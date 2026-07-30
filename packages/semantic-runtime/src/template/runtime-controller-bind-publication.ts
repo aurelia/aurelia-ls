@@ -19,6 +19,7 @@ import {
 } from '../kernel/materialization.js';
 import { OpenSeam } from '../kernel/open-seam.js';
 import {
+  FieldProvenance,
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import type {
@@ -34,6 +35,9 @@ import {
 import type {
   ObserverLocatorLookupResult,
 } from '../observation/observer-locator.js';
+import type {
+  RuntimeOperationReachability,
+} from '../runtime-expression/runtime-operation.js';
 import {
   RuntimeBindingSourceOperation,
   RuntimeBindingSourceOperationAuthority,
@@ -157,11 +161,12 @@ export class RuntimeControllerBindPublisher {
     request: RuntimeBindingTargetAccessRequest,
     target: RuntimeBindingTarget,
     lookup: ObserverLocatorLookupResult,
+    bindReachability: RuntimeOperationReachability,
     source: RuntimeControllerBindSourceSet,
     openSeamHandles: readonly OpenSeamHandle[],
   ): RuntimeControllerBindProductPublication<RuntimeBindingTargetAccess> {
     const handles = this.productHandles(local);
-    const access = this.targetAccessProduct(handles, request, target, lookup);
+    const access = this.targetAccessProduct(handles, request, target, lookup, bindReachability);
     const claim = this.runtimeBindingProductClaim(
       `${handles.local}:runtime-binding-uses-target-access`,
       request.binding.productHandle,
@@ -189,11 +194,19 @@ export class RuntimeControllerBindPublisher {
     target: RuntimeBindingTarget,
     operationKind: RuntimeBindingTargetOperationKind,
     openReason: string | null,
+    reachability: RuntimeOperationReachability,
     source: RuntimeControllerBindSourceSet,
     openSeamHandles: readonly OpenSeamHandle[],
   ): RuntimeControllerBindProductPublication<RuntimeBindingTargetOperation> {
     const handles = this.productHandles(local);
-    const operation = this.targetOperationProduct(handles, request, target, operationKind, openReason);
+    const operation = this.targetOperationProduct(
+      handles,
+      request,
+      target,
+      operationKind,
+      openReason,
+      reachability,
+    );
     const claim = this.runtimeBindingProductClaim(
       `${handles.local}:runtime-binding-uses-target-operation`,
       request.binding.productHandle,
@@ -221,11 +234,19 @@ export class RuntimeControllerBindPublisher {
     target: RuntimeBindingSourceOperationTarget,
     operationKind: RuntimeBindingSourceOperation['operationKind'],
     openReason: string | null,
+    reachability: RuntimeOperationReachability,
     source: RuntimeControllerBindSourceSet,
     openSeamHandles: readonly OpenSeamHandle[],
   ): RuntimeControllerBindProductPublication<RuntimeBindingSourceOperation> {
     const handles = this.productHandles(local);
-    const operation = this.sourceOperationProduct(handles, request, target, operationKind, openReason);
+    const operation = this.sourceOperationProduct(
+      handles,
+      request,
+      target,
+      operationKind,
+      openReason,
+      reachability,
+    );
     const claim = this.runtimeBindingProductClaim(
       `${handles.local}:runtime-binding-uses-source-operation`,
       request.binding.productHandle,
@@ -260,6 +281,7 @@ export class RuntimeControllerBindPublisher {
     request: RuntimeBindingTargetAccessRequest,
     target: RuntimeBindingTarget,
     lookup: ObserverLocatorLookupResult,
+    bindReachability: RuntimeOperationReachability,
   ): RuntimeBindingTargetAccess {
     return new RuntimeBindingTargetAccess(
       handles.productHandle,
@@ -271,6 +293,16 @@ export class RuntimeControllerBindPublisher {
       target.targetControllerProductHandle,
       request.targetProperty,
       lookup.strategy,
+      lookup.fallbackStrategy,
+      lookup.observerCacheDisposition,
+      lookup.supportsCallback,
+      lookup.supportsCoercer,
+      lookup.observerSourceProductHandle,
+      lookup.observerSourceIdentityHandle,
+      lookup.observerSourceAddressHandle,
+      lookup.objectObservationAdapters,
+      lookup.controllerObserverSetupOutcome,
+      bindReachability,
       lookup.nodeObserverConfig,
       lookup.targetType,
       lookup.targetTypeSource,
@@ -283,6 +315,14 @@ export class RuntimeControllerBindPublisher {
       lookup.frameworkErrorCode,
       lookup.diagnosticReason,
       request.sourceAddressHandle,
+      lookup.selectionProvenanceHandles.flatMap((provenanceHandle) => [
+        new FieldProvenance('strategy', provenanceHandle),
+        new FieldProvenance('fallbackStrategy', provenanceHandle),
+        new FieldProvenance('observerCacheDisposition', provenanceHandle),
+        new FieldProvenance('observerSource', provenanceHandle),
+        new FieldProvenance('objectObservationAdapters', provenanceHandle),
+        new FieldProvenance('controllerObserverSetup', provenanceHandle),
+      ]),
     );
   }
 
@@ -292,6 +332,7 @@ export class RuntimeControllerBindPublisher {
     target: RuntimeBindingTarget,
     operationKind: RuntimeBindingTargetOperationKind,
     openReason: string | null,
+    reachability: RuntimeOperationReachability,
   ): RuntimeBindingTargetOperation {
     return new RuntimeBindingTargetOperation(
       handles.productHandle,
@@ -308,6 +349,7 @@ export class RuntimeControllerBindPublisher {
       null,
       operationKind,
       request.affectedNames,
+      reachability,
       this.targetOperationAuthority(openReason),
       openReason,
       request.sourceAddressHandle,
@@ -320,6 +362,7 @@ export class RuntimeControllerBindPublisher {
     target: RuntimeBindingSourceOperationTarget,
     operationKind: RuntimeBindingSourceOperation['operationKind'],
     openReason: string | null,
+    reachability: RuntimeOperationReachability,
   ): RuntimeBindingSourceOperation {
     return new RuntimeBindingSourceOperation(
       handles.productHandle,
@@ -332,6 +375,7 @@ export class RuntimeControllerBindPublisher {
       request.targetName,
       target.targetType,
       operationKind,
+      reachability,
       this.sourceOperationAuthority(openReason),
       openReason,
       request.sourceAddressHandle,

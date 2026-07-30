@@ -66,6 +66,7 @@ import type { CheckerExpressionTypeEvaluationCacheStats } from '../type-system/e
 import type { TypeSystemProjectAcquisitionKind } from '../type-system/project-computation.js';
 import type { TypeSystemTypeScriptVersionRelation } from '../type-system/typescript-environment.js';
 import type { ConfigurationOptionValueKind } from '../configuration/configuration-option.js';
+import type { AppTaskSlot } from '../configuration/app-task.js';
 import type {
   StateIssueKind,
   StateIssuePhase,
@@ -232,6 +233,8 @@ import type {
   RuntimeBindingTargetAccessAuthority,
   RuntimeBindingTargetAccessLookup,
   RuntimeBindingTargetAccessStrategy,
+  RuntimeBindingTargetObserverCacheDisposition,
+  RuntimeControllerObserverSetupOutcome,
   RuntimeBindingTargetKind,
   RuntimeBindingTargetTypeSource,
   RuntimeNodeObserverConfigFieldState,
@@ -268,6 +271,7 @@ import type {
   RuntimeControllerAssemblyStage,
   RuntimeControllerAssemblyStepKind,
   RuntimeControllerReadinessKind,
+  RuntimeControllerObserverSetupState,
 } from '../template/runtime-controller.js';
 import type {
   RuntimeWatcherDependencyEvaluationKind,
@@ -4239,6 +4243,8 @@ export interface SemanticRuntimeControllerRow {
   readonly controllerName: string | null;
   readonly creationKind: RuntimeControllerCreationKind | `${RuntimeControllerCreationKind}`;
   readonly controllerReadiness: RuntimeControllerReadinessKind | `${RuntimeControllerReadinessKind}`;
+  readonly observerSetupState: RuntimeControllerObserverSetupState | `${RuntimeControllerObserverSetupState}`;
+  readonly bindReachability: RuntimeOperationReachability | `${RuntimeOperationReachability}`;
   readonly definitionKind: ResourceDefinitionKind | `${ResourceDefinitionKind}` | null;
   readonly definitionName: string | null;
   readonly definitionClassName: string | null;
@@ -4565,13 +4571,26 @@ export interface SemanticBindingTargetAccessRow {
   readonly targetKind: RuntimeBindingTargetKind | `${RuntimeBindingTargetKind}`;
   readonly targetProperty: string;
   readonly strategy: RuntimeBindingTargetAccessStrategy | `${RuntimeBindingTargetAccessStrategy}`;
+  readonly fallbackStrategy: RuntimeBindingTargetAccessStrategy | `${RuntimeBindingTargetAccessStrategy}` | null;
+  readonly observerCacheDisposition:
+    | RuntimeBindingTargetObserverCacheDisposition
+    | `${RuntimeBindingTargetObserverCacheDisposition}`;
+  readonly supportsCallback: boolean | null;
+  readonly supportsCoercer: boolean | null;
+  readonly observerSource: SemanticSourceReference | null;
+  readonly objectObservationAdapters: readonly SemanticObjectObservationAdapterRow[];
+  readonly controllerObserverSetupOutcome:
+    | RuntimeControllerObserverSetupOutcome
+    | `${RuntimeControllerObserverSetupOutcome}`
+    | null;
+  readonly bindReachability: RuntimeOperationReachability | `${RuntimeOperationReachability}`;
   readonly nodeObserverConfig: SemanticNodeObserverConfig | null;
   readonly targetType: string | null;
   readonly targetTypeSource: RuntimeBindingTargetTypeSource | `${RuntimeBindingTargetTypeSource}` | null;
   readonly propertyType: string | null;
   readonly propertyExists: boolean | null;
   readonly isWritable: boolean | null;
-  readonly isObservable: boolean;
+  readonly isObservable: boolean | null;
   readonly authority: RuntimeBindingTargetAccessAuthority | `${RuntimeBindingTargetAccessAuthority}`;
   readonly openReason: string | null;
   readonly frameworkErrorCode: string | null;
@@ -4582,8 +4601,19 @@ export interface SemanticBindingTargetAccessRow {
     readonly targetAccessProductHandle: ProductHandle;
     readonly targetTypeProductHandle: ProductHandle | null;
     readonly propertyTypeProductHandle: ProductHandle | null;
+    readonly observerSourceProductHandle: ProductHandle | null;
+    readonly observerSourceIdentityHandle: IdentityHandle | null;
+    readonly observerSourceAddressHandle: AddressHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;
   };
+}
+
+export interface SemanticObjectObservationAdapterRow {
+  readonly order: number;
+  readonly adapterName: string | null;
+  readonly appTaskSlot: AppTaskSlot | `${AppTaskSlot}`;
+  readonly source: SemanticSourceReference | null;
+  readonly sourceAddressHandle?: AddressHandle | null;
 }
 
 export interface SemanticNodeObserverConfig {
@@ -4616,6 +4646,7 @@ export interface SemanticTargetOperationRow {
   readonly staticValue: string | null;
   readonly operationKind: RuntimeBindingTargetOperationKind | `${RuntimeBindingTargetOperationKind}`;
   readonly affectedNames: readonly string[];
+  readonly reachability: RuntimeOperationReachability | `${RuntimeOperationReachability}`;
   /** Listener registration strategy when this operation comes from a ListenerBinding. */
   readonly listenerStrategy: TemplateListenerStrategy | `${TemplateListenerStrategy}` | null;
   /** Authored listener modifier when one was lowered with the event registration. */
@@ -4649,6 +4680,7 @@ export interface SemanticBindingSourceOperationRow {
   readonly targetName: string;
   readonly targetType: string | null;
   readonly operationKind: RuntimeBindingSourceOperationKind | `${RuntimeBindingSourceOperationKind}`;
+  readonly reachability: RuntimeOperationReachability | `${RuntimeOperationReachability}`;
   readonly authority: RuntimeBindingSourceOperationAuthority | `${RuntimeBindingSourceOperationAuthority}`;
   readonly openReason: string | null;
   readonly source: SemanticSourceReference | null;
@@ -4793,6 +4825,7 @@ export interface SemanticBindingValueChannelRow {
   readonly rawTargetPropertyType: string | null;
   readonly runtimeValueType: string | null;
   readonly realization: RuntimeOperationRealization | `${RuntimeOperationRealization}`;
+  readonly bindReachability: RuntimeOperationReachability | `${RuntimeOperationReachability}`;
   readonly admittedSourceValueType: string | null;
   readonly admittedSourceMemberKind: CheckerTypeMemberKind | `${CheckerTypeMemberKind}` | null;
   readonly admittedSourceMemberSource: SemanticSourceReference | null;

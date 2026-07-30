@@ -17,6 +17,7 @@ import {
   AuSlotsInfoSourceKind,
   RuntimeHydrationContext,
 } from '../configuration/controller.js';
+import { AppTaskSlot } from '../configuration/app-task.js';
 import { SemanticClaim } from '../kernel/claim.js';
 import type { AddressHandle, ProductHandle, ProvenanceHandle } from '../kernel/handles.js';
 import { ConfigurationIdentity } from '../kernel/identity.js';
@@ -27,6 +28,9 @@ import {
 import {
   OpenSeam,
 } from '../kernel/open-seam.js';
+import {
+  readFieldProvenance,
+} from '../kernel/provenance.js';
 import {
   type KernelStore,
   type KernelStoreRecord,
@@ -63,8 +67,12 @@ import {
 import { ResourceProductDetails } from '../resources/product-details.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import type { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
-import { TypeSystemProductDetails } from '../type-system/product-details.js';
-import { checkerPropertySymbol } from '../type-system/checker-node-helpers.js';
+import { RuntimeOperationReachability } from '../runtime-expression/runtime-operation.js';
+import {
+  CheckerRuntimeMemberPresence,
+  CheckerTypeShapeAccess,
+  readCheckerTypeShape,
+} from '../type-system/checker-type-shape-access.js';
 import { RuntimeHtmlControllerFrameworkErrorCode } from './framework-error-code.js';
 import {
   HydrateAttributeInstruction,
@@ -79,6 +87,8 @@ import {
   RuntimeControllerCreationKind,
   RuntimeControllerCreationRequest,
   RuntimeControllerFrame,
+  RuntimeControllerObserverSetup,
+  RuntimeControllerObserverSetupState,
   type RuntimeControllerInstruction,
   RuntimeControllerAssemblyStage,
   RuntimeControllerAssemblyStepKind,
@@ -86,6 +96,7 @@ import {
 import {
   RuntimeBindingTargetAccessLookup,
   RuntimeBindingTargetKind,
+  RuntimeControllerObserverSetupOutcome,
 } from './runtime-binding.js';
 import {
   RuntimeRendererAllocation,
@@ -263,7 +274,6 @@ export class RuntimeControllerCreationMaterializer {
       source.provenanceHandle,
       records,
     );
-    this.recordControllerWatchers(`${localKey}:controller:root`, frame, definition, expressionWorld, typeSystem);
     return frame;
   }
 
@@ -338,9 +348,6 @@ export class RuntimeControllerCreationMaterializer {
         records,
       )
     );
-    measure('watcher-setup', () =>
-      this.recordControllerWatchers(`${creation.local}:controller`, frame, definition, expressionWorld, typeSystem)
-    );
     measure('activation-di-issues', () =>
       this.recordControllerActivationDiIssues(creation, frame, definition, source, records, controllerIssues)
     );
@@ -359,9 +366,10 @@ export class RuntimeControllerCreationMaterializer {
       this.recordChildControllerHydration(frame, childContainer);
     });
     measure('observer-setup', () =>
-      this.recordControllerObserverSetupIssues(
+      this.materializeControllerObserverSetup(
         frame,
         definition,
+        expressionWorld,
         typeSystem,
         observerLocator,
         source,
@@ -410,6 +418,7 @@ export class RuntimeControllerCreationMaterializer {
     if (hydrationContext != null) {
       frame.attachHydrationContext(hydrationContext);
     }
+    frame.finishObserverSetup(RuntimeControllerObserverSetupState.NotApplicable);
     return frame;
   }
 
@@ -669,7 +678,8 @@ export class RuntimeControllerCreationMaterializer {
     frame: RuntimeControllerFrame,
     definition: CustomElementDefinition | CustomAttributeDefinition | null,
     expressionWorld: CheckerExpressionTypeWorld,
-    typeSystem: TypeSystemProject | null = null,
+    typeSystem: TypeSystemProject | null,
+    reachability: RuntimeOperationReachability,
   ): void {
     for (const watcher of runtimeWatcherMaterializationsForDefinition(
       this.store,
@@ -679,6 +689,7 @@ export class RuntimeControllerCreationMaterializer {
       definition,
       expressionWorld,
       typeSystem,
+      reachability,
     )) {
       frame.addWatcher(watcher);
     }
@@ -735,25 +746,77 @@ export class RuntimeControllerCreationMaterializer {
     );
   }
 
-  recordControllerObserverSetupIssues(
+  materializeControllerObserverSetup(
     frame: RuntimeControllerFrame,
     definition: CustomElementDefinition | CustomAttributeDefinition | null,
+    expressionWorld: CheckerExpressionTypeWorld,
     typeSystem: TypeSystemProject | null,
     observerLocator: ObserverLocator,
     source: RuntimeRenderingSourceSet,
     records: KernelStoreRecord[],
     controllerIssues: RuntimeControllerIssue[],
   ): void {
-    if (definition == null || typeSystem == null || definition.target.targetType == null) {
+    if (definition == null || definition.bindables.length === 0) {
+      frame.finishObserverSetup(RuntimeControllerObserverSetupState.NotApplicable);
       return;
     }
-    const hasTargetProperty = targetTypePropertyLookup(this.publication, definition);
-    const hasAnyChangeCallback = hasTargetProperty('propertyChanged') || hasTargetProperty('propertiesChanged');
-    definition.bindables.forEach((bindable, index) => {
+
+    const targetShape = readCheckerTypeShape(this.publication, definition.target.targetType);
+    const typeAccess = new CheckerTypeShapeAccess(this.store, expressionWorld.projector);
+    const runtimePresence = (
+      propertyName: string,
+      nonNullish: boolean,
+    ): boolean | null => {
+      if (targetShape == null) {
+        return null;
+      }
+      const presence = nonNullish
+        ? typeAccess.runtimeNonNullishMemberPresence(
+            targetShape,
+            propertyName,
+            `${frame.productHandle}:observer-setup:callback:${propertyName}`,
+          )
+        : typeAccess.runtimeMemberPresence(
+            targetShape,
+            propertyName,
+            `${frame.productHandle}:observer-setup:callback:${propertyName}`,
+          );
+      switch (presence) {
+        case CheckerRuntimeMemberPresence.Present:
+          return true;
+        case CheckerRuntimeMemberPresence.Absent:
+          return false;
+        case CheckerRuntimeMemberPresence.Open:
+          return null;
+      }
+    };
+    const hasPropertyChanged = runtimePresence('propertyChanged', true);
+    const hasPropertiesChanged = runtimePresence('propertiesChanged', false);
+    let aggregateState = RuntimeControllerObserverSetupState.Complete;
+    let setupReachability = RuntimeOperationReachability.Reached;
+
+    for (let index = 0; index < definition.bindables.length; index++) {
+      const bindable = definition.bindables[index]!;
       const requiresCoercer = bindableSetterRequiresCoercer(bindable);
-      const requiresCallback = hasAnyChangeCallback || hasTargetProperty(bindable.callback);
-      if (!requiresCoercer && !requiresCallback) {
-        return;
+      const hasBindableCallback = runtimePresence(bindable.callback, false);
+      const requiresCallback = callbackRequirement(
+        hasBindableCallback,
+        hasPropertyChanged,
+        hasPropertiesChanged,
+      );
+      if (setupReachability === RuntimeOperationReachability.BlockedByOuterFailure) {
+        frame.recordObserverSetup(new RuntimeControllerObserverSetup(
+          bindable.name,
+          bindable.propertyTarget?.identityHandle ?? null,
+          null,
+          RuntimeControllerObserverSetupOutcome.NotReached,
+          requiresCoercer,
+          requiresCallback,
+          setupReachability,
+          bindable.sourceAddressHandle ?? definition.sourceAddressHandle,
+          observerSetupProvenanceHandles(bindable, source.provenanceHandle),
+        ));
+        continue;
       }
       const lookup = observerLocator.getObserver(new ObserverLocatorLookupRequest(
         `${frame.productHandle}:observer-setup:${index}:${bindable.name}`,
@@ -767,37 +830,68 @@ export class RuntimeControllerCreationMaterializer {
         bindable.sourceAddressHandle ?? definition.sourceAddressHandle,
         false,
         false,
+        observerSetupAppTaskBoundary(frame),
       ));
-      if (lookup.openReason != null) {
-        return;
+      let outcome = RuntimeControllerObserverSetupOutcome.Installed;
+      if (lookup.openReason != null
+        || lookup.supportsCoercer == null
+        || lookup.supportsCallback == null
+        || requiresCoercer == null
+        || requiresCallback == null) {
+        outcome = RuntimeControllerObserverSetupOutcome.Open;
+        aggregateState = RuntimeControllerObserverSetupState.Open;
+      } else if (requiresCoercer && lookup.supportsCoercer === false) {
+        outcome = RuntimeControllerObserverSetupOutcome.RejectedCoercer;
+        if (setupReachability === RuntimeOperationReachability.Reached) {
+          this.publishControllerObserverSetupIssue(
+            `${frame.productHandle}:controller-issue:observer-setup:${index}:coercer`,
+            frame,
+            source,
+            records,
+            controllerIssues,
+            RuntimeControllerIssueKind.ControllerPropertyNotCoercible,
+            `Observer for bindable property ${bindable.name} does not support coercion.`,
+            RuntimeHtmlControllerFrameworkErrorCode.ControllerPropertyNotCoercible,
+            bindable.sourceAddressHandle ?? definition.sourceAddressHandle,
+          );
+        }
+      } else if (requiresCallback && lookup.supportsCallback === false) {
+        outcome = RuntimeControllerObserverSetupOutcome.RejectedCallback;
+        if (setupReachability === RuntimeOperationReachability.Reached) {
+          this.publishControllerObserverSetupIssue(
+            `${frame.productHandle}:controller-issue:observer-setup:${index}:callback`,
+            frame,
+            source,
+            records,
+            controllerIssues,
+            RuntimeControllerIssueKind.ControllerPropertyNoChangeHandler,
+            `Observer for property ${bindable.name} does not support change handler.`,
+            RuntimeHtmlControllerFrameworkErrorCode.ControllerPropertyNoChangeHandler,
+            bindable.sourceAddressHandle ?? definition.sourceAddressHandle,
+          );
+        }
       }
-      if (requiresCoercer && !lookup.supportsCoercer) {
-        this.publishControllerObserverSetupIssue(
-          `${frame.productHandle}:controller-issue:observer-setup:${index}:coercer`,
-          frame,
-          source,
-          records,
-          controllerIssues,
-          RuntimeControllerIssueKind.ControllerPropertyNotCoercible,
-          `Observer for bindable property ${bindable.name} does not support coercion.`,
-          RuntimeHtmlControllerFrameworkErrorCode.ControllerPropertyNotCoercible,
-          bindable.sourceAddressHandle ?? definition.sourceAddressHandle,
-        );
+
+      frame.recordObserverSetup(new RuntimeControllerObserverSetup(
+        bindable.name,
+        bindable.propertyTarget?.identityHandle ?? null,
+        lookup,
+        outcome,
+        requiresCoercer,
+        requiresCallback,
+        setupReachability,
+        bindable.sourceAddressHandle ?? definition.sourceAddressHandle,
+        observerSetupProvenanceHandles(bindable, source.provenanceHandle),
+      ));
+      if (outcome === RuntimeControllerObserverSetupOutcome.RejectedCoercer
+        || outcome === RuntimeControllerObserverSetupOutcome.RejectedCallback) {
+        aggregateState = RuntimeControllerObserverSetupState.Failed;
+        setupReachability = RuntimeOperationReachability.BlockedByOuterFailure;
+      } else if (outcome === RuntimeControllerObserverSetupOutcome.Open) {
+        setupReachability = RuntimeOperationReachability.Open;
       }
-      if (requiresCallback && !lookup.supportsCallback) {
-        this.publishControllerObserverSetupIssue(
-          `${frame.productHandle}:controller-issue:observer-setup:${index}:callback`,
-          frame,
-          source,
-          records,
-          controllerIssues,
-          RuntimeControllerIssueKind.ControllerPropertyNoChangeHandler,
-          `Observer for property ${bindable.name} does not support change handler.`,
-          RuntimeHtmlControllerFrameworkErrorCode.ControllerPropertyNoChangeHandler,
-          bindable.sourceAddressHandle ?? definition.sourceAddressHandle,
-        );
-      }
-    });
+    }
+    frame.finishObserverSetup(aggregateState);
   }
 
   private publishControllerObserverSetupIssue(
@@ -1502,33 +1596,59 @@ function resourceLookupNames(
   return [definition.name, ...definition.aliases.map((alias) => alias.name)];
 }
 
-function bindableSetterRequiresCoercer(bindable: BindableDefinition): boolean {
-  return bindable.set.kind === BindableSetterKind.Function
-    || bindable.set.kind === BindableSetterKind.TypeCoercion;
+function bindableSetterRequiresCoercer(bindable: BindableDefinition): boolean | null {
+  switch (bindable.set.kind) {
+    case BindableSetterKind.Default:
+      return false;
+    case BindableSetterKind.Function:
+    case BindableSetterKind.TypeCoercion:
+      return true;
+    case BindableSetterKind.Open:
+      return null;
+  }
 }
 
-function targetTypePropertyLookup(
-  publication: KernelPublicationContext,
-  definition: CustomElementDefinition | CustomAttributeDefinition,
-): (propertyName: string) => boolean {
-  const productHandle = definition.target.targetType?.productHandle ?? null;
-  if (productHandle == null) {
-    return () => false;
+function observerSetupAppTaskBoundary(
+  frame: RuntimeControllerFrame,
+): AppTaskSlot {
+  if (frame.parent == null) {
+    return AppTaskSlot.Creating;
   }
-  const carrier = publication.readProductDetail(TypeSystemProductDetails.TypeShape, productHandle)?.carrier ?? null;
-  if (carrier == null) {
-    return () => false;
-  }
-  const cache = new Map<string, boolean>();
-  return (propertyName) => {
-    const cached = cache.get(propertyName);
-    if (cached != null) {
-      return cached;
+  let ancestor: RuntimeControllerFrame | null = frame;
+  while (ancestor != null) {
+    if (ancestor.creationKind === RuntimeControllerCreationKind.SyntheticView) {
+      return AppTaskSlot.Activating;
     }
-    const exists = checkerPropertySymbol(carrier.checker, carrier.type, propertyName) != null;
-    cache.set(propertyName, exists);
-    return exists;
-  };
+    ancestor = ancestor.parent;
+  }
+  return frame.parent.parent == null
+    ? AppTaskSlot.Hydrating
+    : AppTaskSlot.Hydrated;
+}
+
+function callbackRequirement(
+  hasBindableCallback: boolean | null,
+  hasPropertyChanged: boolean | null,
+  hasPropertiesChanged: boolean | null,
+): boolean | null {
+  if (hasBindableCallback === true || hasPropertyChanged === true || hasPropertiesChanged === true) {
+    return true;
+  }
+  return hasBindableCallback === false && hasPropertyChanged === false && hasPropertiesChanged === false
+    ? false
+    : null;
+}
+
+function observerSetupProvenanceHandles(
+  bindable: BindableDefinition,
+  ownerProvenanceHandle: ProvenanceHandle,
+): readonly ProvenanceHandle[] {
+  return [...new Set([
+    ownerProvenanceHandle,
+    readFieldProvenance(bindable.fieldProvenance, 'name'),
+    readFieldProvenance(bindable.fieldProvenance, 'set'),
+    readFieldProvenance(bindable.fieldProvenance, 'callback'),
+  ].filter((handle): handle is ProvenanceHandle => handle != null))];
 }
 
 function isClosedControllerCreationRequest(

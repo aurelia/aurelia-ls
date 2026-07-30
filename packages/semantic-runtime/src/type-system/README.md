@@ -208,6 +208,12 @@ expression tooling should prefer TypeChecker projection when it needs the static
 view-model types. Future SSR/SSG or richer abstract interpretation can connect the two through explicit products and
 claims rather than collapsing the distinction.
 
+Checker member visibility is not automatically JavaScript runtime presence. `CheckerTypeShapeAccess` owns the shared
+three-state projection for `name in value`, non-nullish callback reads, and accessor-descriptor presence. Concrete
+class/object methods, initialized fields, accessors, and auto-accessors can prove runtime facts; abstract, interface,
+ambient, declaration-only, and structurally open surfaces remain open. Consumers must ask the predicate their framework
+operation actually performs rather than turn a TypeScript-visible member into a generic runtime-present boolean.
+
 Fixture and ad hoc app roots are allowed to start without package-manager scaffolding. The default checker options
 therefore use bundler-style module resolution, a small `*.html` module declaration, and an optional local Aurelia
 checkout type-path map when this repository's `aurelia/packages/*/dist/types` tree is present. Roots without a

@@ -57,6 +57,9 @@ import {
   RuntimeBindingValueChannel,
   RuntimeBindingValueChannelTargetMutationKind,
 } from './runtime-binding-observation.js';
+import {
+  RuntimeOperationReachability,
+} from '../runtime-expression/runtime-operation.js';
 import { runtimeBindingPrimitiveValueFromExpressionValue } from './runtime-binding-primitive-value.js';
 import type { RuntimeRenderingEmission } from '../template/runtime-rendering-materializer.js';
 import type { RuntimeExpressionResourcePlan } from '../template/runtime-expression-resource-plan.js';
@@ -262,7 +265,7 @@ export class RuntimeBindingValueChannelMaterializer {
     if (result == null) {
       return null;
     }
-    const valueChannel = this.valueChannelForTarget(local, binding, target, result);
+    const valueChannel = this.valueChannelForTarget(input, local, binding, target, result);
     const claim = this.valueChannelClaim(local, binding, valueChannel, source);
     const open = this.openSeamForValueChannel(local, valueChannel, binding, source);
     return {
@@ -311,6 +314,7 @@ export class RuntimeBindingValueChannelMaterializer {
   }
 
   private valueChannelForTarget(
+    input: RuntimeBindingValueChannelMaterializationRequest,
     local: string,
     binding: RuntimeValueChannelBinding,
     target: ValueChannelTarget,
@@ -334,6 +338,7 @@ export class RuntimeBindingValueChannelMaterializer {
       target.targetAccess?.propertyType ?? null,
       draft.runtimeValueType,
       result.realization,
+      this.bindingOperationReachability(input, binding),
       result.admittedSourceOwnerType,
       result.admittedSourceValueType,
       result.admittedSourceMemberKind,
@@ -348,6 +353,13 @@ export class RuntimeBindingValueChannelMaterializer {
       draft.openReasonKinds ?? [],
       binding.sourceAddressHandle,
     );
+  }
+
+  private bindingOperationReachability(
+    input: RuntimeBindingValueChannelMaterializationRequest,
+    binding: RuntimeValueChannelBinding,
+  ): RuntimeOperationReachability {
+    return input.expressionResourcePlan.readSourceEvaluationReachability(binding.productHandle);
   }
 
   private valueChannelRecords(

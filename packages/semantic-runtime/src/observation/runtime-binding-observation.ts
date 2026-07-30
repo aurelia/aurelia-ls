@@ -342,6 +342,8 @@ export class RuntimeBindingValueChannel {
     readonly runtimeValueType: CheckerTypeReference | null,
     /** Whether this channel exists directly or only after a runtime object/member guard succeeds. */
     readonly realization: RuntimeOperationRealization,
+    /** Whether controller setup and expression-resource binding reach this value transport. */
+    readonly bindReachability: RuntimeOperationReachability,
     /** Object type tested by a guarded source-member read; null for direct channels. */
     readonly admittedSourceOwnerType: CheckerTypeReference | null,
     /** Source member value on the successful guard branch; null for direct channels. */

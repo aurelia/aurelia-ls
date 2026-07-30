@@ -95,6 +95,9 @@ import {
   type RuntimeRenderingMaterializationRequest,
 } from './runtime-rendering-materializer.js';
 import type { RuntimeBindingIssue } from './runtime-binding-issue.js';
+import type {
+  ComputedObserverSourceProjectResult,
+} from '../observation/computed-observer-source.js';
 import type { TemplateRuntimeAnalysisProjectContext } from './template-runtime-analysis-context.js';
 import {
   TemplateControllerScopeMaterializer,
@@ -129,6 +132,8 @@ export class TemplateRuntimeAnalysisRequest {
     readonly sourceValueActivationView: DiProviderActivationView | null,
     /** Project resource index for runtime resource lookup and component-valued binding resolution. */
     readonly resourceDefinitions: ResourceDefinitionIndex | null = null,
+    /** Pre-template computed observer sources keyed by exact checker member identity. */
+    readonly computedObserverSources: ComputedObserverSourceProjectResult | null = null,
     /** Analysis depth requested by the app-world inquiry. */
     readonly analysisDepth: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}` = DEFAULT_SEMANTIC_APP_ANALYSIS_DEPTH,
     /** Shared expression TypeChecker world for the surrounding template-analysis pass. */
@@ -613,6 +618,7 @@ class TemplateRuntimeAnalysisFrame {
       compilerWorld: this.request.compilerWorld,
       projectContext: this.request.projectContext,
       resourceDefinitions: this.request.resourceDefinitions,
+      computedObserverSources: this.request.computedObserverSources,
       typeSystem: this.request.typeSystem,
       expressionWorld: this.expressionWorld,
       profiling: this.profilingSink(),
@@ -624,7 +630,7 @@ class TemplateRuntimeAnalysisFrame {
   ): RuntimeExpressionResourcePlan {
     return this.services.expressionResourcePlan.plan(new RuntimeExpressionResourcePlanningRequest(
       runtimeRendering,
-      this.request.compilerWorld.world.nodeObserverLocatorConfiguration,
+      this.request.compilerWorld.world.observerLocatorConfiguration,
       this.expressionWorld,
     ));
   }
@@ -666,7 +672,7 @@ class TemplateRuntimeAnalysisFrame {
       scopes,
       typeSystem: this.request.typeSystem,
       expressionWorld: this.expressionWorld,
-      nodeObserverLocatorConfiguration: this.request.compilerWorld.world.nodeObserverLocatorConfiguration,
+      observerLocatorConfiguration: this.request.compilerWorld.world.observerLocatorConfiguration,
       isAppRootDefinition: this.request.definition.productHandle != null
         && this.request.definition.productHandle === this.request.appRootDefinitionProductHandle,
     } satisfies RuntimeControllerBindMaterializationRequest);

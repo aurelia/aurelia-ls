@@ -29,11 +29,13 @@ import {
 } from './type-shape.js';
 import {
   CheckerRuntimeObjectMemberAdmissionKind,
+  CheckerTypeNullishPresence,
   checkerIndexKindForKeyType,
   checkerIterableElementType,
   checkerNumberIndexValueType,
   checkerNullishType,
   checkerRuntimeObjectMemberAdmission,
+  checkerTypeShapeNullishPresence,
   checkerTupleElementType,
 } from './checker-related-types.js';
 import {
@@ -78,6 +80,16 @@ export const enum CheckerTypeShapeMemberValueAccessKind {
   MissingValueType = 'missing-value-type',
 }
 
+/** JavaScript property-presence answer supported by emitted declaration evidence. */
+export const enum CheckerRuntimeMemberPresence {
+  /** A concrete emitted declaration proves that `memberName in value` succeeds. */
+  Present = 'present',
+  /** A concrete class surface proves no member, while no declaration can install it. */
+  Absent = 'absent',
+  /** Declaration-only, structural, decorator, or initializer behavior prevents a closed runtime answer. */
+  Open = 'open',
+}
+
 export interface CheckerTypeShapeMemberWriteAccess {
   readonly accessKind: CheckerTypeShapeMemberWriteAccessKind;
   readonly memberName: string;
@@ -99,6 +111,53 @@ export interface CheckerTypeShapeMemberValueAccess {
   readonly memberSourceAddressHandle: AddressHandle | null;
   /** Source of the accessed value/type; may be a type annotation rather than the member declaration. */
   readonly sourceAddressHandle: AddressHandle | null;
+}
+
+/**
+ * Whether checker declarations prove that ObserverLocator will encounter an accessor descriptor at runtime.
+ *
+ * Interface and ambient property syntax proves a TypeScript member but not its JavaScript descriptor shape. Concrete
+ * class/object accessors and auto-accessors do prove the descriptor that ObserverLocator walks through the prototype
+ * chain; abstract accessors remain open because the runtime implementation belongs to a derived class.
+ */
+export function checkerRuntimeAccessorDescriptorPresence(
+  ownerType: CheckerTypeShape,
+  access: CheckerTypeShapeMemberValueAccess,
+): CheckerRuntimeMemberPresence {
+  if (access.declarations.length === 0) {
+    if (access.memberKind === CheckerTypeMemberKind.Accessor) {
+      return CheckerRuntimeMemberPresence.Open;
+    }
+    return access.accessKind === CheckerTypeShapeMemberValueAccessKind.Missing
+      && ownerType.shapeKind === CheckerTypeShapeKind.Class
+      ? CheckerRuntimeMemberPresence.Absent
+      : CheckerRuntimeMemberPresence.Open;
+  }
+
+  let sawAccessor = false;
+  let sawNonAccessor = false;
+  for (const declaration of access.declarations) {
+    if (ts.isGetAccessorDeclaration(declaration)
+      || ts.isSetAccessorDeclaration(declaration)
+      || ts.isAutoAccessorPropertyDeclaration(declaration)) {
+      sawAccessor = true;
+      if (!runtimeAccessorDeclarationIsConcrete(declaration)) {
+        return CheckerRuntimeMemberPresence.Open;
+      }
+      continue;
+    }
+    sawNonAccessor = true;
+  }
+  if (sawAccessor && sawNonAccessor) {
+    return CheckerRuntimeMemberPresence.Open;
+  }
+  if (sawAccessor) {
+    return CheckerRuntimeMemberPresence.Present;
+  }
+  return ownerType.shapeKind === CheckerTypeShapeKind.Class
+    && access.declarations.every(runtimeNonAccessorDeclarationIsConcrete)
+    ? CheckerRuntimeMemberPresence.Absent
+    : CheckerRuntimeMemberPresence.Open;
 }
 
 /** Projected value type and certainty for an object/member runtime guard. */
@@ -248,6 +307,48 @@ export class CheckerTypeShapeAccess {
       null,
       null,
     );
+  }
+
+  /** Whether a TypeScript member surface proves the JavaScript `memberName in value` predicate. */
+  runtimeMemberPresence(
+    ownerType: CheckerTypeShape,
+    memberName: string,
+    localKey: string,
+  ): CheckerRuntimeMemberPresence {
+    const access = this.memberValueAccess(ownerType, memberName, localKey);
+    if (access.declarations.length > 0) {
+      return aggregateRuntimeMemberDeclarationPresence(access.declarations);
+    }
+    if (access.accessKind !== CheckerTypeShapeMemberValueAccessKind.Missing) {
+      return CheckerRuntimeMemberPresence.Open;
+    }
+    return ownerType.shapeKind === CheckerTypeShapeKind.Class
+      ? CheckerRuntimeMemberPresence.Absent
+      : CheckerRuntimeMemberPresence.Open;
+  }
+
+  /** Whether a runtime-present member is statically known to satisfy `value.memberName != null`. */
+  runtimeNonNullishMemberPresence(
+    ownerType: CheckerTypeShape,
+    memberName: string,
+    localKey: string,
+  ): CheckerRuntimeMemberPresence {
+    const presence = this.runtimeMemberPresence(ownerType, memberName, localKey);
+    if (presence !== CheckerRuntimeMemberPresence.Present) {
+      return presence;
+    }
+    const valueType = this.memberValueAccess(ownerType, memberName, `${localKey}:value`).valueType;
+    if (valueType == null) {
+      return CheckerRuntimeMemberPresence.Open;
+    }
+    switch (checkerTypeShapeNullishPresence(valueType)) {
+      case CheckerTypeNullishPresence.None:
+        return CheckerRuntimeMemberPresence.Present;
+      case CheckerTypeNullishPresence.Definitely:
+        return CheckerRuntimeMemberPresence.Absent;
+      case CheckerTypeNullishPresence.Maybe:
+        return CheckerRuntimeMemberPresence.Open;
+    }
   }
 
   /**
@@ -917,6 +1018,82 @@ function checkerTypeMemberWriteAccessKindIsWritable(
     case CheckerTypeShapeMemberWriteAccessKind.Missing:
       return false;
   }
+}
+
+function aggregateRuntimeMemberDeclarationPresence(
+  declarations: readonly ts.Declaration[],
+): CheckerRuntimeMemberPresence {
+  let sawOpen = false;
+  for (const declaration of declarations) {
+    const presence = runtimeMemberDeclarationPresence(declaration);
+    if (presence === CheckerRuntimeMemberPresence.Present) {
+      return presence;
+    }
+    sawOpen ||= presence === CheckerRuntimeMemberPresence.Open;
+  }
+  return sawOpen
+    ? CheckerRuntimeMemberPresence.Open
+    : CheckerRuntimeMemberPresence.Absent;
+}
+
+function runtimeMemberDeclarationPresence(
+  declaration: ts.Declaration,
+): CheckerRuntimeMemberPresence {
+  if (ts.isMethodDeclaration(declaration)
+    || ts.isGetAccessorDeclaration(declaration)
+    || ts.isSetAccessorDeclaration(declaration)) {
+    return (ts.getCombinedModifierFlags(declaration) & ts.ModifierFlags.Abstract) !== 0
+      ? CheckerRuntimeMemberPresence.Open
+      : CheckerRuntimeMemberPresence.Present;
+  }
+  if (ts.isPropertyDeclaration(declaration)) {
+    if (declaration.getSourceFile().isDeclarationFile) {
+      return CheckerRuntimeMemberPresence.Open;
+    }
+    if ((ts.getCombinedModifierFlags(declaration) & ts.ModifierFlags.Ambient) !== 0) {
+      return CheckerRuntimeMemberPresence.Absent;
+    }
+    return declaration.initializer == null
+      ? CheckerRuntimeMemberPresence.Open
+      : CheckerRuntimeMemberPresence.Present;
+  }
+  if (ts.isPropertyAssignment(declaration)
+    || ts.isShorthandPropertyAssignment(declaration)
+    || ts.isEnumMember(declaration)) {
+    return CheckerRuntimeMemberPresence.Present;
+  }
+  if (ts.isParameter(declaration)
+    && (ts.getCombinedModifierFlags(declaration) & ts.ModifierFlags.ParameterPropertyModifier) !== 0) {
+    return CheckerRuntimeMemberPresence.Present;
+  }
+  return CheckerRuntimeMemberPresence.Open;
+}
+
+function runtimeAccessorDeclarationIsConcrete(
+  declaration: ts.GetAccessorDeclaration | ts.SetAccessorDeclaration | ts.AutoAccessorPropertyDeclaration,
+): boolean {
+  if ((ts.getCombinedModifierFlags(declaration) & ts.ModifierFlags.Abstract) !== 0) {
+    return false;
+  }
+  return ts.isClassDeclaration(declaration.parent)
+    || ts.isClassExpression(declaration.parent)
+    || ts.isObjectLiteralExpression(declaration.parent);
+}
+
+function runtimeNonAccessorDeclarationIsConcrete(
+  declaration: ts.Declaration,
+): boolean {
+  if (ts.isMethodDeclaration(declaration)
+    || ts.isPropertyDeclaration(declaration)
+    || ts.isParameter(declaration)) {
+    if ((ts.getCombinedModifierFlags(declaration) & (ts.ModifierFlags.Abstract | ts.ModifierFlags.Ambient)) !== 0) {
+      return false;
+    }
+    return ts.isClassDeclaration(declaration.parent)
+      || ts.isClassExpression(declaration.parent);
+  }
+  return ts.isPropertyAssignment(declaration)
+    || ts.isShorthandPropertyAssignment(declaration);
 }
 
 function checkerTypeMemberValueAccessResult(

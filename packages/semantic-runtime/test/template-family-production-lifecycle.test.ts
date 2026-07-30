@@ -1510,7 +1510,7 @@ function stableCompilationHandles(compilation: TemplateResourceCompilationEmissi
 function observerEvents(
   world: TemplateResourceCompilationEmission['compilerWorld'],
 ): readonly string[] | null {
-  return world.world.nodeObserverLocatorConfiguration?.nodeConfigs.find(
+  return world.world.observerLocatorConfiguration.node.nodeConfigs.find(
     (config) => config.tagName === 'MY-ELEMENT' && config.propertyName === 'value',
   )?.config.eventNames ?? null;
 }

@@ -37,6 +37,15 @@ import type {
   RuntimeWatcher,
   RuntimeWatcherMaterialization,
 } from './runtime-watcher.js';
+import type {
+  ObserverLocatorLookupResult,
+} from '../observation/observer-locator.js';
+import {
+  RuntimeControllerObserverSetupOutcome,
+} from './runtime-binding.js';
+import {
+  RuntimeOperationReachability,
+} from '../runtime-expression/runtime-operation.js';
 
 export const enum RuntimeControllerCreationKind {
   RootCustomElement = 'root-custom-element',
@@ -62,6 +71,7 @@ export const enum RuntimeControllerAssemblyStepKind {
   CreateChildContainer = 'create-child-container',
   InstallHydrationContext = 'install-hydration-context',
   RegisterDependencies = 'register-dependencies',
+  SetupBindableObserver = 'setup-bindable-observer',
   AddChild = 'add-child',
   AdmittedToParent = 'admitted-to-parent',
   AddBinding = 'add-binding',
@@ -78,6 +88,35 @@ export const enum RuntimeControllerReadinessKind {
   Rendered = 'rendered',
   ScopeReady = 'scope-ready',
   Bound = 'bound',
+}
+
+/** Aggregate bindable-observer setup state for one controller hydration frame. */
+export const enum RuntimeControllerObserverSetupState {
+  /** The frame has not yet crossed its observer-setup phase. */
+  Pending = 'pending',
+  /** The controller kind or definition has no bindable observer setup. */
+  NotApplicable = 'not-applicable',
+  /** Every statically visible bindable observer was installed successfully. */
+  Complete = 'complete',
+  /** At least one setup depends on runtime-only observer selection or capability behavior. */
+  Open = 'open',
+  /** Framework hydration rejects at the first unsupported coercer or callback installation. */
+  Failed = 'failed',
+}
+
+/** Immutable observer setup decision retained on a hot controller construction frame. */
+export class RuntimeControllerObserverSetup {
+  constructor(
+    readonly bindableName: string,
+    readonly propertyIdentityHandle: IdentityHandle | null,
+    readonly lookup: ObserverLocatorLookupResult | null,
+    readonly outcome: RuntimeControllerObserverSetupOutcome,
+    readonly requiresCoercer: boolean | null,
+    readonly requiresCallback: boolean | null,
+    readonly reachability: RuntimeOperationReachability,
+    readonly sourceAddressHandle: AddressHandle | null,
+    readonly provenanceHandles: readonly ProvenanceHandle[],
+  ) {}
 }
 
 export class RuntimeControllerAssemblyStep {
@@ -165,6 +204,9 @@ export class RuntimeControllerFrame {
   private constructionHydrationContext: RuntimeHydrationContext | null = null;
   private hydrationContext: RuntimeHydrationContext | null = null;
   private auSlotsInfo: AuSlotsInfo | null = null;
+  private readonly observerSetups = new Map<string, RuntimeControllerObserverSetup>();
+  private observerSetupState = RuntimeControllerObserverSetupState.Pending;
+  private bindReachability: RuntimeOperationReachability | null = null;
 
   constructor(
     readonly creationKind: RuntimeControllerCreationKind,
@@ -204,6 +246,21 @@ export class RuntimeControllerFrame {
       binding.sourceAddressHandle,
       `Controller.addBinding admitted a ${binding.bindingKind} binding.`,
     );
+  }
+
+  recordObserverSetup(setup: RuntimeControllerObserverSetup): void {
+    this.observerSetups.set(setup.bindableName, setup);
+    this.recordAssemblyStep(
+      RuntimeControllerAssemblyStage.Hydration,
+      RuntimeControllerAssemblyStepKind.SetupBindableObserver,
+      setup.lookup?.observerSourceProductHandle ?? null,
+      setup.sourceAddressHandle,
+      `Controller observer setup for '${setup.bindableName}' resolved as ${setup.outcome}.`,
+    );
+  }
+
+  finishObserverSetup(state: Exclude<RuntimeControllerObserverSetupState, RuntimeControllerObserverSetupState.Pending>): void {
+    this.observerSetupState = state;
   }
 
   addWatcher(materialization: RuntimeWatcherMaterialization): void {
@@ -386,6 +443,37 @@ export class RuntimeControllerFrame {
     return [...this.assemblySteps];
   }
 
+  readObserverSetup(bindableName: string): RuntimeControllerObserverSetup | null {
+    return this.observerSetups.get(bindableName) ?? null;
+  }
+
+  readObserverSetups(): readonly RuntimeControllerObserverSetup[] {
+    return [...this.observerSetups.values()];
+  }
+
+  readObserverSetupState(): RuntimeControllerObserverSetupState {
+    return this.observerSetupState;
+  }
+
+  finalizeBindReachability(reachability: RuntimeOperationReachability): void {
+    if (this.bindReachability != null && this.bindReachability !== reachability) {
+      throw new Error(
+        `Controller '${this.productHandle}' cannot replace bind reachability `
+        + `'${this.bindReachability}' with '${reachability}'.`,
+      );
+    }
+    this.bindReachability = reachability;
+  }
+
+  /** Final eager-region bind reachability, or open for pre-activation controller handoffs. */
+  readBindReachability(): RuntimeOperationReachability {
+    return this.bindReachability ?? RuntimeOperationReachability.Open;
+  }
+
+  observerSetupFailed(): boolean {
+    return this.observerSetupState === RuntimeControllerObserverSetupState.Failed;
+  }
+
   hasRecursiveHydrationBoundary(): boolean {
     return this.assemblySteps.some((step) =>
       step.stepKind === RuntimeControllerAssemblyStepKind.RecursiveHydrationBoundary
@@ -487,6 +575,153 @@ export class RuntimeControllerFrame {
       this.sourceAddressHandle,
     );
   }
+}
+
+/**
+ * Bind reachability for the nearest eager view activation.
+ *
+ * Synthetic views are lazy framework boundaries: a failure in one counterfactual child view does not poison its
+ * declaring controller or a sibling view. Ordinary child controllers hydrate synchronously inside the same region.
+ */
+export function runtimeControllerCurrentRenderingReachability(
+  controller: RuntimeControllerFrame,
+): RuntimeOperationReachability {
+  let activationRoot = controller;
+  while (activationRoot.parent != null
+    && activationRoot.creationKind !== RuntimeControllerCreationKind.SyntheticView) {
+    activationRoot = activationRoot.parent;
+  }
+
+  let open = false;
+  const visit = (current: RuntimeControllerFrame): boolean => {
+    switch (current.readObserverSetupState()) {
+      case RuntimeControllerObserverSetupState.Failed:
+        return true;
+      case RuntimeControllerObserverSetupState.Pending:
+      case RuntimeControllerObserverSetupState.Open:
+        open = true;
+        break;
+      case RuntimeControllerObserverSetupState.NotApplicable:
+      case RuntimeControllerObserverSetupState.Complete:
+        break;
+    }
+    for (const child of current.readChildren()) {
+      if (child.creationKind === RuntimeControllerCreationKind.SyntheticView) {
+        continue;
+      }
+      if (visit(child)) {
+        return true;
+      }
+    }
+    return false;
+  };
+  const local = visit(activationRoot)
+    ? RuntimeOperationReachability.BlockedByOuterFailure
+    : open
+      ? RuntimeOperationReachability.Open
+      : RuntimeOperationReachability.Reached;
+  return activationRoot.creationKind === RuntimeControllerCreationKind.SyntheticView
+    && activationRoot.parent != null
+    ? mergeRuntimeOperationReachability(
+        runtimeControllerCurrentRenderingReachability(activationRoot.parent),
+        local,
+      )
+    : local;
+}
+
+/**
+ * Freeze one bind-reachability answer per controller after the complete recursive render graph is known.
+ *
+ * Synthetic views start lazy activation regions but retain the declaring region as a directed prerequisite.
+ */
+export function finalizeRuntimeControllerBindReachability(
+  controllers: readonly RuntimeControllerFrame[],
+): void {
+  const controllersByProduct = new Map(
+    controllers.map((controller) => [controller.productHandle, controller] as const),
+  );
+  const rootsByController = new Map<ProductHandle, RuntimeControllerFrame>();
+  const rootFor = (controller: RuntimeControllerFrame): RuntimeControllerFrame => {
+    const existing = rootsByController.get(controller.productHandle);
+    if (existing != null) {
+      return existing;
+    }
+    const parent = controller.parent == null
+      ? null
+      : controllersByProduct.get(controller.parent.productHandle) ?? null;
+    const root = controller.creationKind === RuntimeControllerCreationKind.SyntheticView
+      || parent == null
+      ? controller
+      : rootFor(parent);
+    rootsByController.set(controller.productHandle, root);
+    return root;
+  };
+
+  const localByRoot = new Map<ProductHandle, RuntimeOperationReachability>();
+  for (const controller of controllers) {
+    const root = rootFor(controller);
+    localByRoot.set(
+      root.productHandle,
+      mergeRuntimeOperationReachability(
+        localByRoot.get(root.productHandle) ?? RuntimeOperationReachability.Reached,
+        observerSetupReachability(controller.readObserverSetupState()),
+      ),
+    );
+  }
+
+  const finalByRoot = new Map<ProductHandle, RuntimeOperationReachability>();
+  const finalForRoot = (root: RuntimeControllerFrame): RuntimeOperationReachability => {
+    const existing = finalByRoot.get(root.productHandle);
+    if (existing != null) {
+      return existing;
+    }
+    let reachability = localByRoot.get(root.productHandle)
+      ?? observerSetupReachability(root.readObserverSetupState());
+    if (root.creationKind === RuntimeControllerCreationKind.SyntheticView && root.parent != null) {
+      reachability = mergeRuntimeOperationReachability(
+        finalForRoot(rootFor(root.parent)),
+        reachability,
+      );
+    }
+    finalByRoot.set(root.productHandle, reachability);
+    return reachability;
+  };
+
+  for (const controller of controllers) {
+    controller.finalizeBindReachability(finalForRoot(rootFor(controller)));
+  }
+}
+
+function observerSetupReachability(
+  state: RuntimeControllerObserverSetupState,
+): RuntimeOperationReachability {
+  switch (state) {
+    case RuntimeControllerObserverSetupState.Failed:
+      return RuntimeOperationReachability.BlockedByOuterFailure;
+    case RuntimeControllerObserverSetupState.Pending:
+    case RuntimeControllerObserverSetupState.Open:
+      return RuntimeOperationReachability.Open;
+    case RuntimeControllerObserverSetupState.NotApplicable:
+    case RuntimeControllerObserverSetupState.Complete:
+      return RuntimeOperationReachability.Reached;
+  }
+}
+
+function mergeRuntimeOperationReachability(
+  left: RuntimeOperationReachability,
+  right: RuntimeOperationReachability,
+): RuntimeOperationReachability {
+  if (left === RuntimeOperationReachability.BlockedByOuterFailure
+    || right === RuntimeOperationReachability.BlockedByOuterFailure) {
+    return RuntimeOperationReachability.BlockedByOuterFailure;
+  }
+  if (left === RuntimeOperationReachability.BlockedByBindFailure
+    || right === RuntimeOperationReachability.BlockedByBindFailure) {
+    return RuntimeOperationReachability.BlockedByBindFailure;
+  }
+  return left === RuntimeOperationReachability.Open || right === RuntimeOperationReachability.Open
+    ? RuntimeOperationReachability.Open
+    : RuntimeOperationReachability.Reached;
 }
 
 export function runtimeControllerCreationKindForInstruction(

@@ -318,6 +318,13 @@ interface RuntimeExpressionAccessMaterializationContext {
   readonly sourceContexts: RuntimeBindingSourceExpressionContextProjector;
 }
 
+function runtimeBindingAccessLocalKey(
+  materializationLocalKey: string,
+  binding: RuntimeExpressionBinding,
+): string {
+  return `${materializationLocalKey}:runtime-expression-access:${localKeyPart(binding.productHandle)}`;
+}
+
 /** Pairs authored expression occurrences with the exact runtime operation and scope that spend them. */
 export class RuntimeExpressionAccessMaterializer {
   constructor(
@@ -353,11 +360,12 @@ export class RuntimeExpressionAccessMaterializer {
 
     input.runtimeRendering.bindings
       .filter(isRuntimeExpressionBinding)
-      .forEach((binding, bindingIndex) => {
+      .forEach((binding) => {
+        const bindingLocal = runtimeBindingAccessLocalKey(input.localKey, binding);
         const evaluator = input.expressionWorld.evaluator(
           input.runtimeRendering.requireRenderContextForBinding(binding.productHandle).resourceScope,
         );
-        const bindingContexts = this.accessContextsForBinding(input, context, binding, bindingIndex);
+        const bindingContexts = this.accessContextsForBinding(input, context, binding, bindingLocal);
         bindingContexts.forEach((accessContext, contextIndex) => {
           const canUseRuntimeArrayMethod = accessContext.checkerContext == null
             ? null
@@ -413,7 +421,7 @@ export class RuntimeExpressionAccessMaterializer {
             const resolution = publishRuntimeBindingExpressionAccessResolution({
               store: this.store,
               publication: this.publication,
-              local: `${input.localKey}:runtime-expression-resolution:${bindingIndex}:${contextIndex}:${accessIndex}`,
+              local: `${bindingLocal}:resolution:${contextIndex}:${accessIndex}`,
               bindingProductHandle: binding.productHandle,
               bindingIdentityHandle: binding.identityHandle,
               occurrence: occurrence.detail,
@@ -433,8 +441,7 @@ export class RuntimeExpressionAccessMaterializer {
               const publication = publishRuntimeExpressionAccessUse({
                 store: this.store,
                 publication: this.publication,
-                local: `${input.localKey}:runtime-expression-access:${bindingIndex}:${contextIndex}`
-                  + `:${operationIndex}:${accessIndex}`,
+                local: `${bindingLocal}:use:${contextIndex}:${operationIndex}:${accessIndex}`,
                 index: accessIndex,
                 operationProductHandle: operation.operationProductHandle,
                 operationKind: operation.operationKind,
@@ -473,7 +480,7 @@ export class RuntimeExpressionAccessMaterializer {
                 operation,
                 drafts,
                 canUseRuntimeArrayMethod,
-                bindingIndex,
+                bindingLocal,
                 contextIndex,
                 operationIndex,
                 drafts.length,
@@ -489,7 +496,7 @@ export class RuntimeExpressionAccessMaterializer {
           const spreadMembers = this.spreadMemberAccessUsesForBinding(
             input,
             binding,
-            bindingIndex,
+            bindingLocal,
             source,
           );
           accessUses.push(...spreadMembers.publications.map((publication) => publication.detail));
@@ -530,7 +537,7 @@ export class RuntimeExpressionAccessMaterializer {
   private spreadMemberAccessUsesForBinding(
     input: RuntimeExpressionAccessMaterializationRequest,
     binding: SpreadValueBinding,
-    bindingIndex: number,
+    bindingLocal: string,
     source: RuntimeExpressionAccessUseSourceSet,
   ): {
     readonly publications: readonly RuntimeExpressionAccessPublication[];
@@ -562,7 +569,7 @@ export class RuntimeExpressionAccessMaterializer {
       const publication = publishRuntimeExpressionAccessUse({
         store: this.store,
         publication: this.publication,
-        local: `${input.localKey}:runtime-expression-access:${bindingIndex}:spread-member:${targetIndex}`,
+        local: `${bindingLocal}:spread-member:${targetIndex}`,
         index: targetIndex,
         ownerKind: RuntimeExpressionAccessOwnerKind.Binding,
         ownerProductHandle: binding.productHandle,
@@ -709,7 +716,7 @@ export class RuntimeExpressionAccessMaterializer {
     operation: RuntimeExpressionAccessOperation,
     invocationAccesses: readonly RuntimeExpressionAccessDraft[],
     canUseRuntimeArrayMethod: RuntimeTemplateArrayMethodPolicy | null,
-    bindingIndex: number,
+    bindingLocal: string,
     contextIndex: number,
     operationIndex: number,
     firstAccessIndex: number,
@@ -759,7 +766,7 @@ export class RuntimeExpressionAccessMaterializer {
         publishRuntimeExpressionAccessUse({
           store: this.store,
           publication: this.publication,
-          local: `${input.localKey}:runtime-expression-access:${bindingIndex}:${contextIndex}:${operationIndex}`
+          local: `${bindingLocal}:use:${contextIndex}:${operationIndex}`
             + `:method:${methodIndex}:${methodAccessIndex}`,
           index: firstAccessIndex + publications.length + methodAccessIndex,
           ownerKind: RuntimeExpressionAccessOwnerKind.Binding,
@@ -915,7 +922,7 @@ export class RuntimeExpressionAccessMaterializer {
     input: RuntimeExpressionAccessMaterializationRequest,
     context: RuntimeExpressionAccessMaterializationContext,
     binding: RuntimeExpressionBinding,
-    bindingIndex: number,
+    bindingLocal: string,
   ): readonly RuntimeBindingExpressionAccessContext[] {
     const accessContexts: RuntimeBindingExpressionAccessContext[] = [];
     const expression = runtimeBindingSourceExpression(this.publication, binding);
@@ -930,7 +937,7 @@ export class RuntimeExpressionAccessMaterializer {
       expressionProductHandle,
       expressionChainIndex: aggregateRuntimeBindingSourceExpressionChainIndex(expression),
       expression,
-      localKey: `${input.localKey}:runtime-expression-access:${bindingIndex}:source`,
+      localKey: `${bindingLocal}:source`,
     });
     const authoredParts = runtimeBindingSourceExpressionParts(expression);
     const interpolation = expression.$kind === 'Interpolation';
@@ -972,7 +979,7 @@ export class RuntimeExpressionAccessMaterializer {
               expressionProductHandle,
               expressionChainIndex: 0,
               expression: target,
-              localKey: `${input.localKey}:runtime-expression-access:${bindingIndex}:source-assignment`,
+              localKey: `${bindingLocal}:source-assignment`,
               sourceScope: assignmentScope,
             });
         const sourceOperation = binding instanceof RefBinding
@@ -1228,7 +1235,8 @@ export class RuntimeExpressionAccessMaterializer {
             ? RuntimeExpressionAccessPhase.CollectionReconciliation
             : RuntimeExpressionAccessPhase.Bind,
           tracking: RuntimeExpressionAccessTracking.Untracked,
-          reachability: RuntimeOperationReachability.Reached,
+          reachability: projection?.sourceEvaluationReachability
+            ?? RuntimeOperationReachability.Open,
         }],
       });
     }

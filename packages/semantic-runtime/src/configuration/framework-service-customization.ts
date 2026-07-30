@@ -1,5 +1,9 @@
 import ts from 'typescript';
 import {
+  APP_TASK_SLOTS,
+  type AppTaskSlot,
+} from './app-task.js';
+import {
   openSeamReasonKindsForEvaluationPressure,
   openSeamReasonKindsForEvaluationRead,
   openSeamReasonKindsForEvaluationValue,
@@ -83,6 +87,8 @@ import {
 } from '../template/runtime-event-modifier.js';
 import {
   NodeObserverLocatorConfiguration,
+  ObjectObservationAdapterRegistration,
+  ObserverLocatorConfiguration,
   type NodeObserverLocatorAccessorOverride,
   type NodeObserverLocatorGlobalConfig,
   type NodeObserverLocatorNodeConfig,
@@ -133,6 +139,7 @@ import type {
 
 const enum FrameworkServiceKind {
   AttrMapper = 'attr-mapper',
+  ObserverLocator = 'observer-locator',
   NodeObserverLocator = 'node-observer-locator',
   KeyMapping = 'key-mapping',
 }
@@ -200,14 +207,14 @@ const builtInGlobalAttributeMappingKeys = [
 export class FrameworkServiceCustomization {
   static readonly empty = new FrameworkServiceCustomization(
     AttributeMapperConfiguration.empty,
-    NodeObserverLocatorConfiguration.empty,
+    ObserverLocatorConfiguration.empty,
     RuntimeKeyMappingConfiguration.frameworkDefault,
     StaticCallableExecutionBindings.empty,
   );
 
   constructor(
     readonly attributeMapper: AttributeMapperConfiguration,
-    readonly nodeObserverLocator: NodeObserverLocatorConfiguration,
+    readonly observerLocator: ObserverLocatorConfiguration,
     readonly runtimeKeyMapping: RuntimeKeyMappingConfiguration,
     readonly callableBindings: StaticCallableExecutionBindings,
   ) {}
@@ -250,6 +257,7 @@ class FrameworkServiceCustomizationDraft {
   readonly globalNodeConfigs: NodeObserverLocatorGlobalConfig[] = [];
   readonly nodeAccessorOverrides: NodeObserverLocatorAccessorOverride[] = [];
   readonly globalAccessorOverrides: string[] = [];
+  readonly objectObservationAdapters: ObjectObservationAdapterRegistration[] = [];
   readonly issues: ConfigurationIssue[] = [];
   readonly records: KernelStoreRecord[] = [];
   private readonly callableBindings: StaticCallableExecutionBinding[] = [];
@@ -263,6 +271,7 @@ class FrameworkServiceCustomizationDraft {
   private issueOrdinal = 0;
   private openOrdinal = 0;
   private runtimeKeyMappingSourceOrdinal = 0;
+  private objectObservationAdapterSourceOrdinal = 0;
   private callableOrdinal = 0;
 
   constructor(
@@ -347,16 +356,71 @@ class FrameworkServiceCustomizationDraft {
   toCustomization(): FrameworkServiceCustomization {
     return new FrameworkServiceCustomization(
       new AttributeMapperConfiguration(this.attributeMappings, this.attributeTwoWayRules),
-      new NodeObserverLocatorConfiguration(
-        this.nodeConfigs,
-        this.globalNodeConfigs,
-        this.nodeAccessorOverrides,
-        this.globalAccessorOverrides,
-        this.nodeObserverLocatorAllowDirtyCheck,
+      new ObserverLocatorConfiguration(
+        new NodeObserverLocatorConfiguration(
+          this.nodeConfigs,
+          this.globalNodeConfigs,
+          this.nodeAccessorOverrides,
+          this.globalAccessorOverrides,
+          this.nodeObserverLocatorAllowDirtyCheck,
+        ),
+        this.objectObservationAdapters,
       ),
       this.runtimeKeyMapping,
       new StaticCallableExecutionBindings(this.callableBindings),
     );
+  }
+
+  addObjectObservationAdapter(
+    context: ConfigurationRecognitionContext,
+    call: ts.CallExpression,
+    appTaskSlot: AppTaskSlot,
+  ): void {
+    const argument = call.arguments[0];
+    if (argument == null || ts.isSpreadElement(argument)) {
+      this.addDomainPressure(
+        context,
+        argument ?? call,
+        'ObserverLocator.addAdapter(...) did not expose one direct adapter value.',
+        [],
+      );
+      return;
+    }
+    const sourceFileAddressHandle = context.sourceFileAddressHandleForNode(argument);
+    const span = sourceFileAddressHandle == null
+      ? null
+      : {
+          sourceFileAddressHandle,
+          start: argument.getStart(argument.getSourceFile()),
+          end: argument.end,
+        };
+    const local = `object-observation-adapter:${this.scopeLocalKey}:${projectModuleSourceNodeOrdinalLocalKey({
+      projectKey: context.projectKey,
+      moduleKey: context.moduleKey,
+      sourceFile: argument.getSourceFile(),
+      node: argument,
+      index: this.objectObservationAdapterSourceOrdinal++,
+    })}`;
+    const source = span == null
+      ? null
+      : sourceSpanEvidenceForSite(
+          this.configurationPublication.store,
+          local,
+          span,
+          SourceSpanRole.Value,
+          [EvidenceRole.Configuration],
+          'AppTask registered an ordered IObjectObservationAdapter.',
+        );
+    if (source != null) {
+      this.records.push(...source.records);
+    }
+    this.objectObservationAdapters.push(new ObjectObservationAdapterRegistration(
+      this.objectObservationAdapters.length,
+      readReferenceName(argument),
+      appTaskSlot,
+      source?.addressHandle ?? null,
+      source?.provenanceHandle ?? null,
+    ));
   }
 
   addAttributeTwoWayRule(
@@ -565,12 +629,16 @@ export class FrameworkServiceCustomizationRecognitionPass {
           new ConfigurationKernelPublication(this.store),
           localKeyPart(cohort.container.identityHandle),
         );
-        for (const registration of cohort.registrations) {
-          executeRegisteredAppTaskServiceCustomizations(
-            registration,
-            sourceIndex,
-            draft,
-          );
+        for (const slot of APP_TASK_SLOTS) {
+          for (const registration of cohort.registrations) {
+            if (registration.task.slot === slot) {
+              executeRegisteredAppTaskServiceCustomizations(
+                registration,
+                sourceIndex,
+                draft,
+              );
+            }
+          }
         }
         customization = draft.toCustomization();
         customizationsByTaskContainer.set(cohort.container.identityHandle, customization);
@@ -648,6 +716,7 @@ function executeRegisteredAppTaskServiceCustomizations(
     evaluation,
     callback,
     draft,
+    registration.task.slot,
   );
 }
 
@@ -656,6 +725,7 @@ function executeAppTaskServiceCustomizations(
   appTask: AureliaAppTaskEvaluation,
   callback: EvaluationFunctionValue,
   draft: FrameworkServiceCustomizationDraft,
+  appTaskSlot: AppTaskSlot,
 ): void {
   const callbackTarget = appTaskCallbackTarget(appTask);
   if (callbackTarget == null) {
@@ -701,6 +771,11 @@ function executeAppTaskServiceCustomizations(
           evaluation.policy,
           runtimeHost,
         );
+        break;
+      case FrameworkServiceKind.ObserverLocator:
+        if (invocation.propertyKey === 'addAdapter') {
+          draft.addObjectObservationAdapter(context, invocation.node, appTaskSlot);
+        }
         break;
       case FrameworkServiceKind.NodeObserverLocator:
         recognizeNodeObserverLocatorCall(context, invocation.propertyKey, invocation.node, reader, draft);
@@ -919,10 +994,15 @@ const nodeObserverLocatorMethodNames = new Set([
   'overrideAccessorGlobal',
 ]);
 
+const observerLocatorMethodNames = new Set([
+  'addAdapter',
+]);
+
 const noFrameworkServiceMethodNames = new Set<string>();
 
 class FrameworkServiceExecutionValues {
   readonly attrMapper: EvaluationObjectValue;
+  readonly observerLocator: EvaluationObjectValue;
   readonly nodeObserverLocator: EvaluationObjectValue;
   readonly keyMapping: EvaluationObjectValue;
   readonly container: EvaluationObjectValue;
@@ -939,6 +1019,11 @@ class FrameworkServiceExecutionValues {
       node,
       allowDirtyCheck,
     );
+    const observerLocator = frameworkServiceValue(
+      FrameworkServiceKind.ObserverLocator,
+      node,
+      allowDirtyCheck,
+    );
     const nodeObserverLocator = frameworkServiceValue(
       FrameworkServiceKind.NodeObserverLocator,
       node,
@@ -947,6 +1032,7 @@ class FrameworkServiceExecutionValues {
     const keyMapping = frameworkKeyMappingValue(node, runtimeKeyMapping);
     const container = frameworkServiceContainerValue(node);
     this.attrMapper = graph?.retainProduced(attrMapper) ?? attrMapper;
+    this.observerLocator = graph?.retainProduced(observerLocator) ?? observerLocator;
     this.nodeObserverLocator = graph?.retainProduced(nodeObserverLocator) ?? nodeObserverLocator;
     this.keyMapping = graph?.retainProduced(keyMapping) ?? keyMapping;
     this.container = graph?.retainProduced(container) ?? container;
@@ -962,6 +1048,8 @@ class FrameworkServiceExecutionValues {
     switch (kind) {
       case FrameworkServiceKind.AttrMapper:
         return this.attrMapper;
+      case FrameworkServiceKind.ObserverLocator:
+        return this.observerLocator;
       case FrameworkServiceKind.NodeObserverLocator:
         return this.nodeObserverLocator;
       case FrameworkServiceKind.KeyMapping:
@@ -972,6 +1060,9 @@ class FrameworkServiceExecutionValues {
   serviceKindForReceiver(receiver: EvaluationValue): FrameworkServiceKind | null {
     if (evaluationValuesShareLineage(receiver, this.attrMapper)) {
       return FrameworkServiceKind.AttrMapper;
+    }
+    if (evaluationValuesShareLineage(receiver, this.observerLocator)) {
+      return FrameworkServiceKind.ObserverLocator;
     }
     if (evaluationValuesShareLineage(receiver, this.nodeObserverLocator)) {
       return FrameworkServiceKind.NodeObserverLocator;
@@ -1159,6 +1250,13 @@ function publishFrameworkServiceMutations(
     context,
     FrameworkServiceKind.AttrMapper,
     services.attrMapper,
+    executionClosed,
+    draft,
+  );
+  publishFrameworkServiceObjectMutations(
+    context,
+    FrameworkServiceKind.ObserverLocator,
+    services.observerLocator,
     executionClosed,
     draft,
   );
@@ -1373,6 +1471,8 @@ function frameworkServiceMethodNames(kind: FrameworkServiceKind): ReadonlySet<st
   switch (kind) {
     case FrameworkServiceKind.AttrMapper:
       return attrMapperMethodNames;
+    case FrameworkServiceKind.ObserverLocator:
+      return observerLocatorMethodNames;
     case FrameworkServiceKind.NodeObserverLocator:
       return nodeObserverLocatorMethodNames;
     case FrameworkServiceKind.KeyMapping:
@@ -1384,6 +1484,8 @@ function frameworkServiceLabel(kind: FrameworkServiceKind): string {
   switch (kind) {
     case FrameworkServiceKind.AttrMapper:
       return 'IAttrMapper';
+    case FrameworkServiceKind.ObserverLocator:
+      return 'IObserverLocator';
     case FrameworkServiceKind.NodeObserverLocator:
       return 'NodeObserverLocator';
     case FrameworkServiceKind.KeyMapping:
@@ -1420,6 +1522,9 @@ function serviceKindForKeyValue(
     case 'INodeObserverLocator':
     case 'NodeObserverLocator':
       return FrameworkServiceKind.NodeObserverLocator;
+    case 'IObserverLocator':
+    case 'ObserverLocator':
+      return FrameworkServiceKind.ObserverLocator;
     case 'IKeyMapping':
       return FrameworkServiceKind.KeyMapping;
     default:

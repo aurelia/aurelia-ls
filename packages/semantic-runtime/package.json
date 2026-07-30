@@ -43,6 +43,7 @@
     "contract:expression-synthetic-unions": "pnpm build && node scripts/contract-expression-synthetic-unions.mjs",
     "contract:node-observer-service-customization": "pnpm build && node scripts/contract-node-observer-service-customization.mjs",
     "contract:observer-locator-target-access": "pnpm build && node scripts/contract-observer-locator-target-access.mjs",
+    "contract:controller-observer-setup": "pnpm build && node scripts/contract-controller-observer-setup.mjs",
     "contract:one-hop-forwarding-accessor": "pnpm build && node scripts/contract-one-hop-forwarding-accessor.mjs",
     "contract:component-object-boundary": "pnpm build && node scripts/contract-component-object-boundary.mjs",
     "contract:listener-method-reference": "pnpm build && node scripts/contract-listener-method-reference.mjs",

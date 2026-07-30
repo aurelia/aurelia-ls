@@ -11,7 +11,7 @@ import type { FieldProvenance } from '../kernel/provenance.js';
 import type { AppRootReference } from '../configuration/app-root.js';
 import type { ContainerReference } from '../di/container-reference.js';
 import type { RuntimeHydrationContext } from '../configuration/controller.js';
-import type { NodeObserverLocatorConfiguration } from '../observation/observer-locator.js';
+import type { ObserverLocatorConfiguration } from '../observation/observer-locator.js';
 import type { ExpressionType } from '../expression/ast.js';
 import type { ExpressionParseContext } from '../expression/expression-parse-support.js';
 import { ExpressionParser } from '../expression/expression-parser.js';
@@ -1080,7 +1080,7 @@ export class TemplateCompilerWorld {
     /** Resource/syntax scope visible to this compiler world. */
     readonly resourceScopeProductHandle: ProductHandle | null,
     /** App-authored NodeObserverLocator service state visible to runtime binding analysis. */
-    readonly nodeObserverLocatorConfiguration: NodeObserverLocatorConfiguration | null,
+    readonly observerLocatorConfiguration: ObserverLocatorConfiguration,
     /** App-effective IKeyMapping state visible to listener runtime analysis and authoring. */
     readonly runtimeKeyMappingConfiguration: RuntimeKeyMappingConfiguration,
     /** Compiler services visible to this compiler world. */

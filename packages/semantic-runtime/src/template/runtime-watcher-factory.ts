@@ -83,7 +83,8 @@ export function runtimeWatcherMaterializationsForDefinition(
   frame: RuntimeControllerFrame,
   definition: CustomElementDefinition | CustomAttributeDefinition | null,
   expressionWorld: CheckerExpressionTypeWorld,
-  typeSystem: TypeSystemProject | null = null,
+  typeSystem: TypeSystemProject | null,
+  reachability: RuntimeOperationReachability,
 ): readonly RuntimeWatcherMaterialization[] {
   if (definition == null || definition.watches.length === 0) {
     return [];
@@ -99,6 +100,7 @@ export function runtimeWatcherMaterializationsForDefinition(
       index,
       expressionWorld,
       typeSystem,
+      reachability,
     )
   );
 }
@@ -113,6 +115,7 @@ function runtimeWatcherForDefinitionWatch(
   watchIndex: number,
   expressionWorld: CheckerExpressionTypeWorld,
   typeSystem: TypeSystemProject | null,
+  reachability: RuntimeOperationReachability,
 ): RuntimeWatcherMaterialization {
   const productHandle = store.handles.product(local);
   const identityHandle = store.handles.identity(local);
@@ -132,6 +135,7 @@ function runtimeWatcherForDefinitionWatch(
     frame.provenanceHandle,
     expressionWorld,
     typeSystem,
+    reachability,
   );
   const observedDependencies = runtimeWatcherObservedDependenciesForAccessUses(
     store,
@@ -204,6 +208,7 @@ function runtimeWatcherAccessUseEmissionForWatch(
   provenanceHandle: RuntimeControllerFrame['provenanceHandle'],
   expressionWorld: CheckerExpressionTypeWorld,
   typeSystem: TypeSystemProject | null,
+  reachability: RuntimeOperationReachability,
 ): RuntimeWatcherAccessUseEmission {
   return watch.expression.kind === WatchExpressionKind.DependencyCollectionFunction
     ? computedWatcherAccessUseEmission(
@@ -215,6 +220,7 @@ function runtimeWatcherAccessUseEmissionForWatch(
         sourceAddressHandle,
         provenanceHandle,
         typeSystem,
+        reachability,
       )
     : expressionWatcherAccessUseEmission(
         store,
@@ -226,6 +232,7 @@ function runtimeWatcherAccessUseEmissionForWatch(
         sourceAddressHandle,
         provenanceHandle,
         expressionWorld,
+        reachability,
       );
 }
 
@@ -279,6 +286,7 @@ function expressionWatcherAccessUseEmission(
   sourceAddressHandle: AddressHandle | null,
   provenanceHandle: RuntimeControllerFrame['provenanceHandle'],
   expressionWorld: CheckerExpressionTypeWorld,
+  reachability: RuntimeOperationReachability,
 ): RuntimeWatcherAccessUseEmission {
   const ast = expressionAstForExpressionWatcher(publication, watch);
   const accessDrafts = ast == null
@@ -312,6 +320,7 @@ function expressionWatcherAccessUseEmission(
     provenanceHandle,
     RuntimeExpressionOperationKind.WatcherExpression,
     drafts,
+    reachability,
   );
   const publicationByDraft = new Map<RuntimeExpressionAccessDraft, RuntimeExpressionAccessPublication>(
     accessDrafts.map((draft, index) => [draft, accessPublication.publications[index]!] as const),
@@ -345,6 +354,7 @@ function computedWatcherAccessUseEmission(
   sourceAddressHandle: AddressHandle | null,
   provenanceHandle: RuntimeControllerFrame['provenanceHandle'],
   typeSystem: TypeSystemProject | null,
+  reachability: RuntimeOperationReachability,
 ): RuntimeWatcherAccessUseEmission {
   const declaration = dependencyCollectionFunctionForTarget(typeSystem, publication, watch.expression.target);
   const dependencies = declaration == null
@@ -371,6 +381,7 @@ function computedWatcherAccessUseEmission(
     provenanceHandle,
     RuntimeExpressionOperationKind.WatcherGetter,
     drafts,
+    reachability,
   );
   return new RuntimeWatcherAccessUseEmission(
     accessPublication,
@@ -387,6 +398,7 @@ function publishRuntimeWatcherAccessUses(
   provenanceHandle: RuntimeControllerFrame['provenanceHandle'],
   operationKind: RuntimeExpressionOperationKind,
   drafts: readonly RuntimeSourceAccessUseDraft[],
+  reachability: RuntimeOperationReachability,
 ): RuntimeSourceAccessUsePublication {
   if (watcher.productHandle == null || watcher.identityHandle == null) {
     throw new Error(`Runtime watcher '${local}' has no durable owner identity.`);
@@ -403,7 +415,7 @@ function publishRuntimeWatcherAccessUses(
     operationIndex: null,
     phase: RuntimeExpressionAccessPhase.WatcherEvaluation,
     realization: RuntimeOperationRealization.Direct,
-    reachability: RuntimeOperationReachability.Reached,
+    reachability,
     provenanceHandle,
     claimPredicateKey: KernelVocabulary.RuntimeExpression.RuntimeWatcherUsesAccessUse.key,
     drafts,

@@ -174,10 +174,9 @@ static type surfaces rather than hydrated runtime values.
   proxy-trap/control-flow precision.
 - `observer-locator.ts` models `ObserverLocator.getAccessor/getObserver`, `NodeObserverLocator`, and binding-owned
   accessor paths for property bindings and interpolations. It is framework-shaped and auLink-backed; the current lookup
-  mechanics are TypeChecker-backed static semantics rather than hydrated DOM/JS execution. Direct framework nouns such
-  as `PropertyAccessor`, `SetterObserver`, `ComputedObserver`, `ControlledComputedObserver`, `ValueAttributeObserver`,
-  `CheckedObserver`, and `SelectValueObserver` are local emulator classes, not anonymous strategy cases, so Atlas can
-  keep their runtime mirror pressure visible. Direct
+  mechanics are TypeChecker-backed static semantics rather than hydrated DOM/JS execution. Selection truth lives in
+  `ObserverLocatorLookupResult`, strategy/capability/cache vocabulary, source products, and provenance; class-shaped
+  framework names are not a second executable observer implementation. Direct
   `AttributeBinding.updateTarget(...)` writes are target-operation products instead of observer-locator lookups.
 - Native element targets use framework-grounded node observer configuration first, then the TypeChecker DOM surface to
   attach target/property type facts such as `HTMLInputElement.value: string` or `HTMLInputElement.checked: boolean`.
@@ -224,14 +223,22 @@ static type surfaces rather than hydrated runtime values.
   publishes `rejected-target-access` so binding data-flow does not duplicate the same failure as generic open pressure.
 - Controller/view-model targets use TypeChecker-backed resource target types when available. Ordinary accessor lookups
   close through Aurelia's runtime-default `PropertyAccessor`; observer lookups use the same framework fallback shape as
-  Aurelia, selecting `ComputedObserver` for configurable accessor descriptors, including setter-only descriptors, and
-  function-key observer requests. `SetterObserver` remains the ordinary or missing data-property fallback. TypeScript
+  Aurelia: cached observers and collection branches precede descriptor selection; concrete getter/setter/auto-accessor
+  descriptors select `ComputedObserver`, exact `@computed` metadata can select `ControlledComputedObserver`, exact
+  field- or class-form `@observable` selects its getter-owned `SetterNotifier`, and ordinary or missing data properties
+  fall back to `SetterObserver`. Interface, abstract, ambient, dynamic `@observable` configuration,
+  function-dependency, and app-adapter behavior stays open when declaration evidence cannot prove the runtime descriptor
+  or selected observer. TypeScript
   `readonly` fields are write-policy facts for diagnostics, not evidence that runtime would choose a computed observer. Collection-shaped view-model targets also
   preserve Aurelia's special object-observer branches:
   array/tuple `length` uses `CollectionLengthObserver`, map/set `size` uses `CollectionSizeObserver`, and numeric array
-  keys use `ArrayIndexObserver`. Lookup results expose whether the selected observer supports controller bindable
-  `useCoercer` and `useCallback` hooks, so controller hydration can report `AUR0507`/`AUR0508` without duplicating
-  observer-locator rules. TypeChecker facts such as property existence and writability remain attached to the
+  keys use `ArrayIndexObserver`. Lookup results expose cache disposition and whether the selected observer supports
+  controller bindable `useCoercer` and `useCallback` hooks. Controller hydration records one setup decision for every
+  bindable, including open, rejected, and not-reached outcomes; later target access reuses only an observer the framework
+  would have cached. Setup uses separate checker-backed runtime predicates for bindable callbacks, `propertyChanged`,
+  and `propertiesChanged`, so declaration-only or nullish members do not masquerade as installed handlers.
+  `AUR0507`/`AUR0508` therefore publish without duplicating observer-locator rules. TypeChecker facts such as property
+  existence and writability remain attached to the
   target-access row so a later strictness/policy layer can decide whether a framework-valid dynamic write should become
   a diagnostic.
   API-facing bindable type surfaces preserve both declared and effective shape. A nullable object bindable can still

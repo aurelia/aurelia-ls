@@ -225,8 +225,10 @@ Some AppTask callbacks do intentionally mutate framework service state before co
 generic lifecycle execution: `framework-service-customization.ts` executes the exact DI-spent callback in an isolated
 evaluator fork under the path-proven effect policy. Framework-service aliases, local helper calls, and
 `IContainer.get(...)` retain evaluator identity, while only reached `IAttrMapper`/`AttrMapper` and
-`NodeObserverLocator`/`INodeObserverLocator` invocation snapshots plus `IKeyMapping` object mutations become explicit
-service configuration for app-root compiler worlds, bind-time observer lookup, and listener authoring. Each app-root
+`NodeObserverLocator`/`INodeObserverLocator` invocation snapshots, ordered `IObserverLocator.addAdapter(...)` calls,
+plus `IKeyMapping` object mutations become explicit service configuration for app-root compiler worlds, bind-time
+observer lookup, and listener authoring. AppTask callbacks execute in framework lifecycle-slot order and retain source
+order within each slot; registration order across different slots is not execution order. Each app-root
 container selects the same nearest `IAppTask` registration cohort as `AppRoot`; independent roots do not share a
 project-global service snapshot. Unregistered task definitions and dead callback branches do not participate;
 runtime-dependent branches publish evaluator pressure instead of guessed mutations.
@@ -236,8 +238,10 @@ and `NodeObserverLocator.useConfig(...)`, accessor overrides, and closed `allowD
 preserving exact authored key sources while dynamic computed writes keep membership open. The callback argument is
 treated as a framework service only when the `AppTask` key is that service, and as a container only when the key is
 `IContainer`; no-key tasks and arbitrary DI keys must not masquerade as containers merely because their parameter is
-later used with `.get(...)`. The execution host models only those three framework services and container lookup for
-them; unsupported calls, mutations, async continuations, and arbitrary lifecycle effects stay open. Invocation
+later used with `.get(...)`. Ordered object-observation adapters retain their exact AppTask slot because root, direct
+child, recursively hydrated child, and synthetic-view controller setup cross different lifecycle boundaries. The
+execution host models only these framework services and container lookup for them; unsupported calls, adapter
+predicate execution, mutations, async continuations, and arbitrary lifecycle effects stay open. Invocation
 arguments are decoded through `StaticInvocationEvidenceExpressionReader`, so a new callback shape must improve the
 ECMAScript evaluator or the shared expression reader rather than add one-off source parsing inside compiler-world,
 renderer, or observation materializers.

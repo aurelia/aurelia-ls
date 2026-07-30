@@ -45,7 +45,6 @@ import { ObservationProductDetails } from '../src/observation/product-details.js
 import {
   RuntimeBindingDataFlow,
   RuntimeBindingDataFlowDirection,
-  RuntimeBindingRealization,
   RuntimeBindingDataFlowSourceAssignmentKind,
   RuntimeBindingDataFlowSourceKind,
   RuntimeBindingObservedDependency,
@@ -56,6 +55,11 @@ import {
   RuntimeObservedDependencyKind,
   RuntimeObservedMemberSourceState,
 } from '../src/observation/runtime-binding-observation.js';
+import {
+  RuntimeOperationReachability,
+  RuntimeOperationRealization,
+} from '../src/runtime-expression/runtime-operation.js';
+import { RuntimeExpressionDetailDescriptors } from '../src/runtime-expression/detail-descriptors.js';
 import { RuntimeWatcherObservedDependency } from '../src/observation/runtime-watcher-observation.js';
 import {
   computedObserverSourceReferenceReferences,
@@ -111,7 +115,6 @@ import {
 } from '../src/template/structural-references.js';
 import { RuntimeValueConverterApplicationReference } from '../src/template/runtime-value-converter.js';
 import { RuntimeWatcherKind, RuntimeWatcherReference } from '../src/template/runtime-watcher.js';
-import { RuntimeExpressionResourcePhaseReachability } from '../src/template/runtime-expression-resource.js';
 
 describe('product-detail structural references', () => {
   test('projects every compact runtime reference to its exact rich-detail occupancy', () => {
@@ -254,6 +257,7 @@ describe('product-detail structural references', () => {
 
     const runtimeBindingProduct = handles.product('binding');
     const bindingDataFlowProduct = handles.product('binding-data-flow');
+    const bindingAccessUseProduct = handles.product('binding-access-use');
     const expressionParseProduct = handles.product('expression-parse');
     const bindingDependency = new RuntimeBindingObservedDependency(
       handles.product('binding-dependency'),
@@ -265,9 +269,10 @@ describe('product-detail structural references', () => {
         sourceAddress,
       ),
       bindingDataFlowProduct,
+      bindingAccessUseProduct,
       expressionParseProduct,
       null,
-      RuntimeBindingRealization.Direct,
+      RuntimeOperationRealization.Direct,
       RuntimeObservedDependencyKind.TemplateExpressionRead,
       'AccessMember',
       'value',
@@ -290,11 +295,13 @@ describe('product-detail structural references', () => {
       [
         [TemplateDetailDescriptors.RuntimeBinding, runtimeBindingProduct],
         [ObservationProductDetails.RuntimeBindingDataFlow.descriptor, bindingDataFlowProduct],
+        [RuntimeExpressionDetailDescriptors.AccessUse, bindingAccessUseProduct],
         [TemplateDetailDescriptors.ExpressionParse, expressionParseProduct],
       ],
     );
 
     const watcherProduct = handles.product('watcher');
+    const watcherAccessUseProduct = handles.product('watcher-access-use');
     const watcherDependency = new RuntimeWatcherObservedDependency(
       handles.product('watcher-dependency'),
       handles.identity('watcher-dependency'),
@@ -304,6 +311,7 @@ describe('product-detail structural references', () => {
         handles.identity('watcher'),
         sourceAddress,
       ),
+      watcherAccessUseProduct,
       expressionParseProduct,
       RuntimeObservedDependencyKind.TemplateExpressionRead,
       'AccessMember',
@@ -322,6 +330,7 @@ describe('product-detail structural references', () => {
       ObservationProductDetails.RuntimeWatcherObservedDependency.referencesFor(watcherDependency),
       [
         [TemplateDetailDescriptors.RuntimeWatcher, watcherProduct],
+        [RuntimeExpressionDetailDescriptors.AccessUse, watcherAccessUseProduct],
         [TemplateDetailDescriptors.ExpressionParse, expressionParseProduct],
       ],
     );
@@ -330,6 +339,7 @@ describe('product-detail structural references', () => {
       bindingDataFlowProduct,
       handles.identity('binding-data-flow'),
       bindingDependency.binding,
+      [bindingAccessUseProduct],
       null,
       null,
       null,
@@ -337,9 +347,9 @@ describe('product-detail structural references', () => {
       expressionParseProduct,
       null,
       RuntimeBindingDataFlowDirection.SourceToTarget,
-      RuntimeBindingRealization.Direct,
+      RuntimeOperationRealization.Direct,
       RuntimeBindingSourceEvaluationKind.ConnectableRead,
-      RuntimeExpressionResourcePhaseReachability.Reached,
+      RuntimeOperationReachability.Reached,
       RuntimeBindingValueChannelTargetMutationKind.WritesTarget,
       true,
       RuntimeBindingDataFlowSourceKind.Member,
@@ -372,6 +382,7 @@ describe('product-detail structural references', () => {
       ObservationProductDetails.RuntimeBindingDataFlow.referencesFor(dataFlow),
       [
         [TemplateDetailDescriptors.RuntimeBinding, runtimeBindingProduct],
+        [RuntimeExpressionDetailDescriptors.AccessUse, bindingAccessUseProduct],
         [TemplateDetailDescriptors.ExpressionParse, expressionParseProduct],
       ],
     );
@@ -388,6 +399,7 @@ describe('product-detail structural references', () => {
       computedDependencyProduct,
       handles.identity('computed-dependency'),
       computedObserverReference,
+      handles.product('computed-access-use'),
       RuntimeObservedDependencyKind.ProxyPropertyRead,
       'AccessMember',
       'state',
@@ -407,11 +419,13 @@ describe('product-detail structural references', () => {
       ComputedObserverSourceTriggerKind.AccessorDescriptor,
       'ViewModel',
       'value',
+      handles.identity('computed-member-declaration'),
       ComputedObservationDependencyMode.ProxyAutoTrack,
       [],
       0,
       'sync',
       null,
+      [],
       [computedDependency],
       sourceAddress,
     );
@@ -428,6 +442,7 @@ describe('product-detail structural references', () => {
 
     const effectProduct = handles.product('runtime-effect');
     const effectDependencyProduct = handles.product('runtime-effect-dependency');
+    const effectAccessUseProduct = handles.product('runtime-effect-access-use');
     const effectReference = new RuntimeEffectReference(
       RuntimeEffectKind.Run,
       RuntimeEffectDependencyEvaluationKind.ConnectableRun,
@@ -439,6 +454,7 @@ describe('product-detail structural references', () => {
       effectDependencyProduct,
       handles.identity('runtime-effect-dependency'),
       effectReference,
+      effectAccessUseProduct,
       RuntimeObservedDependencyKind.ProxyPropertyRead,
       'AccessMember',
       'state',
@@ -458,6 +474,7 @@ describe('product-detail structural references', () => {
       effectProduct,
       effectReference.identityHandle,
       true,
+      [],
       [effectDependency],
       sourceAddress,
     );
@@ -470,6 +487,11 @@ describe('product-detail structural references', () => {
       ObservationProductDetails.RuntimeEffectObservedDependency.referencesFor(effectDependency),
       ObservationProductDetails.RuntimeEffect.descriptor,
       effectProduct,
+    );
+    expectProductDetailReference(
+      ObservationProductDetails.RuntimeEffectObservedDependency.referencesFor(effectDependency),
+      RuntimeExpressionDetailDescriptors.AccessUse,
+      effectAccessUseProduct,
     );
 
     const storeProduct = handles.product('state-store');

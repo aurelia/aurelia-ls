@@ -1766,7 +1766,7 @@ export class KernelStore {
       this.validateHotDetailOwner(publication, nextRecordsByHandle, previousRecordHandles, label);
       if (existing.ownerProductHandle !== publication.ownerProductHandle) {
         throw new Error(
-          `Publication ${label} cannot move hot detail ${handle} from owner `
+          `Publication ${label} cannot move ${publication.slot.detailKind} hot detail ${handle} from owner `
           + `${existing.ownerProductHandle} to ${publication.ownerProductHandle}.`,
         );
       }

@@ -229,6 +229,8 @@ function runtimeControllerRow(
     controllerName: controller.name,
     creationKind: controller.creationKind,
     controllerReadiness: controller.readReadinessKind(),
+    observerSetupState: controller.readObserverSetupState(),
+    bindReachability: controller.readBindReachability(),
     ...runtimeControllerDefinitionRowFields(state),
     ...runtimeControllerTreeRowFields(controller, state),
     ...runtimeControllerViewFactoryRowFields(state),

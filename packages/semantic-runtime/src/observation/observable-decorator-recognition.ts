@@ -8,6 +8,7 @@ import {
   type SourceImportBindings,
 } from '../evaluation/import-bindings.js';
 import {
+  readObjectPropertyExpression,
   unwrapExpression,
 } from '../evaluation/ts-syntax.js';
 import type { TypeSystemProject } from '../type-system/project.js';
@@ -17,12 +18,12 @@ import {
   type SourceDecoratorTargetKind,
 } from '../type-system/decorator-target.js';
 
-const AURELIA_OBSERVABLE_DECORATOR_MODULES = new Set([
+export const AURELIA_OBSERVABLE_DECORATOR_MODULES = new Set([
   'aurelia',
   '@aurelia/runtime',
 ]);
 
-const AURELIA_OBSERVABLE_DECORATOR_EXPORTS = new Set([
+export const AURELIA_OBSERVABLE_DECORATOR_EXPORTS = new Set([
   'observable',
 ]);
 
@@ -31,6 +32,16 @@ export type ObservableDecoratorTargetKind = SourceDecoratorTargetKind;
 export type ObservableDecoratorInvalidForm =
   | 'empty-call'
   | 'object-configuration-call';
+
+/** Whether authored decorator syntax proves a getter-owned observable descriptor for one runtime property. */
+export const enum ObservableDescriptorRecognitionState {
+  /** A valid field or class decorator names this exact runtime property. */
+  Exact = 'exact',
+  /** Dynamic decorator configuration may install this property but does not close its name. */
+  Open = 'open',
+  /** No recognized observable decorator installs this runtime property. */
+  Absent = 'absent',
+}
 
 /** Source site for an @observable decorator form that the runtime decorator rejects with AUR0224. */
 export class ObservableDecoratorSite {
@@ -46,6 +57,84 @@ export class ObservableDecoratorSite {
     readonly targetName: string | null,
     readonly invalidForm: ObservableDecoratorInvalidForm,
   ) {}
+}
+
+/** Whether an exact checker member declaration installs the framework's getter-owned SetterNotifier. */
+export function declarationHasObservableDecorator(
+  declaration: ts.Declaration,
+): boolean {
+  if (sourceDecoratorTargetKind(declaration) !== 'field' || !ts.canHaveDecorators(declaration)) {
+    return false;
+  }
+  const bindings = readSourceImportBindings(
+    declaration.getSourceFile(),
+    AURELIA_OBSERVABLE_DECORATOR_MODULES,
+    AURELIA_OBSERVABLE_DECORATOR_EXPORTS,
+  );
+  return (ts.getDecorators(declaration) ?? []).some((decorator) =>
+    fieldObservableDecoratorState(decorator, bindings) === ObservableDescriptorRecognitionState.Exact
+  );
+}
+
+/** Exact-symbol counterpart used by source-effect and controller-setup materializers. */
+export function symbolHasObservableDecorator(
+  symbol: ts.Symbol | null | undefined,
+): boolean {
+  return (symbol?.declarations ?? []).some(declarationHasObservableDecorator);
+}
+
+/**
+ * Recognize every valid field- and class-form `@observable` source that can install one property descriptor.
+ *
+ * Class forms are resolved from the concrete owner declaration rather than joined by property name alone.
+ */
+export function observableDescriptorRecognitionForMember(
+  ownerDeclarations: readonly ts.Declaration[],
+  memberDeclarations: readonly ts.Declaration[],
+  propertyName: string,
+): ObservableDescriptorRecognitionState {
+  let open = false;
+  for (const declaration of memberDeclarations) {
+    if (sourceDecoratorTargetKind(declaration) !== 'field' || !ts.canHaveDecorators(declaration)) {
+      continue;
+    }
+    const bindings = observableImportBindings(declaration.getSourceFile());
+    for (const decorator of ts.getDecorators(declaration) ?? []) {
+      const state = fieldObservableDecoratorState(decorator, bindings);
+      if (state === ObservableDescriptorRecognitionState.Exact) {
+        return state;
+      }
+      open ||= state === ObservableDescriptorRecognitionState.Open;
+    }
+  }
+
+  const classDeclarations = new Set<ts.ClassLikeDeclarationBase>();
+  for (const declaration of ownerDeclarations) {
+    if (ts.isClassDeclaration(declaration) || ts.isClassExpression(declaration)) {
+      classDeclarations.add(declaration);
+    }
+  }
+  for (const declaration of memberDeclarations) {
+    if (ts.isClassLike(declaration.parent)) {
+      classDeclarations.add(declaration.parent);
+    }
+  }
+  for (const declaration of classDeclarations) {
+    if (!ts.canHaveDecorators(declaration)) {
+      continue;
+    }
+    const bindings = observableImportBindings(declaration.getSourceFile());
+    for (const decorator of ts.getDecorators(declaration) ?? []) {
+      const state = classObservableDecoratorState(decorator, bindings, propertyName);
+      if (state === ObservableDescriptorRecognitionState.Exact) {
+        return state;
+      }
+      open ||= state === ObservableDescriptorRecognitionState.Open;
+    }
+  }
+  return open
+    ? ObservableDescriptorRecognitionState.Open
+    : ObservableDescriptorRecognitionState.Absent;
 }
 
 /** Read invalid @observable decorator sites that match runtime observable.ts invalid-context throws exactly. */
@@ -97,6 +186,77 @@ function readSourceFileInvalidObservableDecoratorSites(
   };
   visit(sourceFile);
   return sites;
+}
+
+function observableImportBindings(sourceFile: ts.SourceFile): SourceImportBindings {
+  return readSourceImportBindings(
+    sourceFile,
+    AURELIA_OBSERVABLE_DECORATOR_MODULES,
+    AURELIA_OBSERVABLE_DECORATOR_EXPORTS,
+  );
+}
+
+function fieldObservableDecoratorState(
+  decorator: ts.Decorator,
+  bindings: SourceImportBindings,
+): ObservableDescriptorRecognitionState {
+  const expression = unwrapExpression(decorator.expression);
+  if (!ts.isCallExpression(expression)) {
+    return readImportedExportName(expression, bindings, true) === 'observable'
+      ? ObservableDescriptorRecognitionState.Exact
+      : ObservableDescriptorRecognitionState.Absent;
+  }
+  if (readImportedExportName(expression.expression, bindings, true) !== 'observable') {
+    return ObservableDescriptorRecognitionState.Absent;
+  }
+  const configuration = expression.arguments[0];
+  return configuration == null || ts.isObjectLiteralExpression(unwrapExpression(configuration))
+    ? ObservableDescriptorRecognitionState.Exact
+    : ObservableDescriptorRecognitionState.Open;
+}
+
+function classObservableDecoratorState(
+  decorator: ts.Decorator,
+  bindings: SourceImportBindings,
+  propertyName: string,
+): ObservableDescriptorRecognitionState {
+  const expression = unwrapExpression(decorator.expression);
+  if (!ts.isCallExpression(expression)
+    || readImportedExportName(expression.expression, bindings, true) !== 'observable') {
+    return ObservableDescriptorRecognitionState.Absent;
+  }
+  const configurationExpression = expression.arguments[0];
+  if (configurationExpression == null) {
+    return ObservableDescriptorRecognitionState.Absent;
+  }
+  const configuration = unwrapExpression(configurationExpression);
+  if (ts.isObjectLiteralExpression(configuration)) {
+    const nameExpression = readObjectPropertyExpression(configuration, 'name');
+    if (nameExpression == null) {
+      return configuration.properties.some(ts.isSpreadAssignment)
+        ? ObservableDescriptorRecognitionState.Open
+        : ObservableDescriptorRecognitionState.Absent;
+    }
+    return staticObservablePropertyNameState(nameExpression, propertyName);
+  }
+  return staticObservablePropertyNameState(configuration, propertyName);
+}
+
+function staticObservablePropertyNameState(
+  expression: ts.Expression,
+  propertyName: string,
+): ObservableDescriptorRecognitionState {
+  const value = unwrapExpression(expression);
+  const staticName = ts.isStringLiteralLike(value)
+    ? value.text
+    : ts.isNumericLiteral(value)
+      ? value.text
+      : null;
+  return staticName == null
+    ? ObservableDescriptorRecognitionState.Open
+    : staticName === propertyName
+      ? ObservableDescriptorRecognitionState.Exact
+      : ObservableDescriptorRecognitionState.Absent;
 }
 
 function readInvalidObservableDecoratorForm(

@@ -648,6 +648,12 @@ classification, expression parsing, and instruction lowering converge on the sam
   accessor lookups select the runtime `PropertyAccessor`, while observer lookups select `ComputedObserver` for getter
   descriptors, setter-only configurable accessor descriptors, and function-key observer requests, or `SetterObserver`
   for ordinary and dynamically-created data keys.
+  Controller construction first performs Aurelia's eager observer setup for every bindable. The controller frame owns
+  each exact setup lookup, capability decision, source/provenance, outcome, and reachability; controller bind reuses a
+  setup observer only when framework caching makes it available. A fatal coercer/callback rejection keeps later
+  bindables as explicit `not-reached` evidence and blocks downstream operations, while an open predecessor makes later
+  setup conditional instead of publishing an unconditional failure. Synthetic view activation has a directed outer
+  prerequisite but does not let a lazy child failure poison already reached outer bindings.
   The checker still contributes property existence, writability, and type facts for downstream policy and data-flow
   products; TypeScript `readonly` is not itself an ObserverLocator computed-observer signal.
   App-authored `NodeObserverLocator.useConfig(...)` service state is consumed only on observer lookup paths, matching the

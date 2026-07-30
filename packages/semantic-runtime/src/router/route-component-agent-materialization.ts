@@ -61,6 +61,9 @@ import {
 import type { TemplateCompilationProjectEmission } from '../template/template-compilation-project-pass.js';
 import { TemplateProductDetails } from '../template/product-details.js';
 import {
+  RuntimeOperationReachability,
+} from '../runtime-expression/runtime-operation.js';
+import {
   runtimeWatcherMaterializationsForDefinition,
 } from '../template/runtime-watcher-factory.js';
 import {
@@ -418,6 +421,7 @@ function routedControllerEmission(
     definition,
     expressionWorld,
     typeSystem,
+    RuntimeOperationReachability.Open,
   )) {
     controller.addWatcher(watcher);
   }

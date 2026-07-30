@@ -18,7 +18,9 @@ import {
 import {
   TemplateCompilerIssuePublisher,
 } from './compiler-issue-publication.js';
-import type { NodeObserverLocatorConfiguration } from '../observation/observer-locator.js';
+import {
+  ObserverLocatorConfiguration,
+} from '../observation/observer-locator.js';
 import { AttributeMapperConfiguration } from './attribute-mapper.js';
 import { RuntimeKeyMappingConfiguration } from './runtime-event-modifier.js';
 import {
@@ -116,8 +118,8 @@ export class TemplateCompilerWorldConstructionRequest {
     readonly callableBindings: StaticCallableExecutionBindings,
     /** App-authored AttrMapper service state visible to this compiler world. */
     readonly attributeMapperConfiguration: AttributeMapperConfiguration = AttributeMapperConfiguration.empty,
-    /** App-authored NodeObserverLocator service state visible to runtime binding analysis for this world. */
-    readonly nodeObserverLocatorConfiguration: NodeObserverLocatorConfiguration | null = null,
+    /** App-authored ObserverLocator and NodeObserverLocator state visible to runtime binding analysis. */
+    readonly observerLocatorConfiguration: ObserverLocatorConfiguration = ObserverLocatorConfiguration.empty,
     /** App-effective IKeyMapping state visible to listener runtime analysis and authoring. */
     readonly runtimeKeyMappingConfiguration: RuntimeKeyMappingConfiguration =
       RuntimeKeyMappingConfiguration.frameworkDefault,
@@ -406,7 +408,7 @@ export class TemplateCompilerWorldMaterializer {
       input.sourceAddressHandle,
       parent.callableBindings,
       parent.attributeMapper.configuration,
-      parent.world.nodeObserverLocatorConfiguration,
+      parent.world.observerLocatorConfiguration,
       parent.world.runtimeKeyMappingConfiguration,
     );
   }
@@ -792,7 +794,7 @@ export class TemplateCompilerWorldMaterializer {
       input.appRoot,
       input.container.toReference(),
       resourceScope.productHandle,
-      input.nodeObserverLocatorConfiguration,
+      input.observerLocatorConfiguration,
       input.runtimeKeyMappingConfiguration,
       services,
       source.addressHandle,

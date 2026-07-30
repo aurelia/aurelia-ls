@@ -17,8 +17,8 @@ import {
   KernelVocabulary,
 } from '../kernel/vocabulary.js';
 import {
-  NodeObserverLocatorConfiguration,
   ObserverLocator,
+  ObserverLocatorConfiguration,
   ObserverLocatorLookupRequest,
   ObserverLocatorLookupResult,
 } from '../observation/observer-locator.js';
@@ -44,6 +44,7 @@ import {
   RuntimeBindingTargetAccess,
   RuntimeBindingTargetAccessAuthority,
   RuntimeBindingTargetAccessLookup,
+  RuntimeBindingTargetObserverCacheDisposition,
   RuntimeBindingTarget,
   type RuntimeBindingTargetAccessRequest,
   RuntimeBindingTargetOperation,
@@ -86,6 +87,7 @@ import {
   type RuntimeBindingIssue,
 } from './runtime-binding-issue.js';
 import { RuntimeHtmlBindingFrameworkErrorCode } from './framework-error-code.js';
+import { RuntimeOperationReachability } from '../runtime-expression/runtime-operation.js';
 
 export interface RuntimeControllerBindMaterializationRequest {
   /** Store-local key shared with the template compilation pass. */
@@ -100,8 +102,8 @@ export interface RuntimeControllerBindMaterializationRequest {
   readonly typeSystem: TypeSystemProject | null;
   /** Runtime-analysis expression world whose projector owns this generation's checker facts. */
   readonly expressionWorld: CheckerExpressionTypeWorld;
-  /** App-authored NodeObserverLocator service state visible to this runtime binding analysis. */
-  readonly nodeObserverLocatorConfiguration?: NodeObserverLocatorConfiguration | null;
+  /** App-authored ObserverLocator service state visible to this runtime binding analysis. */
+  readonly observerLocatorConfiguration: ObserverLocatorConfiguration;
   /** Whether this standalone analysis root is proven to be the app root in its compiler world. */
   readonly isAppRootDefinition: boolean;
 }
@@ -279,7 +281,7 @@ export class RuntimeControllerBindMaterializer {
     const observerLocator = new ObserverLocator(
       this.store,
       input.expressionWorld.projector,
-      input.nodeObserverLocatorConfiguration ?? NodeObserverLocatorConfiguration.empty,
+      input.observerLocatorConfiguration,
     );
     const emission = this.recordsForControllerBind(input, observerLocator);
     this.publication.publish(new KernelPublicationPlan(
@@ -406,15 +408,31 @@ export class RuntimeControllerBindMaterializer {
       observerLocator,
       this.targetAccessLookupRequest(input, request, target),
     );
+    const setup = targetController?.readObserverSetup(request.targetProperty) ?? null;
+    const setupLookup = setup == null
+      ? ordinaryLookup
+      : (
+          setup.lookup != null
+          && (
+            setup.lookup.observerCacheDisposition === RuntimeBindingTargetObserverCacheDisposition.Cached
+            || setup.lookup.observerCacheDisposition === RuntimeBindingTargetObserverCacheDisposition.Open
+          )
+            ? setup.lookup
+            : ordinaryLookup
+        ).forControllerSetupAccess(
+          request.lookup,
+          setup.outcome,
+          setup.provenanceHandles,
+        );
     const rendererLookup = request.binding instanceof PropertyBinding
       && request.binding.rendererTargetObserverStrategy != null
       && target.targetKind === RuntimeBindingTargetKind.Node
-      ? ordinaryLookup.withTargetObserver(
+      ? setupLookup.withTargetObserver(
         request.binding.rendererTargetObserverStrategy,
         [],
         RuntimeBindingTargetAccessAuthority.RuntimeRendererImplementation,
       )
-      : ordinaryLookup;
+      : setupLookup;
     const targetObserver = input.expressionResourcePlan.readTargetObserverOverride(request.binding.productHandle);
     const lookup = targetObserver == null
       ? rendererLookup
@@ -440,6 +458,7 @@ export class RuntimeControllerBindMaterializer {
       request,
       target,
       lookup,
+      this.bindingOperationReachability(input, request.binding),
       source,
       openSeam == null ? [] : [openSeam.handle],
     );
@@ -484,6 +503,7 @@ export class RuntimeControllerBindMaterializer {
       target,
       operationKind,
       openReason,
+      this.bindingOperationReachability(input, request.binding),
       source,
       openSeam == null ? [] : [openSeam.handle],
     );
@@ -531,11 +551,19 @@ export class RuntimeControllerBindMaterializer {
       target,
       operationKind,
       openReason,
+      this.bindingOperationReachability(input, request.binding),
       source,
       openSeam == null ? [] : [openSeam.handle],
     );
     publication.appendTo(records, claims, sourceOperations);
     return publication.product;
+  }
+
+  private bindingOperationReachability(
+    input: RuntimeControllerBindMaterializationRequest,
+    binding: RuntimeBinding,
+  ): RuntimeOperationReachability {
+    return input.expressionResourcePlan.readSourceEvaluationReachability(binding.productHandle);
   }
 
   private targetAccessLookupRequest(

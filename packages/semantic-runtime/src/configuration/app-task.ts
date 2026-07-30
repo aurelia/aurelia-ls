@@ -28,6 +28,14 @@ export const APP_TASK_SLOTS = [
   AppTaskSlot.Deactivated,
 ] as const;
 
+/** Whether an AppTask slot has executed by one framework lifecycle boundary. */
+export function appTaskSlotHasRun(
+  slot: AppTaskSlot,
+  boundary: AppTaskSlot,
+): boolean {
+  return APP_TASK_SLOTS.indexOf(slot) <= APP_TASK_SLOTS.indexOf(boundary);
+}
+
 export const enum AppTaskCallbackKind {
   /** Callback is invoked with no resolved DI value. */
   NoArgument = 'no-argument',

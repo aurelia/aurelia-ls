@@ -2,6 +2,7 @@ import type {
   AddressHandle,
   IdentityHandle,
   ProductHandle,
+  ProvenanceHandle,
 } from '../kernel/handles.js';
 import {
   ComputedObservationDependencyMode,
@@ -48,6 +49,8 @@ export class ComputedObserverSource {
     readonly triggerKind: ComputedObserverSourceTriggerKind,
     readonly className: string | null,
     readonly memberName: string | null,
+    /** Exact checker declaration identity for the getter member, when projected. */
+    readonly memberDeclarationIdentityHandle: IdentityHandle | null,
     readonly dependencyMode: ComputedObservationDependencyMode,
     readonly dependencyKeys: readonly string[],
     readonly dependencyFunctionCount: number,
@@ -56,6 +59,7 @@ export class ComputedObserverSource {
     readonly accessUses: readonly RuntimeExpressionAccessUse[],
     readonly observedDependencies: readonly ComputedObserverObservedDependency[],
     readonly sourceAddressHandle: AddressHandle | null,
+    readonly provenanceHandle: ProvenanceHandle | null = null,
   ) {}
 
   toReference(): ComputedObserverSourceReference {
@@ -90,12 +94,28 @@ export class ComputedObserverObservedDependency {
 }
 
 export class ComputedObserverSourceProjectResult {
+  private readonly computedObserversByMemberDeclaration: ReadonlyMap<IdentityHandle, ComputedObserverSource>;
+
   constructor(
     readonly computedObservers: readonly ComputedObserverSource[],
-  ) {}
+  ) {
+    this.computedObserversByMemberDeclaration = new Map(
+      computedObservers.flatMap((observer) =>
+        observer.memberDeclarationIdentityHandle == null
+          ? []
+          : [[observer.memberDeclarationIdentityHandle, observer] as const]
+      ),
+    );
+  }
 
   readComputedObservers(): readonly ComputedObserverSource[] {
     return this.computedObservers;
+  }
+
+  readComputedObserverForMember(
+    memberDeclarationIdentityHandle: IdentityHandle,
+  ): ComputedObserverSource | null {
+    return this.computedObserversByMemberDeclaration.get(memberDeclarationIdentityHandle) ?? null;
   }
 
   readObservedDependencies(): readonly ComputedObserverObservedDependency[] {

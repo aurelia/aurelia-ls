@@ -101,6 +101,9 @@ import { RuntimeObservedDependencyKind } from './runtime-binding-observation.js'
 import { sourceObservationProductRecords } from './source-observation-product-publication.js';
 import { sourceObservedDependencyRecords } from './source-observed-dependency-publication.js';
 import {
+  symbolHasObservableDecorator,
+} from './observable-decorator-recognition.js';
+import {
   RuntimeEffect,
   RuntimeEffectDependencyEvaluationKind,
   RuntimeEffectKind,
@@ -790,7 +793,7 @@ function collectRunEffectObservedDependencyOccurrenceDrafts(
     typeSystem: TypeSystemProject,
   ): RuntimeObservedDependencyDraft | null {
     const symbol = typeSystem.readProgramSymbolAtLocation(expression.name);
-    if (!symbolHasObservableGetterDecorator(symbol)) {
+    if (!symbolHasObservableDecorator(symbol)) {
       return null;
     }
     return {
@@ -813,31 +816,6 @@ function collectRunEffectObservedDependencyOccurrenceDrafts(
       spanEnd: expression.end,
     };
   }
-}
-
-function symbolHasObservableGetterDecorator(
-  symbol: ts.Symbol | null | undefined,
-): boolean {
-  return (symbol?.declarations ?? []).some(declarationHasObservableGetterDecorator);
-}
-
-function declarationHasObservableGetterDecorator(
-  declaration: ts.Declaration,
-): boolean {
-  if (!ts.canHaveDecorators(declaration)) {
-    return false;
-  }
-  return (ts.getDecorators(declaration) ?? []).some((decorator) => {
-    const expression = unwrapExpression(decorator.expression);
-    const callee = ts.isCallExpression(expression)
-      ? expression.expression
-      : expression;
-    return readImportedExportName(
-      callee,
-      readSourceImportBindings(declaration.getSourceFile(), OBSERVATION_MODULES, OBSERVATION_EXPORTS),
-      true,
-    ) === 'observable';
-  });
 }
 
 function runtimeEffectObservedDependencyForDraft(

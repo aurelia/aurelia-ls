@@ -9,7 +9,9 @@ import {
   type KernelComparablePublicationDecision,
   type KernelPublicationComparisonContext,
 } from '../kernel/publication-comparison.js';
-import type { NodeObserverLocatorConfiguration } from '../observation/observer-locator.js';
+import type {
+  ObserverLocatorConfiguration,
+} from '../observation/observer-locator.js';
 import type { AttributePatternDefinitionEntry } from '../resources/attribute-pattern-definition.js';
 import type { ResourceTargetReference } from '../resources/resource-reference.js';
 import type { CheckerTypeReference } from '../type-system/type-shape.js';
@@ -60,9 +62,9 @@ export function compareTemplateCompilerWorldDetails(
     )
     || !sameNullable(previous.appRoot, next.appRoot, sameAppRootSemantics)
     || !sameContainerSemantics(previous.container, next.container)
-    || !sameNodeObserverLocatorConfiguration(
-      previous.nodeObserverLocatorConfiguration,
-      next.nodeObserverLocatorConfiguration,
+    || !sameObserverLocatorConfiguration(
+      previous.observerLocatorConfiguration,
+      next.observerLocatorConfiguration,
     )
     || !sameRuntimeKeyMappingConfiguration(
       previous.runtimeKeyMappingConfiguration,
@@ -81,6 +83,11 @@ export function compareTemplateCompilerWorldDetails(
       && sameRuntimeKeyMappingWitness(
         previous.runtimeKeyMappingConfiguration,
         next.runtimeKeyMappingConfiguration,
+        context,
+      )
+      && sameObserverLocatorConfigurationWitness(
+        previous.observerLocatorConfiguration,
+        next.observerLocatorConfiguration,
         context,
       )
       && sameKernelRecordWitness(previous.sourceAddressHandle, next.sourceAddressHandle, context)
@@ -584,22 +591,33 @@ function sameAttributeMapperConfiguration(
       left.predicateSlot.key === right.predicateSlot.key);
 }
 
-function sameNodeObserverLocatorConfiguration(
-  previous: NodeObserverLocatorConfiguration | null,
-  next: NodeObserverLocatorConfiguration | null,
+function sameObserverLocatorConfiguration(
+  previous: ObserverLocatorConfiguration,
+  next: ObserverLocatorConfiguration,
 ): boolean {
-  if (previous == null || next == null) return previous === next;
-  return previous.allowDirtyCheck === next.allowDirtyCheck
-    && sameArrays(previous.nodeConfigs, next.nodeConfigs, (left, right) =>
+  return previous.node.allowDirtyCheck === next.node.allowDirtyCheck
+    && sameArrays(previous.node.nodeConfigs, next.node.nodeConfigs, (left, right) =>
       left.tagName === right.tagName
         && left.propertyName === right.propertyName
         && sameRuntimeNodeObserverConfig(left.config, right.config))
-    && sameArrays(previous.globalConfigs, next.globalConfigs, (left, right) =>
+    && sameArrays(previous.node.globalConfigs, next.node.globalConfigs, (left, right) =>
       left.propertyName === right.propertyName
         && sameRuntimeNodeObserverConfig(left.config, right.config))
-    && sameArrays(previous.accessorOverrides, next.accessorOverrides, (left, right) =>
+    && sameArrays(previous.node.accessorOverrides, next.node.accessorOverrides, (left, right) =>
       left.tagName === right.tagName && left.propertyName === right.propertyName)
-    && sameArrays(previous.globalAccessorOverrides, next.globalAccessorOverrides, (left, right) => left === right);
+    && sameArrays(previous.node.globalAccessorOverrides, next.node.globalAccessorOverrides, (left, right) => left === right)
+    && sameArrays(previous.objectAdapters, next.objectAdapters, (left, right) =>
+      left.order === right.order && left.adapterName === right.adapterName);
+}
+
+function sameObserverLocatorConfigurationWitness(
+  previous: ObserverLocatorConfiguration,
+  next: ObserverLocatorConfiguration,
+  context: KernelPublicationComparisonContext,
+): boolean {
+  return sameArrays(previous.objectAdapters, next.objectAdapters, (left, right) =>
+    sameKernelRecordWitness(left.sourceAddressHandle, right.sourceAddressHandle, context)
+      && sameKernelRecordWitness(left.provenanceHandle, right.provenanceHandle, context));
 }
 
 function sameRuntimeKeyMappingConfiguration(
@@ -628,8 +646,8 @@ function sameRuntimeKeyMappingWitness(
 }
 
 function sameRuntimeNodeObserverConfig(
-  previous: NodeObserverLocatorConfiguration['nodeConfigs'][number]['config'],
-  next: NodeObserverLocatorConfiguration['nodeConfigs'][number]['config'],
+  previous: ObserverLocatorConfiguration['node']['nodeConfigs'][number]['config'],
+  next: ObserverLocatorConfiguration['node']['nodeConfigs'][number]['config'],
 ): boolean {
   return sameValues(
     previous.observerKind,

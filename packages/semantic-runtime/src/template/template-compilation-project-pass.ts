@@ -56,6 +56,9 @@ import {
   runtimeBoundControllerValueTableForTemplateResources,
   type RuntimeBoundControllerValueTable,
 } from '../observation/runtime-bound-controller-value.js';
+import type {
+  ComputedObserverSourceProjectResult,
+} from '../observation/computed-observer-source.js';
 import { StateStoreVisibility } from '../state/state-store-visibility.js';
 import {
   AttributeClassificationMaterializer,
@@ -321,6 +324,8 @@ export interface TemplateCompilationProjectOptions {
   readonly authoringTemplateLimit?: number | null;
   readonly projectKey?: string;
   readonly telemetry?: SemanticRuntimeTelemetryOptions | null;
+  /** Pre-template computed-source authority available to controller observer setup. */
+  readonly computedObserverSources?: ComputedObserverSourceProjectResult | null;
 }
 
 /** Immutable pre-template plan shared by family compilation and post-template runtime analysis. */
@@ -751,6 +756,7 @@ export class TemplateCompilationProjectPass {
       typeSystem,
       sourceValueActivationView,
       resourceDefinitions,
+      options.computedObserverSources ?? null,
       runtimeAnalysisDepth,
       expressionWorld,
       phaseRecorder,
@@ -762,6 +768,7 @@ export class TemplateCompilationProjectPass {
       typeSystem,
       sourceValueActivationView,
       resourceDefinitions,
+      options.computedObserverSources ?? null,
       runtimeAnalysisDepth,
       expressionWorld,
       phaseRecorder,
@@ -965,6 +972,7 @@ export class TemplateCompilationProjectPass {
     typeSystem: TypeSystemProject | null,
     sourceValueActivationView: DiProviderActivationView | null,
     resourceDefinitions: ResourceDefinitionIndex | null,
+    computedObserverSources: ComputedObserverSourceProjectResult | null,
     runtimeAnalysisDepth: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}`,
     expressionWorld: CheckerExpressionTypeWorld,
     phases: TemplateCompilationPhaseRecorder,
@@ -993,6 +1001,7 @@ export class TemplateCompilationProjectPass {
                 typeSystem,
                 sourceValueActivationView,
                 resourceDefinitions,
+                computedObserverSources,
                 runtimeAnalysisDepth,
                 expressionWorld,
                 phases.telemetry,
@@ -1485,6 +1494,7 @@ export class TemplateCompilationProjectPass {
     typeSystem: TypeSystemProject | null,
     sourceValueActivationView: DiProviderActivationView | null,
     resourceDefinitions: ResourceDefinitionIndex | null,
+    computedObserverSources: ComputedObserverSourceProjectResult | null,
     analysisDepth: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}` = DEFAULT_SEMANTIC_APP_ANALYSIS_DEPTH,
     expressionWorld: CheckerExpressionTypeWorld | null = null,
     telemetry: SemanticRuntimeTelemetryOptions | null = null,
@@ -1503,6 +1513,7 @@ export class TemplateCompilationProjectPass {
       typeSystem,
       sourceValueActivationView,
       resourceDefinitions,
+      computedObserverSources,
       analysisDepth,
       expressionWorld,
       telemetry,

@@ -22,6 +22,15 @@ import {
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import type { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
 import type { TypeSystemProject } from '../type-system/project.js';
+import {
+  CheckerTypeMemberProjectionPolicy,
+} from '../type-system/checker-projector.js';
+import {
+  CheckerTypeProjectionOrigin,
+} from '../type-system/type-shape.js';
+import {
+  CheckerTypeShapeAccess,
+} from '../type-system/checker-type-shape-access.js';
 import { readPropertyName } from '../evaluation/ts-syntax.js';
 import {
   readSourceImportBindings,
@@ -234,6 +243,14 @@ export class ComputedObserverSourceMaterializer {
       operations.observedDependencies,
       product.provenanceHandle,
     );
+    const memberDeclarationIdentityHandle = computedObserverMemberDeclarationIdentity(
+      this.store,
+      expressionWorld,
+      typeSystem,
+      site,
+      `${local}:member`,
+      product.sourceAddressHandle,
+    );
     const observer = new ComputedObserverSource(
       product.productHandle,
       product.identityHandle,
@@ -242,6 +259,7 @@ export class ComputedObserverSourceMaterializer {
       site.triggerKind,
       site.className,
       site.memberName,
+      memberDeclarationIdentityHandle,
       site.dependency.dependencyMode,
       site.dependency.dependencyKeys,
       site.dependency.dependencyFunctionCount,
@@ -250,6 +268,7 @@ export class ComputedObserverSourceMaterializer {
       operations.accessUses,
       dependencies.map((dependency) => dependency.detail),
       product.sourceAddressHandle,
+      product.provenanceHandle,
     );
     return {
       observer,
@@ -292,7 +311,8 @@ function readSourceFileComputedObserverSourceSites(
         .filter((decorator): decorator is ComputedDecoratorRead => decorator != null);
       const dependency = computedDecorators.length === 0
         ? defaultAccessorDescriptorDependency()
-        : readComputedDependency(computedDecorators[computedDecorators.length - 1]!, ComputedObservationMemberKind.Getter);
+        // Stage-3 decorators apply bottom-up, so the topmost authored decorator overwrites metadata last.
+        : readComputedDependency(computedDecorators[0]!, ComputedObservationMemberKind.Getter);
       sites.push({
         sourcePath,
         sourceFileAddressHandle,
@@ -710,6 +730,38 @@ function computedObserverOwnerType(
   const getter = typeSystem.readProgramNode(site.getter);
   const owner = getter?.parent ?? null;
   return owner == null ? null : typeSystem.readProgramTypeAtLocation(owner);
+}
+
+function computedObserverMemberDeclarationIdentity(
+  store: KernelStore,
+  expressionWorld: CheckerExpressionTypeWorld,
+  typeSystem: TypeSystemProject,
+  site: ComputedObserverSourceSite,
+  localKey: string,
+  sourceAddressHandle: AddressHandle | null,
+): IdentityHandle | null {
+  if (site.memberName == null) {
+    return null;
+  }
+  const ownerType = computedObserverOwnerType(site, typeSystem);
+  const getter = typeSystem.readProgramNode(site.getter);
+  if (ownerType == null || getter == null) {
+    return null;
+  }
+  const ownerShape = expressionWorld.projector.ensureProjection({
+    localKey: `${localKey}:owner`,
+    checker: typeSystem.checker,
+    type: ownerType,
+    origin: CheckerTypeProjectionOrigin.TypeChecker,
+    sourceNode: getter.parent,
+    sourceAddressHandle,
+    display: typeSystem.checker.typeToString(ownerType),
+    memberProjection: CheckerTypeMemberProjectionPolicy.Lazy,
+  });
+  return new CheckerTypeShapeAccess(store, expressionWorld.projector)
+    .memberValueAccess(ownerShape, site.memberName, `${localKey}:value`)
+    .member
+    ?.declarationIdentityHandle ?? null;
 }
 
 /*

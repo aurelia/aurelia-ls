@@ -274,8 +274,9 @@ pressure evidence and app-builder pressure fixtures, not reusable generated-code
   already selected a framework observer: source-to-target binding into a getter-only computed target (`AUR0221`) and a
   Map/Set `size` observer (`AUR0220`). It preserves the data-flow distinction between target observer selection and
   write-time framework failure without making recommendable generators create readonly bindable targets. The same fixture
-  now includes a setter-only target to prove that only getter descriptors enter the computed-observer branch; setter-only
-  accessors remain runtime `SetterObserver` targets. It also carries a small SVG namespace-attribute target-access case:
+  now includes a setter-only target to prove that Aurelia's accessor-descriptor branch includes descriptors with only a
+  setter, selecting `ComputedObserver` rather than the ordinary data-property `SetterObserver`. It also carries a small
+  SVG namespace-attribute target-access case:
   Aurelia's `xlink:*`/selected `xml:*` namespace table must route through `AttributeNSAccessor`, while SVG XML attributes
   outside that table remain generic SVG/data attributes. The plain `href.bind` case proves the accessor-time attr lane
   uses the framework `DataAttributeAccessor` mirror rather than an invented attribute-accessor strategy.
@@ -286,6 +287,16 @@ pressure evidence and app-builder pressure fixtures, not reusable generated-code
   built-in/global mappings (`AUR0653`) and a valid custom host-node observer configuration. The valid mapping is consumed
   by an observer-forcing binding mode so the fixture preserves the framework split between `getAccessor(...)` and
   `getObserver(...)` instead of pretending `useConfig(...)` rewrites every host-node property accessor.
+- `observer-setup-selection` captures controller hydration's eager `getObserver(...)` call for every bindable and the
+  later binding access that either reuses that cache or remains blocked. It covers fields, concrete accessors, field-
+  and class-form `@observable`, automatic/disabled/explicit/stacked `@computed`, function-dependency openness,
+  declaration-only and nullish callback members, coercer/callback rejection, later not-reached bindables, and synthetic
+  view failure isolation. `contract:controller-observer-setup` keeps selection, setup outcome, source identity,
+  provenance-bearing public rows, and operation reachability aligned.
+- `object-observation-adapters` captures app-scoped `IObserverLocator.addAdapter(...)` through both direct AppTask
+  injection and `IContainer.get(...)`. Registrations are deliberately interleaved across lifecycle slots: framework
+  execution order is slot order plus registration order within each slot, child-controller setup sees only adapters
+  installed by its hydration boundary, and an independent app root receives none of them.
 - `select-multiple-binding-order` mirrors Aurelia runtime-html select observer tests where `multiple.bind="true"` can
   appear before, between, or after other bound attributes. It pressure-tests the value-channel handoff from bound
   `multiple` evidence into single, multiple, and dynamic `SelectValueObserver` modes, including a dynamic source that

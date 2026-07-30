@@ -400,7 +400,7 @@ class AppRootCompilerWorldFrame {
       appRoot.sourceAddressHandle,
       callableBindings,
       frameworkServiceCustomization.attributeMapper,
-      frameworkServiceCustomization.nodeObserverLocator,
+      frameworkServiceCustomization.observerLocator,
       frameworkServiceCustomization.runtimeKeyMapping,
     );
     return this.compilerWorldMaterializer.construct(request);

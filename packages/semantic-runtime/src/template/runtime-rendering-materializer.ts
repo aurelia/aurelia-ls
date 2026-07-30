@@ -85,9 +85,16 @@ import {
   type RuntimeControllerFrame,
   RuntimeControllerAssemblyStage,
   RuntimeControllerAssemblyStepKind,
+  finalizeRuntimeControllerBindReachability,
 } from './runtime-controller.js';
 import {
-  type CustomElementDefinition,
+  RuntimeOperationReachability,
+} from '../runtime-expression/runtime-operation.js';
+import {
+  CustomAttributeDefinition,
+} from '../resources/custom-attribute-definition.js';
+import {
+  CustomElementDefinition,
 } from '../resources/custom-element-definition.js';
 import { ResourceProductDetails } from '../resources/product-details.js';
 import {
@@ -114,6 +121,9 @@ import type {
 } from './template-runtime-analysis-context.js';
 import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
 import type { TypeSystemProject } from '../type-system/project.js';
+import type {
+  ComputedObserverSourceProjectResult,
+} from '../observation/computed-observer-source.js';
 import type { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
 import { ObserverLocator } from '../observation/observer-locator.js';
 import {
@@ -162,6 +172,8 @@ type RuntimeRenderingFinePhaseName =
   | 'spend-render-results'
   | 'record-open-instructions'
   | 'record-rendered-instructions'
+  | 'finalize-controller-bind-reachability'
+  | 'record-controller-watchers'
   | 'record-rendered-controllers'
   | 'claim-finalization'
   | 'emission'
@@ -188,6 +200,8 @@ export interface RuntimeRenderingMaterializationRequest {
   readonly resourceDefinitions: ResourceDefinitionIndex | null;
   /** Current TypeChecker epoch available to controller hydration observer setup, when available. */
   readonly typeSystem: TypeSystemProject | null;
+  /** Computed getter sources available to exact controller observer selection. */
+  readonly computedObserverSources: ComputedObserverSourceProjectResult | null;
   /** Shared checker projection/cache world for this complete app-analysis generation. */
   readonly expressionWorld: CheckerExpressionTypeWorld;
   /** Optional fine-grained telemetry sink owned by the surrounding inquiry profile. */
@@ -370,8 +384,26 @@ export class RuntimeRenderingEmission {
     return context;
   }
 
+  /** Lifecycle reachability shared by bindings created in one eager view activation region. */
+  readBindingBindReachability(bindingProductHandle: ProductHandle): RuntimeOperationReachability {
+    const context = this.readRenderContextForBinding(bindingProductHandle);
+    return context == null
+      ? RuntimeOperationReachability.Open
+      : context.renderingController.readBindReachability();
+  }
+
+  /** Aggregate bind reachability for one controller's nearest eager activation region. */
+  readControllerBindReachability(controllerProductHandle: ProductHandle): RuntimeOperationReachability {
+    return this.readController(controllerProductHandle)?.readBindReachability()
+      ?? RuntimeOperationReachability.Open;
+  }
+
   readController(productHandle: ProductHandle): RuntimeControllerFrame | null {
     return this.controllersByProduct.get(productHandle) ?? null;
+  }
+
+  readControllers(): readonly RuntimeControllerFrame[] {
+    return [...this.controllersByProduct.values()];
   }
 
   readControllerForInstructionUnderParent(
@@ -485,6 +517,10 @@ class RuntimeRenderingMaterializationState {
     return this.controllersByProduct.get(productHandle) ?? null;
   }
 
+  readControllers(): readonly RuntimeControllerFrame[] {
+    return [...this.controllersByProduct.values()];
+  }
+
   childContainers(): readonly Container[] {
     return this.childContainerEmissions.map((emission) => emission.container);
   }
@@ -575,7 +611,8 @@ export class RuntimeRenderingMaterializer {
     const observerLocator = new ObserverLocator(
       this.store,
       input.expressionWorld.projector,
-      input.compilerWorld.world.nodeObserverLocatorConfiguration ?? undefined,
+      input.compilerWorld.world.observerLocatorConfiguration,
+      input.computedObserverSources,
     );
     const rootDependencyRecords: KernelStoreRecord[] = [];
     const rootChildContainers: ContainerChildMaterializationEmission[] = [];
@@ -608,9 +645,10 @@ export class RuntimeRenderingMaterializer {
     state.records.push(...rootDependencyRecords);
     state.childContainerEmissions.push(...rootChildContainers);
     this.measure(input, 'controller-observer-setup', () =>
-      this.controllerCreation.recordControllerObserverSetupIssues(
+      this.controllerCreation.materializeControllerObserverSetup(
         rootController,
         input.definition,
+        input.expressionWorld,
         input.typeSystem,
         state.observerLocator,
         source,
@@ -675,7 +713,10 @@ export class RuntimeRenderingMaterializer {
   ): readonly RuntimeControllerFrame[] {
     return this.measure(state.input, 'spend-render-results', () => {
       const openInstructions = renderResults.flatMap((result) => result.openInstructions);
-      const controllers = uniqueRuntimeControllers(renderResults.flatMap((result) => result.controllers));
+      const controllers = uniqueRuntimeControllers([
+        ...renderResults.flatMap((result) => result.controllers),
+        ...state.readControllers(),
+      ]);
       const controllerBindingClaimHandles = this.controllerPublication.controllerBindingClaimHandles(state.input.localKey, controllers);
       const instructionEnvironments = this.bindingInstructionEnvironments(state);
 
@@ -702,6 +743,12 @@ export class RuntimeRenderingMaterializer {
         }
       });
 
+      this.measure(state.input, 'finalize-controller-bind-reachability', () =>
+        finalizeRuntimeControllerBindReachability(controllers)
+      );
+      this.measure(state.input, 'record-controller-watchers', () =>
+        this.recordControllerWatchers(state, controllers)
+      );
       this.measure(state.input, 'record-rendered-controllers', () =>
         this.recordRenderedControllers(state, controllers)
       );
@@ -787,6 +834,32 @@ export class RuntimeRenderingMaterializer {
         state.records,
         state.claims,
         state.viewFactoryByController,
+      );
+    }
+  }
+
+  private recordControllerWatchers(
+    state: RuntimeRenderingMaterializationState,
+    controllers: readonly RuntimeControllerFrame[],
+  ): void {
+    for (const controller of controllers) {
+      const definition = controller.definitionProductHandle == null
+        ? null
+        : this.publication.readProductDetail(
+            ResourceProductDetails.Definition,
+            controller.definitionProductHandle,
+          );
+      if (!(definition instanceof CustomElementDefinition)
+        && !(definition instanceof CustomAttributeDefinition)) {
+        continue;
+      }
+      this.controllerCreation.recordControllerWatchers(
+        `${state.input.localKey}:controller:${controller.productHandle}`,
+        controller,
+        definition,
+        state.input.expressionWorld,
+        state.input.typeSystem,
+        controller.readBindReachability(),
       );
     }
   }
@@ -1488,7 +1561,10 @@ export class RuntimeRenderingMaterializer {
           state.input.projectKey,
           state.input.resourceDefinitions,
         );
-        return controller == null ? null : state.registerController(controller);
+        if (controller == null) {
+          return null;
+        }
+        return state.registerController(controller);
       },
       compileSpread: (spread) => this.spreadBindingCreator.create(spread, state),
       measureRenderingPhase: (name, read) => this.measure(state.input, name as RuntimeRenderingFinePhaseName, read),
@@ -1678,6 +1754,7 @@ function uniqueRuntimeControllers(
   }
   return result;
 }
+
 
 function uniqueRuntimeWatchers(
   watchers: readonly RuntimeWatcher[],

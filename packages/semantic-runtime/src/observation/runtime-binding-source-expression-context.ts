@@ -430,7 +430,12 @@ export function projectRuntimeSourceExpressionsWithLifecycle(
       localKey: index === 0 ? input.localKey : `${input.localKey}:expression:${index}`,
       bindingBehavior: input.bindingBehavior,
       bindingExpressionScopes: input.bindingExpressionScopes,
-      sourceEvaluationReachability: RuntimeOperationReachability.Reached,
+      sourceEvaluationReachability: input.expressionResourcePlan
+        .readExpressionChainSourceEvaluationReachability(
+          input.bindingProductHandle,
+          input.expressionProductHandle,
+          index,
+        ),
     }));
   }
   return input.bindingExpressionScopes.projectSourceExpressions({
@@ -552,9 +557,6 @@ function runtimeSourceEvaluationReachability(
   expressionResourcePlan: RuntimeExpressionResourcePlan,
   bindingBehavior: CheckerExpressionTypeBindingBehaviorEvaluation,
 ): RuntimeOperationReachability {
-  if (bindingBehavior === CheckerExpressionTypeBindingBehaviorEvaluation.AstEvaluateOnly) {
-    return RuntimeOperationReachability.Reached;
-  }
   return expressionChainIndex == null
     ? expressionResourcePlan.readSourceEvaluationReachability(bindingProductHandle)
     : expressionResourcePlan.readExpressionChainSourceEvaluationReachability(

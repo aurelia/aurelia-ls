@@ -4,7 +4,9 @@ import type {
   AddressHandle,
   IdentityHandle,
   ProductHandle,
+  ProvenanceHandle,
 } from '../kernel/handles.js';
+import type { AppTaskSlot } from '../configuration/app-task.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
 import type { ExpressionPrimitiveLiteralValue } from '../expression/ast.js';
 import type {
@@ -18,6 +20,7 @@ import type {
   TemplateListenerStrategy,
 } from './instruction-ir.js';
 import type { RuntimeRendererReference } from './runtime-renderer-reference.js';
+import type { RuntimeOperationReachability } from '../runtime-expression/runtime-operation.js';
 
 export const enum RuntimeBindingKind {
   Property = 'property',
@@ -54,7 +57,9 @@ export const enum RuntimeBindingTargetAccessLookup {
 export const enum RuntimeBindingTargetAccessStrategy {
   PropertyAccessor = 'property-accessor',
   SetterObserver = 'setter-observer',
+  ObservableSetterNotifier = 'observable-setter-notifier',
   ComputedObserver = 'computed-observer',
+  ControlledComputedObserver = 'controlled-computed-observer',
   CollectionLengthObserver = 'collection-length-observer',
   CollectionSizeObserver = 'collection-size-observer',
   ArrayIndexObserver = 'array-index-observer',
@@ -79,6 +84,43 @@ export const enum RuntimeBindingTargetAccessAuthority {
   BindingBehavior = 'binding-behavior',
   FrameworkErrorCode = 'framework-error-code',
   Open = 'open',
+}
+
+/** Whether an ObserverLocator selection survives as the target object's cached observer. */
+export const enum RuntimeBindingTargetObserverCacheDisposition {
+  /** The selected observer is retained in the target's observer lookup. */
+  Cached = 'cached',
+  /** The selected observer explicitly opts out of target-object caching. */
+  NotCached = 'not-cached',
+  /** The access path does not create or consult an observer cache entry. */
+  NotApplicable = 'not-applicable',
+  /** Runtime-only adapter or descriptor behavior prevents a static cache ruling. */
+  Open = 'open',
+}
+
+/** Result of installing one bindable observer during controller hydration. */
+export const enum RuntimeControllerObserverSetupOutcome {
+  /** Observer selection completed and controller setup admitted the bindable. */
+  Installed = 'installed',
+  /** Runtime-only selection or capability behavior prevents a closed setup result. */
+  Open = 'open',
+  /** The selected observer cannot install the bindable coercer. */
+  RejectedCoercer = 'rejected-coercer',
+  /** The selected observer cannot install the bindable change callback. */
+  RejectedCallback = 'rejected-callback',
+  /** Framework hydration stopped at an earlier bindable, so this setup was not attempted. */
+  NotReached = 'not-reached',
+}
+
+/** Ordered app-authored object-observation adapter visible to one ObserverLocator. */
+export class RuntimeObjectObservationAdapterReference {
+  constructor(
+    readonly order: number,
+    readonly adapterName: string | null,
+    readonly appTaskSlot: AppTaskSlot,
+    readonly sourceAddressHandle: AddressHandle | null,
+    readonly provenanceHandle: ProvenanceHandle | null,
+  ) {}
 }
 
 /** Observer constructor selected by one framework NodeObserverLocator configuration. */
@@ -251,6 +293,14 @@ export type RuntimeBindingTargetAccessField =
   | 'targetController'
   | 'targetProperty'
   | 'strategy'
+  | 'fallbackStrategy'
+  | 'observerCacheDisposition'
+  | 'supportsCallback'
+  | 'supportsCoercer'
+  | 'observerSource'
+  | 'objectObservationAdapters'
+  | 'controllerObserverSetup'
+  | 'bindReachability'
   | 'nodeObserverConfig'
   | 'targetType'
   | 'targetTypeSource'
@@ -276,6 +326,7 @@ export type RuntimeBindingTargetOperationField =
   | 'value'
   | 'operationKind'
   | 'affectedNames'
+  | 'reachability'
   | 'authority'
   | 'openReason'
   | 'source';
@@ -289,6 +340,7 @@ export type RuntimeBindingSourceOperationField =
   | 'targetName'
   | 'targetType'
   | 'operationKind'
+  | 'reachability'
   | 'authority'
   | 'openReason'
   | 'source';
@@ -624,13 +676,26 @@ export class RuntimeBindingTargetAccess {
     readonly targetControllerProductHandle: ProductHandle | null,
     readonly targetProperty: string,
     readonly strategy: RuntimeBindingTargetAccessStrategy,
+    /** Framework fallback when ordered app adapters make the actual observer selection runtime-dependent. */
+    readonly fallbackStrategy: RuntimeBindingTargetAccessStrategy | null,
+    readonly observerCacheDisposition: RuntimeBindingTargetObserverCacheDisposition,
+    readonly supportsCallback: boolean | null,
+    readonly supportsCoercer: boolean | null,
+    /** Source observer product selected for a computed getter, when one was proven. */
+    readonly observerSourceProductHandle: ProductHandle | null,
+    readonly observerSourceIdentityHandle: IdentityHandle | null,
+    readonly observerSourceAddressHandle: AddressHandle | null,
+    readonly objectObservationAdapters: readonly RuntimeObjectObservationAdapterReference[],
+    /** Outcome of controller hydration setup reused by this access, when the target is a bindable controller member. */
+    readonly controllerObserverSetupOutcome: RuntimeControllerObserverSetupOutcome | null,
+    readonly bindReachability: RuntimeOperationReachability,
     readonly nodeObserverConfig: RuntimeNodeObserverConfig | null,
     readonly targetType: CheckerTypeReference | null,
     readonly targetTypeSource: RuntimeBindingTargetTypeSource | null,
     readonly propertyType: CheckerTypeReference | null,
     readonly propertyExists: boolean | null,
     readonly isWritable: boolean | null,
-    readonly isObservable: boolean,
+    readonly isObservable: boolean | null,
     readonly authority: RuntimeBindingTargetAccessAuthority,
     readonly openReason: string | null,
     readonly frameworkErrorCode: string | null,
@@ -668,6 +733,7 @@ export class RuntimeTargetOperation {
     readonly value: string | null,
     readonly operationKind: RuntimeBindingTargetOperationKind,
     readonly affectedNames: readonly string[],
+    readonly reachability: RuntimeOperationReachability,
     readonly authority: RuntimeBindingTargetOperationAuthority,
     readonly openReason: string | null,
     readonly sourceAddressHandle: AddressHandle | null,
@@ -703,6 +769,7 @@ export class RuntimeSourceOperation {
     readonly targetName: string,
     readonly targetType: CheckerTypeReference | null,
     readonly operationKind: RuntimeBindingSourceOperationKind,
+    readonly reachability: RuntimeOperationReachability,
     readonly authority: RuntimeBindingSourceOperationAuthority,
     readonly openReason: string | null,
     readonly sourceAddressHandle: AddressHandle | null,

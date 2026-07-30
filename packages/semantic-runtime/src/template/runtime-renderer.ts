@@ -84,6 +84,7 @@ import {
   RuntimeControllerCreationRequest,
   RuntimeControllerCreationKind,
   RuntimeControllerFrame,
+  runtimeControllerCurrentRenderingReachability,
 } from './runtime-controller.js';
 import {
   RuntimeRendererKind,
@@ -1392,6 +1393,7 @@ function renderRendererTargetOperation(
     value,
     openReason == null ? operationKind : RuntimeBindingTargetOperationKind.Open,
     affectedNames,
+    runtimeControllerCurrentRenderingReachability(input.renderingController),
     openReason == null
       ? RuntimeBindingTargetOperationAuthority.RuntimeRendererImplementation
       : RuntimeBindingTargetOperationAuthority.Open,

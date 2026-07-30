@@ -656,7 +656,7 @@ class AureliaAppWorldProjectConstructionFrame {
       typeSystem,
       resourceIndex,
       routeContexts,
-      this.templateCompilationOptions(evaluation, stateBase),
+      this.templateCompilationOptions(evaluation, stateBase, computedObserverSources),
     );
     return new AureliaAppWorldPreTemplateEmission(
       this.analysisDepth,
@@ -712,7 +712,11 @@ class AureliaAppWorldProjectConstructionFrame {
     return templatePass.rebaseAnalyzedFrontDoors(
       frontDoor,
       previous.templates,
-      this.templateCompilationOptions(preTemplate.evaluation, preTemplate.stateBase),
+      this.templateCompilationOptions(
+        preTemplate.evaluation,
+        preTemplate.stateBase,
+        preTemplate.computedObserverSources,
+      ),
     );
   }
 
@@ -730,7 +734,11 @@ class AureliaAppWorldProjectConstructionFrame {
           frontDoor,
           preTemplate.typeSystem,
           preTemplate.resourceIndex,
-          this.templateCompilationOptions(preTemplate.evaluation, preTemplate.stateBase),
+          this.templateCompilationOptions(
+            preTemplate.evaluation,
+            preTemplate.stateBase,
+            preTemplate.computedObserverSources,
+          ),
         )),
       );
       for (const read of this.upstreamReads) {
@@ -906,6 +914,7 @@ class AureliaAppWorldProjectConstructionFrame {
   private templateCompilationOptions(
     evaluation: StaticProjectEvaluationResult,
     state: StateProjectResult,
+    computedObserverSources: ComputedObserverSourceProjectResult,
   ): TemplateCompilationProjectOptions {
     return {
       projectKey: this.project.projectKey,
@@ -916,6 +925,7 @@ class AureliaAppWorldProjectConstructionFrame {
       authoringTemplateSourceFiles: this.authoringTemplateSourceFiles,
       authoringTemplateLimit: this.authoringTemplateLimit,
       telemetry: this.telemetry,
+      computedObserverSources,
     };
   }
 
