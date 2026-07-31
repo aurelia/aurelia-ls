@@ -118,6 +118,13 @@ const contractSuites = [
   contract('observation', 'fast', [
     'observation',
     'observer-locator',
+    'controller',
+    'bindable',
+    'configuration',
+  ], 'contract-controller-observer-setup.mjs', 'Controller bindable observer setup, capability reachability, and ordered object-adapter selection.'),
+  contract('observation', 'fast', [
+    'observation',
+    'observer-locator',
     'configuration',
   ], 'contract-node-observer-service-customization.mjs', 'NodeObserverLocator service customization and accessor/observer split.'),
   contract('observation', 'fast', [

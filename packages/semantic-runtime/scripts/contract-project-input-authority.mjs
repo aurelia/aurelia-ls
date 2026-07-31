@@ -110,7 +110,7 @@ const resourceMetadataDiagnostics = await resourceMetadataRuntime.answerAppQuery
   appRetention: 'retain-app',
 });
 const resourceMetadataRows = resourceMetadataDiagnostics.value.rows;
-assert.equal(resourceMetadataRows.length, 27);
+assert.equal(resourceMetadataRows.length, 26);
 assert.ok(
   resourceMetadataRows.some((row) => row.diagnosticDomain === 'resource'),
   'Expected project-input resource metadata diagnostics to retain resource-domain rows.',
@@ -126,6 +126,11 @@ assert.ok(
 assert.ok(
   resourceMetadataRows.some((row) => row.frameworkErrorCode === 'AUR0717'),
   'Expected project-input resource metadata diagnostics to retain inline template compiler rows.',
+);
+assert.equal(
+  resourceMetadataRows.some((row) => row.frameworkErrorCode === 'AUR0508'),
+  false,
+  'AUR0507 observer setup failure must block the later AUR0508 callback setup step.',
 );
 
 console.log(JSON.stringify({

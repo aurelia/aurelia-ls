@@ -31,6 +31,10 @@ const unsupportedOpenSeamFilterAnswer = app.ask({
   openSeamKindKey: 'resource.open-definition-field',
   page: { size: 20 },
 });
+const supportedOpenSeamKindCounts = Object.groupBy(
+  supportedSourceFileAnswer.value?.rows ?? [],
+  (row) => row.seamKindKey,
+);
 
 const failures = [
   unsupportedSourceFileAnswer.outcome === 'unsupported'
@@ -54,9 +58,21 @@ const failures = [
   supportedSourceFileAnswer.closure === 'complete'
     ? null
     : `Expected open-seam-sites+sourceFile closure to be complete, observed ${supportedSourceFileAnswer.closure}.`,
-  supportedSourceFileAnswer.value?.rows?.length === 3
+  supportedSourceFileAnswer.value?.rows?.length === 9
     ? null
-    : `Expected sourceFile-filtered open-seam-sites to return 3 rows, observed ${supportedSourceFileAnswer.value?.rows?.length ?? 'missing'}.`,
+    : `Expected sourceFile-filtered open-seam-sites to return 9 rows, observed ${supportedSourceFileAnswer.value?.rows?.length ?? 'missing'}.`,
+  supportedOpenSeamKindCounts['binding.open-data-flow']?.length === 2
+    ? null
+    : `Expected two source-filtered open data-flow setup sites, observed ${supportedOpenSeamKindCounts['binding.open-data-flow']?.length ?? 0}.`,
+  supportedOpenSeamKindCounts['binding.open-target-access']?.length === 2
+    ? null
+    : `Expected two source-filtered open target-access setup sites, observed ${supportedOpenSeamKindCounts['binding.open-target-access']?.length ?? 0}.`,
+  supportedOpenSeamKindCounts['binding.open-value-channel']?.length === 2
+    ? null
+    : `Expected two source-filtered open value-channel setup sites, observed ${supportedOpenSeamKindCounts['binding.open-value-channel']?.length ?? 0}.`,
+  supportedOpenSeamKindCounts['resource.open-definition-field']?.length === 3
+    ? null
+    : `Expected three source-filtered open resource-definition sites, observed ${supportedOpenSeamKindCounts['resource.open-definition-field']?.length ?? 0}.`,
   unsupportedOpenSeamFilterAnswer.outcome === 'unsupported'
     ? null
     : `Expected resource-definitions+openSeamKindKey to be unsupported, observed ${unsupportedOpenSeamFilterAnswer.outcome}.`,

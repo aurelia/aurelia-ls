@@ -20,7 +20,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "diagnosticCount": 27,
+  "diagnosticCount": 26,
   "diagnostics": [
     {
       "anomaly": null,
@@ -458,56 +458,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     },
     {
       "anomaly": null,
-      "code": "AUR0508",
-      "data": {
-        "diagnosticAuthority": "framework-error-code",
-        "diagnosticDomain": "template",
-        "diagnosticKind": "runtime-controller-framework-error",
-        "frameworkErrorCode": "AUR0508",
-        "frameworkRawErrorAuthority": null,
-        "missingInput": "runtime-controller:AUR0508",
-        "missingInputs": [
-          "runtime-controller:AUR0508"
-        ],
-        "phase": "observer-setup",
-        "relatedInformation": [],
-        "relatedQueryKind": "template-diagnostics",
-        "repairAffordance": {
-          "actionKind": "rewrite-template-syntax",
-          "actionability": "guided",
-          "changeDomain": "app-source",
-          "planKind": "template-syntax-rewrite",
-          "readiness": "ready-to-plan",
-          "targetSourceCoverage": "all"
-        },
-        "sourceRole": "app-source",
-        "subject": null,
-        "taxonomy": {
-          "actionability": "guided",
-          "category": "template-syntax",
-          "confidence": null,
-          "impact": "blocking",
-          "schema": "diagnostics-taxonomy/1"
-        }
-      },
-      "message": "Aurelia runtime controller AUR0508 rejects this controller input: Observer for property length does not support change handler..",
-      "range": {
-        "end": {
-          "character": 46,
-          "line": 12
-        },
-        "start": {
-          "character": 14,
-          "line": 12
-        }
-      },
-      "rangeText": "{ name: 'length', type: Number }",
-      "relatedInformation": [],
-      "severity": "error",
-      "source": "aurelia"
-    },
-    {
-      "anomaly": null,
       "code": "AUR0772",
       "data": {
         "diagnosticAuthority": "framework-error-code",
@@ -651,12 +601,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "sourceRole": "app-source",
         "subject": {
           "source": {
-            "end": 841,
+            "end": 814,
             "kind": "source-span-address",
-            "label": "src/resource-metadata-errors-app.ts@756..841",
+            "label": "src/resource-metadata-errors-app.ts@789..814",
             "path": "src/resource-metadata-errors-app.ts",
             "role": "value",
-            "start": 756
+            "start": 789
           },
           "span": null,
           "subjectKind": "custom-element",
@@ -673,15 +623,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "message": "Watch callback 'missingStaticWatchHandler' is not declared on the resource instance.",
       "range": {
         "end": {
-          "character": 89,
+          "character": 62,
           "line": 27
         },
         "start": {
-          "character": 4,
+          "character": 37,
           "line": 27
         }
       },
-      "rangeText": "{ expression: 'name', callback: 'missingStaticWatchHandler', flush: 'sync' as const }",
+      "rangeText": "missingStaticWatchHandler",
       "relatedInformation": [],
       "severity": "error",
       "source": "aurelia"
@@ -711,12 +661,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "sourceRole": "app-source",
         "subject": {
           "source": {
-            "end": 937,
+            "end": 909,
             "kind": "source-span-address",
-            "label": "src/resource-metadata-errors-app.ts@847..937",
+            "label": "src/resource-metadata-errors-app.ts@880..909",
             "path": "src/resource-metadata-errors-app.ts",
             "role": "value",
-            "start": 847
+            "start": 880
           },
           "span": null,
           "subjectKind": "custom-element",
@@ -733,15 +683,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "message": "Watch callback 'nonCallableStaticWatchHandler' is not callable on the resource instance.",
       "range": {
         "end": {
-          "character": 94,
+          "character": 66,
           "line": 28
         },
         "start": {
-          "character": 4,
+          "character": 37,
           "line": 28
         }
       },
-      "rangeText": "{ expression: 'name', callback: 'nonCallableStaticWatchHandler', flush: 'async' as const }",
+      "rangeText": "nonCallableStaticWatchHandler",
       "relatedInformation": [],
       "severity": "error",
       "source": "aurelia"
@@ -2147,77 +2097,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null
       },
       {
-        "groupKey": "row:diagnostic:18:template:runtime-controller-framework-error:framework-error-code:AUR0508:src/resource-metadata-errors-app.ts:231:263:runtime-controller:AUR0508",
-        "maxRawSeverity": "error",
-        "primary": {
-          "diagnostic": {
-            "actionability": "guided",
-            "anomaly": null,
-            "category": "template-syntax",
-            "code": "AUR0508",
-            "data": {
-              "diagnosticAuthority": "framework-error-code",
-              "diagnosticDomain": "template",
-              "diagnosticKind": "runtime-controller-framework-error",
-              "frameworkErrorCode": "AUR0508",
-              "frameworkRawErrorAuthority": null,
-              "missingInput": "runtime-controller:AUR0508",
-              "missingInputs": [
-                "runtime-controller:AUR0508"
-              ],
-              "phase": "observer-setup",
-              "relatedInformation": [],
-              "relatedQueryKind": "template-diagnostics",
-              "repairAffordance": {
-                "actionKind": "rewrite-template-syntax",
-                "actionability": "guided",
-                "changeDomain": "app-source",
-                "planKind": "template-syntax-rewrite",
-                "readiness": "ready-to-plan",
-                "targetSourceCoverage": "all"
-              },
-              "sourceRole": null,
-              "subject": null,
-              "taxonomy": {
-                "actionability": null,
-                "category": null,
-                "confidence": null,
-                "impact": null,
-                "schema": null
-              }
-            },
-            "file": "src/resource-metadata-errors-app.ts",
-            "impact": "blocking",
-            "issues": [
-              {
-                "code": "AUR0508",
-                "kind": "runtime-controller-framework-error",
-                "message": "Aurelia runtime controller AUR0508 rejects this controller input: Observer for property length does not support change handler.."
-              }
-            ],
-            "message": "Aurelia runtime controller AUR0508 rejects this controller input: Observer for property length does not support change handler..",
-            "related": [],
-            "severity": "error",
-            "source": "semantic-runtime:template",
-            "span": {
-              "end": 263,
-              "start": 231
-            },
-            "spanText": "{ name: 'length', type: Number }",
-            "status": "primary",
-            "uri": "fixtures://pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts"
-          },
-          "relation": null,
-          "role": "primary",
-          "rowId": "diagnostic:18:template:runtime-controller-framework-error:framework-error-code:AUR0508:src/resource-metadata-errors-app.ts:231:263:runtime-controller:AUR0508"
-        },
-        "primarySeverity": "error",
-        "rawRowCount": 1,
-        "related": [],
-        "subject": null
-      },
-      {
-        "groupKey": "row:diagnostic:23:resource:watch-null-config:framework-error-code:AUR0772:src/resource-metadata-errors-app.ts:372:397:no-missing-input",
+        "groupKey": "row:diagnostic:22:resource:watch-null-config:framework-error-code:AUR0772:src/resource-metadata-errors-app.ts:372:397:no-missing-input",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -2289,7 +2169,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:23:resource:watch-null-config:framework-error-code:AUR0772:src/resource-metadata-errors-app.ts:372:397:no-missing-input"
+          "rowId": "diagnostic:22:resource:watch-null-config:framework-error-code:AUR0772:src/resource-metadata-errors-app.ts:372:397:no-missing-input"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -2305,7 +2185,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         }
       },
       {
-        "groupKey": "row:diagnostic:24:resource:watch-invalid-change-handler:framework-error-code:AUR0773:src/resource-metadata-errors-app.ts:430:453:no-missing-input",
+        "groupKey": "row:diagnostic:23:resource:watch-invalid-change-handler:framework-error-code:AUR0773:src/resource-metadata-errors-app.ts:430:453:no-missing-input",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -2377,7 +2257,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:24:resource:watch-invalid-change-handler:framework-error-code:AUR0773:src/resource-metadata-errors-app.ts:430:453:no-missing-input"
+          "rowId": "diagnostic:23:resource:watch-invalid-change-handler:framework-error-code:AUR0773:src/resource-metadata-errors-app.ts:430:453:no-missing-input"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -2393,7 +2273,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         }
       },
       {
-        "groupKey": "row:diagnostic:25:resource:controller-watch-invalid-callback:framework-error-code:AUR0506:src/resource-metadata-errors-app.ts:756:841:no-missing-input",
+        "groupKey": "row:diagnostic:24:resource:controller-watch-invalid-callback:framework-error-code:AUR0506:src/resource-metadata-errors-app.ts:789:814:no-missing-input",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -2423,12 +2303,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "sourceRole": null,
               "subject": {
                 "source": {
-                  "end": 841,
+                  "end": 814,
                   "kind": "source-span-address",
-                  "label": "src/resource-metadata-errors-app.ts@756..841",
+                  "label": "src/resource-metadata-errors-app.ts@789..814",
                   "path": "src/resource-metadata-errors-app.ts",
                   "role": "value",
-                  "start": 756
+                  "start": 789
                 },
                 "span": null,
                 "subjectKind": "custom-element",
@@ -2456,16 +2336,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "severity": "error",
             "source": "semantic-runtime:resource",
             "span": {
-              "end": 841,
-              "start": 756
+              "end": 814,
+              "start": 789
             },
-            "spanText": "{ expression: 'name', callback: 'missingStaticWatchHandler', flush: 'sync' as const }",
+            "spanText": "missingStaticWatchHandler",
             "status": "primary",
             "uri": "fixtures://pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts"
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:25:resource:controller-watch-invalid-callback:framework-error-code:AUR0506:src/resource-metadata-errors-app.ts:756:841:no-missing-input"
+          "rowId": "diagnostic:24:resource:controller-watch-invalid-callback:framework-error-code:AUR0506:src/resource-metadata-errors-app.ts:789:814:no-missing-input"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -2473,15 +2353,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": {
           "source": null,
           "span": {
-            "end": 841,
-            "start": 756
+            "end": 814,
+            "start": 789
           },
           "subjectKind": "custom-element",
           "uri": "file:///c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts"
         }
       },
       {
-        "groupKey": "row:diagnostic:26:resource:controller-watch-invalid-callback:framework-error-code:AUR0506:src/resource-metadata-errors-app.ts:847:937:no-missing-input",
+        "groupKey": "row:diagnostic:25:resource:controller-watch-invalid-callback:framework-error-code:AUR0506:src/resource-metadata-errors-app.ts:880:909:no-missing-input",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -2511,12 +2391,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "sourceRole": null,
               "subject": {
                 "source": {
-                  "end": 937,
+                  "end": 909,
                   "kind": "source-span-address",
-                  "label": "src/resource-metadata-errors-app.ts@847..937",
+                  "label": "src/resource-metadata-errors-app.ts@880..909",
                   "path": "src/resource-metadata-errors-app.ts",
                   "role": "value",
-                  "start": 847
+                  "start": 880
                 },
                 "span": null,
                 "subjectKind": "custom-element",
@@ -2544,16 +2424,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "severity": "error",
             "source": "semantic-runtime:resource",
             "span": {
-              "end": 937,
-              "start": 847
+              "end": 909,
+              "start": 880
             },
-            "spanText": "{ expression: 'name', callback: 'nonCallableStaticWatchHandler', flush: 'async' as const }",
+            "spanText": "nonCallableStaticWatchHandler",
             "status": "primary",
             "uri": "fixtures://pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts"
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:26:resource:controller-watch-invalid-callback:framework-error-code:AUR0506:src/resource-metadata-errors-app.ts:847:937:no-missing-input"
+          "rowId": "diagnostic:25:resource:controller-watch-invalid-callback:framework-error-code:AUR0506:src/resource-metadata-errors-app.ts:880:909:no-missing-input"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -2561,8 +2441,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": {
           "source": null,
           "span": {
-            "end": 937,
-            "start": 847
+            "end": 909,
+            "start": 880
           },
           "subjectKind": "custom-element",
           "uri": "file:///c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts"
@@ -3343,7 +3223,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         }
       },
       {
-        "groupKey": "row:diagnostic:19:resource:invalid-process-content-hook:framework-error-code:AUR0766:src/resource-metadata-errors-app.ts:2313:2334:no-missing-input",
+        "groupKey": "row:diagnostic:18:resource:invalid-process-content-hook:framework-error-code:AUR0766:src/resource-metadata-errors-app.ts:2313:2334:no-missing-input",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -3415,7 +3295,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:19:resource:invalid-process-content-hook:framework-error-code:AUR0766:src/resource-metadata-errors-app.ts:2313:2334:no-missing-input"
+          "rowId": "diagnostic:18:resource:invalid-process-content-hook:framework-error-code:AUR0766:src/resource-metadata-errors-app.ts:2313:2334:no-missing-input"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -3431,7 +3311,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         }
       },
       {
-        "groupKey": "row:diagnostic:20:resource:invalid-process-content-hook:framework-error-code:AUR0766:src/resource-metadata-errors-app.ts:2661:2675:no-missing-input",
+        "groupKey": "row:diagnostic:19:resource:invalid-process-content-hook:framework-error-code:AUR0766:src/resource-metadata-errors-app.ts:2661:2675:no-missing-input",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -3503,7 +3383,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:20:resource:invalid-process-content-hook:framework-error-code:AUR0766:src/resource-metadata-errors-app.ts:2661:2675:no-missing-input"
+          "rowId": "diagnostic:19:resource:invalid-process-content-hook:framework-error-code:AUR0766:src/resource-metadata-errors-app.ts:2661:2675:no-missing-input"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -3519,7 +3399,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         }
       },
       {
-        "groupKey": "row:diagnostic:21:resource:children-invalid-query:framework-error-code:AUR9989:src/resource-metadata-errors-app.ts:2831:2836:no-missing-input",
+        "groupKey": "row:diagnostic:20:resource:children-invalid-query:framework-error-code:AUR9989:src/resource-metadata-errors-app.ts:2831:2836:no-missing-input",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -3591,7 +3471,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:21:resource:children-invalid-query:framework-error-code:AUR9989:src/resource-metadata-errors-app.ts:2831:2836:no-missing-input"
+          "rowId": "diagnostic:20:resource:children-invalid-query:framework-error-code:AUR9989:src/resource-metadata-errors-app.ts:2831:2836:no-missing-input"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -3607,7 +3487,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         }
       },
       {
-        "groupKey": "row:diagnostic:22:resource:slotted-decorator-invalid-usage:framework-error-code:AUR9990:src/resource-metadata-errors-app.ts:3045:3055:no-missing-input",
+        "groupKey": "row:diagnostic:21:resource:slotted-decorator-invalid-usage:framework-error-code:AUR9990:src/resource-metadata-errors-app.ts:3045:3055:no-missing-input",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -3679,7 +3559,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:22:resource:slotted-decorator-invalid-usage:framework-error-code:AUR9990:src/resource-metadata-errors-app.ts:3045:3055:no-missing-input"
+          "rowId": "diagnostic:21:resource:slotted-decorator-invalid-usage:framework-error-code:AUR9990:src/resource-metadata-errors-app.ts:3045:3055:no-missing-input"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -3695,11 +3575,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         }
       }
     ],
-    "primaryCount": 27,
-    "rawRowCount": 27
+    "primaryCount": 26,
+    "rawRowCount": 26
   },
   "raw": {
-    "diagnosticCount": 27,
+    "diagnosticCount": 26,
     "diagnostics": [
       {
         "actionability": "manual",
@@ -4792,63 +4672,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "uri": "fixtures://pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts"
       },
       {
-        "actionability": "guided",
-        "anomaly": null,
-        "category": "template-syntax",
-        "code": "AUR0508",
-        "data": {
-          "diagnosticAuthority": "framework-error-code",
-          "diagnosticDomain": "template",
-          "diagnosticKind": "runtime-controller-framework-error",
-          "frameworkErrorCode": "AUR0508",
-          "frameworkRawErrorAuthority": null,
-          "missingInput": "runtime-controller:AUR0508",
-          "missingInputs": [
-            "runtime-controller:AUR0508"
-          ],
-          "phase": "observer-setup",
-          "relatedInformation": [],
-          "relatedQueryKind": "template-diagnostics",
-          "repairAffordance": {
-            "actionKind": "rewrite-template-syntax",
-            "actionability": "guided",
-            "changeDomain": "app-source",
-            "planKind": "template-syntax-rewrite",
-            "readiness": "ready-to-plan",
-            "targetSourceCoverage": "all"
-          },
-          "sourceRole": null,
-          "subject": null,
-          "taxonomy": {
-            "actionability": null,
-            "category": null,
-            "confidence": null,
-            "impact": null,
-            "schema": null
-          }
-        },
-        "file": "src/resource-metadata-errors-app.ts",
-        "impact": "blocking",
-        "issues": [
-          {
-            "code": "AUR0508",
-            "kind": "runtime-controller-framework-error",
-            "message": "Aurelia runtime controller AUR0508 rejects this controller input: Observer for property length does not support change handler.."
-          }
-        ],
-        "message": "Aurelia runtime controller AUR0508 rejects this controller input: Observer for property length does not support change handler..",
-        "related": [],
-        "severity": "error",
-        "source": "semantic-runtime:template",
-        "span": {
-          "end": 263,
-          "start": 231
-        },
-        "spanText": "{ name: 'length', type: Number }",
-        "status": "canonical",
-        "uri": "fixtures://pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts"
-      },
-      {
         "actionability": "manual",
         "anomaly": null,
         "category": "resource-resolution",
@@ -5277,12 +5100,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "sourceRole": null,
           "subject": {
             "source": {
-              "end": 841,
+              "end": 814,
               "kind": "source-span-address",
-              "label": "src/resource-metadata-errors-app.ts@756..841",
+              "label": "src/resource-metadata-errors-app.ts@789..814",
               "path": "src/resource-metadata-errors-app.ts",
               "role": "value",
-              "start": 756
+              "start": 789
             },
             "span": null,
             "subjectKind": "custom-element",
@@ -5310,10 +5133,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "severity": "error",
         "source": "semantic-runtime:resource",
         "span": {
-          "end": 841,
-          "start": 756
+          "end": 814,
+          "start": 789
         },
-        "spanText": "{ expression: 'name', callback: 'missingStaticWatchHandler', flush: 'sync' as const }",
+        "spanText": "missingStaticWatchHandler",
         "status": "canonical",
         "uri": "fixtures://pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts"
       },
@@ -5344,12 +5167,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "sourceRole": null,
           "subject": {
             "source": {
-              "end": 937,
+              "end": 909,
               "kind": "source-span-address",
-              "label": "src/resource-metadata-errors-app.ts@847..937",
+              "label": "src/resource-metadata-errors-app.ts@880..909",
               "path": "src/resource-metadata-errors-app.ts",
               "role": "value",
-              "start": 847
+              "start": 880
             },
             "span": null,
             "subjectKind": "custom-element",
@@ -5377,10 +5200,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "severity": "error",
         "source": "semantic-runtime:resource",
         "span": {
-          "end": 937,
-          "start": 847
+          "end": 909,
+          "start": 880
         },
-        "spanText": "{ expression: 'name', callback: 'nonCallableStaticWatchHandler', flush: 'async' as const }",
+        "spanText": "nonCallableStaticWatchHandler",
         "status": "canonical",
         "uri": "fixtures://pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts"
       }
@@ -5392,7 +5215,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   },
   "surfaces": {
     "lsp": {
-      "diagnosticCount": 27,
+      "diagnosticCount": 26,
       "diagnostics": [
         {
           "actionability": "manual",
@@ -5892,63 +5715,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "uri": "fixtures://pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts"
         },
         {
-          "actionability": "guided",
-          "anomaly": null,
-          "category": "template-syntax",
-          "code": "AUR0508",
-          "data": {
-            "diagnosticAuthority": "framework-error-code",
-            "diagnosticDomain": "template",
-            "diagnosticKind": "runtime-controller-framework-error",
-            "frameworkErrorCode": "AUR0508",
-            "frameworkRawErrorAuthority": null,
-            "missingInput": "runtime-controller:AUR0508",
-            "missingInputs": [
-              "runtime-controller:AUR0508"
-            ],
-            "phase": "observer-setup",
-            "relatedInformation": [],
-            "relatedQueryKind": "template-diagnostics",
-            "repairAffordance": {
-              "actionKind": "rewrite-template-syntax",
-              "actionability": "guided",
-              "changeDomain": "app-source",
-              "planKind": "template-syntax-rewrite",
-              "readiness": "ready-to-plan",
-              "targetSourceCoverage": "all"
-            },
-            "sourceRole": null,
-            "subject": null,
-            "taxonomy": {
-              "actionability": null,
-              "category": null,
-              "confidence": null,
-              "impact": null,
-              "schema": null
-            }
-          },
-          "file": "src/resource-metadata-errors-app.ts",
-          "impact": "blocking",
-          "issues": [
-            {
-              "code": "AUR0508",
-              "kind": "runtime-controller-framework-error",
-              "message": "Aurelia runtime controller AUR0508 rejects this controller input: Observer for property length does not support change handler.."
-            }
-          ],
-          "message": "Aurelia runtime controller AUR0508 rejects this controller input: Observer for property length does not support change handler..",
-          "related": [],
-          "severity": "error",
-          "source": "semantic-runtime:template",
-          "span": {
-            "end": 263,
-            "start": 231
-          },
-          "spanText": "{ name: 'length', type: Number }",
-          "status": "primary",
-          "uri": "fixtures://pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts"
-        },
-        {
           "actionability": "manual",
           "anomaly": null,
           "category": "resource-resolution",
@@ -6109,12 +5875,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "sourceRole": null,
             "subject": {
               "source": {
-                "end": 841,
+                "end": 814,
                 "kind": "source-span-address",
-                "label": "src/resource-metadata-errors-app.ts@756..841",
+                "label": "src/resource-metadata-errors-app.ts@789..814",
                 "path": "src/resource-metadata-errors-app.ts",
                 "role": "value",
-                "start": 756
+                "start": 789
               },
               "span": null,
               "subjectKind": "custom-element",
@@ -6142,10 +5908,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "severity": "error",
           "source": "semantic-runtime:resource",
           "span": {
-            "end": 841,
-            "start": 756
+            "end": 814,
+            "start": 789
           },
-          "spanText": "{ expression: 'name', callback: 'missingStaticWatchHandler', flush: 'sync' as const }",
+          "spanText": "missingStaticWatchHandler",
           "status": "primary",
           "uri": "fixtures://pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts"
         },
@@ -6176,12 +5942,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "sourceRole": null,
             "subject": {
               "source": {
-                "end": 937,
+                "end": 909,
                 "kind": "source-span-address",
-                "label": "src/resource-metadata-errors-app.ts@847..937",
+                "label": "src/resource-metadata-errors-app.ts@880..909",
                 "path": "src/resource-metadata-errors-app.ts",
                 "role": "value",
-                "start": 847
+                "start": 880
               },
               "span": null,
               "subjectKind": "custom-element",
@@ -6209,10 +5975,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "severity": "error",
           "source": "semantic-runtime:resource",
           "span": {
-            "end": 937,
-            "start": 847
+            "end": 909,
+            "start": 880
           },
-          "spanText": "{ expression: 'name', callback: 'nonCallableStaticWatchHandler', flush: 'async' as const }",
+          "spanText": "nonCallableStaticWatchHandler",
           "status": "primary",
           "uri": "fixtures://pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts"
         },
@@ -7090,10 +6856,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 {
   "comparisonKey": "domain/kind/code/severity/text/message",
   "countsMatch": true,
-  "customLspSurfaceCount": 27,
+  "customLspSurfaceCount": 26,
   "customOnly": [],
   "lspOnly": [],
-  "lspPublishCount": 27,
+  "lspPublishCount": 26,
   "suppressedCount": 0
 }
 ```
