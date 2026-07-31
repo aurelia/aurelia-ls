@@ -28,9 +28,9 @@ import {
   RuntimeBindingKind,
 } from '../template/runtime-binding.js';
 import {
-  RuntimeObservedDependencyKind,
   type RuntimeBindingObservedDependency,
 } from './runtime-binding-observation.js';
+import { RuntimeObservedDependencyKind } from './runtime-observed-dependency.js';
 import { readTrackableMethodDependency } from './trackable-method-dependency-recognition.js';
 import {
   ObservationIssueKind,
@@ -133,7 +133,10 @@ export class NonTrackableTemplateMethodCallIssueMaterializer {
     return {
       dependency,
       method,
-      methodName: dependency.methodName ?? dependency.sourceName ?? method.name?.getText(method.getSourceFile()) ?? '<method>',
+      methodName: dependency.occurrence.methodName
+        ?? dependency.occurrence.sourceName
+        ?? method.name?.getText(method.getSourceFile())
+        ?? '<method>',
       bodyReads,
     };
   }
@@ -142,8 +145,14 @@ export class NonTrackableTemplateMethodCallIssueMaterializer {
     typeSystem: TypeSystemProject,
     dependency: RuntimeBindingObservedDependency,
   ): ts.MethodDeclaration | null {
-    const sourceSpan = sourceSpanAddressForAddress(this.publication, dependency.observedMemberSourceAddressHandle);
-    const sourceFileAddress = sourceFileAddressForAddress(this.publication, dependency.observedMemberSourceAddressHandle);
+    const sourceSpan = sourceSpanAddressForAddress(
+      this.publication,
+      dependency.occurrence.observedMemberSourceAddressHandle,
+    );
+    const sourceFileAddress = sourceFileAddressForAddress(
+      this.publication,
+      dependency.occurrence.observedMemberSourceAddressHandle,
+    );
     if (sourceSpan == null || sourceFileAddress == null) {
       return null;
     }
@@ -163,16 +172,16 @@ export class NonTrackableTemplateMethodCallIssueMaterializer {
     const source = sourceAddressForRuntimeExpressionBounds(
       this.publication,
       `${local}:source`,
-      call.dependency.sourceAddressHandle,
-      call.dependency.memberNameSpanStart,
-      call.dependency.memberNameSpanEnd,
+      call.dependency.occurrence.sourceAddressHandle,
+      call.dependency.occurrence.memberNameSpanStart,
+      call.dependency.occurrence.memberNameSpanEnd,
     );
     const relatedSources = [
-      ...(call.dependency.observedMemberSourceAddressHandle == null
+      ...(call.dependency.occurrence.observedMemberSourceAddressHandle == null
         ? []
         : [new ObservationIssueRelatedSource(
           ObservationIssueRelatedSourceKind.SubjectDeclaration,
-          call.dependency.observedMemberSourceAddressHandle,
+          call.dependency.occurrence.observedMemberSourceAddressHandle,
           call.methodName,
         )]),
       ...call.bodyReads.map((read) => new ObservationIssueRelatedSource(
@@ -210,12 +219,15 @@ interface NonTrackableTemplateMethodCall {
 function isTemplateMethodCallDependency(
   dependency: RuntimeBindingObservedDependency,
 ): boolean {
-  return dependency.dependencyKind === RuntimeObservedDependencyKind.TemplateExpressionRead
+  return dependency.occurrence.dependencyKind === RuntimeObservedDependencyKind.TemplateExpressionRead
     && dependency.binding.bindingKind !== RuntimeBindingKind.Listener
     && dependency.binding.bindingKind !== RuntimeBindingKind.StateDispatch
-    && dependency.observedMemberKind === CheckerTypeMemberKind.Method
-    && dependency.observedMemberSourceAddressHandle != null
-    && (dependency.expressionKind === 'CallScope' || dependency.expressionKind === 'CallMember');
+    && dependency.occurrence.observedMemberKind === CheckerTypeMemberKind.Method
+    && dependency.occurrence.observedMemberSourceAddressHandle != null
+    && (
+      dependency.occurrence.expressionKind === 'CallScope'
+      || dependency.occurrence.expressionKind === 'CallMember'
+    );
 }
 
 function findMethodDeclarationAtSourceSpan(
@@ -405,7 +417,7 @@ function nonTrackableTemplateMethodCallLocalKey(
     ObservationIssueKind.NonTrackableTemplateMethodCall,
     localKeyPart(project.projectKey),
     localKeyPart(call.methodName),
-    localKeyPart(call.dependency.sourceAddressHandle ?? 'unknown-source'),
+    localKeyPart(call.dependency.occurrence.sourceAddressHandle ?? 'unknown-source'),
     index,
   ].join(':');
 }
@@ -414,8 +426,8 @@ function nonTrackableTemplateMethodCallKey(
   call: NonTrackableTemplateMethodCall,
 ): string {
   return [
-    call.dependency.sourceAddressHandle ?? 'unknown-source',
-    call.dependency.observedMemberSourceAddressHandle ?? 'unknown-method',
+    call.dependency.occurrence.sourceAddressHandle ?? 'unknown-source',
+    call.dependency.occurrence.observedMemberSourceAddressHandle ?? 'unknown-method',
     call.methodName,
   ].join(':');
 }

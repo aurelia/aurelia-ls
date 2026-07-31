@@ -2,6 +2,7 @@ import type { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import type {
   AddressHandle,
   HotDetailHandle,
+  IdentityHandle,
 } from '../kernel/handles.js';
 import type { CheckerExpressionTypeEvaluator } from '../type-system/expression-type-evaluator.js';
 import type {
@@ -40,6 +41,8 @@ export type RuntimeBindingValueChannelDraft = {
 export type RuntimeBindingValueChannelDraftResult = {
   readonly draft: RuntimeBindingValueChannelDraft;
   readonly realization: RuntimeOperationRealization;
+  /** Upstream product owner whose cited seam caused this open draft, or null for channel-local pressure. */
+  readonly openReasonOwnerIdentityHandle: IdentityHandle | null;
   /** Object type tested by a guarded source-member read. */
   readonly admittedSourceOwnerType: CheckerTypeReference | null;
   readonly admittedSourceValueType: CheckerTypeReference | null;

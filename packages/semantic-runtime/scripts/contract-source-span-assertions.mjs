@@ -1,29 +1,65 @@
-export function exactSourceSpanFailures(rows, specs) {
+export function exactObservedDependencySourceSpanFailures(rows, specs) {
   const failures = [];
   for (const spec of specs) {
-    const row = rows.find((candidate) => matchesSourceSpanSpec(candidate, spec));
+    const row = rows.find((candidate) => matchesObservedDependencySourceSpanSpec(candidate, spec));
     if (row == null) {
       failures.push(`${spec.summary} No matching row was published.`);
       continue;
     }
-    if (row.source?.kind !== 'source-span-address') {
-      failures.push(`${spec.summary} Source kind was ${row.source?.kind ?? 'null'}.`);
+    const occurrence = row.occurrence;
+    if (occurrence.source?.kind !== 'source-span-address') {
+      failures.push(`${spec.summary} Source kind was ${occurrence.source?.kind ?? 'null'}.`);
       continue;
     }
-    if (row.source.path !== spec.path) {
-      failures.push(`${spec.summary} Source path was ${row.source.path ?? 'null'}.`);
+    if (occurrence.source.path !== spec.path) {
+      failures.push(`${spec.summary} Source path was ${occurrence.source.path ?? 'null'}.`);
     }
-    if (row.source.start !== row.spanStart || row.source.end !== row.spanEnd) {
-      failures.push(`${spec.summary} Source span was ${row.source.start}..${row.source.end}; dependency span was ${row.spanStart}..${row.spanEnd}.`);
+    const expectedSource = spec.sourceSpan ?? {
+      start: occurrence.spanStart,
+      end: occurrence.spanEnd,
+    };
+    if (
+      occurrence.source.start !== expectedSource.start
+      || occurrence.source.end !== expectedSource.end
+    ) {
+      failures.push(
+        `${spec.summary} Source span was ${occurrence.source.start}..${occurrence.source.end}; expected ${expectedSource.start}..${expectedSource.end}.`,
+      );
+    }
+    const accessSource = occurrence.accessUse?.source;
+    if (
+      accessSource?.kind !== 'source-span-address'
+      || accessSource.path !== occurrence.source.path
+      || accessSource.start !== occurrence.source.start
+      || accessSource.end !== occurrence.source.end
+    ) {
+      failures.push(
+        `${spec.summary} Occurrence source did not match the inducing access-use source.`,
+      );
+    }
+    if (spec.memberTokenSpan != null && (
+      occurrence.memberTokenSource?.kind !== 'source-span-address'
+      || occurrence.memberTokenSource.path !== spec.path
+      || occurrence.memberTokenSource.start !== spec.memberTokenSpan.start
+      || occurrence.memberTokenSource.end !== spec.memberTokenSpan.end
+    )) {
+      failures.push(
+        `${spec.summary} Member token span was ${
+          occurrence.memberTokenSource?.start ?? 'null'
+        }..${occurrence.memberTokenSource?.end ?? 'null'}; expected ${
+          spec.memberTokenSpan.start
+        }..${spec.memberTokenSpan.end}.`,
+      );
     }
   }
   return failures;
 }
 
-function matchesSourceSpanSpec(row, spec) {
-  const match = spec.match ?? {
-    sourceName: spec.sourceName,
-    ...(spec.methodName === undefined ? {} : { methodName: spec.methodName }),
-  };
-  return Object.entries(match).every(([field, value]) => row[field] === value);
+function matchesObservedDependencySourceSpanSpec(row, spec) {
+  return matchesFields(row, spec.owner ?? {})
+    && matchesFields(row.occurrence, spec.occurrence);
+}
+
+function matchesFields(row, fields) {
+  return Object.entries(fields).every(([field, value]) => row[field] === value);
 }

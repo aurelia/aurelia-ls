@@ -4,6 +4,7 @@ import {
   EvaluationTargetResolutionKind,
   readClassTarget,
 } from '../evaluation/expression-reader.js';
+import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import type { ResourceRecognitionContext } from './resource-recognition-context.js';
 import { AttributePatternDefinitionHeader } from './resource-definition.js';
@@ -74,7 +75,7 @@ function recognizeAttributePatternDecorators(
         KernelVocabulary.Resource.OpenPatternExpression.key,
         'Attribute pattern decorator did not expose only static pattern entries.',
         call ?? decorator,
-        [],
+        [OpenSeamReasonKind.ResourceAnnotationOpen],
       ));
     }
     patternReads.forEach((read, index) => {
@@ -85,7 +86,9 @@ function recognizeAttributePatternDecorators(
         KernelVocabulary.Resource.OpenPatternExpression.key,
         read.openSummary ?? 'Attribute pattern decorator entry did not close.',
         read.node ?? call?.arguments[index] ?? decorator,
-        read.openReasonKinds,
+        read.openReasonKinds.length > 0
+          ? read.openReasonKinds
+          : [OpenSeamReasonKind.ResourceAnnotationOpen],
       ));
     });
 
@@ -124,7 +127,9 @@ function recognizeAttributePatternCreate(
       KernelVocabulary.Resource.OpenPatternExpression.key,
       patterns?.openSummary ?? 'AttributePattern.create(...) did not expose static pattern entries.',
       patterns?.node ?? patternExpression ?? call,
-      patterns?.openReasonKinds ?? [],
+      patterns?.openReasonKinds.length
+        ? patterns.openReasonKinds
+        : [OpenSeamReasonKind.ResourceAnnotationOpen],
     ));
   } else if (patterns.openSummary != null) {
     openSeams.push(new ResourceRecognitionOpen(
@@ -144,7 +149,9 @@ function recognizeAttributePatternCreate(
       KernelVocabulary.Resource.OpenTargetExpression.key,
       'AttributePattern.create(...) did not expose a statically named pattern target.',
       targetExpression ?? call,
-      target?.openReasonKinds ?? [],
+      target?.openReasonKinds.length
+        ? target.openReasonKinds
+        : [OpenSeamReasonKind.ResourceDefinitionTargetOpen],
     ));
   } else if (target.openReasonKinds.length > 0) {
     const details = [

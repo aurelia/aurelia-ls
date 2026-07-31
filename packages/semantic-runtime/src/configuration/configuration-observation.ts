@@ -56,8 +56,8 @@ export class ConfigurationRecognitionOpen {
     readonly summary: string,
     /** Source node where the unresolved pressure appeared. */
     readonly node: ts.Node,
-    /** Lower-level producer reasons that caused this configuration seam, when available. */
-    readonly reasonKinds: readonly OpenSeamReasonKind[] = [],
+    /** Lower-level producer reasons that caused this configuration seam. */
+    readonly reasonKinds: readonly OpenSeamReasonKind[],
   ) {}
 }
 

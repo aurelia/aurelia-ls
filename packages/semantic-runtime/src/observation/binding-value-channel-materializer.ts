@@ -16,9 +16,11 @@ import {
 import {
   MaterializationRecord,
   MaterializedProduct,
+  materializationOpenSeamHandlesForOwners,
 } from '../kernel/materialization.js';
 import {
   OpenSeam,
+  OpenSeamReasonKind,
 } from '../kernel/open-seam.js';
 import {
   ProvenanceRecord,
@@ -145,6 +147,7 @@ interface BindingValueChannelRecordEmission {
 interface BindingValueChannelOpenSeamEmission {
   readonly records: readonly KernelStoreRecord[];
   readonly openSeams: readonly OpenSeam[];
+  readonly openSeamHandles: readonly OpenSeam['handle'][];
 }
 
 type ValueChannelDraftResult = RuntimeBindingValueChannelDraftResult;
@@ -267,13 +270,29 @@ export class RuntimeBindingValueChannelMaterializer {
     }
     const valueChannel = this.valueChannelForTarget(input, local, binding, target, result);
     const claim = this.valueChannelClaim(local, binding, valueChannel, source);
-    const open = this.openSeamForValueChannel(local, valueChannel, binding, source);
+    const upstreamOpenSeamHandles = materializationOpenSeamHandlesForOwners(
+      this.publication,
+      [
+        target.targetAccess?.identityHandle,
+        target.targetOperation?.identityHandle,
+        target.sourceOperation?.identityHandle,
+        result.openReasonOwnerIdentityHandle,
+      ].filter((handle): handle is NonNullable<typeof handle> => handle != null),
+    );
+    const open = this.openSeamForValueChannel(
+      local,
+      valueChannel,
+      binding,
+      source,
+      upstreamOpenSeamHandles,
+      result.openReasonOwnerIdentityHandle,
+    );
     return {
       valueChannel,
       openSeams: open.openSeams,
       records: [
         ...open.records,
-        ...this.valueChannelRecords(local, binding, target, valueChannel, claim, open.openSeams, source),
+        ...this.valueChannelRecords(local, binding, target, valueChannel, claim, open.openSeamHandles, source),
       ],
     };
   }
@@ -298,9 +317,19 @@ export class RuntimeBindingValueChannelMaterializer {
     valueChannel: RuntimeBindingValueChannel,
     binding: RuntimeValueChannelBinding,
     source: BindingValueChannelSourceSet,
+    upstreamOpenSeamHandles: readonly OpenSeam['handle'][],
+    openReasonOwnerIdentityHandle: RuntimeBindingValueChannelDraftResult['openReasonOwnerIdentityHandle'],
   ): BindingValueChannelOpenSeamEmission {
     if (valueChannel.openReason == null) {
-      return { records: [], openSeams: [] };
+      return { records: [], openSeams: [], openSeamHandles: upstreamOpenSeamHandles };
+    }
+    if (openReasonOwnerIdentityHandle != null) {
+      if (upstreamOpenSeamHandles.length === 0) {
+        throw new Error(
+          `Open value-channel draft cites upstream owner '${openReasonOwnerIdentityHandle}' without a causal open seam.`,
+        );
+      }
+      return { records: [], openSeams: [], openSeamHandles: upstreamOpenSeamHandles };
     }
     const seam = new OpenSeam(
       this.store.handles.openSeam(`${local}:open-value-channel`),
@@ -308,9 +337,15 @@ export class RuntimeBindingValueChannelMaterializer {
       valueChannel.openReason,
       binding.sourceAddressHandle,
       source.evidenceHandle,
-      valueChannel.openReasonKinds,
+      valueChannel.openReasonKinds.length === 0
+        ? [OpenSeamReasonKind.BindingValueChannelSemanticsOpen]
+        : valueChannel.openReasonKinds,
     );
-    return { records: [seam], openSeams: [seam] };
+    return {
+      records: [seam],
+      openSeams: [seam],
+      openSeamHandles: [...upstreamOpenSeamHandles, seam.handle].sort(),
+    };
   }
 
   private valueChannelForTarget(
@@ -368,7 +403,7 @@ export class RuntimeBindingValueChannelMaterializer {
     target: ValueChannelTarget,
     valueChannel: RuntimeBindingValueChannel,
     claim: SemanticClaim,
-    openSeams: readonly OpenSeam[],
+    openSeamHandles: readonly OpenSeam['handle'][],
     source: BindingValueChannelSourceSet,
   ): readonly KernelStoreRecord[] {
     return [
@@ -392,7 +427,7 @@ export class RuntimeBindingValueChannelMaterializer {
         valueChannel.identityHandle,
         [valueChannel.productHandle],
         [claim.handle],
-        openSeams.map((seam) => seam.handle),
+        openSeamHandles,
       ),
     ];
   }

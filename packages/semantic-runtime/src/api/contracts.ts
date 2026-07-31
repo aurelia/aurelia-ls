@@ -24,6 +24,11 @@ import type {
   ExpressionExpectedContinuationClass,
   ExpressionFrontierKind,
 } from '../expression/parse-result-algebra.js';
+import {
+  InquiryAnswerCoverage,
+  InquiryAnswerResult,
+  InquiryAnswerSelection,
+} from '../inquiry/answer.js';
 import type {
   TemplateCompletionCandidateKind,
   TemplateCompletionCandidateSourceKind,
@@ -47,12 +52,10 @@ import type {
 } from '../telemetry/kernel-density.js';
 import type { SemanticRuntimeInquiryProfile } from '../telemetry/inquiry-profile.js';
 import type {
+  InquiryContinuationEpochDependencyValue,
   InquiryContinuationCostValue,
   InquiryContinuationIntentValue,
-  InquiryEvidenceCoverageValue,
-  InquiryEvidenceStalenessValue,
-  InquiryEvidenceStateValue,
-  InquirySourcePrecisionValue,
+  InquirySourceRequirementValue,
 } from '../inquiry/continuation-intent.js';
 import type {
   InquiryContinuationKindValue,
@@ -143,8 +146,15 @@ import type {
   OpenSeamHandle,
   ProductHandle,
 } from '../kernel/handles.js';
-import type { OpenSeam } from '../kernel/open-seam.js';
-import type { OpenSeamReasonKind } from '../kernel/open-seam.js';
+import type {
+  OpenSeam,
+  OpenSeamBoundaryKind,
+  OpenSeamReasonKind,
+} from '../kernel/open-seam.js';
+import type {
+  MaterializationRecord,
+  MaterializedProduct,
+} from '../kernel/materialization.js';
 import type { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import type { ResourceDependencyReferenceKind } from '../resources/resource-reference.js';
 import type {
@@ -176,7 +186,6 @@ import type {
 import type {
   RuntimeBindingDataFlowDirection,
   RuntimeBindingSourceEvaluationKind,
-  RuntimeObservedDependencyKind,
   RuntimeBindingDataFlowSourceAssignmentKind,
   RuntimeBindingDataFlowSourceAssignmentReasonKind,
   RuntimeBindingDataFlowSourceKind,
@@ -188,6 +197,11 @@ import type {
   RuntimeBindingValueChannelKind,
   RuntimeBindingValueChannelTargetMutationKind,
 } from '../observation/runtime-binding-observation.js';
+import type {
+  RuntimeObservedDependencyKind,
+  RuntimeObservedMemberSourceRoute,
+  RuntimeObservedMemberSourceState,
+} from '../observation/runtime-observed-dependency.js';
 import type {
   RuntimeOperationRealization,
   RuntimeOperationReachability,
@@ -339,7 +353,10 @@ import type {
   ViewportAgentCandidateResolutionKind,
   ViewportFieldStateKind,
 } from '../router/model.js';
-import type { SemanticSourceReference } from './source-reference.js';
+import type {
+  SemanticContinuationSourceFact,
+  SemanticSourceReference,
+} from './source-reference.js';
 import type {
   SemanticRuntimeAppBuilderQueryKind,
   SemanticRuntimeAppBuilderQueryRequest,
@@ -357,34 +374,18 @@ import type {
   AppBuilderControlUseActionChannelKind,
 } from '../app-builder/ontology/control-use-inventory.js';
 
-export const SEMANTIC_RUNTIME_API_VERSION = '0.1' as const;
+export const SEMANTIC_RUNTIME_API_VERSION = '0.2' as const;
 
 export const SEMANTIC_PROJECT_DISCOVERY_MODES = [
   'single-root',
   'package-tsconfig',
 ] as const;
 
-export const enum SemanticRuntimeAnswerOutcome {
-  Hit = 'hit',
-  Miss = 'miss',
-  Partial = 'partial',
-  Unsupported = 'unsupported',
-}
-
-export const enum SemanticRuntimeAnswerClosure {
-  /** Answer is complete for the requested query envelope and no answer-local paging or open state remains. */
-  Complete = 'complete',
-  /** Answer is truncated by public paging; follow `page.nextCursor` to continue the same query. */
-  Paged = 'paged',
-  /** Answer is intentionally partial because some required semantic fact stayed open. */
-  Open = 'open',
-  /** Answer is intentionally partial because the request matched multiple possible semantic loci. */
-  Ambiguous = 'ambiguous',
-  /** Answer is intentionally partial because another query or locus should be used instead. */
-  Reroute = 'reroute',
-  /** Answer cannot be produced by this query family or runtime boundary. */
-  Unsupported = 'unsupported',
-}
+export {
+  InquiryAnswerCoverage as SemanticRuntimeAnswerCoverage,
+  InquiryAnswerResult as SemanticRuntimeAnswerResult,
+  InquiryAnswerSelection as SemanticRuntimeAnswerSelection,
+};
 
 export const SEMANTIC_APP_RETENTION_POLICIES = [
   'profile-default',
@@ -630,7 +631,9 @@ export interface SemanticRuntimeOptions {
 export interface SemanticRuntimeSummaryRequest {
   /** Page over project rows; defaults to 0 so counts and app candidates can serve as a low-token first read. */
   readonly projectPage?: SemanticRuntimePageInput | null;
-  /** Inquiry profile that owns this summary answer outcome; defaults to the runtime's unclassified exploration lane. */
+  /** Optional transport-owned row-page ceilings; excluded from semantic query identity. */
+  readonly pagePolicy?: SemanticRuntimePagePolicy | null;
+  /** Inquiry profile that owns this summary answer claim; defaults to the runtime's unclassified exploration lane. */
   readonly inquiryProfile?: SemanticRuntimeInquiryProfile | `${SemanticRuntimeInquiryProfile}` | null;
 }
 
@@ -657,8 +660,23 @@ export interface SemanticAppOverviewRequest {
 }
 
 export interface SemanticRuntimePageInput {
+  /** Non-negative safe integer. Zero requests rollup/page metadata without selecting rows. */
   readonly size?: number;
+  /** Opaque cursor returned by the same query shape and row-universe generation. */
   readonly cursor?: string | null;
+}
+
+/**
+ * Transport-owned bounds applied while semantic-runtime selects one deterministic row page.
+ *
+ * Semantic-runtime itself does not impose MCP-sized ceilings. IDE, MCP, and future AOT callers may choose different
+ * response budgets without changing semantic answer meaning.
+ */
+export interface SemanticRuntimePagePolicy {
+  /** Positive safe-integer row ceiling; null leaves the caller's requested size unbounded. */
+  readonly maxSize?: number | null;
+  /** Positive safe-integer estimated row-JSON ceiling; null disables byte-budget clamping. */
+  readonly maxRowsJsonBytes?: number | null;
 }
 
 export interface SemanticRouterOverviewRequest {
@@ -667,16 +685,14 @@ export interface SemanticRouterOverviewRequest {
   readonly detail?: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` | null;
 }
 
-/** Public DTO for the evidence obligations behind a suggested continuation. */
+/** Public DTO for facts and source obligations known before following a suggested continuation. */
 export interface SemanticContinuationEvidenceGate {
-  /** Evidence authority state required before trusting the continuation. */
-  readonly evidenceState?: InquiryEvidenceStateValue;
-  /** Completeness posture for the selected source/app locus. */
-  readonly coverage?: InquiryEvidenceCoverageValue;
-  /** Source precision available for navigation, explanation, or future edits. */
-  readonly sourcePrecision?: InquirySourcePrecisionValue;
-  /** Source or project epoch sensitivity for reusing the continuation. */
-  readonly staleness?: InquiryEvidenceStalenessValue;
+  /** Source evidence required by the intended move; the followed answer reports its own semantic coverage. */
+  readonly sourceRequirement: InquirySourceRequirementValue;
+  /** Relevant source facts already carried by the current answer, preserving mixed facets independently. */
+  readonly sourceFacts: readonly SemanticContinuationSourceFact[];
+  /** Generation authorities whose change can invalidate or reshape the continuation target. */
+  readonly epochDependencies: readonly InquiryContinuationEpochDependencyValue[];
 }
 
 /** Public continuation row for MCP/IDE callers that need typed next moves instead of prose hints. */
@@ -702,6 +718,40 @@ export interface SemanticRuntimeContinuationRow {
   /** Explicit reasons the continuation is informative but not currently followable/actionable. */
   readonly blockers: readonly string[];
 }
+
+export const enum SemanticObservedDependencyLocusKind {
+  /** Keep every dependency occurrence in the selected project. */
+  Project = 'project',
+  /** Keep occurrences whose authored source or anchor belongs to one source file. */
+  SourceFile = 'source-file',
+  /** Keep occurrences owned by one owner key returned from a dependency row. */
+  Owner = 'owner',
+  /** Select one dependency row key returned from a dependency row. */
+  Row = 'row',
+  /** Select one summary cluster key returned from a binding dependency summary row. */
+  Cluster = 'cluster',
+}
+
+export type SemanticObservedDependencyLocus =
+  | {
+    readonly kind: SemanticObservedDependencyLocusKind.Project;
+  }
+  | {
+    readonly kind: SemanticObservedDependencyLocusKind.SourceFile;
+    readonly sourceFile: SemanticRuntimeSourceFileInput;
+  }
+  | {
+    readonly kind: SemanticObservedDependencyLocusKind.Owner;
+    readonly ownerKey: string;
+  }
+  | {
+    readonly kind: SemanticObservedDependencyLocusKind.Row;
+    readonly rowKey: string;
+  }
+  | {
+    readonly kind: SemanticObservedDependencyLocusKind.Cluster;
+    readonly clusterKey: string;
+  };
 
 export interface SemanticAppQuery {
   readonly kind: SemanticAppQueryKind | `${SemanticAppQueryKind}`;
@@ -731,6 +781,10 @@ export interface SemanticAppQuery {
   readonly openSeamReasonKind?: OpenSeamReasonKind | `${OpenSeamReasonKind}` | string | null;
   /** Open-seam query filter by source admission role, such as `app-source` or `tooling-script`. */
   readonly sourceRole?: SourceFileRole | `${SourceFileRole}` | string | null;
+  /** Exact cluster key returned by an open-seam summary row. */
+  readonly openSeamClusterKey?: string | null;
+  /** Exact authored-site key returned by an open-seam raw/site row. */
+  readonly openSeamSiteKey?: string | null;
   /** RouterOverview samples several independent route row families; defaults to zero sample rows. */
   readonly rowPageSize?: number | null;
   /** Source cursor used by cursor-scoped authoring queries such as template completions. */
@@ -741,6 +795,8 @@ export interface SemanticAppQuery {
   readonly includeDeclaration?: boolean | null;
   /** New member/resource name for edit-planning queries; omitted when a caller only wants prepare/preflight data. */
   readonly newName?: string | null;
+  /** Family-owned locus for observed-dependency row and summary queries. */
+  readonly observedDependencyLocus?: SemanticObservedDependencyLocus | null;
 }
 
 export interface SemanticRuntimeAppQueryRequest extends SemanticAppQuery {
@@ -768,6 +824,8 @@ export interface SemanticRuntimeAppQueryRequest extends SemanticAppQuery {
    * The clear is recorded on the runtime-level query claim beside any app-epoch disposal.
    */
   readonly typeSystemDependencyCacheClearPolicy?: SemanticTypeSystemDependencyCacheClearPolicy | null;
+  /** Optional transport-owned row-page ceilings; excluded from semantic query identity. */
+  readonly pagePolicy?: SemanticRuntimePagePolicy | null;
 }
 
 export interface SemanticRuntimeAppQueryBatchRequest {
@@ -811,6 +869,8 @@ export interface SemanticRuntimeAppQueryBatchRequest {
    * both app-world and TypeScript dependency cache disposal in the same query claim.
    */
   readonly typeSystemDependencyCacheClearPolicy?: SemanticTypeSystemDependencyCacheClearPolicy | null;
+  /** Optional transport-owned row-page ceilings applied to every child query. */
+  readonly pagePolicy?: SemanticRuntimePagePolicy | null;
   readonly queries: readonly SemanticAppQuery[];
 }
 
@@ -883,6 +943,10 @@ export interface SemanticAppQueryCatalogRow {
   readonly supportsPaging: boolean;
   readonly supportsDetail: boolean;
   readonly supportsSourceFile: boolean;
+  /** Accepted observed-dependency loci; empty when this query does not own that selector family. */
+  readonly observedDependencyLocusKinds: readonly (
+    SemanticObservedDependencyLocusKind | `${SemanticObservedDependencyLocusKind}`
+  )[];
   /** Whether open-seam queries accept seam kind, reason kind, and source-role filters. */
   readonly supportsOpenSeamFilters: boolean;
   readonly supportsDiagnosticProjection: boolean;
@@ -939,8 +1003,12 @@ export interface SemanticTemplateDiagnosticsQuery {
 
 export interface SemanticRuntimeAnswer<TValue> {
   readonly schemaVersion: typeof SEMANTIC_RUNTIME_API_VERSION;
-  readonly outcome: SemanticRuntimeAnswerOutcome;
-  readonly closure: SemanticRuntimeAnswerClosure;
+  /** Whether execution produced an answer, independently from selection, coverage, and paging. */
+  readonly result: InquiryAnswerResult;
+  /** Cursor/locus selection state, independent of semantic coverage and transport paging. */
+  readonly selection: InquiryAnswerSelection;
+  /** Completeness of the semantic basis, independent of whether the row payload is paged. */
+  readonly coverage: InquiryAnswerCoverage;
   readonly summary: string;
   readonly value: TValue;
   readonly page?: SemanticRuntimePageResult | null;
@@ -969,7 +1037,7 @@ export interface SemanticRuntimeAppWorldFreeProfileSummary {
 }
 
 export interface SemanticRuntimePageResult {
-  /** Applied page size after semantic-runtime public safety clamps. */
+  /** Applied page size after caller/transport policy. */
   readonly size: number;
   /** Caller-supplied cursor, if any. */
   readonly cursor: string | null;
@@ -977,18 +1045,35 @@ export interface SemanticRuntimePageResult {
   readonly nextCursor: string | null;
   readonly returnedRows: number;
   readonly totalRows: number;
-  /** Caller-requested size when semantic-runtime had to clamp the public page size. */
+  /** True when this page reaches the end of the deterministic ordered row set. */
+  readonly exhausted: boolean;
+  /** Typed rejection when the supplied cursor does not belong to this query, epoch, or ordering contract. */
+  readonly cursorProblem?: SemanticRuntimePageCursorProblem;
+  /** Caller-requested size when transport policy had to clamp it. */
   readonly requestedSize?: number;
-  /** Maximum public page size used when semantic-runtime had to clamp the request. */
+  /** Maximum page size supplied by transport policy. */
   readonly maxSize?: number;
   /** True when size is smaller than the caller-requested page size. */
   readonly clamped?: boolean;
   /** Estimated UTF-8 JSON bytes for the returned row array. */
   readonly estimatedRowsJsonBytes?: number;
-  /** Maximum estimated row JSON bytes used when this page stopped before `size` by payload budget. */
+  /** Maximum estimated row JSON bytes supplied by transport policy. */
   readonly maxRowsJsonBytes?: number;
-  /** True when row selection stopped before `size` because the public row payload budget was reached. */
+  /** True when row selection stopped before `size` because the transport row payload budget was reached. */
   readonly byteClamped?: boolean;
+}
+
+export const enum SemanticRuntimePageCursorProblemKind {
+  Malformed = 'malformed',
+  QueryMismatch = 'query-mismatch',
+  Stale = 'stale',
+  OrderingMismatch = 'ordering-mismatch',
+  OffsetOutOfRange = 'offset-out-of-range',
+}
+
+export interface SemanticRuntimePageCursorProblem {
+  readonly kind: SemanticRuntimePageCursorProblemKind;
+  readonly message: string;
 }
 
 export interface SemanticRuntimeSourceCursorInput {
@@ -1163,7 +1248,7 @@ export interface SemanticRuntimeQueryClaimDisposeRequest {
    * Claim graph group to prune. `all` covers runtime-level routed/static answers and retained cached-app graphs.
    *
    * This does not dispose app-world kernel products; use `clearAnalysisCache()` when a source edit makes an opened app
-   * epoch stale. This request only clears answer-outcome storage near the public API boundary.
+   * epoch stale. This request only clears retained answer storage near the public API boundary.
    */
   readonly scope?: SemanticQueryClaimDisposalScope | null;
   /** Optional project filter; omitted means every retained query-claim graph in the selected scope. */
@@ -1587,12 +1672,19 @@ export interface SemanticUnresolvedModulesResult {
 }
 
 export interface SemanticOpenSeamRow {
+  /** Opaque answer-local seam identity; raw kernel handles remain detail-only. */
+  readonly seamKey: string;
+  /** Stable authored-location key when exact source exists; otherwise stable only within this answer. */
+  readonly siteKey: string;
   readonly seamKindKey: OpenSeam['seamKindKey'];
   readonly summary: string;
-  readonly attempt: SemanticOpenSeamAttempt;
-  readonly boundary: SemanticOpenSeamBoundary;
+  readonly boundaryKinds: readonly (OpenSeamBoundaryKind | `${OpenSeamBoundaryKind}`)[];
   readonly reasonKinds: readonly (OpenSeamReasonKind | `${OpenSeamReasonKind}`)[];
   readonly reasonSources: readonly SemanticOpenSeamReasonSource[];
+  readonly pressureKind: SemanticOpenSeamPressureKind | `${SemanticOpenSeamPressureKind}`;
+  readonly affectedMaterializationCount: number;
+  readonly affectedProductCount: number;
+  readonly impacts: readonly SemanticOpenSeamMaterializationImpactRow[];
   readonly source: SemanticSourceReference | null;
   readonly sourceRange: SemanticSourceRange | null;
   readonly sourceRole: SourceFileRole | `${SourceFileRole}` | string | null;
@@ -1602,54 +1694,56 @@ export interface SemanticOpenSeamRow {
   };
 }
 
-export const enum SemanticOpenSeamAttemptKind {
-  /** Static module evaluation tried to reduce source enough for Aurelia recognition without executing the app. */
-  StaticModuleEvaluation = 'static-module-evaluation',
-  /** Resource recognition tried to close authored custom-element, custom-attribute, value-converter, binding-behavior, or template-controller metadata. */
-  ResourceRecognition = 'resource-recognition',
-  /** Registration recognition tried to classify DI/resource registration source expressions. */
-  RegistrationRecognition = 'registration-recognition',
-  /** Configuration recognition tried to close app/plugin configuration contributions. */
-  ConfigurationRecognition = 'configuration-recognition',
-  /** DI world construction tried to spend recognized registrations into container effects. */
-  DiWorldConstruction = 'di-world-construction',
-  /** Framework service-root recognition tried to promote source service/container evidence into root products. */
-  FrameworkServiceRootRecognition = 'framework-service-root-recognition',
-  /** Router analysis tried to materialize route, viewport, instruction, or recognition state. */
-  RouterMaterialization = 'router-materialization',
-  /** Template compilation or rendering analysis tried to lower HTML/compiler products into runtime semantics. */
-  TemplateCompilationRendering = 'template-compilation-rendering',
-  /** Runtime binding analysis tried to close target access, value channel, source operation, or data flow. */
-  BindingRuntimeAnalysis = 'binding-runtime-analysis',
-  /** TypeChecker projection tried to close a type/member surface without guessing. */
-  TypeCheckerProjection = 'type-checker-projection',
-  /** A semantic product pass reached a boundary that is not yet classified more narrowly. */
-  SemanticProductMaterialization = 'semantic-product-materialization',
+export const enum SemanticOpenSeamPressureKind {
+  /** The seam is retained as unresolved evidence but no product materialization cites it. */
+  EvidenceOnly = 'evidence-only',
+  /** One or more materializations explicitly cite the seam as unresolved product pressure. */
+  ProductPressure = 'product-pressure',
 }
 
-export const enum SemanticOpenSeamBoundaryKind {
-  /** A value or fact needed by static analysis was absent from the current modeled environment. */
-  StaticEnvironmentGap = 'static-environment-gap',
-  /** Closing the fact would require executing user/runtime behavior that semantic-runtime should not guess. */
-  RuntimeExecutionBoundary = 'runtime-execution-boundary',
-  /** The source construct is legal, but this substrate has not modeled its semantics yet. */
-  UnsupportedSubstrate = 'unsupported-substrate',
-  /** Analysis stopped at an explicit recursion, statement, or budget guardrail. */
-  AnalysisGuardrail = 'analysis-guardrail',
-  /** A TypeChecker-backed projection could not close a type/member surface without guessing. */
-  TypeCheckerProjectionBoundary = 'type-checker-projection-boundary',
-  /** Framework-shaped materialization reached a legal but still-open semantic boundary. */
-  FrameworkSemanticBoundary = 'framework-semantic-boundary',
+export const enum SemanticOpenSeamMaterializationOutcome {
+  /** The constrained materialization produced no product. */
+  OpenWithoutProduct = 'open-without-product',
+  /** The constrained materialization retained one or more partial products. */
+  OpenWithProduct = 'open-with-product',
 }
 
-export interface SemanticOpenSeamAttempt {
-  readonly kind: SemanticOpenSeamAttemptKind | `${SemanticOpenSeamAttemptKind}`;
-  readonly summary: string;
+export interface SemanticOpenSeamMaterializedProductRow {
+  /** Answer-local product key used to conserve impact counts without exposing kernel handles. */
+  readonly productKey: string;
+  readonly productKindKey: MaterializedProduct['productKindKey'];
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly productHandle: MaterializedProduct['handle'];
+    readonly identityHandle: MaterializedProduct['identityHandle'];
+    readonly addressHandle: MaterializedProduct['addressHandle'];
+  };
 }
 
-export interface SemanticOpenSeamBoundary {
-  readonly kind: SemanticOpenSeamBoundaryKind | `${SemanticOpenSeamBoundaryKind}`;
-  readonly summary: string;
+export interface SemanticOpenSeamMaterializationOwnerRow {
+  /** Opaque answer-local identity shared by impacts with the same materialization owner. */
+  readonly ownerKey: string;
+  /** Kernel record discriminator retained without exposing the underlying handle. */
+  readonly recordKind: string;
+  /** Compact semantic label derived from the owning address or identity record. */
+  readonly label: string;
+  /** Best authored source or identity reference available for the owner. */
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly ownerHandle: MaterializationRecord['ownerHandle'];
+  };
+}
+
+export interface SemanticOpenSeamMaterializationImpactRow {
+  /** Answer-local materialization key used to conserve impact counts without exposing kernel handles. */
+  readonly impactKey: string;
+  readonly outcome: SemanticOpenSeamMaterializationOutcome | `${SemanticOpenSeamMaterializationOutcome}`;
+  readonly owner: SemanticOpenSeamMaterializationOwnerRow;
+  readonly products: readonly SemanticOpenSeamMaterializedProductRow[];
+  readonly handles?: {
+    readonly materializationHandle: MaterializationRecord['handle'];
+    readonly ownerHandle: MaterializationRecord['ownerHandle'];
+  };
 }
 
 export interface SemanticOpenSeamReasonSource {
@@ -1669,12 +1763,21 @@ export interface SemanticOpenSeamsResult {
 }
 
 export interface SemanticOpenSeamSummaryRow {
+  /** Stable causal cluster identity formed from seam kind and typed reason signature. */
+  readonly clusterKey: string;
   readonly seamKindKey: OpenSeam['seamKindKey'];
-  readonly attempt: SemanticOpenSeamAttempt;
-  readonly boundary: SemanticOpenSeamBoundary;
+  readonly boundaryKinds: readonly (OpenSeamBoundaryKind | `${OpenSeamBoundaryKind}`)[];
+  readonly boundaryCounts: readonly SemanticRuntimeCountRow[];
+  readonly pressureKinds: readonly (SemanticOpenSeamPressureKind | `${SemanticOpenSeamPressureKind}`)[];
+  readonly pressureCounts: readonly SemanticRuntimeCountRow[];
   readonly reasonKinds: readonly (OpenSeamReasonKind | `${OpenSeamReasonKind}`)[];
+  readonly reasonCounts: readonly SemanticRuntimeCountRow[];
   readonly count: number;
+  readonly evidenceOnlyRowCount: number;
+  readonly productPressureRowCount: number;
   readonly uniqueSiteCount: number;
+  readonly affectedMaterializationCount: number;
+  readonly affectedProductCount: number;
   readonly sourceFileCount: number;
   readonly sourceRoles: readonly SemanticSourceRoleCount[];
   readonly sampleSummary: string;
@@ -1709,10 +1812,15 @@ export interface SemanticSourceRange {
 }
 
 export interface SemanticOpenSeamSiteVariantRow {
-  readonly attempt: SemanticOpenSeamAttempt;
-  readonly boundary: SemanticOpenSeamBoundary;
+  readonly seamKindKey: OpenSeam['seamKindKey'];
+  readonly boundaryKinds: readonly (OpenSeamBoundaryKind | `${OpenSeamBoundaryKind}`)[];
+  readonly pressureKinds: readonly (SemanticOpenSeamPressureKind | `${SemanticOpenSeamPressureKind}`)[];
   readonly reasonKinds: readonly (OpenSeamReasonKind | `${OpenSeamReasonKind}`)[];
   readonly rawRowCount: number;
+  readonly evidenceOnlyRowCount: number;
+  readonly productPressureRowCount: number;
+  readonly affectedMaterializationCount: number;
+  readonly affectedProductCount: number;
   readonly sampleSummary: string;
 }
 
@@ -1728,7 +1836,7 @@ export interface SemanticOpenSeamStaticEvaluationOriginRow {
 export interface SemanticOpenSeamSiteRow {
   /** Stable answer-local key for one authored seam site; not a durable kernel identity. */
   readonly siteKey: string;
-  readonly seamKindKey: OpenSeam['seamKindKey'];
+  readonly seamKindKeys: readonly OpenSeam['seamKindKey'][];
   readonly source: SemanticSourceReference | null;
   readonly sourceRole: SourceFileRole | `${SourceFileRole}` | string | null;
   readonly applicationFileRoles: readonly (ApplicationFileRole | `${ApplicationFileRole}`)[];
@@ -1736,9 +1844,14 @@ export interface SemanticOpenSeamSiteRow {
   readonly sourceRange: SemanticSourceRange | null;
   readonly rawRowCount: number;
   readonly variantCount: number;
-  readonly attemptKinds: readonly (SemanticOpenSeamAttemptKind | `${SemanticOpenSeamAttemptKind}`)[];
-  readonly boundaryKinds: readonly (SemanticOpenSeamBoundaryKind | `${SemanticOpenSeamBoundaryKind}`)[];
+  readonly boundaryKinds: readonly (OpenSeamBoundaryKind | `${OpenSeamBoundaryKind}`)[];
+  readonly boundaryCounts: readonly SemanticRuntimeCountRow[];
+  readonly pressureKinds: readonly (SemanticOpenSeamPressureKind | `${SemanticOpenSeamPressureKind}`)[];
+  readonly pressureCounts: readonly SemanticRuntimeCountRow[];
   readonly reasonKinds: readonly (OpenSeamReasonKind | `${OpenSeamReasonKind}`)[];
+  readonly reasonCounts: readonly SemanticRuntimeCountRow[];
+  readonly affectedMaterializationCount: number;
+  readonly affectedProductCount: number;
   readonly sampleSummary: string;
   readonly variantSamples: readonly SemanticOpenSeamSiteVariantRow[];
 }
@@ -2100,28 +2213,59 @@ export interface SemanticComputedObserverSourcesResult {
   readonly rows: readonly SemanticComputedObserverSourceRow[];
 }
 
+/** Compact owner reference shared by every observed-dependency family. */
+export interface SemanticObservedDependencyOwnerRow {
+  /** Answer-local owner key suitable for focused follow-up queries in the same app epoch. */
+  readonly ownerKey: string;
+  readonly kind: RuntimeExpressionAccessOwnerKind | `${RuntimeExpressionAccessOwnerKind}`;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly productHandle: ProductHandle | null;
+    readonly identityHandle: IdentityHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+/** Lossless public projection of one owner-qualified observed read occurrence. */
+export interface SemanticObservedDependencyOccurrenceRow {
+  readonly dependencyKind: RuntimeObservedDependencyKind | `${RuntimeObservedDependencyKind}`;
+  readonly expressionKind: string;
+  readonly sourceName: string | null;
+  readonly sourceRootName: string | null;
+  readonly memberName: string | null;
+  readonly keyExpression: string | null;
+  readonly methodName: string | null;
+  readonly accessUse: SemanticRuntimeExpressionAccessUseOccurrenceRow;
+  readonly observedMemberKind: CheckerTypeMemberKind | `${CheckerTypeMemberKind}` | null;
+  readonly observedMemberSource: SemanticSourceReference | null;
+  readonly observedMemberSourceState: SemanticObservedMemberSourceState;
+  readonly observedMemberSourceRoute: SemanticObservedMemberSourceRoute | null;
+  readonly scopeLookupAncestor: number | null;
+  readonly spanStart: number | null;
+  readonly spanEnd: number | null;
+  /** Authored token for the observed value carrier; it can differ from the inducing operation token. */
+  readonly memberTokenSource: SemanticSourceReference | null;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly accessUseProductHandle: ProductHandle;
+    readonly observedMemberSourceAddressHandle: AddressHandle | null;
+    readonly sourceFileAddressHandle: AddressHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
 export interface SemanticComputedObserverObservedDependencyRow {
   readonly projectKey: string;
   readonly observerKind: ComputedObserverRuntimeKind | `${ComputedObserverRuntimeKind}`;
   readonly className: string | null;
   readonly memberName: string | null;
-  readonly dependencyKind: RuntimeObservedDependencyKind | `${RuntimeObservedDependencyKind}`;
-  readonly expressionKind: string;
-  readonly sourceName: string | null;
-  readonly sourceRootName: string | null;
-  readonly dependencyMemberName: string | null;
-  readonly keyExpression: string | null;
-  readonly methodName: string | null;
-  readonly accessUse: SemanticRuntimeExpressionAccessUseOccurrenceRow;
-  readonly spanStart: number | null;
-  readonly spanEnd: number | null;
-  readonly source: SemanticSourceReference | null;
+  readonly rowKey: string;
+  readonly owner: SemanticObservedDependencyOwnerRow;
+  readonly occurrence: SemanticObservedDependencyOccurrenceRow;
   readonly handles?: {
     readonly computedObserverProductHandle: ProductHandle | null;
-    readonly accessUseProductHandle: ProductHandle;
     readonly observedDependencyProductHandle: ProductHandle;
     readonly observedDependencyIdentityHandle: IdentityHandle;
-    readonly sourceAddressHandle: AddressHandle | null;
   };
 }
 
@@ -2152,26 +2296,13 @@ export interface SemanticRuntimeEffectObservedDependencyRow {
   readonly effectKind: RuntimeEffectKind | `${RuntimeEffectKind}`;
   readonly dependencyEvaluationKind: RuntimeEffectDependencyEvaluationKind | `${RuntimeEffectDependencyEvaluationKind}`;
   readonly immediate: boolean | null;
-  readonly dependencyKind: RuntimeObservedDependencyKind | `${RuntimeObservedDependencyKind}`;
-  readonly expressionKind: string;
-  readonly sourceName: string | null;
-  readonly sourceRootName: string | null;
-  readonly memberName: string | null;
-  readonly keyExpression: string | null;
-  readonly methodName: string | null;
-  readonly accessUse: SemanticRuntimeExpressionAccessUseOccurrenceRow;
-  readonly observedMemberKind: CheckerTypeMemberKind | `${CheckerTypeMemberKind}` | null;
-  readonly observedMemberSource: SemanticSourceReference | null;
-  readonly spanStart: number | null;
-  readonly spanEnd: number | null;
-  readonly source: SemanticSourceReference | null;
+  readonly rowKey: string;
+  readonly owner: SemanticObservedDependencyOwnerRow;
+  readonly occurrence: SemanticObservedDependencyOccurrenceRow;
   readonly handles?: {
     readonly effectProductHandle: ProductHandle | null;
-    readonly accessUseProductHandle: ProductHandle;
     readonly observedDependencyProductHandle: ProductHandle;
     readonly observedDependencyIdentityHandle: IdentityHandle;
-    readonly observedMemberSourceAddressHandle: AddressHandle | null;
-    readonly sourceAddressHandle: AddressHandle | null;
   };
 }
 
@@ -4227,7 +4358,6 @@ export type SemanticRuntimeTemplateControllerLinkKind =
 
 export interface SemanticRuntimeControllerAssemblyStepRow {
   readonly order: number;
-  readonly count: number;
   readonly stage: RuntimeControllerAssemblyStage | `${RuntimeControllerAssemblyStage}`;
   readonly stepKind: RuntimeControllerAssemblyStepKind | `${RuntimeControllerAssemblyStepKind}`;
   readonly summary: string;
@@ -4242,7 +4372,10 @@ export interface SemanticRuntimeControllerRow {
   readonly renderingDefinitionName: string;
   readonly controllerName: string | null;
   readonly creationKind: RuntimeControllerCreationKind | `${RuntimeControllerCreationKind}`;
-  readonly controllerReadiness: RuntimeControllerReadinessKind | `${RuntimeControllerReadinessKind}`;
+  /** Furthest phase explored by counterfactual controller assembly, even when runtime reachability is open. */
+  readonly assemblyProgress: RuntimeControllerReadinessKind | `${RuntimeControllerReadinessKind}`;
+  /** Furthest phase whose runtime reachability is causally closed, or null when activation remains open/blocked. */
+  readonly realizedReadiness: RuntimeControllerReadinessKind | `${RuntimeControllerReadinessKind}` | null;
   readonly observerSetupState: RuntimeControllerObserverSetupState | `${RuntimeControllerObserverSetupState}`;
   readonly bindReachability: RuntimeOperationReachability | `${RuntimeOperationReachability}`;
   readonly definitionKind: ResourceDefinitionKind | `${ResourceDefinitionKind}` | null;
@@ -4333,26 +4466,13 @@ export interface SemanticRuntimeWatcherObservedDependencyRow {
   readonly definitionClassName: string | null;
   readonly watcherKind: RuntimeWatcherKind | `${RuntimeWatcherKind}`;
   readonly watchIndex: number;
-  readonly dependencyKind: RuntimeObservedDependencyKind | `${RuntimeObservedDependencyKind}`;
-  readonly expressionKind: string;
-  readonly sourceName: string | null;
-  readonly sourceRootName: string | null;
-  readonly memberName: string | null;
-  readonly keyExpression: string | null;
-  readonly methodName: string | null;
-  readonly accessUse: SemanticRuntimeExpressionAccessUseOccurrenceRow;
-  readonly observedMemberKind: CheckerTypeMemberKind | `${CheckerTypeMemberKind}` | null;
-  readonly observedMemberSource: SemanticSourceReference | null;
-  readonly spanStart: number | null;
-  readonly spanEnd: number | null;
-  readonly source: SemanticSourceReference | null;
+  readonly rowKey: string;
+  readonly owner: SemanticObservedDependencyOwnerRow;
+  readonly occurrence: SemanticObservedDependencyOccurrenceRow;
   readonly handles?: {
     readonly watcherProductHandle: ProductHandle | null;
-    readonly accessUseProductHandle: ProductHandle;
     readonly observedDependencyProductHandle: ProductHandle;
     readonly observedDependencyIdentityHandle: IdentityHandle;
-    readonly observedMemberSourceAddressHandle: AddressHandle | null;
-    readonly sourceAddressHandle: AddressHandle | null;
   };
 }
 
@@ -5236,11 +5356,7 @@ export interface SemanticBindingDataFlowSummaryResult {
 }
 
 export type SemanticObservedMemberSourceState =
-  | 'source'
-  | 'temporary-value'
-  | 'runtime-scope-name'
-  | 'scope-open'
-  | 'open';
+  RuntimeObservedMemberSourceState | `${RuntimeObservedMemberSourceState}`;
 
 /**
  * Provenance of `observedMemberSource`: `member-declaration` is the observed member's own
@@ -5248,39 +5364,22 @@ export type SemanticObservedMemberSourceState =
  * for weak, dynamic, keyed, or index-signature-shaped owners and must not be treated as member proof.
  */
 export type SemanticObservedMemberSourceRoute =
-  | 'member-declaration'
-  | 'owner-value';
+  RuntimeObservedMemberSourceRoute | `${RuntimeObservedMemberSourceRoute}`;
 
 export interface SemanticBindingObservedDependencyRow {
   readonly definitionName: string;
   readonly bindingKind: RuntimeBindingKind | `${RuntimeBindingKind}`;
   readonly realization: RuntimeOperationRealization | `${RuntimeOperationRealization}`;
-  readonly dependencyKind: RuntimeObservedDependencyKind | `${RuntimeObservedDependencyKind}`;
-  readonly expressionKind: string;
-  readonly sourceName: string | null;
-  readonly sourceRootName: string | null;
-  readonly memberName: string | null;
-  readonly keyExpression: string | null;
-  readonly methodName: string | null;
-  readonly accessUse: SemanticRuntimeExpressionAccessUseOccurrenceRow;
-  readonly observedMemberKind: CheckerTypeMemberKind | `${CheckerTypeMemberKind}` | null;
-  readonly observedMemberSource: SemanticSourceReference | null;
-  readonly observedMemberSourceState: SemanticObservedMemberSourceState;
-  readonly observedMemberSourceRoute: SemanticObservedMemberSourceRoute | null;
-  readonly spanStart: number | null;
-  readonly spanEnd: number | null;
-  /** Authored token for the observed value carrier; follow access-use lineage for the operation token. */
-  readonly memberTokenSource: SemanticSourceReference | null;
-  readonly source: SemanticSourceReference | null;
+  readonly rowKey: string;
+  readonly owner: SemanticObservedDependencyOwnerRow;
+  readonly occurrence: SemanticObservedDependencyOccurrenceRow;
   readonly handles?: {
     readonly bindingProductHandle: ProductHandle | null;
     readonly dataFlowProductHandle: ProductHandle;
-    readonly accessUseProductHandle: ProductHandle;
     readonly observedDependencyProductHandle: ProductHandle;
+    readonly observedDependencyIdentityHandle: IdentityHandle;
     readonly expressionProductHandle: ProductHandle | null;
     readonly bindingScopeProductHandle: ProductHandle | null;
-    readonly observedMemberSourceAddressHandle: AddressHandle | null;
-    readonly sourceAddressHandle: AddressHandle | null;
   };
 }
 
@@ -5289,6 +5388,8 @@ export interface SemanticBindingObservedDependencyResult {
 }
 
 export interface SemanticBindingObservedDependencySummaryRow {
+  /** Answer-local key for selecting this exact summary cluster in the same app epoch. */
+  readonly clusterKey: string;
   readonly dependencyKind: RuntimeObservedDependencyKind | `${RuntimeObservedDependencyKind}`;
   readonly bindingKind: RuntimeBindingKind | `${RuntimeBindingKind}`;
   readonly realization: RuntimeOperationRealization | `${RuntimeOperationRealization}`;

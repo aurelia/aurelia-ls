@@ -154,7 +154,9 @@ function completionHasCandidate(answer, name) {
 
 function completionSummary(answer) {
   return {
-    outcome: answer.outcome,
+    result: answer.result,
+    selection: answer.selection,
+    coverage: answer.coverage,
     siteKind: answer.value.siteKind,
     missingInputs: answer.value.missingInputs,
     candidates: answer.value.candidates.map((candidate) => ({

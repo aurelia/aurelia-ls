@@ -1,4 +1,5 @@
 import type { KernelStore } from '../kernel/store.js';
+import type { IdentityHandle } from '../kernel/handles.js';
 import {
   AttributeBinding,
   ContentBinding,
@@ -89,7 +90,7 @@ class RuntimeBindingValueChannelDraftFrame {
     if (this.binding instanceof SpreadValueBinding) {
       return this.spreadValueChannelDraft();
     }
-    return directValueChannelDraft(this.readDraft());
+    return directValueChannelDraft(this.readDraft(), this.openReasonOwnerIdentityHandle());
   }
 
   private readDraft(): RuntimeBindingValueChannelDraft {
@@ -137,12 +138,30 @@ class RuntimeBindingValueChannelDraftFrame {
     return {
       draft: this.readDraft(),
       realization: runtimeBindingRealizationForAdmission(access?.admissionKind ?? null),
+      openReasonOwnerIdentityHandle: this.openReasonOwnerIdentityHandle(),
       admittedSourceOwnerType: sourceType,
       admittedSourceValueType: access?.valueType?.toReference() ?? null,
       admittedSourceMemberKind: access?.memberKind ?? null,
       admittedSourceMemberHandle: access?.member?.detailHandle ?? null,
       admittedSourceMemberSourceAddressHandle: access?.memberSourceAddressHandle ?? null,
     };
+  }
+
+  private openReasonOwnerIdentityHandle(): IdentityHandle | null {
+    if ((this.binding instanceof RefBinding || this.binding instanceof StateDispatchBinding)
+      && this.sourceOperation?.openReason != null) {
+      return this.sourceOperation.identityHandle;
+    }
+    if ((this.binding instanceof AttributeBinding
+      || this.binding instanceof ContentBinding
+      || this.binding instanceof LetBinding
+      || this.binding instanceof ListenerBinding)
+      && this.targetOperation?.openReason != null) {
+      return this.targetOperation.identityHandle;
+    }
+    return this.targetAccess?.openReason == null
+      ? null
+      : this.targetAccess.identityHandle;
   }
 
   private closedTargetAccessDraft(): RuntimeBindingValueChannelDraft {
@@ -433,10 +452,12 @@ export class RuntimeBindingValueChannelDraftMaterializer {
 
 function directValueChannelDraft(
   draft: RuntimeBindingValueChannelDraft,
+  openReasonOwnerIdentityHandle: IdentityHandle | null,
 ): RuntimeBindingValueChannelDraftResult {
   return {
     draft,
     realization: RuntimeOperationRealization.Direct,
+    openReasonOwnerIdentityHandle,
     admittedSourceOwnerType: null,
     admittedSourceValueType: null,
     admittedSourceMemberKind: null,

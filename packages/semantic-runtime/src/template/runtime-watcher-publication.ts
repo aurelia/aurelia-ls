@@ -99,7 +99,6 @@ function runtimeWatcherObservedDependencyRecords(
       local: dependencyLocal,
       owner: {
         identityHandle: watcher.identityHandle,
-        sourceAddressHandle: watcher.sourceAddressHandle,
       },
       dependency,
       index,

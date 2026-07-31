@@ -772,7 +772,7 @@ export class RuntimeCompositionMaterializer {
         binding,
         RuntimeBindingSourceValueEvaluation.open(
           'AuCompose composition input was not a PropertyBinding.',
-          [OpenSeamReasonKind.BindingSourceUnsupportedExpression],
+          [OpenSeamReasonKind.RuntimeCompositionInputOpen],
         ),
         null,
       );

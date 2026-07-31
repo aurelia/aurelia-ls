@@ -2264,7 +2264,7 @@
         "rename"
       ],
       "summary": "Observed-member source rows carry an explicit route (member-declaration vs owner-value); only member-declaration routes prove member identity.",
-      "rationale": "When checker member lookup fails (member on unknown, missing member on a primitive), the projection falls back to the owner's declaration address so navigation stays useful. Before 2026-07-07 that fallback was indistinguishable from a proven member declaration: rows claimed observedMemberSourceState 'source' while carrying the owner's address, and rename at a receiver token emitted overlapping template edits that corrupted member-access text while answering available/complete. RuntimeObservedMemberSourceRoute makes the provenance explicit; observedMemberSourceState keeps its documented closed-source-route meaning for summaries and aggregates.",
+      "rationale": "When checker member lookup fails (member on unknown, missing member on a primitive), the projection falls back to the owner's declaration address so navigation stays useful. Before 2026-07-07 that fallback was indistinguishable from a proven member declaration: rows claimed observedMemberSourceState 'source' while carrying the owner's address, and rename at a receiver token emitted overlapping template edits that corrupted member-access text while claiming complete coverage. RuntimeObservedMemberSourceRoute makes the provenance explicit; observedMemberSourceState keeps its documented closed-source-route meaning for summaries and aggregates.",
       "guidance": [
         "Any consumer treating a row as evidence of a specific member declaration must require observedMemberSourceRoute === 'member-declaration'; owner-value routes only say where the owner's value came from.",
         "Do not repurpose observedMemberSourceState for member-identity proof: state answers 'is the source route closed', route answers 'whose declaration is this address'.",
@@ -2274,9 +2274,9 @@
       "anchors": [
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/observation/runtime-binding-observation.ts",
-          "symbolName": "RuntimeObservedMemberSourceRoute",
-          "summary": "Route vocabulary carried on the observed-dependency record and public row."
+          "filePath": "packages/semantic-runtime/src/api/contracts.ts",
+          "symbolName": "SemanticObservedMemberSourceRoute",
+          "summary": "Public route vocabulary carried on observed-dependency rows."
         },
         {
           "kind": "source",
@@ -2294,12 +2294,12 @@
       "liveChecks": [
         {
           "kind": "source-declaration-exists",
-          "filePath": "packages/semantic-runtime/src/observation/runtime-binding-observation.ts",
-          "symbolName": "RuntimeObservedMemberSourceRoute"
+          "filePath": "packages/semantic-runtime/src/api/contracts.ts",
+          "symbolName": "SemanticObservedMemberSourceRoute"
         }
       ],
       "createdAt": "2026-07-07",
-      "updatedAt": "2026-07-07"
+      "updatedAt": "2026-07-31"
     },
     {
       "id": "decision:recursive-runtime-binding-resource-ownership",

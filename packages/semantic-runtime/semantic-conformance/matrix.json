@@ -61,7 +61,7 @@
       },
       "expected": {
         "memberName": "label",
-        "closure": "open",
+        "coverage": "open",
         "rows": 1,
         "candidateRows": 0,
         "referenceKind": "template-usage"
@@ -108,7 +108,7 @@
           "name": "parent-bound repeat-local cursor type",
           "query": { "kind": "template-cursor-info", "options": { "detail": "full" } },
           "equals": {
-            "closure": "complete",
+            "coverage": "complete",
             "value.selectedMemberName": "label",
             "value.selectedMember.typeDisplay": "string",
             "value.memberOwnerType.display": "TicketOption<FulfillmentMethod>",
@@ -118,7 +118,7 @@
         {
           "name": "parent-bound repeat-local references",
           "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 20 } } },
-          "equals": { "closure": "complete", "value.selectedMemberName": "label" },
+          "equals": { "coverage": "complete", "value.selectedMemberName": "label" },
           "rows": [
             {
               "fields": { "referenceKind": "template-usage" },
@@ -2179,7 +2179,7 @@
             {
               "name": "property references",
               "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 100 } } },
-              "closure": "complete",
+              "coverage": "complete",
               "equals": { "value.selectedMemberName": "count", "value.rows.length": 3, "value.candidateRows.length": 0 },
               "rows": [
                 {
@@ -2273,7 +2273,7 @@
             {
               "name": "alias references",
               "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 100 } } },
-              "closure": "complete",
+              "coverage": "complete",
               "equals": { "value.selectedMemberName": "display-label", "value.rows.length": 3, "value.candidateRows.length": 0 },
               "rows": [
                 {
@@ -2520,7 +2520,7 @@
             {
               "name": "rename refusal",
               "query": { "kind": "template-rename", "options": { "newName": "flow" } },
-              "outcomes": ["miss"],
+              "results": ["answered"],
               "equals": { "value.status": "not-available", "value.reason": "unsupported-resource-kind" }
             }
           ]
@@ -3039,7 +3039,7 @@
           "expectations": [
             {
               "name": "template completions",
-              "outcomes": ["miss"],
+              "results": ["answered"],
               "query": {
                 "kind": "template-completions",
                 "cursor": { "marker": "raw-hint=\"", "position": "after-marker" },
@@ -3073,7 +3073,7 @@
             {
               "name": "property references",
               "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 100 } } },
-              "closure": "complete",
+              "coverage": "complete",
               "equals": { "value.selectedMemberName": "labelText", "value.rows.length": 4, "value.candidateRows.length": 0 },
               "rows": [
                 { "fields": { "referenceKind": "declaration" }, "source": { "sourceFile": "src/profile-card.ts", "marker": "labelText = ''", "token": "labelText" }, "count": 1 },
@@ -3092,7 +3092,7 @@
             {
               "name": "alias references",
               "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 100 } } },
-              "closure": "complete",
+              "coverage": "complete",
               "equals": { "value.selectedMemberName": "display-label", "value.rows.length": 2, "value.candidateRows.length": 0 },
               "rows": [
                 { "fields": { "referenceKind": "declaration" }, "source": { "sourceFile": "src/display-hint.ts", "marker": "@bindable({ attribute: 'display-label' }) labelText", "token": "display-label" }, "count": 1 },
@@ -3110,7 +3110,7 @@
             {
               "name": "property references",
               "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 100 } } },
-              "closure": "complete",
+              "coverage": "complete",
               "equals": { "value.selectedMemberName": "shared", "value.rows.length": 3, "value.candidateRows.length": 0 },
               "rows": [
                 { "fields": { "referenceKind": "declaration" }, "source": { "marker": "@bindable shared", "token": "shared" }, "count": 1 },
@@ -3129,7 +3129,7 @@
             {
               "name": "property references",
               "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 100 } } },
-              "closure": "complete",
+              "coverage": "complete",
               "equals": { "value.selectedMemberName": "externalValue", "value.rows.length": 4, "value.candidateRows.length": 0 },
               "rows": [
                 { "fields": { "referenceKind": "declaration" }, "source": { "marker": "@bindable('externalValue')", "token": "externalValue" }, "count": 1 },
@@ -3149,7 +3149,7 @@
             {
               "name": "property references",
               "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 100 } } },
-              "closure": "complete",
+              "coverage": "complete",
               "equals": { "value.selectedMemberName": "baseStatic", "value.rows.length": 4, "value.candidateRows.length": 0 },
               "rows": [
                 { "fields": { "referenceKind": "declaration" }, "source": { "marker": "static readonly bindables: StaticBindableConfig = ['baseStatic']", "token": "baseStatic" }, "count": 1 },
@@ -3169,7 +3169,7 @@
             {
               "name": "property references",
               "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 100 } } },
-              "closure": "complete",
+              "coverage": "complete",
               "equals": { "value.selectedMemberName": "ownStatic", "value.rows.length": 4, "value.candidateRows.length": 0 },
               "rows": [
                 { "fields": { "referenceKind": "declaration" }, "source": { "marker": "{ name: 'ownStatic', attribute: 'own-static' }", "token": "ownStatic" }, "count": 1 },
@@ -3189,7 +3189,7 @@
             {
               "name": "property references",
               "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 100 } } },
-              "closure": "complete",
+              "coverage": "complete",
               "equals": { "value.selectedMemberName": "status", "value.rows.length": 4, "value.candidateRows.length": 0 },
               "rows": [
                 { "fields": { "referenceKind": "declaration" }, "source": { "marker": "status: {", "token": "status" }, "count": 1 },
@@ -3209,7 +3209,7 @@
             {
               "name": "property references",
               "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 100 } } },
-              "closure": "complete",
+              "coverage": "complete",
               "equals": { "value.selectedMemberName": "value", "value.rows.length": 4, "value.candidateRows.length": 0 },
               "rows": [
                 { "fields": { "referenceKind": "declaration" }, "source": { "marker": "{ name: 'value', attribute: 'definition-value', mode: BindingMode.oneTime }", "token": "value" }, "count": 1 },
@@ -5085,7 +5085,7 @@
             {
               "name": "binding command rename is explicitly unsupported",
               "query": { "kind": "template-rename", "options": { "newName": "shared-command" } },
-              "outcomes": ["miss"],
+              "results": ["answered"],
               "equals": {
                 "value.status": "not-available",
                 "value.reason": "unsupported-resource-kind"
@@ -5199,7 +5199,7 @@
             {
               "name": "attribute pattern rename is explicitly unsupported",
               "query": { "kind": "template-rename", "options": { "newName": "datum" } },
-              "outcomes": ["miss"],
+              "results": ["answered"],
               "equals": {
                 "value.status": "not-available",
                 "value.reason": "unsupported-resource-kind"
@@ -5954,7 +5954,7 @@
             {
               "name": "resource rename",
               "query": { "kind": "template-rename", "options": { "newName": "renamed-card" } },
-              "outcomes": ["miss"],
+              "results": ["answered"],
               "equals": { "value.status": "not-available", "value.reason": "resource-name-has-no-authored-source", "value.selectedMemberName": "convention-card" }
             }
           ]
@@ -6605,13 +6605,13 @@
             {
               "name": "references",
               "query": { "kind": "template-references", "options": { "includeDeclaration": true, "page": { "size": 50 } } },
-              "outcomes": ["miss"],
+              "results": ["answered"],
               "equals": { "value.rows.length": 0 }
             },
             {
               "name": "rename refusal",
               "query": { "kind": "template-rename", "options": { "newName": "maximum-size" } },
-              "outcomes": ["miss"],
+              "results": ["answered"],
               "equals": { "value.status": "not-available", "value.reason": "no-source-backed-member", "value.edits.length": 0 }
             }
           ]
@@ -6778,7 +6778,7 @@
             {
               "name": "rename refusal",
               "query": { "kind": "template-rename", "options": { "newName": "settle" } },
-              "outcomes": ["miss"],
+              "results": ["answered"],
               "equals": { "value.status": "not-available", "value.reason": "unsupported-resource-kind" }
             }
           ]
@@ -7153,7 +7153,7 @@
                 "options": { "page": { "size": 100 } }
               },
               "equals": { "value.siteKind": "expression" },
-              "closure": "complete",
+              "coverage": "complete",
               "rows": [
                 {
                   "rowPath": "value.candidates",
@@ -7201,7 +7201,7 @@
                 "options": { "page": { "size": 100 } }
               },
               "equals": { "value.siteKind": "expression-member" },
-              "closure": "complete",
+              "coverage": "complete",
               "rows": [
                 {
                   "rowPath": "value.candidates",
@@ -7361,8 +7361,8 @@
                 "cursor": { "marker": "${selectedTask.", "position": "after-marker", "markerOccurrence": 1 },
                 "options": { "page": { "size": 100 } }
               },
-              "outcomes": [ "partial" ],
-              "closure": "open",
+              "results": ["answered"],
+              "coverage": "open",
               "equals": { "value.siteKind": "expression-member" },
               "rows": [
                 {
@@ -7386,8 +7386,8 @@
                 "cursor": { "marker": "${selectedTask.", "position": "after-marker", "markerOccurrence": 2 },
                 "options": { "page": { "size": 100 } }
               },
-              "outcomes": [ "hit" ],
-              "closure": "complete",
+              "results": ["answered"],
+              "coverage": "complete",
               "equals": { "value.siteKind": "expression-member" },
               "rows": [
                 {
@@ -7905,7 +7905,7 @@
                 "options": { "page": { "size": 200 } }
               },
               "equals": { "value.siteKind": "expression" },
-              "closure": "complete",
+              "coverage": "complete",
               "rows": [
                 { "rowPath": "value.candidates", "fields": { "name": "task", "candidateKind": "binding-context-slot", "typeDisplay": "ScopeTask" } },
                 { "rowPath": "value.candidates", "fields": { "name": "$index", "candidateKind": "override-context-slot", "typeDisplay": "number" } },
@@ -7927,7 +7927,7 @@
                 "cursor": { "marker": "<span class=\"child-name\">${", "position": "after-marker" },
                 "options": { "page": { "size": 200 } }
               },
-              "closure": "complete",
+              "coverage": "complete",
               "rows": [
                 { "rowPath": "value.candidates", "fields": { "name": "child", "candidateKind": "binding-context-slot", "typeDisplay": "ScopeChild" } },
                 { "rowPath": "value.candidates", "fields": { "name": "task", "candidateKind": "binding-context-slot", "typeDisplay": "ScopeTask" } },
@@ -8246,7 +8246,7 @@
                 "cursor": { "marker": "<span class=\"let-dual-name\">${", "position": "after-marker" },
                 "options": { "page": { "size": 200 } }
               },
-              "closure": "complete",
+              "coverage": "complete",
               "rows": [
                 { "rowPath": "value.candidates", "fields": { "name": "dualName", "candidateKind": "override-context-slot", "typeDisplay": "ScopeTask" }, "count": 1 }
               ]
@@ -8545,8 +8545,8 @@
                 "kind": "template-cursor-info",
                 "cursor": { "marker": "<span class=\"custom-window-task\">${customWindowTask.name}</span>", "token": "customWindowTask" }
               },
-              "outcomes": [ "partial" ],
-              "closure": "open",
+              "results": ["answered"],
+              "coverage": "open",
               "equals": {
                 "value.selectedMemberName": "customWindowTask",
                 "value.selectedMember.typeDisplay": "unknown"
@@ -8688,7 +8688,7 @@
             {
               "name": "built-in repeat rename refusal",
               "query": { "kind": "template-rename", "options": { "newName": "loop-over" } },
-              "outcomes": [ "miss" ],
+              "results": ["answered"],
               "equals": {
                 "value.status": "not-available",
                 "value.reason": "resource-name-has-no-authored-source",
@@ -9766,7 +9766,7 @@
             {
               "name": "recognized routes",
               "query": { "kind": "recognized-routes", "fetchAllPages": true, "options": { "page": { "size": 100 } } },
-              "closure": "complete",
+              "coverage": "complete",
               "equals": { "value.rows.length": 2 },
               "rows": [
                 { "fields": { "path": "accounts/account-1", "residue": "details/detail-1", "hasResidue": true, "endpoint.path": "accounts/:id/*$$residue" }, "source": { "marker": "load=\"accounts/account-1/details/detail-1?mode=compact&tag=a&tag=b#details\"", "token": "accounts/account-1/details/detail-1?mode=compact&tag=a&tag=b#details" } },
@@ -9779,7 +9779,7 @@
             {
               "name": "route nodes",
               "query": { "kind": "route-nodes", "fetchAllPages": true, "options": { "page": { "size": 100 } } },
-              "closure": "complete",
+              "coverage": "complete",
               "equals": { "value.rows.length": 4 },
               "rows": [
                 { "fields": { "path": "details/:id", "finalPath": "details/:id", "viewport": "default", "fragment": "details" }, "source": { "marker": "load=\"accounts/account-1/details/detail-1?mode=compact&tag=a&tag=b#details\"", "token": "accounts/account-1/details/detail-1?mode=compact&tag=a&tag=b#details" } },
@@ -10361,7 +10361,7 @@
                   "page": { "size": 50 }
                 }
               },
-              "closure": "complete",
+              "coverage": "complete",
               "equals": { "value.rows.length": 1 },
               "rows": [
                 {
@@ -10386,7 +10386,7 @@
                   "page": { "size": 50 }
                 }
               },
-              "closure": "complete",
+              "coverage": "complete",
               "equals": { "value.rows.length": 1 },
               "rows": [
                 {
@@ -10562,7 +10562,7 @@
             {
               "name": "template references",
               "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
-              "closure": "complete",
+              "coverage": "complete",
               "equals": {
                 "value.selectedMemberName": "load",
                 "value.rows.length": 15
@@ -10582,8 +10582,8 @@
             {
               "name": "template rename",
               "query": { "kind": "template-rename", "options": { "newName": "navigate" } },
-              "outcomes": [ "miss" ],
-              "closure": "complete",
+              "results": ["answered"],
+              "coverage": "complete",
               "equals": {
                 "value.status": "not-available",
                 "value.reason": "resource-name-has-no-authored-source",
@@ -10599,7 +10599,7 @@
             {
               "name": "template references",
               "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
-              "closure": "complete",
+              "coverage": "complete",
               "equals": {
                 "value.selectedMemberName": "au-viewport",
                 "value.rows.length": 4
@@ -10616,7 +10616,7 @@
             {
               "name": "template diagnostics",
               "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
-              "closure": "complete",
+              "coverage": "complete",
               "rows": [
                 { "count": 0 }
               ]
@@ -10631,7 +10631,7 @@
             {
               "name": "template diagnostics",
               "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
-              "closure": "complete",
+              "coverage": "complete",
               "rows": [
                 { "count": 0 }
               ]
@@ -10639,7 +10639,7 @@
             {
               "name": "app diagnostics",
               "query": { "kind": "app-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
-              "closure": "complete",
+              "coverage": "complete",
               "rows": [
                 { "count": 0 }
               ]
@@ -10647,7 +10647,7 @@
             {
               "name": "router issues",
               "query": { "kind": "router-issues", "options": { "page": { "size": 100 } } },
-              "closure": "complete",
+              "coverage": "complete",
               "rows": [
                 { "count": 0 }
               ]
@@ -10825,7 +10825,7 @@
             {
               "name": "template diagnostics",
               "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
-              "closure": "complete",
+              "coverage": "complete",
               "equals": { "value.rows.length": 4 },
               "rows": [
                 { "fields": { "diagnosticKind": "router-framework-error", "frameworkErrorCode": "AUR3401" }, "source": { "marker": "load=\"missing-route\"", "token": "missing-route" } },
@@ -10837,7 +10837,7 @@
             {
               "name": "app diagnostics",
               "query": { "kind": "app-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
-              "closure": "complete",
+              "coverage": "complete",
               "equals": { "value.rows.length": 4 },
               "rows": [
                 { "fields": { "diagnosticDomain": "router", "diagnosticKind": "instruction-no-fallback", "frameworkErrorCode": "AUR3401", "relatedQueryKind": "router-issues" }, "source": { "marker": "load=\"missing-route\"", "token": "missing-route" } },
@@ -11051,8 +11051,8 @@
             {
               "name": "template completions",
               "query": { "kind": "template-completions", "options": { "page": { "size": 50 } } },
-              "outcomes": [ "partial" ],
-              "closure": "open",
+              "results": ["answered"],
+              "coverage": "open",
               "equals": { "value.siteKind": "expression" },
               "rows": [
                 { "rowPath": "value.candidates", "fields": { "candidateKind": "binding-context-slot", "name": "alternateContext" } },
@@ -11068,8 +11068,8 @@
             {
               "name": "template completions",
               "query": { "kind": "template-completions", "options": { "page": { "size": 50 } } },
-              "outcomes": [ "partial" ],
-              "closure": "open",
+              "results": ["answered"],
+              "coverage": "open",
               "equals": { "value.siteKind": "expression" },
               "rows": [
                 { "rowPath": "value.candidates", "fields": { "candidateKind": "binding-context-slot", "name": "selectedRoute" } },
@@ -11097,7 +11097,7 @@
             {
               "name": "typed navigation instructions",
               "query": { "kind": "typed-navigation-instructions", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
-              "closure": "complete",
+              "coverage": "complete",
               "rows": [
                 { "fields": { "instructionKind": "string", "value": "coffee" }, "source": { "marker": "load.bind=\"{ component: productsRoute", "token": "{ component: productsRoute, children: [{ component: productDetailsRoute, params: { productId: 'coffee' }, viewport: 'details' }] }" } },
                 { "fields": { "instructionKind": "string", "value": "sencha" }, "source": { "marker": "load.bind=\"new SenchaRouteInstruction()\"", "token": "new SenchaRouteInstruction()" } },
@@ -11108,7 +11108,7 @@
             {
               "name": "recognized routes",
               "query": { "kind": "recognized-routes", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
-              "closure": "complete",
+              "coverage": "complete",
               "rows": [
                 { "fields": { "path": "coffee" }, "source": { "marker": "load.bind=\"{ component: productsRoute", "token": "{ component: productsRoute, children: [{ component: productDetailsRoute, params: { productId: 'coffee' }, viewport: 'details' }] }" } },
                 { "fields": { "path": "espresso" }, "source": { "sourceFile": "src/routes/products-route.html", "marker": "load=\"route: product-detail; params.bind: { productId: 'espresso' }\"", "token": "route: product-detail; params.bind: { productId: 'espresso' }" } },
@@ -11126,7 +11126,7 @@
             {
               "name": "router issues",
               "query": { "kind": "router-issues", "options": { "page": { "size": 100 } } },
-              "closure": "complete",
+              "coverage": "complete",
               "rows": [
                 { "count": 0 }
               ]
@@ -11134,7 +11134,7 @@
             {
               "name": "open seams",
               "query": { "kind": "open-seams", "options": { "page": { "size": 100 } } },
-              "closure": "complete",
+              "coverage": "complete",
               "rows": [
                 {
                   "fields": { "seamKindKey": "router.open-instruction" },
@@ -13411,7 +13411,7 @@
             {
               "name": "mouse modifier completions",
               "query": { "kind": "template-completions", "cursor": { "marker": "click.trigger:pre", "position": "after-marker" }, "options": { "page": { "size": 100 } } },
-              "outcomes": ["partial"],
+              "results": ["answered"],
               "equals": { "value.domainKind": "listener-modifier", "value.missingInputs.length": 1 },
               "rows": [
                 { "rowPath": "value.candidates", "count": 9 },
@@ -13424,7 +13424,7 @@
             {
               "name": "keyboard modifier completions",
               "query": { "kind": "template-completions", "cursor": { "marker": "keydown.trigger:ctrl+enter", "token": "ctrl" }, "options": { "page": { "size": 100 } } },
-              "outcomes": ["partial"],
+              "results": ["answered"],
               "equals": {
                 "value.domainKind": "listener-modifier",
                 "value.missingInputs": [
@@ -13448,7 +13448,7 @@
             {
               "name": "generic event modifier completions",
               "query": { "kind": "template-completions", "cursor": { "marker": "pointerdown.capture:stop", "token": "stop" }, "options": { "page": { "size": 100 } } },
-              "outcomes": ["partial"],
+              "results": ["answered"],
               "equals": { "value.domainKind": "listener-modifier", "value.missingInputs.length": 1 },
               "rows": [
                 { "rowPath": "value.candidates", "count": 2 },
@@ -13466,7 +13466,7 @@
             {
               "name": "app key mapping completion",
               "query": { "kind": "template-completions", "cursor": { "marker": "keydown.trigger:upper_k", "token": "upper_k" }, "options": { "page": { "size": 100 } } },
-              "outcomes": ["partial"],
+              "results": ["answered"],
               "equals": {
                 "value.domainKind": "listener-modifier",
                 "value.missingInputs": [
@@ -14015,7 +14015,7 @@
             {
               "name": "rename refusal",
               "query": { "kind": "template-rename", "options": { "newName": "renamedMode" } },
-              "outcomes": ["miss"],
+              "results": ["answered"],
               "equals": { "value.status": "not-available", "value.reason": "cursor-not-on-renameable-reference", "value.edits.length": 0 }
             }
           ]
@@ -14895,7 +14895,7 @@
               "name": "non-evaluated source remains referenceable",
               "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 20 } } },
               "equals": {
-                "closure": "complete",
+                "coverage": "complete",
                 "value.selectedMemberName": "attributeFromView",
                 "value.rows.length": 3
               },
@@ -15463,7 +15463,7 @@
             {
               "name": "template references",
               "query": { "kind": "template-references", "options": { "page": { "size": 100 } } },
-              "closure": "complete",
+              "coverage": "complete",
               "rows": [
                 {
                   "fields": {
@@ -15478,7 +15478,7 @@
             {
               "name": "framework-owned alias rename refusal",
               "query": { "kind": "template-rename" },
-              "outcomes": ["miss"],
+              "results": ["answered"],
               "equals": {
                 "value.status": "not-available",
                 "value.reason": "unsupported-resource-kind",
@@ -15906,7 +15906,7 @@
                 "cursor": { "marker": "${ready & state}", "position": "before-marker", "offsetDelta": 2 },
                 "options": { "page": { "size": 100 } }
               },
-              "closure": "complete",
+              "coverage": "complete",
               "rows": [
                 { "rowPath": "value.candidates", "fields": { "name": "ready" }, "count": 1 },
                 { "rowPath": "value.candidates", "fields": { "name": "draft" }, "count": 1 }
@@ -16009,7 +16009,7 @@
             {
               "name": "template cursor info",
               "query": { "kind": "template-cursor-info", "cursor": { "marker": "virtual-repeat.for=\"entry of entries\"", "token": "entry" } },
-              "closure": "open",
+              "coverage": "open",
               "equals": {
                 "value.selectedMemberName": "entry",
                 "value.selectedMember.typeDisplay": "UnadmittedEntry",
@@ -16264,7 +16264,7 @@
             {
               "name": "framework capability demands",
               "query": { "kind": "framework-capability-demands", "options": { "detail": "handles", "page": { "size": 100 } } },
-              "outcomes": ["hit", "partial", "miss"],
+              "results": ["answered"],
               "rows": [
                 { "fields": { "authoredName": "validation-container", "requiredCapability": "validation-html.default-resources" }, "absent": true },
                 { "fields": { "authoredName": "validation-errors", "requiredCapability": "validation-html.default-resources" }, "absent": true },
@@ -16275,7 +16275,7 @@
             {
               "name": "template diagnostics",
               "query": { "kind": "template-diagnostics", "options": { "detail": "handles", "page": { "size": 100 } } },
-              "outcomes": ["hit", "partial", "miss"],
+              "results": ["answered"],
               "rows": [
                 { "fields": { "diagnosticKind": "framework-capability-not-registered" }, "absent": true }
               ]
@@ -16760,7 +16760,7 @@
             {
               "name": "callback-local declaration cursor",
               "query": { "kind": "template-cursor-info", "options": { "detail": "handles" } },
-              "closure": "complete",
+              "coverage": "complete",
               "equals": { "value.selectedMemberName": "item", "value.selectedMember.typeDisplay": "AccessUseItem", "value.selectedMember.memberKind": "property", "value.missingInputs.length": 0 },
               "rows": [
                 { "rowPath": "value.selectedMember", "sourceField": "declarationSource", "source": { "marker": "filter(item => item.label)", "token": "item" }, "count": 1 }
@@ -16769,7 +16769,7 @@
             {
               "name": "callback-local usage cursor",
               "query": { "kind": "template-cursor-info", "cursor": { "marker": "item => item.label", "markerOccurrence": 1, "token": "item", "occurrence": 2 }, "options": { "detail": "handles" } },
-              "closure": "complete",
+              "coverage": "complete",
               "equals": { "value.selectedMemberName": "item", "value.selectedMember.typeDisplay": "AccessUseItem", "value.selectedMember.memberKind": "property", "value.missingInputs.length": 0 },
               "rows": [
                 { "rowPath": "value.selectedMember", "sourceField": "declarationSource", "source": { "marker": "filter(item => item.label)", "token": "item" }, "count": 1 }
@@ -16778,7 +16778,7 @@
             {
               "name": "callback-local references",
               "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 20 } } },
-              "closure": "complete",
+              "coverage": "complete",
               "equals": { "value.selectedMemberName": "item", "value.rows.length": 2, "value.candidateRows.length": 0 },
               "rows": [
                 { "fields": { "referenceKind": "declaration" }, "source": { "marker": "filter(item => item.label)", "token": "item" }, "count": 1 },
@@ -16797,7 +16797,7 @@
             {
               "name": "outer shadowed local references exclude inner local",
               "query": { "kind": "template-references", "cursor": { "marker": "+ item.id", "token": "item" }, "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 20 } } },
-              "closure": "complete",
+              "coverage": "complete",
               "equals": { "value.selectedMemberName": "item", "value.rows.length": 2, "value.candidateRows.length": 0 },
               "rows": [
                 { "fields": { "referenceKind": "declaration" }, "source": { "marker": ".map(item => items.map(item", "token": "item" }, "count": 1 },
@@ -16829,7 +16829,7 @@
             {
               "name": "references include observed and unobserved authored accesses",
               "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 20 } } },
-              "closure": "complete",
+              "coverage": "complete",
               "equals": { "value.selectedMemberName": "name", "value.rows.length": 10, "value.candidateRows.length": 0 },
               "rows": [
                 { "fields": { "referenceKind": "template-usage" }, "source": { "marker": "value.one-time=\"form.name\"", "token": "name" }, "count": 1 },

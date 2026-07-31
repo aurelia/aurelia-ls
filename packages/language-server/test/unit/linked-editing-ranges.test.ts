@@ -4,7 +4,8 @@ import { handleLinkedEditingRange } from "@aurelia-ls/language-server/api";
 import { testRequestGuard } from "./test-request-guard.js";
 
 const uri = "file:///app/src/app.html";
-const text = "<template><my-card value.bind=\"title\"></my-card><input /></template>";
+const text =
+  '<template><my-card value.bind="title"></my-card><input /></template>';
 const doc = TextDocument.create(uri, "html", 1, text);
 
 const elementStart = text.indexOf("<my-card");
@@ -34,39 +35,54 @@ function createMockContext(value: Record<string, unknown>) {
     logger: { log: vi.fn(), info: vi.fn(), error: vi.fn(), warn: vi.fn() },
     ensureProgramDocument: vi.fn(() => doc),
     semanticRuntime: {
-      templateCursorInfo: vi.fn(() => Promise.resolve({
-        schemaVersion: "0.1",
-        outcome: "hit",
-        closure: "complete",
-        summary: "mock",
-        value,
-        page: null,
-      })),
+      templateCursorInfo: vi.fn(() =>
+        Promise.resolve({
+          schemaVersion: "0.2",
+          result: "answered",
+          selection: "not-applicable",
+          coverage: "complete",
+          summary: "mock",
+          value,
+          page: null,
+        }),
+      ),
     },
   };
 }
 
-function cursorInfo(input: {
-  tagName?: string | null;
-  sourceStart?: number;
-  sourceEnd?: number;
-} = {}) {
+function cursorInfo(
+  input: {
+    tagName?: string | null;
+    sourceStart?: number;
+    sourceEnd?: number;
+  } = {},
+) {
   return {
     displayText: "mock",
     siteKind: "html",
     expressionFrontier: null,
     missingInputs: [],
-    template: { compilationLane: "app-runtime", source: source(0, text.length) },
+    template: {
+      compilationLane: "app-runtime",
+      source: source(0, text.length),
+    },
     activeSource: source(openTagStart, openTagEnd),
     html: {
       nodeKind: "element",
       tagName: input.tagName ?? "my-card",
       attributeName: null,
       attributeValue: null,
-      source: source(input.sourceStart ?? elementStart, input.sourceEnd ?? elementEnd),
+      source: source(
+        input.sourceStart ?? elementStart,
+        input.sourceEnd ?? elementEnd,
+      ),
       attributeSource: null,
-      tagNameSource: input.tagName === "input" ? source(inputStart + 1, inputStart + 6) : source(openTagStart, openTagEnd),
-      closingTagNameSource: input.tagName === "input" ? null : source(closeTagStart, closeTagEnd),
+      tagNameSource:
+        input.tagName === "input"
+          ? source(inputStart + 1, inputStart + 6)
+          : source(openTagStart, openTagEnd),
+      closingTagNameSource:
+        input.tagName === "input" ? null : source(closeTagStart, closeTagEnd),
     },
     valueSite: null,
     selectedDefinition: null,
@@ -90,12 +106,20 @@ describe("runtime-backed linked editing ranges", () => {
     const ctx = createMockContext(cursorInfo());
     const position = doc.positionAt(openTagStart + 2);
 
-    const result = await handleLinkedEditingRange(ctx as never, {
-      textDocument: { uri },
-      position,
-    }, testRequestGuard);
+    const result = await handleLinkedEditingRange(
+      ctx as never,
+      {
+        textDocument: { uri },
+        position,
+      },
+      testRequestGuard,
+    );
 
-    expect(ctx.semanticRuntime.templateCursorInfo).toHaveBeenCalledWith(doc, position, testRequestGuard);
+    expect(ctx.semanticRuntime.templateCursorInfo).toHaveBeenCalledWith(
+      doc,
+      position,
+      testRequestGuard,
+    );
     expect(result).toEqual({
       ranges: [
         range(openTagStart, openTagEnd),
@@ -108,25 +132,35 @@ describe("runtime-backed linked editing ranges", () => {
   test("returns null away from the paired tag name", async () => {
     const ctx = createMockContext(cursorInfo());
 
-    const result = await handleLinkedEditingRange(ctx as never, {
-      textDocument: { uri },
-      position: doc.positionAt(text.indexOf("value.bind")),
-    }, testRequestGuard);
+    const result = await handleLinkedEditingRange(
+      ctx as never,
+      {
+        textDocument: { uri },
+        position: doc.positionAt(text.indexOf("value.bind")),
+      },
+      testRequestGuard,
+    );
 
     expect(result).toBeNull();
   });
 
   test("returns null for self-closing elements without an authored close tag", async () => {
-    const ctx = createMockContext(cursorInfo({
-      tagName: "input",
-      sourceStart: inputStart,
-      sourceEnd: inputEnd,
-    }));
+    const ctx = createMockContext(
+      cursorInfo({
+        tagName: "input",
+        sourceStart: inputStart,
+        sourceEnd: inputEnd,
+      }),
+    );
 
-    const result = await handleLinkedEditingRange(ctx as never, {
-      textDocument: { uri },
-      position: doc.positionAt(inputStart + 2),
-    }, testRequestGuard);
+    const result = await handleLinkedEditingRange(
+      ctx as never,
+      {
+        textDocument: { uri },
+        position: doc.positionAt(inputStart + 2),
+      },
+      testRequestGuard,
+    );
 
     expect(result).toBeNull();
   });

@@ -630,7 +630,6 @@ function candidateSeamForNode(
     end: node.getEnd(),
     evidenceRoles: [EvidenceRole.Usage, EvidenceRole.Diagnostic],
     reasonKinds: [OpenSeamReasonKind.FrameworkServiceRootCandidateOpen],
-    includeProvenanceRecord: true,
   };
 }
 

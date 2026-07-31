@@ -275,7 +275,7 @@ export async function handleGetDiagnostics(
     if (!doc) return null;
     const answer = await ctx.semanticRuntime.appDiagnostics(doc, guard);
     const diagnostics = serializeRuntimeDiagnosticsSnapshot(ctx.workspaceRoot, answer.value);
-    const fingerprint = `semantic-runtime:${answer.outcome}`;
+    const fingerprint = `semantic-runtime:${answer.result}:${answer.coverage}`;
     return { uri: canonical.uri, fingerprint, diagnostics };
   } catch (e) {
     if (logIfSemanticRuntimeRequestAborted(ctx, "getDiagnostics", e, uriFromParam(params))) {
@@ -577,7 +577,11 @@ export async function handleInspectEntity(
       params.position,
       guard,
     );
-    return inspectEntityFromCursorInfo(uri, answer.outcome, answer.value);
+    return inspectEntityFromCursorInfo(
+      uri,
+      `${answer.result}:${answer.selection}:${answer.coverage}`,
+      answer.value,
+    );
   } catch (e) {
     if (logIfSemanticRuntimeRequestAborted(ctx, "inspectEntity", e, params?.uri)) {
       return null;
@@ -589,7 +593,7 @@ export async function handleInspectEntity(
 
 function inspectEntityFromCursorInfo(
   uri: string,
-  outcome: string,
+  answerState: string,
   value: SemanticTemplateCursorInfoResult,
 ): InspectEntityResponse {
   const entityKind = inspectEntityKind(value);
@@ -611,7 +615,7 @@ function inspectEntityFromCursorInfo(
       type: value.selectedMember?.typeDisplay != null || value.memberOwnerType?.display != null ? "projected" : "not-projected",
       scope: value.selectedMember == null ? "not-selected" : "source-backed",
       expression: value.valueSite == null && value.expressionFrontier == null ? "not-selected" : "parsed",
-      composite: outcome,
+      composite: answerState,
     },
     expressionLabel,
     detail,

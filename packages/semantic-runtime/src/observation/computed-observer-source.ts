@@ -7,8 +7,8 @@ import type {
 import {
   ComputedObservationDependencyMode,
 } from './computed-observation.js';
-import type { RuntimeObservedDependencyKind } from './runtime-binding-observation.js';
 import type { RuntimeExpressionAccessUse } from '../runtime-expression/runtime-expression-access-use.js';
+import type { RuntimeObservedDependencyOccurrence } from './runtime-observed-dependency.js';
 
 export const enum ComputedObserverRuntimeKind {
   ComputedObserver = 'computed-observer',
@@ -78,18 +78,7 @@ export class ComputedObserverObservedDependency {
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
     readonly computedObserver: ComputedObserverSourceReference,
-    /** Exact authored or generated access occurrence that induced this observation effect. */
-    readonly accessUseProductHandle: ProductHandle,
-    readonly dependencyKind: RuntimeObservedDependencyKind,
-    readonly expressionKind: string,
-    readonly sourceName: string | null,
-    readonly sourceRootName: string | null,
-    readonly memberName: string | null,
-    readonly keyExpression: string | null,
-    readonly methodName: string | null,
-    readonly spanStart: number | null,
-    readonly spanEnd: number | null,
-    readonly sourceAddressHandle: AddressHandle | null,
+    readonly occurrence: RuntimeObservedDependencyOccurrence,
   ) {}
 }
 

@@ -56,6 +56,7 @@ try {
   await verifyBundledDocsTools();
   await verifyStrictTopLevelEnvelope();
   await verifyPageClampAndTextPreview();
+  await verifyObservedDependencyLocus();
   await verifyWorkspaceOverviewContinuations();
   await verifyAnalysisDepthEnvelope();
   await verifySourceFilePathUnsupportedPreflight();
@@ -114,7 +115,7 @@ async function verifyOrientationResource() {
   expect(text.includes('aurelia_docs_search'), 'Orientation resource should teach docs search before docs fetch.');
   expect(text.includes('no web requests'), 'Orientation resource should describe bundled docs as offline/local.');
   expect(!text.includes('aurelia_app_builder'), 'Orientation resource should not advertise retired app-builder tools.');
-  expect(text.includes('sourceFile') && text.includes('outcome=unsupported'), 'Orientation resource should teach honest source-file selector rejection.');
+  expect(text.includes('sourceFile') && text.includes('result=unsupported'), 'Orientation resource should teach honest source-file selector rejection.');
   expect(!containsLocalPathOrScratchReference(text), 'Orientation resource should stay app-agnostic.');
 }
 
@@ -142,7 +143,8 @@ async function verifyToolInputSchemaDescriptions() {
   }
   const appQuery = tools.find((tool) => tool.name === 'aurelia_app_query');
   expect(JSON.stringify(appQuery?.inputSchema).includes('Check supportsSourceFile'), 'sourceFile schema description should point callers to supportsSourceFile.');
-  expect(JSON.stringify(appQuery?.inputSchema).includes('outcome=unsupported'), 'sourceFilePath schema description should promise honest unsupported answers.');
+  expect(JSON.stringify(appQuery?.inputSchema).includes('result=unsupported'), 'sourceFilePath schema description should promise honest unsupported answers.');
+  expect(JSON.stringify(appQuery?.inputSchema).includes('observedDependencyLocus'), 'Generic app-query schema should expose family-owned observed-dependency loci.');
 }
 
 async function verifyPatternFollowUpHints() {
@@ -272,6 +274,35 @@ async function verifyPageClampAndTextPreview() {
   expect(text.includes('Rows:'), 'Text content should include a bounded row preview for row answers.');
 }
 
+async function verifyObservedDependencyLocus() {
+  const first = await callTool('aurelia_app_query', {
+    workspaceRoot: fixtureRoot,
+    queryKind: 'binding-observed-dependencies',
+    page: { size: 1 },
+  });
+  const firstRow = first.result?.structuredContent?.value?.value?.rows?.[0];
+  expect(typeof firstRow?.rowKey === 'string', 'Observed-dependency rows should expose an answer-local row key.');
+  if (typeof firstRow?.rowKey !== 'string') {
+    return;
+  }
+  const selected = await callTool('aurelia_app_query', {
+    workspaceRoot: fixtureRoot,
+    queryKind: 'binding-observed-dependencies',
+    observedDependencyLocus: {
+      kind: 'row',
+      rowKey: firstRow.rowKey,
+    },
+    page: { size: 10 },
+  });
+  const selectedRows = selected.result?.structuredContent?.value?.value?.rows;
+  expect(
+    Array.isArray(selectedRows)
+      && selectedRows.length === 1
+      && selectedRows[0]?.rowKey === firstRow.rowKey,
+    'MCP should preserve an observed-dependency row locus through strict schema validation and adapter projection.',
+  );
+}
+
 async function verifyWorkspaceOverviewContinuations() {
   const response = await callTool('aurelia_workspace_overview', {
     workspaceRoot: fixtureRoot,
@@ -299,7 +330,7 @@ async function verifySourceFilePathUnsupportedPreflight() {
     sourceFilePath: 'src/app.ts',
   });
   const answer = response.result?.structuredContent?.value;
-  expect(answer?.outcome === 'unsupported', 'sourceFilePath on an unsupported query family should return outcome=unsupported.');
+  expect(answer?.result === 'unsupported', 'sourceFilePath on an unsupported query family should return result=unsupported.');
   expect(answer?.value?.unsupportedFields?.includes('sourceFile'), 'Unsupported sourceFilePath should be normalized into the runtime sourceFile selector preflight.');
   expect(resultText(response).includes('does not support sourceFile'), 'Unsupported sourceFilePath text should explain that the query cannot honor file scoping.');
 }
@@ -370,19 +401,21 @@ async function verifyCursorVocabulary() {
     page: { size: 3 },
   });
   const nextCursor = first.result?.structuredContent?.value?.page?.nextCursor;
-  expect(nextCursor === 'after:2', 'Newly emitted row cursors should use the after:<row-index> vocabulary.');
+  expect(typeof nextCursor === 'string' && nextCursor.length > 0, 'Row pages should expose an opaque continuation cursor.');
   const second = await callTool('aurelia_app_query', {
     workspaceRoot: fixtureRoot,
     queryKind: 'source-files',
     page: { size: 3, cursor: nextCursor },
   });
-  expect(second.result?.structuredContent?.value?.page?.cursor === 'after:2', 'Next-page calls should echo the opaque cursor they consumed.');
+  expect(second.result?.structuredContent?.value?.page?.cursor === nextCursor, 'Next-page calls should echo the opaque cursor they consumed.');
   const legacy = await callTool('aurelia_app_query', {
     workspaceRoot: fixtureRoot,
     queryKind: 'source-files',
     page: { size: 3, cursor: 'offset:2' },
   });
-  expect(legacy.result?.structuredContent?.value?.page?.returnedRows === 3, 'Legacy offset cursors should remain accepted for compatibility.');
+  const legacyAnswer = legacy.result?.structuredContent?.value;
+  expect(legacyAnswer?.result === 'invalid', 'Legacy offset cursors should be rejected instead of being replayed against an unscoped result.');
+  expect(legacyAnswer?.page?.cursorProblem?.kind === 'malformed', 'Legacy offset rejection should expose a structured cursor problem.');
 }
 
 async function verifyMissingWorkspaceRoot() {

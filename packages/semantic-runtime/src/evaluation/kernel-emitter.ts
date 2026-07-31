@@ -14,7 +14,10 @@ import {
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import type { StaticModuleEvaluationResult } from './module-evaluation-result.js';
-import type { EvaluationOpenSeam } from './seams.js';
+import {
+  evaluationOpenSeamDefaultReasonKinds,
+  type EvaluationOpenSeam,
+} from './seams.js';
 
 export interface EvaluationOpenSeamSource {
   readonly sourceFile: ts.SourceFile;
@@ -67,8 +70,9 @@ export class EvaluationKernelEmitter {
       openKind: seam.seamKind,
       summary: seam.summary,
       evidenceRoles: [EvidenceRole.Diagnostic],
-      reasonKinds: seam.reasonKinds,
-      includeProvenanceRecord: true,
+      reasonKinds: seam.reasonKinds.length === 0
+        ? evaluationOpenSeamDefaultReasonKinds(seam.seamKind)
+        : seam.reasonKinds,
     }).records;
   }
 }

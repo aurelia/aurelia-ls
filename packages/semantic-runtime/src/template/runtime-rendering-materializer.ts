@@ -18,7 +18,7 @@ import {
 } from '../kernel/evidence.js';
 import {
   OpenSeam,
-  type OpenSeamReasonKind,
+  OpenSeamReasonKind,
 } from '../kernel/open-seam.js';
 import type {
   AddressHandle,
@@ -653,6 +653,7 @@ export class RuntimeRenderingMaterializer {
         state.observerLocator,
         source,
         state.records,
+        state.openSeams,
         state.controllerIssues,
       )
     );
@@ -815,8 +816,8 @@ export class RuntimeRenderingMaterializer {
         state.source,
         state.records,
         state.openSeams,
-        KernelVocabulary.Instruction.OpenInstruction.key,
         open.reasonKinds,
+        KernelVocabulary.Instruction.OpenInstruction.key,
       );
     }
   }
@@ -964,6 +965,7 @@ export class RuntimeRenderingMaterializer {
           source,
           records,
           openSeams,
+          [OpenSeamReasonKind.RuntimeRenderingProductMissing],
         );
         return;
       }
@@ -982,6 +984,7 @@ export class RuntimeRenderingMaterializer {
           source,
           records,
           openSeams,
+          [OpenSeamReasonKind.RuntimeRenderingProductMissing],
         );
       }
       targets.push({ target, sequence, instructions });
@@ -1177,6 +1180,7 @@ export class RuntimeRenderingMaterializer {
         state.source,
         state.records,
         state.openSeams,
+        [OpenSeamReasonKind.RuntimeRenderingProductMissing],
       );
       state.contentProjectionViews.push(new RuntimeContentProjectionView(
         selectionKind,
@@ -1279,6 +1283,7 @@ export class RuntimeRenderingMaterializer {
         state.source,
         state.records,
         state.openSeams,
+        [OpenSeamReasonKind.RuntimeRenderingContextOpen],
         KernelVocabulary.Di.OpenChildContainer.key,
       );
       return null;
@@ -1297,6 +1302,7 @@ export class RuntimeRenderingMaterializer {
         state.source,
         state.records,
         state.openSeams,
+        [OpenSeamReasonKind.RuntimeRenderingContextOpen],
         KernelVocabulary.Di.OpenChildContainer.key,
       );
       return null;
@@ -1310,6 +1316,7 @@ export class RuntimeRenderingMaterializer {
         state.source,
         state.records,
         state.openSeams,
+        [OpenSeamReasonKind.RuntimeRenderingContextOpen],
       );
       return null;
     }
@@ -1423,6 +1430,7 @@ export class RuntimeRenderingMaterializer {
         state.source,
         state.records,
         state.openSeams,
+        [OpenSeamReasonKind.RuntimeRenderingContextOpen],
         KernelVocabulary.Di.OpenChildContainer.key,
       );
       return null;
@@ -1482,6 +1490,7 @@ export class RuntimeRenderingMaterializer {
         state.source,
         state.records,
         state.openSeams,
+        [OpenSeamReasonKind.RuntimeRenderingProductMissing],
       );
       return new RuntimeEmbeddedViewRendering(viewFactory, syntheticController, null);
     }
@@ -1618,6 +1627,7 @@ export class RuntimeRenderingMaterializer {
       state.source,
       state.records,
       state.openSeams,
+      [OpenSeamReasonKind.RuntimeRenderingProductMissing],
     );
     return null;
   }
@@ -1673,6 +1683,7 @@ export class RuntimeRenderingMaterializer {
         source,
         records,
         openSeams,
+        [OpenSeamReasonKind.RuntimeRenderingProductMissing],
       );
     }
     return instructions;
@@ -1693,8 +1704,8 @@ export class RuntimeRenderingMaterializer {
     source: RuntimeRenderingSourceSet,
     records: KernelStoreRecord[],
     openSeams: OpenSeam[],
+    reasonKinds: readonly OpenSeamReasonKind[],
     seamKindKey: OpenSeamKindKey = KernelVocabulary.Instruction.OpenInstruction.key,
-    reasonKinds: readonly OpenSeamReasonKind[] = [],
   ): void {
     const seam = new OpenSeam(
       this.store.handles.openSeam(local),

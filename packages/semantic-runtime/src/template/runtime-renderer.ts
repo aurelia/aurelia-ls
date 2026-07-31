@@ -7,7 +7,7 @@ import type {
   ProvenanceHandle,
 } from '../kernel/handles.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
-import type { OpenSeamReasonKind } from '../kernel/open-seam.js';
+import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import {
   KernelVocabulary,
 } from '../kernel/vocabulary.js';
@@ -291,7 +291,7 @@ export interface RuntimeRenderingRun {
     ownerHandle: IdentityHandle,
     summary: string,
     addressHandle: AddressHandle | null,
-    reasonKinds?: readonly OpenSeamReasonKind[],
+    reasonKinds: readonly OpenSeamReasonKind[],
   ): void;
 
   recordRendererIssue(
@@ -380,7 +380,7 @@ export class RuntimeRendererInvocation {
     localSuffix: string,
     summary: string,
     addressHandle: AddressHandle | null,
-    reasonKinds: readonly OpenSeamReasonKind[] = [],
+    reasonKinds: readonly OpenSeamReasonKind[],
   ): void {
     this.run.recordOpenInstruction(
       `${this.local}:${localSuffix}`,
@@ -1480,6 +1480,7 @@ function consumeIteratorTailInstructions(
         `iterator-tail:${index}:missing`,
         `Iterator binding tail instruction '${handle}' could not be hydrated for runtime Rendering.`,
         instruction.sourceAddressHandle,
+        [OpenSeamReasonKind.RuntimeRenderingProductMissing],
       );
       return;
     }
@@ -1489,6 +1490,7 @@ function consumeIteratorTailInstructions(
         `iterator-tail:${index}:unexpected`,
         `Iterator binding tail instruction '${handle}' was not a MultiAttrInstruction.`,
         tail.sourceAddressHandle,
+        [OpenSeamReasonKind.RuntimeRenderingProductMissing],
       );
     }
   });

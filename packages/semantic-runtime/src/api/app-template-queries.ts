@@ -53,16 +53,16 @@ import {
 } from './source-reference.js';
 import {
   answer,
-  closureForAnswer,
+  COMPLETE_COLLECTION_ANSWER_OPTIONS,
   includeHandles,
-  outcomeForPagedRows,
+  NON_APPLICABLE_ANSWER_OPTIONS,
   pageRows,
-  toPageRequest,
 } from './answer-helpers.js';
 import {
+  SemanticRuntimeAnswerCoverage,
+  SemanticRuntimeAnswerSelection,
   SemanticRuntimeDetail,
-  SemanticRuntimeAnswerClosure,
-  SemanticRuntimeAnswerOutcome,
+  SemanticRuntimeAnswerResult,
   type SemanticAppQuery,
   type SemanticRuntimeAnswer,
   type SemanticRuntimePageInput,
@@ -206,10 +206,10 @@ export class SemanticAppTemplateQueries {
       );
     const paged = pageRows(rows, page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} compiled template row(s).`,
       { rows: paged.rows },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
@@ -223,7 +223,7 @@ export class SemanticAppTemplateQueries {
       this.projectRootDir,
       this.emission,
       query.cursor,
-      toPageRequest(query.page),
+      query.page,
       query.detail ?? SemanticRuntimeDetail.Compact,
     );
   }
@@ -253,7 +253,7 @@ export class SemanticAppTemplateQueries {
     const context = this.templateReferenceContextForCursor(query, detail, handles);
     if (context == null) {
       return answer(
-        SemanticRuntimeAnswerOutcome.Miss,
+        SemanticRuntimeAnswerResult.Answered,
         'No source-backed template member is selected at this cursor.',
         {
           displayText: 'No source-backed template member is selected.',
@@ -261,6 +261,10 @@ export class SemanticAppTemplateQueries {
           targetSource: null,
           rows: [],
           candidateRows: [],
+        },
+        {
+          selection: SemanticRuntimeAnswerSelection.Absent,
+          coverage: SemanticRuntimeAnswerCoverage.Complete,
         },
       );
     }
@@ -284,11 +288,8 @@ export class SemanticAppTemplateQueries {
       ? allRows
       : allRows.filter((row) => row.referenceKind !== SemanticTemplateReferenceKind.Declaration);
     const paged = pageRows(rows, query.page);
-    const closure = (context.forceOpen || context.candidateRows.length > 0) && paged.page.nextCursor == null
-      ? SemanticRuntimeAnswerClosure.Open
-      : closureForAnswer(outcomeForPagedRows(paged), paged.page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} template reference row(s).`,
       {
         displayText: `${rows.length} template reference row(s) for ${context.selectedMemberName}.`,
@@ -297,9 +298,13 @@ export class SemanticAppTemplateQueries {
         rows: paged.rows,
         candidateRows: context.candidateRows,
       },
-      paged.page,
-      [],
-      closure,
+      {
+        page: paged.page,
+        selection: SemanticRuntimeAnswerSelection.Exact,
+        coverage: context.forceOpen || context.candidateRows.length > 0
+          ? SemanticRuntimeAnswerCoverage.Open
+          : SemanticRuntimeAnswerCoverage.Complete,
+      },
     );
   }
 
@@ -350,13 +355,13 @@ export class SemanticAppTemplateQueries {
     }
 
     const placeholder = context.selectedMemberName;
-    const renameClosure = context.candidateRows.length > 0
-      ? SemanticRuntimeAnswerClosure.Open
-      : SemanticRuntimeAnswerClosure.Complete;
+    const renameCoverage = context.candidateRows.length > 0
+      ? SemanticRuntimeAnswerCoverage.Open
+      : SemanticRuntimeAnswerCoverage.Complete;
     const newName = query.newName ?? null;
     if (newName == null) {
       return answer(
-        SemanticRuntimeAnswerOutcome.Hit,
+        SemanticRuntimeAnswerResult.Answered,
         `Rename is available for ${placeholder}.`,
         {
           displayText: `Rename is available for ${placeholder}.`,
@@ -371,9 +376,10 @@ export class SemanticAppTemplateQueries {
           templateReferenceCount: context.templateUsageRows.length,
           typeScriptReferenceCount: 0,
         },
-        null,
-        [],
-        renameClosure,
+        {
+          selection: SemanticRuntimeAnswerSelection.Exact,
+          coverage: renameCoverage,
+        },
       );
     }
 
@@ -433,7 +439,7 @@ export class SemanticAppTemplateQueries {
       );
 
     return answer(
-      SemanticRuntimeAnswerOutcome.Hit,
+      SemanticRuntimeAnswerResult.Answered,
       `Prepared ${edits.length} rename edit(s) for ${placeholder}.`,
       {
         displayText: `${edits.length} rename edit(s) for ${placeholder}.`,
@@ -448,9 +454,10 @@ export class SemanticAppTemplateQueries {
         templateReferenceCount: context.templateUsageRows.length,
         typeScriptReferenceCount: typeScriptLikeEdits.length,
       },
-      null,
-      [],
-      renameClosure,
+      {
+        selection: SemanticRuntimeAnswerSelection.Exact,
+        coverage: renameCoverage,
+      },
     );
   }
 
@@ -500,13 +507,13 @@ export class SemanticAppTemplateQueries {
     }
 
     const placeholder = context.selectedMemberName;
-    const propagationClosure = context.candidateRows.length > 0
-      ? SemanticRuntimeAnswerClosure.Open
-      : SemanticRuntimeAnswerClosure.Complete;
+    const propagationCoverage = context.candidateRows.length > 0
+      ? SemanticRuntimeAnswerCoverage.Open
+      : SemanticRuntimeAnswerCoverage.Complete;
     const newName = query.newName ?? null;
     if (newName == null) {
       return answer(
-        SemanticRuntimeAnswerOutcome.Hit,
+        SemanticRuntimeAnswerResult.Answered,
         `Template rename propagation is available for ${placeholder}.`,
         {
           displayText: `Template rename propagation is available for ${placeholder}.`,
@@ -521,9 +528,10 @@ export class SemanticAppTemplateQueries {
           templateReferenceCount: context.templateUsageRows.length,
           typeScriptReferenceCount: 0,
         },
-        null,
-        [],
-        propagationClosure,
+        {
+          selection: SemanticRuntimeAnswerSelection.Exact,
+          coverage: propagationCoverage,
+        },
       );
     }
 
@@ -558,7 +566,7 @@ export class SemanticAppTemplateQueries {
       );
 
     return answer(
-      SemanticRuntimeAnswerOutcome.Hit,
+      SemanticRuntimeAnswerResult.Answered,
       `Prepared ${uniqueEdits.length} template rename propagation edit(s) for ${placeholder}.`,
       {
         displayText: `${uniqueEdits.length} template rename propagation edit(s) for ${placeholder}.`,
@@ -573,9 +581,10 @@ export class SemanticAppTemplateQueries {
         templateReferenceCount: context.templateUsageRows.length,
         typeScriptReferenceCount: callbackEdits.length,
       },
-      null,
-      [],
-      propagationClosure,
+      {
+        selection: SemanticRuntimeAnswerSelection.Exact,
+        coverage: propagationCoverage,
+      },
     );
   }
 
@@ -586,12 +595,13 @@ export class SemanticAppTemplateQueries {
     const query = this.queryWithResolvedCursor(input);
     if (query.cursor == null || query.cursor.offset == null) {
       return answer(
-        SemanticRuntimeAnswerOutcome.Miss,
+        SemanticRuntimeAnswerResult.Answered,
         'Template code actions require a source cursor with an offset.',
         {
           displayText: 'Template code actions require a source cursor.',
           rows: [],
         },
+        NON_APPLICABLE_ANSWER_OPTIONS,
       );
     }
     const cursor = query.cursor;
@@ -613,11 +623,15 @@ export class SemanticAppTemplateQueries {
     );
 
     return answer(
-      SemanticRuntimeAnswerOutcome.Hit,
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${actions.length} template code action(s).`,
       {
         displayText: `${actions.length} template code action(s).`,
         rows: actions,
+      },
+      {
+        selection: SemanticRuntimeAnswerSelection.Exact,
+        coverage: SemanticRuntimeAnswerCoverage.Complete,
       },
     );
   }
@@ -632,7 +646,7 @@ export class SemanticAppTemplateQueries {
       this.projectRootDir,
       this.emission,
       query.sourceFile,
-      toPageRequest(query.page),
+      query.page,
       query.detail ?? SemanticRuntimeDetail.Compact,
       query.diagnosticProjection,
     );
@@ -659,13 +673,13 @@ export class SemanticAppTemplateQueries {
       );
     const paged = pageRows(rows, query.page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} template inlay hint row(s).`,
       {
         displayText: `${rows.length} template inlay hint row(s).`,
         rows: paged.rows,
       },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
@@ -682,13 +696,13 @@ export class SemanticAppTemplateQueries {
     );
     const paged = pageRows(rows, query.page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} template semantic token row(s).`,
       {
         displayText: `${rows.length} template semantic token row(s).`,
         rows: paged.rows,
       },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
@@ -705,13 +719,13 @@ export class SemanticAppTemplateQueries {
     );
     const paged = pageRows(rows, query.page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} template folding range row(s).`,
       {
         displayText: `${rows.length} template folding range row(s).`,
         rows: paged.rows,
       },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
@@ -1327,9 +1341,9 @@ export class SemanticAppTemplateQueries {
     for (const resource of [...this.emission.templates.resources, ...this.emission.templates.authoringResources]) {
       const observedByAccessUse = new Map<ProductHandle, RuntimeBindingObservedDependency[]>();
       for (const dependency of resourceLocalBindingObservedDependencies(this.store, resource)) {
-        const dependencies = observedByAccessUse.get(dependency.accessUseProductHandle) ?? [];
+        const dependencies = observedByAccessUse.get(dependency.occurrence.accessUseProductHandle) ?? [];
         dependencies.push(dependency);
-        observedByAccessUse.set(dependency.accessUseProductHandle, dependencies);
+        observedByAccessUse.set(dependency.occurrence.accessUseProductHandle, dependencies);
       }
       const accessUsesByResolution = new Map<HotDetailHandle, RuntimeExpressionAccessUse[]>();
       for (const accessUse of resourceLocalRuntimeExpressionAccessUses(this.store, resource)) {
@@ -2085,7 +2099,7 @@ function templateRenameUnavailable(
   status: SemanticTemplateRenameStatus = SemanticTemplateRenameStatus.NotAvailable,
 ): SemanticRuntimeAnswer<SemanticTemplateRenameResult> {
   return answer(
-    SemanticRuntimeAnswerOutcome.Miss,
+    SemanticRuntimeAnswerResult.Answered,
     summary,
     {
       displayText: summary,
@@ -2099,6 +2113,12 @@ function templateRenameUnavailable(
       candidateRows: [],
       templateReferenceCount: 0,
       typeScriptReferenceCount: 0,
+    },
+    {
+      selection: selectedMemberName == null && targetSource == null
+        ? SemanticRuntimeAnswerSelection.Absent
+        : SemanticRuntimeAnswerSelection.Exact,
+      coverage: SemanticRuntimeAnswerCoverage.Complete,
     },
   );
 }
@@ -3416,7 +3436,7 @@ function templateReferenceRowForRuntimeExpressionAccess(
 ): SemanticTemplateReferenceRow {
   const resolution = site.resolution;
   const dependencyKinds = [...new Set(
-    site.observedDependencies.map((dependency) => dependency.dependencyKind),
+    site.observedDependencies.map((dependency) => dependency.occurrence.dependencyKind),
   )].sort();
   return {
     referenceKind: SemanticTemplateReferenceKind.TemplateUsage,

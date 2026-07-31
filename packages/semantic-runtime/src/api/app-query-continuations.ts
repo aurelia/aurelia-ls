@@ -1,10 +1,9 @@
 import {
   InquiryContinuationCost,
+  InquiryContinuationEpochDependency,
   InquiryContinuationIntent,
-  InquiryEvidenceCoverage,
-  InquiryEvidenceStaleness,
-  InquiryEvidenceState,
-  InquirySourcePrecision,
+  InquirySourceFacet,
+  InquirySourceRequirement,
   inquiryContinuationIntents,
 } from '../inquiry/continuation-intent.js';
 import {
@@ -23,13 +22,13 @@ import {
 } from './app-query-catalog.js';
 import { semanticAppQueryMaterializationPolicy } from './app-query-policy.js';
 import {
-  semanticSourcePrecisionForAnswerRows,
-  semanticSourcePrecisionForReference,
-  semanticSourcePrecisionForReferences,
+  semanticContinuationSourceFacts,
+  semanticSourceFacetsForReference,
   type SemanticSourceReference,
 } from './source-reference.js';
 import {
   SemanticAppQueryKind,
+  SemanticObservedDependencyLocusKind,
   SemanticRuntimeDetail,
   type SemanticAppQuery,
   type SemanticAppQueryCatalogRow,
@@ -37,6 +36,7 @@ import {
   type SemanticAppDiagnosticSummaryRow,
   type SemanticFrameworkCapabilityDemandRow,
   type SemanticRuntimeAnswer,
+  type SemanticRuntimeAppQueryBatchResult,
   type SemanticRuntimeContinuationRow,
   type SemanticRuntimePageInput,
   type SemanticRuntimeSourceFileInput,
@@ -58,10 +58,8 @@ type ContinuationSeedBase = {
   readonly kind: InquiryContinuationKind;
   readonly rationale: string;
   readonly intents: readonly InquiryContinuationIntent[];
-  readonly evidenceState?: InquiryEvidenceState;
-  readonly coverage?: InquiryEvidenceCoverage;
-  readonly sourcePrecision?: InquirySourcePrecision;
-  readonly staleness?: InquiryEvidenceStaleness;
+  readonly sourceRequirement?: InquirySourceRequirement;
+  readonly sourceReferences?: readonly (SemanticSourceReference | null)[];
   readonly cost?: InquiryContinuationCost;
   readonly blockers?: readonly string[];
 };
@@ -100,7 +98,6 @@ type IssueContinuationSpec = {
   readonly target: SemanticAppQueryKind;
   readonly intent: InquiryContinuationIntent.Inspect | InquiryContinuationIntent.Diagnose;
   readonly queryShape: IssueContinuationQueryShape;
-  readonly evidenceState?: InquiryEvidenceState;
 };
 
 /** Product-specific issue family follow-ups that remain below edit/authoring policy. */
@@ -111,7 +108,6 @@ const ISSUE_CONTINUATION_SPECS: readonly IssueContinuationSpec[] = [
     target: SemanticAppQueryKind.DiIssues,
     intent: InquiryContinuationIntent.Inspect,
     queryShape: 'row',
-    evidenceState: InquiryEvidenceState.Open,
   },
   {
     source: SemanticAppQueryKind.ConfigurationIssues,
@@ -126,7 +122,6 @@ const ISSUE_CONTINUATION_SPECS: readonly IssueContinuationSpec[] = [
     target: SemanticAppQueryKind.ConfigurationIssues,
     intent: InquiryContinuationIntent.Inspect,
     queryShape: 'row',
-    evidenceState: InquiryEvidenceState.Open,
   },
   {
     source: SemanticAppQueryKind.StateIssues,
@@ -141,7 +136,6 @@ const ISSUE_CONTINUATION_SPECS: readonly IssueContinuationSpec[] = [
     target: SemanticAppQueryKind.BindingDataFlowSummary,
     intent: InquiryContinuationIntent.Inspect,
     queryShape: 'row',
-    evidenceState: InquiryEvidenceState.TypeProjected,
   },
   {
     source: SemanticAppQueryKind.ValidationIssues,
@@ -149,7 +143,6 @@ const ISSUE_CONTINUATION_SPECS: readonly IssueContinuationSpec[] = [
     target: SemanticAppQueryKind.BindingBehaviorApplications,
     intent: InquiryContinuationIntent.Inspect,
     queryShape: 'row',
-    evidenceState: InquiryEvidenceState.TypeProjected,
   },
   {
     source: SemanticAppQueryKind.ValidationIssues,
@@ -157,7 +150,6 @@ const ISSUE_CONTINUATION_SPECS: readonly IssueContinuationSpec[] = [
     target: SemanticAppQueryKind.TemplateDiagnostics,
     intent: InquiryContinuationIntent.Diagnose,
     queryShape: 'diagnostic',
-    evidenceState: InquiryEvidenceState.TypeProjected,
   },
   {
     source: SemanticAppQueryKind.FetchClientIssues,
@@ -165,7 +157,6 @@ const ISSUE_CONTINUATION_SPECS: readonly IssueContinuationSpec[] = [
     target: SemanticAppQueryKind.ConfigurationIssues,
     intent: InquiryContinuationIntent.Inspect,
     queryShape: 'row',
-    evidenceState: InquiryEvidenceState.Open,
   },
   {
     source: SemanticAppQueryKind.FetchClientIssues,
@@ -180,7 +171,6 @@ const ISSUE_CONTINUATION_SPECS: readonly IssueContinuationSpec[] = [
     target: SemanticAppQueryKind.DiIssues,
     intent: InquiryContinuationIntent.Inspect,
     queryShape: 'row',
-    evidenceState: InquiryEvidenceState.Open,
   },
   {
     source: SemanticAppQueryKind.DialogIssues,
@@ -197,7 +187,11 @@ export function withSemanticAppQueryContinuations<TValue>(
   result: SemanticRuntimeAnswer<TValue>,
   catalogRow: SemanticAppQueryCatalogRow = semanticAppQueryCatalogRow(query.kind),
 ): SemanticRuntimeAnswer<TValue> {
-  const continuations = semanticAppQueryContinuationRows(query, result, catalogRow);
+  const neutralQuery: SemanticAppQuery = {
+    ...query,
+    continuationIntents: undefined,
+  };
+  const continuations = semanticAppQueryContinuationRows(neutralQuery, result, catalogRow);
   if (continuations.length === 0) {
     return result;
   }
@@ -207,27 +201,76 @@ export function withSemanticAppQueryContinuations<TValue>(
   };
 }
 
-/** Apply caller-requested continuation intent filtering after claim/cache materialization. */
-export function filterSemanticAppQueryContinuations<TValue>(
-  query: Pick<SemanticAppQuery, 'continuationIntents'>,
+/** Apply response-envelope continuation policy after the last reusable claim/cache boundary. */
+export function projectSemanticAppQueryContinuations<TValue>(
+  query: Pick<SemanticAppQuery, 'continuationIntents' | 'diagnosticProjection'>,
   result: SemanticRuntimeAnswer<TValue>,
 ): SemanticRuntimeAnswer<TValue> {
   if (result.continuations == null || result.continuations.length === 0) {
     return result;
   }
+  const diagnosticProjection = query.diagnosticProjection;
+  let rows = diagnosticProjection == null
+    ? result.continuations
+    : result.continuations.map((row) =>
+      continuationWithDiagnosticProjection(row, diagnosticProjection)
+    );
   const requestedIntents = inquiryContinuationIntents(query.continuationIntents ?? []);
-  if (requestedIntents.length === 0) {
-    return result;
+  if (requestedIntents.length > 0) {
+    rows = rows
+      .filter((row) => semanticRuntimeContinuationMatchesRequestedIntents(row, requestedIntents))
+      .map((row) => semanticRuntimeContinuationWithAppBuilderQueryIntentFilter(
+        semanticRuntimeContinuationWithAppQueryIntentFilter(row, requestedIntents),
+        requestedIntents,
+      ));
   }
-  const rows = result.continuations
-    .filter((row) => semanticRuntimeContinuationMatchesRequestedIntents(row, requestedIntents))
-    .map((row) => semanticRuntimeContinuationWithAppBuilderQueryIntentFilter(
-      semanticRuntimeContinuationWithAppQueryIntentFilter(row, requestedIntents),
-      requestedIntents,
-    ));
   return {
     ...result,
     continuations: rows,
+  };
+}
+
+/** Project child response-envelope policy only after a reusable routed batch answer has been read. */
+export function projectSemanticAppQueryBatchContinuations(
+  queries: readonly Pick<SemanticAppQuery, 'continuationIntents' | 'diagnosticProjection'>[],
+  result: SemanticRuntimeAnswer<SemanticRuntimeAppQueryBatchResult>,
+): SemanticRuntimeAnswer<SemanticRuntimeAppQueryBatchResult> {
+  return {
+    ...result,
+    value: {
+      ...result.value,
+      rows: result.value.rows.map((row) => {
+        const query = queries[row.index];
+        return query == null
+          ? row
+          : {
+              ...row,
+              answer: projectSemanticAppQueryContinuations(query, row.answer),
+            };
+      }),
+    },
+  };
+}
+
+function continuationWithDiagnosticProjection(
+  row: SemanticRuntimeContinuationRow,
+  diagnosticProjection: NonNullable<SemanticAppQuery['diagnosticProjection']>,
+): SemanticRuntimeContinuationRow {
+  if (row.targetQuery == null) {
+    return row;
+  }
+  const targetRow = semanticAppQueryCatalogRow(row.targetQuery.kind);
+  if (!targetRow.supportsDiagnosticProjection) {
+    return row;
+  }
+  const targetQuery = semanticAppQueryCatalogShape({
+    ...row.targetQuery,
+    diagnosticProjection,
+  });
+  return {
+    ...row,
+    targetQuery,
+    cost: costForQuery(targetQuery, targetRow),
   };
 }
 
@@ -240,14 +283,13 @@ function semanticAppQueryContinuationRows(
   const locusQuery = semanticAppQueryCatalogShape(query);
   const sourceFile = semanticAppQuerySourceFileLocus(locusQuery);
   const page = semanticRuntimeContinuationPageInput(query);
-  const answerSourcePrecision = semanticSourcePrecisionForAnswerRows(result.value);
 
   const nextPage = nextPageContinuation(query, result, catalogRow);
   addOverviewContinuations(query, seeds);
   addSourceContinuations(query, seeds, sourceFile, page);
   addDiagnosticContinuations(query, result, seeds, sourceFile, page);
   addDiagnosticValueContinuations(query, result, seeds, sourceFile, page);
-  addTemplateContinuations(query, result, seeds, sourceFile, page);
+  addTemplateContinuations(query, seeds, sourceFile, page);
   addRouterContinuations(query, seeds, page);
   addResourceContinuations(query, seeds, page);
   addObservationContinuations(query, seeds, page);
@@ -257,7 +299,7 @@ function semanticAppQueryContinuationRows(
   addFrameworkContinuations(query, result, seeds, sourceFile, page);
   addIssueContinuations(query, seeds, page);
 
-  return mergeSemanticRuntimeContinuationRows(nextPage, seeds.map((seed) => seedToRow(seed, answerSourcePrecision)));
+  return mergeSemanticRuntimeContinuationRows(nextPage, seeds.map(seedToRow));
 }
 
 function addOverviewContinuations(
@@ -282,7 +324,6 @@ function addOverviewContinuations(
         inspect(
           'Group open semantic seams before paging seam rows.',
           overviewQuery(SemanticAppQueryKind.OpenSeamSummary, query),
-          InquiryEvidenceState.Open,
         ),
         inspect(
           'Inspect router, viewport, route-tree, and navigation shape.',
@@ -303,7 +344,6 @@ function addOverviewContinuations(
         inspect(
           'Open seam clusters summarized by the overview.',
           overviewQuery(SemanticAppQueryKind.OpenSeamSummary, query),
-          InquiryEvidenceState.Open,
         ),
         inspect(
           'Inspect router-family rows from the overview.',
@@ -324,7 +364,6 @@ function addOverviewContinuations(
         inspect(
           'Inspect binding value-flow summaries from topology context.',
           rowQuery(SemanticAppQueryKind.BindingDataFlowSummary, query),
-          InquiryEvidenceState.TypeProjected,
         ),
       );
       break;
@@ -343,7 +382,6 @@ function addSourceContinuations(
         inspect(
           'Inspect static evaluator issues after seeing admitted source files.',
           pagedQuery(SemanticAppQueryKind.EvaluationIssues, query, page),
-          InquiryEvidenceState.Open,
         ),
       );
       break;
@@ -356,7 +394,6 @@ function addSourceContinuations(
         inspect(
           'Inspect evaluator issues related to unresolved module edges.',
           pagedQuery(SemanticAppQueryKind.EvaluationIssues, query, page),
-          InquiryEvidenceState.Open,
         ),
       );
       break;
@@ -369,7 +406,6 @@ function addSourceContinuations(
         diagnose(
           'Compare evaluator issues with app diagnostic clusters.',
           withSourceFile(diagnosticQuery(SemanticAppQueryKind.AppDiagnosticSummary, query), sourceFile),
-          InquiryEvidenceState.Open,
         ),
       );
       break;
@@ -383,26 +419,23 @@ function addDiagnosticContinuations(
   sourceFile: SemanticRuntimeSourceFileInput | null,
   page: SemanticRuntimePageInput,
 ): void {
-  const templateSourcePrecision = query.kind === SemanticAppQueryKind.TemplateDiagnostics
-    ? templateDiagnosticSourcePrecision(result.value)
-    : undefined;
+  const templateSources = query.kind === SemanticAppQueryKind.TemplateDiagnostics
+    ? templateDiagnosticSourceReferences(result.value)
+    : [];
   switch (query.kind) {
     case SemanticAppQueryKind.AppDiagnosticSummary:
       seeds.push(
         diagnose(
           'Page detailed diagnostics for the selected diagnostic clusters.',
           withSourceFile(diagnosticQuery(SemanticAppQueryKind.AppDiagnostics, query, page), sourceFile),
-          InquiryEvidenceState.TypeProjected,
         ),
         diagnose(
           'Inspect ordinary TypeScript diagnostics for the same project/source locus.',
           withSourceFile(pagedQuery(SemanticAppQueryKind.TypeScriptDiagnostics, query, page), sourceFile),
-          InquiryEvidenceState.TypeProjected,
         ),
         diagnose(
           'Inspect template diagnostics for the same source locus.',
           withSourceFile(diagnosticQuery(SemanticAppQueryKind.TemplateDiagnostics, query, page), sourceFile),
-          InquiryEvidenceState.TypeProjected,
         ),
       );
       break;
@@ -415,12 +448,10 @@ function addDiagnosticContinuations(
         diagnose(
           'Compare unified diagnostics with ordinary TypeScript diagnostics.',
           withSourceFile(pagedQuery(SemanticAppQueryKind.TypeScriptDiagnostics, query, page), sourceFile),
-          InquiryEvidenceState.TypeProjected,
         ),
         diagnose(
           'Compare unified diagnostics with template diagnostics.',
           withSourceFile(diagnosticQuery(SemanticAppQueryKind.TemplateDiagnostics, query, page), sourceFile),
-          InquiryEvidenceState.TypeProjected,
         ),
       );
       break;
@@ -429,12 +460,10 @@ function addDiagnosticContinuations(
         diagnose(
           'Page ordinary TypeScript diagnostics behind the summary.',
           withSourceFile(pagedQuery(SemanticAppQueryKind.TypeScriptDiagnostics, query, page), sourceFile),
-          InquiryEvidenceState.TypeProjected,
         ),
         diagnose(
           'Compare TypeScript diagnostic clusters with unified app diagnostic clusters.',
           withSourceFile(diagnosticQuery(SemanticAppQueryKind.AppDiagnosticSummary, query, page), sourceFile),
-          InquiryEvidenceState.TypeProjected,
         ),
       );
       break;
@@ -443,28 +472,28 @@ function addDiagnosticContinuations(
         orient(
           'Cluster ordinary TypeScript diagnostics.',
           withSourceFile(pagedQuery(SemanticAppQueryKind.TypeScriptDiagnosticSummary, query, page), sourceFile),
-          InquiryEvidenceState.TypeProjected,
         ),
         diagnose(
           'Compare TypeScript diagnostics with unified app diagnostics.',
           withSourceFile(diagnosticQuery(SemanticAppQueryKind.AppDiagnostics, query, page), sourceFile),
-          InquiryEvidenceState.TypeProjected,
         ),
       );
       break;
     case SemanticAppQueryKind.TemplateDiagnostics:
       seeds.push(
-        diagnose(
-          'Compare template diagnostics with unified app diagnostics.',
-          withSourceFile(diagnosticQuery(SemanticAppQueryKind.AppDiagnostics, query, page), sourceFile),
-          InquiryEvidenceState.TypeProjected,
-          templateSourcePrecision,
+        withSourceReferences(
+          diagnose(
+            'Compare template diagnostics with unified app diagnostics.',
+            withSourceFile(diagnosticQuery(SemanticAppQueryKind.AppDiagnostics, query, page), sourceFile),
+          ),
+          templateSources,
         ),
-        diagnose(
-          'Cluster diagnostics for the same template/source locus.',
-          withSourceFile(diagnosticQuery(SemanticAppQueryKind.AppDiagnosticSummary, query, page), sourceFile),
-          InquiryEvidenceState.TypeProjected,
-          templateSourcePrecision,
+        withSourceReferences(
+          diagnose(
+            'Cluster diagnostics for the same template/source locus.',
+            withSourceFile(diagnosticQuery(SemanticAppQueryKind.AppDiagnosticSummary, query, page), sourceFile),
+          ),
+          templateSources,
         ),
       );
       break;
@@ -488,30 +517,27 @@ function addDiagnosticValueContinuations(
       continue;
     }
     relatedTargets.add(relatedQueryKind);
-    const sourcePrecision = relatedDiagnosticSourcePrecision(relatedRows, relatedQueryKind);
+    const sourceReferences = relatedDiagnosticSourceReferences(relatedRows, relatedQueryKind);
     seeds.push(
       {
         ...diagnoseForRepair(
           `Inspect ${relatedQueryKind} rows referenced by returned diagnostics.`,
           rowQuery(relatedQueryKind, query, page),
-          InquiryEvidenceState.SourceBacked,
-          sourcePrecision,
         ),
-        staleness: sourcePrecision === InquirySourcePrecision.NotRequired
-          ? InquiryEvidenceStaleness.ProjectEpochSensitive
-          : InquiryEvidenceStaleness.SourceEpochSensitive,
-        blockers: relatedDiagnosticRepairBlockers(relatedRows, relatedQueryKind, sourcePrecision),
+        sourceReferences,
+        blockers: relatedDiagnosticRepairBlockers(relatedRows, relatedQueryKind),
       },
     );
   }
   const frameworkRows = frameworkCapabilityDiagnosticRows(relatedRows);
   if (frameworkRows.length > 0) {
     seeds.push(
-      inspect(
-        'Inspect framework capability-demand rows behind returned registration diagnostics.',
-        withSourceFile(rowQuery(SemanticAppQueryKind.FrameworkCapabilityDemands, query, page), sourceFile),
-        InquiryEvidenceState.SourceBacked,
-        frameworkCapabilityDiagnosticSourcePrecision(frameworkRows),
+      withSourceReferences(
+        inspect(
+          'Inspect framework capability-demand rows behind returned registration diagnostics.',
+          withSourceFile(rowQuery(SemanticAppQueryKind.FrameworkCapabilityDemands, query, page), sourceFile),
+        ),
+        frameworkCapabilityDiagnosticSourceReferences(frameworkRows),
       ),
     );
   }
@@ -519,22 +545,10 @@ function addDiagnosticValueContinuations(
 
 function addTemplateContinuations(
   query: SemanticAppQuery,
-  result: SemanticRuntimeAnswer<unknown>,
   seeds: ContinuationSeed[],
   sourceFile: SemanticRuntimeSourceFileInput | null,
   page: SemanticRuntimePageInput,
 ): void {
-  const templateSourcePrecision = query.kind === SemanticAppQueryKind.TemplateDiagnostics
-    ? templateDiagnosticSourcePrecision(result.value)
-    : query.kind === SemanticAppQueryKind.TemplateInlayHints
-        || query.kind === SemanticAppQueryKind.TemplateReferences
-        || query.kind === SemanticAppQueryKind.TemplateRename
-        || query.kind === SemanticAppQueryKind.TemplateRenameFromTypeScript
-        || query.kind === SemanticAppQueryKind.TemplateCodeActions
-        || query.kind === SemanticAppQueryKind.TemplateSemanticTokens
-        || query.kind === SemanticAppQueryKind.TemplateFoldingRanges
-      ? semanticSourcePrecisionForAnswerRows(result.value)
-    : undefined;
   if (query.cursor != null) {
     switch (query.kind) {
       case SemanticAppQueryKind.TemplateCursorInfo:
@@ -550,17 +564,14 @@ function addTemplateContinuations(
           diagnoseForRepair(
             'Check whether the selected member has a conservative rename edit plan.',
             cursorQuery(SemanticAppQueryKind.TemplateRename, query),
-            InquiryEvidenceState.TypeProjected,
           ),
           diagnoseForRepair(
             'Check whether cursor diagnostics have conservative code-action edit plans.',
             cursorQuery(SemanticAppQueryKind.TemplateCodeActions, query),
-            InquiryEvidenceState.TypeProjected,
           ),
           diagnose(
             'Inspect diagnostics for the cursor source file.',
             withSourceFile(diagnosticQuery(SemanticAppQueryKind.TemplateDiagnostics, query, page), sourceFile),
-            InquiryEvidenceState.TypeProjected,
           ),
         );
         break;
@@ -569,17 +580,14 @@ function addTemplateContinuations(
           inspect(
             'Inspect semantic cursor context for these completions.',
             cursorQuery(SemanticAppQueryKind.TemplateCursorInfo, query),
-            InquiryEvidenceState.TypeProjected,
           ),
           diagnose(
             'Inspect diagnostics for the completion source file.',
             withSourceFile(diagnosticQuery(SemanticAppQueryKind.TemplateDiagnostics, query, page), sourceFile),
-            InquiryEvidenceState.TypeProjected,
           ),
           diagnoseForRepair(
             'Check whether cursor diagnostics have conservative code-action edit plans.',
             cursorQuery(SemanticAppQueryKind.TemplateCodeActions, query),
-            InquiryEvidenceState.TypeProjected,
           ),
         );
         break;
@@ -588,20 +596,14 @@ function addTemplateContinuations(
           inspect(
             'Inspect semantic cursor context for these references.',
             cursorQuery(SemanticAppQueryKind.TemplateCursorInfo, query),
-            InquiryEvidenceState.TypeProjected,
-            templateSourcePrecision,
           ),
           diagnose(
             'Inspect diagnostics for the references source file.',
             withSourceFile(diagnosticQuery(SemanticAppQueryKind.TemplateDiagnostics, query, page), sourceFile),
-            InquiryEvidenceState.TypeProjected,
-            templateSourcePrecision,
           ),
           diagnoseForRepair(
             'Check whether these references can become a conservative rename edit plan.',
             cursorQuery(SemanticAppQueryKind.TemplateRename, query),
-            InquiryEvidenceState.TypeProjected,
-            templateSourcePrecision,
           ),
         );
         break;
@@ -611,8 +613,6 @@ function addTemplateContinuations(
           inspect(
             'Inspect semantic cursor context for this rename plan.',
             cursorQuery(SemanticAppQueryKind.TemplateCursorInfo, query),
-            InquiryEvidenceState.TypeProjected,
-            templateSourcePrecision,
           ),
           navigate(
             'Inspect references used by this rename plan.',
@@ -621,8 +621,6 @@ function addTemplateContinuations(
           diagnose(
             'Inspect diagnostics for the rename source file.',
             withSourceFile(diagnosticQuery(SemanticAppQueryKind.TemplateDiagnostics, query, page), sourceFile),
-            InquiryEvidenceState.TypeProjected,
-            templateSourcePrecision,
           ),
         );
         break;
@@ -631,14 +629,10 @@ function addTemplateContinuations(
           inspect(
             'Inspect semantic cursor context for these code actions.',
             cursorQuery(SemanticAppQueryKind.TemplateCursorInfo, query),
-            InquiryEvidenceState.TypeProjected,
-            templateSourcePrecision,
           ),
           diagnose(
             'Inspect diagnostics behind these code actions.',
             withSourceFile(diagnosticQuery(SemanticAppQueryKind.TemplateDiagnostics, query, page), sourceFile),
-            InquiryEvidenceState.TypeProjected,
-            templateSourcePrecision,
           ),
         );
         break;
@@ -651,7 +645,6 @@ function addTemplateContinuations(
         diagnose(
           'Inspect diagnostics produced from compiled template evidence.',
           withSourceFile(diagnosticQuery(SemanticAppQueryKind.TemplateDiagnostics, query, page), sourceFile),
-          InquiryEvidenceState.TypeProjected,
         ),
         inspect(
           'Inspect resource definitions used by template compilation.',
@@ -664,14 +657,10 @@ function addTemplateContinuations(
         inspect(
           'Inspect resource definitions involved in template diagnostics.',
           rowQuery(SemanticAppQueryKind.ResourceDefinitions, query, page),
-          InquiryEvidenceState.Inferred,
-          templateSourcePrecision,
         ),
         inspect(
           'Inspect binding flow summaries behind template diagnostics.',
           rowQuery(SemanticAppQueryKind.BindingDataFlowSummary, query, page),
-          InquiryEvidenceState.TypeProjected,
-          templateSourcePrecision,
         ),
       );
       break;
@@ -680,20 +669,14 @@ function addTemplateContinuations(
         diagnose(
           'Inspect diagnostics for the inlay hint source file.',
           withSourceFile(diagnosticQuery(SemanticAppQueryKind.TemplateDiagnostics, query, page), sourceFile),
-          InquiryEvidenceState.TypeProjected,
-          templateSourcePrecision,
         ),
         inspect(
           'Inspect binding data-flow rows behind resolved binding-mode hints.',
           rowQuery(SemanticAppQueryKind.BindingDataFlows, query, page),
-          InquiryEvidenceState.TypeProjected,
-          templateSourcePrecision,
         ),
         inspect(
           'Inspect value-channel rows behind resolved binding-mode hints.',
           rowQuery(SemanticAppQueryKind.BindingValueChannels, query, page),
-          InquiryEvidenceState.TypeProjected,
-          templateSourcePrecision,
         ),
       );
       break;
@@ -702,14 +685,10 @@ function addTemplateContinuations(
         diagnose(
           'Inspect diagnostics for the semantic-token source file.',
           withSourceFile(diagnosticQuery(SemanticAppQueryKind.TemplateDiagnostics, query, page), sourceFile),
-          InquiryEvidenceState.TypeProjected,
-          templateSourcePrecision,
         ),
         inspect(
           'Inspect compiled template rows behind semantic token classification.',
           rowQuery(SemanticAppQueryKind.TemplateCompilations, query, page),
-          InquiryEvidenceState.Inferred,
-          templateSourcePrecision,
         ),
       );
       break;
@@ -718,14 +697,10 @@ function addTemplateContinuations(
         diagnose(
           'Inspect diagnostics for the folding-range source file.',
           withSourceFile(diagnosticQuery(SemanticAppQueryKind.TemplateDiagnostics, query, page), sourceFile),
-          InquiryEvidenceState.TypeProjected,
-          templateSourcePrecision,
         ),
         inspect(
           'Inspect compiled template rows behind foldable authored regions.',
           rowQuery(SemanticAppQueryKind.TemplateCompilations, query, page),
-          InquiryEvidenceState.Inferred,
-          templateSourcePrecision,
         ),
       );
       break;
@@ -750,7 +725,6 @@ function addRouterContinuations(
       diagnose(
         'Inspect router issue rows after the router overview.',
         rowQuery(SemanticAppQueryKind.RouterIssues, query, page),
-        InquiryEvidenceState.Open,
       ),
     );
     return;
@@ -777,7 +751,6 @@ function addResourceContinuations(
         inspect(
           'Inspect resource diagnostics after resource definitions.',
           rowQuery(SemanticAppQueryKind.ResourceIssues, query, page),
-          InquiryEvidenceState.Open,
         ),
         inspect(
           'Inspect resource visibility for these definitions.',
@@ -816,7 +789,6 @@ function addResourceContinuations(
         diagnose(
           'Compare resource issues with unified diagnostic clusters.',
           diagnosticQuery(SemanticAppQueryKind.AppDiagnosticSummary, query, page),
-          InquiryEvidenceState.Open,
         ),
       );
       break;
@@ -846,27 +818,22 @@ function addObservationContinuations(
         inspect(
           'Compare authored access occurrences with binding observed-dependency summaries.',
           rowQuery(SemanticAppQueryKind.BindingObservedDependencySummary, query, page),
-          InquiryEvidenceState.TypeProjected,
         ),
         inspect(
           'Inspect controller-watcher observation effects induced by authored access occurrences.',
           rowQuery(SemanticAppQueryKind.RuntimeWatcherObservedDependencies, query, page),
-          InquiryEvidenceState.TypeProjected,
         ),
         inspect(
           'Inspect source-effect observation effects induced by authored access occurrences.',
           rowQuery(SemanticAppQueryKind.RuntimeEffectObservedDependencies, query, page),
-          InquiryEvidenceState.TypeProjected,
         ),
         inspect(
           'Inspect computed-observer effects induced by authored access occurrences.',
           rowQuery(SemanticAppQueryKind.ComputedObserverObservedDependencies, query, page),
-          InquiryEvidenceState.TypeProjected,
         ),
         diagnose(
           'Inspect observation issues beside authored access occurrences.',
           rowQuery(SemanticAppQueryKind.ObservationIssues, query, page),
-          InquiryEvidenceState.Open,
         ),
       );
       break;
@@ -879,12 +846,10 @@ function addObservationContinuations(
         inspect(
           'Inspect observed dependencies collected for computed observers.',
           rowQuery(SemanticAppQueryKind.ComputedObserverObservedDependencies, query, page),
-          InquiryEvidenceState.TypeProjected,
         ),
         diagnose(
           'Inspect observation issues related to computed-observer modeling.',
           rowQuery(SemanticAppQueryKind.ObservationIssues, query, page),
-          InquiryEvidenceState.Open,
         ),
       );
       break;
@@ -897,12 +862,10 @@ function addObservationContinuations(
         inspect(
           'Inspect dependencies observed from these computed sources.',
           rowQuery(SemanticAppQueryKind.ComputedObserverObservedDependencies, query, page),
-          InquiryEvidenceState.TypeProjected,
         ),
         diagnose(
           'Inspect observation issues beside computed source rows.',
           rowQuery(SemanticAppQueryKind.ObservationIssues, query, page),
-          InquiryEvidenceState.Open,
         ),
       );
       break;
@@ -911,12 +874,10 @@ function addObservationContinuations(
         inspect(
           'Inspect computed observer source rows behind these dependencies.',
           rowQuery(SemanticAppQueryKind.ComputedObserverSources, query, page),
-          InquiryEvidenceState.TypeProjected,
         ),
         inspect(
           'Compare computed dependencies with binding observed-dependency summaries.',
           rowQuery(SemanticAppQueryKind.BindingObservedDependencySummary, query, page),
-          InquiryEvidenceState.TypeProjected,
         ),
       );
       break;
@@ -925,12 +886,10 @@ function addObservationContinuations(
         inspect(
           'Inspect dependencies observed by direct runtime effects.',
           rowQuery(SemanticAppQueryKind.RuntimeEffectObservedDependencies, query, page),
-          InquiryEvidenceState.TypeProjected,
         ),
         diagnose(
           'Inspect observation issues beside direct runtime effects.',
           rowQuery(SemanticAppQueryKind.ObservationIssues, query, page),
-          InquiryEvidenceState.Open,
         ),
       );
       break;
@@ -939,12 +898,10 @@ function addObservationContinuations(
         inspect(
           'Return to direct runtime effect source rows.',
           rowQuery(SemanticAppQueryKind.RuntimeEffects, query, page),
-          InquiryEvidenceState.TypeProjected,
         ),
         inspect(
           'Compare runtime-effect dependencies with binding observed-dependency summaries.',
           rowQuery(SemanticAppQueryKind.BindingObservedDependencySummary, query, page),
-          InquiryEvidenceState.TypeProjected,
         ),
       );
       break;
@@ -953,12 +910,10 @@ function addObservationContinuations(
         diagnose(
           'Inspect observation issues related to raw/proxy escape calls.',
           rowQuery(SemanticAppQueryKind.ObservationIssues, query, page),
-          InquiryEvidenceState.Open,
         ),
         inspect(
           'Inspect binding observed-dependency summaries near proxy-observation pressure.',
           rowQuery(SemanticAppQueryKind.BindingObservedDependencySummary, query, page),
-          InquiryEvidenceState.TypeProjected,
         ),
       );
       break;
@@ -1011,12 +966,10 @@ function addBindingContinuations(
         inspect(
           'Inspect binding value-flow summaries after target/source operations.',
           rowQuery(SemanticAppQueryKind.BindingDataFlowSummary, query, page),
-          InquiryEvidenceState.TypeProjected,
         ),
         diagnose(
           'Inspect template diagnostics for the binding operation locus.',
           diagnosticQuery(SemanticAppQueryKind.TemplateDiagnostics, query, page),
-          InquiryEvidenceState.TypeProjected,
         ),
       );
       break;
@@ -1034,7 +987,6 @@ function addRenderingContinuations(
         inspect(
           'Inspect binding data-flow created by runtime controllers.',
           rowQuery(SemanticAppQueryKind.BindingDataFlowSummary, query, page),
-          InquiryEvidenceState.TypeProjected,
         ),
         inspect(
           'Inspect controller-owned watcher rows.',
@@ -1051,7 +1003,6 @@ function addRenderingContinuations(
         inspect(
           'Inspect observed-dependency summary rows.',
           rowQuery(SemanticAppQueryKind.BindingObservedDependencySummary, query, page),
-          InquiryEvidenceState.TypeProjected,
         ),
       );
       break;
@@ -1060,7 +1011,6 @@ function addRenderingContinuations(
         inspect(
           'Group watcher dependencies with binding observed-dependency summaries.',
           rowQuery(SemanticAppQueryKind.BindingObservedDependencySummary, query, page),
-          InquiryEvidenceState.TypeProjected,
         ),
       );
       break;
@@ -1098,12 +1048,10 @@ function addStateAndI18nContinuations(
         inspect(
           'Inspect source-level @fromState definitions that reference configured stores.',
           rowQuery(SemanticAppQueryKind.StateGetterBindings, query, page),
-          InquiryEvidenceState.TypeProjected,
         ),
         diagnose(
           'Inspect state modeling issues for discovered state stores.',
           rowQuery(SemanticAppQueryKind.StateIssues, query, page),
-          InquiryEvidenceState.Open,
         ),
         inspect(
           'Inspect app topology around discovered state stores.',
@@ -1120,7 +1068,6 @@ function addStateAndI18nContinuations(
         diagnose(
           'Inspect state lookup and decorator issues around @fromState bindings.',
           rowQuery(SemanticAppQueryKind.StateIssues, query, page),
-          InquiryEvidenceState.Open,
         ),
       );
       break;
@@ -1133,7 +1080,6 @@ function addStateAndI18nContinuations(
         diagnose(
           'Inspect template diagnostics around i18n translation usage.',
           diagnosticQuery(SemanticAppQueryKind.TemplateDiagnostics, query, page),
-          InquiryEvidenceState.TypeProjected,
         ),
       );
       break;
@@ -1146,7 +1092,6 @@ function addStateAndI18nContinuations(
         diagnose(
           'Inspect template diagnostics around rendered i18n bindings.',
           diagnosticQuery(SemanticAppQueryKind.TemplateDiagnostics, query, page),
-          InquiryEvidenceState.TypeProjected,
         ),
       );
       break;
@@ -1168,17 +1113,14 @@ function addFrameworkContinuations(
     diagnose(
       'Compare framework capability demands with unified diagnostic clusters before planning registration work.',
       withSourceFile(diagnosticQuery(SemanticAppQueryKind.AppDiagnosticSummary, query, page), sourceFile),
-      InquiryEvidenceState.Open,
     ),
     inspect(
       'Inspect configuration issues beside framework registration and package admission posture.',
       rowQuery(SemanticAppQueryKind.ConfigurationIssues, query, page),
-      InquiryEvidenceState.Open,
     ),
     inspect(
       'Inspect DI issues beside source-service framework capability admission posture.',
       rowQuery(SemanticAppQueryKind.DiIssues, query, page),
-      InquiryEvidenceState.Open,
     ),
   );
   for (const relatedQueryKind of frameworkCapabilityDemandRelatedQueryKinds(rows)) {
@@ -1193,7 +1135,6 @@ function addFrameworkContinuations(
       inspect(
         `Inspect ${relatedQueryKind} rows related to returned framework capability demands.`,
         rowQuery(relatedQueryKind, query, page),
-        InquiryEvidenceState.Inferred,
       ),
     );
   }
@@ -1205,7 +1146,6 @@ function addFrameworkContinuations(
       inspect(
         'Inspect open seam sites that may explain unknown framework capability admission.',
         rowQuery(SemanticAppQueryKind.OpenSeamSites, query, page),
-        InquiryEvidenceState.Open,
       ),
     );
   }
@@ -1221,7 +1161,6 @@ function addIssueContinuations(
       diagnose(
         'Compare issue rows with unified diagnostic clusters.',
         diagnosticQuery(SemanticAppQueryKind.AppDiagnosticSummary, query, page),
-        InquiryEvidenceState.Open,
       ),
     );
   }
@@ -1235,12 +1174,10 @@ function addIssueContinuations(
       inspect(
         'Group open seams by unique authored source site before paging raw derivations.',
         rowQuery(SemanticAppQueryKind.OpenSeamSites, query, page),
-        InquiryEvidenceState.Open,
       ),
       inspect(
         'Page raw open seam rows behind the summary.',
         rowQuery(SemanticAppQueryKind.OpenSeams, query, page),
-        InquiryEvidenceState.Open,
       ),
     );
   }
@@ -1249,12 +1186,10 @@ function addIssueContinuations(
       inspect(
         'Page raw open seam rows behind the selected authored sites.',
         rowQuery(SemanticAppQueryKind.OpenSeams, query, page),
-        InquiryEvidenceState.Open,
       ),
       orient(
         'Group open seams by seam kind and reason signature.',
         rowQuery(SemanticAppQueryKind.OpenSeamSummary, query, page),
-        InquiryEvidenceState.Open,
       ),
     );
   }
@@ -1263,12 +1198,10 @@ function addIssueContinuations(
       orient(
         'Group open seams before choosing a narrower follow-up.',
         rowQuery(SemanticAppQueryKind.OpenSeamSummary, query, page),
-        InquiryEvidenceState.Open,
       ),
       orient(
         'Group repeated derivation rows by unique authored source site.',
         rowQuery(SemanticAppQueryKind.OpenSeamSites, query, page),
-        InquiryEvidenceState.Open,
       ),
     );
   }
@@ -1289,8 +1222,8 @@ function issueContinuationSeed(
     ? diagnosticQuery(spec.target, query, page)
     : rowQuery(spec.target, query, page);
   return spec.intent === 'diagnose'
-    ? diagnose(spec.rationale, targetQuery, spec.evidenceState)
-    : inspect(spec.rationale, targetQuery, spec.evidenceState);
+    ? diagnose(spec.rationale, targetQuery)
+    : inspect(spec.rationale, targetQuery);
 }
 
 function nextPageContinuation(
@@ -1306,27 +1239,21 @@ function nextPageContinuation(
     page: {
       ...(query.page ?? {}),
       cursor: result.page.nextCursor,
-      size: result.page.size,
+      size: result.page.size === 0 ? 50 : result.page.size,
     },
   };
-  const targetRow = semanticAppQueryCatalogRow(targetQuery.kind);
   return [
     seedToRow({
       kind: InquiryContinuationKind.NextPage,
       rationale: 'Continue paging this query with the next cursor.',
       targetQuery,
       intents: [InquiryContinuationIntent.Inspect],
-      evidenceState: InquiryEvidenceState.NotRequired,
-      coverage: InquiryEvidenceCoverage.PartialKnownGaps,
-      sourcePrecision: InquirySourcePrecision.NotRequired,
-      staleness: stalenessForQuery(targetQuery, targetRow),
     }),
   ];
 }
 
 function seedToRow(
   seed: ContinuationSeed,
-  answerSourcePrecision?: InquirySourcePrecision,
 ): SemanticRuntimeContinuationRow {
   if (isAppBuilderContinuationSeed(seed)) {
     return {
@@ -1337,10 +1264,9 @@ function seedToRow(
       intents: seed.intents,
       cost: seed.cost ?? InquiryContinuationCost.Free,
       evidence: {
-        evidenceState: seed.evidenceState ?? InquiryEvidenceState.NotRequired,
-        coverage: seed.coverage ?? InquiryEvidenceCoverage.PartialKnownGaps,
-        sourcePrecision: seed.sourcePrecision ?? InquirySourcePrecision.NotRequired,
-        staleness: seed.staleness ?? InquiryEvidenceStaleness.CurrentEpoch,
+        sourceRequirement: seed.sourceRequirement ?? InquirySourceRequirement.NotRequired,
+        sourceFacts: semanticContinuationSourceFacts(seed.sourceReferences ?? []),
+        epochDependencies: [InquiryContinuationEpochDependency.RuntimeSession],
       },
       blockers: seed.blockers ?? [],
     };
@@ -1355,10 +1281,10 @@ function seedToRow(
     intents: seed.intents,
     cost: costForQuery(targetQuery, targetRow),
     evidence: {
-      evidenceState: seed.evidenceState ?? evidenceStateForQuery(targetQuery, targetRow),
-      coverage: seed.coverage ?? coverageForCatalogRow(targetRow),
-      sourcePrecision: seed.sourcePrecision ?? answerSourcePrecision ?? sourcePrecisionForQuery(targetQuery),
-      staleness: seed.staleness ?? stalenessForQuery(targetQuery, targetRow),
+      sourceRequirement: seed.sourceRequirement
+        ?? sourceRequirementForContinuation(targetQuery, seed.intents),
+      sourceFacts: semanticContinuationSourceFacts(seed.sourceReferences ?? []),
+      epochDependencies: epochDependenciesForQuery(targetQuery, targetRow),
     },
     blockers: seed.blockers ?? [],
   };
@@ -1367,21 +1293,25 @@ function seedToRow(
 function orient(
   rationale: string,
   targetQuery: SemanticAppQuery,
-  evidenceState: InquiryEvidenceState = InquiryEvidenceState.Inferred,
 ): ContinuationSeed {
-  return seed(InquiryContinuationKind.FollowQuery, rationale, targetQuery, [InquiryContinuationIntent.Orient, InquiryContinuationIntent.Inspect], evidenceState);
+  return seed(
+    InquiryContinuationKind.FollowQuery,
+    rationale,
+    targetQuery,
+    [InquiryContinuationIntent.Orient, InquiryContinuationIntent.Inspect],
+  );
 }
 
 function inspect(
   rationale: string,
   targetQuery: SemanticAppQuery,
-  evidenceState: InquiryEvidenceState = InquiryEvidenceState.Inferred,
-  sourcePrecision?: InquirySourcePrecision,
 ): AppQueryContinuationSeed {
-  return {
-    ...seed(InquiryContinuationKind.FollowQuery, rationale, targetQuery, [InquiryContinuationIntent.Inspect], evidenceState),
-    ...withSourcePrecision(sourcePrecision),
-  };
+  return seed(
+    InquiryContinuationKind.FollowQuery,
+    rationale,
+    targetQuery,
+    [InquiryContinuationIntent.Inspect],
+  );
 }
 
 function appBuilderInspect(
@@ -1393,10 +1323,6 @@ function appBuilderInspect(
     rationale,
     targetAppBuilderQuery,
     intents: [InquiryContinuationIntent.Inspect],
-    evidenceState: InquiryEvidenceState.NotRequired,
-    coverage: InquiryEvidenceCoverage.PartialKnownGaps,
-    sourcePrecision: InquirySourcePrecision.NotRequired,
-    staleness: InquiryEvidenceStaleness.CurrentEpoch,
     cost: InquiryContinuationCost.Free,
     blockers: [],
   };
@@ -1405,32 +1331,37 @@ function appBuilderInspect(
 function diagnose(
   rationale: string,
   targetQuery: SemanticAppQuery,
-  evidenceState: InquiryEvidenceState = InquiryEvidenceState.TypeProjected,
-  sourcePrecision?: InquirySourcePrecision,
 ): AppQueryContinuationSeed {
-  return {
-    ...seed(InquiryContinuationKind.FollowQuery, rationale, targetQuery, [InquiryContinuationIntent.Diagnose], evidenceState),
-    ...withSourcePrecision(sourcePrecision),
-  };
+  return seed(
+    InquiryContinuationKind.FollowQuery,
+    rationale,
+    targetQuery,
+    [InquiryContinuationIntent.Diagnose],
+  );
 }
 
 function diagnoseForRepair(
   rationale: string,
   targetQuery: SemanticAppQuery,
-  evidenceState: InquiryEvidenceState = InquiryEvidenceState.TypeProjected,
-  sourcePrecision?: InquirySourcePrecision,
 ): AppQueryContinuationSeed {
-  return {
-    ...seed(InquiryContinuationKind.FollowQuery, rationale, targetQuery, [InquiryContinuationIntent.Diagnose, InquiryContinuationIntent.Repair], evidenceState),
-    ...withSourcePrecision(sourcePrecision),
-  };
+  return seed(
+    InquiryContinuationKind.FollowQuery,
+    rationale,
+    targetQuery,
+    [InquiryContinuationIntent.Diagnose, InquiryContinuationIntent.Repair],
+  );
 }
 
 function navigate(
   rationale: string,
   targetQuery: SemanticAppQuery,
 ): AppQueryContinuationSeed {
-  return seed(InquiryContinuationKind.FollowQuery, rationale, targetQuery, [InquiryContinuationIntent.Navigate, InquiryContinuationIntent.Inspect], InquiryEvidenceState.TypeProjected);
+  return seed(
+    InquiryContinuationKind.FollowQuery,
+    rationale,
+    targetQuery,
+    [InquiryContinuationIntent.Navigate, InquiryContinuationIntent.Inspect],
+  );
 }
 
 function seed(
@@ -1438,14 +1369,12 @@ function seed(
   rationale: string,
   targetQuery: SemanticAppQuery,
   intents: readonly InquiryContinuationIntent[],
-  evidenceState: InquiryEvidenceState,
 ): AppQueryContinuationSeed {
   return {
     kind,
     rationale,
     targetQuery,
     intents,
-    evidenceState,
   };
 }
 
@@ -1462,7 +1391,6 @@ function bindingRow(
   return inspect(
     rationale,
     rowQuery(targetKind, query, page),
-    InquiryEvidenceState.TypeProjected,
   );
 }
 
@@ -1475,7 +1403,6 @@ function bindingSummary(
   return inspect(
     rationale,
     rowQuery(targetKind, query, page),
-    InquiryEvidenceState.TypeProjected,
   );
 }
 
@@ -1500,6 +1427,7 @@ function rowQuery(
     ...detailFromQuery(kind, source),
     ...diagnosticProjectionFromQuery(kind, source),
     ...openSeamFilterFromQuery(kind, source),
+    ...observedDependencyLocusFromQuery(kind, source),
     page,
   };
 }
@@ -1588,7 +1516,10 @@ function diagnosticProjectionFromQuery(
 function openSeamFilterFromQuery(
   kind: SemanticAppQueryKind | `${SemanticAppQueryKind}`,
   query: SemanticAppQuery,
-): Pick<SemanticAppQuery, 'sourceFile' | 'openSeamKindKey' | 'openSeamReasonKind' | 'sourceRole'> {
+): Pick<
+  SemanticAppQuery,
+  'sourceFile' | 'openSeamKindKey' | 'openSeamReasonKind' | 'sourceRole' | 'openSeamClusterKey' | 'openSeamSiteKey'
+> {
   if (!semanticAppQueryCatalogRow(kind).supportsOpenSeamFilters) {
     return {};
   }
@@ -1597,7 +1528,30 @@ function openSeamFilterFromQuery(
     ...(query.openSeamKindKey == null ? {} : { openSeamKindKey: query.openSeamKindKey }),
     ...(query.openSeamReasonKind == null ? {} : { openSeamReasonKind: query.openSeamReasonKind }),
     ...(query.sourceRole == null ? {} : { sourceRole: query.sourceRole }),
+    ...(query.openSeamClusterKey == null ? {} : { openSeamClusterKey: query.openSeamClusterKey }),
+    ...(query.openSeamSiteKey == null ? {} : { openSeamSiteKey: query.openSeamSiteKey }),
   };
+}
+
+function observedDependencyLocusFromQuery(
+  kind: SemanticAppQueryKind | `${SemanticAppQueryKind}`,
+  query: SemanticAppQuery,
+): Pick<SemanticAppQuery, 'observedDependencyLocus'> {
+  const acceptedKinds = semanticAppQueryCatalogRow(kind).observedDependencyLocusKinds;
+  const current = query.observedDependencyLocus;
+  if (current != null && acceptedKinds.includes(current.kind)) {
+    return { observedDependencyLocus: current };
+  }
+  const sourceFile = semanticAppQuerySourceFileLocus(query);
+  return sourceFile != null
+    && acceptedKinds.includes(SemanticObservedDependencyLocusKind.SourceFile)
+      ? {
+          observedDependencyLocus: {
+            kind: SemanticObservedDependencyLocusKind.SourceFile,
+            sourceFile,
+          },
+        }
+      : {};
 }
 
 function costForQuery(
@@ -1618,53 +1572,45 @@ function costForQuery(
   }
 }
 
-function evidenceStateForQuery(
+function sourceRequirementForContinuation(
+  query: SemanticAppQuery,
+  intents: readonly InquiryContinuationIntent[],
+): InquirySourceRequirement {
+  if (intents.includes(InquiryContinuationIntent.Repair) || query.cursor != null) {
+    return InquirySourceRequirement.ExactAuthoredSpan;
+  }
+  return query.sourceFile != null
+    ? InquirySourceRequirement.AuthoredSource
+    : InquirySourceRequirement.NotRequired;
+}
+
+function epochDependenciesForQuery(
   query: SemanticAppQuery,
   row: SemanticAppQueryCatalogRow,
-): InquiryEvidenceState {
-  if (semanticAppQueryMaterializationPolicy(query, row.materializationPolicy) === 'query-type-projection') {
-    return InquiryEvidenceState.TypeProjected;
+): readonly InquiryContinuationEpochDependency[] {
+  const dependencies: InquiryContinuationEpochDependency[] = [];
+  switch (row.runtimeBoundary) {
+    case 'runtime-static':
+      dependencies.push(InquiryContinuationEpochDependency.RuntimeSession);
+      break;
+    case 'project-frame':
+    case 'static-evaluation':
+      dependencies.push(InquiryContinuationEpochDependency.ProjectInput);
+      break;
+    case 'app-world':
+      dependencies.push(
+        InquiryContinuationEpochDependency.ProjectInput,
+        InquiryContinuationEpochDependency.AppWorld,
+      );
+      break;
   }
-  if (row.group === 'diagnostics') {
-    return InquiryEvidenceState.Open;
+  if (
+    semanticAppQuerySourceFileLocus(query) != null
+    || query.observedDependencyLocus?.kind === SemanticObservedDependencyLocusKind.SourceFile
+  ) {
+    dependencies.push(InquiryContinuationEpochDependency.SourceInput);
   }
-  if (row.runtimeBoundary === 'runtime-static') {
-    return InquiryEvidenceState.NotRequired;
-  }
-  return InquiryEvidenceState.Inferred;
-}
-
-function coverageForCatalogRow(row: SemanticAppQueryCatalogRow): InquiryEvidenceCoverage {
-  if (row.supportsPaging || row.resultRole === 'overview' || row.resultRole === 'summary-row-table') {
-    return InquiryEvidenceCoverage.PartialKnownGaps;
-  }
-  if (row.requiresCursor || row.runtimeBoundary === 'runtime-static') {
-    return InquiryEvidenceCoverage.CompleteForLocus;
-  }
-  return InquiryEvidenceCoverage.Unknown;
-}
-
-function sourcePrecisionForQuery(query: SemanticAppQuery): InquirySourcePrecision {
-  if (query.cursor != null) {
-    return InquirySourcePrecision.ExactAuthoredSpan;
-  }
-  if (query.sourceFile != null) {
-    return InquirySourcePrecision.CarrierSpan;
-  }
-  return InquirySourcePrecision.NotRequired;
-}
-
-function stalenessForQuery(
-  query: SemanticAppQuery,
-  row: SemanticAppQueryCatalogRow,
-): InquiryEvidenceStaleness {
-  if (query.cursor != null || query.sourceFile != null) {
-    return InquiryEvidenceStaleness.SourceEpochSensitive;
-  }
-  if (row.runtimeBoundary === 'runtime-static') {
-    return InquiryEvidenceStaleness.CurrentEpoch;
-  }
-  return InquiryEvidenceStaleness.ProjectEpochSensitive;
+  return dependencies;
 }
 
 function relatedDiagnosticQueryKinds(
@@ -1682,17 +1628,9 @@ function relatedDiagnosticQueryKinds(
   return relatedQueryKinds;
 }
 
-function relatedDiagnosticSourcePrecision(
-  rows: readonly (SemanticAppDiagnosticRow | SemanticAppDiagnosticSummaryRow)[],
-  relatedQueryKind: SemanticAppQueryKind | `${SemanticAppQueryKind}`,
-): InquirySourcePrecision {
-  return semanticSourcePrecisionForReferences(relatedDiagnosticSourceReferences(rows, relatedQueryKind));
-}
-
 function relatedDiagnosticRepairBlockers(
   rows: readonly (SemanticAppDiagnosticRow | SemanticAppDiagnosticSummaryRow)[],
   relatedQueryKind: SemanticAppQueryKind | `${SemanticAppQueryKind}`,
-  sourcePrecision: InquirySourcePrecision,
 ): readonly string[] {
   const relatedRows = rows.filter((row) => row.relatedQueryKind === relatedQueryKind);
   if (relatedRows.length === 0) {
@@ -1701,9 +1639,10 @@ function relatedDiagnosticRepairBlockers(
   const blockers: string[] = [];
   const sources = relatedDiagnosticSourceReferences(rows, relatedQueryKind);
   if (
-    sourcePrecision !== InquirySourcePrecision.ExactAuthoredSpan
-    || sources.length === 0
-    || sources.some((source) => semanticSourcePrecisionForReference(source) !== InquirySourcePrecision.ExactAuthoredSpan)
+    sources.length === 0
+    || sources.some((source) =>
+      !semanticSourceFacetsForReference(source).includes(InquirySourceFacet.ExactAuthoredSpan)
+    )
   ) {
     blockers.push('At least one returned diagnostic row for this related family lacks an exact authored source span.');
   }
@@ -1739,18 +1678,14 @@ function frameworkCapabilityDiagnosticRows(
   return rows.filter((row) => row.diagnosticKind === 'framework-capability-not-registered');
 }
 
-function frameworkCapabilityDiagnosticSourcePrecision(
+function frameworkCapabilityDiagnosticSourceReferences(
   rows: readonly (SemanticAppDiagnosticRow | SemanticAppDiagnosticSummaryRow)[],
-): InquirySourcePrecision {
-  return semanticSourcePrecisionForReferences(rows.flatMap((row) =>
-    'sampleSources' in row ? row.sampleSources : nullableSourceReferenceRow(row.source)
-  ));
-}
-
-function nullableSourceReferenceRow(
-  source: SemanticSourceReference | null,
-): readonly SemanticSourceReference[] {
-  return source == null ? [] : [source];
+): readonly (SemanticSourceReference | null)[] {
+  const sources: (SemanticSourceReference | null)[] = [];
+  for (const row of rows) {
+    sources.push(...('sampleSources' in row ? row.sampleSources : [row.source]));
+  }
+  return sources;
 }
 
 function frameworkCapabilityDemandValueRows(
@@ -1776,20 +1711,21 @@ function frameworkCapabilityDemandRelatedQueryKinds(
   );
 }
 
-function templateDiagnosticSourcePrecision(value: unknown): InquirySourcePrecision | undefined {
+function templateDiagnosticSourceReferences(
+  value: unknown,
+): readonly (SemanticSourceReference | null)[] {
   const rows = templateDiagnosticValueRows(value);
-  if (rows.length === 0) {
-    return undefined;
-  }
-  return semanticSourcePrecisionForReferences(rows.flatMap((row) => [row.source, row.template.source]));
+  return rows.flatMap((row) => [row.source, row.template.source]);
 }
 
-function withSourcePrecision(
-  sourcePrecision: InquirySourcePrecision | undefined,
-): Pick<ContinuationSeed, 'sourcePrecision'> {
-  return sourcePrecision == null
-    ? {}
-    : { sourcePrecision };
+function withSourceReferences<TSeed extends ContinuationSeed>(
+  seed: TSeed,
+  sourceReferences: readonly (SemanticSourceReference | null)[],
+): TSeed {
+  return {
+    ...seed,
+    sourceReferences,
+  };
 }
 
 function diagnosticValueRows(value: unknown): readonly (SemanticAppDiagnosticRow | SemanticAppDiagnosticSummaryRow)[] {

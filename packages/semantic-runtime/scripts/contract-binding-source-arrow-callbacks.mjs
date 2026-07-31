@@ -177,8 +177,10 @@ for (const methodName of ['flat', 'join', 'lastIndexOf', 'toSorted', 'toSpliced'
     page: { size: 40, cursor: null },
   });
   assert(
-    completion.outcome === 'hit',
-    `Expected completion after diagnostics at Array.${methodName} to stay a hit, observed ${completion.outcome}.`,
+    completion.result === 'answered'
+      && completion.selection === 'exact'
+      && completion.coverage === 'complete',
+    `Expected completion after diagnostics at Array.${methodName} to remain exact and complete, observed ${completion.result}/${completion.selection}/${completion.coverage}.`,
   );
   assert(
     completion.value.missingInputs.length === 0,

@@ -5,6 +5,7 @@ import {
 import { SemanticClaim } from '../kernel/claim.js';
 import {
   OpenSeam,
+  type OpenSeamReasonKind,
 } from '../kernel/open-seam.js';
 import {
   EvidenceKind,
@@ -408,6 +409,7 @@ export class BindingCommandLoweringPublisher {
     source: BindingCommandLoweringSourceSet,
     addressHandle: AddressHandle | null,
     summary: string,
+    reasonKinds: readonly OpenSeamReasonKind[],
     seamKindKey: OpenSeamKindKey = KernelVocabulary.Compiler.OpenExecutableBody.key,
   ): OpenSeam {
     return new OpenSeam(
@@ -416,6 +418,7 @@ export class BindingCommandLoweringPublisher {
       summary,
       addressHandle,
       source.evidenceHandle,
+      reasonKinds,
     );
   }
 

@@ -7,6 +7,7 @@ import {
   SEMANTIC_PROJECT_DISCOVERY_MODES,
   SEMANTIC_RUNTIME_DETAIL_VALUES,
   SEMANTIC_TYPE_SYSTEM_DEPENDENCY_CACHE_CLEAR_POLICIES,
+  SemanticObservedDependencyLocusKind,
 } from '@aurelia-ls/semantic-runtime';
 
 const appQueryKindSchema = z.string()
@@ -14,7 +15,7 @@ const appQueryKindSchema = z.string()
 
 const pageSchema = z.object({
   size: z.number().int().nonnegative().optional()
-    .describe('Rows to return. Omit for default; use 0 for summary rollup only; large values clamp.'),
+    .describe('Rows to return. Omit for default; use 0 for summary rollup only; large values clamp to the MCP transport limit.'),
   cursor: z.string().nullable().optional()
     .describe('Opaque cursor from the prior page; omit first, pass back unchanged.'),
 }).strict().describe('Paging envelope for row and summary-row queries.');
@@ -69,7 +70,7 @@ const projectKeySchema = z.string().nullable().optional()
   .describe('Optional key from aurelia_workspace_overview; omit for default app.');
 
 const sourceFilePathSchema = z.string().nullable().optional()
-  .describe('Top-level file selector. Unsupported query families return outcome=unsupported instead of ignoring it.');
+  .describe('Top-level file selector. Unsupported query families return result=unsupported instead of ignoring it.');
 
 const analysisDepthSchema = z.enum(SEMANTIC_APP_ANALYSIS_DEPTHS).nullable().optional()
   .describe('Optional analysis depth; omit for catalog-driven auto-depth.');
@@ -108,6 +109,36 @@ const cursorSchema = sourceFileSchema.extend({
   offset: z.number().int().nonnegative().nullable().optional()
     .describe('Optional zero-based offset when the editor already has it.'),
 }).strict().describe('Source cursor for template cursor/completion queries.');
+
+const observedDependencyLocusSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal(SemanticObservedDependencyLocusKind.Project)
+      .describe('Select every dependency occurrence in the project.'),
+  }).strict().describe('Project-wide observed-dependency locus.'),
+  z.object({
+    kind: z.literal(SemanticObservedDependencyLocusKind.SourceFile)
+      .describe('Select dependency occurrences anchored to one source file.'),
+    sourceFile: sourceFileSchema,
+  }).strict().describe('Source-file observed-dependency locus.'),
+  z.object({
+    kind: z.literal(SemanticObservedDependencyLocusKind.Owner)
+      .describe('Select dependency occurrences for one returned owner key.'),
+    ownerKey: z.string()
+      .describe('Opaque owner key returned by an observed-dependency row.'),
+  }).strict().describe('Owner-scoped observed-dependency locus.'),
+  z.object({
+    kind: z.literal(SemanticObservedDependencyLocusKind.Row)
+      .describe('Select one returned dependency row.'),
+    rowKey: z.string()
+      .describe('Answer-local row key returned by an observed-dependency row.'),
+  }).strict().describe('Single-row observed-dependency locus.'),
+  z.object({
+    kind: z.literal(SemanticObservedDependencyLocusKind.Cluster)
+      .describe('Select dependency occurrences for one returned summary cluster.'),
+    clusterKey: z.string()
+      .describe('Answer-local cluster key returned by a dependency summary row.'),
+  }).strict().describe('Summary-cluster observed-dependency locus.'),
+]).describe('Family-owned observed-dependency locus returned by dependency row and summary queries.');
 
 const workspaceShape = {
   workspaceRoot: workspaceRootSchema,
@@ -170,12 +201,22 @@ const semanticAppQuerySchema = z.object({
     .describe('Open-seam reason-kind filter.'),
   sourceRole: z.string().nullable().optional()
     .describe('Open-seam source-role filter.'),
+  openSeamClusterKey: z.string().nullable().optional()
+    .describe('Answer-local open-seam cluster key returned by open-seam-summary.'),
+  openSeamSiteKey: z.string().nullable().optional()
+    .describe('Answer-local authored-site key returned by open-seam-sites or open-seams.'),
   rowPageSize: z.number().int().nonnegative().nullable().optional()
     .describe('Router overview row-sample size.'),
   cursor: cursorSchema.nullable().optional()
     .describe('Cursor locus for cursor query kinds.'),
   sourceFile: sourceFileSchema.nullable().optional()
     .describe('Per-query file locus. Check supportsSourceFile in aurelia_app_query_catalog.'),
+  observedDependencyLocus: observedDependencyLocusSchema.nullable().optional()
+    .describe('Optional project, file, owner, row, or summary-cluster locus for observed-dependency query families.'),
+  includeDeclaration: z.boolean().nullable().optional()
+    .describe('Include the declaration in template-reference results when the catalog admits it.'),
+  newName: z.string().nullable().optional()
+    .describe('Replacement name for template rename planning; omit for prepare-only queries.'),
 }).strict().describe('Child app query for aurelia_app_query_batch.');
 
 export const workspaceOverviewInputSchema = {
@@ -247,13 +288,31 @@ export const appQueryInputSchema = {
   cursor: cursorSchema.nullable().optional()
     .describe('Cursor locus. Use member token for member-owner type answers.'),
   sourceFile: sourceFileSchema.nullable().optional()
-    .describe('Per-query file scope. Check supportsSourceFile; unsupported returns outcome=unsupported.'),
+    .describe('Per-query file scope. Check supportsSourceFile; unsupported returns result=unsupported.'),
+  includeTypeSurfaces: z.boolean().nullable().optional()
+    .describe('Include query-local TypeChecker type surfaces when the selected query admits them.'),
+  diagnosticPageSize: z.number().int().positive().nullable().optional()
+    .describe('App-overview diagnostic sample size.'),
+  openSeamPageSize: z.number().int().positive().nullable().optional()
+    .describe('App-overview open-seam sample size.'),
   openSeamKindKey: z.string().nullable().optional()
     .describe('Open-seam kind filter.'),
   openSeamReasonKind: z.string().nullable().optional()
     .describe('Open-seam reason-kind filter.'),
   sourceRole: z.string().nullable().optional()
     .describe('Open-seam source-role filter.'),
+  openSeamClusterKey: z.string().nullable().optional()
+    .describe('Answer-local open-seam cluster key returned by open-seam-summary.'),
+  openSeamSiteKey: z.string().nullable().optional()
+    .describe('Answer-local authored-site key returned by open-seam-sites or open-seams.'),
+  observedDependencyLocus: observedDependencyLocusSchema.nullable().optional()
+    .describe('Optional project, file, owner, row, or summary-cluster locus for observed-dependency query families.'),
+  rowPageSize: z.number().int().nonnegative().nullable().optional()
+    .describe('Router overview row-sample size.'),
+  includeDeclaration: z.boolean().nullable().optional()
+    .describe('Include the declaration in template-reference results when the catalog admits it.'),
+  newName: z.string().nullable().optional()
+    .describe('Replacement name for template rename planning; omit for prepare-only queries.'),
 } as const;
 
 export const appQueryBatchInputSchema = {
@@ -293,6 +352,10 @@ export const openSeamOverviewInputSchema = {
     .describe('Open-seam reason-kind filter.'),
   sourceRole: z.string().nullable().optional()
     .describe('Open-seam source-role filter.'),
+  openSeamClusterKey: z.string().nullable().optional()
+    .describe('Answer-local open-seam cluster key returned by open-seam-summary.'),
+  openSeamSiteKey: z.string().nullable().optional()
+    .describe('Answer-local authored-site key returned by open-seam-sites or open-seams.'),
 } as const;
 
 export const appDiagnosticsInputSchema = {

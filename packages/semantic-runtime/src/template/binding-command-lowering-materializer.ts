@@ -5,6 +5,7 @@ import {
 } from '../kernel/address.js';
 import {
   OpenSeam,
+  OpenSeamReasonKind,
 } from '../kernel/open-seam.js';
 import type {
   AddressHandle,
@@ -746,7 +747,13 @@ export class BindingCommandLoweringMaterializer {
     claims.push(...buildInput.claims);
 
     const loweringResult = syntax == null || attribute == null || owner == null || commandMatch == null
-      ? this.openLowering(local, source, syntax?.sourceAddressHandle ?? classification.sourceAddressHandle, missingInputSummary(syntax, attribute, owner, commandMatch))
+      ? this.openLowering(
+          local,
+          source,
+          syntax?.sourceAddressHandle ?? classification.sourceAddressHandle,
+          missingInputSummary(syntax, attribute, owner, commandMatch),
+          [OpenSeamReasonKind.BindingTargetProductMissing],
+        )
       : this.executeCommand(
         local,
         source,
@@ -862,6 +869,7 @@ export class BindingCommandLoweringMaterializer {
         source,
         site.sourceAddressHandle,
         'Inline multi-binding lowering could not close over its authored attribute, owner element, classification, and custom-attribute definition.',
+        [OpenSeamReasonKind.BindingTargetProductMissing],
         KernelVocabulary.Instruction.OpenInstruction.key,
       );
     }
@@ -871,6 +879,7 @@ export class BindingCommandLoweringMaterializer {
         source,
         site.sourceAddressHandle,
         `Inline multi-binding value for '${classification.resource?.name ?? attribute.rawName}' did not contain a closed segment.`,
+        [OpenSeamReasonKind.BindingExpressionOpen],
         KernelVocabulary.Instruction.OpenInstruction.key,
       );
     }
@@ -1278,6 +1287,7 @@ export class BindingCommandLoweringMaterializer {
         source,
         syntax.sourceAddressHandle,
         `Binding command '${executable.name}' reached an executable body this substrate does not model yet.`,
+        [OpenSeamReasonKind.BindingCommandExecutableBodyOpen],
         KernelVocabulary.Compiler.OpenExecutableBody.key,
       );
     }
@@ -1316,6 +1326,7 @@ export class BindingCommandLoweringMaterializer {
         source,
         syntax.sourceAddressHandle,
         message,
+        [OpenSeamReasonKind.BindingCommandExecutableBodyOpen],
         KernelVocabulary.Instruction.OpenInstruction.key,
         BindingCommandLoweringState.Invalid,
       );
@@ -1327,6 +1338,7 @@ export class BindingCommandLoweringMaterializer {
           source,
           syntax.sourceAddressHandle,
           result.message ?? `Binding command '${executable.name}' did not produce closed instructions.`,
+          [OpenSeamReasonKind.BindingCommandExecutableBodyOpen],
           KernelVocabulary.Compiler.OpenExecutableBody.key,
         ),
       ]
@@ -1339,12 +1351,13 @@ export class BindingCommandLoweringMaterializer {
     source: BindingCommandLoweringSourceSet,
     addressHandle: AddressHandle | null,
     summary: string,
+    reasonKinds: readonly OpenSeamReasonKind[],
     seamKindKey: OpenSeamKindKey = KernelVocabulary.Compiler.OpenExecutableBody.key,
     state = BindingCommandLoweringState.Open,
   ): OpenLoweringResult {
     return new OpenLoweringResult(
       new BindingCommandBuildResult(state, [], summary),
-      [this.publisher.openSeam(local, source, addressHandle, summary, seamKindKey)],
+      [this.publisher.openSeam(local, source, addressHandle, summary, reasonKinds, seamKindKey)],
     );
   }
 

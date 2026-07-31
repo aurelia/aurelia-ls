@@ -7,10 +7,10 @@ import {
   ExpectedSemanticEffectFilter,
   ExpectedSemanticEffectKind,
   ExpectedSemanticEffectScope,
-  SemanticOpenSeamAttemptKind,
   readFixtureVerificationSnapshot,
   verifyFixtureEffects,
 } from '../out/index.js';
+import { KernelOpenSeamKinds } from '../out/kernel/vocabulary/index.js';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/router-active-link-state');
@@ -132,13 +132,13 @@ const expectedEffects = [
     ],
     'signature',
   ),
-  ExpectedSemanticEffect.absent(
-    'Router active-link state should close without router-materialization seams.',
+  ...Object.values(KernelOpenSeamKinds.Router).map((entry) => ExpectedSemanticEffect.absent(
+    `Router active-link state should close without ${entry.key} seams.`,
     ExpectedSemanticEffectKind.OpenSeamClosure,
     ExpectedSemanticEffectScope.Route,
     null,
-    [effectFilter('attempt.kind', SemanticOpenSeamAttemptKind.RouterMaterialization)],
-  ),
+    [effectFilter('seamKindKey', entry.key)],
+  )),
 ];
 
 const snapshot = readFixtureVerificationSnapshot(app);

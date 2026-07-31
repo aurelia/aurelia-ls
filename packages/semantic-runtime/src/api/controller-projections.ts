@@ -25,12 +25,19 @@ import { CustomAttributeDefinition } from '../resources/custom-attribute-definit
 import { CustomElementDefinition } from '../resources/custom-element-definition.js';
 import type { FullResourceDefinition } from '../resources/resource-definition.js';
 import { describeAddress } from './source-reference.js';
-import { requireRuntimeExpressionAccessUseOccurrenceRow } from './runtime-expression-projections.js';
+import {
+  filterObservedDependencyRows,
+  observedDependencyOccurrenceRow,
+  observedDependencyOwnerRow,
+  observedDependencyRowKey,
+} from './observed-dependency-projections.js';
+import { RuntimeExpressionAccessOwnerKind } from '../runtime-expression/runtime-expression-access-use.js';
 import type {
   SemanticRuntimeControllerHydrationHandoffKind,
   SemanticRuntimeControllerChildViewRenderingState,
   SemanticRuntimeControllerAssemblyStepRow,
   SemanticRuntimeControllerRow,
+  SemanticObservedDependencyLocus,
   SemanticRuntimeWatcherObservedDependencyRow,
   SemanticRuntimeWatcherRow,
   SemanticRuntimeTemplateControllerLinkKind,
@@ -123,16 +130,18 @@ export function readRuntimeWatcherObservedDependencyRows(
   emission: AureliaAppWorldProjectEmission,
   store: KernelStore,
   handles: boolean,
+  locus?: SemanticObservedDependencyLocus | null,
 ): readonly SemanticRuntimeWatcherObservedDependencyRow[] {
   const context = runtimeControllerProjectionContext(emission, store, handles);
-  return runtimeWatcherProjectionControllers(emission)
+  const rows = runtimeWatcherProjectionControllers(emission)
     .flatMap(({ renderingDefinitionName, controller }) =>
       runtimeWatcherObservedDependencyRowsForController(renderingDefinitionName, controller, context)
     )
     .sort((left, right) =>
-      `${left.renderingDefinitionName}:${left.controllerName}:${left.watchIndex}:${left.dependencyKind}:${left.memberName ?? ''}`
-        .localeCompare(`${right.renderingDefinitionName}:${right.controllerName}:${right.watchIndex}:${right.dependencyKind}:${right.memberName ?? ''}`)
+      `${left.renderingDefinitionName}:${left.controllerName}:${left.watchIndex}:${left.occurrence.dependencyKind}:${left.occurrence.memberName ?? ''}`
+        .localeCompare(`${right.renderingDefinitionName}:${right.controllerName}:${right.watchIndex}:${right.occurrence.dependencyKind}:${right.occurrence.memberName ?? ''}`)
     );
+  return filterObservedDependencyRows(rows, locus);
 }
 
 export interface RuntimeWatcherProjectionController {
@@ -228,7 +237,8 @@ function runtimeControllerRow(
     renderingDefinitionName,
     controllerName: controller.name,
     creationKind: controller.creationKind,
-    controllerReadiness: controller.readReadinessKind(),
+    assemblyProgress: controller.readAssemblyProgressKind(),
+    realizedReadiness: controller.readRealizedReadinessKind(),
     observerSetupState: controller.readObserverSetupState(),
     bindReachability: controller.readBindReachability(),
     ...runtimeControllerDefinitionRowFields(state),
@@ -306,41 +316,37 @@ function runtimeWatcherObservedDependencyRowsForController(
 ): readonly SemanticRuntimeWatcherObservedDependencyRow[] {
   const state = runtimeControllerProjectionState(controller, context);
   return controller.readWatchers().flatMap((watcher) =>
-    watcher.observedDependencies.map((dependency) => ({
-      renderingDefinitionName,
-      controllerName: controller.name,
-      definitionName: definitionName(state.controllerDefinition),
-      definitionClassName: definitionClassName(state.controllerDefinition),
-      watcherKind: watcher.watcherKind,
-      watchIndex: watcher.watchIndex,
-      dependencyKind: dependency.dependencyKind,
-      expressionKind: dependency.expressionKind,
-      sourceName: dependency.sourceName,
-      sourceRootName: dependency.sourceRootName,
-      memberName: dependency.memberName,
-      keyExpression: dependency.keyExpression,
-      methodName: dependency.methodName,
-      accessUse: requireRuntimeExpressionAccessUseOccurrenceRow(
+    watcher.observedDependencies.map((dependency) => {
+      const owner = observedDependencyOwnerRow(context.store, {
+        kind: RuntimeExpressionAccessOwnerKind.RuntimeWatcher,
+        productHandle: watcher.productHandle,
+        identityHandle: watcher.identityHandle,
+        sourceAddressHandle: watcher.sourceAddressHandle,
+      }, context.handles);
+      const occurrence = observedDependencyOccurrenceRow(
         context.store,
-        dependency.accessUseProductHandle,
+        dependency.occurrence,
         context.handles,
-      ),
-      observedMemberKind: dependency.observedMemberKind,
-      observedMemberSource: describeAddress(context.store, dependency.observedMemberSourceAddressHandle),
-      spanStart: dependency.spanStart,
-      spanEnd: dependency.spanEnd,
-      source: describeAddress(context.store, dependency.sourceAddressHandle),
-      ...(context.handles ? {
-        handles: {
-          watcherProductHandle: watcher.productHandle,
-          accessUseProductHandle: dependency.accessUseProductHandle,
-          observedDependencyProductHandle: dependency.productHandle,
-          observedDependencyIdentityHandle: dependency.identityHandle,
-          observedMemberSourceAddressHandle: dependency.observedMemberSourceAddressHandle,
-          sourceAddressHandle: dependency.sourceAddressHandle,
-        },
-      } : {}),
-    }))
+      );
+      return {
+        renderingDefinitionName,
+        controllerName: controller.name,
+        definitionName: definitionName(state.controllerDefinition),
+        definitionClassName: definitionClassName(state.controllerDefinition),
+        watcherKind: watcher.watcherKind,
+        watchIndex: watcher.watchIndex,
+        rowKey: observedDependencyRowKey(owner, dependency.identityHandle),
+        owner,
+        occurrence,
+        ...(context.handles ? {
+          handles: {
+            watcherProductHandle: watcher.productHandle,
+            observedDependencyProductHandle: dependency.productHandle,
+            observedDependencyIdentityHandle: dependency.identityHandle,
+          },
+        } : {}),
+      };
+    })
   );
 }
 
@@ -556,21 +562,9 @@ function controllerAssemblyStepRows(
   store: KernelStore,
   handles: boolean,
 ): readonly SemanticRuntimeControllerAssemblyStepRow[] {
-  const steps = controller.readAssemblySteps();
-  const rows: SemanticRuntimeControllerAssemblyStepRow[] = [];
-  for (const step of steps) {
-    const previous = rows[rows.length - 1] ?? null;
-    if (previous != null && previous.stage === step.stage && previous.stepKind === step.stepKind) {
-      rows[rows.length - 1] = {
-        ...previous,
-        count: previous.count + 1,
-        summary: `${previous.count + 1} consecutive ${step.stepKind} step(s).`,
-      };
-      continue;
-    }
-    rows.push({
+  return controller.readAssemblySteps()
+    .map((step): SemanticRuntimeControllerAssemblyStepRow => ({
       order: step.order,
-      count: 1,
       stage: step.stage,
       stepKind: step.stepKind,
       summary: step.summary,
@@ -581,9 +575,7 @@ function controllerAssemblyStepRows(
           sourceAddressHandle: step.sourceAddressHandle,
         },
       } : {}),
-    });
-  }
-  return rows;
+    }));
 }
 
 function compiledTemplateInfoByProductHandle(

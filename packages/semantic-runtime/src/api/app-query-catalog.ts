@@ -3,7 +3,8 @@ import { SemanticAppAnalysisDepth } from '../configuration/app-analysis.js';
 import {
   SEMANTIC_APP_QUERY_KINDS,
   SemanticAppQueryKind,
-  SemanticRuntimeAnswerOutcome,
+  SemanticObservedDependencyLocusKind,
+  SemanticRuntimeAnswerResult,
   type SemanticAppQuery,
   type SemanticAppQueryCatalogRequest,
   type SemanticAppQueryCatalogResult,
@@ -11,7 +12,22 @@ import {
   type SemanticRuntimeAnswer,
   type SemanticRuntimeSourceFileInput,
 } from './contracts.js';
-import { answer } from './answer-helpers.js';
+import {
+  answer,
+  COMPLETE_COLLECTION_ANSWER_OPTIONS,
+} from './answer-helpers.js';
+
+const observedDependencyRowLocusKinds = [
+  SemanticObservedDependencyLocusKind.Project,
+  SemanticObservedDependencyLocusKind.SourceFile,
+  SemanticObservedDependencyLocusKind.Owner,
+  SemanticObservedDependencyLocusKind.Row,
+] as const;
+
+const bindingObservedDependencyLocusKinds = [
+  ...observedDependencyRowLocusKinds,
+  SemanticObservedDependencyLocusKind.Cluster,
+] as const;
 
 const semanticAppQueryCatalogRows = [
   queryRow(SemanticAppQueryKind.Summary, 'overview', 'Compact project app-world counts and app shape summary.', 'overview'),
@@ -19,9 +35,9 @@ const semanticAppQueryCatalogRows = [
   queryRow(SemanticAppQueryKind.AppTopology, 'overview', 'Compact topology counts and scalar facts from the opened app world; bindable type surfaces are opt-in.', 'overview'),
   queryRow(SemanticAppQueryKind.SourceFiles, 'source', 'Admitted source files for the selected project; routed runtime calls can answer this from the booted project frame without opening an app epoch.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, runtimeBoundary: 'project-frame' }),
   queryRow(SemanticAppQueryKind.UnresolvedModules, 'source', 'Static evaluator module edges that could not be resolved; routed runtime calls can answer this from read-only Aurelia project evaluation without opening an app epoch.', 'row-table', { pagingKind: 'offset-cursor', runtimeBoundary: 'static-evaluation' }),
-  queryRow(SemanticAppQueryKind.OpenSeams, 'diagnostics', 'Source-backed or product-backed semantic seams still open after app-world construction; filter by sourceFile, openSeamKindKey, openSeamReasonKind, or sourceRole to inspect a cluster.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, supportsSourceFile: true, supportsOpenSeamFilters: true }),
-  queryRow(SemanticAppQueryKind.OpenSeamSummary, 'diagnostics', 'Open seam clusters grouped by seam kind and reason-kind signature; filter by sourceFile, openSeamKindKey, openSeamReasonKind, or sourceRole before paging raw seams.', 'summary-row-table', { pagingKind: 'offset-cursor', supportsDetail: true, supportsSourceFile: true, supportsOpenSeamFilters: true }),
-  queryRow(SemanticAppQueryKind.OpenSeamSites, 'diagnostics', 'Open seam sites grouped by authored source span and seam kind; filter by sourceFile, sourceRole, openSeamKindKey, or openSeamReasonKind before paging raw seams.', 'summary-row-table', { pagingKind: 'offset-cursor', supportsDetail: true, supportsSourceFile: true, supportsOpenSeamFilters: true }),
+  queryRow(SemanticAppQueryKind.OpenSeams, 'diagnostics', 'Source-backed or product-backed semantic seams still open after app-world construction; filter by source, causal cluster, authored site, seam kind, reason kind, or source role.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, supportsSourceFile: true, supportsOpenSeamFilters: true }),
+  queryRow(SemanticAppQueryKind.OpenSeamSummary, 'diagnostics', 'Open seam clusters grouped by seam kind and reason-kind signature; returned cluster keys can narrow sites or raw seam rows within the same app answer epoch.', 'summary-row-table', { pagingKind: 'offset-cursor', supportsSourceFile: true, supportsOpenSeamFilters: true }),
+  queryRow(SemanticAppQueryKind.OpenSeamSites, 'diagnostics', 'Open seam sites grouped by exact authored root source; returned site keys can narrow raw seam rows within the same app answer epoch.', 'summary-row-table', { pagingKind: 'offset-cursor', supportsSourceFile: true, supportsOpenSeamFilters: true }),
   queryRow(SemanticAppQueryKind.AppDiagnostics, 'diagnostics', 'Unified app diagnostics across TypeScript, modeled Aurelia issue lanes, and template diagnostics; optionally narrowed to one source file.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, supportsSourceFile: true, supportsDiagnosticProjection: true, materializationPolicy: 'query-type-projection' }),
   queryRow(SemanticAppQueryKind.AppDiagnosticSummary, 'diagnostics', 'Diagnostic clusters grouped by domain, kind, authority, severity, framework code, and owning query; explicit diagnostic projections include TypeScript diagnostics.', 'summary-row-table', { pagingKind: 'offset-cursor', supportsDetail: true, supportsSourceFile: true, supportsDiagnosticProjection: true, materializationPolicy: 'query-type-projection' }),
   queryRow(SemanticAppQueryKind.TypeScriptDiagnostics, 'diagnostics', 'Ordinary TypeScript project diagnostics from the semantic-runtime Program/tsconfig epoch.', 'row-table', { pagingKind: 'offset-cursor', supportsSourceFile: true, materializationPolicy: 'query-type-projection' }),
@@ -32,9 +48,9 @@ const semanticAppQueryCatalogRows = [
   queryRow(SemanticAppQueryKind.ObservationIssues, 'observation', 'Observer/accessor and binding-observation issues from runtime binding setup.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true }),
   queryRow(SemanticAppQueryKind.ComputedObservationDefinitions, 'observation', 'Valid @computed getter/method dependency declarations and their proxy/explicit observation mode.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true }),
   queryRow(SemanticAppQueryKind.ComputedObserverSources, 'observation', 'Source-backed ComputedObserver and ControlledComputedObserver projection rows for authored getters.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true }),
-  queryRow(SemanticAppQueryKind.ComputedObserverObservedDependencies, 'observation', 'Getter-body and explicit-dependency reads collected by computed-observer source execution.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true }),
+  queryRow(SemanticAppQueryKind.ComputedObserverObservedDependencies, 'observation', 'Getter-body and explicit-dependency reads collected by computed-observer source execution.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, observedDependencyLocusKinds: observedDependencyRowLocusKinds }),
   queryRow(SemanticAppQueryKind.RuntimeEffects, 'observation', 'Immutable construction-site plans for direct Observation.watch(...) and Observation.run(...) calls.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true }),
-  queryRow(SemanticAppQueryKind.RuntimeEffectObservedDependencies, 'observation', 'Expression, function-key, and synchronous RunEffect dependency reads collected by direct Observation source effects.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true }),
+  queryRow(SemanticAppQueryKind.RuntimeEffectObservedDependencies, 'observation', 'Expression, function-key, and synchronous RunEffect dependency reads collected by direct Observation source effects.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, observedDependencyLocusKinds: observedDependencyRowLocusKinds }),
   queryRow(SemanticAppQueryKind.ProxyObservableEscapes, 'observation', 'Source-level ProxyObservable.getRaw(...) and ProxyObservable.unwrap(...) escape calls.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true }),
   queryRow(SemanticAppQueryKind.RuntimeExpressionAccessUses, 'observation', 'Owner-qualified authored expression accesses with exact operation slots, execution semantics, checker targets, and source loci.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingObservation }),
   queryRow(SemanticAppQueryKind.StateStores, 'state', 'Discovered state-store products and state ownership rows.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true }),
@@ -72,7 +88,7 @@ const semanticAppQueryCatalogRows = [
   queryRow(SemanticAppQueryKind.TemplateDiagnostics, 'template', 'Template diagnostics across app-runtime and source-selected authoring templates; diagnosticProjection controls answer-time TypeChecker work.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, supportsSourceFile: true, supportsDiagnosticProjection: true, materializationPolicy: 'query-type-projection', minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingObservation }),
   queryRow(SemanticAppQueryKind.RuntimeControllers, 'rendering', 'Runtime controller frames and recursive hydration handoff rows.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true }),
   queryRow(SemanticAppQueryKind.RuntimeWatchers, 'rendering', 'Controller-owned ComputedWatcher and ExpressionWatcher rows created from resource watch metadata.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true }),
-  queryRow(SemanticAppQueryKind.RuntimeWatcherObservedDependencies, 'rendering', 'ExpressionWatcher astEvaluate dependency reads and first ComputedWatcher ProxyObservable dependency reads collected during controller-owned watcher setup.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true }),
+  queryRow(SemanticAppQueryKind.RuntimeWatcherObservedDependencies, 'rendering', 'ExpressionWatcher astEvaluate dependency reads and first ComputedWatcher ProxyObservable dependency reads collected during controller-owned watcher setup.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, observedDependencyLocusKinds: observedDependencyRowLocusKinds }),
   queryRow(SemanticAppQueryKind.RuntimeCompositions, 'rendering', 'Runtime-html AuCompose CompositionContext and CompositionController rows with resolved component candidates.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingObservation }),
   queryRow(SemanticAppQueryKind.TemplateContentProjections, 'rendering', 'Compiler provider sequences, runtime AuSlot view selection, and native Shadow DOM slot outlets.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true }),
   queryRow(SemanticAppQueryKind.BindingTargetAccesses, 'binding', 'Observer/accessor lookup selected for target-side binding access.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingTargets }),
@@ -86,8 +102,8 @@ const semanticAppQueryCatalogRows = [
   queryRow(SemanticAppQueryKind.BindingDataFlows, 'binding', 'Source-to-target and target-to-source binding data-flow rows with TypeChecker pressure.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingObservation }),
   queryRow(SemanticAppQueryKind.BindingDataFlowSummary, 'binding', 'Grouped binding data-flow directions, value channels, assignability, and writeback pressure.', 'summary-row-table', { pagingKind: 'offset-cursor', minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingObservation }),
   queryRow(SemanticAppQueryKind.ControlUseInventory, 'controls', 'Concrete authored native/control uses classified through runtime binding value-channel, data-flow, static submit-control, static route-link, and static message products.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingObservation }),
-  queryRow(SemanticAppQueryKind.BindingObservedDependencySummary, 'binding', 'Grouped binding observed-dependency reads, source roots, member source states, and source-backed observation pressure.', 'summary-row-table', { pagingKind: 'offset-cursor', minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingObservation }),
-  queryRow(SemanticAppQueryKind.BindingObservedDependencies, 'binding', 'Source-side expression dependency reads collected through template connectable observation during binding evaluation.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingObservation }),
+  queryRow(SemanticAppQueryKind.BindingObservedDependencySummary, 'binding', 'Grouped binding observed-dependency reads, source roots, member source states, and source-backed observation pressure.', 'summary-row-table', { pagingKind: 'offset-cursor', minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingObservation, observedDependencyLocusKinds: bindingObservedDependencyLocusKinds }),
+  queryRow(SemanticAppQueryKind.BindingObservedDependencies, 'binding', 'Source-side expression dependency reads collected through template connectable observation during binding evaluation.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingObservation, observedDependencyLocusKinds: bindingObservedDependencyLocusKinds }),
 ] satisfies readonly SemanticAppQueryCatalogRow[];
 
 assertCompleteQueryCatalog();
@@ -103,7 +119,7 @@ export function readSemanticAppQueryCatalog(
     && (request.queryKind == null || row.queryKind === request.queryKind)
   );
   return answer(
-    SemanticRuntimeAnswerOutcome.Hit,
+    SemanticRuntimeAnswerResult.Answered,
     `Read app query catalog with ${rows.length} of ${allRows.length} query kind(s) across ${groupRows(rows).length} group(s).`,
     {
       totalRows: allRows.length,
@@ -112,6 +128,7 @@ export function readSemanticAppQueryCatalog(
       rows,
       groups: groupRows(rows),
     },
+    COMPLETE_COLLECTION_ANSWER_OPTIONS,
   );
 }
 
@@ -141,7 +158,7 @@ function appQueryCatalogDisplayText(
     lines.push('Router: start with router-overview before paging route, viewport, recognizer, or navigation row tables.');
   }
   if (rows.some((row) => row.supportsOpenSeamFilters)) {
-    lines.push('Open seams: open-seams, open-seam-summary, and open-seam-sites accept sourceFile, sourceRole, openSeamKindKey, and openSeamReasonKind filters for drill-down.');
+    lines.push('Open seams: open-seams, open-seam-summary, and open-seam-sites accept sourceFile, sourceRole, openSeamKindKey, openSeamReasonKind, openSeamClusterKey, and openSeamSiteKey filters for drill-down.');
     lines.push('Source roles are admission/classification hints from source discovery, not proof that a nested folder such as src/tools is unreachable from app runtime.');
   }
   if (rows.some((row) => row.materializationPolicy === 'query-type-projection' || row.requiresCursor)) {
@@ -196,6 +213,14 @@ export function semanticAppQueryCatalogShape(
     ...(row.supportsOpenSeamFilters && query.openSeamKindKey != null ? { openSeamKindKey: query.openSeamKindKey } : {}),
     ...(row.supportsOpenSeamFilters && query.openSeamReasonKind != null ? { openSeamReasonKind: query.openSeamReasonKind } : {}),
     ...(row.supportsOpenSeamFilters && query.sourceRole != null ? { sourceRole: query.sourceRole } : {}),
+    ...(row.supportsOpenSeamFilters && query.openSeamClusterKey != null ? { openSeamClusterKey: query.openSeamClusterKey } : {}),
+    ...(row.supportsOpenSeamFilters && query.openSeamSiteKey != null ? { openSeamSiteKey: query.openSeamSiteKey } : {}),
+    ...(
+      query.observedDependencyLocus != null
+      && row.observedDependencyLocusKinds.includes(query.observedDependencyLocus.kind)
+        ? { observedDependencyLocus: query.observedDependencyLocus }
+        : {}
+    ),
     ...(query.kind !== SemanticAppQueryKind.RouterOverview || query.rowPageSize == null ? {} : { rowPageSize: query.rowPageSize }),
     ...(row.requiresCursor && query.cursor != null ? { cursor: query.cursor } : {}),
     ...(query.kind !== SemanticAppQueryKind.TemplateReferences || query.includeDeclaration == null ? {} : { includeDeclaration: query.includeDeclaration }),
@@ -207,6 +232,66 @@ export function semanticAppQueryCatalogShape(
     ),
     ...(!row.requiresCursor && sourceFile != null ? { sourceFile } : {}),
   };
+}
+
+/** Return caller fields that the selected query catalog row cannot consume as current-query input. */
+export function unsupportedSemanticAppQuerySelectorFields(
+  query: SemanticAppQuery,
+): readonly string[] {
+  const row = semanticAppQueryCatalogRow(query.kind);
+  const unsupportedFields: string[] = [];
+  if (query.page != null && !row.supportsPaging) {
+    unsupportedFields.push('page');
+  }
+  if (query.detail != null && !row.supportsDetail) {
+    unsupportedFields.push('detail');
+  }
+  if (query.sourceFile != null && !row.supportsSourceFile) {
+    unsupportedFields.push('sourceFile');
+  }
+  if (query.cursor != null && !row.requiresCursor && !row.supportsSourceFile) {
+    unsupportedFields.push('cursor');
+  }
+  if (query.includeTypeSurfaces != null && query.kind !== SemanticAppQueryKind.AppTopology) {
+    unsupportedFields.push('includeTypeSurfaces');
+  }
+  if (query.diagnosticPageSize != null && query.kind !== SemanticAppQueryKind.AppOverview) {
+    unsupportedFields.push('diagnosticPageSize');
+  }
+  if (query.openSeamPageSize != null && query.kind !== SemanticAppQueryKind.AppOverview) {
+    unsupportedFields.push('openSeamPageSize');
+  }
+  for (const field of [
+    'openSeamKindKey',
+    'openSeamReasonKind',
+    'sourceRole',
+    'openSeamClusterKey',
+    'openSeamSiteKey',
+  ] as const) {
+    if (query[field] != null && !row.supportsOpenSeamFilters) {
+      unsupportedFields.push(field);
+    }
+  }
+  if (
+    query.observedDependencyLocus != null
+    && !row.observedDependencyLocusKinds.includes(query.observedDependencyLocus.kind)
+  ) {
+    unsupportedFields.push(`observedDependencyLocus(${query.observedDependencyLocus.kind})`);
+  }
+  if (query.rowPageSize != null && query.kind !== SemanticAppQueryKind.RouterOverview) {
+    unsupportedFields.push('rowPageSize');
+  }
+  if (query.includeDeclaration != null && query.kind !== SemanticAppQueryKind.TemplateReferences) {
+    unsupportedFields.push('includeDeclaration');
+  }
+  if (
+    query.newName != null
+    && query.kind !== SemanticAppQueryKind.TemplateRename
+    && query.kind !== SemanticAppQueryKind.TemplateRenameFromTypeScript
+  ) {
+    unsupportedFields.push('newName');
+  }
+  return unsupportedFields;
 }
 
 /** Derive the source-file locus a source-capable app query can consume from sourceFile or cursor input. */
@@ -229,7 +314,7 @@ function queryRow(
   resultRole: SemanticAppQueryCatalogRow['resultRole'],
   options: Partial<Pick<
     SemanticAppQueryCatalogRow,
-    'runtimeBoundary' | 'materializationPolicy' | 'pagingKind' | 'minimumAnalysisDepth' | 'supportsDetail' | 'supportsSourceFile' | 'supportsOpenSeamFilters' | 'supportsDiagnosticProjection' | 'supportsContinuationIntentFilter' | 'requiresCursor' | 'routeProductKind'
+    'runtimeBoundary' | 'materializationPolicy' | 'pagingKind' | 'minimumAnalysisDepth' | 'supportsDetail' | 'supportsSourceFile' | 'observedDependencyLocusKinds' | 'supportsOpenSeamFilters' | 'supportsDiagnosticProjection' | 'supportsContinuationIntentFilter' | 'requiresCursor' | 'routeProductKind'
   >> = {},
 ): SemanticAppQueryCatalogRow {
   const pagingKind = options.pagingKind ?? 'none';
@@ -248,6 +333,7 @@ function queryRow(
     supportsPaging: pagingKind !== 'none',
     supportsDetail: options.supportsDetail ?? false,
     supportsSourceFile,
+    observedDependencyLocusKinds: options.observedDependencyLocusKinds ?? [],
     supportsOpenSeamFilters: options.supportsOpenSeamFilters ?? false,
     supportsDiagnosticProjection: options.supportsDiagnosticProjection ?? false,
     supportsContinuationIntentFilter: options.supportsContinuationIntentFilter ?? supportsContinuationIntentFilter(queryKind),

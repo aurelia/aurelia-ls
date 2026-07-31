@@ -261,7 +261,7 @@ const mutationDependencies = detailedObservedDependencies.filter((row) =>
   row.memberName === 'mutationRoleProbe'
 );
 if (!mutationDependencies.some((row) =>
-  row.accessUse.targetLinks.some((target) =>
+  row.occurrence.accessUse.targetLinks.some((target) =>
     target.authorityProductHandle != null
     && target.targetIdentityHandle != null
     && target.declarationSourceAddressHandle != null
@@ -270,12 +270,12 @@ if (!mutationDependencies.some((row) =>
   failures.push('Detailed computed dependencies should retain handles on nested access-use targets.');
 }
 const qualifiedMutationDependencies = mutationDependencies.filter((row) =>
-  row.accessUse.executionQualifiers.length > 0
+  row.occurrence.accessUse.executionQualifiers.length > 0
 );
 if (
   qualifiedMutationDependencies.length === 0
   || !qualifiedMutationDependencies.every((row) =>
-    row.accessUse.executionQualifiers.every((qualifier) => qualifier.sourceAddressHandle != null)
+    row.occurrence.accessUse.executionQualifiers.every((qualifier) => qualifier.sourceAddressHandle != null)
   )
 ) {
   failures.push('Detailed computed dependencies should retain handles on nested access-use qualifiers.');

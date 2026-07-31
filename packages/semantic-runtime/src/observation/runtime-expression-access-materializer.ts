@@ -143,7 +143,7 @@ import type { RuntimeBindingValueChannel } from './runtime-binding-observation.j
 import {
   RuntimeObservedDependencyKind,
   RuntimeObservedMemberSourceRoute,
-} from './runtime-binding-observation.js';
+} from './runtime-observed-dependency.js';
 import {
   RuntimeBindingSourceEvaluationKind,
 } from './runtime-binding-observation.js';

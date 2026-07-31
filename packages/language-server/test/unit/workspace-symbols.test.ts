@@ -2,12 +2,17 @@ import { describe, expect, test, vi } from "vitest";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { SymbolKind } from "vscode-languageserver/node";
-import { canonicalDocumentUri, handleWorkspaceSymbols } from "@aurelia-ls/language-server/api";
+import {
+  canonicalDocumentUri,
+  handleWorkspaceSymbols,
+} from "@aurelia-ls/language-server/api";
 import { testRequestGuard } from "./test-request-guard.js";
 
 const workspaceRoot = path.resolve("test-workspace");
 const resourcePath = path.join(workspaceRoot, "src", "resources.ts");
-const resourceUri = canonicalDocumentUri(pathToFileURL(resourcePath).toString()).uri;
+const resourceUri = canonicalDocumentUri(
+  pathToFileURL(resourcePath).toString(),
+).uri;
 
 function source(filePath: string, start: number, end: number) {
   return {
@@ -22,19 +27,17 @@ function source(filePath: string, start: number, end: number) {
 
 function answer<T>(rows: T[]) {
   return Promise.resolve({
-    schemaVersion: "0.1",
-    outcome: "hit",
-    closure: "complete",
+    schemaVersion: "0.2",
+    result: "answered",
+    selection: "not-applicable",
+    coverage: "complete",
     summary: "mock",
     value: { rows },
     page: null,
   });
 }
 
-function createMockContext(input: {
-  text: string;
-  definitions: unknown[];
-}) {
+function createMockContext(input: { text: string; definitions: unknown[] }) {
   return {
     workspaceRoot,
     documents: {
@@ -45,7 +48,9 @@ function createMockContext(input: {
     semanticRuntime: {
       resourceDefinitions: vi.fn(() => answer(input.definitions)),
     },
-    lookupText: vi.fn((uri: string) => uri === resourceUri ? input.text : null),
+    lookupText: vi.fn((uri: string) =>
+      uri === resourceUri ? input.text : null,
+    ),
   };
 }
 
@@ -66,8 +71,16 @@ describe("runtime-backed workspace symbols", () => {
           aliases: [{ name: "product-tile", source: null }],
           key: "custom-element:product-card",
           targetName: "ProductCard",
-          targetSource: source("src/resources.ts", productClassStart, productClassStart + "ProductCard".length),
-          source: source("src/resources.ts", productClassStart, productClassStart + "ProductCard".length),
+          targetSource: source(
+            "src/resources.ts",
+            productClassStart,
+            productClassStart + "ProductCard".length,
+          ),
+          source: source(
+            "src/resources.ts",
+            productClassStart,
+            productClassStart + "ProductCard".length,
+          ),
         },
         {
           resourceKind: "value-converter",
@@ -75,13 +88,25 @@ describe("runtime-backed workspace symbols", () => {
           aliases: [],
           key: "value-converter:currency",
           targetName: "CurrencyValueConverter",
-          targetSource: source("src/resources.ts", converterClassStart, converterClassStart + "CurrencyValueConverter".length),
-          source: source("src/resources.ts", converterClassStart, converterClassStart + "CurrencyValueConverter".length),
+          targetSource: source(
+            "src/resources.ts",
+            converterClassStart,
+            converterClassStart + "CurrencyValueConverter".length,
+          ),
+          source: source(
+            "src/resources.ts",
+            converterClassStart,
+            converterClassStart + "CurrencyValueConverter".length,
+          ),
         },
       ],
     });
 
-    const result = await handleWorkspaceSymbols(ctx as never, { query: "tile" }, testRequestGuard);
+    const result = await handleWorkspaceSymbols(
+      ctx as never,
+      { query: "tile" },
+      testRequestGuard,
+    );
 
     expect(result).toEqual([
       {
@@ -116,7 +141,11 @@ describe("runtime-backed workspace symbols", () => {
       ],
     });
 
-    const result = await handleWorkspaceSymbols(ctx as never, { query: "missing" }, testRequestGuard);
+    const result = await handleWorkspaceSymbols(
+      ctx as never,
+      { query: "missing" },
+      testRequestGuard,
+    );
 
     expect(result).toBeNull();
   });

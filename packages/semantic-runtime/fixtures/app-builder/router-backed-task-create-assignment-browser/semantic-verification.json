@@ -2,7 +2,7 @@
   "schemaVersion": "semantic-fixture-verification.v1",
   "fixtureRole": "app-builder-generated-app-contract",
   "fixtureId": "router-backed-task-create-assignment-browser",
-  "ok": true,
+  "ok": false,
   "expectedEffects": 22,
   "effectResults": [
     {
@@ -48,12 +48,12 @@
     {
       "outcome": "satisfied",
       "effectKind": "route",
-      "summary": "Routed collection/detail SourcePlan should use route decorator object-literal configs. Observed 2 matching semantic fact(s)."
+      "summary": "Routed collection/detail SourcePlan should use route decorator object-literal configs. Observed 1 matching semantic fact(s)."
     },
     {
       "outcome": "satisfied",
       "effectKind": "route",
-      "summary": "Routed collection/detail SourcePlan should use child route object-literal configs. Observed 6 matching semantic fact(s)."
+      "summary": "Routed collection/detail SourcePlan should use child route object-literal configs. Observed 3 matching semantic fact(s)."
     },
     {
       "outcome": "satisfied",
@@ -108,12 +108,12 @@
     {
       "outcome": "satisfied",
       "effectKind": "runtime-controller",
-      "summary": "Routed collection/detail SourcePlan should hydrate runtime controllers. Observed 24 matching semantic fact(s)."
+      "summary": "Routed collection/detail SourcePlan should hydrate runtime controllers. Observed 23 matching semantic fact(s)."
     },
     {
-      "outcome": "satisfied",
+      "outcome": "failed",
       "effectKind": "open-seam-closure",
-      "summary": "Routed collection/detail SourcePlan should have no open semantic seams. Observed 0 matching semantic fact(s)."
+      "summary": "Routed collection/detail SourcePlan should have no open semantic seams. Observed 2 matching semantic fact(s)."
     }
   ],
   "expectedControlUseRows": 5,
@@ -305,7 +305,7 @@
       "outcome": "satisfied",
       "rowFamily": "appBuilderResponse",
       "rowCount": null,
-      "jsonLength": 20901,
+      "jsonLength": 20956,
       "summary": "Generated app-builder contract row family 'appBuilderResponse' matches the stored request output."
     },
     {
@@ -441,5 +441,11 @@
       "summary": "Generated app-builder contract row family 'sourcePlanWitnessRows' matches the stored request output."
     }
   ],
-  "failures": []
+  "failures": [
+    {
+      "outcome": "failed",
+      "effectKind": "open-seam-closure",
+      "summary": "Routed collection/detail SourcePlan should have no open semantic seams. Observed 2 matching semantic fact(s)."
+    }
+  ]
 }

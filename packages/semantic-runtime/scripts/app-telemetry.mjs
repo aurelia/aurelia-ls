@@ -879,7 +879,9 @@ function measureQuery(app, query, queryIteration = 0) {
   return {
     label: queryLabel(query.kind, queryIteration),
     materializationPolicy,
-    outcome: answer.outcome,
+    result: answer.result,
+    selection: answer.selection,
+    coverage: answer.coverage,
     milliseconds,
     payloadBytes: payload.valueBytes,
     answerBytes: payload.answerBytes,
@@ -933,7 +935,9 @@ async function measureRoutedQuery(runtime, appCandidate, depth, profile, query, 
   return {
     label: queryLabel(query.kind, queryIteration),
     materializationPolicy,
-    outcome: answer.outcome,
+    result: answer.result,
+    selection: answer.selection,
+    coverage: answer.coverage,
     milliseconds,
     payloadBytes: payload.valueBytes,
     answerBytes: payload.answerBytes,
@@ -986,7 +990,9 @@ async function measureRoutedQueryBatch(runtime, appCandidate, depth, profile, qu
   return {
     label: queryLabel('app-query-batch', queryIteration),
     materializationPolicy,
-    outcome: answer.outcome,
+    result: answer.result,
+    selection: answer.selection,
+    coverage: answer.coverage,
     milliseconds,
     payloadBytes: payload.valueBytes,
     answerBytes: payload.answerBytes,
@@ -1348,7 +1354,7 @@ function createQueryClaimAggregate() {
     retainedQueryKeyCharacters: 0,
     retainedLocusKeyCharacters: 0,
     retainedEpochKeyCharacters: 0,
-    retainedOutcomeKeyCharacters: 0,
+    retainedReuseKeyCharacters: 0,
     budgetDisposedRecords: 0,
     budgetDisposedAnswerValues: 0,
     budgetDisposedAnswerBytes: 0,
@@ -1454,6 +1460,9 @@ function addToAggregate(aggregate, run, options = {}) {
     const current = aggregate.queries.get(key) ?? {
       label: queryResult.label,
       materializationPolicy: queryResult.materializationPolicy ?? 'unknown',
+      result: queryResult.result,
+      selection: queryResult.selection,
+      coverage: queryResult.coverage,
       count: 0,
       milliseconds: 0,
       payloadBytes: 0,
@@ -1504,7 +1513,13 @@ function aggregateGroupKey(run) {
 }
 
 function queryAggregateKey(queryResult) {
-  return `${queryResult.label}\0${queryResult.materializationPolicy ?? 'unknown'}`;
+  return [
+    queryResult.label,
+    queryResult.materializationPolicy ?? 'unknown',
+    queryResult.result,
+    queryResult.selection,
+    queryResult.coverage,
+  ].join('\0');
 }
 
 function addHostSourceFileCache(target, source) {
@@ -1876,7 +1891,7 @@ function addQueryClaims(target, queryClaims) {
   target.retainedQueryKeyCharacters += queryClaims.retainedQueryKeyCharacters ?? 0;
   target.retainedLocusKeyCharacters += queryClaims.retainedLocusKeyCharacters ?? 0;
   target.retainedEpochKeyCharacters += queryClaims.retainedEpochKeyCharacters ?? 0;
-  target.retainedOutcomeKeyCharacters += queryClaims.retainedOutcomeKeyCharacters ?? 0;
+  target.retainedReuseKeyCharacters += queryClaims.retainedReuseKeyCharacters ?? 0;
   target.budgetDisposedRecords += queryClaims.budgetDisposedRecords ?? 0;
   target.budgetDisposedAnswerValues += queryClaims.budgetDisposedAnswerValues ?? 0;
   target.budgetDisposedAnswerBytes += queryClaims.budgetDisposedAnswerBytes ?? 0;
@@ -2180,8 +2195,8 @@ function formatQueryClaimGraph(label, queryClaims) {
     `roots=${queryClaims.rootRecords ?? queryClaims.records}/${queryClaims.childRecords ?? 0}, ` +
     `maxDepth=${queryClaims.maxDepth ?? 0}, ` +
     `deps=${queryClaims.retainedDependencyEdges ?? 0}/${queryClaims.distinctParentClaimIds ?? 0}, ` +
-    `indexes=q${queryClaims.distinctQueryKinds ?? 0}/l${queryClaims.distinctLocusKeys ?? 0}/e${queryClaims.distinctEpochKeys ?? 0}/m${queryClaims.distinctMaterializationPolicies ?? 0}/o${queryClaims.distinctOutcomeKeys ?? 0}, ` +
-    `keyChars=q${formatCharacterCount(queryClaims.retainedQueryKeyCharacters ?? 0)}/l${formatCharacterCount(queryClaims.retainedLocusKeyCharacters ?? 0)}/e${formatCharacterCount(queryClaims.retainedEpochKeyCharacters ?? 0)}/o${formatCharacterCount(queryClaims.retainedOutcomeKeyCharacters ?? 0)}, ` +
+    `indexes=q${queryClaims.distinctQueryKinds ?? 0}/l${queryClaims.distinctLocusKeys ?? 0}/e${queryClaims.distinctEpochKeys ?? 0}/m${queryClaims.distinctMaterializationPolicies ?? 0}/r${queryClaims.distinctReuseKeys ?? 0}, ` +
+    `keyChars=q${formatCharacterCount(queryClaims.retainedQueryKeyCharacters ?? 0)}/l${formatCharacterCount(queryClaims.retainedLocusKeyCharacters ?? 0)}/e${formatCharacterCount(queryClaims.retainedEpochKeyCharacters ?? 0)}/r${formatCharacterCount(queryClaims.retainedReuseKeyCharacters ?? 0)}, ` +
     `projectionOnly=${queryClaims.projectionOnly}, queryTypeProjection=${queryClaims.queryTypeProjection}, ` +
     `staticCatalog=${queryClaims.staticCatalog}, payload=${formatSemanticRuntimeBytes(queryClaims.approximatePayloadBytes)}, ` +
     `retainedAnswers=${queryClaims.retainedAnswerValues}/${formatSemanticRuntimeBytes(queryClaims.retainedAnswerBytes)}, ` +
@@ -2209,7 +2224,7 @@ function formatQueryClaimAggregate(label, queryClaims) {
     `retainedAnswers=${queryClaims.retainedAnswerValues}/${formatSemanticRuntimeBytes(queryClaims.retainedAnswerBytes)}, ` +
     `retainedAnswerHits=${queryClaims.retainedAnswerHits}, ` +
     `budgetDisposed=${queryClaims.budgetDisposedRecords}/${queryClaims.budgetDisposedAnswerValues} answers/${formatSemanticRuntimeBytes(queryClaims.budgetDisposedAnswerBytes)}, ` +
-    `keyChars=q${formatCharacterCount(queryClaims.retainedQueryKeyCharacters)}/l${formatCharacterCount(queryClaims.retainedLocusKeyCharacters)}/e${formatCharacterCount(queryClaims.retainedEpochKeyCharacters)}/o${formatCharacterCount(queryClaims.retainedOutcomeKeyCharacters)}, ` +
+    `keyChars=q${formatCharacterCount(queryClaims.retainedQueryKeyCharacters)}/l${formatCharacterCount(queryClaims.retainedLocusKeyCharacters)}/e${formatCharacterCount(queryClaims.retainedEpochKeyCharacters)}/r${formatCharacterCount(queryClaims.retainedReuseKeyCharacters)}, ` +
     `rootKernelDelta=${queryClaims.rootKernelRecordDelta}/${queryClaims.rootKernelProductDelta}/${queryClaims.rootKernelHotDetailDelta}, ` +
     `allKernelDelta=${queryClaims.allKernelRecordDelta}/${queryClaims.allKernelProductDelta}/${queryClaims.allKernelHotDetailDelta}, ` +
     `disposedKernel=${queryClaims.disposedKernelRecords}/${queryClaims.disposedProductDetails}/${queryClaims.disposedHotDetails}/${formatCharacterCount(queryClaims.disposedKernelHandleCharacters)}, ` +
@@ -2461,7 +2476,10 @@ function sortedQueryAggregate(queries) {
     .map((value) => ({
       label: value.label,
       materializationPolicy: value.materializationPolicy,
-      outcome: `${value.count} run(s)`,
+      result: value.result,
+      selection: value.selection,
+      coverage: value.coverage,
+      sampleCount: value.count,
       milliseconds: value.milliseconds,
       payloadBytes: value.payloadBytes,
       answerBytes: value.answerBytes,
@@ -2933,7 +2951,8 @@ function printQueryRows(label, rows) {
   const parts = rows
     .slice(0, 12)
     .map((row) =>
-      `${row.label}=${row.milliseconds.toFixed(1)}ms/${row.outcome}`
+      `${row.label}=${row.milliseconds.toFixed(1)}ms/${row.result}/${row.selection}/${row.coverage}`
+      + `/runs ${row.sampleCount}`
       + (row.materializationPolicy == null ? '' : `/policy ${row.materializationPolicy}`)
       + `/rows ${row.rowCount}/valueJson ${formatSemanticRuntimeBytes(row.payloadBytes)}`
       + `/answerJson ${formatSemanticRuntimeBytes(row.answerBytes ?? row.payloadBytes)}`

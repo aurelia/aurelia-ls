@@ -13,6 +13,7 @@ import type { ContainerReference } from '../di/container-reference.js';
 import type {
   AddressHandle,
   IdentityHandle,
+  OpenSeamHandle,
   ProductHandle,
   ProvenanceHandle,
 } from '../kernel/handles.js';
@@ -116,6 +117,7 @@ export class RuntimeControllerObserverSetup {
     readonly reachability: RuntimeOperationReachability,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly provenanceHandles: readonly ProvenanceHandle[],
+    readonly openSeamHandles: readonly OpenSeamHandle[],
   ) {}
 }
 
@@ -480,7 +482,8 @@ export class RuntimeControllerFrame {
     );
   }
 
-  readReadinessKind(): RuntimeControllerReadinessKind {
+  /** Furthest controller phase explored by the counterfactual assembly model. */
+  readAssemblyProgressKind(): RuntimeControllerReadinessKind {
     if (this.assemblySteps.some((step) => step.stepKind === RuntimeControllerAssemblyStepKind.Bind)) {
       return RuntimeControllerReadinessKind.Bound;
     }
@@ -494,6 +497,13 @@ export class RuntimeControllerFrame {
       return RuntimeControllerReadinessKind.Rendered;
     }
     return RuntimeControllerReadinessKind.Created;
+  }
+
+  /** Furthest controller phase whose runtime reachability is causally closed. */
+  readRealizedReadinessKind(): RuntimeControllerReadinessKind | null {
+    return this.readBindReachability() === RuntimeOperationReachability.Reached
+      ? this.readAssemblyProgressKind()
+      : null;
   }
 
   toReference(): ControllerReference {

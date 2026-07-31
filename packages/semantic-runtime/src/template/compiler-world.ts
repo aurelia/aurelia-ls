@@ -1,5 +1,5 @@
 import { auLink } from '../kernel/au-link.js';
-import type { OpenSeamReasonKind } from '../kernel/open-seam.js';
+import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import type {
   AddressHandle,
   IdentityHandle,
@@ -296,7 +296,7 @@ export class TemplateRenderingOpenInstruction {
     readonly ownerHandle: MaterializationOwnerHandle,
     readonly summary: string,
     readonly addressHandle: AddressHandle | null,
-    readonly reasonKinds: readonly OpenSeamReasonKind[] = [],
+    readonly reasonKinds: readonly OpenSeamReasonKind[],
   ) {}
 }
 
@@ -778,6 +778,7 @@ class TemplateRenderingRun implements RuntimeRenderingRun {
             reference.identityHandle ?? surrogateSequence.identityHandle,
             `Surrogate instruction reference '${reference.productHandle ?? '(null)'}' could not be hydrated for runtime Rendering.`,
             reference.addressHandle,
+            [OpenSeamReasonKind.RuntimeRenderingProductMissing],
           ));
           return;
         }
@@ -855,7 +856,7 @@ class TemplateRenderingRun implements RuntimeRenderingRun {
     ownerHandle: IdentityHandle,
     summary: string,
     addressHandle: AddressHandle | null,
-    reasonKinds: readonly OpenSeamReasonKind[] = [],
+    reasonKinds: readonly OpenSeamReasonKind[],
   ): void {
     this.openInstructions.push(new TemplateRenderingOpenInstruction(local, ownerHandle, summary, addressHandle, reasonKinds));
   }
@@ -909,6 +910,7 @@ class TemplateRenderingRun implements RuntimeRenderingRun {
           instruction.identityHandle,
           `Spread element prop instruction '${instruction.productHandle}' references an inner instruction that is not present in the lowering emission.`,
           instruction.sourceAddressHandle,
+          [OpenSeamReasonKind.RuntimeRenderingProductMissing],
         ));
         return;
       }
@@ -934,6 +936,7 @@ class TemplateRenderingRun implements RuntimeRenderingRun {
         instruction.identityHandle,
         `No configured runtime renderer was available for instruction kind '${instruction.instructionKind}'.`,
         instruction.sourceAddressHandle,
+        [OpenSeamReasonKind.RuntimeRenderingRendererUnavailable],
       ));
       return;
     }

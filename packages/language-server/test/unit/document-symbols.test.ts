@@ -23,19 +23,17 @@ function source(filePath: string, start: number, end: number) {
 
 function answer<T>(rows: T[]) {
   return Promise.resolve({
-    schemaVersion: "0.1",
-    outcome: "hit",
-    closure: "complete",
+    schemaVersion: "0.2",
+    result: "answered",
+    selection: "not-applicable",
+    coverage: "complete",
     summary: "mock",
     value: { rows },
     page: null,
   });
 }
 
-function createMockContext(input: {
-  text?: string;
-  definitions?: unknown[];
-}) {
+function createMockContext(input: { text?: string; definitions?: unknown[] }) {
   const document = TextDocument.create(
     resourceUri,
     "typescript",
@@ -46,7 +44,7 @@ function createMockContext(input: {
   return {
     workspaceRoot,
     documents: {
-      get: vi.fn((uri: string) => uri === resourceUri ? document : undefined),
+      get: vi.fn((uri: string) => (uri === resourceUri ? document : undefined)),
     },
     logger: { log: vi.fn(), info: vi.fn(), error: vi.fn(), warn: vi.fn() },
     semanticRuntime: {
@@ -68,7 +66,9 @@ describe("runtime-backed document symbols", () => {
     const productDeclarationEnd = text.indexOf("}\nexport class") + 1;
     const productNameStart = text.indexOf("product");
     const converterClassStart = text.indexOf("CurrencyValueConverter");
-    const converterDeclarationStart = text.indexOf("export class CurrencyValueConverter");
+    const converterDeclarationStart = text.indexOf(
+      "export class CurrencyValueConverter",
+    );
     const ctx = createMockContext({
       text,
       definitions: [
@@ -76,9 +76,21 @@ describe("runtime-backed document symbols", () => {
           resourceKind: "custom-element",
           name: "product-card",
           targetName: "ProductCard",
-          targetSource: source("src/resources.ts", productClassStart, productClassStart + "ProductCard".length),
-          targetDeclarationSource: source("src/resources.ts", productDeclarationStart, productDeclarationEnd),
-          source: source("src/resources.ts", productClassStart, productClassStart + "ProductCard".length),
+          targetSource: source(
+            "src/resources.ts",
+            productClassStart,
+            productClassStart + "ProductCard".length,
+          ),
+          targetDeclarationSource: source(
+            "src/resources.ts",
+            productDeclarationStart,
+            productDeclarationEnd,
+          ),
+          source: source(
+            "src/resources.ts",
+            productClassStart,
+            productClassStart + "ProductCard".length,
+          ),
           bindables: [
             {
               name: "product",
@@ -92,7 +104,11 @@ describe("runtime-backed document symbols", () => {
               valueTypeHasCallSignature: false,
               valueTypeHasMembers: false,
               valueTypeIsWeak: false,
-              source: source("src/resources.ts", productNameStart, productNameStart + "product".length),
+              source: source(
+                "src/resources.ts",
+                productNameStart,
+                productNameStart + "product".length,
+              ),
             },
           ],
         },
@@ -100,15 +116,31 @@ describe("runtime-backed document symbols", () => {
           resourceKind: "value-converter",
           name: "currency",
           targetName: "CurrencyValueConverter",
-          targetSource: source("src/resources.ts", converterClassStart, converterClassStart + "CurrencyValueConverter".length),
-          targetDeclarationSource: source("src/resources.ts", converterDeclarationStart, text.length),
-          source: source("src/resources.ts", converterClassStart, converterClassStart + "CurrencyValueConverter".length),
+          targetSource: source(
+            "src/resources.ts",
+            converterClassStart,
+            converterClassStart + "CurrencyValueConverter".length,
+          ),
+          targetDeclarationSource: source(
+            "src/resources.ts",
+            converterDeclarationStart,
+            text.length,
+          ),
+          source: source(
+            "src/resources.ts",
+            converterClassStart,
+            converterClassStart + "CurrencyValueConverter".length,
+          ),
           bindables: [],
         },
       ],
     });
 
-    const result = await handleDocumentSymbols(ctx as never, { textDocument: { uri: resourceUri } }, testRequestGuard);
+    const result = await handleDocumentSymbols(
+      ctx as never,
+      { textDocument: { uri: resourceUri } },
+      testRequestGuard,
+    );
 
     expect(result).toHaveLength(2);
     expect(result?.[0]).toMatchObject({
@@ -154,9 +186,17 @@ describe("runtime-backed document symbols", () => {
   test("does not query runtime rows for non-TypeScript files", async () => {
     const ctx = createMockContext({});
 
-    const result = await handleDocumentSymbols(ctx as never, {
-      textDocument: { uri: pathToFileURL(path.join(workspaceRoot, "src", "app.html")).toString() },
-    }, testRequestGuard);
+    const result = await handleDocumentSymbols(
+      ctx as never,
+      {
+        textDocument: {
+          uri: pathToFileURL(
+            path.join(workspaceRoot, "src", "app.html"),
+          ).toString(),
+        },
+      },
+      testRequestGuard,
+    );
 
     expect(result).toBeNull();
     expect(ctx.semanticRuntime.resourceDefinitions).not.toHaveBeenCalled();

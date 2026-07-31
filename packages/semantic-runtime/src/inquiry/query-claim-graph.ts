@@ -2,6 +2,11 @@ import type {
   SemanticRuntimeInquiryProfile,
 } from '../telemetry/inquiry-profile.js';
 import {
+  InquiryAnswerCoverage,
+  InquiryAnswerResult,
+  InquiryAnswerSelection,
+} from './answer.js';
+import {
   diffSemanticRuntimeKernelCounts,
   type SemanticRuntimeKernelCountSnapshot,
 } from '../telemetry/kernel-density.js';
@@ -29,7 +34,7 @@ const MAX_QUERY_ANSWER_PAYLOAD_ESTIMATE_BYTES = 1024 * 1024;
 export const enum QueryClaimEvaluationState {
   /** The claim exists, but the answer-producing closure has not run yet. */
   Pending = 'pending',
-  /** The answer-producing closure ran and the graph retained the configured outcome shape. */
+  /** The answer-producing closure ran and the graph retained the configured answer shape. */
   Answered = 'answered',
   /** The answer-producing closure threw before producing a public answer. */
   Failed = 'failed',
@@ -41,8 +46,10 @@ export interface QueryClaimRequestInput {
   readonly queryKind: string;
   readonly queryKey: string;
   readonly locusKey: string;
+  /** Response-shaping policy applied before this answer is retained; distinct policy must not share retained DTOs. */
+  readonly responsePolicyKey: string;
   /**
-   * Epoch/dependency keys that can invalidate this answer outcome.
+   * Epoch/dependency keys that can invalidate this answer.
    *
    * Keep these separate from `locusKey`: a cursor answer's exact locus can be one source offset, while its validity
    * still depends on the containing source file and project epoch.
@@ -75,7 +82,7 @@ export interface QueryClaimAnswerBoundary {
    * Dispose non-marker answer side effects after the public answer is shaped.
    *
    * Use this for policy-owned boundaries such as one-off routed app queries where an opened app epoch is reclaimed by
-   * app-cache policy rather than by the query graph's marker. The graph records this next to the answer outcome so
+   * app-cache policy rather than by the query graph's marker. The graph records this next to the answer state so
    * telemetry can distinguish "materialized during answer" from "retained after answer".
    */
   readonly disposeAnswerSideEffects?: () => QueryClaimAnswerDisposalSummary | null;
@@ -106,12 +113,34 @@ export interface QueryClaimTypeSystemDependencyCacheDisposalSummary {
 
 export interface QueryClaimAnswerShape {
   readonly schemaVersion?: unknown;
-  readonly outcome: string;
+  readonly result: InquiryAnswerResult | `${InquiryAnswerResult}`;
+  readonly selection: InquiryAnswerSelection | `${InquiryAnswerSelection}`;
+  readonly coverage: InquiryAnswerCoverage | `${InquiryAnswerCoverage}`;
   readonly summary: string;
   readonly value: unknown;
-  readonly page?: unknown;
+  readonly page?: QueryClaimAnswerPageShape | null;
   readonly continuations?: unknown;
   readonly profile?: unknown;
+}
+
+export interface QueryClaimAnswerPageShape {
+  readonly returnedRows?: unknown;
+  readonly totalRows?: unknown;
+  readonly exhausted?: unknown;
+  readonly nextCursor?: unknown;
+  readonly cursorProblem?: { readonly kind?: unknown } | null;
+  readonly clamped?: unknown;
+  readonly byteClamped?: unknown;
+}
+
+export interface QueryClaimPageState {
+  readonly returnedRows: number;
+  readonly totalRows: number | null;
+  readonly exhausted: boolean;
+  readonly hasNextCursor: boolean;
+  readonly cursorProblemKind: string | null;
+  readonly clamped: boolean;
+  readonly byteClamped: boolean;
 }
 
 export interface QueryClaimRecord {
@@ -127,6 +156,8 @@ export interface QueryClaimRecord {
   readonly queryKind: string;
   /** Stable key of the query shape and locus within this app session. */
   readonly queryKey: string;
+  /** Response policy that shaped the retained DTO without changing the semantic query or locus. */
+  readonly responsePolicyKey: string;
   /** Coarse locus key, usually the app project plus optional source/cursor information. */
   readonly locusKey: string;
   /** Dependency/epoch keys that can invalidate this claim without matching the exact answer locus. */
@@ -135,14 +166,20 @@ export interface QueryClaimRecord {
   readonly materializationPolicy: SemanticQueryMaterializationPolicy;
   /** Current answer-boundary state for this claim. */
   readonly evaluationState: QueryClaimEvaluationState;
-  /** Answer outcome projected to the public API, after resolution. */
-  readonly outcome: string | null;
+  /** Execution result projected to the public API, after resolution. */
+  readonly result: InquiryAnswerResult | null;
+  /** Cursor/locus selection state projected independently from result. */
+  readonly selection: InquiryAnswerSelection | null;
+  /** Semantic coverage state projected independently from transport paging. */
+  readonly coverage: InquiryAnswerCoverage | null;
+  /** Compact page progress retained independently from answer-value retention. */
+  readonly pageState: QueryClaimPageState | null;
   /** Summary retained according to the graph policy. */
   readonly summary: string | null;
   /** Approximate payload shape retained as telemetry without serializing or storing the payload itself. */
   readonly approximatePayloadBytes: number;
-  /** Row count or scalar-answer count when cheaply known. */
-  readonly rowCount: number;
+  /** Rows returned in the retained payload shape when cheaply known. */
+  readonly returnedRowCount: number;
   /** Whether the graph retained the public answer value after resolution. */
   readonly retainedAnswerValue: boolean;
   /** Disposal reason when this record is retained as a tombstone or read before removal. */
@@ -208,8 +245,8 @@ export interface QueryClaimGraphSnapshot {
   readonly retainedDependencyEdges: number;
   /** Distinct retained parent claim ids that currently own one or more child answer claims. */
   readonly distinctParentClaimIds: number;
-  /** Distinct outcome keys retained for answer-value reuse checks. */
-  readonly distinctOutcomeKeys: number;
+  /** Distinct answer-reuse keys retained for answer-value reuse checks. */
+  readonly distinctReuseKeys: number;
   /** Distinct query-kind buckets retained in the graph-owned invalidation index. */
   readonly distinctQueryKinds: number;
   /** Distinct locus buckets retained in the graph-owned invalidation index. */
@@ -224,8 +261,8 @@ export interface QueryClaimGraphSnapshot {
   readonly retainedLocusKeyCharacters: number;
   /** Retained epoch-key character mass. */
   readonly retainedEpochKeyCharacters: number;
-  /** Retained outcome-key character mass. */
-  readonly retainedOutcomeKeyCharacters: number;
+  /** Retained answer-reuse-key character mass. */
+  readonly retainedReuseKeyCharacters: number;
   readonly pending: number;
   readonly answered: number;
   readonly failed: number;
@@ -442,7 +479,7 @@ export class QueryClaimGraph {
       maxDepth: retainedShape.maxDepth,
       retainedDependencyEdges: retainedShape.dependencyEdges,
       distinctParentClaimIds: retainedShape.parentClaimIds,
-      distinctOutcomeKeys: indexes.outcomeKeys,
+      distinctReuseKeys: indexes.reuseKeys,
       distinctQueryKinds: indexes.queryKinds,
       distinctLocusKeys: indexes.locusKeys,
       distinctEpochKeys: indexes.epochKeys,
@@ -450,7 +487,7 @@ export class QueryClaimGraph {
       retainedQueryKeyCharacters: keyCharacters.queryKeyCharacters,
       retainedLocusKeyCharacters: keyCharacters.locusKeyCharacters,
       retainedEpochKeyCharacters: keyCharacters.epochKeyCharacters,
-      retainedOutcomeKeyCharacters: keyCharacters.outcomeKeyCharacters,
+      retainedReuseKeyCharacters: keyCharacters.reuseKeyCharacters,
       pending: retainedShape.pending,
       answered: this.counters.answeredRecords,
       failed: this.counters.failedRecords,
@@ -536,13 +573,17 @@ export class QueryClaimGraph {
     const resolvedAnswer = answer as TAnswer;
     const after = boundary.readKernelSnapshot?.() ?? null;
     const approximatePayloadBytes = approximateQueryAnswerPayloadBytes(resolvedAnswer);
-    const rowCount = queryAnswerRowCount(resolvedAnswer.value);
+    const returnedRowCount = queryAnswerRowCount(resolvedAnswer.value);
+    const pageState = queryClaimPageState(resolvedAnswer.page);
     const delta = kernelDelta(before, after);
     node.resolve({
-      outcome: resolvedAnswer.outcome,
+      result: resolvedAnswer.result,
+      selection: resolvedAnswer.selection,
+      coverage: resolvedAnswer.coverage,
+      pageState,
       summary: this.retentionPolicy.retainAnswerSummary ? resolvedAnswer.summary : null,
       approximatePayloadBytes: this.retentionPolicy.retainPayloadShape ? approximatePayloadBytes : 0,
-      rowCount: this.retentionPolicy.retainPayloadShape ? rowCount : 0,
+      returnedRowCount: this.retentionPolicy.retainPayloadShape ? returnedRowCount : 0,
       retainedAnswerValue: this.shouldRetainAnswerValue(node, approximatePayloadBytes),
       kernelDelta: delta,
     });
@@ -638,6 +679,7 @@ export class QueryClaimGraph {
       input.queryKind,
       input.queryKey,
       input.locusKey,
+      input.responsePolicyKey,
       normalizeQueryClaimEpochKeys(input),
       input.materializationPolicy,
     );
@@ -742,7 +784,7 @@ export class QueryClaimGraph {
 }
 
 interface QueryClaimGraphIndexCardinality {
-  readonly outcomeKeys: number;
+  readonly reuseKeys: number;
   readonly queryKinds: number;
   readonly locusKeys: number;
   readonly epochKeys: number;
@@ -753,7 +795,7 @@ interface QueryClaimGraphKeyCharacters {
   readonly queryKeyCharacters: number;
   readonly locusKeyCharacters: number;
   readonly epochKeyCharacters: number;
-  readonly outcomeKeyCharacters: number;
+  readonly reuseKeyCharacters: number;
 }
 
 interface QueryClaimGraphRetainedShape {
@@ -767,7 +809,7 @@ interface QueryClaimGraphRetainedShape {
 }
 
 /**
- * Retained query-outcome storage plus invalidation indexes.
+ * Retained query-answer storage plus invalidation indexes.
  *
  * The graph owns materialization and policy decisions; this object owns the indexed answer-history shape that makes
  * reuse, source invalidation, query-family disposal, and retention-budget pruning graph-owned instead of adapter scans.
@@ -776,7 +818,7 @@ class QueryClaimGraphStorage {
   private readonly nodes: QueryClaimNode[] = [];
   private readonly nodesById = new Map<number, QueryClaimNode>();
   private readonly childNodesByParentId = new Map<number, QueryClaimNode[]>();
-  private readonly nodesByOutcomeKey = new Map<string, QueryClaimNode[]>();
+  private readonly nodesByReuseKey = new Map<string, QueryClaimNode[]>();
   private readonly nodesByQueryKind = new Map<string, QueryClaimNode[]>();
   private readonly nodesByLocusKey = new Map<string, QueryClaimNode[]>();
   private readonly nodesByEpochKey = new Map<string, QueryClaimNode[]>();
@@ -806,7 +848,7 @@ class QueryClaimGraphStorage {
 
   readIndexCardinality(): QueryClaimGraphIndexCardinality {
     return {
-      outcomeKeys: this.nodesByOutcomeKey.size,
+      reuseKeys: this.nodesByReuseKey.size,
       queryKinds: this.nodesByQueryKind.size,
       locusKeys: this.nodesByLocusKey.size,
       epochKeys: this.nodesByEpochKey.size,
@@ -818,11 +860,11 @@ class QueryClaimGraphStorage {
     let queryKeyCharacters = 0;
     let locusKeyCharacters = 0;
     let epochKeyCharacters = 0;
-    let outcomeKeyCharacters = 0;
+    let reuseKeyCharacters = 0;
     for (const node of this.nodes) {
       queryKeyCharacters += node.queryKey.length;
       locusKeyCharacters += node.locusKey.length;
-      outcomeKeyCharacters += node.outcomeKey.length;
+      reuseKeyCharacters += node.reuseKey.length;
       for (const epochKey of node.epochKeys) {
         epochKeyCharacters += epochKey.length;
       }
@@ -831,7 +873,7 @@ class QueryClaimGraphStorage {
       queryKeyCharacters,
       locusKeyCharacters,
       epochKeyCharacters,
-      outcomeKeyCharacters,
+      reuseKeyCharacters,
     };
   }
 
@@ -869,7 +911,7 @@ class QueryClaimGraphStorage {
     if (node.parentId != null) {
       addNodeToIndex(this.childNodesByParentId, node.parentId, node);
     }
-    addNodeToIndex(this.nodesByOutcomeKey, node.outcomeKey, node);
+    addNodeToIndex(this.nodesByReuseKey, node.reuseKey, node);
     addNodeToIndex(this.nodesByQueryKind, node.queryKind, node);
     addNodeToIndex(this.nodesByLocusKey, node.locusKey, node);
     addNodeToIndex(this.nodesByMaterializationPolicy, node.materializationPolicy, node);
@@ -926,7 +968,7 @@ class QueryClaimGraphStorage {
   readReusableRetainedAnswer<TAnswer extends QueryClaimAnswerShape>(
     input: QueryClaimRequestInput,
   ): { readonly node: QueryClaimNode; readonly answer: TAnswer } | null {
-    const candidates = this.nodesByOutcomeKey.get(queryClaimOutcomeKey(input)) ?? [];
+    const candidates = this.nodesByReuseKey.get(queryClaimReuseKey(input)) ?? [];
     for (let index = candidates.length - 1; index >= 0; index -= 1) {
       const node = candidates[index];
       if (node?.canReuseAnswer(input) !== true) {
@@ -990,7 +1032,7 @@ class QueryClaimGraphStorage {
     if (node.parentId != null) {
       removeNodeFromIndex(this.childNodesByParentId, node.parentId, node);
     }
-    removeNodeFromIndex(this.nodesByOutcomeKey, node.outcomeKey, node);
+    removeNodeFromIndex(this.nodesByReuseKey, node.reuseKey, node);
     removeNodeFromIndex(this.nodesByQueryKind, node.queryKind, node);
     removeNodeFromIndex(this.nodesByLocusKey, node.locusKey, node);
     removeNodeFromIndex(this.nodesByMaterializationPolicy, node.materializationPolicy, node);
@@ -1010,10 +1052,13 @@ class QueryClaimGraphStorage {
 
 class QueryClaimNode {
   private evaluationState = QueryClaimEvaluationState.Pending;
-  private outcome: string | null = null;
+  private result: InquiryAnswerResult | null = null;
+  private selection: InquiryAnswerSelection | null = null;
+  private coverage: InquiryAnswerCoverage | null = null;
+  private pageState: QueryClaimPageState | null = null;
   private summary: string | null = null;
   private approximatePayloadBytes = 0;
-  private rowCount = 0;
+  private returnedRowCount = 0;
   private retainedAnswer: QueryClaimAnswerShape | null = null;
   private disposalReason: QueryClaimDisposalReason | null = null;
   private kernelDelta = emptyKernelDelta();
@@ -1040,15 +1085,17 @@ class QueryClaimNode {
     readonly queryKind: string,
     readonly queryKey: string,
     readonly locusKey: string,
+    readonly responsePolicyKey: string,
     readonly epochKeys: readonly string[],
     readonly materializationPolicy: SemanticQueryMaterializationPolicy,
   ) {}
 
-  get outcomeKey(): string {
-    return queryClaimOutcomeKey({
+  get reuseKey(): string {
+    return queryClaimReuseKey({
       queryKind: this.queryKind,
       queryKey: this.queryKey,
       locusKey: this.locusKey,
+      responsePolicyKey: this.responsePolicyKey,
       materializationPolicy: this.materializationPolicy,
     });
   }
@@ -1058,18 +1105,24 @@ class QueryClaimNode {
   }
 
   resolve(shape: {
-    readonly outcome: string;
+    readonly result: InquiryAnswerResult | `${InquiryAnswerResult}`;
+    readonly selection: InquiryAnswerSelection | `${InquiryAnswerSelection}`;
+    readonly coverage: InquiryAnswerCoverage | `${InquiryAnswerCoverage}`;
+    readonly pageState: QueryClaimPageState | null;
     readonly summary: string | null;
     readonly approximatePayloadBytes: number;
-    readonly rowCount: number;
+    readonly returnedRowCount: number;
     readonly retainedAnswerValue: boolean;
     readonly kernelDelta: QueryClaimKernelDelta;
   }): void {
     this.evaluationState = QueryClaimEvaluationState.Answered;
-    this.outcome = shape.outcome;
+    this.result = shape.result as InquiryAnswerResult;
+    this.selection = shape.selection as InquiryAnswerSelection;
+    this.coverage = shape.coverage as InquiryAnswerCoverage;
+    this.pageState = shape.pageState;
     this.summary = shape.summary;
     this.approximatePayloadBytes = shape.approximatePayloadBytes;
-    this.rowCount = shape.rowCount;
+    this.returnedRowCount = shape.returnedRowCount;
     this.retainedAnswerValue = shape.retainedAnswerValue;
     this.kernelDelta = shape.kernelDelta;
   }
@@ -1079,7 +1132,10 @@ class QueryClaimNode {
     kernelDelta: QueryClaimKernelDelta,
   ): void {
     this.evaluationState = QueryClaimEvaluationState.Failed;
-    this.outcome = 'failed';
+    this.result = InquiryAnswerResult.Failed;
+    this.selection = InquiryAnswerSelection.NotApplicable;
+    this.coverage = InquiryAnswerCoverage.NotApplicable;
+    this.pageState = null;
     this.summary = summary;
     this.kernelDelta = kernelDelta;
   }
@@ -1163,6 +1219,7 @@ class QueryClaimNode {
       && this.queryKind === input.queryKind
       && this.queryKey === input.queryKey
       && this.locusKey === input.locusKey
+      && this.responsePolicyKey === input.responsePolicyKey
       && this.materializationPolicy === input.materializationPolicy
       && sameQueryClaimEpochKeys(this.epochKeys, epochKeys);
   }
@@ -1180,14 +1237,18 @@ class QueryClaimNode {
       depth: this.depth,
       queryKind: this.queryKind,
       queryKey: this.queryKey,
+      responsePolicyKey: this.responsePolicyKey,
       locusKey: this.locusKey,
       epochKeys: this.epochKeys,
       materializationPolicy: this.materializationPolicy,
       evaluationState: this.evaluationState,
-      outcome: this.outcome,
+      result: this.result,
+      selection: this.selection,
+      coverage: this.coverage,
+      pageState: this.pageState,
       summary: this.summary,
       approximatePayloadBytes: this.approximatePayloadBytes,
-      rowCount: this.rowCount,
+      returnedRowCount: this.returnedRowCount,
       retainedAnswerValue: this.retainedAnswerValue,
       disposalReason: this.disposalReason,
       kernelRecordDelta: this.kernelDelta.totalRecords,
@@ -1222,7 +1283,7 @@ class QueryClaimNode {
     return {
       materializationPolicy: this.materializationPolicy,
       approximatePayloadBytes: this.approximatePayloadBytes,
-      rowCount: this.rowCount,
+      rowCount: this.returnedRowCount,
       retainedAnswerValue: this.retainedAnswerValue,
       depth: this.depth,
       kernelDelta: this.kernelDelta,
@@ -1230,12 +1291,13 @@ class QueryClaimNode {
   }
 }
 
-function queryClaimOutcomeKey(input: QueryClaimRequestInput): string {
+function queryClaimReuseKey(input: QueryClaimRequestInput): string {
   return [
     input.materializationPolicy,
     input.queryKind,
     input.queryKey,
     input.locusKey,
+    input.responsePolicyKey,
   ].join('\u0000');
 }
 
@@ -1479,12 +1541,39 @@ class QueryClaimGraphCounters {
 
 export function approximateQueryAnswerPayloadBytes(answer: QueryClaimAnswerShape): number {
   return approximateScalarBytes(answer.schemaVersion)
-    + approximateScalarBytes(answer.outcome)
+    + approximateScalarBytes(answer.result)
+    + approximateScalarBytes(answer.selection)
+    + approximateScalarBytes(answer.coverage)
     + approximateScalarBytes(answer.summary)
     + approximatePayloadValueBytes(answer.value, MAX_QUERY_ANSWER_PAYLOAD_ESTIMATE_BYTES)
     + (answer.page == null ? 0 : approximatePayloadValueBytes(answer.page, MAX_QUERY_ANSWER_PAYLOAD_ESTIMATE_BYTES))
     + (answer.continuations == null ? 0 : approximatePayloadValueBytes(answer.continuations, MAX_QUERY_ANSWER_PAYLOAD_ESTIMATE_BYTES))
     + (answer.profile == null ? 0 : approximatePayloadValueBytes(answer.profile, MAX_QUERY_ANSWER_PAYLOAD_ESTIMATE_BYTES));
+}
+
+function queryClaimPageState(
+  page: QueryClaimAnswerPageShape | null | undefined,
+): QueryClaimPageState | null {
+  if (page == null) {
+    return null;
+  }
+  return {
+    returnedRows: finiteNonNegativeInteger(page.returnedRows) ?? 0,
+    totalRows: finiteNonNegativeInteger(page.totalRows),
+    exhausted: page.exhausted === true,
+    hasNextCursor: typeof page.nextCursor === 'string' && page.nextCursor.length > 0,
+    cursorProblemKind: typeof page.cursorProblem?.kind === 'string'
+      ? page.cursorProblem.kind
+      : null,
+    clamped: page.clamped === true,
+    byteClamped: page.byteClamped === true,
+  };
+}
+
+function finiteNonNegativeInteger(value: unknown): number | null {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+    ? value
+    : null;
 }
 
 export function queryAnswerRowCount(value: unknown): number {

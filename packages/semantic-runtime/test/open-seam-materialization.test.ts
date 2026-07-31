@@ -4,8 +4,11 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vitest';
 
 import { createSemanticRuntime } from '../src/api/runtime.js';
-import type { OpenSeam } from '../src/kernel/open-seam.js';
-import type { KernelStore } from '../src/kernel/store.js';
+import { SourceFileAddress, SourceFileRole, SourceLanguage } from '../src/kernel/address.js';
+import { RuntimeExpressionIdentity } from '../src/kernel/identity.js';
+import { MaterializationRecord } from '../src/kernel/materialization.js';
+import { OpenSeam, OpenSeamReasonKind } from '../src/kernel/open-seam.js';
+import { KernelStore, KernelStoreBatch } from '../src/kernel/store.js';
 import { KernelVocabulary } from '../src/kernel/vocabulary.js';
 
 const pressureFixtures = fileURLToPath(new URL('../fixtures/pressure', import.meta.url));
@@ -81,7 +84,141 @@ describe('open seam materialization ownership', () => {
       expect(materializationsForSeam(evaluator, seam)).toEqual([]);
     }
   });
+
+  test('requires indexed owners and cited products, claims, and seams', () => {
+    const valid = kernelMaterializationFixture('valid');
+    expect(() => valid.store.commit(new KernelStoreBatch([
+      valid.owner,
+      valid.seam,
+      valid.materialization,
+    ], 'valid-materialization'))).not.toThrow();
+    expect(valid.store.readMaterializationsByOwner(valid.owner.handle)).toEqual([valid.materialization]);
+
+    for (const scenario of [
+      {
+        label: 'owner',
+        records: (fixture: ReturnType<typeof kernelMaterializationFixture>) => [
+          fixture.seam,
+          fixture.materialization,
+        ],
+        message: 'Unknown owner',
+      },
+      {
+        label: 'product',
+        records: (fixture: ReturnType<typeof kernelMaterializationFixture>) => [
+          fixture.owner,
+          fixture.seam,
+          new MaterializationRecord(
+            fixture.materialization.handle,
+            fixture.owner.handle,
+            [fixture.store.handles.product('missing')],
+            [],
+            [fixture.seam.handle],
+          ),
+        ],
+        message: 'Unknown product',
+      },
+      {
+        label: 'claim',
+        records: (fixture: ReturnType<typeof kernelMaterializationFixture>) => [
+          fixture.owner,
+          fixture.seam,
+          new MaterializationRecord(
+            fixture.materialization.handle,
+            fixture.owner.handle,
+            [],
+            [fixture.store.handles.claim('missing')],
+            [fixture.seam.handle],
+          ),
+        ],
+        message: 'Unknown claim',
+      },
+      {
+        label: 'open-seam',
+        records: (fixture: ReturnType<typeof kernelMaterializationFixture>) => [
+          fixture.owner,
+          new MaterializationRecord(
+            fixture.materialization.handle,
+            fixture.owner.handle,
+            [],
+            [],
+            [fixture.store.handles.openSeam('missing')],
+          ),
+        ],
+        message: 'Unknown open seam',
+      },
+    ] as const) {
+      const fixture = kernelMaterializationFixture(scenario.label);
+      expect(() =>
+        fixture.store.commit(new KernelStoreBatch(
+          scenario.records(fixture),
+          `invalid-materialization:${scenario.label}`,
+        ))
+      ).toThrow(scenario.message);
+    }
+  });
+
+  test('rejects duplicate materialization memberships before publication', () => {
+    for (const referenceKind of ['product', 'claim', 'open seam'] as const) {
+      const fixture = kernelMaterializationFixture(`duplicate-${referenceKind}`);
+      const productHandle = fixture.store.handles.product('duplicate');
+      const claimHandle = fixture.store.handles.claim('duplicate');
+      const seamHandle = fixture.seam.handle;
+      const materialization = new MaterializationRecord(
+        fixture.materialization.handle,
+        fixture.owner.handle,
+        referenceKind === 'product' ? [productHandle, productHandle] : [],
+        referenceKind === 'claim' ? [claimHandle, claimHandle] : [],
+        referenceKind === 'open seam' ? [seamHandle, seamHandle] : [seamHandle],
+      );
+      expect(() =>
+        fixture.store.commit(new KernelStoreBatch(
+          [fixture.owner, fixture.seam, materialization],
+          `duplicate-materialization:${referenceKind}`,
+        ))
+      ).toThrow(`Duplicate ${referenceKind} reference`);
+    }
+  });
+
+  test('indexes runtime expression identities admitted by the kernel record union', () => {
+    const store = new KernelStore('runtime-expression-identity-index');
+    const identity = new RuntimeExpressionIdentity(
+      store.handles.identity('runtime-expression'),
+      KernelVocabulary.RuntimeExpression.AccessUse.key,
+      null,
+    );
+    store.commit(new KernelStoreBatch([identity], 'runtime-expression-identity'));
+    expect(store.readIdentity(identity.handle)).toBe(identity);
+    expect(store.read(identity.handle)).toBe(identity);
+  });
 });
+
+function kernelMaterializationFixture(localKey: string) {
+  const store = new KernelStore(`open-seam-materialization:${localKey}`);
+  const owner = new SourceFileAddress(
+    store.handles.address('owner'),
+    'workspace',
+    'src/app.ts',
+    SourceLanguage.TypeScript,
+    SourceFileRole.AppSource,
+  );
+  const seam = new OpenSeam(
+    store.handles.openSeam('seam'),
+    KernelVocabulary.Binding.OpenTargetAccess.key,
+    'Observer selection remains open.',
+    owner.handle,
+    null,
+    [OpenSeamReasonKind.BindingObserverSelectionOpen],
+  );
+  const materialization = new MaterializationRecord(
+    store.handles.materialization('materialization'),
+    owner.handle,
+    [],
+    [],
+    [seam.handle],
+  );
+  return { store, owner, seam, materialization };
+}
 
 async function analyzeFixture(fixtureName: string): Promise<KernelStore> {
   const runtime = await createSemanticRuntime({

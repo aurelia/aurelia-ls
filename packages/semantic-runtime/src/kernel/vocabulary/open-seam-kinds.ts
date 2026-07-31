@@ -343,6 +343,14 @@ export const KernelOpenSeamKinds = {
     ),
   },
   Binding: {
+    /** Controller hydration could not close bindable observer installation. */
+    OpenObserverSetup: defineVocabulary(
+      KernelVocabularyNamespace.Binding,
+      'open-observer-setup',
+      KernelVocabularySlot.OpenSeamKind,
+      'Controller hydration could not close bindable observer selection, requirements, or capabilities.',
+    ),
+
     /** Runtime binding target-side accessor or observer selection stayed open. */
     OpenTargetAccess: defineVocabulary(
       KernelVocabularyNamespace.Binding,

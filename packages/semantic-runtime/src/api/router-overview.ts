@@ -1,6 +1,6 @@
 import {
   SemanticAppQueryKind,
-  SemanticRuntimeAnswerOutcome,
+  SemanticRuntimeAnswerResult,
   type SemanticAppQuery,
   type SemanticComponentAgentsResult,
   type SemanticRecognizedRoutesResult,
@@ -18,7 +18,10 @@ import {
   type SemanticViewportAgentsResult,
   type SemanticViewportInstructionTreesResult,
 } from './contracts.js';
-import { answer } from './answer-helpers.js';
+import {
+  answer,
+  COMPLETE_COLLECTION_ANSWER_OPTIONS,
+} from './answer-helpers.js';
 
 export function readSemanticRouterOverview(
   ask: (query: SemanticAppQuery) => SemanticRuntimeAnswer<unknown>,
@@ -71,7 +74,7 @@ export function readSemanticRouterOverview(
     routerIssues,
   } satisfies SemanticRouterOverviewResult;
   return answer(
-    SemanticRuntimeAnswerOutcome.Hit,
+    SemanticRuntimeAnswerResult.Answered,
     [
       'Read router overview:',
       `${value.counts.routes} route config(s),`,
@@ -85,6 +88,7 @@ export function readSemanticRouterOverview(
       `and ${value.counts.routerIssues} router issue(s).`,
     ].join(' '),
     value,
+    COMPLETE_COLLECTION_ANSWER_OPTIONS,
   );
 }
 

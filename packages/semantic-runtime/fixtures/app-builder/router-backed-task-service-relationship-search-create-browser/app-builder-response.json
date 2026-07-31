@@ -1,5 +1,7 @@
 {
-  "outcome": "hit",
+  "result": "answered",
+  "selection": "not-applicable",
+  "coverage": "complete",
   "summary": "Previewed app-builder ontology SourcePlan with 11 file(s) and 0 issue(s).",
   "value": {
     "displayText": "App-builder SourcePlan preview: root=., template=none, target=none, source=router-backed-list-detail, files=11, witnesses=120, controlUses=11, expectedEffects=22, handoffNotes=6, decisionBundles=1, issues=0.",

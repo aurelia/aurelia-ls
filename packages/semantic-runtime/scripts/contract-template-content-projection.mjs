@@ -961,7 +961,9 @@ const ambiguousProjectionRename = app.ask({
   cursor: ambiguousProjectionCursor,
   newName: 'renamedExposure',
 });
-assert.equal(ambiguousProjectionRename.outcome, 'miss');
+assert.equal(ambiguousProjectionRename.result, 'answered');
+assert.equal(ambiguousProjectionRename.selection, 'absent');
+assert.equal(ambiguousProjectionRename.coverage, 'complete');
 assert.equal(
   ambiguousProjectionRename.value.status,
   'not-available',

@@ -40,7 +40,9 @@ do {
     includeAuthoringTemplates: true,
     appRetention: 'retain-app',
   });
-  assert.match(answer.outcome, /^(hit|partial)$/u, answer.summary);
+  assert.equal(answer.result, 'answered', answer.summary);
+  assert.equal(answer.selection, 'not-applicable', answer.summary);
+  assert.equal(answer.coverage, 'complete', answer.summary);
   rows.push(...answer.value.rows);
   cursor = answer.page?.nextCursor ?? null;
 } while (cursor != null);

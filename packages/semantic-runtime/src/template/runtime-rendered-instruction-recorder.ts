@@ -15,6 +15,7 @@ import {
 } from '../kernel/materialization.js';
 import {
   OpenSeam,
+  OpenSeamReasonKind,
 } from '../kernel/open-seam.js';
 import type {
   KernelStore,
@@ -329,10 +330,16 @@ export class RuntimeRenderedInstructionRecorder {
     }
     const operationLocal = `${local}:target-operation:${operation.productHandle}`;
     const publication = this.publishTargetOperation(operationLocal, operation, renderer.productHandle, source);
-    this.recordOpenTargetOperationSeam(operationLocal, operation, source, records, openSeams);
+    const openSeam = this.recordOpenTargetOperationSeam(operationLocal, operation, source, records, openSeams);
     claims.push(...publication.claims);
     targetOperations.push(operation);
-    records.push(...this.recordsForTargetOperation(operation, renderer, publication, source));
+    records.push(...this.recordsForTargetOperation(
+      operation,
+      renderer,
+      publication,
+      source,
+      openSeam == null ? [] : [openSeam.handle],
+    ));
   }
 
   private publishTargetOperation(
@@ -361,9 +368,9 @@ export class RuntimeRenderedInstructionRecorder {
     source: RuntimeRenderingSourceSet,
     records: KernelStoreRecord[],
     openSeams: OpenSeam[],
-  ): void {
+  ): OpenSeam | null {
     if (operation.openReason == null) {
-      return;
+      return null;
     }
     const seam = new OpenSeam(
       this.store.handles.openSeam(`${operationLocal}:open`),
@@ -371,9 +378,11 @@ export class RuntimeRenderedInstructionRecorder {
       operation.openReason,
       operation.sourceAddressHandle,
       source.evidenceHandle,
+      [OpenSeamReasonKind.BindingTargetProductMissing],
     );
     openSeams.push(seam);
     records.push(seam);
+    return seam;
   }
 
   private recordsForTargetOperation(
@@ -381,6 +390,7 @@ export class RuntimeRenderedInstructionRecorder {
     renderer: RuntimeRenderer,
     publication: RuntimeTargetOperationPublication,
     source: RuntimeRenderingSourceSet,
+    openSeamHandles: readonly OpenSeam['handle'][],
   ): readonly KernelStoreRecord[] {
     return [
       new CompilerIdentity(
@@ -402,6 +412,7 @@ export class RuntimeRenderedInstructionRecorder {
         operation.identityHandle,
         [operation.productHandle],
         publication.claims.map((claim) => claim.handle),
+        openSeamHandles,
       ),
     ];
   }

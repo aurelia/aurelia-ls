@@ -20,8 +20,8 @@ import {
 } from '../kernel/vocabulary.js';
 import {
   runtimeObservedDependencyIdentityLocalName,
-  type RuntimeObservedDependencyAccessUseDraft,
 } from './runtime-observed-dependency-draft.js';
+import type { RuntimeObservedDependencyOccurrence } from './runtime-observed-dependency.js';
 
 export interface SourceObservedDependencyOwner {
   readonly productHandle: ProductHandle;
@@ -33,7 +33,7 @@ export interface SourceObservedDependencyRecordInput {
   readonly store: KernelStore;
   readonly local: string;
   readonly owner: SourceObservedDependencyOwner;
-  readonly draft: RuntimeObservedDependencyAccessUseDraft;
+  readonly occurrence: RuntimeObservedDependencyOccurrence;
   readonly index: number;
   readonly provenanceHandle: ProvenanceHandle;
   readonly claimPredicateKey: ClaimPredicateKey;
@@ -74,7 +74,7 @@ function sourceObservedDependencyPublicationFrame(
 ): SourceObservedDependencyPublicationFrame {
   const productHandle = input.store.handles.product(input.local);
   const identityHandle = input.store.handles.identity(input.local);
-  const sourceAddressHandle = input.draft.accessUseSourceAddressHandle;
+  const sourceAddressHandle = input.occurrence.sourceAddressHandle;
   const claim = new SemanticClaim(
     input.store.handles.claim(`${input.local}:${input.claimLocalName}`),
     input.owner.productHandle,
@@ -100,7 +100,7 @@ function sourceObservedDependencyKernelRecords(
       KernelVocabulary.Binding.ObservedDependency.key,
       input.owner.identityHandle,
       frame.sourceAddressHandle,
-      runtimeObservedDependencyIdentityLocalName(input.draft, input.index),
+      runtimeObservedDependencyIdentityLocalName(input.occurrence, input.index),
     ),
     new MaterializedProduct(
       frame.productHandle,

@@ -39,13 +39,13 @@ const bindingDataFlows = app.ask({
 const failures = [];
 const observedTemplateGetterReads = bindingObservedDependencies.filter((row) =>
   row.definitionName === 'one-hop-forwarding-accessor-app'
-  && row.dependencyKind === 'template-expression-read'
-  && row.observedMemberKind === 'accessor'
+  && row.occurrence.dependencyKind === 'template-expression-read'
+  && row.occurrence.observedMemberKind === 'accessor'
 );
 const directStateTemplateReads = bindingObservedDependencies.filter((row) =>
   row.definitionName === 'one-hop-forwarding-accessor-app'
-  && row.sourceName === 'state.selectedName'
-  && row.observedMemberKind === 'property'
+  && row.occurrence.sourceName === 'state.selectedName'
+  && row.occurrence.observedMemberKind === 'property'
 );
 const directStateDataFlows = bindingDataFlows.filter((row) =>
   row.definitionName === 'one-hop-forwarding-accessor-app'
@@ -99,15 +99,15 @@ if (failures.length > 0) {
 
 function summaryObservedDependency(row) {
   return {
-    sourceName: row.sourceName,
-    sourceRootName: row.sourceRootName,
-    observedMemberKind: row.observedMemberKind,
-    observedMemberSourceState: row.observedMemberSourceState,
+    sourceName: row.occurrence.sourceName,
+    sourceRootName: row.occurrence.sourceRootName,
+    observedMemberKind: row.occurrence.observedMemberKind,
+    observedMemberSourceState: row.occurrence.observedMemberSourceState,
   };
 }
 
 function hasNestedAccessUseTargetHandles(row) {
-  return row.accessUse?.targetLinks?.some((target) =>
+  return row.occurrence.accessUse?.targetLinks?.some((target) =>
     target.authorityProductHandle != null
     && target.targetIdentityHandle != null
     && target.declarationSourceAddressHandle != null

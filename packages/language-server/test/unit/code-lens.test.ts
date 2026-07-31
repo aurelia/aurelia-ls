@@ -38,9 +38,10 @@ function definition(input: {
 
 function answer<T>(rows: T[]) {
   return Promise.resolve({
-    schemaVersion: "0.1",
-    outcome: "hit",
-    closure: "complete",
+    schemaVersion: "0.2",
+    result: "answered",
+    selection: "not-applicable",
+    coverage: "complete",
     summary: "mock",
     value: { rows },
     page: null,
@@ -58,24 +59,29 @@ function createMockContext(input: {
     resourceUri,
     "typescript",
     1,
-    input.text ?? [
-      "export class ProductCard {}",
-      "export class CurrencyValueConverter {}",
-      "export class ValidateBindingBehavior {}",
-    ].join("\n"),
+    input.text ??
+      [
+        "export class ProductCard {}",
+        "export class CurrencyValueConverter {}",
+        "export class ValidateBindingBehavior {}",
+      ].join("\n"),
   );
 
   return {
     workspaceRoot,
     documents: {
-      get: vi.fn((uri: string) => uri === resourceUri ? document : undefined),
+      get: vi.fn((uri: string) => (uri === resourceUri ? document : undefined)),
     },
     logger: { log: vi.fn(), info: vi.fn(), error: vi.fn(), warn: vi.fn() },
     semanticRuntime: {
       resourceDefinitions: vi.fn(() => answer(input.definitions ?? [])),
       runtimeControllers: vi.fn(() => answer(input.controllers ?? [])),
-      bindingBehaviorApplications: vi.fn(() => answer(input.bindingBehaviors ?? [])),
-      valueConverterApplications: vi.fn(() => answer(input.valueConverters ?? [])),
+      bindingBehaviorApplications: vi.fn(() =>
+        answer(input.bindingBehaviors ?? []),
+      ),
+      valueConverterApplications: vi.fn(() =>
+        answer(input.valueConverters ?? []),
+      ),
     },
   };
 }
@@ -133,18 +139,30 @@ describe("runtime-backed code lens", () => {
       ],
     });
 
-    const result = await handleCodeLens(ctx as never, { textDocument: { uri: resourceUri } }, testRequestGuard);
+    const result = await handleCodeLens(
+      ctx as never,
+      { textDocument: { uri: resourceUri } },
+      testRequestGuard,
+    );
 
     expect(result?.map((lens) => lens.command?.title)).toEqual([
       "$(symbol-class) element: 2 bindables · used in 2 templates",
       "$(symbol-class) converter: used in 1 template",
       "$(symbol-class) behavior: used in 1 template",
     ]);
-    expect(result?.every((lens) => lens.command?.command === "editor.action.findReferences")).toBe(true);
+    expect(
+      result?.every(
+        (lens) => lens.command?.command === "editor.action.findReferences",
+      ),
+    ).toBe(true);
     expect(ctx.semanticRuntime.resourceDefinitions).toHaveBeenCalledTimes(1);
     expect(ctx.semanticRuntime.runtimeControllers).toHaveBeenCalledTimes(1);
-    expect(ctx.semanticRuntime.bindingBehaviorApplications).toHaveBeenCalledTimes(1);
-    expect(ctx.semanticRuntime.valueConverterApplications).toHaveBeenCalledTimes(1);
+    expect(
+      ctx.semanticRuntime.bindingBehaviorApplications,
+    ).toHaveBeenCalledTimes(1);
+    expect(
+      ctx.semanticRuntime.valueConverterApplications,
+    ).toHaveBeenCalledTimes(1);
   });
 
   test("keeps no-usage resources visible with an inert command", async () => {
@@ -159,7 +177,11 @@ describe("runtime-backed code lens", () => {
       ],
     });
 
-    const result = await handleCodeLens(ctx as never, { textDocument: { uri: resourceUri } }, testRequestGuard);
+    const result = await handleCodeLens(
+      ctx as never,
+      { textDocument: { uri: resourceUri } },
+      testRequestGuard,
+    );
 
     expect(result).toHaveLength(1);
     expect(result?.[0]?.command).toEqual({
@@ -171,9 +193,17 @@ describe("runtime-backed code lens", () => {
   test("does not query runtime rows for non-TypeScript files", async () => {
     const ctx = createMockContext({});
 
-    const result = await handleCodeLens(ctx as never, {
-      textDocument: { uri: pathToFileURL(path.join(workspaceRoot, "src", "app.html")).toString() },
-    }, testRequestGuard);
+    const result = await handleCodeLens(
+      ctx as never,
+      {
+        textDocument: {
+          uri: pathToFileURL(
+            path.join(workspaceRoot, "src", "app.html"),
+          ).toString(),
+        },
+      },
+      testRequestGuard,
+    );
 
     expect(result).toBeNull();
     expect(ctx.semanticRuntime.resourceDefinitions).not.toHaveBeenCalled();

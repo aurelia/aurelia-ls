@@ -2,7 +2,7 @@
   "schemaVersion": "semantic-fixture-verification.v1",
   "fixtureRole": "app-builder-generated-app-contract",
   "fixtureId": "component-pair-task-section-service-filter-create-complete",
-  "ok": true,
+  "ok": false,
   "expectedEffects": 12,
   "effectResults": [
     {
@@ -46,9 +46,9 @@
       "summary": "Component-pair app shell SourcePlan should hydrate its root component. Observed 25 matching semantic fact(s)."
     },
     {
-      "outcome": "satisfied",
+      "outcome": "failed",
       "effectKind": "open-seam-closure",
-      "summary": "Component-pair app shell SourcePlan should have no open semantic seams. Observed 0 matching semantic fact(s)."
+      "summary": "Component-pair app shell SourcePlan should have no open semantic seams. Observed 1 matching semantic fact(s)."
     },
     {
       "outcome": "satisfied",
@@ -327,7 +327,7 @@
       "outcome": "satisfied",
       "rowFamily": "appBuilderResponse",
       "rowCount": null,
-      "jsonLength": 11611,
+      "jsonLength": 11666,
       "summary": "Generated app-builder contract row family 'appBuilderResponse' matches the stored request output."
     },
     {
@@ -427,5 +427,11 @@
       "summary": "Generated app-builder contract row family 'sourcePlanWitnessRows' matches the stored request output."
     }
   ],
-  "failures": []
+  "failures": [
+    {
+      "outcome": "failed",
+      "effectKind": "open-seam-closure",
+      "summary": "Component-pair app shell SourcePlan should have no open semantic seams. Observed 1 matching semantic fact(s)."
+    }
+  ]
 }

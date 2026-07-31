@@ -11,7 +11,7 @@ file, cursor, range, or known kernel handle and needs a truthful answer plus a n
 ## Responsibilities
 
 - Represent query loci such as workspace, project, source file, source cursor, source range, and kernel record.
-- Preserve outcomes such as hit, miss, ambiguous, open, partial, unsupported, and reroute.
+- Preserve execution result, locus selection, and semantic coverage as independent answer axes.
 - Carry answer basis, projection lanes, expansions, evidence handles, provenance handles, claim
   handles, open seams, page state, and continuations.
 - Resolve host selectors into the narrowest currently known inquiry locus.
@@ -164,10 +164,10 @@ materialization-policy mix. Public control-plane disposal should surface those s
 source-edit/session cleanup into one global count; otherwise adapters cannot tell whether they invalidated runtime-level
 routed answers, cached-app answers, or the wrong profile.
 Graph snapshots also report retained root/child counts, maximum nested answer depth, and the distinct query-kind, locus,
-epoch, materialization-policy, and outcome-key buckets held in the graph indexes. Those counts are the cheap x-ray for
+epoch, materialization-policy, and answer-reuse-key buckets held in the graph indexes. Those counts are the cheap x-ray for
 long-lived adapters: if source invalidation or projection cleanup looks wrong, first check whether the graph actually
 retained the expected epoch/locus/materialization buckets before adding adapter-local caches or scans.
-Snapshots also expose retained query/locus/epoch/outcome key character mass. Query keys are API identity, not durable
+Snapshots also expose retained query/locus/epoch/answer-reuse key character mass. Query keys are API identity, not durable
 semantic truth; if a broad orientation or authoring batch starts retaining large key strings, compact the query identity
 policy at this layer before adding transport-side caches or suppressing useful claims.
 
@@ -195,8 +195,15 @@ the boundary.
 ## Design Pressure
 
 Inquiry is where answer shape is separated from produced facts. Kernel records can preserve that a materializer was
-partial or blocked; an inquiry answer can expose the seams, continuations, source context, and graph handles needed by later
+open or blocked; an inquiry answer can expose the seams, continuations, source context, and graph handles needed by later
 presentation or policy layers without changing what the kernel facts mean.
+
+Every public and lower-level inquiry answer reports three independent axes. `result` says whether execution answered,
+was unsupported or invalid, or failed. `selection` says whether the requested locus was exact, absent, ambiguous,
+rerouted, or not applicable. `coverage` says whether the selected semantic basis is complete, open, deliberately
+truncated, or not applicable. Paging is transport state in `page` and never changes semantic coverage. A collection can
+be `answered/not-applicable/complete` while returning one bounded page, and a cursor answer can be
+`answered/exact/open` without pretending execution failed.
 
 Compiler and editor pressure comes from integrating HTML parsing, attribute classification, expression parsing, and
 instruction lowering. Those flows need to serve batch-like compiler questions and live IDE questions from the same
@@ -217,18 +224,25 @@ caller's possible next move (`orient`, `inspect`, `diagnose`, `repair`, `navigat
 so an answer with many truthful follow-ups can filter without pretending that intent changes the app fact being queried.
 Public app-query callers can pass `continuationIntents` as an answer-envelope filter; do not promote that filter into
 query identity, catalog defaults, cost policy, or app semantics.
+Apply response-envelope policy only after the last reusable query-claim boundary. Claims retain neutral continuation
+rows; `continuationIntents` filters them per response, while `diagnosticProjection` is projected onto diagnostic
+continuation targets when the current source query does not consume that field itself. If the current diagnostic query
+does consume it, it remains part of semantic query identity and materialization policy.
 `InquiryContinuationKind` is the canonical action vocabulary for continuations. Public app-query rows should keep app-query
 specificity in `targetQueryKind` and the shaped `targetQuery` instead of creating a parallel target-specific kind enum.
 
 Continuations should be evidence-gated, not confidence-scored. A continuation may say which intents it serves, which
-cost boundary it crosses, what source precision or coverage is available, and which blockers prevent it from being
-actionable. Avoid numeric confidence and ranking-as-truth; expose evidence state, coverage, source precision,
-staleness, and blockers so the caller can make a task-specific judgment.
+cost boundary it crosses, what source evidence its next move requires, which source facts are already available, and
+which blockers prevent it from being actionable. Avoid numeric confidence and ranking-as-truth; expose answer coverage,
+per-reference source facets, independent epoch dependencies, and blockers so the caller can make a task-specific
+judgment. Runtime-session, project-input, app-world, and source-input dependencies are a set of invalidation authorities,
+not an ordered staleness scale.
 
-Continuation `sourcePrecision` is a compact evidence summary, not a blanket editability claim. Repair-oriented
-diagnostic follow-ups must also inspect the individual source references they are based on: a related diagnostic family
-with one exact authored span and one carrier/external/generated source remains inspectable, but the repair intent must
-carry a blocker until every returned source needed by that repair lane is exact.
+Continuation `sourceRequirement` records what the intended move needs, while `sourceFacts` preserve every distinct
+reference and its independent authored, exact-span, carrier, generated, external, or unavailable facets. Do not collapse
+mixed references into one strongest precision. Repair-oriented follow-ups can remain inspectable when one reference is
+exact and another is carrier-only, generated, external, or unavailable, but must carry a blocker until every source the
+repair requires satisfies its declared requirement.
 
 App-query answers now share a catalog-aware continuation policy, and lower-level `InquiryContinuation` producers must
 attach `InquiryContinuationApplicability` so kernel-side follow-ups use the same intent/evidence vocabulary. Future work
@@ -316,7 +330,7 @@ while cursor-info can expose the strict authoring diagnostic signal.
 `pnpm --filter @aurelia-ls/semantic-runtime pressure:cursor-loci` is the current batch pressure view for this layer. It
 samples bounded template cursor loci, answers completion through the same cursor adapter, compares that substrate answer
 with the public `SemanticApp.ask({ kind: TemplateCompletions })` path, compares cursor site/value-site classification
-with `SemanticApp.ask({ kind: TemplateCursorInfo })`, and prints aggregate site kinds, outcomes, completion pressure
+with `SemanticApp.ask({ kind: TemplateCursorInfo })`, and prints aggregate site kinds, result/selection/coverage axes, completion pressure
 classes, value-site kinds, candidate lanes, public-API mismatches, cursor-info source coverage, hover/navigation
 targets, diagnostic signals, LSP envelopes, value-domain gaps, and bucketed missing-input reasons without paths, source
 text, or candidate names. Use it for LSP-shaped pressure before assuming a gap belongs to parsing, scope construction,

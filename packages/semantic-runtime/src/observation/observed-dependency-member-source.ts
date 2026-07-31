@@ -29,16 +29,22 @@ import {
   CheckerTypeMember,
 } from '../type-system/type-shape.js';
 import {
-  type RuntimeBindingObservedDependency,
+  RuntimeObservedDependencyOccurrence,
+  RuntimeObservedDependencyKind,
   RuntimeObservedMemberSourceState,
   RuntimeObservedMemberSourceRoute,
-  RuntimeObservedDependencyKind,
-} from './runtime-binding-observation.js';
-import type { RuntimeObservedDependencyDraft } from './runtime-observed-dependency-draft.js';
+} from './runtime-observed-dependency.js';
+import type {
+  RuntimeObservedDependencyAccessUseDraft,
+  RuntimeObservedDependencyDraft,
+} from './runtime-observed-dependency-draft.js';
 
 export interface RuntimeObservedMemberSourceProjection {
-  readonly observedMemberKind: RuntimeObservedDependencyDraft['observedMemberKind'];
-  readonly observedMemberSourceAddressHandle: RuntimeObservedDependencyDraft['observedMemberSourceAddressHandle'];
+  readonly observedMemberKind: Exclude<RuntimeObservedDependencyDraft['observedMemberKind'], undefined>;
+  readonly observedMemberSourceAddressHandle: Exclude<
+    RuntimeObservedDependencyDraft['observedMemberSourceAddressHandle'],
+    undefined
+  >;
   /** Whose declaration the address is; owner-value routes are navigation aids, never member proof. */
   readonly observedMemberSourceRoute: RuntimeObservedMemberSourceRoute | null;
 }
@@ -106,14 +112,50 @@ export function observedMemberSourceForRuntimeExpressionAccessUse(
   };
 }
 
-export function observedMemberSourceStateForBindingDependency(input: {
+export function runtimeObservedDependencyOccurrence(input: {
+  readonly dependency: RuntimeObservedDependencyAccessUseDraft;
+  readonly scope: BindingScope | null;
+  readonly projection?: RuntimeObservedMemberSourceProjection | null;
+}): RuntimeObservedDependencyOccurrence {
+  const projection = mergedObservedMemberSourceProjection(
+    input.dependency,
+    input.projection ?? null,
+  );
+  return new RuntimeObservedDependencyOccurrence(
+    input.dependency.accessUseProductHandle,
+    input.dependency.dependencyKind,
+    input.dependency.expressionKind,
+    input.dependency.sourceName,
+    input.dependency.sourceRootName,
+    input.dependency.memberName,
+    input.dependency.keyExpression,
+    input.dependency.methodName,
+    projection.observedMemberKind,
+    projection.observedMemberSourceAddressHandle,
+    observedMemberSourceStateForDependency({
+      dependency: input.dependency,
+      scope: input.scope,
+      projection,
+    }),
+    projection.observedMemberSourceRoute,
+    input.dependency.sourceFileAddressHandle ?? null,
+    input.dependency.scopeLookupAncestor ?? null,
+    input.dependency.spanStart,
+    input.dependency.spanEnd,
+    input.dependency.memberNameSpanStart ?? null,
+    input.dependency.memberNameSpanEnd ?? null,
+    input.dependency.accessUseSourceAddressHandle,
+  );
+}
+
+function observedMemberSourceStateForDependency(input: {
   readonly dependency: RuntimeObservedDependencyDraft;
   readonly scope: BindingScope | null;
-  readonly projection: RuntimeObservedMemberSourceProjection | null;
+  readonly projection: RuntimeObservedMemberSourceProjection;
 }): RuntimeObservedMemberSourceState {
   // Source means "a source route is closed", including honest owner-value routes for weak/dynamic
   // owners; consumers that need member-declaration proof must additionally check the route field.
-  if (input.projection?.observedMemberSourceAddressHandle != null) {
+  if (input.projection.observedMemberSourceAddressHandle != null) {
     return RuntimeObservedMemberSourceState.Source;
   }
   if (isTemporaryObservedCollectionOwner(input.dependency)) {
@@ -128,11 +170,26 @@ export function observedMemberSourceStateForBindingDependency(input: {
   return RuntimeObservedMemberSourceState.Open;
 }
 
-export function isRuntimeObservedDependencyScopeOpenRoot(
-  dependency: RuntimeBindingObservedDependency,
-): boolean {
-  return dependency.observedMemberSourceState === RuntimeObservedMemberSourceState.ScopeOpen
-    && isDirectScopeRootDependency(dependency);
+function mergedObservedMemberSourceProjection(
+  dependency: RuntimeObservedDependencyDraft,
+  projection: RuntimeObservedMemberSourceProjection | null,
+): RuntimeObservedMemberSourceProjection {
+  const observedMemberKind = projection?.observedMemberKind
+    ?? dependency.observedMemberKind
+    ?? null;
+  const observedMemberSourceAddressHandle = projection?.observedMemberSourceAddressHandle
+    ?? dependency.observedMemberSourceAddressHandle
+    ?? null;
+  const observedMemberSourceRoute = projection?.observedMemberSourceRoute
+    ?? dependency.observedMemberSourceRoute
+    ?? (observedMemberSourceAddressHandle == null
+      ? null
+      : RuntimeObservedMemberSourceRoute.MemberDeclaration);
+  return {
+    observedMemberKind,
+    observedMemberSourceAddressHandle,
+    observedMemberSourceRoute,
+  };
 }
 
 export function observedDependencyWithMemberSourceForCheckerType<TDraft extends RuntimeObservedDependencyDraft>(

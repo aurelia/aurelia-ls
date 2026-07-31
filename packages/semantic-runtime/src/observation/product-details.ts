@@ -26,6 +26,7 @@ import type {
 } from './runtime-binding-observation.js';
 import type { ComputedObserverObservedDependency, ComputedObserverSource } from './computed-observer-source.js';
 import type { RuntimeEffect, RuntimeEffectObservedDependency } from './runtime-effect.js';
+import type { RuntimeObservedDependencyOccurrence } from './runtime-observed-dependency.js';
 import { ObservationDetailDescriptors } from './detail-descriptors.js';
 import {
   computedObserverSourceReferenceReferences,
@@ -34,7 +35,7 @@ import {
 } from './structural-references.js';
 
 function runtimeExpressionAccessUseRecords(
-  productHandle: RuntimeBindingObservedDependency['accessUseProductHandle'],
+  productHandle: RuntimeObservedDependencyOccurrence['accessUseProductHandle'],
 ): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     kernelRecordReferences(productHandle),
@@ -80,7 +81,12 @@ function computedObserverDependencyRecords(
     includeObserverBackReference
       ? computedObserverSourceReferenceReferences(dependency.computedObserver)
       : kernelRecordReferences(),
-    runtimeExpressionAccessUseRecords(dependency.accessUseProductHandle),
+    runtimeExpressionAccessUseRecords(dependency.occurrence.accessUseProductHandle),
+    kernelRecordReferences(
+      dependency.occurrence.observedMemberSourceAddressHandle,
+      dependency.occurrence.sourceFileAddressHandle,
+      dependency.occurrence.sourceAddressHandle,
+    ),
   );
 }
 
@@ -92,8 +98,12 @@ function runtimeEffectDependencyRecords(
     includeEffectBackReference
       ? runtimeEffectReferenceReferences(dependency.effect)
       : kernelRecordReferences(),
-    runtimeExpressionAccessUseRecords(dependency.accessUseProductHandle),
-    kernelRecordReferences(dependency.observedMemberSourceAddressHandle),
+    runtimeExpressionAccessUseRecords(dependency.occurrence.accessUseProductHandle),
+    kernelRecordReferences(
+      dependency.occurrence.observedMemberSourceAddressHandle,
+      dependency.occurrence.sourceFileAddressHandle,
+      dependency.occurrence.sourceAddressHandle,
+    ),
   );
 }
 
@@ -102,11 +112,13 @@ function runtimeBindingObservedDependencyReferences(
 ): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     runtimeBindingReferenceReferences(dependency.binding),
-    runtimeExpressionAccessUseRecords(dependency.accessUseProductHandle),
+    runtimeExpressionAccessUseRecords(dependency.occurrence.accessUseProductHandle),
     kernelRecordReferences(
       dependency.dataFlowProductHandle,
       dependency.expressionProductHandle,
-      dependency.observedMemberSourceAddressHandle,
+      dependency.occurrence.observedMemberSourceAddressHandle,
+      dependency.occurrence.sourceFileAddressHandle,
+      dependency.occurrence.sourceAddressHandle,
     ),
     [kernelProductDetailReference(
       ObservationDetailDescriptors.RuntimeBindingDataFlow,
@@ -140,7 +152,7 @@ function computedObserverSourceReferences(
       kernelRecordReferences(
         dependency.productHandle,
         dependency.identityHandle,
-        dependency.sourceAddressHandle,
+        dependency.occurrence.sourceAddressHandle,
       ),
       [kernelProductDetailReference(
         ObservationDetailDescriptors.ComputedObserverObservedDependency,
@@ -171,7 +183,7 @@ function runtimeEffectReferences(
       kernelRecordReferences(
         dependency.productHandle,
         dependency.identityHandle,
-        dependency.sourceAddressHandle,
+        dependency.occurrence.sourceAddressHandle,
       ),
       [kernelProductDetailReference(
         ObservationDetailDescriptors.RuntimeEffectObservedDependency,
@@ -248,10 +260,12 @@ export const ObservationProductDetails = {
     ObservationDetailDescriptors.RuntimeWatcherObservedDependency,
     (dependency) => mergeKernelDetailReferences(
       runtimeWatcherReferenceReferences(dependency.watcher),
-      runtimeExpressionAccessUseRecords(dependency.accessUseProductHandle),
+      runtimeExpressionAccessUseRecords(dependency.occurrence.accessUseProductHandle),
       kernelRecordReferences(
         dependency.expressionProductHandle,
-        dependency.observedMemberSourceAddressHandle,
+        dependency.occurrence.observedMemberSourceAddressHandle,
+        dependency.occurrence.sourceFileAddressHandle,
+        dependency.occurrence.sourceAddressHandle,
       ),
       [kernelProductDetailReference(
         TemplateDetailDescriptors.ExpressionParse,

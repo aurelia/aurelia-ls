@@ -1,6 +1,6 @@
 import type { StaticProjectEvaluationResult } from '../evaluation/project-evaluation.js';
 import {
-  SemanticRuntimeAnswerOutcome,
+  SemanticRuntimeAnswerResult,
   type SemanticRuntimeAnswer,
   type SemanticRuntimePageInput,
   type SemanticUnresolvedModuleRow,
@@ -8,7 +8,7 @@ import {
 } from './contracts.js';
 import {
   answer,
-  outcomeForPagedRows,
+  COMPLETE_COLLECTION_ANSWER_OPTIONS,
   pageRows,
 } from './answer-helpers.js';
 import {
@@ -30,9 +30,9 @@ export function readSemanticUnresolvedModules(
     );
   const paged = pageRows(rows, page);
   return answer(
-    outcomeForPagedRows(paged),
+    SemanticRuntimeAnswerResult.Answered,
     `Returned ${paged.rows.length} of ${rows.length} unresolved module edge(s).`,
     { rows: paged.rows },
-    paged.page,
+    { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
   );
 }

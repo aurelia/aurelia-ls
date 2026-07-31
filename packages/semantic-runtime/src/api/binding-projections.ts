@@ -2,16 +2,21 @@ import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-
 import type { KernelStore } from '../kernel/store.js';
 import { readTemplateExpressionParse } from '../template/expression-parse-product.js';
 import {
-  RuntimeObservedDependencyKind,
   type RuntimeBindingDataFlow,
   type RuntimeBindingDataFlowValueConverterWritebackStage,
   type RuntimeBindingObservedDependency,
 } from '../observation/runtime-binding-observation.js';
 import { RuntimeOperationRealization } from '../runtime-expression/runtime-operation.js';
 import {
-  requireRuntimeExpressionAccessUseOccurrenceRow,
   runtimeExpressionAccessUseRow,
 } from './runtime-expression-projections.js';
+import {
+  type ObservedDependencyOwnerProjectionInput,
+  observedDependencyOccurrenceRow,
+  observedDependencyOwnerRow,
+  observedDependencyRowKey,
+} from './observed-dependency-projections.js';
+import { RuntimeExpressionAccessOwnerKind } from '../runtime-expression/runtime-expression-access-use.js';
 import {
   runtimeBindingPrimitiveValueApiDisplay,
   runtimeBindingPrimitiveValueDomainKinds,
@@ -20,10 +25,10 @@ import type { TemplateExpressionParse } from '../template/value-site.js';
 import type { TemplateVisibleResourceReference } from '../template/compiler-world-reference.js';
 import {
   describeAddress,
+  semanticSourceReferenceMatchesFilePath,
   sourceReferenceForParserSpan,
   type SemanticSourceReference,
 } from './source-reference.js';
-import { sourceSpanFromBounds } from '../expression/source-span.js';
 import { runtimeAssignmentTargetAstForExpression } from '../expression/runtime-assignment.js';
 import { bindingDataFlowDirectionIncludesTargetToSource } from '../observation/binding-data-flow-direction.js';
 import { completedTemplateExpressionAstForParse } from '../template/expression-parse-projection.js';
@@ -48,12 +53,14 @@ import type {
   SemanticBindingValueChannelSummaryResult,
   SemanticBindingValueChannelSummaryRow,
   SemanticObservedMemberSourceState,
+  SemanticObservedDependencyLocus,
   SemanticRuntimeExpressionAccessUseRow,
   SemanticExpressionResourceLifecycleEffectsRow,
   SemanticTargetOperationRow,
   SemanticTemplateResourceReferenceRow,
   SemanticValueConverterApplicationRow,
 } from './contracts.js';
+import { SemanticObservedDependencyLocusKind } from './contracts.js';
 import {
   resourceLocalBindingBehaviorApplications,
   resourceLocalBindingDataFlows,
@@ -550,33 +557,96 @@ export function readBindingObservedDependencyRows(
   emission: AureliaAppWorldProjectEmission,
   store: KernelStore,
   handles: boolean,
+  locus?: SemanticObservedDependencyLocus | null,
 ): readonly SemanticBindingObservedDependencyRow[] {
-  return bindingProjectionResources(emission)
-    .flatMap((resource): readonly SemanticBindingObservedDependencyRow[] =>
-      resourceLocalBindingObservedDependencies(store, resource).map((dependency) =>
-        bindingObservedDependencyRow(resource.compilation.definition.name, dependency, store, handles)
-      )
-    )
-    .sort((left, right) =>
-      `${left.definitionName}:${left.sourceName ?? ''}:${left.dependencyKind}:${left.memberName ?? ''}`
-        .localeCompare(`${right.definitionName}:${right.sourceName ?? ''}:${right.dependencyKind}:${right.memberName ?? ''}`)
-    );
+  return filterBindingObservedDependencyFacts(
+    bindingObservedDependencyFacts(emission, store),
+    locus,
+  ).map((fact) => bindingObservedDependencyRow(fact, store, handles));
 }
 
 export function readBindingObservedDependencySummary(
   emission: AureliaAppWorldProjectEmission,
   store: KernelStore,
+  locus?: SemanticObservedDependencyLocus | null,
 ): SemanticBindingObservedDependencySummaryResult {
-  const rows = readBindingObservedDependencyRows(emission, store, false);
-  const summaryRows = summarizeBindingObservedDependencies(rows);
-  const memberSourceStateRows = summarizeBindingObservedDependencyMemberSourceStates(rows);
+  const facts = filterBindingObservedDependencyFacts(
+    bindingObservedDependencyFacts(emission, store),
+    locus,
+  );
+  const summaryRows = summarizeBindingObservedDependencies(facts);
+  const memberSourceStateRows = summarizeBindingObservedDependencyMemberSourceStates(facts);
   return {
-    displayText: bindingObservedDependencySummaryDisplayText(rows.length, summaryRows, memberSourceStateRows),
-    totalRows: rows.length,
+    displayText: bindingObservedDependencySummaryDisplayText(facts.length, summaryRows, memberSourceStateRows),
+    totalRows: facts.length,
     summaryRows: summaryRows.length,
     memberSourceStateRows,
     rows: summaryRows,
   };
+}
+
+interface BindingObservedDependencyProjectionFact {
+  readonly definitionName: string;
+  readonly dependency: RuntimeBindingObservedDependency;
+  readonly owner: ObservedDependencyOwnerProjectionInput;
+  readonly ownerKey: string;
+  readonly rowKey: string;
+  readonly source: SemanticSourceReference | null;
+}
+
+function bindingObservedDependencyFacts(
+  emission: AureliaAppWorldProjectEmission,
+  store: KernelStore,
+): readonly BindingObservedDependencyProjectionFact[] {
+  return bindingProjectionResources(emission)
+    .flatMap((resource): readonly BindingObservedDependencyProjectionFact[] =>
+      resourceLocalBindingObservedDependencies(store, resource).map((dependency) => {
+        const owner: ObservedDependencyOwnerProjectionInput = {
+          kind: RuntimeExpressionAccessOwnerKind.Binding,
+          productHandle: dependency.binding.productHandle,
+          identityHandle: dependency.binding.identityHandle,
+          sourceAddressHandle: dependency.binding.addressHandle,
+        };
+        const ownerRow = observedDependencyOwnerRow(store, owner, false);
+        return {
+          definitionName: resource.compilation.definition.name,
+          dependency,
+          owner,
+          ownerKey: ownerRow.ownerKey,
+          rowKey: observedDependencyRowKey(ownerRow, dependency.identityHandle),
+          source: describeAddress(store, dependency.occurrence.sourceAddressHandle),
+        };
+      })
+    )
+    .sort((left, right) => {
+      const leftOccurrence = left.dependency.occurrence;
+      const rightOccurrence = right.dependency.occurrence;
+      return `${left.definitionName}:${leftOccurrence.sourceName ?? ''}:${leftOccurrence.dependencyKind}:${leftOccurrence.memberName ?? ''}:${left.rowKey}`
+        .localeCompare(
+          `${right.definitionName}:${rightOccurrence.sourceName ?? ''}:${rightOccurrence.dependencyKind}:${rightOccurrence.memberName ?? ''}:${right.rowKey}`,
+        );
+    });
+}
+
+function filterBindingObservedDependencyFacts(
+  facts: readonly BindingObservedDependencyProjectionFact[],
+  locus: SemanticObservedDependencyLocus | null | undefined,
+): readonly BindingObservedDependencyProjectionFact[] {
+  if (locus == null || locus.kind === SemanticObservedDependencyLocusKind.Project) {
+    return facts;
+  }
+  switch (locus.kind) {
+    case SemanticObservedDependencyLocusKind.SourceFile:
+      return facts.filter((fact) =>
+        semanticSourceReferenceMatchesFilePath(fact.source, locus.sourceFile.filePath)
+      );
+    case SemanticObservedDependencyLocusKind.Owner:
+      return facts.filter((fact) => fact.ownerKey === locus.ownerKey);
+    case SemanticObservedDependencyLocusKind.Row:
+      return facts.filter((fact) => fact.rowKey === locus.rowKey);
+    case SemanticObservedDependencyLocusKind.Cluster:
+      return facts.filter((fact) => bindingObservedDependencyClusterKey(fact) === locus.clusterKey);
+  }
 }
 
 export function bindingProjectionResources(
@@ -1107,27 +1177,22 @@ function isEmptyArrayInferenceTypeDisplay(display: string | null): boolean {
 }
 
 function summarizeBindingObservedDependencies(
-  rows: readonly SemanticBindingObservedDependencyRow[],
+  facts: readonly BindingObservedDependencyProjectionFact[],
 ): readonly SemanticBindingObservedDependencySummaryRow[] {
   const groups = new Map<string, BindingObservedDependencySummaryAccumulator>();
-  for (const row of rows) {
-    const key = [
-      row.dependencyKind,
-      row.bindingKind,
-      row.realization,
-      row.observedMemberSourceState,
-      row.observedMemberKind ?? '',
-      row.sourceRootName ?? '',
-    ].join('|');
+  for (const fact of facts) {
+    const occurrence = fact.dependency.occurrence;
+    const key = bindingObservedDependencyClusterKey(fact);
     let group = groups.get(key);
     if (group == null) {
       group = {
-        dependencyKind: row.dependencyKind,
-        bindingKind: row.bindingKind,
-        realization: row.realization,
-        observedMemberSourceState: row.observedMemberSourceState,
-        observedMemberKind: row.observedMemberKind,
-        sourceRootName: row.sourceRootName,
+        clusterKey: key,
+        dependencyKind: occurrence.dependencyKind,
+        bindingKind: fact.dependency.binding.bindingKind,
+        realization: fact.dependency.realization,
+        observedMemberSourceState: occurrence.observedMemberSourceState,
+        observedMemberKind: occurrence.observedMemberKind,
+        sourceRootName: occurrence.sourceRootName,
         count: 0,
         expressionKinds: new Set(),
         sourceRootNames: new Set(),
@@ -1141,27 +1206,28 @@ function summarizeBindingObservedDependencies(
       groups.set(key, group);
     }
     group.count += 1;
-    group.expressionKinds.add(row.expressionKind);
-    addNameParts(group.sourceRootNames, row.sourceRootName);
-    if (row.sourceName != null) {
-      group.sourceNames.add(row.sourceName);
+    group.expressionKinds.add(occurrence.expressionKind);
+    addNameParts(group.sourceRootNames, occurrence.sourceRootName);
+    if (occurrence.sourceName != null) {
+      group.sourceNames.add(occurrence.sourceName);
     }
-    if (row.memberName != null) {
-      group.memberNames.add(row.memberName);
+    if (occurrence.memberName != null) {
+      group.memberNames.add(occurrence.memberName);
     }
-    if (row.methodName != null) {
-      group.methodNames.add(row.methodName);
+    if (occurrence.methodName != null) {
+      group.methodNames.add(occurrence.methodName);
     }
-    if (row.keyExpression != null) {
-      group.keyExpressions.add(row.keyExpression);
+    if (occurrence.keyExpression != null) {
+      group.keyExpressions.add(occurrence.keyExpression);
     }
-    group.definitionNames.add(row.definitionName);
-    if (row.observedMemberSourceState === 'source') {
+    group.definitionNames.add(fact.definitionName);
+    if (occurrence.observedMemberSourceState === 'source') {
       group.sourceBackedCount += 1;
     }
   }
   return [...groups.values()]
     .map((group): SemanticBindingObservedDependencySummaryRow => ({
+      clusterKey: group.clusterKey,
       dependencyKind: group.dependencyKind,
       bindingKind: group.bindingKind,
       realization: group.realization,
@@ -1191,15 +1257,30 @@ function summarizeBindingObservedDependencies(
     );
 }
 
+function bindingObservedDependencyClusterKey(
+  fact: BindingObservedDependencyProjectionFact,
+): string {
+  const occurrence = fact.dependency.occurrence;
+  return [
+    occurrence.dependencyKind,
+    fact.dependency.binding.bindingKind,
+    fact.dependency.realization,
+    occurrence.observedMemberSourceState,
+    occurrence.observedMemberKind ?? '',
+    occurrence.sourceRootName ?? '',
+  ].join('|');
+}
+
 function summarizeBindingObservedDependencyMemberSourceStates(
-  rows: readonly SemanticBindingObservedDependencyRow[],
+  facts: readonly BindingObservedDependencyProjectionFact[],
 ): readonly SemanticBindingObservedDependencyMemberSourceStateSummaryRow[] {
   const groups = new Map<SemanticObservedMemberSourceState, BindingObservedDependencyMemberSourceStateSummaryAccumulator>();
-  for (const row of rows) {
-    let group = groups.get(row.observedMemberSourceState);
+  for (const fact of facts) {
+    const occurrence = fact.dependency.occurrence;
+    let group = groups.get(occurrence.observedMemberSourceState);
     if (group == null) {
       group = {
-        observedMemberSourceState: row.observedMemberSourceState,
+        observedMemberSourceState: occurrence.observedMemberSourceState,
         count: 0,
         dependencyKinds: new Set(),
         bindingKinds: new Set(),
@@ -1208,15 +1289,15 @@ function summarizeBindingObservedDependencyMemberSourceStates(
         definitionNames: new Set(),
         sourceBackedCount: 0,
       };
-      groups.set(row.observedMemberSourceState, group);
+      groups.set(occurrence.observedMemberSourceState, group);
     }
     group.count += 1;
-    group.dependencyKinds.add(row.dependencyKind);
-    group.bindingKinds.add(row.bindingKind);
-    group.observedMemberKinds.add(row.observedMemberKind);
-    addNameParts(group.sourceRootNames, row.sourceRootName);
-    group.definitionNames.add(row.definitionName);
-    if (row.observedMemberSourceState === 'source') {
+    group.dependencyKinds.add(occurrence.dependencyKind);
+    group.bindingKinds.add(fact.dependency.binding.bindingKind);
+    group.observedMemberKinds.add(occurrence.observedMemberKind);
+    addNameParts(group.sourceRootNames, occurrence.sourceRootName);
+    group.definitionNames.add(fact.definitionName);
+    if (occurrence.observedMemberSourceState === 'source') {
       group.sourceBackedCount += 1;
     }
   }
@@ -1240,6 +1321,7 @@ function summarizeBindingObservedDependencyMemberSourceStates(
 }
 
 interface BindingObservedDependencySummaryAccumulator {
+  readonly clusterKey: string;
   readonly dependencyKind: SemanticBindingObservedDependencySummaryRow['dependencyKind'];
   readonly bindingKind: SemanticBindingObservedDependencySummaryRow['bindingKind'];
   readonly realization: SemanticBindingObservedDependencySummaryRow['realization'];
@@ -1571,49 +1653,28 @@ function sourceAssignmentOccurrenceSource(
 }
 
 function bindingObservedDependencyRow(
-  definitionName: string,
-  dependency: RuntimeBindingObservedDependency,
+  fact: BindingObservedDependencyProjectionFact,
   store: KernelStore,
   handles: boolean,
 ): SemanticBindingObservedDependencyRow {
-  const source = describeAddress(store, dependency.sourceAddressHandle);
-  const accessUse = requireRuntimeExpressionAccessUseOccurrenceRow(
-    store,
-    dependency.accessUseProductHandle,
-    handles,
-  );
+  const dependency = fact.dependency;
+  const owner = observedDependencyOwnerRow(store, fact.owner, handles);
+  const occurrence = observedDependencyOccurrenceRow(store, dependency.occurrence, handles);
   return {
-    definitionName,
+    definitionName: fact.definitionName,
     bindingKind: dependency.binding.bindingKind,
     realization: dependency.realization,
-    dependencyKind: dependency.dependencyKind,
-    expressionKind: dependency.expressionKind,
-    sourceName: dependency.sourceName,
-    sourceRootName: dependency.sourceRootName,
-    memberName: dependency.memberName,
-    keyExpression: dependency.keyExpression,
-    methodName: dependency.methodName,
-    accessUse,
-    observedMemberKind: dependency.observedMemberKind,
-    observedMemberSource: describeAddress(store, dependency.observedMemberSourceAddressHandle),
-    observedMemberSourceState: dependency.observedMemberSourceState,
-    observedMemberSourceRoute: dependency.observedMemberSourceRoute,
-    spanStart: dependency.spanStart,
-    spanEnd: dependency.spanEnd,
-    memberTokenSource: dependency.dependencyKind === RuntimeObservedDependencyKind.TemplateExpressionRead
-      ? accessUse.nameSource
-      : memberTokenSourceReference(source, dependency),
-    source,
+    rowKey: fact.rowKey,
+    owner,
+    occurrence,
     ...(handles ? {
       handles: {
         bindingProductHandle: dependency.binding.productHandle,
         dataFlowProductHandle: dependency.dataFlowProductHandle,
-        accessUseProductHandle: dependency.accessUseProductHandle,
         observedDependencyProductHandle: dependency.productHandle,
+        observedDependencyIdentityHandle: dependency.identityHandle,
         expressionProductHandle: dependency.expressionProductHandle,
         bindingScopeProductHandle: dependency.bindingScope?.productHandle ?? null,
-        observedMemberSourceAddressHandle: dependency.observedMemberSourceAddressHandle,
-        sourceAddressHandle: dependency.sourceAddressHandle,
       },
     } : {}),
   };
@@ -1624,28 +1685,4 @@ function expressionParseForDataFlow(
   dataFlow: RuntimeBindingDataFlow,
 ): TemplateExpressionParse | null {
   return readTemplateExpressionParse(store, dataFlow.expressionProductHandle);
-}
-
-/**
- * Authored token for the value whose observer is requested. For a derived collection read this can
- * be the preceding call (`filter` in `items.filter().map()`), while the linked access use owns the
- * operation token (`map`). The token lives in the same authored file as the expression source, so
- * no separate kernel address is minted for it.
- */
-function memberTokenSourceReference(
-  source: SemanticSourceReference | null,
-  dependency: RuntimeBindingObservedDependency,
-): SemanticSourceReference | null {
-  if (
-    source?.path == null
-    || dependency.memberNameSpanStart == null
-    || dependency.memberNameSpanEnd == null
-  ) {
-    return null;
-  }
-  return sourceReferenceForParserSpan(
-    source.path,
-    sourceSpanFromBounds(dependency.memberNameSpanStart, dependency.memberNameSpanEnd),
-    'name',
-  );
 }

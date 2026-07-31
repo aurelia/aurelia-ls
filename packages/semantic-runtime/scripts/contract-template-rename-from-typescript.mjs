@@ -54,7 +54,9 @@ const declarationStart = viewModelText.indexOf('title');
 const tsUsageStart = viewModelText.indexOf('title', declarationStart + 'title'.length);
 
 const prepare = await askRenameFromTypeScript(null, declarationStart + 1);
-assert.equal(prepare.outcome, 'hit');
+assert.equal(prepare.result, 'answered');
+assert.equal(prepare.selection, 'exact');
+assert.equal(prepare.coverage, 'complete');
 assert.equal(prepare.value.status, 'available');
 assert.equal(prepare.value.placeholder, 'title');
 assert.equal(prepare.value.templateReferenceCount, 2);
@@ -67,7 +69,8 @@ assert.equal(prepare.value.activeSource?.start, declarationStart);
 assert.equal(prepare.value.edits.length, 0, 'Prepare rename should not emit template edits before a new name is supplied.');
 
 const invalid = await askRenameFromTypeScript('not-valid-name', declarationStart + 1);
-assert.equal(invalid.outcome, 'miss');
+assert.equal(invalid.result, 'answered');
+assert.equal(invalid.selection, 'exact');
 assert.equal(invalid.value.status, 'invalid-name');
 assert.equal(invalid.value.reason, 'invalid-new-name');
 
@@ -91,7 +94,9 @@ assert.notEqual(labelTextTemplateStart, -1, 'Expected labelText template usage.'
 assert.notEqual(displayLabelAttributeStart, -1, 'Expected explicit display-label alias usage.');
 
 const defaultBindablePropagation = await askAliasedBindableRenameFromTypeScript('headline', titleDeclarationStart + 1);
-assert.equal(defaultBindablePropagation.outcome, 'hit');
+assert.equal(defaultBindablePropagation.result, 'answered');
+assert.equal(defaultBindablePropagation.selection, 'exact');
+assert.equal(defaultBindablePropagation.coverage, 'complete');
 assert.equal(defaultBindablePropagation.value.status, 'available');
 assert.equal(defaultBindablePropagation.value.templateReferenceCount, 2);
 assert.equal(defaultBindablePropagation.value.edits.length, 2);
@@ -99,7 +104,9 @@ expectAliasedEdit(defaultBindablePropagation.value.edits, 'src/app.html', titleA
 expectAliasedEdit(defaultBindablePropagation.value.edits, 'src/product-card.html', titleTemplateStart, titleTemplateStart + 'title'.length, 'headline');
 
 const explicitAliasPropagation = await askAliasedBindableRenameFromTypeScript('headlineText', labelTextDeclarationStart + 1);
-assert.equal(explicitAliasPropagation.outcome, 'hit');
+assert.equal(explicitAliasPropagation.result, 'answered');
+assert.equal(explicitAliasPropagation.selection, 'exact');
+assert.equal(explicitAliasPropagation.coverage, 'complete');
 assert.equal(explicitAliasPropagation.value.status, 'available');
 assert.equal(explicitAliasPropagation.value.templateReferenceCount, 2);
 assert.equal(explicitAliasPropagation.value.edits.length, 1, 'TS-origin property rename should not rewrite explicit bindable aliases.');
@@ -126,11 +133,10 @@ async function askRenameFromTypeScript(newName, offset) {
     cursor: cursorAtOffset(viewModelPath, viewModelText, offset),
     ...(newName == null ? {} : { newName }),
     analysisDepth: 'binding-observation',
-    diagnosticProjection: 'type-projection',
     includeAuthoringTemplates: true,
     appRetention: 'retain-app',
   });
-  assert.match(answer.outcome, /^(hit|miss|partial)$/u, answer.summary);
+  assert.equal(answer.result, 'answered', answer.summary);
   return answer;
 }
 
@@ -141,16 +147,17 @@ async function askAliasedBindableRenameFromTypeScript(newName, offset) {
     cursor: cursorAtOffset(aliasedBindableProductDefinitionPath, aliasedBindableProductDefinitionText, offset),
     ...(newName == null ? {} : { newName }),
     analysisDepth: 'binding-observation',
-    diagnosticProjection: 'type-projection',
     includeAuthoringTemplates: true,
     appRetention: 'retain-app',
   });
-  assert.match(answer.outcome, /^(hit|miss|partial)$/u, answer.summary);
+  assert.equal(answer.result, 'answered', answer.summary);
   return answer;
 }
 
 function assertTemplateRenameEdits(answer, label) {
-  assert.equal(answer.outcome, 'hit', `${label}: expected hit.`);
+  assert.equal(answer.result, 'answered', `${label}: expected an answered query.`);
+  assert.equal(answer.selection, 'exact', `${label}: expected exact TypeScript symbol selection.`);
+  assert.equal(answer.coverage, 'complete', `${label}: expected complete template propagation coverage.`);
   assert.equal(answer.value.status, 'available', `${label}: expected available rename propagation.`);
   assert.equal(answer.value.templateReferenceCount, 2, `${label}: expected two template references.`);
   assert.equal(answer.value.typeScriptReferenceCount, 0, `${label}: TS edits should be excluded.`);

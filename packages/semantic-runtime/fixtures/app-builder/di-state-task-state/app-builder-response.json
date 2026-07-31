@@ -1,5 +1,7 @@
 {
-  "outcome": "hit",
+  "result": "answered",
+  "selection": "not-applicable",
+  "coverage": "complete",
   "summary": "Previewed app-builder ontology SourcePlan with 1 file(s) and 0 issue(s).",
   "value": {
     "displayText": "App-builder SourcePlan preview: root=., template=none, target=src/task-state.ts, source=di-state-class, files=1, witnesses=2, controlUses=0, expectedEffects=0, handoffNotes=4, decisionBundles=1, issues=0.",

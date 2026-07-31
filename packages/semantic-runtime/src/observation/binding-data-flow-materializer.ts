@@ -26,6 +26,7 @@ import {
 import {
   MaterializationRecord,
   MaterializedProduct,
+  materializationOpenSeamHandlesForOwners,
 } from '../kernel/materialization.js';
 import {
   OpenSeam,
@@ -113,12 +114,14 @@ import {
   RuntimeBindingDataFlowSourceKind,
   RuntimeBindingDataFlowTypeMismatchKind,
   RuntimeBindingObservedDependency,
-  RuntimeObservedDependencyKind,
-  RuntimeObservedMemberSourceRoute,
   type RuntimeBindingValueChannel,
   RuntimeBindingValueChannelKind,
   RuntimeBindingValueChannelTargetMutationKind,
 } from './runtime-binding-observation.js';
+import {
+  RuntimeObservedDependencyKind,
+  RuntimeObservedMemberSourceRoute,
+} from './runtime-observed-dependency.js';
 import {
   RuntimeOperationRealization,
   RuntimeOperationReachability,
@@ -146,7 +149,7 @@ import {
   type RuntimeObservedDependencyAccessUseDraft,
 } from './runtime-observed-dependency-draft.js';
 import {
-  observedMemberSourceStateForBindingDependency,
+  runtimeObservedDependencyOccurrence,
   type RuntimeObservedMemberSourceProjection,
 } from './observed-dependency-member-source.js';
 import {
@@ -294,10 +297,12 @@ interface BindingDataFlowRecordEmission {
 interface BindingDataFlowProductEmission {
   readonly dataFlow: RuntimeBindingDataFlow;
   readonly observedDependencies: readonly RuntimeBindingObservedDependency[];
+  readonly localOpenReasons: readonly BindingDataFlowOpenReason[];
 }
 
 interface BindingDataFlowOpenSeamEmission {
   readonly openSeams: readonly OpenSeam[];
+  readonly openSeamHandles: readonly OpenSeam['handle'][];
   readonly records: readonly KernelStoreRecord[];
 }
 
@@ -388,6 +393,11 @@ type DataFlowDraft = {
   readonly frameworkErrorCode: ObservationFrameworkErrorCode | null;
   readonly openReason: string | null;
 };
+
+interface BindingDataFlowOpenReason {
+  readonly reasonKind: OpenSeamReasonKind;
+  readonly summary: string;
+}
 
 function runtimeBindingDataFlowForDraft(
   store: KernelStore,
@@ -573,7 +583,13 @@ export class RuntimeBindingDataFlowMaterializer {
     const dataFlow = products.dataFlow;
     const claim = this.claimForDataFlow(local, binding, dataFlow, source);
     const accessUseClaims = this.claimsForDataFlowAccessUses(local, dataFlow, source);
-    const openSeams = this.openSeamEmissionForDataFlow(local, binding, target, dataFlow, source);
+    const openSeams = this.openSeamEmissionForDataFlow(
+      local,
+      binding,
+      target,
+      products.localOpenReasons,
+      source,
+    );
     return {
       dataFlow,
       observedDependencies: products.observedDependencies,
@@ -587,7 +603,7 @@ export class RuntimeBindingDataFlowMaterializer {
           dataFlow,
           claim,
           accessUseClaims,
-          openSeams.openSeams,
+          openSeams.openSeamHandles,
           source,
         ),
         ...this.observedDependencyRecords(local, binding, dataFlow, products.observedDependencies, source),
@@ -630,25 +646,42 @@ export class RuntimeBindingDataFlowMaterializer {
     local: string,
     binding: RuntimeDataFlowBinding,
     target: DataFlowTarget,
-    dataFlow: RuntimeBindingDataFlow,
+    localOpenReasons: readonly BindingDataFlowOpenReason[],
     source: BindingDataFlowSourceSet,
   ): BindingDataFlowOpenSeamEmission {
-    if (dataFlow.openReason == null) {
-      return { openSeams: [], records: [] };
+    const inheritedOpenSeamHandles = materializationOpenSeamHandlesForOwners(
+      this.publication,
+      [
+        target.targetAccess?.identityHandle,
+        target.targetOperation?.identityHandle,
+        target.sourceOperation?.identityHandle,
+        target.valueChannel?.identityHandle,
+      ].filter((handle): handle is NonNullable<typeof handle> => handle != null),
+    );
+    if (localOpenReasons.length === 0) {
+      return {
+        openSeams: [],
+        openSeamHandles: inheritedOpenSeamHandles,
+        records: [],
+      };
     }
     const records: KernelStoreRecord[] = [];
     const openSeams: OpenSeam[] = [];
-    this.recordOpenSeam(
+    const openSeam = this.recordOpenSeam(
       `${local}:open-data-flow`,
-      dataFlow.openReason,
+      localOpenReasons.map((reason) => reason.summary).join(' '),
       binding.sourceAddressHandle,
       source,
       records,
       openSeams,
       KernelVocabulary.Binding.OpenDataFlow.key,
-      openSeamReasonKindsForDataFlow(dataFlow, target),
+      [...new Set(localOpenReasons.map((reason) => reason.reasonKind))].sort(),
     );
-    return { openSeams, records };
+    return {
+      openSeams,
+      openSeamHandles: [...new Set([...inheritedOpenSeamHandles, openSeam.handle])].sort(),
+      records,
+    };
   }
 
   private dataFlowForBinding(
@@ -690,6 +723,7 @@ export class RuntimeBindingDataFlowMaterializer {
     );
     return {
       dataFlow,
+      localOpenReasons: localOpenReasonsForDataFlow(draft, target, scope),
       observedDependencies: this.observedDependenciesForDataFlow(
         input,
         local,
@@ -731,7 +765,6 @@ export class RuntimeBindingDataFlowMaterializer {
         dataFlow,
         effect.accessUse.expressionProductHandle,
         effect.scope,
-        effect.accessUse.sourceAddressHandle,
         effect.dependency,
         effect.memberProjection,
       ));
@@ -743,7 +776,6 @@ export class RuntimeBindingDataFlowMaterializer {
     dataFlow: RuntimeBindingDataFlow,
     expressionProductHandle: ProductHandle | null,
     scope: BindingScope | null,
-    sourceAddressHandle: AddressHandle | null,
     dependency: RuntimeObservedDependencyAccessUseDraft,
     memberProjection: RuntimeObservedMemberSourceProjection | null,
   ): RuntimeBindingObservedDependency {
@@ -752,32 +784,14 @@ export class RuntimeBindingDataFlowMaterializer {
       this.store.handles.identity(dependencyLocal),
       binding.toReference(),
       dataFlow.productHandle,
-      dependency.accessUseProductHandle,
       expressionProductHandle,
       scope?.toReference() ?? null,
       dataFlow.realization,
-      dependency.dependencyKind,
-      dependency.expressionKind,
-      dependency.sourceName,
-      dependency.sourceRootName,
-      dependency.memberName,
-      dependency.keyExpression,
-      dependency.methodName,
-      memberProjection?.observedMemberKind ?? dependency.observedMemberKind ?? null,
-      memberProjection?.observedMemberSourceAddressHandle
-        ?? dependency.observedMemberSourceAddressHandle
-        ?? null,
-      observedMemberSourceStateForBindingDependency({
+      runtimeObservedDependencyOccurrence({
         dependency,
         scope,
         projection: memberProjection,
       }),
-      memberProjection?.observedMemberSourceRoute ?? dependency.observedMemberSourceRoute ?? null,
-      dependency.spanStart,
-      dependency.spanEnd,
-      dependency.memberNameSpanStart ?? null,
-      dependency.memberNameSpanEnd ?? null,
-      sourceAddressHandle,
     );
   }
 
@@ -788,7 +802,7 @@ export class RuntimeBindingDataFlowMaterializer {
     dataFlow: RuntimeBindingDataFlow,
     claim: SemanticClaim,
     accessUseClaims: readonly SemanticClaim[],
-    openSeams: readonly OpenSeam[],
+    openSeamHandles: readonly OpenSeam['handle'][],
     source: BindingDataFlowSourceSet,
   ): readonly KernelStoreRecord[] {
     return [
@@ -813,7 +827,7 @@ export class RuntimeBindingDataFlowMaterializer {
         dataFlow.identityHandle,
         [dataFlow.productHandle],
         [claim.handle, ...accessUseClaims.map((accessUseClaim) => accessUseClaim.handle)],
-        openSeams.map((seam) => seam.handle),
+        openSeamHandles,
       ),
     ];
   }
@@ -832,7 +846,6 @@ export class RuntimeBindingDataFlowMaterializer {
         local: dependencyLocal,
         owner: {
           identityHandle: binding.identityHandle,
-          sourceAddressHandle: binding.sourceAddressHandle,
         },
         dependency,
         index,
@@ -1549,18 +1562,73 @@ function openReasonForDataFlow(input: {
   return distinctReasons.length === 0 ? null : distinctReasons.join(' ');
 }
 
-function openSeamReasonKindsForDataFlow(
-  dataFlow: RuntimeBindingDataFlow,
+function localOpenReasonsForDataFlow(
+  draft: DataFlowDraft,
   target: DataFlowTarget,
-): readonly OpenSeamReasonKind[] {
-  const reasons = [
-    ...(target.valueChannel?.openReasonKinds ?? []),
-    ...openSeamReasonKindsForExpressionOpen(dataFlow.sourceTypeOpenKind, dataFlow.sourceTypeOpenReason),
-  ];
-  if (reasons.length === 0 && dataFlow.openReason != null) {
-    reasons.push(OpenSeamReasonKind.BindingSourceUnsupportedExpression);
+  scope: BindingScope | null,
+): readonly BindingDataFlowOpenReason[] {
+  const reasons: BindingDataFlowOpenReason[] = [];
+  const add = (reasonKind: OpenSeamReasonKind, summary: string): void => {
+    if (!reasons.some((reason) => reason.reasonKind === reasonKind && reason.summary === summary)) {
+      reasons.push({ reasonKind, summary });
+    }
+  };
+  if (draft.direction === RuntimeBindingDataFlowDirection.Open) {
+    add(
+      OpenSeamReasonKind.BindingModeOpen,
+      'Binding mode did not close to source-to-target, target-to-source, or two-way data flow.',
+    );
   }
-  return [...new Set(reasons)].sort((left, right) => left.localeCompare(right));
+  if (!target.sourceOnly
+    && target.targetAccess == null
+    && target.targetOperation == null
+    && target.sourceOperation == null) {
+    add(
+      OpenSeamReasonKind.BindingTargetProductMissing,
+      'Runtime binding did not carry a target accessor, direct target operation, or source operation.',
+    );
+  }
+  if (!target.sourceOnly && target.valueChannel == null) {
+    add(
+      OpenSeamReasonKind.BindingValueChannelProductMissing,
+      'Runtime binding did not carry a value-channel product.',
+    );
+  }
+  if (scope == null) {
+    add(
+      OpenSeamReasonKind.BindingScopeOpen,
+      'Runtime instruction scope was not available for binding expression lookup.',
+    );
+  }
+  if (draft.ast == null) {
+    add(
+      OpenSeamReasonKind.BindingExpressionOpen,
+      'Runtime binding source did not expose an evaluable expression AST for binding data flow.',
+    );
+  }
+  for (const reasonKind of openSeamReasonKindsForExpressionOpen(
+    draft.sourceTypeOpenKind,
+    draft.sourceTypeOpenReason,
+  )) {
+    add(reasonKind, draft.sourceTypeOpenReason!);
+  }
+  for (const reasonKind of openSeamReasonKindsForExpressionOpen(
+    draft.targetToSourceValueTypeOpenKind,
+    draft.targetToSourceValueTypeOpenReason,
+  )) {
+    add(reasonKind, draft.targetToSourceValueTypeOpenReason!);
+  }
+  if (
+    bindingDataFlowDirectionIncludesTargetToSource(draft.direction)
+    && !bindingValueChannelMutatesCollection(target.valueChannel)
+    && draft.sourceAssignmentKind === RuntimeBindingDataFlowSourceAssignmentKind.Open
+  ) {
+    add(
+      OpenSeamReasonKind.BindingSourceAssignmentOpen,
+      'Target-to-source data flow could not prove runtime source assignment.',
+    );
+  }
+  return reasons;
 }
 
 function openSeamReasonKindsForExpressionOpen(

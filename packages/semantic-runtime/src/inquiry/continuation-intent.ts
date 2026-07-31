@@ -60,90 +60,65 @@ export const enum InquiryContinuationCost {
 /** Transport-safe value form for continuation cost enum members. */
 export type InquiryContinuationCostValue = InquiryContinuationCost | `${InquiryContinuationCost}`;
 
-/** Evidence authority state a caller should inspect before trusting a continuation. */
-export const enum InquiryEvidenceState {
-  /** Continuation is operational and does not require source/product evidence. */
+/** Source evidence an intended continuation requires before a consumer may act on it. */
+export const enum InquirySourceRequirement {
+  /** The continuation does not depend on source evidence. */
   NotRequired = 'not-required',
-  /** Continuation is grounded in authored or framework source. */
-  SourceBacked = 'source-backed',
-  /** Continuation depends on TypeScript checker/type-projection evidence. */
-  TypeProjected = 'type-projected',
-  /** Continuation uses modeled inference that should remain explainable. */
-  Inferred = 'inferred',
-  /** Continuation is useful specifically because an open seam remains. */
-  Open = 'open',
-}
-
-/** Transport-safe value form for continuation evidence-state enum members. */
-export type InquiryEvidenceStateValue = InquiryEvidenceState | `${InquiryEvidenceState}`;
-
-/** Completeness posture for evidence behind a continuation. */
-export const enum InquiryEvidenceCoverage {
-  /** Evidence is complete for the selected locus. */
-  CompleteForLocus = 'complete-for-locus',
-  /** Evidence is useful but known route-local gaps remain. */
-  PartialKnownGaps = 'partial-known-gaps',
-  /** Evidence is a sample or canary, not a full proof. */
-  Sampled = 'sampled',
-  /** Completeness is not known yet and should not be implied. */
-  Unknown = 'unknown',
-}
-
-/** Transport-safe value form for continuation evidence-coverage enum members. */
-export type InquiryEvidenceCoverageValue = InquiryEvidenceCoverage | `${InquiryEvidenceCoverage}`;
-
-/** Source precision available for an answer or continuation. */
-export const enum InquirySourcePrecision {
-  /** Source precision is irrelevant for this continuation. */
-  NotRequired = 'not-required',
-  /** Continuation can point at an exact authored source span. */
+  /** The continuation requires an admitted authored source file, but not a token span. */
+  AuthoredSource = 'authored-source',
+  /** The continuation requires an exact authored token or expression span. */
   ExactAuthoredSpan = 'exact-authored-span',
-  /** Continuation only knows a broader carrier/header span. */
+}
+
+/** Transport-safe value form for continuation source requirements. */
+export type InquirySourceRequirementValue =
+  InquirySourceRequirement | `${InquirySourceRequirement}`;
+
+/** Independent facets retained for each source reference behind a continuation. */
+export const enum InquirySourceFacet {
+  /** The reference resolves into an admitted authored source file. */
+  AuthoredSource = 'authored-source',
+  /** The reference resolves to an exact authored source span. */
+  ExactAuthoredSpan = 'exact-authored-span',
+  /** The authored reference reaches only a file/header/carrier span. */
   CarrierSpan = 'carrier-span',
-  /** Continuation points at generated overlay or synthetic source evidence. */
-  GeneratedAnchor = 'generated-anchor',
-  /** Continuation points outside the admitted authored project source. */
+  /** The reference itself is generated or synthetic, independently from any authored anchor. */
+  Generated = 'generated',
+  /** The reference points outside admitted authored project source. */
   External = 'external',
+  /** No source reference was available for a fact that requires one. */
+  Unavailable = 'unavailable',
 }
 
-/** Transport-safe value form for continuation source-precision enum members. */
-export type InquirySourcePrecisionValue = InquirySourcePrecision | `${InquirySourcePrecision}`;
+/** Transport-safe value form for source-facet enum members. */
+export type InquirySourceFacetValue = InquirySourceFacet | `${InquirySourceFacet}`;
 
-/** Epoch sensitivity for evidence carried by a continuation. */
-export const enum InquiryEvidenceStaleness {
-  /** Evidence belongs to the current answer/app epoch. */
-  CurrentEpoch = 'current-epoch',
-  /** Evidence must be invalidated when the owning source file changes. */
-  SourceEpochSensitive = 'source-epoch-sensitive',
-  /** Evidence must be invalidated when the project shape changes. */
-  ProjectEpochSensitive = 'project-epoch-sensitive',
-  /** Staleness has not been modeled yet and should stay visible. */
-  Unknown = 'unknown',
+/** Generation authorities whose change can invalidate or reshape a continuation target. */
+export const enum InquiryContinuationEpochDependency {
+  /** The target is valid only for the currently booted semantic-runtime session. */
+  RuntimeSession = 'runtime-session',
+  /** The target depends on the admitted project source/configuration generation. */
+  ProjectInput = 'project-input',
+  /** The target depends on the exact materialized app-world generation. */
+  AppWorld = 'app-world',
+  /** The target carries a source-file locus whose authored generation must remain current. */
+  SourceInput = 'source-input',
 }
 
-/** Transport-safe value form for continuation evidence-staleness enum members. */
-export type InquiryEvidenceStalenessValue = InquiryEvidenceStaleness | `${InquiryEvidenceStaleness}`;
+/** Transport-safe value form for continuation epoch-dependency enum members. */
+export type InquiryContinuationEpochDependencyValue =
+  InquiryContinuationEpochDependency | `${InquiryContinuationEpochDependency}`;
 
-/** Evidence gate attached to a continuation so callers know what kind of proof it carries. */
-export interface InquiryContinuationEvidenceGate {
-  /** Evidence authority state for the continuation. */
-  readonly evidenceState?: InquiryEvidenceStateValue;
-  /** Completeness posture for the selected locus. */
-  readonly coverage?: InquiryEvidenceCoverageValue;
-  /** Source precision available for navigation, edits, or explanation. */
-  readonly sourcePrecision?: InquirySourcePrecisionValue;
-  /** Epoch sensitivity that should guide reuse or invalidation. */
-  readonly staleness?: InquiryEvidenceStalenessValue;
-}
-
-/** Intent, cost, evidence, and blocker envelope for one typed continuation. */
+/** Intent, cost, source requirement, and blocker envelope for one typed continuation. */
 export interface InquiryContinuationApplicability {
   /** Next-move intents this continuation can serve; omitted or empty means intent-neutral. */
   readonly intents?: readonly InquiryContinuationIntentValue[];
   /** Coarse cost boundary for following this continuation. */
   readonly cost?: InquiryContinuationCostValue;
-  /** Evidence obligations a caller should inspect before treating this continuation as actionable. */
-  readonly evidence?: InquiryContinuationEvidenceGate;
+  /** Source evidence the intended move requires; actual answer coverage is reported by the followed query. */
+  readonly sourceRequirement?: InquirySourceRequirementValue;
+  /** Generation authorities whose change can invalidate or reshape the target query. */
+  readonly epochDependencies?: readonly InquiryContinuationEpochDependencyValue[];
   /** Explicit blockers that make the continuation informative but not currently followable/actionable. */
   readonly blockers?: readonly string[];
 }
@@ -152,12 +127,8 @@ export interface InquiryContinuationApplicability {
 export const INTENT_NEUTRAL_CONTINUATION: InquiryContinuationApplicability = {
   intents: [],
   cost: InquiryContinuationCost.ProjectionOnly,
-  evidence: {
-    evidenceState: InquiryEvidenceState.NotRequired,
-    coverage: InquiryEvidenceCoverage.Unknown,
-    sourcePrecision: InquirySourcePrecision.NotRequired,
-    staleness: InquiryEvidenceStaleness.Unknown,
-  },
+  sourceRequirement: InquirySourceRequirement.NotRequired,
+  epochDependencies: [InquiryContinuationEpochDependency.RuntimeSession],
   blockers: [],
 };
 
@@ -165,12 +136,8 @@ export const INTENT_NEUTRAL_CONTINUATION: InquiryContinuationApplicability = {
 export const PAGED_INQUIRY_CONTINUATION: InquiryContinuationApplicability = {
   intents: [InquiryContinuationIntent.Inspect],
   cost: InquiryContinuationCost.Free,
-  evidence: {
-    evidenceState: InquiryEvidenceState.NotRequired,
-    coverage: InquiryEvidenceCoverage.PartialKnownGaps,
-    sourcePrecision: InquirySourcePrecision.NotRequired,
-    staleness: InquiryEvidenceStaleness.CurrentEpoch,
-  },
+  sourceRequirement: InquirySourceRequirement.NotRequired,
+  epochDependencies: [InquiryContinuationEpochDependency.RuntimeSession],
   blockers: [],
 };
 
@@ -178,12 +145,11 @@ export const PAGED_INQUIRY_CONTINUATION: InquiryContinuationApplicability = {
 export const SOURCE_SELECTION_CONTINUATION: InquiryContinuationApplicability = {
   intents: [InquiryContinuationIntent.Navigate, InquiryContinuationIntent.Inspect],
   cost: InquiryContinuationCost.ProjectionOnly,
-  evidence: {
-    evidenceState: InquiryEvidenceState.SourceBacked,
-    coverage: InquiryEvidenceCoverage.CompleteForLocus,
-    sourcePrecision: InquirySourcePrecision.CarrierSpan,
-    staleness: InquiryEvidenceStaleness.SourceEpochSensitive,
-  },
+  sourceRequirement: InquirySourceRequirement.AuthoredSource,
+  epochDependencies: [
+    InquiryContinuationEpochDependency.ProjectInput,
+    InquiryContinuationEpochDependency.SourceInput,
+  ],
   blockers: [],
 };
 
@@ -191,12 +157,8 @@ export const SOURCE_SELECTION_CONTINUATION: InquiryContinuationApplicability = {
 export const SOURCE_INVENTORY_CONTINUATION: InquiryContinuationApplicability = {
   intents: [InquiryContinuationIntent.Orient, InquiryContinuationIntent.Inspect],
   cost: InquiryContinuationCost.ProjectionOnly,
-  evidence: {
-    evidenceState: InquiryEvidenceState.SourceBacked,
-    coverage: InquiryEvidenceCoverage.PartialKnownGaps,
-    sourcePrecision: InquirySourcePrecision.CarrierSpan,
-    staleness: InquiryEvidenceStaleness.ProjectEpochSensitive,
-  },
+  sourceRequirement: InquirySourceRequirement.NotRequired,
+  epochDependencies: [InquiryContinuationEpochDependency.ProjectInput],
   blockers: [],
 };
 
@@ -204,12 +166,8 @@ export const SOURCE_INVENTORY_CONTINUATION: InquiryContinuationApplicability = {
 export const CLAIM_NEIGHBORHOOD_CONTINUATION: InquiryContinuationApplicability = {
   intents: [InquiryContinuationIntent.Inspect],
   cost: InquiryContinuationCost.ProjectionOnly,
-  evidence: {
-    evidenceState: InquiryEvidenceState.Inferred,
-    coverage: InquiryEvidenceCoverage.CompleteForLocus,
-    sourcePrecision: InquirySourcePrecision.NotRequired,
-    staleness: InquiryEvidenceStaleness.CurrentEpoch,
-  },
+  sourceRequirement: InquirySourceRequirement.NotRequired,
+  epochDependencies: [InquiryContinuationEpochDependency.AppWorld],
   blockers: [],
 };
 

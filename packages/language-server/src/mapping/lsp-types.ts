@@ -41,6 +41,7 @@ import {
   diagnosticRepairAffordanceForSuggestion,
   semanticExactSourceReference,
   semanticSourceReferenceContainsOffset,
+  SemanticRuntimeAnswerCoverage,
 } from "@aurelia-ls/semantic-runtime";
 import { canonicalDocumentUri, type DocumentUri } from "../utils/document-uri.js";
 import {
@@ -365,7 +366,8 @@ export function mapSemanticRuntimeTemplateCompletions(
 ): CompletionList {
   const items = answer.value.candidates.map(mapSemanticRuntimeTemplateCompletionCandidate);
   const isIncomplete = answer.page?.nextCursor != null
-    || answer.outcome === "partial"
+    || answer.coverage === SemanticRuntimeAnswerCoverage.Open
+    || answer.coverage === SemanticRuntimeAnswerCoverage.Truncated
     || answer.value.missingInputs.length > 0;
   if (!isIncomplete) {
     return { isIncomplete: false, items };

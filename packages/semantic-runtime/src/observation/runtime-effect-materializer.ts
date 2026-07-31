@@ -87,6 +87,7 @@ import {
 import {
   observedMemberSourceFields,
   observedMemberSourceForCheckerSymbol,
+  runtimeObservedDependencyOccurrence,
 } from './observed-dependency-member-source.js';
 import { ObservationProductDetails } from './product-details.js';
 import { ProxyObservable } from './proxy-observable-dependency.js';
@@ -97,7 +98,7 @@ import {
 import {
   observedDependencyAccessUseDrafts,
 } from './runtime-observed-dependency-access-use.js';
-import { RuntimeObservedDependencyKind } from './runtime-binding-observation.js';
+import { RuntimeObservedDependencyKind } from './runtime-observed-dependency.js';
 import { sourceObservationProductRecords } from './source-observation-product-publication.js';
 import { sourceObservedDependencyRecords } from './source-observed-dependency-publication.js';
 import {
@@ -827,6 +828,10 @@ function runtimeEffectObservedDependencyForDraft(
   index: number,
   provenanceHandle: ProvenanceHandle,
 ): RuntimeEffectObservedDependencyPublication {
+  const occurrence = runtimeObservedDependencyOccurrence({
+    dependency: draft,
+    scope: null,
+  });
   const publication = sourceObservedDependencyRecords({
     store,
     local,
@@ -835,7 +840,7 @@ function runtimeEffectObservedDependencyForDraft(
       identityHandle: effect.identityHandle,
       addressHandle: effect.addressHandle,
     },
-    draft,
+    occurrence,
     index,
     provenanceHandle,
     claimPredicateKey: KernelVocabulary.Observation.RuntimeEffectUsesObservedDependency.key,
@@ -845,19 +850,7 @@ function runtimeEffectObservedDependencyForDraft(
     publication.productHandle,
     publication.identityHandle,
     effect,
-    draft.accessUseProductHandle,
-    draft.dependencyKind,
-    draft.expressionKind,
-    draft.sourceName,
-    draft.sourceRootName,
-    draft.memberName,
-    draft.keyExpression,
-    draft.methodName,
-    draft.observedMemberKind ?? null,
-    draft.observedMemberSourceAddressHandle ?? null,
-    draft.spanStart,
-    draft.spanEnd,
-    publication.sourceAddressHandle,
+    occurrence,
   );
   return {
     detail,

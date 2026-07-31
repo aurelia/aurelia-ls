@@ -1,10 +1,13 @@
 import { describe, expect, test } from 'vitest';
 
-import { answer } from '../src/api/answer-helpers.js';
+import {
+  answer,
+  COMPLETE_COLLECTION_ANSWER_OPTIONS,
+} from '../src/api/answer-helpers.js';
 import type { SemanticApplicationTopologyResult } from '../src/api/app-topology.js';
 import {
   SemanticAppQueryKind,
-  SemanticRuntimeAnswerOutcome,
+  SemanticRuntimeAnswerResult,
   type SemanticAppQuery,
   type SemanticAppSummary,
 } from '../src/api/contracts.js';
@@ -18,22 +21,25 @@ describe('fixture verification', () => {
     const queries: SemanticAppQuery[] = [];
     const source: FixtureVerificationAppSnapshotSource = {
       summary: () => answer(
-        SemanticRuntimeAnswerOutcome.Hit,
+        SemanticRuntimeAnswerResult.Answered,
         'Fixture summary.',
         {} as SemanticAppSummary,
+        COMPLETE_COLLECTION_ANSWER_OPTIONS,
       ),
       ask: (query) => {
         queries.push(query);
         return query.kind === SemanticAppQueryKind.AppTopology
           ? answer(
-              SemanticRuntimeAnswerOutcome.Hit,
+              SemanticRuntimeAnswerResult.Answered,
               'Fixture topology.',
               { routes: [] } as unknown as SemanticApplicationTopologyResult,
+              COMPLETE_COLLECTION_ANSWER_OPTIONS,
             )
           : answer(
-              SemanticRuntimeAnswerOutcome.Hit,
+              SemanticRuntimeAnswerResult.Answered,
               `Fixture rows for ${query.kind}.`,
               { rows: [] },
+              COMPLETE_COLLECTION_ANSWER_OPTIONS,
             );
       },
     };

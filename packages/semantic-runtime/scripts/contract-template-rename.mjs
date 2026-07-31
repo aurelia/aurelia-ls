@@ -93,7 +93,7 @@ const declarationStart = viewModelText.indexOf('title');
 const tsUsageStart = viewModelText.indexOf('title', declarationStart + 'title'.length);
 
 const prepare = await askRename(null);
-assert.equal(prepare.outcome, 'hit');
+assertExactRenameAnswer(prepare);
 assert.equal(prepare.value.status, 'available');
 assert.equal(prepare.value.placeholder, 'title');
 assert.equal(prepare.value.activeSource?.path?.replace(/\\/g, '/'), 'src/app.html');
@@ -101,12 +101,12 @@ assert.equal(prepare.value.activeSource?.start, firstTitleStart);
 assert.equal(prepare.value.edits.length, 0, 'Prepare rename should not invent edits before a new name is supplied.');
 
 const invalid = await askRename('not-valid-name');
-assert.equal(invalid.outcome, 'miss');
+assertExactRenameAnswer(invalid);
 assert.equal(invalid.value.status, 'invalid-name');
 assert.equal(invalid.value.reason, 'invalid-new-name');
 
 const rename = await askRename('heading');
-assert.equal(rename.outcome, 'hit');
+assertExactRenameAnswer(rename);
 assert.equal(rename.value.status, 'available');
 assert.equal(rename.value.templateReferenceCount, 2);
 assert.equal(rename.value.typeScriptReferenceCount, 2);
@@ -138,7 +138,7 @@ const stateScopeRename = await stateScopeRuntime.answerAppQuery({
   includeAuthoringTemplates: true,
   appRetention: 'retain-app',
 });
-assert.equal(stateScopeRename.outcome, 'hit');
+assertExactRenameAnswer(stateScopeRename);
 assert.equal(stateScopeRename.value.status, 'available');
 expectEdit(
   stateScopeRename.value.edits,
@@ -210,14 +210,14 @@ assert.notEqual(resourceOpenTagStart, 0, 'Expected opening item-card tag.');
 assert.notEqual(resourceCloseTagStart, 1, 'Expected closing item-card tag.');
 
 const resourcePrepare = await askResourceRename(null);
-assert.equal(resourcePrepare.outcome, 'hit');
+assertExactRenameAnswer(resourcePrepare);
 assert.equal(resourcePrepare.value.status, 'available');
 assert.equal(resourcePrepare.value.placeholder, 'item-card');
 assert.equal(resourcePrepare.value.activeSource?.path?.replace(/\\/g, '/'), 'src/routes/item-list-route.html');
 assert.equal(resourcePrepare.value.activeSource?.start, resourceOpenTagStart);
 
 const resourceRename = await askResourceRename('product-card');
-assert.equal(resourceRename.outcome, 'hit');
+assertExactRenameAnswer(resourceRename);
 assert.equal(resourceRename.value.status, 'available');
 assert.equal(resourceRename.value.typeScriptReferenceCount, 0);
 assert.equal(resourceRename.value.templateReferenceCount, 2);
@@ -226,14 +226,14 @@ expectEdit(resourceRename.value.edits, 'resource-element-tag', 'src/routes/item-
 expectEdit(resourceRename.value.edits, 'resource-element-tag', 'src/routes/item-list-route.html', resourceCloseTagStart, resourceCloseTagStart + 'item-card'.length, 'product-card', resourceFixtureRoot);
 
 const uppercaseResourceRename = await askResourceRename('ItemCard');
-assert.equal(uppercaseResourceRename.outcome, 'miss');
+assertExactRenameAnswer(uppercaseResourceRename);
 assert.equal(uppercaseResourceRename.value.status, 'invalid-name');
 assert.equal(uppercaseResourceRename.value.reason, 'invalid-new-name');
 assert.match(uppercaseResourceRename.value.displayText, /lowercased HTML/u);
 assert.equal(uppercaseResourceRename.value.edits.length, 0);
 
 const conventionResourcePrepare = await askConventionResourceRename(null);
-assert.equal(conventionResourcePrepare.outcome, 'miss');
+assertExactRenameAnswer(conventionResourcePrepare);
 assert.equal(conventionResourcePrepare.value.status, 'not-available');
 assert.equal(conventionResourcePrepare.value.reason, 'resource-name-has-no-authored-source');
 assert.equal(conventionResourcePrepare.value.edits.length, 0);
@@ -244,13 +244,13 @@ assert.notEqual(attributeDeclarationStart, -1, 'Expected template-probe custom-a
 assert.notEqual(attributeUsageStart, -1, 'Expected template-probe custom-attribute usage.');
 
 const attributePrepare = await askAttributeResourceRename(null);
-assert.equal(attributePrepare.outcome, 'hit');
+assertExactRenameAnswer(attributePrepare);
 assert.equal(attributePrepare.value.status, 'available');
 assert.equal(attributePrepare.value.placeholder, 'template-probe');
 assert.equal(attributePrepare.value.activeSource?.start, attributeUsageStart);
 
 const attributeRename = await askAttributeResourceRename('template-marker');
-assert.equal(attributeRename.outcome, 'hit');
+assertExactRenameAnswer(attributeRename);
 assert.equal(attributeRename.value.status, 'available');
 assert.equal(attributeRename.value.typeScriptReferenceCount, 0);
 assert.equal(attributeRename.value.templateReferenceCount, 1);
@@ -258,7 +258,7 @@ expectEdit(attributeRename.value.edits, 'resource-name-declaration', 'src/templa
 expectEdit(attributeRename.value.edits, 'resource-attribute-target', 'src/template-compiler-errors-app.html', attributeUsageStart, attributeUsageStart + 'template-probe'.length, 'template-marker', attributeFixtureRoot);
 
 const uppercaseAttributeRename = await askAttributeResourceRename('TemplateMarker');
-assert.equal(uppercaseAttributeRename.outcome, 'miss');
+assertExactRenameAnswer(uppercaseAttributeRename);
 assert.equal(uppercaseAttributeRename.value.status, 'invalid-name');
 assert.equal(uppercaseAttributeRename.value.reason, 'invalid-new-name');
 assert.match(uppercaseAttributeRename.value.displayText, /lowercased HTML/u);
@@ -287,13 +287,13 @@ assert.equal(templateControllerDefinition.key, 'au:resource:custom-attribute:vie
 assert.equal(templateControllerDecoratorDefinition.key, 'au:resource:custom-attribute:view-factory-template');
 
 const templateControllerPrepare = await askTemplateControllerResourceRename(templateControllerRuntime, null);
-assert.equal(templateControllerPrepare.outcome, 'hit');
+assertExactRenameAnswer(templateControllerPrepare);
 assert.equal(templateControllerPrepare.value.status, 'available');
 assert.equal(templateControllerPrepare.value.placeholder, 'view-factory-template');
 assert.equal(templateControllerPrepare.value.activeSource?.start, templateControllerUsageStart);
 
 const templateControllerRename = await askTemplateControllerResourceRename(templateControllerRuntime, 'view-factory-panel');
-assert.equal(templateControllerRename.outcome, 'hit');
+assertExactRenameAnswer(templateControllerRename);
 assert.equal(templateControllerRename.value.status, 'available');
 assert.equal(templateControllerRename.value.typeScriptReferenceCount, 0);
 assert.equal(templateControllerRename.value.templateReferenceCount, 1);
@@ -320,7 +320,7 @@ const aliasedPropertyRename = await askAliasedBindableRename(
   'labelText',
   'headlineText',
 );
-assert.equal(aliasedPropertyRename.outcome, 'hit');
+assertExactRenameAnswer(aliasedPropertyRename);
 assert.equal(aliasedPropertyRename.value.status, 'available');
 expectEdit(aliasedPropertyRename.value.edits, 'typescript-reference', 'src/product-card.ts', productLabelTextDeclarationStart, productLabelTextDeclarationStart + 'labelText'.length, 'headlineText', aliasedBindableRoot);
 expectEdit(aliasedPropertyRename.value.edits, 'template-usage', 'src/product-card.html', productLabelTextTemplateStart, productLabelTextTemplateStart + 'labelText'.length, 'headlineText', aliasedBindableRoot);
@@ -340,7 +340,7 @@ const productAliasRename = await askAliasedBindableRename(
   'display-label',
   'headline-label',
 );
-assert.equal(productAliasRename.outcome, 'hit');
+assertExactRenameAnswer(productAliasRename);
 assert.equal(productAliasRename.value.status, 'available');
 assert.equal(productAliasRename.value.typeScriptReferenceCount, 0);
 expectEdit(productAliasRename.value.edits, 'bindable-attribute-alias-declaration', 'src/product-card.ts', productAliasDeclarationStart, productAliasDeclarationStart + 'display-label'.length, 'headline-label', aliasedBindableRoot);
@@ -354,7 +354,7 @@ const inlineAliasRename = await askAliasedBindableRename(
   'display-label',
   'hint-label',
 );
-assert.equal(inlineAliasRename.outcome, 'hit');
+assertExactRenameAnswer(inlineAliasRename);
 assert.equal(inlineAliasRename.value.status, 'available');
 assert.equal(inlineAliasRename.value.typeScriptReferenceCount, 0);
 expectEdit(inlineAliasRename.value.edits, 'bindable-attribute-alias-declaration', 'src/display-hint.ts', displayHintAliasDeclarationStart, displayHintAliasDeclarationStart + 'display-label'.length, 'hint-label', aliasedBindableRoot);
@@ -381,7 +381,7 @@ const inertAttributeRename = await bindingLifecycleRuntime.answerAppQuery({
   includeAuthoringTemplates: true,
   appRetention: 'retain-app',
 });
-assert.equal(inertAttributeRename.outcome, 'hit');
+assertExactRenameAnswer(inertAttributeRename);
 assert.equal(inertAttributeRename.value.status, 'available');
 assert.equal(inertAttributeRename.value.templateReferenceCount, 2);
 assert.equal(inertAttributeRename.value.typeScriptReferenceCount, 1);
@@ -431,6 +431,21 @@ console.log(`Template rename contract passed (${
   + inertAttributeRename.value.edits.length
 } edit row(s)).`);
 
+function assertExactRenameAnswer(answer) {
+  assert.equal(answer.result, 'answered', answer.summary);
+  assert.equal(answer.selection, 'exact', answer.summary);
+  assert.ok(
+    answer.coverage === 'complete' || answer.coverage === 'open',
+    `Expected complete or explicitly open rename coverage, observed ${answer.coverage}.`,
+  );
+}
+
+function assertCompleteCollectionAnswer(answer) {
+  assert.equal(answer.result, 'answered', answer.summary);
+  assert.equal(answer.selection, 'not-applicable', answer.summary);
+  assert.equal(answer.coverage, 'complete', answer.summary);
+}
+
 async function askRename(newName) {
   const answer = await runtime.answerAppQuery({
     kind: SemanticAppQueryKind.TemplateRename,
@@ -442,7 +457,7 @@ async function askRename(newName) {
     includeAuthoringTemplates: true,
     appRetention: 'retain-app',
   });
-  assert.match(answer.outcome, /^(hit|miss|partial)$/u, answer.summary);
+  assertExactRenameAnswer(answer);
   return answer;
 }
 
@@ -457,7 +472,7 @@ async function askResourceRename(newName) {
     includeAuthoringTemplates: true,
     appRetention: 'retain-app',
   });
-  assert.match(answer.outcome, /^(hit|miss|partial)$/u, answer.summary);
+  assertExactRenameAnswer(answer);
   return answer;
 }
 
@@ -478,7 +493,7 @@ async function askConventionResourceRename(newName) {
     includeAuthoringTemplates: true,
     appRetention: 'retain-app',
   });
-  assert.match(answer.outcome, /^(hit|miss|partial)$/u, answer.summary);
+  assertExactRenameAnswer(answer);
   return answer;
 }
 
@@ -493,7 +508,7 @@ async function askAttributeResourceRename(newName) {
     includeAuthoringTemplates: true,
     appRetention: 'retain-app',
   });
-  assert.match(answer.outcome, /^(hit|miss|partial)$/u, answer.summary);
+  assertExactRenameAnswer(answer);
   return answer;
 }
 
@@ -508,7 +523,7 @@ async function askTemplateControllerResourceRename(runtime, newName) {
     includeAuthoringTemplates: true,
     appRetention: 'retain-app',
   });
-  assert.match(answer.outcome, /^(hit|miss|partial)$/u, answer.summary);
+  assertExactRenameAnswer(answer);
   return answer;
 }
 
@@ -523,7 +538,7 @@ async function askAliasedBindableRename(filePath, text, marker, needle, newName)
     includeAuthoringTemplates: true,
     appRetention: 'retain-app',
   });
-  assert.match(answer.outcome, /^(hit|miss|partial)$/u, answer.summary);
+  assertExactRenameAnswer(answer);
   return answer;
 }
 
@@ -534,7 +549,7 @@ async function readTemplateControllerDefinition(runtime, sourceText, label) {
     page: { size: 100 },
     appRetention: 'retain-app',
   });
-  assert.match(answer.outcome, /^(hit|partial)$/u, answer.summary);
+  assertCompleteCollectionAnswer(answer);
   const row = answer.value.rows.find((candidate) => candidate.name === 'view-factory-template');
   assert.ok(row, `Expected view-factory-template definition row for ${label}.`);
   const expectedNameStart = sourceText.indexOf("'view-factory-template'") + 1;

@@ -1690,7 +1690,7 @@ function emptyScopeStateTopology() {
 
 function nonSourceObservedDependencyCount(app) {
   return app.bindingObservedDependencies({ size: 500 }).value.rows
-    .filter((row) => row.observedMemberSourceState !== 'source')
+    .filter((row) => row.occurrence.observedMemberSourceState !== 'source')
     .length;
 }
 

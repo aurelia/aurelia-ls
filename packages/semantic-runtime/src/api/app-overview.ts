@@ -1,6 +1,6 @@
 import {
   SemanticAppQueryKind,
-  SemanticRuntimeAnswerOutcome,
+  SemanticRuntimeAnswerResult,
   type SemanticAppOverviewRequest,
   type SemanticAppOverviewResult,
   type SemanticAppQuery,
@@ -11,7 +11,10 @@ import {
   type SemanticOpenSeamSitesResult,
   type SemanticRuntimeAnswer,
 } from './contracts.js';
-import { answer } from './answer-helpers.js';
+import {
+  answer,
+  COMPLETE_COLLECTION_ANSWER_OPTIONS,
+} from './answer-helpers.js';
 import type { SemanticApplicationTopologyResult } from './app-topology.js';
 import {
   semanticExactSourceReference,
@@ -59,9 +62,10 @@ export function readSemanticAppOverview(
     openSeams,
   };
   return answer(
-    SemanticRuntimeAnswerOutcome.Hit,
+    SemanticRuntimeAnswerResult.Answered,
     `Read app overview: ${summary.summary} ${diagnostics.summary} ${openSeams.summary}`,
     value,
+    COMPLETE_COLLECTION_ANSWER_OPTIONS,
   );
 }
 
@@ -70,8 +74,9 @@ function summarizeCollectionAnswer<TValue extends object>(
 ): SemanticRuntimeAnswer<SemanticAppOverviewCollectionSummary> {
   return {
     schemaVersion: answer.schemaVersion,
-    outcome: answer.outcome,
-    closure: answer.closure,
+    result: answer.result,
+    selection: answer.selection,
+    coverage: answer.coverage,
     summary: answer.summary,
     value: summarizeCollectionValue(answer.value),
     page: answer.page ?? null,
@@ -151,7 +156,7 @@ function overviewOpenSeamSampleDisplay(
       const appRoles = row.applicationFileRoles.length === 0 ? '' : ` appRoles=${row.applicationFileRoles.slice(0, 2).join('+')}`;
       const originKinds = overviewOpenSeamStaticEvaluationOriginKinds(row);
       const evalOrigins = originKinds.length === 0 ? '' : ` evalOrigins=${originKinds.slice(0, 2).join('+')}`;
-      return `${row.seamKindKey} raw=${row.rawRowCount} variants=${row.variantCount}${reasons}${sourceRole}${appRoles}${evalOrigins} at ${overviewOpenSeamSourceDisplay(row)}`;
+      return `${row.seamKindKeys.join('+')} raw=${row.rawRowCount} variants=${row.variantCount} materializations=${row.affectedMaterializationCount} products=${row.affectedProductCount}${reasons}${sourceRole}${appRoles}${evalOrigins} at ${overviewOpenSeamSourceDisplay(row)}`;
     })
     .join(' | ');
 }
@@ -161,8 +166,8 @@ function overviewOpenSeamBoundaryDisplay(
 ): string {
   const counts = new Map<string, number>();
   for (const row of openSeams.rows) {
-    for (const boundaryKind of row.boundaryKinds) {
-      counts.set(boundaryKind, (counts.get(boundaryKind) ?? 0) + row.rawRowCount);
+    for (const boundary of row.boundaryCounts) {
+      counts.set(boundary.key, (counts.get(boundary.key) ?? 0) + boundary.count);
     }
   }
   return [...counts.entries()]
@@ -232,8 +237,8 @@ function overviewOpenSeamReasonDisplay(
 ): string {
   const counts = new Map<string, number>();
   for (const row of openSeams.rows) {
-    for (const reasonKind of row.reasonKinds) {
-      counts.set(reasonKind, (counts.get(reasonKind) ?? 0) + row.rawRowCount);
+    for (const reason of row.reasonCounts) {
+      counts.set(reason.key, (counts.get(reason.key) ?? 0) + reason.count);
     }
   }
   return [...counts.entries()]

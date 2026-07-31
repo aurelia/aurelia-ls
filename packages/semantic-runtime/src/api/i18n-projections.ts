@@ -102,13 +102,13 @@ export function readI18nTranslationBindingRows(
           staticTargets,
           hasParameterBinding: group.parameterBindings.length > 0,
           parameterSourceNames: uniqueStrings(parameterDependencies.flatMap((dependency) =>
-            dependency.sourceName == null ? [] : [dependency.sourceName]
+            dependency.occurrence.sourceName == null ? [] : [dependency.occurrence.sourceName]
           )),
           parameterSourceRootNames: uniqueStrings(parameterDependencies.flatMap((dependency) =>
-            dependency.sourceRootName == null ? [] : [dependency.sourceRootName]
+            dependency.occurrence.sourceRootName == null ? [] : [dependency.occurrence.sourceRootName]
           )),
           parameterMemberNames: uniqueStrings(parameterDependencies.flatMap((dependency) =>
-            dependency.memberName == null ? [] : [dependency.memberName]
+            dependency.occurrence.memberName == null ? [] : [dependency.occurrence.memberName]
           )),
           issueCount: issues.length,
           frameworkErrorCodes: issues.flatMap((issue) =>

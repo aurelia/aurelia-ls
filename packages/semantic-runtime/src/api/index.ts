@@ -1,4 +1,3 @@
-export * from './answer.js';
 export * from './app-builder.js';
 export * from './app-builder-continuations.js';
 export * from './app-query-catalog.js';
@@ -41,6 +40,14 @@ export {
   SemanticRuntimeProjectInputGeneration,
   SemanticRuntimeProjectInputReadKind,
 } from '../kernel/project-input.js';
+export {
+  OpenSeamBoundaryKind,
+  OpenSeamReasonKind,
+  openSeamBoundaryKindForReason,
+} from '../kernel/open-seam.js';
+export type {
+  OpenSeamReasonSource,
+} from '../kernel/open-seam.js';
 export type {
   SemanticRuntimeProjectInputHost,
   SemanticRuntimeProjectInputScope,

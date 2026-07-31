@@ -438,7 +438,6 @@ export class ResourceConventionTransformAdmissionMaterializer {
           end: open.sourceNode.end,
           evidenceRoles: [EvidenceRole.Admission, EvidenceRole.Configuration],
           reasonKinds: open.reasonKinds,
-          includeProvenanceRecord: true,
         }).records
       ));
     }

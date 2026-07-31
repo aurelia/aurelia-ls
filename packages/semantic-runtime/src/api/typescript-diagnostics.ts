@@ -8,10 +8,11 @@ import { sourcePathMatchesFileName } from '../kernel/source-address.js';
 import type { SourceFileAdmission } from '../boot/frames.js';
 import {
   answer,
-  outcomeForPagedRows,
+  COMPLETE_COLLECTION_ANSWER_OPTIONS,
   pageRows,
 } from './answer-helpers.js';
 import {
+  SemanticRuntimeAnswerResult,
   type SemanticRuntimeAnswer,
   type SemanticRuntimePageInput,
   type SemanticRuntimeSourceFileInput,
@@ -40,14 +41,14 @@ export function readSemanticTypeScriptDiagnostics(
   const paged = pageRows(rows, page);
   const typeScript = semanticTypeScriptEnvironmentSummary(typeSystem);
   return answer(
-    outcomeForPagedRows(paged),
+    SemanticRuntimeAnswerResult.Answered,
     `Returned ${paged.rows.length} of ${rows.length} TypeScript diagnostic row(s).`,
     {
       displayText: semanticTypeScriptDiagnosticsDisplayText(paged.rows, rows.length, typeScript),
       typeScript,
       rows: paged.rows,
     },
-    paged.page,
+    { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
   );
 }
 
@@ -62,7 +63,7 @@ export function readSemanticTypeScriptDiagnosticSummary(
   const paged = pageRows(rows, page);
   const typeScript = semanticTypeScriptEnvironmentSummary(typeSystem);
   return answer(
-    outcomeForPagedRows(paged),
+    SemanticRuntimeAnswerResult.Answered,
     `Returned ${paged.rows.length} of ${rows.length} TypeScript diagnostic cluster(s) covering ${diagnosticRows.length} diagnostic row(s).`,
     {
       totalDiagnosticRows: diagnosticRows.length,
@@ -70,7 +71,7 @@ export function readSemanticTypeScriptDiagnosticSummary(
       typeScript,
       rows: paged.rows,
     },
-    paged.page,
+    { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
   );
 }
 

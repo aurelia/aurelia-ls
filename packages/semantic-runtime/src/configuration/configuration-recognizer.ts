@@ -19,6 +19,7 @@ import {
   type EvaluationFunctionValue,
   type EvaluationValue,
 } from '../evaluation/values.js';
+import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import {
   readDeclarationLocalName,
   readObjectPropertyExpression,
@@ -295,6 +296,7 @@ function recognizeConfigurationPreparationBoundary(
         KernelVocabulary.Registration.OpenSpread.key,
         'Configuration register invocation did not reach dispatch because its argument list stayed open.',
         fallbackNode,
+        [OpenSeamReasonKind.RegistrationSpreadOpen],
       )]
     : boundary.openSeams.map((seam) => new ConfigurationRecognitionOpen(
         KernelVocabulary.Registration.OpenSpread.key,
@@ -750,6 +752,7 @@ function aureliaFacadeOpenSeams(
       KernelVocabulary.Configuration.OpenConfigurationTarget.key,
       'Aurelia facade received an explicit container whose runtime identity did not close during static evaluation.',
       node,
+      [OpenSeamReasonKind.ConfigurationTargetOpen],
     )];
 }
 
@@ -918,6 +921,7 @@ function recognizeAppTaskFactory(
       KernelVocabulary.Configuration.OpenConfigurationCallback.key,
       `AppTask.${slot}(...) did not expose a callback argument.`,
       first ?? call,
+      [OpenSeamReasonKind.ConfigurationCallbackOpen],
     ));
   }
   for (const argument of call.arguments) {
@@ -926,6 +930,7 @@ function recognizeAppTaskFactory(
         KernelVocabulary.Registration.OpenSpread.key,
         `AppTask.${slot}(...) contains a spread argument that AppTask recognition cannot close.`,
         argument,
+        [OpenSeamReasonKind.RegistrationSpreadOpen],
       ));
     }
   }
@@ -1014,6 +1019,7 @@ function appRootConfigOpenSeams(
       KernelVocabulary.Configuration.OpenConfigurationOption.key,
       'AppRoot config did not expose a closed host property.',
       object,
+      [OpenSeamReasonKind.ConfigurationOptionOpen],
     ));
   }
   if (component == null) {
@@ -1021,6 +1027,7 @@ function appRootConfigOpenSeams(
       KernelVocabulary.Configuration.OpenConfigurationTarget.key,
       'AppRoot config did not expose a closed component property.',
       object,
+      [OpenSeamReasonKind.ConfigurationTargetOpen],
     ));
   } else {
     const reasonKinds = openSeamReasonKindsForEvaluationRead(component.evaluation);
@@ -1827,6 +1834,7 @@ function readBuilderContributions(
           KernelVocabulary.Configuration.OpenConfigurationOption.key,
           'Builder method contains a spread argument whose option contribution cannot close yet.',
           argument,
+          [OpenSeamReasonKind.RegistrationSpreadOpen],
         )],
       ));
       return;
@@ -2204,6 +2212,7 @@ function readSpreadOpens(
       KernelVocabulary.Registration.OpenSpread.key,
       'Configuration register call contains a spread argument that must be resolved before registration spending.',
       argument,
+      [OpenSeamReasonKind.RegistrationSpreadOpen],
     ));
 }
 
@@ -2225,7 +2234,12 @@ function missingArgumentOpen(
   summary: string,
 ): readonly ConfigurationRecognitionOpen[] {
   return argument == null
-    ? [new ConfigurationRecognitionOpen(KernelVocabulary.Configuration.OpenConfigurationOption.key, summary, call)]
+    ? [new ConfigurationRecognitionOpen(
+        KernelVocabulary.Configuration.OpenConfigurationOption.key,
+        summary,
+        call,
+        [OpenSeamReasonKind.ConfigurationOptionOpen],
+      )]
     : [];
 }
 
@@ -2242,6 +2256,7 @@ function customizeCallbackOpenForCall(
       KernelVocabulary.Configuration.OpenConfigurationCallback.key,
       'Configuration customize callback has control flow or side effects beyond direct option assignments.',
       callback,
+      [OpenSeamReasonKind.ConfigurationCallbackOpen],
     )];
 }
 

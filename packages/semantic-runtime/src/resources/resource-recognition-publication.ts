@@ -227,7 +227,6 @@ export class ResourceRecognitionPublicationSupport {
         end: seam.node.end,
         evidenceRoles: [EvidenceRole.Diagnostic],
         reasonKinds: seam.reasonKinds,
-        includeProvenanceRecord: true,
       })),
     );
     return new ResourceOpenSeamPublicationSet(result.records, result.handles);

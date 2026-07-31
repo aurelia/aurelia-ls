@@ -8,7 +8,7 @@ import {
   readFixtureVerificationSnapshot,
   verifyFixtureEffects,
 } from '../out/index.js';
-import { exactSourceSpanFailures } from './contract-source-span-assertions.mjs';
+import { exactObservedDependencySourceSpanFailures } from './contract-source-span-assertions.mjs';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const workspaceRoot = path.resolve(packageRoot, '../..');
@@ -1094,7 +1094,7 @@ const detailedWatcherDependencies = app.ask({
   page: { size: 300 },
 }).value.rows;
 if (!detailedWatcherDependencies.some((row) =>
-  row.accessUse.targetLinks.some((target) =>
+  row.occurrence.accessUse.targetLinks.some((target) =>
     target.authorityProductHandle != null
     && target.targetIdentityHandle != null
     && target.declarationSourceAddressHandle != null
@@ -1102,18 +1102,26 @@ if (!detailedWatcherDependencies.some((row) =>
 )) {
   failures.push('Detailed watcher dependencies should retain handles on nested access-use targets.');
 }
-failures.push(...exactSourceSpanFailures(snapshot.runtimeWatcherObservedDependencies, [
+failures.push(...exactObservedDependencySourceSpanFailures(snapshot.runtimeWatcherObservedDependencies, [
   {
     summary: 'Computed watcher proxy collection dependency should publish its own function-body source span.',
     path: 'src/watcher-proxy-dependencies-app.ts',
-    sourceName: 'vm.products',
-    methodName: 'some',
+    occurrence: {
+      sourceName: 'vm.products',
+      methodName: 'some',
+    },
+    sourceSpan: { start: 2386, end: 2397 },
+    memberTokenSpan: { start: 2389, end: 2397 },
   },
   {
     summary: 'Computed watcher callback-local dependency should publish its exact function-body source span.',
     path: 'src/watcher-proxy-dependencies-app.ts',
-    sourceName: 'product.tags',
-    methodName: 'includes',
+    occurrence: {
+      sourceName: 'product.tags',
+      methodName: 'includes',
+    },
+    sourceSpan: { start: 2416, end: 2428 },
+    memberTokenSpan: { start: 2424, end: 2428 },
   },
   ...[
     [3, 'vm.products', 2989],
@@ -1127,8 +1135,8 @@ failures.push(...exactSourceSpanFailures(snapshot.runtimeWatcherObservedDependen
   ].map(([watchIndex, sourceName, spanStart]) => ({
     summary: `Watcher ${watchIndex} should retain the authored ${sourceName} occurrence at ${spanStart}.`,
     path: 'src/watcher-proxy-dependencies-app.ts',
-    match: {
-      watchIndex,
+    owner: { watchIndex },
+    occurrence: {
       sourceName,
       spanStart,
       dependencyKind: 'proxy-property-read',

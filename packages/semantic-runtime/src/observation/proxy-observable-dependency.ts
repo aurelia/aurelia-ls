@@ -18,7 +18,7 @@ import {
   typescriptAccessModeForExpression,
   unwrapExpression,
 } from '../evaluation/ts-syntax.js';
-import { RuntimeObservedDependencyKind } from './runtime-binding-observation.js';
+import { RuntimeObservedDependencyKind } from './runtime-observed-dependency.js';
 import {
   RuntimeProxyCollectionMethodSet,
   RuntimeProxyCollectionReceiverKind,
@@ -511,16 +511,19 @@ class RuntimeProxyObservedDependencyDraftCollector {
     methodName: string,
     spanNode: ts.Node,
   ): void {
+    const observedMember = observedMemberSegmentForCollectionReceiver(receiver);
     this.add({
       dependencyKind: RuntimeObservedDependencyKind.ProxyCollectionRead,
       expressionKind: 'ProxyCollectionCall',
       sourceName: sourceNameForChain(receiver),
       sourceRootName: receiver.rootName,
-      memberName: observedMemberNameForCollectionReceiver(receiver),
+      memberName: observedMember?.keyExpression == null ? observedMember?.name ?? null : null,
       keyExpression: null,
       methodName,
-      ...observedMemberSourceFields(observedMemberSourceForCollectionReceiver(receiver)),
+      ...observedMemberSourceFields(observedMember?.memberSource ?? null),
       sourceFileAddressHandle: this.sourceFileAddressHandle,
+      memberNameSpanStart: observedMember?.keyExpression == null ? observedMember?.nameStart ?? null : null,
+      memberNameSpanEnd: observedMember?.keyExpression == null ? observedMember?.nameEnd ?? null : null,
       spanStart: spanNode.getStart(this.sourceFile),
       spanEnd: spanNode.end,
     });
@@ -1230,22 +1233,13 @@ function sourceNameForChain(
   return sourceName;
 }
 
-function observedMemberNameForCollectionReceiver(
+function observedMemberSegmentForCollectionReceiver(
   receiver: PropertyChain,
-): string | null {
-  const last = receiver.segments.at(-1) ?? null;
-  return last?.observed === false || last?.keyExpression != null
-    ? null
-    : last?.name ?? null;
-}
-
-function observedMemberSourceForCollectionReceiver(
-  receiver: PropertyChain,
-): RuntimeObservedMemberSourceProjection | null {
+): PropertyChainSegment | null {
   const last = receiver.segments.at(-1) ?? null;
   return last?.observed === false
     ? null
-    : last?.memberSource ?? null;
+    : last;
 }
 
 function proxyWrappedCallResultChainForExpression(

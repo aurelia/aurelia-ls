@@ -90,13 +90,13 @@ const summary = {
       openReason: row.openReason,
     })),
   keyedObservedDependencies: observedDependencies
-    .filter((row) => row.sourceName?.startsWith('person[') === true)
+    .filter((row) => row.occurrence.sourceName?.startsWith('person[') === true)
     .map((row) => ({
-      sourceName: row.sourceName,
-      expressionKind: row.expressionKind,
-      keyExpression: row.keyExpression,
-      observedMemberSourceState: row.observedMemberSourceState,
-      source: row.source?.label ?? null,
+      sourceName: row.occurrence.sourceName,
+      expressionKind: row.occurrence.expressionKind,
+      keyExpression: row.occurrence.keyExpression,
+      observedMemberSourceState: row.occurrence.observedMemberSourceState,
+      source: row.occurrence.source?.label ?? null,
     })),
   diagnostics: templateDiagnostics.length,
   validationIssues: validationIssues.length,
@@ -153,18 +153,18 @@ function expectKeyedDataFlow(message, sourceName) {
 function expectObservedDependency(message, sourceName) {
   const row = observedDependencies.find((candidate) =>
     candidate.definitionName === 'dynamic-keyed-validation-app'
-    && candidate.sourceName === sourceName
-    && candidate.expressionKind === 'AccessKeyed'
+    && candidate.occurrence.sourceName === sourceName
+    && candidate.occurrence.expressionKind === 'AccessKeyed'
   );
   if (row == null) {
     failures.push(`${message}: missing binding-observed-dependency row.`);
     return;
   }
-  if (row.sourceRootName !== 'person') {
-    failures.push(`${message}: expected sourceRootName=person, observed ${JSON.stringify(row.sourceRootName)}.`);
+  if (row.occurrence.sourceRootName !== 'person') {
+    failures.push(`${message}: expected sourceRootName=person, observed ${JSON.stringify(row.occurrence.sourceRootName)}.`);
   }
-  if (row.observedMemberSourceState !== 'source') {
-    failures.push(`${message}: expected observedMemberSourceState=source, observed ${JSON.stringify(row.observedMemberSourceState)}.`);
+  if (row.occurrence.observedMemberSourceState !== 'source') {
+    failures.push(`${message}: expected observedMemberSourceState=source, observed ${JSON.stringify(row.occurrence.observedMemberSourceState)}.`);
   }
 }
 

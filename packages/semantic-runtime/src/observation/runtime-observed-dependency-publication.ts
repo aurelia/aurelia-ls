@@ -20,19 +20,17 @@ import {
 } from '../kernel/vocabulary.js';
 import {
   runtimeObservedDependencyIdentityLocalName,
-  type RuntimeObservedDependencyDraft,
 } from './runtime-observed-dependency-draft.js';
+import type { RuntimeObservedDependencyOccurrence } from './runtime-observed-dependency.js';
 
-export interface RuntimeObservedDependencyProduct extends RuntimeObservedDependencyDraft {
+export interface RuntimeObservedDependencyProduct {
   readonly productHandle: ProductHandle;
   readonly identityHandle: IdentityHandle;
-  readonly accessUseProductHandle: ProductHandle;
-  readonly sourceAddressHandle: AddressHandle | null;
+  readonly occurrence: RuntimeObservedDependencyOccurrence;
 }
 
 export interface RuntimeObservedDependencyPublicationOwner {
   readonly identityHandle: IdentityHandle | null;
-  readonly sourceAddressHandle: AddressHandle | null;
 }
 
 export interface RuntimeObservedDependencyPublicationClaim {
@@ -85,14 +83,14 @@ function runtimeObservedDependencyKernelRecords(
       input.dependency.identityHandle,
       KernelVocabulary.Binding.ObservedDependency.key,
       input.owner.identityHandle,
-      input.dependency.sourceAddressHandle,
-      runtimeObservedDependencyIdentityLocalName(input.dependency, input.index),
+      input.dependency.occurrence.sourceAddressHandle,
+      runtimeObservedDependencyIdentityLocalName(input.dependency.occurrence, input.index),
     ),
     new MaterializedProduct(
       input.dependency.productHandle,
       KernelVocabulary.Binding.ObservedDependency.key,
       input.dependency.identityHandle,
-      input.dependency.sourceAddressHandle,
+      input.dependency.occurrence.sourceAddressHandle,
       input.provenanceHandle,
     ),
     ...frame.claims,

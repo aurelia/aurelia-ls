@@ -11,9 +11,11 @@ import type {
 import type { KernelStore } from '../kernel/store.js';
 import {
   InquiryAnswer,
+  InquiryAnswerCoverage,
+  InquiryAnswerResult,
+  InquiryAnswerSelection,
   InquiryContinuation,
   InquiryContinuationKind,
-  InquiryOutcomeKind,
 } from './answer.js';
 import { KernelExactBasis } from './basis.js';
 import {
@@ -91,48 +93,42 @@ export function answerAdmittedSources(
   const locus = admittedSourcesLocus(query);
 
   if (matched.length === 0) {
-    return new InquiryAnswer(
-      InquiryOutcomeKind.Miss,
+    return new InquiryAnswer({
+      result: InquiryAnswerResult.Answered,
+      selection: InquiryAnswerSelection.Absent,
+      coverage: InquiryAnswerCoverage.Complete,
       locus,
-      'No admitted source files matched the selected locus.',
-      KernelExactBasis,
-      result,
-      [],
-      [],
-      [],
-      [],
-      [],
-      null,
-      null,
-    );
+      summary: 'No admitted source files matched the selected locus.',
+      basis: KernelExactBasis,
+      value: result,
+    });
   }
 
   const evidenceHandles = uniqueValues(sources.flatMap((source) => source.evidenceHandles));
   const provenanceHandles = uniqueValues(sources.flatMap((source) => source.provenanceHandles));
   const continuations = admittedSourcesContinuations(query, page);
 
-  return new InquiryAnswer(
-    page.hasMore ? InquiryOutcomeKind.Partial : InquiryOutcomeKind.Hit,
+  return new InquiryAnswer({
+    result: InquiryAnswerResult.Answered,
+    selection: InquiryAnswerSelection.NotApplicable,
+    coverage: InquiryAnswerCoverage.Complete,
     locus,
-    page.hasMore
+    summary: page.hasMore
       ? `Returned ${sources.length} of ${matched.length} admitted source files.`
       : `Returned ${sources.length} admitted source file(s).`,
-    KernelExactBasis,
-    result,
+    basis: KernelExactBasis,
+    value: result,
     evidenceHandles,
     provenanceHandles,
-    [],
-    [],
     continuations,
-    new InquiryPageInfo(
+    page: new InquiryPageInfo(
       page.size,
       query.page.cursor,
       page.nextCursor,
       sources.length,
       matched.length,
     ),
-    null,
-  );
+  });
 }
 
 function matchedAdmittedSourceAddresses(

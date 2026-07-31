@@ -107,6 +107,7 @@ interface KernelStoreCommitIndex {
   readonly identities: ReadonlyMap<IdentityHandle, SemanticIdentity>;
   readonly products: ReadonlyMap<ProductHandle, MaterializedProduct>;
   readonly claims: ReadonlyMap<ClaimHandle, SemanticClaim>;
+  readonly openSeams: ReadonlyMap<OpenSeamHandle, OpenSeam>;
 }
 
 interface PreparedProductDetailPublication {
@@ -2583,6 +2584,7 @@ export class KernelStore {
     const identities = new Map<IdentityHandle, SemanticIdentity>();
     const products = new Map<ProductHandle, MaterializedProduct>();
     const claims = new Map<ClaimHandle, SemanticClaim>();
+    const openSeams = new Map<OpenSeamHandle, OpenSeam>();
 
     for (const record of records) {
       switch (record.kind) {
@@ -2614,6 +2616,7 @@ export class KernelStore {
         case 'fetch-client-identity':
         case 'dialog-identity':
         case 'compiler-identity':
+        case 'runtime-expression-identity':
         case 'template-identity':
         case 'template-node-identity':
         case 'binding-identity':
@@ -2627,10 +2630,13 @@ export class KernelStore {
         case 'semantic-claim':
           claims.set(record.handle, record);
           break;
+        case 'open-seam':
+          openSeams.set(record.handle, record);
+          break;
       }
     }
 
-    return { addresses, identities, products, claims };
+    return { addresses, identities, products, claims, openSeams };
   }
 
   private validateBatch(
@@ -2647,6 +2653,11 @@ export class KernelStore {
     for (const record of batch.records) {
       if (record.kind === 'semantic-claim') {
         this.validateClaim(record, pending, batchLabel, replacedHandles);
+      }
+    }
+    for (const record of batch.records) {
+      if (record.kind === 'materialization-record') {
+        this.validateMaterialization(record, pending, batchLabel, replacedHandles);
       }
     }
   }
@@ -2736,6 +2747,90 @@ export class KernelStore {
     );
   }
 
+  private validateMaterialization(
+    materialization: MaterializationRecord,
+    pending: KernelStoreCommitIndex,
+    batchLabel: string,
+    replacedHandles: ReadonlySet<KernelRecordHandle>,
+  ): void {
+    this.validateMaterializationOwner(materialization, pending, batchLabel, replacedHandles);
+    this.validateDistinctMaterializationReferences(materialization, 'product', materialization.productHandles, batchLabel);
+    this.validateDistinctMaterializationReferences(materialization, 'claim', materialization.claimHandles, batchLabel);
+    this.validateDistinctMaterializationReferences(materialization, 'open seam', materialization.openSeamHandles, batchLabel);
+    for (const handle of materialization.productHandles) {
+      if (
+        pending.products.has(handle)
+        || (!replacedHandles.has(handle) && this.products.has(handle))
+      ) {
+        continue;
+      }
+      throw new Error(
+        `Unknown product while committing ${batchLabel}: ${materialization.handle} references ${handle}.`,
+      );
+    }
+    for (const handle of materialization.claimHandles) {
+      if (
+        pending.claims.has(handle)
+        || (!replacedHandles.has(handle) && this.claims.has(handle))
+      ) {
+        continue;
+      }
+      throw new Error(
+        `Unknown claim while committing ${batchLabel}: ${materialization.handle} references ${handle}.`,
+      );
+    }
+    for (const handle of materialization.openSeamHandles) {
+      if (
+        pending.openSeams.has(handle)
+        || (!replacedHandles.has(handle) && this.openSeams.has(handle))
+      ) {
+        continue;
+      }
+      throw new Error(
+        `Unknown open seam while committing ${batchLabel}: ${materialization.handle} references ${handle}.`,
+      );
+    }
+  }
+
+  private validateMaterializationOwner(
+    materialization: MaterializationRecord,
+    pending: KernelStoreCommitIndex,
+    batchLabel: string,
+    replacedHandles: ReadonlySet<KernelRecordHandle>,
+  ): void {
+    const handle = materialization.ownerHandle;
+    if (
+      pending.addresses.has(handle as AddressHandle)
+      || pending.identities.has(handle as IdentityHandle)
+      || (
+        !replacedHandles.has(handle)
+        && (
+          this.addresses.has(handle as AddressHandle)
+          || this.identities.has(handle as IdentityHandle)
+        )
+      )
+    ) {
+      return;
+    }
+    throw new Error(
+      `Unknown owner while committing ${batchLabel}: ${materialization.handle} references ${handle}.`,
+    );
+  }
+
+  private validateDistinctMaterializationReferences(
+    materialization: MaterializationRecord,
+    referenceKind: string,
+    handles: readonly string[],
+    batchLabel: string,
+  ): void {
+    if (new Set(handles).size === handles.length) {
+      return;
+    }
+    throw new Error(
+      `Duplicate ${referenceKind} reference while committing ${batchLabel}: ${materialization.handle}.`,
+    );
+  }
+
   private indexRecord(record: KernelStoreRecord): void {
     switch (record.kind) {
       case 'source-file-address':
@@ -2771,6 +2866,7 @@ export class KernelStore {
       case 'fetch-client-identity':
       case 'dialog-identity':
       case 'compiler-identity':
+      case 'runtime-expression-identity':
       case 'template-identity':
       case 'template-node-identity':
       case 'binding-identity':
@@ -2848,6 +2944,7 @@ export class KernelStore {
       case 'fetch-client-identity':
       case 'dialog-identity':
       case 'compiler-identity':
+      case 'runtime-expression-identity':
       case 'template-identity':
       case 'template-node-identity':
       case 'binding-identity':

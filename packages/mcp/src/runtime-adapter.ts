@@ -8,6 +8,7 @@ import {
   type SemanticRuntimeAnalysisCacheOverviewRequest,
   type SemanticRuntimeAnswer,
   type SemanticRuntimeOptions,
+  type SemanticRuntimePagePolicy,
 } from '@aurelia-ls/semantic-runtime';
 import { SemanticRuntimeSessionRegistry, normalizeRuntimeOptions } from './session-registry.js';
 import {
@@ -29,6 +30,11 @@ import {
   type AureliaMcpWorkspaceOverviewInput,
 } from './tool-contracts.js';
 
+const MCP_PAGE_POLICY: SemanticRuntimePagePolicy = {
+  maxSize: 200,
+  maxRowsJsonBytes: 64 * 1024,
+};
+
 export class AureliaMcpSemanticRuntimeAdapter {
   constructor(
     private readonly sessions = new SemanticRuntimeSessionRegistry(),
@@ -38,6 +44,7 @@ export class AureliaMcpSemanticRuntimeAdapter {
     const runtime = await this.sessions.runtime(runtimeOptions(input));
     return toolResponse(aureliaMcpToolNames.workspaceOverview, input, runtime.summary({
       projectPage: input.projectPage ?? undefined,
+      pagePolicy: MCP_PAGE_POLICY,
     }));
   }
 
@@ -89,9 +96,18 @@ export class AureliaMcpSemanticRuntimeAdapter {
       cursor: input.cursor ?? undefined,
       sourceFile: normalizedSourceFileInput(input.sourceFile, 'sourceFile'),
       diagnosticProjection: input.diagnosticProjection ?? undefined,
+      includeTypeSurfaces: input.includeTypeSurfaces ?? undefined,
+      diagnosticPageSize: input.diagnosticPageSize ?? undefined,
+      openSeamPageSize: input.openSeamPageSize ?? undefined,
       openSeamKindKey: input.openSeamKindKey ?? undefined,
       openSeamReasonKind: input.openSeamReasonKind ?? undefined,
       sourceRole: input.sourceRole ?? undefined,
+      openSeamClusterKey: input.openSeamClusterKey ?? undefined,
+      openSeamSiteKey: input.openSeamSiteKey ?? undefined,
+      observedDependencyLocus: input.observedDependencyLocus ?? undefined,
+      rowPageSize: input.rowPageSize ?? undefined,
+      includeDeclaration: input.includeDeclaration ?? undefined,
+      newName: input.newName ?? undefined,
     });
   }
 
@@ -108,6 +124,7 @@ export class AureliaMcpSemanticRuntimeAdapter {
       appRetention: input.appRetention ?? 'dispose-app',
       includeAppProfile: input.includeAppProfile ?? undefined,
       includeAppQueryClaimProfiles: input.includeAppQueryClaimProfiles ?? undefined,
+      pagePolicy: MCP_PAGE_POLICY,
       inquiryProfile: 'mcp-orientation',
       queries: queriesWithSourceFilePathSelector(
         continuationFilteredQueries(input.queries, input.continuationIntents),
@@ -163,6 +180,8 @@ export class AureliaMcpSemanticRuntimeAdapter {
       openSeamKindKey: input.openSeamKindKey ?? undefined,
       openSeamReasonKind: input.openSeamReasonKind ?? undefined,
       sourceRole: input.sourceRole ?? undefined,
+      openSeamClusterKey: input.openSeamClusterKey ?? undefined,
+      openSeamSiteKey: input.openSeamSiteKey ?? undefined,
     });
   }
 
@@ -214,6 +233,7 @@ export class AureliaMcpSemanticRuntimeAdapter {
       continuationIntents: queryWithSelectors.continuationIntents ?? input.continuationIntents ?? undefined,
       inquiryProfile: 'mcp-orientation',
       appRetention: input.appRetention ?? 'dispose-app',
+      pagePolicy: MCP_PAGE_POLICY,
     });
     return toolResponse(toolName, input, answer);
   }

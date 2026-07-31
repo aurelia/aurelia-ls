@@ -156,7 +156,9 @@ function assertCompletionMembers(completion, expectedMembers) {
 
 function completionSummary(completion) {
   return {
-    outcome: completion.answer.outcome,
+    result: completion.answer.result,
+    selection: completion.answer.selection,
+    coverage: completion.answer.coverage,
     siteKind: completion.answer.value.siteKind,
     missingInputs: completion.answer.value.missingInputs,
     candidates: completion.answer.value.candidates

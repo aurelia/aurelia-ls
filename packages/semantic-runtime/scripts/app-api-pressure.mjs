@@ -57,7 +57,9 @@ console.log(JSON.stringify({
   openedApps: aggregate.openedApps,
   skippedProjects: aggregate.skippedProjects,
   failures: aggregate.failures,
-  outcomes: Object.fromEntries(aggregate.outcomes),
+  results: Object.fromEntries(aggregate.results),
+  selections: Object.fromEntries(aggregate.selections),
+  coverages: Object.fromEntries(aggregate.coverages),
   counts: Object.fromEntries(aggregate.counts),
   diagnostics: Object.fromEntries(aggregate.diagnostics),
 }, null, 2));
@@ -74,7 +76,9 @@ async function readPressureForRoot(root) {
     openedApps: 0,
     skippedProjects: 0,
     failures: 0,
-    outcomes: new Map(),
+    results: new Map(),
+    selections: new Map(),
+    coverages: new Map(),
     counts: new Map(),
     diagnostics: new Map(),
   };
@@ -91,18 +95,20 @@ async function readPressureForRoot(root) {
     result.openedApps += 1;
     for (const query of pressureQueries()) {
       const answer = app.ask(query);
-      increment(result.outcomes, `${query.kind}:${answer.outcome}`);
+      increment(result.results, `${query.kind}:${answer.result}`);
+      increment(result.selections, `${query.kind}:${answer.selection}`);
+      increment(result.coverages, `${query.kind}:${answer.coverage}`);
       observeAnswer(result, query.kind, answer.value);
       observeContinuations(result, query.kind, answer.continuations ?? []);
     }
   } catch (error) {
     if (isNoAureliaAppOpenError(error)) {
       result.skippedProjects += 1;
-      increment(result.outcomes, 'skipped:no-aurelia-app');
+      increment(result.results, 'skipped:no-aurelia-app');
       return result;
     }
     result.failures += 1;
-    increment(result.outcomes, `error:${error?.name ?? 'unknown'}`);
+    increment(result.results, `error:${error?.name ?? 'unknown'}`);
   }
   return result;
 }
@@ -248,7 +254,9 @@ function combineResults(results) {
     openedApps: 0,
     skippedProjects: 0,
     failures: 0,
-    outcomes: new Map(),
+    results: new Map(),
+    selections: new Map(),
+    coverages: new Map(),
     counts: new Map(),
     diagnostics: new Map(),
   };
@@ -256,7 +264,9 @@ function combineResults(results) {
     aggregate.openedApps += result.openedApps;
     aggregate.skippedProjects += result.skippedProjects;
     aggregate.failures += result.failures;
-    addCounts(aggregate.outcomes, result.outcomes);
+    addCounts(aggregate.results, result.results);
+    addCounts(aggregate.selections, result.selections);
+    addCounts(aggregate.coverages, result.coverages);
     addCounts(aggregate.counts, result.counts);
     addCounts(aggregate.diagnostics, result.diagnostics);
   }

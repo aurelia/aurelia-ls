@@ -21,8 +21,9 @@ const renameText = "<template>${title}</template>";
 const renameStart = renameText.indexOf("title");
 const definitionLspUri = "file:///app/src/my-app.ts";
 const definitionUri = canonicalDocumentUri(definitionLspUri).uri;
-const definitionText = "export class MyApp {\n  message = \"hello\";\n}";
-const renameDefinitionText = "export class MyApp {\n  title = \"hello\";\n  summary() { return this.title; }\n}";
+const definitionText = 'export class MyApp {\n  message = "hello";\n}';
+const renameDefinitionText =
+  'export class MyApp {\n  title = "hello";\n  summary() { return this.title; }\n}';
 const renameDefinitionStart = renameDefinitionText.indexOf("title");
 const codeActionText = "<template>${titel}</template>";
 const codeActionStart = codeActionText.indexOf("titel");
@@ -31,7 +32,9 @@ const codeActionInsertionOffset = definitionText.lastIndexOf("\n}");
 function mockMissingMemberDiagnostic() {
   const source = {
     kind: "source-span-address",
-    label: `src/my-app.html@${codeActionStart}..${codeActionStart + "titel".length}`,
+    label: `src/my-app.html@${codeActionStart}..${
+      codeActionStart + "titel".length
+    }`,
     path: "file:///app/src/my-app.html",
     start: codeActionStart,
     end: codeActionStart + "titel".length,
@@ -81,7 +84,12 @@ function mockMissingMemberRepair() {
   };
 }
 
-function snapshot(uri: string, text: string, version: number | null = null, languageId = uri.endsWith(".ts") ? "typescript" : "html") {
+function snapshot(
+  uri: string,
+  text: string,
+  version: number | null = null,
+  languageId = uri.endsWith(".ts") ? "typescript" : "html",
+) {
   return {
     uri: canonicalDocumentUri(uri).uri,
     languageId,
@@ -107,20 +115,25 @@ function createMockRenameContext(value: Record<string, unknown>) {
     },
     ensureProgramDocument: vi.fn(() => document),
     semanticRuntime: {
-      templateRename: vi.fn(() => Promise.resolve({
-        schemaVersion: "0.1",
-        outcome: value.status === "available" ? "hit" : "miss",
-        closure: "complete",
-        summary: "mock semantic-runtime rename answer",
-        value: { candidateRows: [], ...value },
-      })),
+      templateRename: vi.fn(() =>
+        Promise.resolve({
+          schemaVersion: "0.2",
+          result: "answered",
+          selection: "exact",
+          coverage: "complete",
+          summary: "mock semantic-runtime rename answer",
+          value: { candidateRows: [], ...value },
+        }),
+      ),
     },
-    lookupText: vi.fn((uri: string) => (uri === definitionUri ? renameDefinitionText : null)),
-    lookupDocumentSnapshot: vi.fn((uri: string) => (
+    lookupText: vi.fn((uri: string) =>
+      uri === definitionUri ? renameDefinitionText : null,
+    ),
+    lookupDocumentSnapshot: vi.fn((uri: string) =>
       canonicalDocumentUri(uri).uri === definitionUri
         ? snapshot(definitionUri, renameDefinitionText, 8, "typescript")
-        : null
-    )),
+        : null,
+    ),
   };
 }
 
@@ -143,41 +156,44 @@ function createMockCompletionContext(input: {
       offsetAt: vi.fn(() => 0),
     })),
     semanticRuntime: {
-      templateCompletions: vi.fn(() => Promise.resolve({
-        schemaVersion: "0.1",
-        outcome: input.isIncomplete ? "partial" : "hit",
-        closure: "complete",
-        summary: "mock semantic-runtime completion answer",
-        value: {
-          displayText: "mock",
-          siteKind: "expression",
-          candidates: input.completions.map((completion) => ({
-            candidateKind: completion.candidateKind ?? "binding-context-slot",
-            name: completion.name,
-            sourceKind: completion.sourceKind ?? "binding-scope",
-            summary: completion.detail ?? null,
-            typeDisplay: completion.typeDisplay ?? null,
-            memberKind: completion.memberKind ?? "property",
-            memberVisibility: "public",
-            memberIsOptional: false,
-            memberIsReadonly: false,
-            aureliaHookKind: null,
-          })),
-          expressionFrontier: null,
-          missingInputs: input.isIncomplete ? ["mock-gap"] : [],
-          template: {
-            compilationLane: "app-runtime",
-            source: null,
+      templateCompletions: vi.fn(() =>
+        Promise.resolve({
+          schemaVersion: "0.2",
+          result: "answered",
+          selection: "exact",
+          coverage: input.isIncomplete ? "open" : "complete",
+          summary: "mock semantic-runtime completion answer",
+          value: {
+            displayText: "mock",
+            siteKind: "expression",
+            candidates: input.completions.map((completion) => ({
+              candidateKind: completion.candidateKind ?? "binding-context-slot",
+              name: completion.name,
+              sourceKind: completion.sourceKind ?? "binding-scope",
+              summary: completion.detail ?? null,
+              typeDisplay: completion.typeDisplay ?? null,
+              memberKind: completion.memberKind ?? "property",
+              memberVisibility: "public",
+              memberIsOptional: false,
+              memberIsReadonly: false,
+              aureliaHookKind: null,
+            })),
+            expressionFrontier: null,
+            missingInputs: input.isIncomplete ? ["mock-gap"] : [],
+            template: {
+              compilationLane: "app-runtime",
+              source: null,
+            },
           },
-        },
-        page: {
-          size: input.completions.length,
-          cursor: null,
-          nextCursor: null,
-          returnedRows: input.completions.length,
-          totalRows: input.completions.length,
-        },
-      })),
+          page: {
+            size: input.completions.length,
+            cursor: null,
+            nextCursor: null,
+            returnedRows: input.completions.length,
+            totalRows: input.completions.length,
+          },
+        }),
+      ),
     },
     lookupText: vi.fn(() => testText),
   };
@@ -193,47 +209,50 @@ function createMockHoverContext() {
     logger: { log: vi.fn(), info: vi.fn(), error: vi.fn(), warn: vi.fn() },
     ensureProgramDocument: vi.fn(() => document),
     semanticRuntime: {
-      templateCursorInfo: vi.fn(() => Promise.resolve({
-        schemaVersion: "0.1",
-        outcome: "hit",
-        closure: "complete",
-        summary: "mock semantic-runtime cursor answer",
-        value: {
-          displayText: "mock",
-          siteKind: "expression",
-          expressionFrontier: null,
-          missingInputs: [],
-          template: { compilationLane: "authoring", source: null },
-          html: {
-            nodeKind: "element",
-            tagName: "div",
-            attributeName: null,
-            attributeValue: null,
-            source: null,
-            attributeSource: null,
+      templateCursorInfo: vi.fn(() =>
+        Promise.resolve({
+          schemaVersion: "0.2",
+          result: "answered",
+          selection: "not-applicable",
+          coverage: "complete",
+          summary: "mock semantic-runtime cursor answer",
+          value: {
+            displayText: "mock",
+            siteKind: "expression",
+            expressionFrontier: null,
+            missingInputs: [],
+            template: { compilationLane: "authoring", source: null },
+            html: {
+              nodeKind: "element",
+              tagName: "div",
+              attributeName: null,
+              attributeValue: null,
+              source: null,
+              attributeSource: null,
+            },
+            valueSite: null,
+            selectedDefinition: null,
+            selectedBindable: null,
+            selectedMemberName: "message",
+            selectedMember: {
+              name: "message",
+              memberKind: "property",
+              typeDisplay: "string",
+              isOptional: false,
+              isReadonly: false,
+              source: null,
+            },
+            memberOwnerType: {
+              display: "MyApp",
+              shapeKind: "object",
+              origin: "typescript",
+              source: null,
+              declarationSource: null,
+            },
+            diagnostics: [],
           },
-          valueSite: null,
-          selectedDefinition: null,
-          selectedBindable: null,
-          selectedMemberName: "message",
-          selectedMember: {
-            name: "message",
-            memberKind: "property",
-            typeDisplay: "string",
-            isOptional: false,
-            isReadonly: false,
-            source: null,
-          },
-          memberOwnerType: {
-            display: "MyApp",
-            shapeKind: "object",
-            origin: "typescript",
-            source: null,
-            declarationSource: null,
-          },
-          diagnostics: [],
-        },
-      })),
+        }),
+      ),
     },
   };
 }
@@ -243,15 +262,18 @@ function createMockDefinitionContext(
   options: { readonly selectedMemberSource?: unknown } = {},
 ) {
   const messageStart = definitionText.indexOf("message");
-  const selectedMemberSource = options.selectedMemberSource === undefined
-    ? {
-        kind: "typescript-node",
-        label: `${definitionLspUri}@${messageStart}..${messageStart + "message".length}`,
-        path: definitionLspUri,
-        start: messageStart,
-        end: messageStart + "message".length,
-      }
-    : options.selectedMemberSource;
+  const selectedMemberSource =
+    options.selectedMemberSource === undefined
+      ? {
+          kind: "typescript-node",
+          label: `${definitionLspUri}@${messageStart}..${
+            messageStart + "message".length
+          }`,
+          path: definitionLspUri,
+          start: messageStart,
+          end: messageStart + "message".length,
+        }
+      : options.selectedMemberSource;
   const document = {
     uri: "file:///app/src/my-app.html",
     languageId: "html",
@@ -264,51 +286,59 @@ function createMockDefinitionContext(
     logger: { log: vi.fn(), info: vi.fn(), error: vi.fn(), warn: vi.fn() },
     ensureProgramDocument: vi.fn(() => document),
     semanticRuntime: {
-      routeNodes: vi.fn(() => Promise.resolve({
-        schemaVersion: "0.1",
-        outcome: "hit",
-        closure: "complete",
-        summary: "mock semantic-runtime route-node answer",
-        value: { rows: routeRows },
-        page: null,
-      })),
-      templateCursorInfo: vi.fn(() => Promise.resolve({
-        schemaVersion: "0.1",
-        outcome: "hit",
-        closure: "complete",
-        summary: "mock semantic-runtime cursor answer",
-        value: {
-          displayText: "mock",
-          siteKind: "expression",
-          expressionFrontier: null,
-          missingInputs: [],
-          template: { compilationLane: "authoring", source: null },
-          html: {
-            nodeKind: "text",
-            tagName: null,
-            attributeName: null,
-            attributeValue: null,
-            source: null,
-            attributeSource: null,
+      routeNodes: vi.fn(() =>
+        Promise.resolve({
+          schemaVersion: "0.2",
+          result: "answered",
+          selection: "not-applicable",
+          coverage: "complete",
+          summary: "mock semantic-runtime route-node answer",
+          value: { rows: routeRows },
+          page: null,
+        }),
+      ),
+      templateCursorInfo: vi.fn(() =>
+        Promise.resolve({
+          schemaVersion: "0.2",
+          result: "answered",
+          selection: "not-applicable",
+          coverage: "complete",
+          summary: "mock semantic-runtime cursor answer",
+          value: {
+            displayText: "mock",
+            siteKind: "expression",
+            expressionFrontier: null,
+            missingInputs: [],
+            template: { compilationLane: "authoring", source: null },
+            html: {
+              nodeKind: "text",
+              tagName: null,
+              attributeName: null,
+              attributeValue: null,
+              source: null,
+              attributeSource: null,
+            },
+            valueSite: null,
+            selectedDefinition: null,
+            selectedBindable: null,
+            selectedMemberName: "message",
+            selectedMember: {
+              name: "message",
+              memberKind: "property",
+              typeDisplay: "string",
+              isOptional: false,
+              isReadonly: false,
+              source: selectedMemberSource,
+            },
+            memberOwnerType: null,
+            diagnostics: [],
           },
-          valueSite: null,
-          selectedDefinition: null,
-          selectedBindable: null,
-          selectedMemberName: "message",
-          selectedMember: {
-            name: "message",
-            memberKind: "property",
-            typeDisplay: "string",
-            isOptional: false,
-            isReadonly: false,
-            source: selectedMemberSource,
-          },
-          memberOwnerType: null,
-          diagnostics: [],
-        },
-      })),
+        }),
+      ),
     },
-    lookupText: vi.fn((uri: string) => (uri === definitionUri ? definitionText : null)),
+    lookupText: vi.fn((uri: string) =>
+      uri === definitionUri ? definitionText : null,
+    ),
   };
 }
 
@@ -331,58 +361,69 @@ function createMockReferencesContext() {
     logger: { log: vi.fn(), info: vi.fn(), error: vi.fn(), warn: vi.fn() },
     ensureProgramDocument: vi.fn(() => document),
     semanticRuntime: {
-      templateReferences: vi.fn(() => Promise.resolve({
-        schemaVersion: "0.1",
-        outcome: "hit",
-        closure: "complete",
-        summary: "mock semantic-runtime references answer",
-        value: {
-          displayText: "mock",
-          selectedMemberName: "message",
-          targetSource: {
-            kind: "typescript-node",
-            label: `src/my-app.ts@${declarationStart}..${declarationStart + "message".length}`,
-            path: definitionLspUri,
-            start: declarationStart,
-            end: declarationStart + "message".length,
+      templateReferences: vi.fn(() =>
+        Promise.resolve({
+          schemaVersion: "0.2",
+          result: "answered",
+          selection: "not-applicable",
+          coverage: "complete",
+          summary: "mock semantic-runtime references answer",
+          value: {
+            displayText: "mock",
+            selectedMemberName: "message",
+            targetSource: {
+              kind: "typescript-node",
+              label: `src/my-app.ts@${declarationStart}..${
+                declarationStart + "message".length
+              }`,
+              path: definitionLspUri,
+              start: declarationStart,
+              end: declarationStart + "message".length,
+            },
+            rows: [
+              {
+                referenceKind: "template-usage",
+                name: "message",
+                definitionName: "my-app",
+                bindingKind: "property",
+                dependencyKinds: ["template-expression-read"],
+                source: {
+                  kind: "source-span-address",
+                  label: `src/my-app.html@${messageStart}..${
+                    messageStart + "my-el".length
+                  }`,
+                  path: "file:///app/src/my-app.html",
+                  start: messageStart,
+                  end: messageStart + "my-el".length,
+                },
+                targetSource: null,
+              },
+              {
+                referenceKind: "declaration",
+                name: "message",
+                definitionName: null,
+                bindingKind: null,
+                dependencyKinds: [],
+                source: {
+                  kind: "typescript-node",
+                  label: `src/my-app.ts@${declarationStart}..${
+                    declarationStart + "message".length
+                  }`,
+                  path: definitionLspUri,
+                  start: declarationStart,
+                  end: declarationStart + "message".length,
+                },
+                targetSource: null,
+              },
+            ],
           },
-          rows: [
-            {
-              referenceKind: "template-usage",
-              name: "message",
-              definitionName: "my-app",
-              bindingKind: "property",
-              dependencyKinds: ["template-expression-read"],
-              source: {
-                kind: "source-span-address",
-                label: `src/my-app.html@${messageStart}..${messageStart + "my-el".length}`,
-                path: "file:///app/src/my-app.html",
-                start: messageStart,
-                end: messageStart + "my-el".length,
-              },
-              targetSource: null,
-            },
-            {
-              referenceKind: "declaration",
-              name: "message",
-              definitionName: null,
-              bindingKind: null,
-              dependencyKinds: [],
-              source: {
-                kind: "typescript-node",
-                label: `src/my-app.ts@${declarationStart}..${declarationStart + "message".length}`,
-                path: definitionLspUri,
-                start: declarationStart,
-                end: declarationStart + "message".length,
-              },
-              targetSource: null,
-            },
-          ],
-        },
-        page: null,
-      })),
+          page: null,
+        }),
+      ),
     },
-    lookupText: vi.fn((uri: string) => (uri === definitionUri ? definitionText : null)),
+    lookupText: vi.fn((uri: string) =>
+      uri === definitionUri ? definitionText : null,
+    ),
   };
 }
 
@@ -424,23 +465,28 @@ function createMockCodeActionContext(input: { actions?: unknown[] } = {}) {
     logger: { log: vi.fn(), info: vi.fn(), error: vi.fn(), warn: vi.fn() },
     ensureProgramDocument: vi.fn(() => document),
     semanticRuntime: {
-      templateCodeActions: vi.fn(() => Promise.resolve({
-        schemaVersion: "0.1",
-        outcome: "hit",
-        closure: "complete",
-        summary: "mock semantic-runtime code actions answer",
-        value: {
-          displayText: `${actions.length} template code action(s).`,
-          rows: actions,
-        },
-      })),
+      templateCodeActions: vi.fn(() =>
+        Promise.resolve({
+          schemaVersion: "0.2",
+          result: "answered",
+          selection: "not-applicable",
+          coverage: "complete",
+          summary: "mock semantic-runtime code actions answer",
+          value: {
+            displayText: `${actions.length} template code action(s).`,
+            rows: actions,
+          },
+        }),
+      ),
     },
-    lookupText: vi.fn((uri: string) => (uri === definitionUri ? definitionText : null)),
-    lookupDocumentSnapshot: vi.fn((uri: string) => (
+    lookupText: vi.fn((uri: string) =>
+      uri === definitionUri ? definitionText : null,
+    ),
+    lookupDocumentSnapshot: vi.fn((uri: string) =>
       canonicalDocumentUri(uri).uri === definitionUri
         ? snapshot(definitionUri, definitionText, 9, "typescript")
-        : null
-    )),
+        : null,
+    ),
   };
 }
 
@@ -453,7 +499,8 @@ describe("handleRename", () => {
 
   test("throws ResponseError with semantic-runtime denial message", async () => {
     const ctx = createMockRenameContext({
-      displayText: "No source-backed template member is selected at this cursor.",
+      displayText:
+        "No source-backed template member is selected at this cursor.",
       status: "not-available",
       reason: "no-source-backed-member",
       selectedMemberName: null,
@@ -465,8 +512,12 @@ describe("handleRename", () => {
       typeScriptReferenceCount: 0,
     });
 
-    await expect(handleRename(ctx as never, params, testRequestGuard)).rejects.toThrow(ResponseError);
-    await expect(handleRename(ctx as never, params, testRequestGuard)).rejects.toMatchObject({
+    await expect(
+      handleRename(ctx as never, params, testRequestGuard),
+    ).rejects.toThrow(ResponseError);
+    await expect(
+      handleRename(ctx as never, params, testRequestGuard),
+    ).rejects.toMatchObject({
       message: "No source-backed template member is selected at this cursor.",
     });
   });
@@ -481,7 +532,9 @@ describe("handleRename", () => {
       targetSource: null,
       activeSource: {
         kind: "source-span-address",
-        label: `src/my-app.html@${renameStart}..${renameStart + "title".length}`,
+        label: `src/my-app.html@${renameStart}..${
+          renameStart + "title".length
+        }`,
         path: "file:///app/src/my-app.html",
         start: renameStart,
         end: renameStart + "title".length,
@@ -491,7 +544,9 @@ describe("handleRename", () => {
           editKind: "template-usage",
           source: {
             kind: "source-span-address",
-            label: `src/my-app.html@${renameStart}..${renameStart + "title".length}`,
+            label: `src/my-app.html@${renameStart}..${
+              renameStart + "title".length
+            }`,
             path: "file:///app/src/my-app.html",
             start: renameStart,
             end: renameStart + "title".length,
@@ -503,7 +558,9 @@ describe("handleRename", () => {
           editKind: "typescript-reference",
           source: {
             kind: "typescript-node",
-            label: `${definitionLspUri}@${renameDefinitionStart}..${renameDefinitionStart + "title".length}`,
+            label: `${definitionLspUri}@${renameDefinitionStart}..${
+              renameDefinitionStart + "title".length
+            }`,
             path: definitionLspUri,
             start: renameDefinitionStart,
             end: renameDefinitionStart + "title".length,
@@ -519,17 +576,21 @@ describe("handleRename", () => {
     const result = await handleRename(ctx as never, params, testRequestGuard);
     expect(result).not.toBeNull();
     expect(result!.changes).toBeUndefined();
-    expect(result!.documentChanges).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        textDocument: { uri: "file:///app/src/my-app.html", version: 3 },
-      }),
-      expect.objectContaining({
-        textDocument: { uri: definitionLspUri, version: 8 },
-      }),
-    ]));
+    expect(result!.documentChanges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          textDocument: { uri: "file:///app/src/my-app.html", version: 3 },
+        }),
+        expect.objectContaining({
+          textDocument: { uri: definitionLspUri, version: 8 },
+        }),
+      ]),
+    );
     const changes = workspaceEditChanges(result!);
     const uris = Object.keys(changes);
-    expect(uris.sort()).toEqual(["file:///app/src/my-app.html", definitionLspUri].sort());
+    expect(uris.sort()).toEqual(
+      ["file:///app/src/my-app.html", definitionLspUri].sort(),
+    );
     expect(changes["file:///app/src/my-app.html"]).toEqual([
       expect.objectContaining({ newText: "heading" }),
     ]);
@@ -555,7 +616,9 @@ describe("handlePrepareRename", () => {
       targetSource: null,
       activeSource: {
         kind: "source-span-address",
-        label: `src/my-app.html@${renameStart}..${renameStart + "title".length}`,
+        label: `src/my-app.html@${renameStart}..${
+          renameStart + "title".length
+        }`,
         path: "file:///app/src/my-app.html",
         start: renameStart,
         end: renameStart + "title".length,
@@ -565,7 +628,11 @@ describe("handlePrepareRename", () => {
       typeScriptReferenceCount: 0,
     });
 
-    const result = await handlePrepareRename(ctx as never, params, testRequestGuard);
+    const result = await handlePrepareRename(
+      ctx as never,
+      params,
+      testRequestGuard,
+    );
 
     expect(ctx.semanticRuntime.templateRename).toHaveBeenCalledWith(
       expect.objectContaining({ uri: "file:///app/src/my-app.html" }),
@@ -592,7 +659,11 @@ describe("handleReferences", () => {
   test("maps semantic-runtime template references to locations", async () => {
     const ctx = createMockReferencesContext();
 
-    const result = await handleReferences(ctx as never, params, testRequestGuard);
+    const result = await handleReferences(
+      ctx as never,
+      params,
+      testRequestGuard,
+    );
 
     expect(ctx.semanticRuntime.templateReferences).toHaveBeenCalledWith(
       expect.objectContaining({ uri: "file:///app/src/my-app.html" }),
@@ -617,7 +688,11 @@ describe("handleDocumentHighlight", () => {
   test("maps same-document semantic-runtime references to document highlights", async () => {
     const ctx = createMockReferencesContext();
 
-    const result = await handleDocumentHighlight(ctx as never, params, testRequestGuard);
+    const result = await handleDocumentHighlight(
+      ctx as never,
+      params,
+      testRequestGuard,
+    );
 
     expect(ctx.semanticRuntime.templateReferences).toHaveBeenCalledWith(
       expect.objectContaining({ uri: "file:///app/src/my-app.html" }),
@@ -650,7 +725,11 @@ describe("handleCodeAction", () => {
   test("maps semantic-runtime template code actions to unresolved LSP quickfixes", async () => {
     const ctx = createMockCodeActionContext();
 
-    const result = await handleCodeAction(ctx as never, params, testRequestGuard);
+    const result = await handleCodeAction(
+      ctx as never,
+      params,
+      testRequestGuard,
+    );
 
     expect(ctx.semanticRuntime.templateCodeActions).toHaveBeenCalledWith(
       expect.objectContaining({ uri: "file:///app/src/my-app.html" }),
@@ -658,39 +737,53 @@ describe("handleCodeAction", () => {
       testRequestGuard,
     );
     expect(result).toHaveLength(1);
-    expect(result?.[0]).toEqual(expect.objectContaining({
-      title: "Declare member 'titel' on MyApp",
-      kind: "quickfix",
-      isPreferred: true,
-      data: expect.objectContaining({
-        semanticRuntime: expect.objectContaining({
-          repairAffordance: expect.objectContaining({
-            actionability: "guided",
+    expect(result?.[0]).toEqual(
+      expect.objectContaining({
+        title: "Declare member 'titel' on MyApp",
+        kind: "quickfix",
+        isPreferred: true,
+        data: expect.objectContaining({
+          semanticRuntime: expect.objectContaining({
+            repairAffordance: expect.objectContaining({
+              actionability: "guided",
+            }),
+            sourceDiagnostics: [
+              expect.objectContaining({
+                diagnosticKind: "missing-expression-member",
+              }),
+            ],
           }),
-          sourceDiagnostics: [expect.objectContaining({
-            diagnosticKind: "missing-expression-member",
-          })],
         }),
       }),
-    }));
+    );
     expect(result?.[0]?.edit).toBeUndefined();
-    expect(result?.[0]?.data).toEqual(expect.objectContaining({
-      semanticRuntime: expect.objectContaining({
-        resolve: expect.objectContaining({
-          schema: "aurelia.template-code-action-resolve/1",
-          textDocument: { uri: "file:///app/src/my-app.html" },
-          position: params.range.start,
-          actionIdentity: expect.any(String),
+    expect(result?.[0]?.data).toEqual(
+      expect.objectContaining({
+        semanticRuntime: expect.objectContaining({
+          resolve: expect.objectContaining({
+            schema: "aurelia.template-code-action-resolve/1",
+            textDocument: { uri: "file:///app/src/my-app.html" },
+            position: params.range.start,
+            actionIdentity: expect.any(String),
+          }),
         }),
       }),
-    }));
+    );
   });
 
   test("re-plans and resolves a selected code action with current document versions", async () => {
     const ctx = createMockCodeActionContext();
-    const actions = await handleCodeAction(ctx as never, params, testRequestGuard);
+    const actions = await handleCodeAction(
+      ctx as never,
+      params,
+      testRequestGuard,
+    );
 
-    const resolved = await handleCodeActionResolve(ctx as never, actions![0]!, testRequestGuard);
+    const resolved = await handleCodeActionResolve(
+      ctx as never,
+      actions![0]!,
+      testRequestGuard,
+    );
 
     expect(ctx.semanticRuntime.templateCodeActions).toHaveBeenCalledTimes(2);
     expect(resolved.edit?.changes).toBeUndefined();
@@ -708,7 +801,11 @@ describe("handleCodeAction", () => {
     const ctx = createMockCodeActionContext();
     ctx.clientSupportsCodeActionResolveEdit = false;
 
-    const actions = await handleCodeAction(ctx as never, params, testRequestGuard);
+    const actions = await handleCodeAction(
+      ctx as never,
+      params,
+      testRequestGuard,
+    );
 
     expect(actions?.[0]?.edit?.documentChanges).toEqual([
       expect.objectContaining({
@@ -720,93 +817,128 @@ describe("handleCodeAction", () => {
 
   test("leaves a prepared action unresolved when its semantic plan is no longer applicable", async () => {
     const ctx = createMockCodeActionContext();
-    const actions = await handleCodeAction(ctx as never, params, testRequestGuard);
+    const actions = await handleCodeAction(
+      ctx as never,
+      params,
+      testRequestGuard,
+    );
     ctx.semanticRuntime.templateCodeActions.mockResolvedValueOnce({
-      schemaVersion: "0.1",
-      outcome: "hit",
-      closure: "complete",
+      schemaVersion: "0.2",
+      result: "answered",
+      selection: "not-applicable",
+      coverage: "complete",
       summary: "mock semantic-runtime code actions answer",
       value: { displayText: "0 template code action(s).", rows: [] },
     });
 
-    const resolved = await handleCodeActionResolve(ctx as never, actions![0]!, testRequestGuard);
+    const resolved = await handleCodeActionResolve(
+      ctx as never,
+      actions![0]!,
+      testRequestGuard,
+    );
 
     expect(resolved.edit).toBeUndefined();
-    expect(ctx.logger.warn).toHaveBeenCalledWith(expect.stringContaining("no longer uniquely applicable"));
+    expect(ctx.logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining("no longer uniquely applicable"),
+    );
   });
 
   test("returns null when semantic-runtime has no applicable code actions", async () => {
     const ctx = createMockCodeActionContext({ actions: [] });
 
-    await expect(handleCodeAction(ctx as never, params, testRequestGuard)).resolves.toBeNull();
+    await expect(
+      handleCodeAction(ctx as never, params, testRequestGuard),
+    ).resolves.toBeNull();
   });
 
   test("does not offer a code action when any edit row cannot be mapped", async () => {
     const ctx = createMockCodeActionContext({
-      actions: [{
-        title: "Declare member 'titel' on MyApp",
-        kind: "quickfix",
-        diagnostics: [mockMissingMemberDiagnostic()],
-        repair: mockMissingMemberRepair(),
-        edits: [
-          {
-            editKind: "declare-view-model-member",
-            source: {
-              kind: "typescript-node",
-              label: `${definitionLspUri}@${codeActionInsertionOffset}..${codeActionInsertionOffset}`,
-              path: definitionLspUri,
-              start: codeActionInsertionOffset,
-              end: codeActionInsertionOffset,
+      actions: [
+        {
+          title: "Declare member 'titel' on MyApp",
+          kind: "quickfix",
+          diagnostics: [mockMissingMemberDiagnostic()],
+          repair: mockMissingMemberRepair(),
+          edits: [
+            {
+              editKind: "declare-view-model-member",
+              source: {
+                kind: "typescript-node",
+                label: `${definitionLspUri}@${codeActionInsertionOffset}..${codeActionInsertionOffset}`,
+                path: definitionLspUri,
+                start: codeActionInsertionOffset,
+                end: codeActionInsertionOffset,
+              },
+              oldText: null,
+              newText: "\n  titel!: unknown;",
             },
-            oldText: null,
-            newText: "\n  titel!: unknown;",
-          },
-          {
-            editKind: "declare-view-model-member",
-            source: null,
-            oldText: null,
-            newText: "\n  partial!: unknown;",
-          },
-        ],
-        isPreferred: true,
-      }],
+            {
+              editKind: "declare-view-model-member",
+              source: null,
+              oldText: null,
+              newText: "\n  partial!: unknown;",
+            },
+          ],
+          isPreferred: true,
+        },
+      ],
     });
 
-    const result = await handleCodeAction(ctx as never, params, testRequestGuard);
+    const result = await handleCodeAction(
+      ctx as never,
+      params,
+      testRequestGuard,
+    );
 
     expect(result).toBeNull();
-    expect(ctx.logger.warn).toHaveBeenCalledWith(expect.stringContaining("skipped unsafe code action"));
-    expect(ctx.logger.warn).toHaveBeenCalledWith(expect.stringContaining("has no exact authored source span"));
+    expect(ctx.logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining("skipped unsafe code action"),
+    );
+    expect(ctx.logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining("has no exact authored source span"),
+    );
   });
 
   test("does not offer a code action when oldText validation fails", async () => {
     const ctx = createMockCodeActionContext({
-      actions: [{
-        title: "Rewrite stale member",
-        kind: "quickfix",
-        diagnostics: [mockMissingMemberDiagnostic()],
-        repair: mockMissingMemberRepair(),
-        edits: [{
-          editKind: "declare-view-model-member",
-          source: {
-            kind: "typescript-node",
-            label: `${definitionLspUri}@0..6`,
-            path: definitionLspUri,
-            start: 0,
-            end: 6,
-          },
-          oldText: "class",
-          newText: "interface",
-        }],
-        isPreferred: true,
-      }],
+      actions: [
+        {
+          title: "Rewrite stale member",
+          kind: "quickfix",
+          diagnostics: [mockMissingMemberDiagnostic()],
+          repair: mockMissingMemberRepair(),
+          edits: [
+            {
+              editKind: "declare-view-model-member",
+              source: {
+                kind: "typescript-node",
+                label: `${definitionLspUri}@0..6`,
+                path: definitionLspUri,
+                start: 0,
+                end: 6,
+              },
+              oldText: "class",
+              newText: "interface",
+            },
+          ],
+          isPreferred: true,
+        },
+      ],
     });
 
-    const result = await handleCodeAction(ctx as never, params, testRequestGuard);
+    const result = await handleCodeAction(
+      ctx as never,
+      params,
+      testRequestGuard,
+    );
 
     expect(result).toBeNull();
-    expect(ctx.logger.warn).toHaveBeenCalledWith(expect.stringContaining("expected \"class\""));
-    expect(ctx.logger.warn).toHaveBeenCalledWith(expect.stringContaining("document contains \"export\""));
+    expect(ctx.logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('expected "class"'),
+    );
+    expect(ctx.logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('document contains "export"'),
+    );
   });
 });
 
@@ -819,12 +951,26 @@ describe("handleCompletion", () => {
   test("maps semantic-runtime completion candidates and returns CompletionList", async () => {
     const ctx = createMockCompletionContext({
       completions: [
-        { name: "message", candidateKind: "binding-context-slot", detail: "Name visible in current view-model.", typeDisplay: "string" },
-        { name: "productId", candidateKind: "router-route-parameter", sourceKind: "router", detail: "Required route parameter." },
+        {
+          name: "message",
+          candidateKind: "binding-context-slot",
+          detail: "Name visible in current view-model.",
+          typeDisplay: "string",
+        },
+        {
+          name: "productId",
+          candidateKind: "router-route-parameter",
+          sourceKind: "router",
+          detail: "Required route parameter.",
+        },
       ],
     });
 
-    const result = await handleCompletion(ctx as never, params, testRequestGuard);
+    const result = await handleCompletion(
+      ctx as never,
+      params,
+      testRequestGuard,
+    );
     expect(result.isIncomplete).toBe(false);
     expect(result.items).toHaveLength(2);
     expect(result.items[0]).toEqual(
@@ -845,31 +991,41 @@ describe("handleCompletion", () => {
 
   test("signals incomplete list and appends a gap marker when semantic-runtime reports missing inputs", async () => {
     const ctx = createMockCompletionContext({
-      completions: [
-        { name: "summary-panel", candidateKind: "custom-element" },
-      ],
+      completions: [{ name: "summary-panel", candidateKind: "custom-element" }],
       isIncomplete: true,
     });
 
-    const result = await handleCompletion(ctx as never, params, testRequestGuard);
+    const result = await handleCompletion(
+      ctx as never,
+      params,
+      testRequestGuard,
+    );
     expect(result.isIncomplete).toBe(true);
-    expect(result.items.some((item) => item.label === "summary-panel")).toBe(true);
-    const marker = result.items.find((item) => item.label === COMPLETION_GAP_MARKER_LABEL);
+    expect(result.items.some((item) => item.label === "summary-panel")).toBe(
+      true,
+    );
+    const marker = result.items.find(
+      (item) => item.label === COMPLETION_GAP_MARKER_LABEL,
+    );
     expect(marker?.kind).toBe(CompletionItemKind.Text);
     expect(marker?.insertText).toBe("");
   });
 
   test("signals incomplete list when semantic-runtime answer outcome is partial", async () => {
     const ctx = createMockCompletionContext({
-      completions: [
-        { name: "summary-panel", candidateKind: "custom-element" },
-      ],
+      completions: [{ name: "summary-panel", candidateKind: "custom-element" }],
       isIncomplete: true,
     });
 
-    const result = await handleCompletion(ctx as never, params, testRequestGuard);
+    const result = await handleCompletion(
+      ctx as never,
+      params,
+      testRequestGuard,
+    );
     expect(result.isIncomplete).toBe(true);
-    const marker = result.items.find((item) => item.label === COMPLETION_GAP_MARKER_LABEL);
+    const marker = result.items.find(
+      (item) => item.label === COMPLETION_GAP_MARKER_LABEL,
+    );
     expect(marker).toBeDefined();
     expect(marker?.insertText).toBe("");
   });
@@ -877,7 +1033,11 @@ describe("handleCompletion", () => {
   test("returns empty CompletionList when document is unavailable", async () => {
     const ctx = createMockCompletionContext({ completions: [] });
     ctx.ensureProgramDocument = vi.fn(() => null);
-    const result = await handleCompletion(ctx as never, params, testRequestGuard);
+    const result = await handleCompletion(
+      ctx as never,
+      params,
+      testRequestGuard,
+    );
     expect(result).toEqual({ isIncomplete: false, items: [] });
   });
 });
@@ -913,7 +1073,11 @@ describe("handleDefinition", () => {
   test("maps semantic-runtime cursor info to location links", async () => {
     const ctx = createMockDefinitionContext();
 
-    const result = await handleDefinition(ctx as never, params, testRequestGuard);
+    const result = await handleDefinition(
+      ctx as never,
+      params,
+      testRequestGuard,
+    );
 
     expect(ctx.semanticRuntime.routeNodes).not.toHaveBeenCalled();
     expect(ctx.semanticRuntime.templateCursorInfo).toHaveBeenCalledWith(
@@ -922,7 +1086,10 @@ describe("handleDefinition", () => {
       testRequestGuard,
     );
     expect(Array.isArray(result)).toBe(true);
-    const [link] = result as Array<{ targetUri: string; targetRange: { start: { line: number; character: number } } }>;
+    const [link] = result as Array<{
+      targetUri: string;
+      targetRange: { start: { line: number; character: number } };
+    }>;
     expect(link.targetUri).toBe(definitionLspUri);
     expect(link.targetRange.start).toEqual({ line: 1, character: 2 });
   });
@@ -945,29 +1112,41 @@ describe("handleDefinition", () => {
       role: "range",
     };
     const ctx = createMockDefinitionContext(
-      [{
-        instruction: { source: routeSource },
-        originalInstruction: null,
-        routeConfig: {
-          routeKind: "child-route",
-          id: "tasks",
-          source: routeTargetSource,
+      [
+        {
+          instruction: { source: routeSource },
+          originalInstruction: null,
+          routeConfig: {
+            routeKind: "child-route",
+            id: "tasks",
+            source: routeTargetSource,
+          },
+          routeContext: { label: "MyApp/Tasks", source: null },
+          source: routeSource,
         },
-        routeContext: { label: "MyApp/Tasks", source: null },
-        source: routeSource,
-      }],
+      ],
       { selectedMemberSource: null },
     );
 
-    const result = await handleDefinition(ctx as never, params, testRequestGuard);
+    const result = await handleDefinition(
+      ctx as never,
+      params,
+      testRequestGuard,
+    );
 
     expect(ctx.semanticRuntime.routeNodes).toHaveBeenCalled();
     expect(ctx.semanticRuntime.templateCursorInfo).toHaveBeenCalled();
     expect(Array.isArray(result)).toBe(true);
     const [link] = result as Array<{
       targetUri: string;
-      targetRange: { start: { line: number; character: number }; end: { line: number; character: number } };
-      originSelectionRange?: { start: { line: number; character: number }; end: { line: number; character: number } };
+      targetRange: {
+        start: { line: number; character: number };
+        end: { line: number; character: number };
+      };
+      originSelectionRange?: {
+        start: { line: number; character: number };
+        end: { line: number; character: number };
+      };
     }>;
     expect(link.targetUri).toBe(definitionLspUri);
     expect(link.targetRange).toEqual({

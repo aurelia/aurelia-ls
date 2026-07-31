@@ -139,7 +139,7 @@ const rootTitleReferences = await stateScopeRuntime.answerAppQuery({
   includeAuthoringTemplates: true,
   appRetention: 'retain-app',
 });
-assert.match(rootTitleReferences.outcome, /^(hit|partial)$/u, rootTitleReferences.summary);
+assertExactReferenceAnswer(rootTitleReferences);
 const rootTitleDeclarationStart = stateScopeDefinitionText.indexOf('title');
 const stateOwnedTitleStart = stateScopeTemplateText.indexOf('title & state');
 const parentTitleStart = stateScopeTemplateText.indexOf('$parent.title') + '$parent.'.length;
@@ -181,7 +181,7 @@ const resourceReferences = await storefrontRuntime.answerAppQuery({
   includeAuthoringTemplates: true,
   appRetention: 'retain-app',
 });
-assert.match(resourceReferences.outcome, /^(hit|partial)$/u, resourceReferences.summary);
+assertExactReferenceAnswer(resourceReferences);
 assert.equal(resourceReferences.value.selectedMemberName, 'item-card');
 const resourceNameStart = storefrontDefinitionText.indexOf("'item-card'") + 1;
 assert.notEqual(resourceNameStart, 0, 'Expected item-card resource name literal in storefront component.');
@@ -217,8 +217,8 @@ const specializedMemberReferences = await mixedFormRuntime.answerAppQuery({
   includeAuthoringTemplates: true,
   appRetention: 'retain-app',
 });
-assert.match(specializedMemberReferences.outcome, /^(hit|partial)$/u, specializedMemberReferences.summary);
-assert.equal(specializedMemberReferences.closure, 'complete', 'Reached parent-bound value types should close child repeat-local member references.');
+assertExactReferenceAnswer(specializedMemberReferences);
+assert.equal(specializedMemberReferences.coverage, 'complete', 'Reached parent-bound value types should completely cover child repeat-local member references.');
 assert.equal(specializedMemberReferences.value.selectedMemberName, 'label');
 const optionLabelMarkerStart = mixedFormTemplateText.indexOf('${option.label || option}');
 assert.notEqual(optionLabelMarkerStart, -1, 'Expected option.label marker in mixed-form template.');
@@ -247,8 +247,8 @@ const openMemberReferences = await typecheckingCorpusRuntime.answerAppQuery({
   includeAuthoringTemplates: true,
   appRetention: 'retain-app',
 });
-assert.match(openMemberReferences.outcome, /^(hit|partial)$/u, openMemberReferences.summary);
-assert.equal(openMemberReferences.closure, 'open', 'Unproven member references should not claim complete coverage.');
+assertExactReferenceAnswer(openMemberReferences);
+assert.equal(openMemberReferences.coverage, 'open', 'Unproven member references should not claim complete coverage.');
 assert.equal(openMemberReferences.value.selectedMemberName, 'label');
 const unknownLabelMarkerStart = typecheckingCorpusTemplateText.indexOf('${unknownValue.label}');
 assert.notEqual(unknownLabelMarkerStart, -1, 'Expected unknownValue.label marker in typechecking corpus template.');
@@ -279,7 +279,7 @@ const labelTextPropertyReferences = await aliasedBindableRuntime.answerAppQuery(
   includeAuthoringTemplates: true,
   appRetention: 'retain-app',
 });
-assert.match(labelTextPropertyReferences.outcome, /^(hit|partial)$/u, labelTextPropertyReferences.summary);
+assertExactReferenceAnswer(labelTextPropertyReferences);
 assert.equal(labelTextPropertyReferences.value.selectedMemberName, 'labelText');
 const productLabelTextDeclarationStart = aliasedBindableProductDefinitionText.indexOf('labelText');
 const productLabelTextTemplateStart = aliasedBindableProductTemplateText.indexOf('labelText');
@@ -313,7 +313,7 @@ const labelTextTypeScriptPropertyReferences = await aliasedBindableRuntime.answe
   includeAuthoringTemplates: true,
   appRetention: 'retain-app',
 });
-assert.match(labelTextTypeScriptPropertyReferences.outcome, /^(hit|partial)$/u, labelTextTypeScriptPropertyReferences.summary);
+assertExactReferenceAnswer(labelTextTypeScriptPropertyReferences);
 assert.equal(labelTextTypeScriptPropertyReferences.value.selectedMemberName, 'labelText');
 expectReference(labelTextTypeScriptPropertyReferences.value.rows, 'declaration', 'src/product-card.ts', productLabelTextDeclarationStart, productLabelTextDeclarationStart + 'labelText'.length, aliasedBindableRoot);
 expectReference(labelTextTypeScriptPropertyReferences.value.rows, 'template-usage', 'src/product-card.html', productLabelTextTemplateStart, productLabelTextTemplateStart + 'labelText'.length, aliasedBindableRoot);
@@ -338,7 +338,7 @@ const productAliasReferences = await aliasedBindableRuntime.answerAppQuery({
   includeAuthoringTemplates: true,
   appRetention: 'retain-app',
 });
-assert.match(productAliasReferences.outcome, /^(hit|partial)$/u, productAliasReferences.summary);
+assertExactReferenceAnswer(productAliasReferences);
 assert.equal(productAliasReferences.value.selectedMemberName, 'display-label');
 const productAliasDeclarationStart = aliasedBindableProductDefinitionText.indexOf("'display-label'") + 1;
 assert.notEqual(productAliasDeclarationStart, 0, 'Expected product display-label alias declaration.');
@@ -357,7 +357,7 @@ const inlineAliasReferences = await aliasedBindableRuntime.answerAppQuery({
   includeAuthoringTemplates: true,
   appRetention: 'retain-app',
 });
-assert.match(inlineAliasReferences.outcome, /^(hit|partial)$/u, inlineAliasReferences.summary);
+assertExactReferenceAnswer(inlineAliasReferences);
 assert.equal(inlineAliasReferences.value.selectedMemberName, 'display-label');
 const displayHintAliasDeclarationStart = aliasedBindableDisplayHintDefinitionText.indexOf("'display-label'") + 1;
 const inlineDisplayLabelUsageStart = aliasedBindableAppTemplateText.indexOf('display-label.bind: aliasLabel');
@@ -390,8 +390,8 @@ const accessUseReferences = await accessUseRuntime.answerAppQuery({
   includeAuthoringTemplates: true,
   appRetention: 'retain-app',
 });
-assert.match(accessUseReferences.outcome, /^(hit|partial)$/u, accessUseReferences.summary);
-assert.equal(accessUseReferences.closure, 'complete');
+assertExactReferenceAnswer(accessUseReferences);
+assert.equal(accessUseReferences.coverage, 'complete');
 assert.equal(accessUseReferences.value.selectedMemberName, 'name');
 assert.equal(
   accessUseReferences.value.rows.length,
@@ -449,8 +449,8 @@ const callbackLocalReferences = await accessUseRuntime.answerAppQuery({
   includeAuthoringTemplates: true,
   appRetention: 'retain-app',
 });
-assert.match(callbackLocalReferences.outcome, /^(hit|partial)$/u, callbackLocalReferences.summary);
-assert.equal(callbackLocalReferences.closure, 'complete');
+assertExactReferenceAnswer(callbackLocalReferences);
+assert.equal(callbackLocalReferences.coverage, 'complete');
 assert.equal(callbackLocalReferences.value.selectedMemberName, 'item');
 assert.equal(callbackLocalReferences.value.rows.length, 2);
 const filterParameterStart = sourceTokenStart(
@@ -594,7 +594,7 @@ const converterArgumentReferences = await accessUseRuntime.answerAppQuery({
   includeAuthoringTemplates: true,
   appRetention: 'retain-app',
 });
-assert.match(converterArgumentReferences.outcome, /^(hit|partial)$/u, converterArgumentReferences.summary);
+assertExactReferenceAnswer(converterArgumentReferences);
 const converterArgumentReference = converterArgumentReferences.value.rows.find((row) =>
   row.referenceKind === 'template-usage'
   && row.source?.path?.replace(/\\/g, '/') === 'src/runtime-expression-access-uses-app.html'
@@ -632,8 +632,8 @@ const inertAttributeReferences = await bindingLifecycleRuntime.answerAppQuery({
   includeAuthoringTemplates: true,
   appRetention: 'retain-app',
 });
-assert.match(inertAttributeReferences.outcome, /^(hit|partial)$/u, inertAttributeReferences.summary);
-assert.equal(inertAttributeReferences.closure, 'complete');
+assertExactReferenceAnswer(inertAttributeReferences);
+assert.equal(inertAttributeReferences.coverage, 'complete');
 assert.equal(inertAttributeReferences.value.selectedMemberName, 'attributeFromView');
 const inertAttributeStart = sourceTokenStart(
   bindingLifecycleTemplateText,
@@ -691,7 +691,7 @@ const bindingLifecycleAccessUses = await bindingLifecycleRuntime.answerAppQuery(
   includeAuthoringTemplates: true,
   appRetention: 'retain-app',
 });
-assert.match(bindingLifecycleAccessUses.outcome, /^(hit|partial)$/u, bindingLifecycleAccessUses.summary);
+assertCompleteCollectionAnswer(bindingLifecycleAccessUses);
 assert.ok(
   bindingLifecycleAccessUses.value.rows.every((row) =>
     row.nameSource?.path?.replace(/\\/g, '/') !== 'src/observation-binding-lifecycle-app.html'
@@ -725,8 +725,23 @@ async function askReferences(includeDeclaration) {
     includeAuthoringTemplates: true,
     appRetention: 'retain-app',
   });
-  assert.match(answer.outcome, /^(hit|partial)$/u, answer.summary);
+  assertExactReferenceAnswer(answer);
   return answer;
+}
+
+function assertExactReferenceAnswer(answer) {
+  assert.equal(answer.result, 'answered', answer.summary);
+  assert.equal(answer.selection, 'exact', answer.summary);
+  assert.ok(
+    answer.coverage === 'complete' || answer.coverage === 'open',
+    `Expected complete or explicitly open reference coverage, observed ${answer.coverage}.`,
+  );
+}
+
+function assertCompleteCollectionAnswer(answer) {
+  assert.equal(answer.result, 'answered', answer.summary);
+  assert.equal(answer.selection, 'not-applicable', answer.summary);
+  assert.equal(answer.coverage, 'complete', answer.summary);
 }
 
 function cursorInside(marker, needle, delta = 0) {
@@ -762,7 +777,7 @@ async function readAllRuntimeExpressionAccessUses(semanticRuntime) {
       includeAuthoringTemplates: true,
       appRetention: 'retain-app',
     });
-    assert.match(answer.outcome, /^(hit|partial)$/u, answer.summary);
+    assertCompleteCollectionAnswer(answer);
     rows.push(...answer.value.rows);
     cursor = answer.page?.nextCursor ?? null;
   } while (cursor != null);

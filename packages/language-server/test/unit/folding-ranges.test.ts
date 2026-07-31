@@ -10,7 +10,7 @@ const text = [
   "  <section>",
   "    <div>One</div>",
   "  </section>",
-  "  <input value.bind=\"title\">",
+  '  <input value.bind="title">',
   "</template>",
 ].join("\n");
 const doc = TextDocument.create(uri, "html", 1, text);
@@ -53,17 +53,20 @@ function createMockContext(rows: SemanticTemplateFoldingRangeRow[]) {
     logger: { log: vi.fn(), info: vi.fn(), error: vi.fn(), warn: vi.fn() },
     ensureProgramDocument: vi.fn(() => doc),
     semanticRuntime: {
-      templateFoldingRanges: vi.fn(() => Promise.resolve({
-        schemaVersion: "0.1",
-        outcome: "hit",
-        closure: "complete",
-        summary: "mock",
-        value: {
-          displayText: "mock",
-          rows,
-        },
-        page: null,
-      })),
+      templateFoldingRanges: vi.fn(() =>
+        Promise.resolve({
+          schemaVersion: "0.2",
+          result: "answered",
+          selection: "not-applicable",
+          coverage: "complete",
+          summary: "mock",
+          value: {
+            displayText: "mock",
+            rows,
+          },
+          page: null,
+        }),
+      ),
     },
   };
 }
@@ -76,11 +79,18 @@ describe("runtime-backed folding ranges", () => {
     ];
     const ctx = createMockContext(rows);
 
-    const result = await handleFoldingRanges(ctx as never, {
-      textDocument: { uri },
-    }, testRequestGuard);
+    const result = await handleFoldingRanges(
+      ctx as never,
+      {
+        textDocument: { uri },
+      },
+      testRequestGuard,
+    );
 
-    expect(ctx.semanticRuntime.templateFoldingRanges).toHaveBeenCalledWith(doc, testRequestGuard);
+    expect(ctx.semanticRuntime.templateFoldingRanges).toHaveBeenCalledWith(
+      doc,
+      testRequestGuard,
+    );
     expect(result).toEqual([
       {
         startLine: doc.positionAt(sectionStart).line,
@@ -96,9 +106,13 @@ describe("runtime-backed folding ranges", () => {
       row(sectionStart, sectionEnd, "section", "file:///app/src/other.html"),
     ]);
 
-    const result = await handleFoldingRanges(ctx as never, {
-      textDocument: { uri },
-    }, testRequestGuard);
+    const result = await handleFoldingRanges(
+      ctx as never,
+      {
+        textDocument: { uri },
+      },
+      testRequestGuard,
+    );
 
     expect(result).toBeNull();
   });

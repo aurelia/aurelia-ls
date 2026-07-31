@@ -3,7 +3,10 @@ import type {
   ProductHandle,
 } from '../kernel/handles.js';
 import type { CheckerTypeMemberKind } from '../type-system/type-shape.js';
-import type { RuntimeObservedDependencyKind, RuntimeObservedMemberSourceRoute } from './runtime-binding-observation.js';
+import type {
+  RuntimeObservedDependencyKind,
+  RuntimeObservedMemberSourceRoute,
+} from './runtime-observed-dependency.js';
 
 export interface RuntimeObservedDependencyDraft {
   readonly dependencyKind: RuntimeObservedDependencyKind;

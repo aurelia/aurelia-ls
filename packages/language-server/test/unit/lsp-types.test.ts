@@ -23,10 +23,12 @@ import {
 type DocumentUri = string;
 type SourceSpan = { start: number; end: number };
 
-const spanUri: DocumentUri = canonicalDocumentUri("file:///C:/projects/app/src/span.html").uri;
+const spanUri: DocumentUri = canonicalDocumentUri(
+  "file:///C:/projects/app/src/span.html",
+).uri;
 const definitionLspUri = "file:///C:/projects/app/src/component.ts";
 const definitionUri = canonicalDocumentUri(definitionLspUri).uri;
-const definitionText = "export class Component {\n  message = \"hello\";\n}";
+const definitionText = 'export class Component {\n  message = "hello";\n}';
 
 const textByUri = new Map<DocumentUri, string>([
   [spanUri, "alpha\nbeta\ngamma"],
@@ -41,12 +43,18 @@ function makeSpan(start: number, end: number): SourceSpan {
 
 describe("toLspUri", () => {
   test("converts document URI to proper file URI", () => {
-    const result = toLspUri(canonicalDocumentUri("file:///C:/projects/app/src/component.html").uri);
-    expect(result).toMatch(/^file:\/\/\/[Cc]:\/projects\/app\/src\/component\.html$/);
+    const result = toLspUri(
+      canonicalDocumentUri("file:///C:/projects/app/src/component.html").uri,
+    );
+    expect(result).toMatch(
+      /^file:\/\/\/[Cc]:\/projects\/app\/src\/component\.html$/,
+    );
   });
 
   test("preserves Unix paths correctly", () => {
-    const result = toLspUri(canonicalDocumentUri("file:///home/user/project/src/view.html").uri);
+    const result = toLspUri(
+      canonicalDocumentUri("file:///home/user/project/src/view.html").uri,
+    );
     expect(result).toBe("file:///home/user/project/src/view.html");
   });
 });
@@ -66,7 +74,10 @@ describe("guessLanguage", () => {
 
 describe("spanToRange", () => {
   test("maps offsets to line and character positions", () => {
-    const range = spanToRange({ uri: spanUri, span: makeSpan(6, 10) }, lookupText);
+    const range = spanToRange(
+      { uri: spanUri, span: makeSpan(6, 10) },
+      lookupText,
+    );
     expect(range).toEqual({
       start: { line: 1, character: 0 },
       end: { line: 1, character: 4 },
@@ -82,62 +93,69 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
       1,
       "alpha\nbeta\ngamma",
     );
-    const mapped = mapSemanticRuntimeAppDiagnostics({
-      value: {
-        rows: [{
-          projectKey: "app",
-          diagnosticDomain: "template",
-          phase: null,
-          diagnosticKind: "missing-expression-member",
-          diagnosticAuthority: "type-checker",
-          frameworkErrorCode: null,
-          frameworkRawErrorAuthority: null,
-          severity: "warning",
-          summary: "Missing member",
-          missingInput: "expression-member:selected-member-missing",
-          missingInputs: ["expression-member:selected-member-missing"],
-          source: {
-            kind: "source-span-address",
-            label: "src/component.html@6..10",
-            path: "src/component.html",
-            start: 6,
-            end: 10,
-            role: "expression",
-          },
-          subject: {
-            subjectKind: "template-member-access",
-            subjectName: "beta",
-            source: null,
-          },
-          relatedInformation: [{
-            relationKind: "subject-declaration",
-            code: null,
-            message: "The member is declared here.",
-            source: {
-              kind: "source-span-address",
-              label: "src/component.html@0..5",
-              path: doc.uri,
-              start: 0,
-              end: 5,
-              role: "name",
+    const mapped = mapSemanticRuntimeAppDiagnostics(
+      {
+        value: {
+          rows: [
+            {
+              projectKey: "app",
+              diagnosticDomain: "template",
+              phase: null,
+              diagnosticKind: "missing-expression-member",
+              diagnosticAuthority: "type-checker",
+              frameworkErrorCode: null,
+              frameworkRawErrorAuthority: null,
+              severity: "warning",
+              summary: "Missing member",
+              missingInput: "expression-member:selected-member-missing",
+              missingInputs: ["expression-member:selected-member-missing"],
+              source: {
+                kind: "source-span-address",
+                label: "src/component.html@6..10",
+                path: "src/component.html",
+                start: 6,
+                end: 10,
+                role: "expression",
+              },
+              subject: {
+                subjectKind: "template-member-access",
+                subjectName: "beta",
+                source: null,
+              },
+              relatedInformation: [
+                {
+                  relationKind: "subject-declaration",
+                  code: null,
+                  message: "The member is declared here.",
+                  source: {
+                    kind: "source-span-address",
+                    label: "src/component.html@0..5",
+                    path: doc.uri,
+                    start: 0,
+                    end: 5,
+                    role: "name",
+                  },
+                },
+              ],
+              suggestion: null,
+              sourceRole: "template",
+              relatedQueryKind: "template-diagnostics",
+              handles: {
+                productHandle: 1,
+                identityHandle: 2,
+                ownerIdentityHandle: null,
+                sourceAddressHandle: 3,
+                relatedSourceAddressHandles: [4],
+                overlayOriginKey: null,
+                overlayFileName: null,
+                overlaySegmentLabel: null,
+              },
             },
-          }],
-          suggestion: null,
-          sourceRole: "template",
-          relatedQueryKind: "template-diagnostics",
-          handles: {
-            productHandle: 1,
-            identityHandle: 2,
-            ownerIdentityHandle: null,
-            sourceAddressHandle: 3,
-            relatedSourceAddressHandles: [4],
-            overlayOriginKey: null,
-            overlayFileName: null,
-            overlaySegmentLabel: null,
-          },
-        }],
-      },
-    } as never, doc);
+          ],
+        },
+      } as never,
+      doc,
+    );
 
     expect(mapped).toHaveLength(1);
     expect(mapped[0]?.range).toEqual({
@@ -154,10 +172,12 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
         diagnosticKind: "missing-expression-member",
         missingInputs: ["expression-member:selected-member-missing"],
         subject: { subjectName: "beta" },
-        relatedInformation: [{
-          relationKind: "subject-declaration",
-          message: "The member is declared here.",
-        }],
+        relatedInformation: [
+          {
+            relationKind: "subject-declaration",
+            message: "The member is declared here.",
+          },
+        ],
         handles: {
           productHandle: 1,
           relatedSourceAddressHandles: [4],
@@ -187,36 +207,42 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
       1,
       "alpha\nbeta\ngamma",
     );
-    const mapped = mapSemanticRuntimeAppDiagnostics({
-      value: {
-        rows: [{
-          projectKey: "app",
-          diagnosticDomain: "template",
-          phase: null,
-          diagnosticKind: "template-expression-typescript-diagnostic",
-          diagnosticAuthority: "typescript",
-          frameworkErrorCode: null,
-          frameworkRawErrorAuthority: null,
-          severity: "error",
-          summary: "TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.",
-          missingInput: "typescript:TS2345",
-          missingInputs: ["typescript:TS2345"],
-          source: {
-            kind: "source-span-address",
-            label: "src/component.html@6..10",
-            path: "src/component.html",
-            start: 6,
-            end: 10,
-            role: "expression",
-          },
-          subject: null,
-          relatedInformation: [],
-          suggestion: null,
-          sourceRole: "template",
-          relatedQueryKind: "template-diagnostics",
-        }],
-      },
-    } as never, doc);
+    const mapped = mapSemanticRuntimeAppDiagnostics(
+      {
+        value: {
+          rows: [
+            {
+              projectKey: "app",
+              diagnosticDomain: "template",
+              phase: null,
+              diagnosticKind: "template-expression-typescript-diagnostic",
+              diagnosticAuthority: "typescript",
+              frameworkErrorCode: null,
+              frameworkRawErrorAuthority: null,
+              severity: "error",
+              summary:
+                "TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.",
+              missingInput: "typescript:TS2345",
+              missingInputs: ["typescript:TS2345"],
+              source: {
+                kind: "source-span-address",
+                label: "src/component.html@6..10",
+                path: "src/component.html",
+                start: 6,
+                end: 10,
+                role: "expression",
+              },
+              subject: null,
+              relatedInformation: [],
+              suggestion: null,
+              sourceRole: "template",
+              relatedQueryKind: "template-diagnostics",
+            },
+          ],
+        },
+      } as never,
+      doc,
+    );
 
     expect(mapped).toHaveLength(1);
     expect(mapped[0]?.source).toBe("aurelia");
@@ -275,34 +301,42 @@ describe("mapSemanticRuntimeTemplateCodeActions", () => {
       },
     ];
 
-    const actions = mapSemanticRuntimeTemplateCodeActions({
-      value: {
-        rows: [{
-          title: "Declare member",
-          kind: "quickfix",
-          diagnostics: [semanticDiagnostic, checkerDiagnostic],
-          repair: {
-            actionKind: "declare-missing-member",
-            planKind: "source-member-declaration",
-            changeDomain: "app-source",
-            readiness: "ready-to-plan",
-            targetSourceCoverage: "all",
-            actionability: "guided",
-          },
-          edits: [{
-            editKind: "declare-view-model-member",
-            source: { ...source, start: 0, end: 0 },
-            oldText: "",
-            newText: "declared",
-          }],
-          isPreferred: true,
-        }],
+    const actions = mapSemanticRuntimeTemplateCodeActions(
+      {
+        value: {
+          rows: [
+            {
+              title: "Declare member",
+              kind: "quickfix",
+              diagnostics: [semanticDiagnostic, checkerDiagnostic],
+              repair: {
+                actionKind: "declare-missing-member",
+                planKind: "source-member-declaration",
+                changeDomain: "app-source",
+                readiness: "ready-to-plan",
+                targetSourceCoverage: "all",
+                actionability: "guided",
+              },
+              edits: [
+                {
+                  editKind: "declare-view-model-member",
+                  source: { ...source, start: 0, end: 0 },
+                  oldText: "",
+                  newText: "declared",
+                },
+              ],
+              isPreferred: true,
+            },
+          ],
+        },
+      } as never,
+      () => null,
+      {
+        workspaceRoot: null,
+        originDocument: doc,
+        diagnostics,
       },
-    } as never, () => null, {
-      workspaceRoot: null,
-      originDocument: doc,
-      diagnostics,
-    });
+    );
 
     expect(actions).toHaveLength(1);
     expect(actions?.[0]?.diagnostics).toEqual(diagnostics);
@@ -319,27 +353,33 @@ describe("source-backed edit mapping", () => {
     );
     const invalidOffset = doc.getText().length + 1;
 
-    const mapping = mapSemanticRuntimeTemplateRenameEdit({
-      value: {
-        status: "available",
-        edits: [{
-          editKind: "typescript-reference",
-          source: {
-            kind: "source-span-address",
-            label: `src/component.ts@${invalidOffset}..${invalidOffset}`,
-            path: doc.uri,
-            start: invalidOffset,
-            end: invalidOffset,
-            role: "insertion",
-          },
-          oldText: "",
-          newText: "declare member;",
-        }],
+    const mapping = mapSemanticRuntimeTemplateRenameEdit(
+      {
+        value: {
+          status: "available",
+          edits: [
+            {
+              editKind: "typescript-reference",
+              source: {
+                kind: "source-span-address",
+                label: `src/component.ts@${invalidOffset}..${invalidOffset}`,
+                path: doc.uri,
+                start: invalidOffset,
+                end: invalidOffset,
+                role: "insertion",
+              },
+              oldText: "",
+              newText: "declare member;",
+            },
+          ],
+        },
+      } as never,
+      () => null,
+      {
+        workspaceRoot: "C:/projects/app",
+        originDocument: doc,
       },
-    } as never, () => null, {
-      workspaceRoot: "C:/projects/app",
-      originDocument: doc,
-    });
+    );
 
     expect(mapping.edit).toBeNull();
     expect(mapping.failures).toEqual([
@@ -367,7 +407,9 @@ describe("createCompletionGapMarker", () => {
       { label: "summary-panel" },
       { label: COMPLETION_GAP_MARKER_LABEL, kind: CompletionItemKind.Text },
     ]);
-    const markerCount = list.items.filter((item) => item.label === COMPLETION_GAP_MARKER_LABEL).length;
+    const markerCount = list.items.filter(
+      (item) => item.label === COMPLETION_GAP_MARKER_LABEL,
+    ).length;
     expect(list.isIncomplete).toBe(true);
     expect(markerCount).toBe(1);
   });
@@ -376,13 +418,25 @@ describe("createCompletionGapMarker", () => {
 describe("mapSemanticRuntimeTemplateCompletions", () => {
   test("preserves authorable template-domain roles as specific LSP kinds", () => {
     const mapped = mapSemanticRuntimeTemplateCompletions({
-      outcome: "hit",
+      result: "answered",
       value: {
         candidates: [
-          { name: "component", candidateKind: "ref-target", sourceKind: "framework" },
+          {
+            name: "component",
+            candidateKind: "ref-target",
+            sourceKind: "framework",
+          },
           { name: "click", candidateKind: "event", sourceKind: "type-system" },
-          { name: "prevent", candidateKind: "event-modifier", sourceKind: "framework" },
-          { name: "twoWay", candidateKind: "bindable-mode", sourceKind: "framework" },
+          {
+            name: "prevent",
+            candidateKind: "event-modifier",
+            sourceKind: "framework",
+          },
+          {
+            name: "twoWay",
+            candidateKind: "bindable-mode",
+            sourceKind: "framework",
+          },
         ],
         missingInputs: [],
       },
@@ -395,6 +449,27 @@ describe("mapSemanticRuntimeTemplateCompletions", () => {
       ["prevent", CompletionItemKind.Keyword],
       ["twoWay", CompletionItemKind.EnumMember],
     ]);
+  });
+
+  test("marks semantically truncated completion answers as incomplete", () => {
+    const mapped = mapSemanticRuntimeTemplateCompletions({
+      result: "answered",
+      coverage: "truncated",
+      value: {
+        candidates: [
+          {
+            name: "component",
+            candidateKind: "ref-target",
+            sourceKind: "framework",
+          },
+        ],
+        missingInputs: [],
+      },
+      page: null,
+    } as never);
+
+    expect(mapped.isIncomplete).toBe(true);
+    expect(mapped.items.at(-1)?.label).toBe(COMPLETION_GAP_MARKER_LABEL);
   });
 });
 
@@ -454,31 +529,39 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
       "<template>${message}</template>",
     );
 
-    const mapped = mapSemanticRuntimeTemplateDefinition({
-      value: {
-        selectedMember: {
-          source: {
-            kind: "typescript-node",
-            label: `${definitionLspUri}@${componentStart}..${componentStart + "Component".length}`,
-            path: definitionLspUri,
-            start: componentStart,
-            end: componentStart + "Component".length,
+    const mapped = mapSemanticRuntimeTemplateDefinition(
+      {
+        value: {
+          selectedMember: {
+            source: {
+              kind: "typescript-node",
+              label: `${definitionLspUri}@${componentStart}..${
+                componentStart + "Component".length
+              }`,
+              path: definitionLspUri,
+              start: componentStart,
+              end: componentStart + "Component".length,
+            },
+            declarationSource: {
+              kind: "typescript-node",
+              label: `${definitionLspUri}@${messageStart}..${
+                messageStart + "message".length
+              }`,
+              path: definitionLspUri,
+              start: messageStart,
+              end: messageStart + "message".length,
+            },
           },
-          declarationSource: {
-            kind: "typescript-node",
-            label: `${definitionLspUri}@${messageStart}..${messageStart + "message".length}`,
-            path: definitionLspUri,
-            start: messageStart,
-            end: messageStart + "message".length,
-          },
+          selectedBindable: null,
+          selectedDefinition: null,
         },
-        selectedBindable: null,
-        selectedDefinition: null,
+      } as never,
+      lookupText,
+      {
+        workspaceRoot: "C:/projects/app",
+        originDocument,
       },
-    } as never, lookupText, {
-      workspaceRoot: "C:/projects/app",
-      originDocument,
-    });
+    );
 
     expect(mapped?.[0]?.targetSelectionRange).toEqual({
       start: { line: 1, character: 2 },
@@ -493,34 +576,42 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
       "file:///C:/projects/app/src/component.html",
       "html",
       1,
-      "<template><my-el message.bind=\"message\"></my-el></template>",
+      '<template><my-el message.bind="message"></my-el></template>',
     );
 
-    const mapped = mapSemanticRuntimeTemplateDefinition({
-      value: {
-        selectedMember: null,
-        selectedBindable: {
-          source: {
-            kind: "typescript-node",
-            label: `${definitionLspUri}@${componentStart}..${componentStart + "Component".length}`,
-            path: definitionLspUri,
-            start: componentStart,
-            end: componentStart + "Component".length,
+    const mapped = mapSemanticRuntimeTemplateDefinition(
+      {
+        value: {
+          selectedMember: null,
+          selectedBindable: {
+            source: {
+              kind: "typescript-node",
+              label: `${definitionLspUri}@${componentStart}..${
+                componentStart + "Component".length
+              }`,
+              path: definitionLspUri,
+              start: componentStart,
+              end: componentStart + "Component".length,
+            },
+            propertySource: {
+              kind: "typescript-node",
+              label: `${definitionLspUri}@${messageStart}..${
+                messageStart + "message".length
+              }`,
+              path: definitionLspUri,
+              start: messageStart,
+              end: messageStart + "message".length,
+            },
           },
-          propertySource: {
-            kind: "typescript-node",
-            label: `${definitionLspUri}@${messageStart}..${messageStart + "message".length}`,
-            path: definitionLspUri,
-            start: messageStart,
-            end: messageStart + "message".length,
-          },
+          selectedDefinition: null,
         },
-        selectedDefinition: null,
+      } as never,
+      lookupText,
+      {
+        workspaceRoot: "C:/projects/app",
+        originDocument,
       },
-    } as never, lookupText, {
-      workspaceRoot: "C:/projects/app",
-      originDocument,
-    });
+    );
 
     expect(mapped?.[0]?.targetSelectionRange).toEqual({
       start: { line: 1, character: 2 },
@@ -537,63 +628,73 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
       "<template>${message}</template>",
     );
 
-    const mapped = mapSemanticRuntimeTemplateDefinition({
-      value: {
-        displayText: "mock",
-        siteKind: "expression",
-        expressionFrontier: null,
-        missingInputs: [],
-        template: { compilationLane: "authoring", source: null },
-        html: {
-          nodeKind: "text",
-          tagName: null,
-          attributeName: null,
-          attributeValue: null,
-          source: null,
-          attributeSource: null,
-        },
-        valueSite: null,
-        selectedDefinition: null,
-        selectedBindable: null,
-        selectedMemberName: "message",
-        selectedMember: {
-          name: "message",
-          memberKind: "property",
-          typeDisplay: "string",
-          isOptional: false,
-          isReadonly: false,
-          source: {
-            kind: "typescript-node",
-            label: `${definitionLspUri}@${messageStart}..${messageStart + "message".length}`,
-            path: definitionLspUri,
-            start: messageStart,
-            end: messageStart + "message".length,
+    const mapped = mapSemanticRuntimeTemplateDefinition(
+      {
+        value: {
+          displayText: "mock",
+          siteKind: "expression",
+          expressionFrontier: null,
+          missingInputs: [],
+          template: { compilationLane: "authoring", source: null },
+          html: {
+            nodeKind: "text",
+            tagName: null,
+            attributeName: null,
+            attributeValue: null,
+            source: null,
+            attributeSource: null,
           },
+          valueSite: null,
+          selectedDefinition: null,
+          selectedBindable: null,
+          selectedMemberName: "message",
+          selectedMember: {
+            name: "message",
+            memberKind: "property",
+            typeDisplay: "string",
+            isOptional: false,
+            isReadonly: false,
+            source: {
+              kind: "typescript-node",
+              label: `${definitionLspUri}@${messageStart}..${
+                messageStart + "message".length
+              }`,
+              path: definitionLspUri,
+              start: messageStart,
+              end: messageStart + "message".length,
+            },
+          },
+          memberOwnerType: null,
+          diagnostics: [],
         },
-        memberOwnerType: null,
-        diagnostics: [],
+      } as never,
+      lookupText,
+      {
+        workspaceRoot: "C:/projects/app",
+        originDocument,
       },
-    } as never, lookupText, {
-      workspaceRoot: "C:/projects/app",
-      originDocument,
-    });
+    );
 
-    expect(mapped).toEqual([{
-      targetUri: definitionUri,
-      targetRange: {
-        start: { line: 1, character: 2 },
-        end: { line: 1, character: 9 },
+    expect(mapped).toEqual([
+      {
+        targetUri: definitionUri,
+        targetRange: {
+          start: { line: 1, character: 2 },
+          end: { line: 1, character: 9 },
+        },
+        targetSelectionRange: {
+          start: { line: 1, character: 2 },
+          end: { line: 1, character: 9 },
+        },
       },
-      targetSelectionRange: {
-        start: { line: 1, character: 2 },
-        end: { line: 1, character: 9 },
-      },
-    }]);
+    ]);
   });
 
   test("selects an ordinary resource implementation rather than its explicit name literal", () => {
     const resourceText = '@customElement("my-el")\nexport class Component {}';
-    const resourceUri = canonicalDocumentUri("file:///C:/projects/app/src/my-el.ts").uri;
+    const resourceUri = canonicalDocumentUri(
+      "file:///C:/projects/app/src/my-el.ts",
+    ).uri;
     const nameStart = resourceText.indexOf("my-el");
     const classStart = resourceText.indexOf("Component");
     const originDocument = TextDocument.create(
@@ -610,26 +711,30 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
       end,
     });
 
-    const mapped = mapSemanticRuntimeTemplateDefinition({
-      value: {
-        activeSource: null,
-        selectedMember: null,
-        selectedBindable: null,
-        selectedDefinition: {
-          resourceKind: "custom-element",
-          name: "my-el",
-          matchedName: "my-el",
-          targetName: "Component",
-          source: source(0, resourceText.length),
-          nameSource: source(nameStart, nameStart + "my-el".length),
-          matchedNameSource: source(nameStart, nameStart + "my-el".length),
-          targetSource: source(classStart, classStart + "Component".length),
+    const mapped = mapSemanticRuntimeTemplateDefinition(
+      {
+        value: {
+          activeSource: null,
+          selectedMember: null,
+          selectedBindable: null,
+          selectedDefinition: {
+            resourceKind: "custom-element",
+            name: "my-el",
+            matchedName: "my-el",
+            targetName: "Component",
+            source: source(0, resourceText.length),
+            nameSource: source(nameStart, nameStart + "my-el".length),
+            matchedNameSource: source(nameStart, nameStart + "my-el".length),
+            targetSource: source(classStart, classStart + "Component".length),
+          },
         },
+      } as never,
+      (uri) => (uri === resourceUri ? resourceText : null),
+      {
+        workspaceRoot: "C:/projects/app",
+        originDocument,
       },
-    } as never, (uri) => uri === resourceUri ? resourceText : null, {
-      workspaceRoot: "C:/projects/app",
-      originDocument,
-    });
+    );
 
     expect(mapped?.[0]?.targetSelectionRange).toEqual({
       start: { line: 1, character: 13 },
@@ -638,7 +743,8 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
   });
 
   test("keeps a local resource carrier range while selecting its exact authored name", () => {
-    const template = '<template as-custom-element="mode-panel"><p>local</p></template>';
+    const template =
+      '<template as-custom-element="mode-panel"><p>local</p></template>';
     const nameStart = template.indexOf("mode-panel");
     const originDocument = TextDocument.create(
       "file:///C:/projects/app/src/component.html",
@@ -655,32 +761,38 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
     };
     const nameSource = {
       kind: "source-span-address",
-      label: `src/component.html@${nameStart}..${nameStart + "mode-panel".length}`,
+      label: `src/component.html@${nameStart}..${
+        nameStart + "mode-panel".length
+      }`,
       path: "src/component.html",
       start: nameStart,
       end: nameStart + "mode-panel".length,
     };
 
-    const mapped = mapSemanticRuntimeTemplateDefinition({
-      value: {
-        activeSource: nameSource,
-        selectedMember: null,
-        selectedBindable: null,
-        selectedDefinition: {
-          resourceKind: "custom-element",
-          name: "mode-panel",
-          matchedName: "mode-panel",
-          targetName: null,
-          source: carrierSource,
-          nameSource,
-          matchedNameSource: nameSource,
-          targetSource: carrierSource,
+    const mapped = mapSemanticRuntimeTemplateDefinition(
+      {
+        value: {
+          activeSource: nameSource,
+          selectedMember: null,
+          selectedBindable: null,
+          selectedDefinition: {
+            resourceKind: "custom-element",
+            name: "mode-panel",
+            matchedName: "mode-panel",
+            targetName: null,
+            source: carrierSource,
+            nameSource,
+            matchedNameSource: nameSource,
+            targetSource: carrierSource,
+          },
         },
+      } as never,
+      lookupText,
+      {
+        workspaceRoot: "C:/projects/app",
+        originDocument,
       },
-    } as never, lookupText, {
-      workspaceRoot: "C:/projects/app",
-      originDocument,
-    });
+    );
 
     expect(mapped?.[0]?.targetRange).toEqual({
       start: { line: 0, character: 0 },
@@ -711,39 +823,47 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
     };
     const aliasSource = {
       kind: "source-span-address",
-      label: `src/component.html@${aliasStart}..${aliasStart + "card-item".length}`,
+      label: `src/component.html@${aliasStart}..${
+        aliasStart + "card-item".length
+      }`,
       path: "src/component.html",
       start: aliasStart,
       end: aliasStart + "card-item".length,
     };
 
-    const mapped = mapSemanticRuntimeTemplateDefinition({
-      value: {
-        activeSource: {
-          kind: "source-span-address",
-          label: "src/consumer.html@4..13",
-          path: "src/consumer.html",
-          start: 4,
-          end: 13,
-        },
-        selectedMember: null,
-        selectedDefinition: null,
-        selectedBindable: {
-          source: carrierSource,
-          attributeSource: aliasSource,
-          propertySource: {
-            kind: "typescript-node",
-            label: `${definitionLspUri}@${propertyStart}..${propertyStart + "message".length}`,
-            path: definitionLspUri,
-            start: propertyStart,
-            end: propertyStart + "message".length,
+    const mapped = mapSemanticRuntimeTemplateDefinition(
+      {
+        value: {
+          activeSource: {
+            kind: "source-span-address",
+            label: "src/consumer.html@4..13",
+            path: "src/consumer.html",
+            start: 4,
+            end: 13,
+          },
+          selectedMember: null,
+          selectedDefinition: null,
+          selectedBindable: {
+            source: carrierSource,
+            attributeSource: aliasSource,
+            propertySource: {
+              kind: "typescript-node",
+              label: `${definitionLspUri}@${propertyStart}..${
+                propertyStart + "message".length
+              }`,
+              path: definitionLspUri,
+              start: propertyStart,
+              end: propertyStart + "message".length,
+            },
           },
         },
+      } as never,
+      lookupText,
+      {
+        workspaceRoot: "C:/projects/app",
+        originDocument,
       },
-    } as never, lookupText, {
-      workspaceRoot: "C:/projects/app",
-      originDocument,
-    });
+    );
 
     expect(mapped?.[0]?.targetRange).toEqual({
       start: { line: 0, character: 0 },
@@ -763,42 +883,46 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
       "<template>${message}</template>",
     );
 
-    const mapped = mapSemanticRuntimeTemplateDefinition({
-      value: {
-        displayText: "mock",
-        siteKind: "expression",
-        expressionFrontier: null,
-        missingInputs: [],
-        template: { compilationLane: "authoring", source: null },
-        html: {
-          nodeKind: "text",
-          tagName: null,
-          attributeName: null,
-          attributeValue: null,
-          source: null,
-          attributeSource: null,
-        },
-        valueSite: null,
-        selectedDefinition: {
-          resourceKind: "custom-element",
-          name: "my-el",
-          targetName: "MyEl",
-          source: {
-            kind: "source-file-address",
-            label: "src/my-el.ts",
-            path: "src/my-el.ts",
+    const mapped = mapSemanticRuntimeTemplateDefinition(
+      {
+        value: {
+          displayText: "mock",
+          siteKind: "expression",
+          expressionFrontier: null,
+          missingInputs: [],
+          template: { compilationLane: "authoring", source: null },
+          html: {
+            nodeKind: "text",
+            tagName: null,
+            attributeName: null,
+            attributeValue: null,
+            source: null,
+            attributeSource: null,
           },
+          valueSite: null,
+          selectedDefinition: {
+            resourceKind: "custom-element",
+            name: "my-el",
+            targetName: "MyEl",
+            source: {
+              kind: "source-file-address",
+              label: "src/my-el.ts",
+              path: "src/my-el.ts",
+            },
+          },
+          selectedBindable: null,
+          selectedMemberName: null,
+          selectedMember: null,
+          memberOwnerType: null,
+          diagnostics: [],
         },
-        selectedBindable: null,
-        selectedMemberName: null,
-        selectedMember: null,
-        memberOwnerType: null,
-        diagnostics: [],
+      } as never,
+      lookupText,
+      {
+        workspaceRoot: "C:/projects/app",
+        originDocument,
       },
-    } as never, lookupText, {
-      workspaceRoot: "C:/projects/app",
-      originDocument,
-    });
+    );
 
     expect(mapped).toBeNull();
   });

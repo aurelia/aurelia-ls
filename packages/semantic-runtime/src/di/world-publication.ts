@@ -489,7 +489,6 @@ export function recordsForDiEvaluationOpenSeams(
             end: evaluationSeam.node.end,
             evidenceRoles: [EvidenceRole.Diagnostic, EvidenceRole.Registration],
             reasonKinds,
-            includeProvenanceRecord: true,
           });
           const seam = sourceEmission.records.find((record): record is OpenSeam =>
             record instanceof OpenSeam && record.handle === sourceEmission.handle

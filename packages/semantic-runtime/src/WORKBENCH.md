@@ -240,7 +240,7 @@ compilation, rendering dispatch, and TypeChecker-backed scope products. Keep ini
 kernel handles only through explicit detail projections so the API can serve app developers and AI callers without
 forcing every query into full graph expansion.
 Query outcomes now pass through `QueryClaimGraph` before public answer serialization. Treat that graph as the lazy
-answer/outcome layer, not as a kernel substitute: durable facts still belong in kernel products and claims, while
+answer-state layer, not as a kernel substitute: durable facts still belong in kernel products and claims, while
 answer-local work, nested query composition, payload shape, query type projections, and disposal policy belong in
 the query-claim layer. When a public query grows kernel products, first check the query catalog materialization policy
 and telemetry output before adding another cache or eager projection.

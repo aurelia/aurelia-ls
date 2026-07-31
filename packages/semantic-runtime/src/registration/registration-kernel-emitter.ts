@@ -572,7 +572,6 @@ class RegistrationAdmissionSupportMaterializer {
         reasonKinds: seam.reasonKinds.length === 0
           ? registrationOpenSeamReasonKinds(seam.openKind)
           : seam.reasonKinds,
-        includeProvenanceRecord: true,
       })),
     );
   }

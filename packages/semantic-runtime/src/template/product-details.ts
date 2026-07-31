@@ -1487,7 +1487,7 @@ function runtimeWatcherObservedDependencyReferences(
   return productIdentityAddressReferences(
     dependency.productHandle,
     dependency.identityHandle,
-    dependency.sourceAddressHandle,
+    dependency.occurrence.sourceAddressHandle,
     ObservationDetailDescriptors.RuntimeWatcherObservedDependency,
   );
 }

@@ -126,19 +126,25 @@ function printCursorAggregate(aggregate, requestMilliseconds) {
   printCounts('project shape reasons', aggregate.projectShapeReasons);
   printCounts('sample lanes', aggregate.sampleLanes);
   printCounts('site kinds', aggregate.siteKinds);
-  printCounts('outcomes', aggregate.outcomes);
-  printCounts('outcomes by site kind', aggregate.outcomeSiteKinds, 18);
-  printCounts('outcomes by sample lane', aggregate.outcomeSampleLanes, 18);
+  printCounts('answer results', aggregate.answerResults);
+  printCounts('answer selections', aggregate.answerSelections);
+  printCounts('answer coverages', aggregate.answerCoverages);
+  printCounts('answer states by site kind', aggregate.answerStateSiteKinds, 18);
+  printCounts('answer states by sample lane', aggregate.answerStateSampleLanes, 18);
   printCounts('completion pressure classes', aggregate.completionPressureClasses, 18);
-  printCounts('outcomes by completion pressure class', aggregate.outcomeCompletionPressureClasses, 18);
-  printCounts('public API outcomes', aggregate.apiOutcomes, 18);
+  printCounts('answer states by completion pressure class', aggregate.answerStateCompletionPressureClasses, 18);
+  printCounts('public API answer results', aggregate.apiAnswerResults, 18);
+  printCounts('public API answer selections', aggregate.apiAnswerSelections, 18);
+  printCounts('public API answer coverages', aggregate.apiAnswerCoverages, 18);
   printCounts('public API site kinds', aggregate.apiSiteKinds, 18);
   printCounts('public API pressure classes', aggregate.apiCompletionPressureClasses, 18);
   printCounts('public API exception classes', aggregate.apiExceptionClasses, 18);
   printCounts('public API answer mismatches', aggregate.apiAnswerMismatches, 18);
   printCounts('public API template-resource miss reasons', aggregate.apiTemplateResourceMissReasons, 18);
   printCounts('public API missing inputs', aggregate.apiMissingInputs, 24);
-  printCounts('public cursor-info outcomes', aggregate.apiCursorInfoOutcomes, 18);
+  printCounts('public cursor-info answer results', aggregate.apiCursorInfoAnswerResults, 18);
+  printCounts('public cursor-info answer selections', aggregate.apiCursorInfoAnswerSelections, 18);
+  printCounts('public cursor-info answer coverages', aggregate.apiCursorInfoAnswerCoverages, 18);
   printCounts('public cursor-info site kinds', aggregate.apiCursorInfoSiteKinds, 18);
   printCounts('public cursor-info value-site kinds', aggregate.apiCursorInfoValueSiteKinds, 18);
   printCounts('public cursor-info definition kinds', aggregate.apiCursorInfoDefinitionKinds, 18);
@@ -159,7 +165,7 @@ function printCursorAggregate(aggregate, requestMilliseconds) {
   printCounts('public cursor-info mismatches', aggregate.apiCursorInfoMismatches, 18);
   printCounts('public cursor-info missing inputs', aggregate.apiCursorInfoMissingInputs, 18);
   printCounts('value-site kinds', aggregate.valueSiteKinds, 18);
-  printCounts('outcomes by value-site kind', aggregate.outcomeValueSiteKinds, 18);
+  printCounts('answer states by value-site kind', aggregate.answerStateValueSiteKinds, 18);
   printCounts('value-domain gaps', aggregate.valueDomainGaps, 18);
   printCounts('context missing inputs', aggregate.contextMissingInputs, 20);
   printCounts('answer missing inputs', aggregate.answerMissingInputs, 24);
@@ -198,19 +204,25 @@ async function readCursorPressureForRoot(root) {
     projectShapeReasons: {},
     sampleLanes: {},
     siteKinds: {},
-    outcomes: {},
-    outcomeSiteKinds: {},
-    outcomeSampleLanes: {},
+    answerResults: {},
+    answerSelections: {},
+    answerCoverages: {},
+    answerStateSiteKinds: {},
+    answerStateSampleLanes: {},
     completionPressureClasses: {},
-    outcomeCompletionPressureClasses: {},
-    apiOutcomes: {},
+    answerStateCompletionPressureClasses: {},
+    apiAnswerResults: {},
+    apiAnswerSelections: {},
+    apiAnswerCoverages: {},
     apiSiteKinds: {},
     apiCompletionPressureClasses: {},
     apiExceptionClasses: {},
     apiAnswerMismatches: {},
     apiTemplateResourceMissReasons: {},
     apiMissingInputs: {},
-    apiCursorInfoOutcomes: {},
+    apiCursorInfoAnswerResults: {},
+    apiCursorInfoAnswerSelections: {},
+    apiCursorInfoAnswerCoverages: {},
     apiCursorInfoSiteKinds: {},
     apiCursorInfoValueSiteKinds: {},
     apiCursorInfoDefinitionKinds: {},
@@ -231,7 +243,7 @@ async function readCursorPressureForRoot(root) {
     apiCursorInfoMismatches: {},
     apiCursorInfoMissingInputs: {},
     valueSiteKinds: {},
-    outcomeValueSiteKinds: {},
+    answerStateValueSiteKinds: {},
     valueDomainGaps: {},
     contextMissingInputs: {},
     answerMissingInputs: {},
@@ -378,18 +390,21 @@ async function readCursorPressureForRoot(root) {
           );
         }
         aggregate.candidateRows += rows.length;
-        increment(aggregate.outcomes, answer.outcome);
+        const answerState = answerStateKey(answer);
+        increment(aggregate.answerResults, answer.result);
+        increment(aggregate.answerSelections, answer.selection);
+        increment(aggregate.answerCoverages, answer.coverage);
         increment(aggregate.siteKinds, answer.value.siteKind);
-        increment(aggregate.outcomeSiteKinds, `${answer.outcome}:${answer.value.siteKind}`);
-        increment(aggregate.outcomeSampleLanes, `${answer.outcome}:${locusSpec.lane}`);
+        increment(aggregate.answerStateSiteKinds, `${answerState}:${answer.value.siteKind}`);
+        increment(aggregate.answerStateSampleLanes, `${answerState}:${locusSpec.lane}`);
         const pressureClass = completionPressureClass(answer, valueSite, apiCursorInfoAnswer?.value ?? null);
         increment(aggregate.completionPressureClasses, pressureClass);
-        increment(aggregate.outcomeCompletionPressureClasses, `${answer.outcome}:${pressureClass}`);
+        increment(aggregate.answerStateCompletionPressureClasses, `${answerState}:${pressureClass}`);
         if (valueSite != null) {
           increment(aggregate.valueSiteKinds, valueSite.siteKind);
-          increment(aggregate.outcomeValueSiteKinds, `${answer.outcome}:${valueSite.siteKind}`);
+          increment(aggregate.answerStateValueSiteKinds, `${answerState}:${valueSite.siteKind}`);
         } else if (answer.value.siteKind === 'attribute-value') {
-          increment(aggregate.outcomeValueSiteKinds, `${answer.outcome}:none`);
+          increment(aggregate.answerStateValueSiteKinds, `${answerState}:none`);
         }
         for (const missing of context.missingInputs) {
           increment(aggregate.contextMissingInputs, bucketMissingInput(missing));
@@ -441,13 +456,14 @@ async function recordPublicApiCursorInfoPressure(
       },
     });
   } catch (error) {
-    increment(aggregate.apiCursorInfoOutcomes, 'exception');
     increment(aggregate.apiCursorInfoExceptionClasses, runtimeExceptionClass(error));
     increment(aggregate.apiCursorInfoMismatches, 'api-exception');
     return;
   }
 
-  increment(aggregate.apiCursorInfoOutcomes, apiAnswer.outcome);
+  increment(aggregate.apiCursorInfoAnswerResults, apiAnswer.result);
+  increment(aggregate.apiCursorInfoAnswerSelections, apiAnswer.selection);
+  increment(aggregate.apiCursorInfoAnswerCoverages, apiAnswer.coverage);
   increment(aggregate.apiCursorInfoSiteKinds, apiAnswer.value.siteKind);
   increment(aggregate.apiCursorInfoValueSiteKinds, apiAnswer.value.valueSite?.siteKind ?? 'none');
   increment(aggregate.apiCursorInfoDefinitionKinds, apiAnswer.value.selectedDefinition?.resourceKind ?? 'none');
@@ -733,13 +749,14 @@ async function recordPublicApiCompletionPressure(
       },
     });
   } catch (error) {
-    increment(aggregate.apiOutcomes, 'exception');
     increment(aggregate.apiExceptionClasses, runtimeExceptionClass(error));
     increment(aggregate.apiAnswerMismatches, 'api-exception');
     return;
   }
 
-  increment(aggregate.apiOutcomes, apiAnswer.outcome);
+  increment(aggregate.apiAnswerResults, apiAnswer.result);
+  increment(aggregate.apiAnswerSelections, apiAnswer.selection);
+  increment(aggregate.apiAnswerCoverages, apiAnswer.coverage);
   increment(aggregate.apiSiteKinds, apiAnswer.value.siteKind);
   compareCompletionAnswers(aggregate, inquiryAnswer, apiAnswer);
 
@@ -812,8 +829,10 @@ function compareCompletionAnswers(
   inquiryAnswer,
   apiAnswer,
 ) {
-  if (inquiryAnswer.outcome !== apiAnswer.outcome) {
-    increment(aggregate.apiAnswerMismatches, `outcome:${inquiryAnswer.outcome}->${apiAnswer.outcome}`);
+  for (const axis of ['result', 'selection', 'coverage']) {
+    if (inquiryAnswer[axis] !== apiAnswer[axis]) {
+      increment(aggregate.apiAnswerMismatches, `${axis}:${inquiryAnswer[axis]}->${apiAnswer[axis]}`);
+    }
   }
   if (inquiryAnswer.value.siteKind !== apiAnswer.value.siteKind) {
     increment(aggregate.apiAnswerMismatches, `site-kind:${inquiryAnswer.value.siteKind}->${apiAnswer.value.siteKind}`);
@@ -1294,7 +1313,7 @@ function bucketMissingInput(value) {
 }
 
 function completionPressureClass(answer, valueSite, cursorInfoValue = null) {
-  if (answer.outcome === 'hit' && answer.value.missingInputs.length === 0) {
+  if (isCompleteExactAnswer(answer) && answer.value.missingInputs.length === 0) {
     return 'complete';
   }
   const missingInputBuckets = answer.value.missingInputs.map(bucketMissingInput);
@@ -1329,10 +1348,20 @@ function completionPressureClass(answer, valueSite, cursorInfoValue = null) {
   if (missingInputBuckets.length > 0) {
     return `missing-input:${missingInputBuckets[0]}`;
   }
-  if (answer.outcome === 'hit') {
-    return 'complete-with-pressure';
+  if (answer.result === 'answered') {
+    return `answered-with-pressure:${answer.selection}:${answer.coverage}`;
   }
-  return `unexplained-${answer.outcome}:${answer.value.siteKind}`;
+  return `unexplained-${answer.result}:${answer.selection}:${answer.coverage}:${answer.value.siteKind}`;
+}
+
+function answerStateKey(answer) {
+  return `${answer.result}/${answer.selection}/${answer.coverage}`;
+}
+
+function isCompleteExactAnswer(answer) {
+  return answer.result === 'answered'
+    && answer.selection === 'exact'
+    && answer.coverage === 'complete';
 }
 
 function diagnosticBackedCompletionPressureClass(cursorInfoValue, missingInput = null) {

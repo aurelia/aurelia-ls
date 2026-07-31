@@ -28,6 +28,7 @@ import type {
 } from '../runtime-expression/runtime-operation.js';
 import type { RuntimeValueConverterApplicationReference } from '../template/runtime-value-converter.js';
 import type { ObservationFrameworkErrorCode } from './framework-error-code.js';
+import type { RuntimeObservedDependencyOccurrence } from './runtime-observed-dependency.js';
 
 export const enum RuntimeBindingValueChannelKind {
   RawProperty = 'raw-property',
@@ -206,16 +207,6 @@ export const enum RuntimeBindingDataFlowSourceKind {
   Open = 'open',
 }
 
-export const enum RuntimeObservedDependencyKind {
-  TemplateExpressionRead = 'template-expression-read',
-  TemplateCollectionRead = 'template-collection-read',
-  ProxyPropertyRead = 'proxy-property-read',
-  ProxyCollectionRead = 'proxy-collection-read',
-  ObservablePropertyRead = 'observable-property-read',
-  DeepPropertyRead = 'deep-property-read',
-  DeepCollectionRead = 'deep-collection-read',
-}
-
 export const enum RuntimeBindingDataFlowSourceAssignmentKind {
   RuntimeAssignable = 'runtime-assignable',
   RuntimeAssignableWithTypeScriptStrictness = 'runtime-assignable-with-typescript-strictness',
@@ -251,26 +242,6 @@ export const enum RuntimeBindingDataFlowTypeMismatchKind {
   TargetNullishToRequiredSource = 'target-nullish-to-required-source',
 }
 
-export const enum RuntimeObservedMemberSourceState {
-  Source = 'source',
-  TemporaryValue = 'temporary-value',
-  RuntimeScopeName = 'runtime-scope-name',
-  ScopeOpen = 'scope-open',
-  Open = 'open',
-}
-
-/**
- * Provenance of `observedMemberSourceAddressHandle`. The state above says whether a source route is
- * closed at all; the route says WHOSE declaration the address is. Only `member-declaration` rows may
- * be treated as proof that the address is the observed member's own declaration; `owner-value` rows
- * carry the owner/root declaration as a best-effort navigation aid for weak, dynamic, keyed, or
- * index-signature-shaped owners and must never be matched against a member declaration span.
- */
-export const enum RuntimeObservedMemberSourceRoute {
-  MemberDeclaration = 'member-declaration',
-  OwnerValue = 'owner-value',
-}
-
 /** Reference to a runtime value channel without expanding checker facts. */
 export class RuntimeBindingValueChannelReference {
   constructor(
@@ -292,29 +263,11 @@ export class RuntimeBindingObservedDependency {
     readonly identityHandle: IdentityHandle,
     readonly binding: RuntimeBindingReference,
     readonly dataFlowProductHandle: ProductHandle,
-    /** Exact authored or generated access occurrence that induced this observation effect. */
-    readonly accessUseProductHandle: ProductHandle,
     readonly expressionProductHandle: ProductHandle | null,
     readonly bindingScope: BindingScopeReference | null,
     /** Whether dependency collection is direct or belongs to a guarded runtime-created inner binding. */
     readonly realization: RuntimeOperationRealization,
-    readonly dependencyKind: RuntimeObservedDependencyKind,
-    readonly expressionKind: string,
-    readonly sourceName: string | null,
-    readonly sourceRootName: string | null,
-    readonly memberName: string | null,
-    readonly keyExpression: string | null,
-    readonly methodName: string | null,
-    readonly observedMemberKind: CheckerTypeMemberKind | `${CheckerTypeMemberKind}` | null,
-    readonly observedMemberSourceAddressHandle: AddressHandle | null,
-    readonly observedMemberSourceState: RuntimeObservedMemberSourceState,
-    readonly observedMemberSourceRoute: RuntimeObservedMemberSourceRoute | null,
-    readonly spanStart: number | null,
-    readonly spanEnd: number | null,
-    /** Authored bounds of the member-name token inside the expression, for AccessMember/CallMember reads. */
-    readonly memberNameSpanStart: number | null,
-    readonly memberNameSpanEnd: number | null,
-    readonly sourceAddressHandle: AddressHandle | null,
+    readonly occurrence: RuntimeObservedDependencyOccurrence,
   ) {}
 }
 

@@ -228,9 +228,11 @@ binding commands as `AUR0713` unknown binding-command issues. After lint or form
 as clean.
 
 App-query answers may carry `continuations`: typed semantic-runtime next moves with a followable `targetQuery`, intent
-labels, cost, evidence state, source precision, staleness, and blockers. Pass `continuationIntents` when the caller
-already knows the task posture, such as `inspect`, `diagnose`, `repair`, `verify`, or `profile`; semantic-runtime
-filters only the response envelope and leaves query materialization identity unchanged.
+labels, cost, source requirements, per-reference source facts, epoch dependencies, and blockers. Epoch dependencies
+preserve runtime-session, project-input, app-world, and source-input invalidation authorities independently rather than
+ranking them as one staleness value. Pass `continuationIntents` when the caller already knows the task posture, such as
+`inspect`, `diagnose`, `repair`, `verify`, or `profile`; semantic-runtime filters only the response envelope and leaves
+query materialization identity unchanged.
 
 Use `aurelia_app_query_batch` when a client needs several related app answers for one orientation move. Leave
 `includeAppProfile` and `includeAppQueryClaimProfiles` unset for ordinary app-building answers; use

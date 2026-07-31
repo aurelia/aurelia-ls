@@ -2,6 +2,7 @@ import ts from 'typescript';
 import { SourceSpanRole } from '../kernel/address.js';
 import {
   OpenSeam,
+  OpenSeamReasonKind,
 } from '../kernel/open-seam.js';
 import {
   EvidenceKind,
@@ -448,6 +449,7 @@ export class CheckerTypeProjector {
           `TypeChecker projection could not classify '${descriptor.display}' into a known type-shape lane.`,
           source.sourceAddressHandle,
           source.evidenceHandle,
+          [OpenSeamReasonKind.TypeProjectionUnclassified],
         ),
       ]
       : [];

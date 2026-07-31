@@ -25,21 +25,26 @@ template completion, cursor-info, references, inlay hints, and diagnostic query 
 app-level dispatch, and direct cursor-locus convenience methods.
 App-query identity, locus, and invalidation epoch keys live in `app-query-identity.ts`. Keep reuse/invalidation keys
 there rather than rebuilding private string keys in the MCP adapter, scripts, or individual answerers.
-`semanticAppQueryCatalogShape(...)` is the shared boundary that drops unsupported envelope fields before app dispatch,
+`unsupportedSemanticAppQuerySelectorFields(...)` is the catalog-owned authority for caller fields that the current query
+cannot consume. `answerUnsupportedSemanticAppQuerySelectors(...)` turns those facts into an `unsupported` answer before
+app-world construction, while `semanticAppQueryRequestKey(...)` keeps invalid request shapes distinct from the normalized
+valid-query identity. `semanticAppQueryCatalogShape(...)` then normalizes the supported envelope before app dispatch,
 claim identity, materialization policy, authoring-template opt-in, default inquiry-profile selection, and continuation
-target-query shaping. Use it when a new query option is added so unsupported cursor/source/detail knobs do not fragment
-caches, epoch keys, or pre-open policy. Continuation builders may still inherit explicit target-policy hints from the
-caller, such as diagnostic projection, but the final `targetQuery` must be shaped against the target catalog row.
-`SemanticApp.ask(...)` therefore dispatches and records claims with the shaped query while passing the original caller
-query to continuation generation, so follow-up target policy survives without changing current-query materialization.
+target-query shaping. Update these boundaries together when a query option is added so unsupported cursor/source/detail
+knobs neither disappear nor contaminate caches, epoch keys, or pre-open policy.
+`SemanticApp.answerRoutedQuery(...)` records the shaped semantic answer and neutral continuation rows. Public
+`SemanticApp.ask(...)`, routed runtime answers, and batch answers apply `continuationIntents` and continuation-target
+`diagnosticProjection` only after their last reusable claim boundary. A diagnostic query that consumes
+`diagnosticProjection` still includes it in current-query identity; a source query that does not consume it may use the
+same field solely as response-envelope policy for diagnostic continuation targets.
 Its non-router dispatch is grouped through `semanticAppQueryCatalogRow(...).group`; keep that as the public app-query
 family boundary before adding another branch table or moving a substrate-family answerer back into `runtime.ts`.
 `semanticAppQuerySourceFileLocus(...)` owns the cursor-to-source-file bridge used by catalog shaping and continuation
 source-locus evidence; do not recreate a local `sourceFile ?? cursor.filePath` helper in query answerers.
-Public source-locus DTOs, bounded row source-reference traversal, and source-precision classification live in
-`source-reference.ts`. Use those helpers when an answer policy needs to discover source precision from returned rows;
-do not add another recursive DTO walker or authored/generated/external ranking in a diagnostic, continuation, hover, or
-future edit surface.
+Public source-locus DTOs, bounded row source-reference traversal, and per-reference source-facet classification live in
+`source-reference.ts`. Use those helpers when an answer policy needs to inspect returned source evidence; do not add
+another recursive DTO walker or authored/generated/external ranking in a diagnostic, continuation, hover, or future edit
+surface.
 `PUBLIC_SOURCE_REFERENCE_CARRIER_KEYS` is intentionally contract-checked against public row DTOs whose nested fields
 contain `SemanticSourceReference`, and the contract also synthesizes those DTO paths to prove the runtime collector can
 actually reach them. Add a carrier key when a row nests source-bearing objects instead of widening the collector to
@@ -47,8 +52,9 @@ arbitrary object recursion or adding depth-based special cases.
 Generated addresses may be anchored to either source addresses or semantic identities. Public source descriptions must
 follow the shared kernel source-address resolver so identity-backed generated products can still point back to authored
 TypeScript or template spans instead of dropping to broad generated carriers.
-Continuation source-precision policy also follows `SemanticSourceReference.anchor` for authored template/source carriers;
-generated-address rows intentionally remain `generated-anchor` even when they carry an authored anchor.
+Continuation source facts follow `SemanticSourceReference.anchor` for authored template/source carriers. A generated
+reference retains its `generated` facet alongside the authored/exact facets of its anchor instead of being collapsed to
+one representative precision.
 `describeStoredAddress(...)` intentionally mirrors the address-kind switch in the kernel source resolver without sharing
 its result type: the API layer must preserve visible carriers such as `generated-address` and `template-node-address`,
 while `kernel/source-address.ts` collapses those carriers to their nearest authored source for internal source lookup.
@@ -56,7 +62,7 @@ Routed app-query defaults and retention choices live in `app-query-policy.ts`: d
 selection, authoring-template opt-in, minimum analysis depth upgrades, materialization-policy overrides, and
 `appRetention` disposal decisions are API policy, not transport adapter behavior.
 Typed app-query follow-ups live in `app-query-continuations.ts`. That module is the public continuation policy point:
-it maps answered query families to compact `targetQuery` shapes plus intent, cost, evidence, staleness, and blocker
+it maps answered query families to compact `targetQuery` shapes plus intent, cost, evidence, epoch dependencies, and blocker
 metadata. Keep it catalog-aware and lazy; do not rebuild app facts or adapter-specific ranking there.
 Continuation target queries should carry only modifiers the target catalog row can consume. Cursor and source-file loci
 are first normalized through the source query's catalog shape so unsupported loci do not leak into follow-ups; detail,
@@ -66,16 +72,19 @@ continuation evidence.
 Continuation cost uses the same query-specific materialization policy as the app-query answer path. For example,
 `diagnosticProjection: 'available-products'` removes answer-time TypeChecker projection cost, but it does not pretend an
 app-world diagnostic family is project-frame cheap.
-Even cheap `next-page` continuations should inherit target query staleness, because a cursor over project or source rows
-is not current-epoch stable merely because following it is inexpensive. Source-capable catalog rows are still
-project-epoch sensitive until the shaped `targetQuery` carries a cursor or `sourceFile` locus.
+Even cheap `next-page` continuations should expose the target query's epoch dependencies, because a cursor over project
+or source rows is not stable merely because following it is inexpensive. Keep runtime-session, project-input,
+app-world, and source-input dependencies as independent facts: app-world targets depend on both the admitted project
+input and the selected app generation, while a cursor, source-file selector, or source-file dependency locus adds the
+source-input authority. Do not collapse these into one ranked staleness value.
 The app-query catalog also exposes `runtimeBoundary`: `runtime-static`, `project-frame`, `static-evaluation`, or
 `app-world`. Keep that boundary honest whenever adding a query kind. It is the public signal that lets MCP/LSP-style
 adapters ask cheap static/project/evaluation questions without accidentally paying for full app construction.
 `continuationIntents` is a response-envelope filter over those typed rows. It is deliberately not part of app-query or
 app-builder query identity, locus, materialization policy, or query-claim invalidation because it does not change the
 semantic facts being answered; it only narrows which follow-up moves are returned and inherited by their target query
-payloads.
+payloads. Reusable claims retain the unfiltered continuation set; projection happens after the outermost claim read so
+one caller's intent cannot poison a later response.
 Query cost still belongs to `runtimeBoundary`, `minimumAnalysisDepth`, `materializationPolicy`, `inquiryProfile`,
 paging, and query-claim retention. Intent should not become a shadow query policy.
 
@@ -143,9 +152,12 @@ summaries, while explicit row selectors or family filters activate rich joins by
 default. A caller should use catalog/readiness answers to select refs and then
 drill into detail; broad detail expansion is still possible, but only through
 explicit `include*` flags.
-Continuation evidence `coverage` is a proof posture, not a confidence score. Paged row tables, overviews, and summary
-tables report `partial-known-gaps`; exact cursor-locus follow-ups can report `complete-for-locus`; future or
-insufficiently modeled families should stay `unknown` instead of implying completeness.
+Public answers expose three independent proof axes rather than one overloaded outcome. `result` records whether execution
+answered, was unsupported or invalid, or failed; `selection` records exact, absent, ambiguous, rerouted, or
+not-applicable locus selection; `coverage` records complete, open, truncated, or not-applicable semantic coverage.
+Transport paging is reported only in `page`. Continuation evidence separately declares a source requirement and preserves
+per-reference source facts plus independent runtime-session, project-input, app-world, and source-input epoch
+dependencies; it does not restate answer coverage or manufacture a confidence score.
 When phase-kernel telemetry is enabled, those same phase rows also carry compact kernel deltas and optional product/detail
 breakdown rows, so disposed-app answers can explain which template or runtime phase created the answer-local products
 that the claim graph later reclaimed.
@@ -158,12 +170,15 @@ Small retained DTO values are bounded twice: profiles choose which materializati
 query-claim graph enforces both a per-answer byte limit and a total retained-answer byte budget. When the value budget
 is exceeded, claim rows remain available for reuse diagnostics and invalidation, but old public DTO objects are dropped
 so a long MCP-style orientation session does not turn the graph into an unbounded answer cache.
+Transport page policy is not semantic query identity, but it is retained-answer response-policy identity. A bounded
+caller and an unbounded caller may share semantic materialization while never replaying each other's clamped DTO.
 App-world-free app-query answers stay at the runtime boundary. `SourceFiles` can answer from the booted project frame,
 and `UnresolvedModules` can answer from read-only Aurelia
 static evaluation without emitting kernel records or opening an app epoch. `answerAppQuery(...)` and
 all-app-world-free `answerAppQueries(...)` batches therefore avoid TypeSystem construction, template compilation, and
-app-epoch disposal. When every child query is runtime-static, the batch stays workspace-level too: it does not select a
-project, and the batch result has `projectKey: null` and `analysisDepth: null`. Project-frame and static-evaluation
+app-epoch disposal. When every child query is runtime-static, or every child refuses during selector preflight, the batch
+stays workspace-level too: it does not select a project, and the batch result has `projectKey: null` and
+`analysisDepth: null`. Project-frame and static-evaluation
 batches still select the owning project because their answers depend on admitted source files or static project
 evaluation. All app-world-free batch results mark `appWorldOpened: false` and carry no `appProfile`; that absence is
 intentional, not missing telemetry. When a routed app-world-free request includes telemetry options, the answer envelope
@@ -189,7 +204,7 @@ Conversely, `appRetention: 'retain-app'` disables retained-answer reuse when no 
 because the caller is asking to warm the app world for follow-up tools, not merely to receive the same DTO again.
 Direct static facade answers such as `runtime.appQueryCatalog(...)` are also claim-backed. Public adapters should use
 runtime facade methods rather than raw catalog readers when the answer crosses a transport boundary, so retention,
-reuse, and cache overview all observe the same query-outcome layer. Inside an already-entered claim boundary, use the
+reuse, and cache overview all observe the same query-answer layer. Inside an already-entered claim boundary, use the
 focused raw answer builder instead of calling another public facade method; otherwise an implementation detail can
 create an unrelated default-profile claim even though only one public answer crossed the API boundary.
 The retired legacy recipe-authoring catalog, guidance, and recipe-plan answers have been removed. Public app generation
@@ -232,7 +247,7 @@ should reuse the same project epoch without changing the meaning of the repair-o
 Query-claim records distinguish the exact answer locus from invalidation epoch keys. For example, a cursor query uses a
 cursor-shaped locus for reuse/history but also depends on its source-file epoch; adapters that keep a runtime session
 open across edits should call `runtime.disposeQueryClaims({ sourceFilePath })` after a source change when they only need
-to clear answer-outcome storage, or `runtime.clearAnalysisCache()` when the edit makes retained app-world products
+to clear retained answer storage, or `runtime.clearAnalysisCache()` when the edit makes retained app-world products
 stale. The runtime canonicalizes source-file loci to project-relative paths before assigning query keys and epoch keys,
 so absolute host paths and project-relative paths converge on the same source-epoch claim. App-local
 `disposeQueryClaimsForSourceEpoch(...)` remains available for callers that already own a `SemanticApp`, but transport
@@ -322,29 +337,31 @@ options, or `authoringTemplateLimit` when they need different scope or budget be
 
 Rows default to compact source labels and counts. Opaque kernel handles are intentionally opt-in through
 `SemanticRuntimeDetail.Handles`; they are useful for exact in-process follow-up navigation but too noisy for initial
-answers. Paged app rows use offset cursors for this in-process facade. Earlier semantic-string cursors looked nicer but
-quietly assumed every row projection had a unique display key, which is false for repeated controller and binding
-shapes; exact follow-up navigation should use handles instead of cursor text. A paged query returns `partial` only
-when the returned page has a `nextCursor`; a caller that drains all pages should see a final `hit`, even when the last
-page is smaller than the total row count. Cursor-scoped template completion answers may carry an opaque continuation
-cursor from the completion inquiry because the candidate set is not a durable row table.
+answers. Paged app rows use opaque cursors bound to normalized query identity, project/app generation, and ordering
+version. Cross-query, stale-generation, malformed, and out-of-range cursors return `invalid` answers instead of being
+interpreted as raw offsets. Exact follow-up navigation should use answer-local row/owner/cluster keys or handle
+projection rather than cursor text. Paging never changes answer coverage: a bounded page can remain
+`answered/not-applicable/complete` when the query enumerated its declared semantic basis. `page.nextCursor` alone says
+that more transport rows remain. A size-zero page returns rollup/total state without rows and can still provide a
+followable continuation.
 Paged row tables are bounded by row count and by estimated UTF-8 JSON size for the returned row array. Dense families
 such as binding observed-dependency rows can hit the payload budget before they hit the row-count clamp; in that case
 the page returns fewer rows, sets `byteClamped: true`, reports `estimatedRowsJsonBytes` and `maxRowsJsonBytes`, and
 still provides `nextCursor` when more rows are available. Public adapters should treat this as pagination, not lossy
-truncation. Callers that need complete row families should drain `nextCursor`; `partial` is a successful bounded page
-state for dense answers.
-`OpenSeamSites` reads the same unpaged seam row set as `OpenSeams`, then groups repeated derivations by authored
-source span and seam kind. Use it before raw seams or kind summaries when a large app reports hundreds of seams: one
+truncation. Callers that need complete row families should drain `nextCursor`; semantic `coverage` remains independent
+from row-count and byte clamping.
+`OpenSeamSites` reads the same unpaged seam fact set as `OpenSeams`, then groups repeated derivations by exact authored
+root source. One site may therefore retain multiple seam kinds, reason kinds, boundary kinds, and pressure kinds. Use it
+before raw seams or kind summaries when a large app reports hundreds of seams: one
 authored expression can produce many raw evaluator rows after callback/intrinsic expansion, and the public first read
 should say "two authored sites covering six raw rows" rather than making derivation count look like problem count.
-`OpenSeamSummary` remains the kind/reason cluster view for understanding dominant seam families after the site-level
+`OpenSeamSummary` remains the typed seam-kind/reason-signature cluster view for understanding dominant seam families after the site-level
 problem count is clear. Raw seam, site, and summary answers all own compact `displayText`: raw rows report seam-kind
 and reason-kind rollups plus a few source-backed samples, site rows report unique authored locations with raw-row and
 variant counts, while summary rows report dominant clusters, source-file coverage, and sample locations. `OpenSeams`,
-`OpenSeamSites`, and `OpenSeamSummary` accept `sourceFile`, `openSeamKindKey`, and `openSeamReasonKind` so a large
-cluster count always has a direct drill-down path. Public adapters should forward that text before asking for handle
-detail.
+`OpenSeamSites`, and `OpenSeamSummary` accept source, kind, reason, answer-local cluster, and answer-local site selectors
+so a large cluster count always has a direct drill-down path. Summary/site queries do not support handle detail and
+refuse that selector rather than silently dropping it; raw `OpenSeams` owns handle projection.
 `AppOverview` is the compact app-opening answer for MCP and other AI callers. It composes summary, topology counts,
 diagnostic clusters, and open-seam clusters without making adapters reconstruct that answer locally. The topology child read uses a compact summary projection instead of
 asking the full `AppTopology` row DTO and summarizing afterward. Call `AppTopology` directly when row families or
@@ -592,15 +609,15 @@ the framework-default modifier model; and local-template bindable modes come fro
 mode source address. The candidate kind records that semantic role while `siteKind` remains the compatible broad
 attribute-name or attribute-value surface expected by IDE clients. Once selected, an exact authoring domain owns the
 candidate list; generic attribute or value collectors do not add unrelated candidates to that syntax position.
-The public result preserves this narrower `domainKind`. Framework-default modifier candidates are explicitly partial
+The public result preserves this narrower `domainKind`. Framework-default modifier candidates carry open answer coverage
 until the app-effective `IKeyMapping` and `IModifiedEventHandlerCreator` registrations can be projected; custom handler
 implementations do not expose an enumerable modifier vocabulary and must never be presented as a closed list.
 Completion answers own compact `displayText` with site kind, candidate count, template lane/path, frontier/missing-input
 state, and a small candidate preview. Public clients should forward that instead of turning candidate rows into prose in
 the adapter.
-Cursor-derived and inquiry-derived missing inputs share one honesty boundary: if either remains, a non-paged completion
-answer is `partial` with `closure: open`. Do not merge missing inputs into the value after computing a `hit`/`complete`
-envelope; that produces a self-contradictory public answer.
+Cursor-derived and inquiry-derived missing inputs share one honesty boundary: if either remains, a completion is
+`answered/exact/open`. Do not merge missing inputs into the value after computing complete coverage; that produces a
+self-contradictory public answer.
 `TemplateCursorInfo` uses the same cursor-to-template selection and value-site classification path, but returns the
 semantic site under the cursor rather than completion candidates: site kind, HTML node/attribute, active value site,
 selected definition, selected bindable, selected expression member, member-owner type, parser frontier, and template
@@ -636,7 +653,7 @@ Index-signature selected members are only synthesized for string-capable indexed
 such as primitive or array-like keyed reads, must not make arbitrary dot members look real. When a member token is
 authored on a known owner type but the owner does not project that member, cursor-info reports
 `missing-expression-member` with an inspect or declare-member action target instead of hiding the mismatch behind a
-completion hit.
+successful completion list.
 Cursor-info answers also own `displayText` for MCP/LSP-style hover or explanation surfaces: selected HTML/value site,
 resource/bindable/member/owner facts, cursor diagnostics, missing inputs, and the next focused tool family.
 `TemplateReferences` and `TemplateRename` share one canonical binding-resolution target and authored-occurrence closure.
@@ -744,8 +761,9 @@ declaration provenance.
 Like app API pressure, cursor-locus pressure accepts explicit `--fixture` and `--root` selectors for focused canary
 runs. Prefer those selectors over env-only root overrides when comparing cursor-info behavior across overlay, router,
 and form pressure fixtures; the printed aggregate still omits source text and raw paths.
-Completion pressure classes prefer cursor-diagnostic-backed labels when the LSP envelope already explains a miss or
-partial answer, but the script still prints the underlying `missingInputs` counters separately. That keeps actionable
+Completion pressure classes prefer cursor-diagnostic-backed labels when the LSP envelope already explains an absent or
+open answer, but the script still prints the underlying `missingInputs` counters separately. It also reports result,
+selection, and coverage independently so an answered-but-open completion is not flattened into execution failure. That keeps actionable
 repair surfaces such as missing scope-slot types visible without making them look like unexplained autocomplete gaps.
 It also seeds a bounded `diagnostic-probe` lane from file/app diagnostic source ranges before generic expression
 sampling. The reader may inspect more diagnostic rows than it samples and then chooses loci by diagnostic pressure class,
@@ -1323,15 +1341,15 @@ opening another project should not make seam rows bleed into the first app answe
 addressed seams owned by the app's admitted/evaluated sources plus emission-local DI, template, runtime rendering,
 observer, value-channel, and data-flow seams that may not have a precise authored address yet.
 `OpenSeamSites` is the default public trust surface for these rows. It keeps raw seam rows available for detail but
-groups them by exact source path/span plus seam kind, then reports `rawRowCount`, `variantCount`, attempt kinds,
-boundary kinds, reason kinds, and the best source range that can be calculated at query time. This grouping is
+groups them by exact root source path/span, then reports every seam kind, `rawRowCount`, `variantCount`, boundary kinds,
+pressure kinds, reason kinds, materialization/product impact, and the best source range that can be calculated at query time. This grouping is
 answer-local and does not add durable kernel records; it exists because kernel records intentionally preserve
 derivation-level detail while MCP/IDE first reads need authored-site counts.
 `OpenSeamSummary` remains the family-cluster view, but its samples should be just as actionable as site rows: keep
 `sampleSources` for source-reference identity and use `sampleSourceSites` when text or UI needs authored
 `path:line:column` locations. Summary rows also carry `uniqueSiteCount`, so cluster displays can distinguish raw
 derivation amplification from the number of authored sites that need inspection.
-Rows expose human `summary` text, typed `reasonKinds`, and optional `reasonSources` for reason-level source/evidence
+Raw rows expose human `summary` text, typed `reasonKinds`, and optional `reasonSources` for reason-level source/evidence
 when one coherent seam has adjacent contributing source sites. Pressure scripts should aggregate the typed reason kinds
 when present, reserving summary text for human inspection and raw-detail debugging. For example, a router resource whose
 instruction value depends on host environment state remains a router open seam, but carries both
@@ -1340,6 +1358,16 @@ When the same router seam is blocked by a binding expression, router materializa
 `router-instruction-needs-static-value` reason and attach the lower-level binding-source reason, such as a runtime scope
 slot without a static value carrier. This keeps ownership honest: router owns the product seam; observation owns the
 source-value explanation.
+Open-seam pressure is causal rather than cloned prose. `evidence-only` means a seam is queryable at its authored root but
+does not block a published product; `product-pressure` means a `MaterializationOpenSeamRelation` links the same root seam
+to one or more materialization owners and affected products. Public raw rows preserve structured owner/product impacts,
+site rows conserve their aggregate cardinality, and cluster rows group only by typed seam kind plus reason signature.
+Never infer causality from source containment or manufacture a downstream seam with rewritten summary text.
+Boundary kinds are derived only from typed reason facts. `cause-unresolved` means the producer proved that the result is
+open but did not prove one narrower causal family; do not replace it with a more specific boundary inferred from prose or
+code location. Split the producer reason when stronger evidence exists. Source identity, authored-site grouping, and
+source-file counts include workspace and file-role identity in addition to path/span so equal-looking monorepo paths do
+not collapse across projects.
 Dynamic `href` router-resource seams can also carry `router-href-externality-open`. That reason means the framework
 would decide at runtime whether the value is an external URL before creating viewport instructions; semantic-runtime has
 not proven either the external lane or a static internal route string. Click-interception facts are separate:
@@ -1844,17 +1872,20 @@ registered source-reference carriers, so continuation evidence and other public 
 nested authored or declaration locus instead of only the row's top-level source.
 
 `BindingObservedDependencies` exposes the concrete source-side reads that a source-to-target binding evaluation would
-collect through Aurelia's template connectable circuit. Rows preserve expression kind, source/root/member/key
-names, method name for calls, parser-local spans, source reference, and optional handles back to the runtime binding,
-data-flow edge, expression parse, binding scope, and required access-use lineage. Member reads also carry TypeChecker
+collect through Aurelia's template connectable circuit. Every row has an answer-local `rowKey`, a structured `owner`
+reference, and one shared `occurrence` shape used by binding, watcher, source-effect, and computed-observer families.
+The occurrence preserves expression kind, source/root/member/key names, method name for calls, parser-local spans,
+source reference, and required access-use lineage; optional row handles lead back to the runtime binding, data-flow edge,
+expression parse, and binding scope. Member reads also carry TypeChecker
 member kind and declaration source when the binding scope can close the owner expression. Repeated authored occurrences
 remain separate rows even when Aurelia would coalesce their live observer subscription. The
-`observedMemberSourceState` field distinguishes
+occurrence's `observedMemberSourceState` field distinguishes
 closed source routes from honest non-member carriers such as temporary collection call results, `$` runtime scope names,
 and genuinely open scope roots, so aggregate pressure does not treat every null declaration source as provenance loss.
-`memberTokenSource` names the value carrier whose observer is requested; for a derived call such as
+`occurrence.memberTokenSource` names the value carrier whose observer is requested; for a derived call such as
 `items.filter().map()`, that can be `filter`. The linked access use names the `map` operation occurrence. Do not flatten
-those two loci into one source field.
+those two loci into one source field. Owner keys and row keys are opaque within the current answer epoch and must not
+expose or be reconstructed from kernel handle strings.
 Rows are published only when `sourceEvaluationKind` is connectable-read and
 `sourceEvaluationReachability` is reached. A blocked binding remains visible in `BindingDataFlows` for diagnostics and
 explanation, while this query stays an honest runtime-effect projection.

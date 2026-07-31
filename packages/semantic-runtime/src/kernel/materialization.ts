@@ -12,6 +12,24 @@ import type { ProductKindKey } from './vocabulary.js';
 /** Owner of a materialization pass, such as a resource identity or source/template address. */
 export type MaterializationOwnerHandle = IdentityHandle | AddressHandle;
 
+/** Minimal read boundary for following unresolved pressure through materialization ownership. */
+export interface MaterializationOwnerOpenSeamReadView {
+  readMaterializationsByOwner(ownerHandle: MaterializationOwnerHandle): readonly MaterializationRecord[];
+}
+
+/** Read the distinct open seams constraining one or more materialization owners. */
+export function materializationOpenSeamHandlesForOwners(
+  store: MaterializationOwnerOpenSeamReadView,
+  ownerHandles: readonly MaterializationOwnerHandle[],
+): readonly OpenSeamHandle[] {
+  return [...new Set(
+    ownerHandles.flatMap((ownerHandle) =>
+      store.readMaterializationsByOwner(ownerHandle)
+        .flatMap((materialization) => materialization.openSeamHandles)
+    ),
+  )].sort();
+}
+
 /**
  * Concrete product envelope produced by a materialization phase.
  *

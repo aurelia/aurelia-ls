@@ -19,7 +19,12 @@ function createMockLogger() {
   };
 }
 
-function snapshot(uri: string, text: string, version: number | null = null, languageId = uri.endsWith(".ts") ? "typescript" : "html") {
+function snapshot(
+  uri: string,
+  text: string,
+  version: number | null = null,
+  languageId = uri.endsWith(".ts") ? "typescript" : "html",
+) {
   return {
     uri: canonicalDocumentUri(uri).uri,
     languageId,
@@ -40,74 +45,83 @@ function createMockContext(overrides: Record<string, unknown> = {}) {
       all: vi.fn(() => []),
     },
     semanticRuntime: {
-      appDiagnostics: vi.fn(() => Promise.resolve({
-        schemaVersion: "0.1",
-        outcome: "hit",
-        closure: "complete",
-        summary: "mock",
-        value: {
-          displayText: "mock",
-          typeScript: null,
-          rows: [],
-          presentation: {
-            rawRowCount: 0,
-            primaryCount: 0,
-            contextualCount: 0,
-            complete: true,
-            groups: [],
+      appDiagnostics: vi.fn(() =>
+        Promise.resolve({
+          schemaVersion: "0.2",
+          result: "answered",
+          selection: "not-applicable",
+          coverage: "complete",
+          summary: "mock",
+          value: {
+            displayText: "mock",
+            typeScript: null,
+            rows: [],
+            presentation: {
+              rawRowCount: 0,
+              primaryCount: 0,
+              contextualCount: 0,
+              complete: true,
+              groups: [],
+            },
           },
-        },
-        page: null,
-      })),
-      templateCursorInfo: vi.fn(() => Promise.resolve({
-        schemaVersion: "0.1",
-        outcome: "hit",
-        closure: "complete",
-        summary: "mock",
-        value: {
-          displayText: "mock",
-          siteKind: "unknown",
-          expressionFrontier: null,
-          missingInputs: [],
-          template: { compilationLane: "app-runtime", source: null },
-          html: {
-            nodeKind: null,
-            tagName: null,
-            attributeName: null,
-            attributeValue: null,
-            source: null,
-            attributeSource: null,
+          page: null,
+        }),
+      ),
+      templateCursorInfo: vi.fn(() =>
+        Promise.resolve({
+          schemaVersion: "0.2",
+          result: "answered",
+          selection: "not-applicable",
+          coverage: "complete",
+          summary: "mock",
+          value: {
+            displayText: "mock",
+            siteKind: "unknown",
+            expressionFrontier: null,
+            missingInputs: [],
+            template: { compilationLane: "app-runtime", source: null },
+            html: {
+              nodeKind: null,
+              tagName: null,
+              attributeName: null,
+              attributeValue: null,
+              source: null,
+              attributeSource: null,
+            },
+            valueSite: null,
+            selectedDefinition: null,
+            selectedBindable: null,
+            selectedMemberName: null,
+            selectedMember: null,
+            memberOwnerType: null,
+            diagnostics: [],
           },
-          valueSite: null,
-          selectedDefinition: null,
-          selectedBindable: null,
-          selectedMemberName: null,
-          selectedMember: null,
-          memberOwnerType: null,
-          diagnostics: [],
-        },
-        page: null,
-      })),
-      templateRenameFromTypeScript: vi.fn(() => Promise.resolve({
-        schemaVersion: "0.1",
-        outcome: "hit",
-        closure: "complete",
-        summary: "mock",
-        value: {
-          displayText: "mock",
-          status: "available",
-          reason: null,
-          selectedMemberName: "title",
-          placeholder: "title",
-          targetSource: null,
-          activeSource: null,
-          edits: [],
-          candidateRows: [],
-          templateReferenceCount: 0,
-          typeScriptReferenceCount: 0,
-        },
-        page: null,
-      })),
+          page: null,
+        }),
+      ),
+      templateRenameFromTypeScript: vi.fn(() =>
+        Promise.resolve({
+          schemaVersion: "0.2",
+          result: "answered",
+          selection: "not-applicable",
+          coverage: "complete",
+          summary: "mock",
+          value: {
+            displayText: "mock",
+            status: "available",
+            reason: null,
+            selectedMemberName: "title",
+            placeholder: "title",
+            targetSource: null,
+            activeSource: null,
+            edits: [],
+            candidateRows: [],
+            templateReferenceCount: 0,
+            typeScriptReferenceCount: 0,
+          },
+          page: null,
+        }),
+      ),
     },
     ...overrides,
   };
@@ -117,9 +131,10 @@ describe("handleGetDiagnostics", () => {
   test("returns semantic-runtime diagnostics in the report snapshot envelope", async () => {
     const ctx = createMockContext();
     ctx.semanticRuntime.appDiagnostics.mockResolvedValue({
-      schemaVersion: "0.1",
-      outcome: "hit",
-      closure: "complete",
+      schemaVersion: "0.2",
+      result: "answered",
+      selection: "not-applicable",
+      coverage: "complete",
       summary: "mock",
       value: {
         displayText: "mock",
@@ -150,20 +165,22 @@ describe("handleGetDiagnostics", () => {
               subjectName: "title",
               source: null,
             },
-            relatedInformation: [{
-              message: "Subject declaration.",
-              source: {
-                kind: "source-span-address",
-                label: "src/app.ts@10..15",
-                path: "src/app.ts",
-                start: 10,
-                end: 15,
-                role: "range",
+            relatedInformation: [
+              {
+                message: "Subject declaration.",
+                source: {
+                  kind: "source-span-address",
+                  label: "src/app.ts@10..15",
+                  path: "src/app.ts",
+                  start: 10,
+                  end: 15,
+                  role: "range",
+                },
+                relationKind: "subject-declaration",
+                code: null,
+                sourceRole: "app-source",
               },
-              relationKind: "subject-declaration",
-              code: null,
-              sourceRole: "app-source",
-            }],
+            ],
             suggestion: null,
             sourceRole: "template",
             relatedQueryKind: "template-diagnostics",
@@ -174,35 +191,44 @@ describe("handleGetDiagnostics", () => {
           primaryCount: 1,
           contextualCount: 0,
           complete: true,
-          groups: [{
-            groupKey: "member-title",
-            subject: {
-              subjectKind: "template-member-access",
-              subjectName: "title",
-              source: null,
+          groups: [
+            {
+              groupKey: "member-title",
+              subject: {
+                subjectKind: "template-member-access",
+                subjectName: "title",
+                source: null,
+              },
+              primary: {
+                rowId: "diagnostic-title",
+                rowIndex: 0,
+                role: "primary",
+                relation: null,
+              },
+              related: [],
+              rawRowCount: 1,
+              primarySeverity: "warning",
+              maxRawSeverity: "warning",
             },
-            primary: {
-              rowId: "diagnostic-title",
-              rowIndex: 0,
-              role: "primary",
-              relation: null,
-            },
-            related: [],
-            rawRowCount: 1,
-            primarySeverity: "warning",
-            maxRawSeverity: "warning",
-          }],
+          ],
         },
       },
       page: null,
     });
 
-    const result = await handleGetDiagnostics(ctx as never, { uri: "file:///test.html" }, testRequestGuard);
+    const result = await handleGetDiagnostics(
+      ctx as never,
+      { uri: "file:///test.html" },
+      testRequestGuard,
+    );
 
-    expect(ctx.semanticRuntime.appDiagnostics).toHaveBeenCalledWith(expect.objectContaining({}), testRequestGuard);
+    expect(ctx.semanticRuntime.appDiagnostics).toHaveBeenCalledWith(
+      expect.objectContaining({}),
+      testRequestGuard,
+    );
     expect(result).toEqual({
       uri: canonicalDocumentUri("file:///test.html").uri,
-      fingerprint: "semantic-runtime:hit",
+      fingerprint: "semantic-runtime:answered:complete",
       diagnostics: {
         bySurface: {
           lsp: [
@@ -235,36 +261,43 @@ describe("handleGetDiagnostics", () => {
           }),
         ],
         presentation: expect.objectContaining({
-          groups: [expect.objectContaining({
-            subject: {
-              subjectKind: "template-member-access",
-              subjectName: "title",
-            },
-          })],
+          groups: [
+            expect.objectContaining({
+              subject: {
+                subjectKind: "template-member-access",
+                subjectName: "title",
+              },
+            }),
+          ],
         }),
       },
     });
-    expect(result?.diagnostics.bySurface.lsp[0]?.data).toEqual(expect.objectContaining({
-      semanticRuntime: true,
-      phase: null,
-      diagnosticKind: "missing-expression-member",
-      relatedQueryKind: "template-diagnostics",
-    }));
-    expect(result?.diagnostics.raw[0]?.related).toEqual([{
-      message: "Subject declaration.",
-      uri: expect.stringContaining("src/app.ts"),
-      span: { start: 10, end: 15 },
-      sourceRole: "app-source",
-      relationKind: "subject-declaration",
-    }]);
+    expect(result?.diagnostics.bySurface.lsp[0]?.data).toEqual(
+      expect.objectContaining({
+        semanticRuntime: true,
+        phase: null,
+        diagnosticKind: "missing-expression-member",
+        relatedQueryKind: "template-diagnostics",
+      }),
+    );
+    expect(result?.diagnostics.raw[0]?.related).toEqual([
+      {
+        message: "Subject declaration.",
+        uri: expect.stringContaining("src/app.ts"),
+        span: { start: 10, end: 15 },
+        sourceRole: "app-source",
+        relationKind: "subject-declaration",
+      },
+    ]);
   });
 
   test("maps runtime informational severity to report info severity", async () => {
     const ctx = createMockContext();
     ctx.semanticRuntime.appDiagnostics.mockResolvedValue({
-      schemaVersion: "0.1",
-      outcome: "hit",
-      closure: "complete",
+      schemaVersion: "0.2",
+      result: "answered",
+      selection: "not-applicable",
+      coverage: "complete",
       summary: "mock",
       value: {
         displayText: "mock",
@@ -295,43 +328,52 @@ describe("handleGetDiagnostics", () => {
           primaryCount: 1,
           contextualCount: 0,
           complete: true,
-          groups: [{
-            groupKey: "typescript-TS1234",
-            subject: null,
-            primary: {
-              rowId: "diagnostic-TS1234",
-              rowIndex: 0,
-              role: "primary",
-              relation: null,
+          groups: [
+            {
+              groupKey: "typescript-TS1234",
+              subject: null,
+              primary: {
+                rowId: "diagnostic-TS1234",
+                rowIndex: 0,
+                role: "primary",
+                relation: null,
+              },
+              related: [],
+              rawRowCount: 1,
+              primarySeverity: "information",
+              maxRawSeverity: "information",
             },
-            related: [],
-            rawRowCount: 1,
-            primarySeverity: "information",
-            maxRawSeverity: "information",
-          }],
+          ],
         },
       },
       page: null,
     });
 
-    const result = await handleGetDiagnostics(ctx as never, { uri: "file:///test.html" }, testRequestGuard);
+    const result = await handleGetDiagnostics(
+      ctx as never,
+      { uri: "file:///test.html" },
+      testRequestGuard,
+    );
 
-    expect(result?.diagnostics.bySurface.lsp[0]).toEqual(expect.objectContaining({
-      code: "TS1234",
-      severity: "info",
-      impact: "informational",
-      category: "expression",
-      uri: undefined,
-      span: undefined,
-    }));
+    expect(result?.diagnostics.bySurface.lsp[0]).toEqual(
+      expect.objectContaining({
+        code: "TS1234",
+        severity: "info",
+        impact: "informational",
+        category: "expression",
+        uri: undefined,
+        span: undefined,
+      }),
+    );
   });
 
   test("uses TypeScript display codes for template overlay diagnostics in the report envelope", async () => {
     const ctx = createMockContext();
     ctx.semanticRuntime.appDiagnostics.mockResolvedValue({
-      schemaVersion: "0.1",
-      outcome: "hit",
-      closure: "complete",
+      schemaVersion: "0.2",
+      result: "answered",
+      selection: "not-applicable",
+      coverage: "complete",
       summary: "mock",
       value: {
         displayText: "mock",
@@ -346,7 +388,8 @@ describe("handleGetDiagnostics", () => {
             frameworkErrorCode: null,
             frameworkRawErrorAuthority: null,
             severity: "error",
-            summary: "TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.",
+            summary:
+              "TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.",
             missingInput: "typescript:TS2345",
             missingInputs: ["typescript:TS2345"],
             source: {
@@ -369,44 +412,56 @@ describe("handleGetDiagnostics", () => {
           primaryCount: 1,
           contextualCount: 0,
           complete: true,
-          groups: [{
-            groupKey: "template-TS2345",
-            subject: null,
-            primary: {
-              rowId: "diagnostic-TS2345",
-              rowIndex: 0,
-              role: "primary",
-              relation: null,
+          groups: [
+            {
+              groupKey: "template-TS2345",
+              subject: null,
+              primary: {
+                rowId: "diagnostic-TS2345",
+                rowIndex: 0,
+                role: "primary",
+                relation: null,
+              },
+              related: [],
+              rawRowCount: 1,
+              primarySeverity: "error",
+              maxRawSeverity: "error",
             },
-            related: [],
-            rawRowCount: 1,
-            primarySeverity: "error",
-            maxRawSeverity: "error",
-          }],
+          ],
         },
       },
       page: null,
     });
 
-    const result = await handleGetDiagnostics(ctx as never, { uri: "file:///test.html" }, testRequestGuard);
+    const result = await handleGetDiagnostics(
+      ctx as never,
+      { uri: "file:///test.html" },
+      testRequestGuard,
+    );
     const item = result?.diagnostics.bySurface.lsp[0];
 
-    expect(item).toEqual(expect.objectContaining({
-      code: "TS2345",
-      source: "semantic-runtime:template",
-      uri: expect.stringContaining("src/app.html"),
-      span: { start: 4, end: 9 },
-    }));
-    expect(item?.issues?.[0]).toEqual(expect.objectContaining({
-      kind: "template-expression-typescript-diagnostic",
-      code: "TS2345",
-    }));
-    expect(item?.data).toEqual(expect.objectContaining({
-      semanticRuntime: true,
-      diagnosticKind: "template-expression-typescript-diagnostic",
-      diagnosticAuthority: "typescript",
-      missingInput: "typescript:TS2345",
-    }));
+    expect(item).toEqual(
+      expect.objectContaining({
+        code: "TS2345",
+        source: "semantic-runtime:template",
+        uri: expect.stringContaining("src/app.html"),
+        span: { start: 4, end: 9 },
+      }),
+    );
+    expect(item?.issues?.[0]).toEqual(
+      expect.objectContaining({
+        kind: "template-expression-typescript-diagnostic",
+        code: "TS2345",
+      }),
+    );
+    expect(item?.data).toEqual(
+      expect.objectContaining({
+        semanticRuntime: true,
+        diagnosticKind: "template-expression-typescript-diagnostic",
+        diagnosticAuthority: "typescript",
+        missingInput: "typescript:TS2345",
+      }),
+    );
   });
 });
 
@@ -414,14 +469,18 @@ describe("handleInspectEntity", () => {
   test("returns runtime cursor member details", async () => {
     const ctx = createMockContext();
     ctx.semanticRuntime.templateCursorInfo.mockResolvedValue({
-      schemaVersion: "0.1",
-      outcome: "hit",
-      closure: "complete",
+      schemaVersion: "0.2",
+      result: "answered",
+      selection: "not-applicable",
+      coverage: "complete",
       summary: "mock",
       value: {
         displayText: "title member",
         siteKind: "expression-member",
-        expressionFrontier: { frontierKind: "member", expectedContinuationClasses: [] },
+        expressionFrontier: {
+          frontierKind: "member",
+          expectedContinuationClasses: [],
+        },
         missingInputs: [],
         template: { compilationLane: "app-runtime", source: null },
         html: {
@@ -476,44 +535,54 @@ describe("handleInspectEntity", () => {
       page: null,
     });
 
-    const result = await handleInspectEntity(ctx as never, {
-      uri: "file:///test.html",
-      position: { line: 0, character: 3 },
-    }, testRequestGuard);
+    const result = await handleInspectEntity(
+      ctx as never,
+      {
+        uri: "file:///test.html",
+        position: { line: 0, character: 3 },
+      },
+      testRequestGuard,
+    );
 
     expect(ctx.semanticRuntime.templateCursorInfo).toHaveBeenCalledWith(
       expect.objectContaining({}),
       { line: 0, character: 3 },
       testRequestGuard,
     );
-    expect(result).toEqual(expect.objectContaining({
-      uri: "file:///test.html",
-      entityKind: "member",
-      expressionLabel: "title",
-      confidence: expect.objectContaining({
-        type: "projected",
-        scope: "source-backed",
-        composite: "hit",
+    expect(result).toEqual(
+      expect.objectContaining({
+        uri: "file:///test.html",
+        entityKind: "member",
+        expressionLabel: "title",
+        confidence: expect.objectContaining({
+          type: "projected",
+          scope: "source-backed",
+          composite: "answered:not-applicable:complete",
+        }),
+        detail: expect.objectContaining({
+          kind: "member",
+          name: "title",
+          symbolKind: "property",
+          symbolType: "string",
+          ownerType: "App",
+          rawValue: "title",
+          htmlTag: "h1",
+        }),
       }),
-      detail: expect.objectContaining({
-        kind: "member",
-        name: "title",
-        symbolKind: "property",
-        symbolType: "string",
-        ownerType: "App",
-        rawValue: "title",
-        htmlTag: "h1",
-      }),
-    }));
+    );
   });
 
   test("returns null when runtime cursor info has no inspectable fact", async () => {
     const ctx = createMockContext();
 
-    const result = await handleInspectEntity(ctx as never, {
-      uri: "file:///test.html",
-      position: { line: 0, character: 3 },
-    }, testRequestGuard);
+    const result = await handleInspectEntity(
+      ctx as never,
+      {
+        uri: "file:///test.html",
+        position: { line: 0, character: 3 },
+      },
+      testRequestGuard,
+    );
 
     expect(result).toBeNull();
   });
@@ -521,21 +590,27 @@ describe("handleInspectEntity", () => {
 
 describe("handleRenameFromTs", () => {
   test("maps semantic-runtime template rename propagation edits", async () => {
-    const tsDocument = TextDocument.create("file:///test/workspace/src/app.ts", "typescript", 1, "class App { title = ''; }");
+    const tsDocument = TextDocument.create(
+      "file:///test/workspace/src/app.ts",
+      "typescript",
+      1,
+      "class App { title = ''; }",
+    );
     const templateText = "<p>${title}</p>";
     const ctx = createMockContext({
       ensureProgramDocument: vi.fn(() => tsDocument),
       lookupText: vi.fn(() => templateText),
-      lookupDocumentSnapshot: vi.fn((uri: string) => (
+      lookupDocumentSnapshot: vi.fn((uri: string) =>
         canonicalDocumentUri(uri).uri.endsWith("/src/app.html")
           ? snapshot(uri, templateText, 4, "html")
-          : null
-      )),
+          : null,
+      ),
     });
     ctx.semanticRuntime.templateRenameFromTypeScript.mockResolvedValue({
-      schemaVersion: "0.1",
-      outcome: "hit",
-      closure: "complete",
+      schemaVersion: "0.2",
+      result: "answered",
+      selection: "not-applicable",
+      coverage: "complete",
       summary: "mock",
       value: {
         displayText: "mock",
@@ -578,13 +653,19 @@ describe("handleRenameFromTs", () => {
       page: null,
     });
 
-    const result = await handleRenameFromTs(ctx as never, {
-      uri: tsDocument.uri,
-      position: { line: 0, character: 12 },
-      newName: "heading",
-    }, testRequestGuard);
+    const result = await handleRenameFromTs(
+      ctx as never,
+      {
+        uri: tsDocument.uri,
+        position: { line: 0, character: 12 },
+        newName: "heading",
+      },
+      testRequestGuard,
+    );
 
-    expect(ctx.semanticRuntime.templateRenameFromTypeScript).toHaveBeenCalledWith(
+    expect(
+      ctx.semanticRuntime.templateRenameFromTypeScript,
+    ).toHaveBeenCalledWith(
       tsDocument,
       { line: 0, character: 12 },
       testRequestGuard,
@@ -617,16 +698,25 @@ describe("handleRenameFromTs", () => {
   });
 
   test("returns not-applicable when runtime has no template propagation edits", async () => {
-    const tsDocument = TextDocument.create("file:///test/workspace/src/app.ts", "typescript", 1, "class App { title = ''; }");
+    const tsDocument = TextDocument.create(
+      "file:///test/workspace/src/app.ts",
+      "typescript",
+      1,
+      "class App { title = ''; }",
+    );
     const ctx = createMockContext({
       ensureProgramDocument: vi.fn(() => tsDocument),
     });
 
-    const result = await handleRenameFromTs(ctx as never, {
-      uri: tsDocument.uri,
-      position: { line: 0, character: 12 },
-      newName: "heading",
-    }, testRequestGuard);
+    const result = await handleRenameFromTs(
+      ctx as never,
+      {
+        uri: tsDocument.uri,
+        position: { line: 0, character: 12 },
+        newName: "heading",
+      },
+      testRequestGuard,
+    );
 
     expect(result).toMatchObject({
       status: "not-applicable",
@@ -637,20 +727,26 @@ describe("handleRenameFromTs", () => {
   });
 
   test("returns blocked when template propagation edits fail old-text validation", async () => {
-    const tsDocument = TextDocument.create("file:///test/workspace/src/app.ts", "typescript", 1, "class App { title = ''; }");
+    const tsDocument = TextDocument.create(
+      "file:///test/workspace/src/app.ts",
+      "typescript",
+      1,
+      "class App { title = ''; }",
+    );
     const ctx = createMockContext({
       ensureProgramDocument: vi.fn(() => tsDocument),
       lookupText: vi.fn(() => "<p>${stale}</p>"),
-      lookupDocumentSnapshot: vi.fn((uri: string) => (
+      lookupDocumentSnapshot: vi.fn((uri: string) =>
         canonicalDocumentUri(uri).uri.endsWith("/src/app.html")
           ? snapshot(uri, "<p>${stale}</p>", 4, "html")
-          : null
-      )),
+          : null,
+      ),
     });
     ctx.semanticRuntime.templateRenameFromTypeScript.mockResolvedValue({
-      schemaVersion: "0.1",
-      outcome: "hit",
-      closure: "complete",
+      schemaVersion: "0.2",
+      result: "answered",
+      selection: "not-applicable",
+      coverage: "complete",
       summary: "mock",
       value: {
         displayText: "mock",
@@ -681,11 +777,15 @@ describe("handleRenameFromTs", () => {
       page: null,
     });
 
-    const result = await handleRenameFromTs(ctx as never, {
-      uri: tsDocument.uri,
-      position: { line: 0, character: 12 },
-      newName: "heading",
-    }, testRequestGuard);
+    const result = await handleRenameFromTs(
+      ctx as never,
+      {
+        uri: tsDocument.uri,
+        position: { line: 0, character: 12 },
+        newName: "heading",
+      },
+      testRequestGuard,
+    );
 
     expect(result).toMatchObject({
       status: "blocked",
@@ -693,7 +793,9 @@ describe("handleRenameFromTs", () => {
       templateReferenceCount: 1,
       candidateCount: 0,
     });
-    expect(result.status === "blocked" ? result.failures?.[0] : "").toContain("expected \"title\"");
+    expect(result.status === "blocked" ? result.failures?.[0] : "").toContain(
+      'expected "title"',
+    );
   });
 });
 
@@ -715,15 +817,21 @@ describe("handleDumpState", () => {
   test("returns error object on failure", () => {
     const ctx = createMockContext({
       documents: {
-        all: vi.fn(() => { throw new Error("document registry crashed"); }),
+        all: vi.fn(() => {
+          throw new Error("document registry crashed");
+        }),
       },
     });
 
     const result = handleDumpState(ctx as never);
 
     expect(result).toHaveProperty("error");
-    expect((result as { error: string }).error).toContain("document registry crashed");
-    expect(ctx.logger.error).toHaveBeenCalledWith(expect.stringContaining("dumpState"));
+    expect((result as { error: string }).error).toContain(
+      "document registry crashed",
+    );
+    expect(ctx.logger.error).toHaveBeenCalledWith(
+      expect.stringContaining("dumpState"),
+    );
   });
 });
 
@@ -733,12 +841,17 @@ describe("handleCapabilities", () => {
 
     const result = handleCapabilities(ctx as never);
 
-    expect(result.contracts).toEqual(expect.objectContaining({
-      query: { version: "query/1" },
-      diagnostics: { version: "diagnostics/1", taxonomy: "diagnostics-taxonomy/1" },
-      semanticTokens: expect.objectContaining({ version: "tokens/1" }),
-      presentation: { version: "presentation/1" },
-    }));
+    expect(result.contracts).toEqual(
+      expect.objectContaining({
+        query: { version: "query/1" },
+        diagnostics: {
+          version: "diagnostics/1",
+          taxonomy: "diagnostics-taxonomy/1",
+        },
+        semanticTokens: expect.objectContaining({ version: "tokens/1" }),
+        presentation: { version: "presentation/1" },
+      }),
+    );
     expect(result.contracts).not.toHaveProperty("mapping");
     expect(result).not.toHaveProperty("custom");
     expect(result.notifications).toEqual({

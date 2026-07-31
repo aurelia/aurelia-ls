@@ -49,7 +49,9 @@ const completion = await runtime.answerAppQuery({
   appRetention: 'retain-app',
 });
 
-assert.equal(completion.outcome, 'hit');
+assert.equal(completion.result, 'answered');
+assert.equal(completion.selection, 'exact');
+assert.equal(completion.coverage, 'complete');
 assert.equal(completion.value.siteKind, 'expression');
 const candidateNames = completion.value.candidates.map((candidate) => candidate.name);
 assert.ok(candidateNames.includes('title'), `Expected project-input-backed title completion; observed ${candidateNames.join(', ') || 'none'}.`);
@@ -137,7 +139,9 @@ console.log(JSON.stringify({
   ok: true,
   projectInputAuthority: {
     overlaidFiles: [...overlays.keys()].map((fileName) => path.relative(fixtureRoot, fileName).replace(/\\/g, '/')),
-    completionOutcome: completion.outcome,
+    completionResult: completion.result,
+    completionSelection: completion.selection,
+    completionCoverage: completion.coverage,
     candidateNames,
     reopenedCandidateNames,
     resourceMetadataDiagnostics: {

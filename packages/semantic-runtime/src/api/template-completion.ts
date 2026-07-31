@@ -13,9 +13,7 @@ import {
   SourceTextCursor,
 } from '../inquiry/locus.js';
 import {
-  clampPublicInquiryPageSize,
   InquiryPageRequest,
-  PUBLIC_INQUIRY_MAX_PAGE_SIZE,
 } from '../inquiry/page.js';
 import {
   isSourceFileAddress,
@@ -101,13 +99,14 @@ import { checkerTypeMemberSourceAddressHandle } from '../type-system/checker-typ
 import { readOrProjectCheckerTypeMembersInProjection } from '../type-system/checker-type-member-surface.js';
 import type { RuntimeBindingDataFlow } from '../observation/runtime-binding-observation.js';
 import type { TemplateBindableReference } from '../template/compiler-world-reference.js';
-import {
-  semanticClosureForInquiry,
-  semanticOutcomeForInquiry,
-} from './answer.js';
 import { resolveSemanticSourceCursor } from './source-cursor.js';
-import { closureForAnswer } from './answer-helpers.js';
+import {
+  answer as publicAnswer,
+  COMPLETE_COLLECTION_ANSWER_OPTIONS,
+  pageRows,
+} from './answer-helpers.js';
 import type {
+  SemanticRuntimePageInput,
   SemanticRuntimePageResult,
   SemanticRuntimeSourceFileInput,
   SemanticRuntimeSourceCursorInput,
@@ -129,10 +128,10 @@ import type {
   SemanticTemplateCursorSuggestionValueTypeSource,
 } from './contracts.js';
 import {
-  SEMANTIC_RUNTIME_API_VERSION,
   SemanticDiagnosticProjectionPolicy,
-  SemanticRuntimeAnswerClosure,
-  SemanticRuntimeAnswerOutcome,
+  SemanticRuntimeAnswerCoverage,
+  SemanticRuntimeAnswerResult,
+  SemanticRuntimeAnswerSelection,
   SemanticRuntimeDetail,
   type SemanticRuntimeAnswer,
 } from './contracts.js';
@@ -217,8 +216,9 @@ interface TemplateOverlayDiagnosticSubjectProjection {
 }
 
 interface TemplateCompletionReadResult {
-  readonly outcome: SemanticRuntimeAnswerOutcome;
-  readonly closure: SemanticRuntimeAnswerClosure;
+  readonly result: SemanticRuntimeAnswerResult;
+  readonly selection: SemanticRuntimeAnswerSelection;
+  readonly coverage: SemanticRuntimeAnswerCoverage;
   readonly summary: string;
   readonly value: SemanticTemplateCompletionResult;
   readonly page: SemanticRuntimePageResult | null;
@@ -276,18 +276,15 @@ export function readSemanticTemplateCompletions(
   projectRootDir: string,
   emission: AureliaAppWorldProjectEmission,
   cursor: SemanticRuntimeSourceCursorInput | null | undefined,
-  page: InquiryPageRequest,
+  page: SemanticRuntimePageInput | undefined,
   detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}`,
 ): SemanticRuntimeAnswer<SemanticTemplateCompletionResult> {
   const read = readTemplateCompletion(store, workspaceRootDir, projectRootDir, emission, cursor, page, detail === SemanticRuntimeDetail.Handles);
-  return {
-    schemaVersion: SEMANTIC_RUNTIME_API_VERSION,
-    outcome: read.outcome,
-    closure: read.closure,
-    summary: read.summary,
-    value: read.value,
+  return publicAnswer(read.result, read.summary, read.value, {
     page: read.page,
-  };
+    selection: read.selection,
+    coverage: read.coverage,
+  });
 }
 
 export function readSemanticTemplateCursorInfo(
@@ -300,7 +297,7 @@ export function readSemanticTemplateCursorInfo(
   diagnosticProjection: SemanticDiagnosticProjectionPolicy | `${SemanticDiagnosticProjectionPolicy}` | null | undefined = SemanticDiagnosticProjectionPolicy.TypeProjection,
 ): SemanticRuntimeAnswer<SemanticTemplateCursorInfoResult> {
   const readContext = readContextForCursor(store, workspaceRootDir, projectRootDir, emission, cursor, new InquiryPageRequest(1, null));
-  if ('outcome' in readContext) {
+  if ('result' in readContext) {
     return missingTemplateCursorInfo(readContext);
   }
   const read = readTemplateCursorInfoValue(
@@ -312,15 +309,17 @@ export function readSemanticTemplateCursorInfo(
     detail === SemanticRuntimeDetail.Handles,
     diagnosticProjection,
   );
-  const outcome = read.missingInputs.length === 0 ? SemanticRuntimeAnswerOutcome.Hit : SemanticRuntimeAnswerOutcome.Partial;
-  return {
-    schemaVersion: SEMANTIC_RUNTIME_API_VERSION,
-    outcome,
-    closure: closureForAnswer(outcome),
-    summary: `Resolved template cursor as ${read.value.siteKind}.`,
-    value: read.value,
-    page: null,
-  };
+  return publicAnswer(
+    SemanticRuntimeAnswerResult.Answered,
+    `Resolved template cursor as ${read.value.siteKind}.`,
+    read.value,
+    {
+      selection: SemanticRuntimeAnswerSelection.Exact,
+      coverage: read.missingInputs.length === 0
+        ? SemanticRuntimeAnswerCoverage.Complete
+        : SemanticRuntimeAnswerCoverage.Open,
+    },
+  );
 }
 
 function readTemplateCursorInfoValue(
@@ -446,7 +445,7 @@ export function readSemanticTemplateDiagnostics(
   projectRootDir: string,
   emission: AureliaAppWorldProjectEmission,
   sourceFile: SemanticRuntimeSourceFileInput | null | undefined,
-  page: InquiryPageRequest,
+  page: SemanticRuntimePageInput | undefined,
   detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}`,
   diagnosticProjection: SemanticDiagnosticProjectionPolicy | `${SemanticDiagnosticProjectionPolicy}` | null | undefined = SemanticDiagnosticProjectionPolicy.TypeProjection,
 ): SemanticRuntimeAnswer<SemanticTemplateDiagnosticsResult> {
@@ -459,28 +458,19 @@ export function readSemanticTemplateDiagnostics(
     detail === SemanticRuntimeDetail.Handles,
     diagnosticProjection,
   );
-  const paged = pageTemplateDiagnosticRows(rows, page);
+  const paged = pageRows(rows, page);
   const scopedToSourceFile = sourceFile != null;
-  return {
-    schemaVersion: SEMANTIC_RUNTIME_API_VERSION,
-    outcome: paged.page.nextCursor == null
-      ? SemanticRuntimeAnswerOutcome.Hit
-      : SemanticRuntimeAnswerOutcome.Partial,
-    closure: closureForAnswer(
-      paged.page.nextCursor == null
-        ? SemanticRuntimeAnswerOutcome.Hit
-        : SemanticRuntimeAnswerOutcome.Partial,
-      paged.page,
-    ),
-    summary: !scopedToSourceFile
+  return publicAnswer(
+    SemanticRuntimeAnswerResult.Answered,
+    !scopedToSourceFile
       ? `Returned ${paged.rows.length} of ${rows.length} template diagnostic row(s) from the opened app basis.`
       : `Returned ${paged.rows.length} of ${rows.length} template diagnostic row(s) for the requested source file.`,
-    value: {
+    {
       displayText: semanticTemplateDiagnosticsDisplayText(paged.rows, rows.length, scopedToSourceFile),
       rows: paged.rows,
     },
-    page: paged.page,
-  };
+    { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
+  );
 }
 
 function semanticTemplateDiagnosticsDisplayText(
@@ -621,11 +611,11 @@ function readTemplateCompletion(
   projectRootDir: string,
   emission: AureliaAppWorldProjectEmission,
   cursor: SemanticRuntimeSourceCursorInput | null | undefined,
-  page: InquiryPageRequest,
+  page: SemanticRuntimePageInput | undefined,
   includeHandles: boolean,
 ): TemplateCompletionReadResult {
   const readContext = readContextForCursor(store, workspaceRootDir, projectRootDir, emission, cursor, page);
-  if ('outcome' in readContext) {
+  if ('result' in readContext) {
     return readContext;
   }
 
@@ -633,13 +623,19 @@ function readTemplateCompletion(
     locus: readContext.locus,
     resource: readContext.selection.resource,
     typeSystem: emission.typeSystem,
-    page,
+    page: new InquiryPageRequest(Number.MAX_SAFE_INTEGER, null),
     routeConfigProductHandles: emission.routes.readRouteConfigs().map((routeConfig) => routeConfig.productHandle),
     routeParameterEndpointPlans: emission.routeInstructions.readRouteParameterEndpointPlans(),
     i18nTranslationKeyProductHandles: emission.i18n.readTranslationKeys().map((translationKey) => translationKey.productHandle),
   });
   const answer = answerTemplateCompletion(store, cursorContext.query, cursorContext.expressionWorld);
-  return templateCompletionReadResult(store, { cursorContext, selection: readContext.selection }, answer, includeHandles);
+  return templateCompletionReadResult(
+    store,
+    { cursorContext, selection: readContext.selection },
+    answer,
+    includeHandles,
+    page,
+  );
 }
 
 function readContextForCursor(
@@ -648,7 +644,7 @@ function readContextForCursor(
   projectRootDir: string,
   emission: AureliaAppWorldProjectEmission,
   cursor: SemanticRuntimeSourceCursorInput | null | undefined,
-  page: InquiryPageRequest,
+  page: SemanticRuntimePageInput | undefined,
 ): TemplateCompletionReadContext | TemplateCompletionReadResult {
   if (cursor == null) {
     return missingTemplateCompletion(page, ['source-cursor'], 'Template completion requires a source cursor.');
@@ -2233,82 +2229,25 @@ function diagnosticSubjectForSpan(
   };
 }
 
-function pageTemplateDiagnosticRows<TRow>(
-  rows: readonly TRow[],
-  page: InquiryPageRequest,
-): {
-  readonly rows: readonly TRow[];
-  readonly page: SemanticRuntimePageResult;
-} {
-  const requestedSize = Math.max(0, page.size);
-  const size = clampPublicInquiryPageSize(requestedSize);
-  const cursor = page.cursor;
-  const start = cursor == null ? 0 : diagnosticCursorStart(cursor, rows.length);
-  const safeStart = start < 0 ? rows.length : start;
-  const selected = rows.slice(safeStart, safeStart + size);
-  const nextCursor = selected.length > 0 && safeStart + selected.length < rows.length
-    ? `after:${safeStart + selected.length - 1}`
-    : null;
-  return {
-    rows: selected,
-    page: {
-      size,
-      cursor,
-      nextCursor,
-      returnedRows: selected.length,
-      totalRows: rows.length,
-      ...(requestedSize === size
-        ? {}
-        : {
-          requestedSize,
-          maxSize: PUBLIC_INQUIRY_MAX_PAGE_SIZE,
-          clamped: true,
-        }),
-    },
-  };
-}
-
-function diagnosticCursorStart(
-  cursor: string,
-  rowCount: number,
-): number {
-  if (cursor.startsWith('after:')) {
-    const offset = Number.parseInt(cursor.slice('after:'.length), 10);
-    return Number.isFinite(offset) ? offset + 1 : rowCount;
-  }
-  if (cursor.startsWith('offset:')) {
-    const offset = Number.parseInt(cursor.slice('offset:'.length), 10);
-    return Number.isFinite(offset) ? offset + 1 : rowCount;
-  }
-  return rowCount;
-}
-
 function templateCompletionReadResult(
   store: KernelStore,
   context: TemplateCompletionAnswerContext,
   answer: ReturnType<typeof answerTemplateCompletion>,
   includeHandles: boolean,
+  pageInput?: SemanticRuntimePageInput,
 ): TemplateCompletionReadResult {
   const rows = answer.value.candidates.map((candidate) => templateCompletionCandidateRow(candidate, includeHandles));
-  const page = semanticTemplateCompletionPage(answer.page, rows.length);
+  const paged = pageRows(rows, pageInput);
   const missingInputs = [...new Set([...context.cursorContext.missingInputs, ...answer.value.missingInputs])];
-  const inquiryOutcome = semanticOutcomeForInquiry(answer.outcome);
-  const outcome = missingInputs.length > 0 && (
-    inquiryOutcome === SemanticRuntimeAnswerOutcome.Hit
-    || inquiryOutcome === SemanticRuntimeAnswerOutcome.Miss
-  )
-    ? SemanticRuntimeAnswerOutcome.Partial
-    : inquiryOutcome;
-  const inquiryClosure = semanticClosureForInquiry(answer.outcome);
-  const closure = page?.nextCursor != null
-    ? SemanticRuntimeAnswerClosure.Paged
-    : missingInputs.length > 0 && inquiryClosure === SemanticRuntimeAnswerClosure.Complete
-      ? SemanticRuntimeAnswerClosure.Open
-      : inquiryClosure;
+  const selection = answer.selection;
+  const inquiryCoverage = answer.coverage;
+  const coverage = missingInputs.length > 0 && inquiryCoverage === SemanticRuntimeAnswerCoverage.Complete
+    ? SemanticRuntimeAnswerCoverage.Open
+    : inquiryCoverage;
   const value: Omit<SemanticTemplateCompletionResult, 'displayText'> = {
     siteKind: answer.value.siteKind,
     domainKind: answer.value.domainKind,
-    candidates: rows,
+    candidates: paged.rows,
     expressionFrontier: answer.value.expressionFrontier == null
       ? null
       : {
@@ -2322,49 +2261,28 @@ function templateCompletionReadResult(
     },
   };
   return {
-    outcome,
-    closure,
+    result: answer.result,
+    selection,
+    coverage,
     summary: answer.summary,
     value: {
       displayText: semanticTemplateCompletionDisplayText(value),
       ...value,
     },
-    page,
-  };
-}
-
-function semanticTemplateCompletionPage(
-  page: ReturnType<typeof answerTemplateCompletion>['page'],
-  rowCount: number,
-): SemanticRuntimePageResult | null {
-  if (page == null) {
-    return null;
-  }
-
-  return {
-    size: page.size,
-    cursor: page.cursor,
-    nextCursor: page.nextCursor,
-    returnedRows: page.returned,
-    totalRows: page.total ?? rowCount,
-    ...(page.clamped
-      ? {
-        requestedSize: page.requestedSize ?? undefined,
-        maxSize: page.maxSize ?? undefined,
-        clamped: true,
-      }
-      : {}),
+    page: paged.page,
   };
 }
 
 function missingTemplateCompletion(
-  page: InquiryPageRequest,
+  page: SemanticRuntimePageInput | undefined,
   missingInputs: readonly string[],
   summary: string,
 ): TemplateCompletionReadResult {
+  const paged = pageRows([], page);
   return {
-    outcome: SemanticRuntimeAnswerOutcome.Miss,
-    closure: closureForAnswer(SemanticRuntimeAnswerOutcome.Miss),
+    result: SemanticRuntimeAnswerResult.Answered,
+    selection: SemanticRuntimeAnswerSelection.Absent,
+    coverage: SemanticRuntimeAnswerCoverage.Complete,
     summary,
     value: {
       displayText: semanticTemplateCompletionDisplayText({
@@ -2388,13 +2306,7 @@ function missingTemplateCompletion(
         source: null,
       },
     },
-    page: {
-      size: page.size,
-      cursor: page.cursor,
-      nextCursor: null,
-      returnedRows: 0,
-      totalRows: 0,
-    },
+    page: paged.page,
   };
 }
 
@@ -2416,17 +2328,13 @@ function missingTemplateCursorInfo(
     memberOwnerType: null,
     diagnostics: [],
   };
-  return {
-    schemaVersion: SEMANTIC_RUNTIME_API_VERSION,
-    outcome: read.outcome,
-    closure: read.closure,
-    summary: read.summary,
-    value: {
+  return publicAnswer(read.result, read.summary, {
       displayText: semanticTemplateCursorInfoDisplayText(value),
       ...value,
-    },
-    page: null,
-  };
+    }, {
+      selection: read.selection,
+      coverage: read.coverage,
+    });
 }
 
 function templateCursorInfoResult(

@@ -7,10 +7,10 @@ import {
   ExpectedSemanticEffectFilter,
   ExpectedSemanticEffectKind,
   ExpectedSemanticEffectScope,
-  SemanticOpenSeamAttemptKind,
   readFixtureVerificationSnapshot,
   verifyFixtureEffects,
 } from '../out/index.js';
+import { KernelOpenSeamKinds } from '../out/kernel/vocabulary/index.js';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const workspaceRoot = path.resolve(packageRoot, '../..');
@@ -91,16 +91,17 @@ const expectedEffects = [
     ],
   ),
   ...[
-    SemanticOpenSeamAttemptKind.ResourceRecognition,
-    SemanticOpenSeamAttemptKind.TemplateCompilationRendering,
-    SemanticOpenSeamAttemptKind.BindingRuntimeAnalysis,
-    SemanticOpenSeamAttemptKind.TypeCheckerProjection,
-  ].map((attemptKind) => ExpectedSemanticEffect.absent(
-    `Object boundary fixture should close without ${attemptKind} seams.`,
+    ...vocabularyKeys(KernelOpenSeamKinds.Resource),
+    ...vocabularyKeys(KernelOpenSeamKinds.Compiler),
+    ...vocabularyKeys(KernelOpenSeamKinds.Instruction),
+    ...vocabularyKeys(KernelOpenSeamKinds.Binding),
+    ...vocabularyKeys(KernelOpenSeamKinds.TypeSystem),
+  ].map((seamKindKey) => ExpectedSemanticEffect.absent(
+    `Object boundary fixture should close without ${seamKindKey} seams.`,
     ExpectedSemanticEffectKind.OpenSeamClosure,
     ExpectedSemanticEffectScope.Template,
     null,
-    [effectFilter('attempt.kind', attemptKind)],
+    [effectFilter('seamKindKey', seamKindKey)],
   )),
 ];
 
@@ -158,4 +159,8 @@ if (failures.length > 0) {
 
 function effectFilter(field, value) {
   return new ExpectedSemanticEffectFilter(field, value);
+}
+
+function vocabularyKeys(namespace) {
+  return Object.values(namespace).map((entry) => entry.key);
 }

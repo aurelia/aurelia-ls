@@ -1,5 +1,7 @@
 {
-  "outcome": "hit",
+  "result": "answered",
+  "selection": "not-applicable",
+  "coverage": "complete",
   "summary": "Previewed app-builder ontology SourcePlan with 3 file(s) and 0 issue(s).",
   "value": {
     "displayText": "App-builder SourcePlan preview: root=., template=src/task-command-actions.html, target=src/task-command-actions.ts, source=component-pair, files=3, witnesses=58, controlUses=6, expectedEffects=9, handoffNotes=4, decisionBundles=1, issues=0.",

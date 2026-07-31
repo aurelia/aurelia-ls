@@ -25,13 +25,18 @@ import {
   describeAddress,
 } from './source-reference.js';
 import {
-  requireRuntimeExpressionAccessUseOccurrenceRow,
-} from './runtime-expression-projections.js';
+  filterObservedDependencyRows,
+  observedDependencyOccurrenceRow,
+  observedDependencyOwnerRow,
+  observedDependencyRowKey,
+} from './observed-dependency-projections.js';
+import { RuntimeExpressionAccessOwnerKind } from '../runtime-expression/runtime-expression-access-use.js';
 import type {
   SemanticComputedObservationDefinitionsResult,
   SemanticComputedObservationDefinitionRow,
   SemanticComputedObserverObservedDependenciesResult,
   SemanticComputedObserverObservedDependencyRow,
+  SemanticObservedDependencyLocus,
   SemanticComputedObserverSourcesResult,
   SemanticComputedObserverSourceRow,
   SemanticObservationIssueRow,
@@ -87,16 +92,18 @@ export function readComputedObserverObservedDependencyRows(
   emission: AureliaAppWorldProjectEmission,
   store: KernelStore,
   handles: boolean,
+  locus?: SemanticObservedDependencyLocus | null,
 ): SemanticComputedObserverObservedDependenciesResult['rows'] {
   const observersByHandle = new Map(
     emission.computedObserverSources.readComputedObservers().map((observer) => [observer.productHandle, observer]),
   );
-  return emission.computedObserverSources.readObservedDependencies()
+  const rows = emission.computedObserverSources.readObservedDependencies()
     .map((dependency) => computedObserverObservedDependencyRow(store, dependency, observersByHandle, handles))
     .sort((left, right) =>
-      `${left.observerKind}:${left.className ?? ''}:${left.memberName ?? ''}:${left.sourceName ?? ''}:${left.spanStart ?? -1}`
-        .localeCompare(`${right.observerKind}:${right.className ?? ''}:${right.memberName ?? ''}:${right.sourceName ?? ''}:${right.spanStart ?? -1}`)
+      `${left.observerKind}:${left.className ?? ''}:${left.memberName ?? ''}:${left.occurrence.sourceName ?? ''}:${left.occurrence.spanStart ?? -1}`
+        .localeCompare(`${right.observerKind}:${right.className ?? ''}:${right.memberName ?? ''}:${right.occurrence.sourceName ?? ''}:${right.occurrence.spanStart ?? -1}`)
     );
+  return filterObservedDependencyRows(rows, locus);
 }
 
 export function readRuntimeEffectRows(
@@ -116,16 +123,18 @@ export function readRuntimeEffectObservedDependencyRows(
   emission: AureliaAppWorldProjectEmission,
   store: KernelStore,
   handles: boolean,
+  locus?: SemanticObservedDependencyLocus | null,
 ): SemanticRuntimeEffectObservedDependenciesResult['rows'] {
   const effectsByHandle = new Map(
     emission.runtimeEffects.readEffects().map((effect) => [effect.productHandle, effect]),
   );
-  return emission.runtimeEffects.readObservedDependencies()
+  const rows = emission.runtimeEffects.readObservedDependencies()
     .map((dependency) => runtimeEffectObservedDependencyRow(store, emission.project.projectKey, dependency, effectsByHandle, handles))
     .sort((left, right) =>
-      `${left.effectKind}:${left.dependencyEvaluationKind}:${left.sourceName ?? ''}:${left.spanStart ?? -1}`
-        .localeCompare(`${right.effectKind}:${right.dependencyEvaluationKind}:${right.sourceName ?? ''}:${right.spanStart ?? -1}`)
+      `${left.effectKind}:${left.dependencyEvaluationKind}:${left.occurrence.sourceName ?? ''}:${left.occurrence.spanStart ?? -1}`
+        .localeCompare(`${right.effectKind}:${right.dependencyEvaluationKind}:${right.occurrence.sourceName ?? ''}:${right.occurrence.spanStart ?? -1}`)
     );
+  return filterObservedDependencyRows(rows, locus);
 }
 
 export function readProxyObservableEscapeRows(
@@ -212,33 +221,26 @@ function computedObserverObservedDependencyRow(
   const observer = dependency.computedObserver.productHandle == null
     ? null
     : observersByHandle.get(dependency.computedObserver.productHandle) ?? null;
+  const owner = observedDependencyOwnerRow(store, {
+    kind: RuntimeExpressionAccessOwnerKind.ComputedObserver,
+    productHandle: dependency.computedObserver.productHandle,
+    identityHandle: dependency.computedObserver.identityHandle,
+    sourceAddressHandle: dependency.computedObserver.addressHandle,
+  }, handles);
+  const occurrence = observedDependencyOccurrenceRow(store, dependency.occurrence, handles);
   return {
     projectKey: observer?.projectKey ?? '',
     observerKind: dependency.computedObserver.observerKind,
     className: observer?.className ?? null,
     memberName: observer?.memberName ?? null,
-    dependencyKind: dependency.dependencyKind,
-    expressionKind: dependency.expressionKind,
-    sourceName: dependency.sourceName,
-    sourceRootName: dependency.sourceRootName,
-    dependencyMemberName: dependency.memberName,
-    keyExpression: dependency.keyExpression,
-    methodName: dependency.methodName,
-    accessUse: requireRuntimeExpressionAccessUseOccurrenceRow(
-      store,
-      dependency.accessUseProductHandle,
-      handles,
-    ),
-    spanStart: dependency.spanStart,
-    spanEnd: dependency.spanEnd,
-    source: describeAddress(store, dependency.sourceAddressHandle),
+    rowKey: observedDependencyRowKey(owner, dependency.identityHandle),
+    owner,
+    occurrence,
     ...(handles ? {
       handles: {
         computedObserverProductHandle: dependency.computedObserver.productHandle,
-        accessUseProductHandle: dependency.accessUseProductHandle,
         observedDependencyProductHandle: dependency.productHandle,
         observedDependencyIdentityHandle: dependency.identityHandle,
-        sourceAddressHandle: dependency.sourceAddressHandle,
       },
     } : {}),
   };
@@ -275,36 +277,26 @@ function runtimeEffectObservedDependencyRow(
   handles: boolean,
 ): SemanticRuntimeEffectObservedDependencyRow {
   const effect = effectsByHandle.get(dependency.effect.productHandle) ?? null;
+  const owner = observedDependencyOwnerRow(store, {
+    kind: RuntimeExpressionAccessOwnerKind.SourceEffectPlan,
+    productHandle: dependency.effect.productHandle,
+    identityHandle: dependency.effect.identityHandle,
+    sourceAddressHandle: dependency.effect.addressHandle,
+  }, handles);
+  const occurrence = observedDependencyOccurrenceRow(store, dependency.occurrence, handles);
   return {
     projectKey,
     effectKind: dependency.effect.effectKind,
     dependencyEvaluationKind: dependency.effect.dependencyEvaluationKind,
     immediate: effect?.immediate ?? null,
-    dependencyKind: dependency.dependencyKind,
-    expressionKind: dependency.expressionKind,
-    sourceName: dependency.sourceName,
-    sourceRootName: dependency.sourceRootName,
-    memberName: dependency.memberName,
-    keyExpression: dependency.keyExpression,
-    methodName: dependency.methodName,
-    accessUse: requireRuntimeExpressionAccessUseOccurrenceRow(
-      store,
-      dependency.accessUseProductHandle,
-      handles,
-    ),
-    observedMemberKind: dependency.observedMemberKind,
-    observedMemberSource: describeAddress(store, dependency.observedMemberSourceAddressHandle),
-    spanStart: dependency.spanStart,
-    spanEnd: dependency.spanEnd,
-    source: describeAddress(store, dependency.sourceAddressHandle),
+    rowKey: observedDependencyRowKey(owner, dependency.identityHandle),
+    owner,
+    occurrence,
     ...(handles ? {
       handles: {
         effectProductHandle: dependency.effect.productHandle,
-        accessUseProductHandle: dependency.accessUseProductHandle,
         observedDependencyProductHandle: dependency.productHandle,
         observedDependencyIdentityHandle: dependency.identityHandle,
-        observedMemberSourceAddressHandle: dependency.observedMemberSourceAddressHandle,
-        sourceAddressHandle: dependency.sourceAddressHandle,
       },
     } : {}),
   };

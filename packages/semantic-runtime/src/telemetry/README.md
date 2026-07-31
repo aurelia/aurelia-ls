@@ -65,7 +65,7 @@ Disposed-kernel telemetry includes handle-character mass as well as record, prod
 Use `rootHandleChars`, `disposedHandleChars`, and net handle characters to separate logical disposal from transient
 string/handle bulk, especially when an MCP-style answer briefly builds a large app world and then discards it.
 The query-claim line also prints `roots=root/child`, `maxDepth`, retained dependency-edge counts, and compact index
-cardinalities as `q/l/e/m/o` for query-kind, locus, epoch, materialization-policy, and outcome-key buckets. Those counts
+cardinalities as `q/l/e/m/r` for query-kind, locus, epoch, materialization-policy, and answer-reuse-key buckets. Those counts
 make retained answer storage, nested answer invalidation, and invalidation shape visible without dumping every retained
 row. It also prints record-budget and
 answer-value budget disposal counts separately: a graph can drop old retained DTO values to stay within the profile's

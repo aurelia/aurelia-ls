@@ -23,6 +23,7 @@ import {
 import {
   observedMemberSourceFields,
   observedMemberSourceForRuntimeExpressionAccessUse,
+  runtimeObservedDependencyOccurrence,
 } from '../observation/observed-dependency-member-source.js';
 import type { CustomAttributeDefinition } from '../resources/custom-attribute-definition.js';
 import type { CustomElementDefinition } from '../resources/custom-element-definition.js';
@@ -258,20 +259,11 @@ function runtimeWatcherObservedDependenciesForAccessUses(
       store.handles.product(dependencyLocal),
       store.handles.identity(dependencyLocal),
       watcher,
-      dependency.accessUseProductHandle,
       null,
-      dependency.dependencyKind,
-      dependency.expressionKind,
-      dependency.sourceName,
-      dependency.sourceRootName,
-      dependency.memberName,
-      dependency.keyExpression,
-      dependency.methodName,
-      dependency.observedMemberKind ?? null,
-      dependency.observedMemberSourceAddressHandle ?? null,
-      dependency.spanStart,
-      dependency.spanEnd,
-      accessUse.sourceAddressHandle,
+      runtimeObservedDependencyOccurrence({
+        dependency,
+        scope: null,
+      }),
     );
   });
 }

@@ -11,21 +11,39 @@ import type { InquiryLocus } from './locus.js';
 import type { InquiryPageInfo } from './page.js';
 import type { InquiryContinuationApplicability } from './continuation-intent.js';
 
-export const enum InquiryOutcomeKind {
-  /** The query closed with the requested result. */
-  Hit = 'hit',
-  /** The query was valid but found no matching fact in the selected locus. */
-  Miss = 'miss',
-  /** The query found multiple incompatible candidates and needs narrowing. */
-  Ambiguous = 'ambiguous',
-  /** The query reached an explicitly modeled unresolved seam. */
-  Open = 'open',
-  /** The query produced useful results but did not close the full basis. */
-  Partial = 'partial',
-  /** The query shape or requested interpretation is not supported yet. */
+export const enum InquiryAnswerResult {
+  /** The query executed and produced its declared answer shape. */
+  Answered = 'answered',
+  /** The query shape or requested interpretation is outside this runtime boundary. */
   Unsupported = 'unsupported',
-  /** The query should be answered by a different locus or query shape. */
-  Reroute = 'reroute',
+  /** The request envelope, selector, or cursor was invalid or stale. */
+  Invalid = 'invalid',
+  /** Execution failed before a trustworthy answer could be produced. */
+  Failed = 'failed',
+}
+
+export const enum InquiryAnswerSelection {
+  /** Selection does not apply to this collection, summary, or static-catalog answer. */
+  NotApplicable = 'not-applicable',
+  /** One semantic locus was selected with enough authority for this answer. */
+  Exact = 'exact',
+  /** The requested semantic locus was absent. */
+  Absent = 'absent',
+  /** More than one semantic locus remains plausible. */
+  Ambiguous = 'ambiguous',
+  /** Another query or locus owns the requested answer. */
+  Rerouted = 'rerouted',
+}
+
+export const enum InquiryAnswerCoverage {
+  /** The runtime covered the requested semantic basis completely. */
+  Complete = 'complete',
+  /** One or more facts required for complete semantic coverage remain open. */
+  Open = 'open',
+  /** A semantic analysis guardrail deliberately stopped enumeration. */
+  Truncated = 'truncated',
+  /** Coverage does not apply because the request was invalid or unsupported. */
+  NotApplicable = 'not-applicable',
 }
 
 export const enum InquiryProjectionKind {
@@ -118,32 +136,68 @@ export class InquiryContinuation<TQuery> {
   ) {}
 }
 
+export interface InquiryAnswerInit<TValue, TQuery> {
+  readonly result: InquiryAnswerResult;
+  readonly selection: InquiryAnswerSelection;
+  readonly coverage: InquiryAnswerCoverage;
+  readonly locus: InquiryLocus;
+  readonly summary: string;
+  readonly basis: InquiryBasis;
+  readonly value: TValue;
+  readonly evidenceHandles?: readonly EvidenceHandle[];
+  readonly provenanceHandles?: readonly ProvenanceHandle[];
+  readonly claimHandles?: readonly ClaimHandle[];
+  readonly openSeamHandles?: readonly OpenSeamHandle[];
+  readonly continuations?: readonly InquiryContinuation<TQuery>[];
+  readonly page?: InquiryPageInfo | null;
+  readonly projection?: InquiryProjection | null;
+}
+
 /** Shared answer envelope for kernel-backed inquiry surfaces. */
 export class InquiryAnswer<TValue, TQuery> {
-  constructor(
-    /** Query outcome without hiding miss, open, partial, or unsupported states. */
-    readonly outcome: InquiryOutcomeKind,
-    /** Locus this answer is about. */
-    readonly locus: InquiryLocus,
-    /** Short answer summary for IDE, Atlas, tooling, and agent consumers. */
-    readonly summary: string,
-    /** Basis describing what substrate the answer actually spent. */
-    readonly basis: InquiryBasis,
-    /** Structured result value for this query. */
-    readonly value: TValue,
-    /** Evidence handles directly relevant to the answer. */
-    readonly evidenceHandles: readonly EvidenceHandle[] = [],
-    /** Provenance handles that can expand the explanation. */
-    readonly provenanceHandles: readonly ProvenanceHandle[] = [],
-    /** Claim handles consumed or returned by the query. */
-    readonly claimHandles: readonly ClaimHandle[] = [],
-    /** Open seams that prevented complete closure. */
-    readonly openSeamHandles: readonly OpenSeamHandle[] = [],
-    /** Suggested follow-up queries. */
-    readonly continuations: readonly InquiryContinuation<TQuery>[] = [],
-    /** Page state when this answer returns one page of a larger ordered result. */
-    readonly page: InquiryPageInfo | null = null,
-    /** Projection lane and expansions represented by this answer. */
-    readonly projection: InquiryProjection | null = null,
-  ) {}
+  /** Whether execution produced an answer, independently from selection and semantic coverage. */
+  readonly result: InquiryAnswerResult;
+  /** Selection state for the requested semantic locus. */
+  readonly selection: InquiryAnswerSelection;
+  /** Coverage of the selected semantic basis, independent from transport paging. */
+  readonly coverage: InquiryAnswerCoverage;
+  /** Locus this answer is about. */
+  readonly locus: InquiryLocus;
+  /** Short answer summary for IDE, Atlas, tooling, and agent consumers. */
+  readonly summary: string;
+  /** Basis describing what substrate the answer actually spent. */
+  readonly basis: InquiryBasis;
+  /** Structured result value for this query. */
+  readonly value: TValue;
+  /** Evidence handles directly relevant to the answer. */
+  readonly evidenceHandles: readonly EvidenceHandle[];
+  /** Provenance handles that can expand the explanation. */
+  readonly provenanceHandles: readonly ProvenanceHandle[];
+  /** Claim handles consumed or returned by the query. */
+  readonly claimHandles: readonly ClaimHandle[];
+  /** Open seams that prevented complete coverage. */
+  readonly openSeamHandles: readonly OpenSeamHandle[];
+  /** Suggested follow-up queries. */
+  readonly continuations: readonly InquiryContinuation<TQuery>[];
+  /** Page state when this answer returns one page of a larger ordered result. */
+  readonly page: InquiryPageInfo | null;
+  /** Projection lane and expansions represented by this answer. */
+  readonly projection: InquiryProjection | null;
+
+  constructor(init: InquiryAnswerInit<TValue, TQuery>) {
+    this.result = init.result;
+    this.selection = init.selection;
+    this.coverage = init.coverage;
+    this.locus = init.locus;
+    this.summary = init.summary;
+    this.basis = init.basis;
+    this.value = init.value;
+    this.evidenceHandles = init.evidenceHandles ?? [];
+    this.provenanceHandles = init.provenanceHandles ?? [];
+    this.claimHandles = init.claimHandles ?? [];
+    this.openSeamHandles = init.openSeamHandles ?? [];
+    this.continuations = init.continuations ?? [];
+    this.page = init.page ?? null;
+    this.projection = init.projection ?? null;
+  }
 }

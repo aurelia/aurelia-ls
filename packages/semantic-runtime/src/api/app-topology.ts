@@ -1798,10 +1798,11 @@ function uniqueServiceInteractionObservedRootMemberNames(
   const memberNames: string[] = [];
   const prefix = `${sourceRootName}.`;
   for (const dependency of observedDependencies) {
-    if (dependency.sourceRootName !== sourceRootName || dependency.sourceName?.startsWith(prefix) !== true) {
+    const sourceName = dependency.occurrence.sourceName;
+    if (dependency.occurrence.sourceRootName !== sourceRootName || sourceName?.startsWith(prefix) !== true) {
       continue;
     }
-    const memberName = dependency.sourceName.slice(prefix.length).split(/[.[(]/u)[0] ?? '';
+    const memberName = sourceName.slice(prefix.length).split(/[.[(]/u)[0] ?? '';
     if (memberName.length > 0 && !memberNames.includes(memberName)) {
       memberNames.push(memberName);
     }

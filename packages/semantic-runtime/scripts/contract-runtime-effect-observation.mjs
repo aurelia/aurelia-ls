@@ -100,13 +100,13 @@ const summary = {
   })),
   observedDependencies: observedDependencies.map((row) => ({
     dependencyEvaluationKind: row.dependencyEvaluationKind,
-    dependencyKind: row.dependencyKind,
-    expressionKind: row.expressionKind,
-    sourceName: row.sourceName,
-    sourceRootName: row.sourceRootName,
-    memberName: row.memberName,
-    observedMemberKind: row.observedMemberKind,
-    source: row.source?.label ?? null,
+    dependencyKind: row.occurrence.dependencyKind,
+    expressionKind: row.occurrence.expressionKind,
+    sourceName: row.occurrence.sourceName,
+    sourceRootName: row.occurrence.sourceRootName,
+    memberName: row.occurrence.memberName,
+    observedMemberKind: row.occurrence.observedMemberKind,
+    source: row.occurrence.source?.label ?? null,
   })),
 };
 
@@ -159,8 +159,8 @@ function openEffectExpectation(summary, rows) {
 function dependencyExpectation(summary, rows, dependencyEvaluationKind, dependencyKind, sourceName) {
   const row = rows.find((candidate) =>
     candidate.dependencyEvaluationKind === dependencyEvaluationKind
-    && candidate.dependencyKind === dependencyKind
-    && candidate.sourceName === sourceName
+    && candidate.occurrence.dependencyKind === dependencyKind
+    && candidate.occurrence.sourceName === sourceName
   );
   return row == null
     ? `${summary}: missing ${dependencyEvaluationKind}/${dependencyKind}/${sourceName}.`
@@ -168,8 +168,8 @@ function dependencyExpectation(summary, rows, dependencyEvaluationKind, dependen
 }
 
 function nestedAccessUseHandleExpectation(summary, rows, sourceName) {
-  const row = rows.find((candidate) => candidate.sourceName === sourceName);
-  return row?.accessUse?.targetLinks?.some((target) =>
+  const row = rows.find((candidate) => candidate.occurrence.sourceName === sourceName);
+  return row?.occurrence.accessUse?.targetLinks?.some((target) =>
     target.authorityProductHandle != null
     && target.targetIdentityHandle != null
     && target.declarationSourceAddressHandle != null

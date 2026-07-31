@@ -17,7 +17,10 @@ import {
   MaterializationRecord,
   MaterializedProduct,
 } from '../kernel/materialization.js';
-import { OpenSeam } from '../kernel/open-seam.js';
+import {
+  OpenSeam,
+  type OpenSeamReasonKind,
+} from '../kernel/open-seam.js';
 import {
   FieldProvenance,
   ProvenanceRecord,
@@ -143,6 +146,7 @@ export class RuntimeControllerBindPublisher {
     records: KernelStoreRecord[],
     openSeams: OpenSeam[],
     seamKindKey: OpenSeamKindKey = KernelVocabulary.Binding.OpenTargetAccess.key,
+    reasonKinds: readonly OpenSeamReasonKind[] = [],
   ): OpenSeam {
     const seam = new OpenSeam(
       this.store.handles.openSeam(local),
@@ -150,6 +154,7 @@ export class RuntimeControllerBindPublisher {
       summary,
       addressHandle,
       source.evidenceHandle,
+      reasonKinds,
     );
     openSeams.push(seam);
     records.push(seam);

@@ -52,7 +52,7 @@ const answer = await runtime.answerAppQuery({
   appRetention: 'dispose-app',
 });
 
-assert.equal(answer.outcome, 'hit');
+assertExactCompleteAnswer(answer);
 assert.equal(answer.value.rows.length, 1, 'Expected one code action at the missing root member.');
 
 const action = answer.value.rows[0];
@@ -90,7 +90,7 @@ const unsupported = await runtime.answerAppQuery({
   includeAuthoringTemplates: true,
   appRetention: 'dispose-app',
 });
-assert.equal(unsupported.outcome, 'hit');
+assertExactCompleteAnswer(unsupported);
 assert.equal(unsupported.value.rows.length, 0, 'Unsupported globals have suggestions but no conservative edit plan yet.');
 
 const mixedRuntime = await createSemanticRuntime({
@@ -109,7 +109,7 @@ const ownerTypeRepair = await mixedRuntime.answerAppQuery({
   includeAuthoringTemplates: true,
   appRetention: 'dispose-app',
 });
-assert.equal(ownerTypeRepair.outcome, 'hit');
+assertExactCompleteAnswer(ownerTypeRepair);
 assert.equal(ownerTypeRepair.value.rows.length, 0, 'Owner-type repairs must not be exposed as view-model member declarations.');
 
 const unregisteredPluginRuntime = await createSemanticRuntime({
@@ -127,7 +127,7 @@ const routerRegistration = await unregisteredPluginRuntime.answerAppQuery({
   includeAuthoringTemplates: true,
   appRetention: 'dispose-app',
 });
-assert.equal(routerRegistration.outcome, 'hit');
+assertExactCompleteAnswer(routerRegistration);
 assert.equal(routerRegistration.value.rows.length, 1, 'Expected one router registration code action.');
 const routerAction = routerRegistration.value.rows[0];
 assert.equal(routerAction.title, 'Register RouterConfiguration for router.default-resources');
@@ -151,7 +151,7 @@ const shorthandRegistration = await shorthandRuntime.answerAppQuery({
   includeAuthoringTemplates: true,
   appRetention: 'dispose-app',
 });
-assert.equal(shorthandRegistration.outcome, 'hit');
+assertExactCompleteAnswer(shorthandRegistration);
 assert.equal(shorthandRegistration.value.rows.length, 1, 'Expected one shorthand registration code action.');
 const shorthandAction = shorthandRegistration.value.rows[0];
 assert.equal(shorthandAction.title, 'Register ShortHandBindingSyntax for runtime-html.short-hand-binding-syntax');
@@ -167,6 +167,12 @@ assertFrameworkRegistrationEdit(
 assertFrameworkRegistrationEdit(shorthandAction.edits[1], shorthandMainPath, '', '.register(ShortHandBindingSyntax)\n  ');
 
 console.log('Template code actions contract passed.');
+
+function assertExactCompleteAnswer(answer) {
+  assert.equal(answer.result, 'answered', answer.summary);
+  assert.equal(answer.selection, 'exact', answer.summary);
+  assert.equal(answer.coverage, 'complete', answer.summary);
+}
 
 function cursorAt(filePath, text, offset) {
   const before = text.slice(0, offset);

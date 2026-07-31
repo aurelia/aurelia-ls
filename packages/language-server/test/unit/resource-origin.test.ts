@@ -42,7 +42,12 @@ function externalCatalogSource(value = "runtime-html:default-resources") {
   };
 }
 
-function definition(input: Partial<Record<string, unknown>> & { resourceKind: string; name: string }) {
+function definition(
+  input: Partial<Record<string, unknown>> & {
+    resourceKind: string;
+    name: string;
+  },
+) {
   return {
     projectKey: "app",
     resourceKind: input.resourceKind,
@@ -57,7 +62,8 @@ function definition(input: Partial<Record<string, unknown>> & { resourceKind: st
     watches: [],
     issues: [],
     dependencies: [],
-    isTemplateController: input.resourceKind === "template-controller" ? true : null,
+    isTemplateController:
+      input.resourceKind === "template-controller" ? true : null,
     containerStrategy: null,
     defaultProperty: null,
     containerless: null,
@@ -66,7 +72,8 @@ function definition(input: Partial<Record<string, unknown>> & { resourceKind: st
     needsCompile: null,
     patterns: [],
     source: input.source ?? source("src/my-resource.ts"),
-    targetSource: input.targetSource ?? input.source ?? source("src/my-resource.ts", 2, 12),
+    targetSource:
+      input.targetSource ?? input.source ?? source("src/my-resource.ts", 2, 12),
   };
 }
 
@@ -124,9 +131,10 @@ function compilation(input: Partial<Record<string, unknown>> = {}) {
 
 function answer<T>(rows: T[]) {
   return Promise.resolve({
-    schemaVersion: "0.1",
-    outcome: "hit",
-    closure: "complete",
+    schemaVersion: "0.2",
+    result: "answered",
+    selection: "not-applicable",
+    coverage: "complete",
     summary: "mock",
     value: { rows },
     page: null,
@@ -182,15 +190,28 @@ describe("runtime-backed resource explorer", () => {
         }),
       ],
       visibility: [
-        visibility({ resourceKind: "custom-element", name: "my-resource", visibilityKind: "app-root" }),
+        visibility({
+          resourceKind: "custom-element",
+          name: "my-resource",
+          visibilityKind: "app-root",
+        }),
       ],
       compilations: [
-        compilation({ source: source("src/my-app.html"), templateSourceKind: "file" }),
-        compilation({ source: source("src/inline.ts"), templateSourceKind: "inline" }),
+        compilation({
+          source: source("src/my-app.html"),
+          templateSourceKind: "file",
+        }),
+        compilation({
+          source: source("src/inline.ts"),
+          templateSourceKind: "inline",
+        }),
       ],
     });
 
-    const result: ResourceExplorerResponse = await handleGetResources(ctx as never, testRequestGuard);
+    const result: ResourceExplorerResponse = await handleGetResources(
+      ctx as never,
+      testRequestGuard,
+    );
 
     expect(result.templateCount).toBe(2);
     expect(result.inlineTemplateCount).toBe(1);
@@ -206,12 +227,14 @@ describe("runtime-backed resource explorer", () => {
         declarationForm: "decorator",
       }),
     ]);
-    expect(result.resources[0].bindables[0]).toEqual(expect.objectContaining({
-      name: "value",
-      attribute: "value",
-      mode: "twoWay",
-      type: "string",
-    }));
+    expect(result.resources[0].bindables[0]).toEqual(
+      expect.objectContaining({
+        name: "value",
+        attribute: "value",
+        mode: "twoWay",
+        type: "string",
+      }),
+    );
   });
 
   test("adds framework resources from visibility rows when no definition row exists", async () => {
@@ -260,12 +283,21 @@ describe("runtime-backed resource explorer", () => {
 
     const result = await handleGetResources(ctx as never, testRequestGuard);
 
-    expect(result.resources[0]).toEqual(expect.objectContaining({
-      name: "plugin-card",
-      package: "@scope/plugin",
-      origin: "source",
-      file: path.join(workspaceRoot, "node_modules", "@scope", "plugin", "dist", "plugin-card.js"),
-    }));
+    expect(result.resources[0]).toEqual(
+      expect.objectContaining({
+        name: "plugin-card",
+        package: "@scope/plugin",
+        origin: "source",
+        file: path.join(
+          workspaceRoot,
+          "node_modules",
+          "@scope",
+          "plugin",
+          "dist",
+          "plugin-card.js",
+        ),
+      }),
+    );
   });
 
   test("does not duplicate resources present in definitions and visibility", async () => {
@@ -274,7 +306,11 @@ describe("runtime-backed resource explorer", () => {
         definition({ resourceKind: "template-controller", name: "if" }),
       ],
       visibility: [
-        visibility({ resourceKind: "template-controller", name: "if", source: externalCatalogSource() }),
+        visibility({
+          resourceKind: "template-controller",
+          name: "if",
+          source: externalCatalogSource(),
+        }),
       ],
     });
 
@@ -289,19 +325,37 @@ describe("runtime-backed scope resources", () => {
   test("filters visibility rows to the selected template compiler world", async () => {
     const ctx = createMockContext({
       visibility: [
-        visibility({ resourceKind: "custom-element", name: "in-scope", compilerWorld: "app-root selected" }),
-        visibility({ resourceKind: "custom-element", name: "out-of-scope", compilerWorld: "app-root other" }),
+        visibility({
+          resourceKind: "custom-element",
+          name: "in-scope",
+          compilerWorld: "app-root selected",
+        }),
+        visibility({
+          resourceKind: "custom-element",
+          name: "out-of-scope",
+          compilerWorld: "app-root other",
+        }),
       ],
       compilations: [
-        compilation({ compilerWorld: "app-root selected", source: source("src/my-app.html") }),
+        compilation({
+          compilerWorld: "app-root selected",
+          source: source("src/my-app.html"),
+        }),
       ],
     });
 
-    const result: ScopeResourcesResponse = await handleGetScopeResources(ctx as never, { uri: componentUri }, testRequestGuard);
+    const result: ScopeResourcesResponse = await handleGetScopeResources(
+      ctx as never,
+      { uri: componentUri },
+      testRequestGuard,
+    );
 
-    const calls = ctx.semanticRuntime.templateCompilations.mock.calls as unknown as [unknown, string][];
+    const calls = ctx.semanticRuntime.templateCompilations.mock
+      .calls as unknown as [unknown, string][];
     const calledPath = calls[0]?.[1] ?? "";
-    expect(path.normalize(calledPath).toLowerCase()).toBe(path.normalize(componentPath).toLowerCase());
+    expect(path.normalize(calledPath).toLowerCase()).toBe(
+      path.normalize(componentPath).toLowerCase(),
+    );
     expect(result?.scopeId).toBe("app-root selected");
     expect(result?.resources.map((item) => item.name)).toEqual(["in-scope"]);
   });
@@ -344,7 +398,11 @@ describe("runtime-backed related file lookup", () => {
       ],
     });
 
-    const result = await handleGetRelatedFile(ctx as never, { uri: pathToFileURL(componentFile).toString() }, testRequestGuard);
+    const result = await handleGetRelatedFile(
+      ctx as never,
+      { uri: pathToFileURL(componentFile).toString() },
+      testRequestGuard,
+    );
 
     expect(result).toEqual({
       uri: pathToFileURL(templateFile).toString(),
@@ -371,7 +429,11 @@ describe("runtime-backed related file lookup", () => {
       ],
     });
 
-    const result = await handleGetRelatedFile(ctx as never, { uri: pathToFileURL(templateFile).toString() }, testRequestGuard);
+    const result = await handleGetRelatedFile(
+      ctx as never,
+      { uri: pathToFileURL(templateFile).toString() },
+      testRequestGuard,
+    );
 
     expect(result).toEqual({
       uri: pathToFileURL(componentFile).toString(),
@@ -397,7 +459,12 @@ describe("runtime-backed related file lookup", () => {
       ],
     });
 
-    await expect(handleGetRelatedFile(ctx as never, { uri: pathToFileURL(componentFile).toString() }, testRequestGuard))
-      .resolves.toBeNull();
+    await expect(
+      handleGetRelatedFile(
+        ctx as never,
+        { uri: pathToFileURL(componentFile).toString() },
+        testRequestGuard,
+      ),
+    ).resolves.toBeNull();
   });
 });

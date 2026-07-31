@@ -27,6 +27,8 @@ import {
 } from '../kernel/materialization.js';
 import {
   OpenSeam,
+  OpenSeamReasonKind,
+  type OpenSeamReasonSource,
 } from '../kernel/open-seam.js';
 import {
   readFieldProvenance,
@@ -374,6 +376,7 @@ export class RuntimeControllerCreationMaterializer {
         observerLocator,
         source,
         records,
+        openSeams,
         controllerIssues,
       )
     );
@@ -432,14 +435,24 @@ export class RuntimeControllerCreationMaterializer {
     if (parentContainer != null) {
       return parentContainer;
     }
-    this.recordOpenSeam(
+    const seam = this.recordOpenSeam(
       `${creation.local}:open-controller-container`,
       `Renderer-created controller '${creation.creationKind}' needs runtime child-container materialization, but its parent controller did not carry a modeled container frame.`,
       creation.instruction.sourceAddressHandle,
       source,
       records,
       openSeams,
+      [OpenSeamReasonKind.RuntimeControllerContainerOpen],
       KernelVocabulary.Di.OpenChildContainer.key,
+    );
+    records.push(
+      new MaterializationRecord(
+        this.store.handles.materialization(`${creation.local}:controller-attempt`),
+        creation.instruction.identityHandle,
+        [],
+        [],
+        [seam.handle],
+      ),
     );
     return null;
   }
@@ -754,6 +767,7 @@ export class RuntimeControllerCreationMaterializer {
     observerLocator: ObserverLocator,
     source: RuntimeRenderingSourceSet,
     records: KernelStoreRecord[],
+    openSeams: OpenSeam[],
     controllerIssues: RuntimeControllerIssue[],
   ): void {
     if (definition == null || definition.bindables.length === 0) {
@@ -815,6 +829,7 @@ export class RuntimeControllerCreationMaterializer {
           setupReachability,
           bindable.sourceAddressHandle ?? definition.sourceAddressHandle,
           observerSetupProvenanceHandles(bindable, source.provenanceHandle),
+          [],
         ));
         continue;
       }
@@ -832,12 +847,15 @@ export class RuntimeControllerCreationMaterializer {
         false,
         observerSetupAppTaskBoundary(frame),
       ));
+      const openReasons = observerSetupOpenReasons(
+        lookup.openReason,
+        lookup.supportsCoercer,
+        lookup.supportsCallback,
+        requiresCoercer,
+        requiresCallback,
+      );
       let outcome = RuntimeControllerObserverSetupOutcome.Installed;
-      if (lookup.openReason != null
-        || lookup.supportsCoercer == null
-        || lookup.supportsCallback == null
-        || requiresCoercer == null
-        || requiresCallback == null) {
+      if (openReasons.length > 0) {
         outcome = RuntimeControllerObserverSetupOutcome.Open;
         aggregateState = RuntimeControllerObserverSetupState.Open;
       } else if (requiresCoercer && lookup.supportsCoercer === false) {
@@ -872,6 +890,21 @@ export class RuntimeControllerCreationMaterializer {
         }
       }
 
+      const setupSourceAddressHandle = bindable.sourceAddressHandle ?? definition.sourceAddressHandle;
+      const openSeam = outcome === RuntimeControllerObserverSetupOutcome.Open
+        ? controllerObserverSetupOpenSeam(
+            this.store,
+            `${frame.productHandle}:observer-setup:${index}:${bindable.name}:open`,
+            bindable.name,
+            setupSourceAddressHandle,
+            source.evidenceHandle,
+            openReasons,
+          )
+        : null;
+      if (openSeam != null) {
+        records.push(openSeam);
+        openSeams.push(openSeam);
+      }
       frame.recordObserverSetup(new RuntimeControllerObserverSetup(
         bindable.name,
         bindable.propertyTarget?.identityHandle ?? null,
@@ -880,8 +913,9 @@ export class RuntimeControllerCreationMaterializer {
         requiresCoercer,
         requiresCallback,
         setupReachability,
-        bindable.sourceAddressHandle ?? definition.sourceAddressHandle,
+        setupSourceAddressHandle,
         observerSetupProvenanceHandles(bindable, source.provenanceHandle),
+        openSeam == null ? [] : [openSeam.handle],
       ));
       if (outcome === RuntimeControllerObserverSetupOutcome.RejectedCoercer
         || outcome === RuntimeControllerObserverSetupOutcome.RejectedCallback) {
@@ -1286,17 +1320,20 @@ export class RuntimeControllerCreationMaterializer {
     source: RuntimeRenderingSourceSet,
     records: KernelStoreRecord[],
     openSeams: OpenSeam[],
+    reasonKinds: readonly OpenSeamReasonKind[],
     seamKindKey: OpenSeamKindKey = KernelVocabulary.Instruction.OpenInstruction.key,
-  ): void {
+  ): OpenSeam {
     const seam = new OpenSeam(
       this.store.handles.openSeam(local),
       seamKindKey,
       summary,
       addressHandle,
       source.evidenceHandle,
+      reasonKinds,
     );
     openSeams.push(seam);
     records.push(seam);
+    return seam;
   }
 }
 
@@ -1637,6 +1674,75 @@ function callbackRequirement(
   return hasBindableCallback === false && hasPropertyChanged === false && hasPropertiesChanged === false
     ? false
     : null;
+}
+
+interface ObserverSetupOpenReason {
+  readonly reasonKind: OpenSeamReasonKind;
+  readonly summary: string;
+}
+
+function observerSetupOpenReasons(
+  lookupOpenReason: string | null,
+  supportsCoercer: boolean | null,
+  supportsCallback: boolean | null,
+  requiresCoercer: boolean | null,
+  requiresCallback: boolean | null,
+): readonly ObserverSetupOpenReason[] {
+  const reasons: ObserverSetupOpenReason[] = [];
+  if (lookupOpenReason != null) {
+    reasons.push({
+      reasonKind: OpenSeamReasonKind.BindingObserverSelectionOpen,
+      summary: lookupOpenReason,
+    });
+  }
+  if (requiresCoercer == null) {
+    reasons.push({
+      reasonKind: OpenSeamReasonKind.BindingObserverRequirementOpen,
+      summary: 'Bindable setter metadata did not close whether observer coercion is required.',
+    });
+  } else if (requiresCoercer && lookupOpenReason == null && supportsCoercer == null) {
+    reasons.push({
+      reasonKind: OpenSeamReasonKind.BindingObserverCapabilityOpen,
+      summary: 'The selected observer did not prove whether it supports the required coercer.',
+    });
+  }
+  if (requiresCallback == null) {
+    reasons.push({
+      reasonKind: OpenSeamReasonKind.BindingObserverRequirementOpen,
+      summary: 'Bindable callback and controller callback members did not close whether change notification is required.',
+    });
+  } else if (requiresCallback && lookupOpenReason == null && supportsCallback == null) {
+    reasons.push({
+      reasonKind: OpenSeamReasonKind.BindingObserverCapabilityOpen,
+      summary: 'The selected observer did not prove whether it supports the required change callback.',
+    });
+  }
+  return reasons;
+}
+
+function controllerObserverSetupOpenSeam(
+  store: KernelStore,
+  local: string,
+  bindableName: string,
+  sourceAddressHandle: AddressHandle | null,
+  evidenceHandle: RuntimeRenderingSourceSet['evidenceHandle'],
+  reasons: readonly ObserverSetupOpenReason[],
+): OpenSeam {
+  const reasonSources: OpenSeamReasonSource[] = reasons.map((reason) => ({
+    reasonKind: reason.reasonKind,
+    summary: reason.summary,
+    addressHandle: sourceAddressHandle,
+    evidenceHandle,
+  }));
+  return new OpenSeam(
+    store.handles.openSeam(local),
+    KernelVocabulary.Binding.OpenObserverSetup.key,
+    `Controller observer setup for bindable '${bindableName}' remained open: ${reasons.map((reason) => reason.summary).join(' ')}`,
+    sourceAddressHandle,
+    evidenceHandle,
+    [...new Set(reasons.map((reason) => reason.reasonKind))].sort(),
+    reasonSources,
+  );
 }
 
 function observerSetupProvenanceHandles(

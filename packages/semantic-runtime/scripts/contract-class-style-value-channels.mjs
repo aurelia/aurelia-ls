@@ -135,8 +135,8 @@ function expectDataFlow(summary, expected) {
 function expectObservedDependency(summary, sourceName) {
   const row = observedDependencies.find((candidate) =>
     candidate.definitionName === 'class-style-interpolation-boundaries-app'
-    && candidate.dependencyKind === 'template-expression-read'
-    && candidate.sourceName === sourceName
+    && candidate.occurrence.dependencyKind === 'template-expression-read'
+    && candidate.occurrence.sourceName === sourceName
   );
   if (row == null) {
     failures.push(`${summary} Missing observed dependency for ${sourceName}.`);

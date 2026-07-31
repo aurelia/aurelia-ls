@@ -18,7 +18,7 @@ import {
   RuntimeExpressionAccessForm,
   RuntimeExpressionAccessRole,
 } from '../runtime-expression/runtime-expression-access-use.js';
-import { RuntimeObservedDependencyKind } from './runtime-binding-observation.js';
+import { RuntimeObservedDependencyKind } from './runtime-observed-dependency.js';
 
 export interface RuntimeConnectableObservedDependencyDraft {
   readonly dependencyKind: RuntimeObservedDependencyKind;

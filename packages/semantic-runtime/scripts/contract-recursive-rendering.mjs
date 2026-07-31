@@ -2,8 +2,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   createSemanticRuntime,
-  SemanticOpenSeamAttemptKind,
 } from '../out/index.js';
+import { KernelOpenSeamKinds } from '../out/kernel/vocabulary/index.js';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/recursive-custom-element-surfaces');
@@ -32,16 +32,17 @@ const openSeams = app.ask({
   kind: 'open-seams',
   page: { size: 100 },
 }).value.rows;
-const recursiveRenderingAttemptKinds = new Set([
-  SemanticOpenSeamAttemptKind.ResourceRecognition,
-  SemanticOpenSeamAttemptKind.TemplateCompilationRendering,
-  SemanticOpenSeamAttemptKind.BindingRuntimeAnalysis,
-  SemanticOpenSeamAttemptKind.TypeCheckerProjection,
+const recursiveRenderingSeamKinds = new Set([
+  ...vocabularyKeys(KernelOpenSeamKinds.Resource),
+  ...vocabularyKeys(KernelOpenSeamKinds.Compiler),
+  ...vocabularyKeys(KernelOpenSeamKinds.Instruction),
+  ...vocabularyKeys(KernelOpenSeamKinds.Binding),
+  ...vocabularyKeys(KernelOpenSeamKinds.TypeSystem),
 ]);
 const recursiveRenderingOpenSeams = openSeams.filter((row) =>
-  recursiveRenderingAttemptKinds.has(row.attempt.kind)
+  recursiveRenderingSeamKinds.has(row.seamKindKey)
   || (
-    row.attempt.kind === SemanticOpenSeamAttemptKind.DiWorldConstruction
+    row.seamKindKey.startsWith('di.')
     && !isStandardConfigurationDiCoverageSeam(row)
   )
 );
@@ -67,7 +68,7 @@ const rootIdFlows = dataFlows.filter((row) =>
 );
 const childIdDependencies = observedDependencies.filter((row) =>
   row.definitionName === 'tree-node'
-  && row.sourceName === 'childId'
+  && row.occurrence.sourceName === 'childId'
 );
 
 const failures = [
@@ -100,8 +101,8 @@ const failures = [
     ? null
     : 'Expected recursive child bindable flow childId -> tree-node.nodeId to close through the active synthetic-view scope.',
   childIdDependencies.some((row) =>
-    row.observedMemberKind === 'accessor'
-    && row.observedMemberSourceState === 'source'
+    row.occurrence.observedMemberKind === 'accessor'
+    && row.occurrence.observedMemberSourceState === 'source'
   )
     ? null
     : 'Expected childId getter reads to preserve accessor observed-dependency source provenance.',
@@ -135,15 +136,16 @@ const summary = {
     source: row.source?.label ?? null,
   })),
   childIdDependencies: childIdDependencies.map((row) => ({
-    sourceName: row.sourceName,
-    observedMemberKind: row.observedMemberKind,
-    observedMemberSourceState: row.observedMemberSourceState,
-    observedMemberSource: row.observedMemberSource?.label ?? null,
-    source: row.source?.label ?? null,
+    sourceName: row.occurrence.sourceName,
+    observedMemberKind: row.occurrence.observedMemberKind,
+    observedMemberSourceState: row.occurrence.observedMemberSourceState,
+    observedMemberSource: row.occurrence.observedMemberSource?.label ?? null,
+    source: row.occurrence.source?.label ?? null,
   })),
   openSeams: openSeams.map((row) => ({
     seamKindKey: row.seamKindKey,
-    attemptKind: row.attempt.kind,
+    boundaryKinds: row.boundaryKinds,
+    pressureKind: row.pressureKind,
     summary: row.summary,
     source: row.source?.label ?? null,
   })),
@@ -159,4 +161,8 @@ if (failures.length > 0) {
 function isStandardConfigurationDiCoverageSeam(row) {
   return row.seamKindKey === 'di.open-registry-body'
     && row.summary.startsWith('StandardConfiguration catalogs and compiler-world services are modeled');
+}
+
+function vocabularyKeys(namespace) {
+  return Object.values(namespace).map((entry) => entry.key);
 }

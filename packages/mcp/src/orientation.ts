@@ -16,7 +16,7 @@ export const AURELIA_MCP_SERVER_INSTRUCTIONS = [
   'Use page.size=0 on summary queries for rollup-only reads when row payload is not yet needed.',
   'For aurelia_template_cursor_info, cursor position matters: call names identify expression sites; member tokens identify expression-member owner types.',
   'Do not pre-pass analysisDepth for ordinary query calls; semantic-runtime auto-selects the required depth per query and reports the depth used.',
-  'Check supportsSourceFile in aurelia_app_query_catalog before scoping by sourceFile/sourceFilePath; unsupported selectors return outcome=unsupported and should not be retried blindly.',
+  'Check supportsSourceFile in aurelia_app_query_catalog before scoping by sourceFile/sourceFilePath; unsupported selectors return result=unsupported and should not be retried blindly.',
 ].join(' ');
 
 export const AURELIA_MCP_ORIENTATION_RESOURCE_TEXT = [
@@ -34,7 +34,7 @@ export const AURELIA_MCP_ORIENTATION_RESOURCE_TEXT = [
   '6. Use `page.size=0` on summary queries when the caller needs counts/clusters without row payload.',
   '7. For `aurelia_template_cursor_info`, position is semantic: cursor on a call name returns expression-site context; cursor on a member token returns expression-member owner type context.',
   '8. Omit `analysisDepth` unless intentionally controlling cache or cost. Query calls auto-select the smallest required app-world depth, and answers report the depth used when an app world is opened.',
-  '9. Check `supportsSourceFile` before file-scoping a query with `sourceFile` or `sourceFilePath`. Unsupported selectors return `outcome=unsupported` with accepted query families; trust that answer instead of retrying blindly.',
+  '9. Check `supportsSourceFile` before file-scoping a query with `sourceFile` or `sourceFilePath`. Unsupported selectors return `result=unsupported` with accepted query families; trust that answer instead of retrying blindly.',
   AURELIA_PATTERN_WORKFLOW_ORIENTATION_STEP,
   '11. For docs context behind a pattern or framework concept, call `aurelia_docs_search`, then `aurelia_docs_fetch` with the returned `documentPath` and optional `sectionAnchor`. The docs are bundled; make no web requests for this context.',
   '',

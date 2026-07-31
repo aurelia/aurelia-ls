@@ -33,7 +33,7 @@ const contractSuites = [
     'api',
     'mcp',
     'open-seams',
-  ], 'contract-open-seam-interpretation.mjs', 'Controlled open-seam vocabulary keys carry public attempt and boundary interpretation.'),
+  ], 'contract-open-seam-causality.mjs', 'Typed open-seam reasons own boundary classification while materialization edges expose propagated product pressure without cloned seams.'),
   contract('evaluation', 'fast', [
     'evaluation',
     'api',
@@ -142,6 +142,15 @@ const contractSuites = [
     'effect',
     'source-address',
   ], 'contract-runtime-effect-observation.mjs', 'Source-level Observation.watch/run effects and observed-dependency rows.'),
+  contract('observation', 'fast', [
+    'observation',
+    'binding',
+    'watcher',
+    'effect',
+    'source-address',
+    'provenance',
+    'api',
+  ], 'contract-observed-dependency-conservation.mjs', 'Binding, watcher, effect, and computed-observer projections conserve shared dependency identity, ownership, source, and provenance facts.'),
   contract('observation', 'fast', [
     'observation',
     'proxy-observation',
@@ -410,6 +419,13 @@ const contractSuites = [
     'api',
     'performance',
   ], 'contract-query-claim-graph.mjs', 'Query-claim graph laziness, retained-answer reuse, failure handling, budgets, and indexed disposal policy.'),
+  contract('inquiry', 'fast', [
+    'inquiry',
+    'api',
+    'paging',
+    'query-claim',
+    'mcp',
+  ], 'contract-public-answer-pagination.mjs', 'Public answer quality stays independent from scoped transport paging, response budgets, and retained-claim reuse.'),
   contract('app-builder', 'fast', [
     'app-builder',
     'api',

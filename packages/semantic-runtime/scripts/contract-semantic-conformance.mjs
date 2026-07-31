@@ -266,7 +266,7 @@ async function assertSourcePrecisionAgreement(assertion, failures, notes) {
   const runtime = await runtimeForAssertion(assertion);
   const cursor = cursorForSpan(context.sourceFilePath, context.sourceText, expectedSpan);
   const cursorInfo = await runtime.answerAppQuery(cursorQuery(SemanticAppQueryKind.TemplateCursorInfo, context.sourceFilePath, cursor));
-  expectAnswer(cursorInfo, [ 'hit', 'partial' ], 'template-cursor-info', failures);
+  expectAnswer(cursorInfo, [ 'answered' ], 'template-cursor-info', failures);
   expectEqual(cursorInfo.value?.selectedMember?.name, assertion.expected.memberName, 'cursor-info selected member', failures);
 
   const references = await runtime.answerAppQuery({
@@ -275,7 +275,7 @@ async function assertSourcePrecisionAgreement(assertion, failures, notes) {
     detail: 'handles',
     page: { size: 50 },
   });
-  expectAnswer(references, [ 'hit', 'partial' ], 'template-references', failures);
+  expectAnswer(references, [ 'answered' ], 'template-references', failures);
   const referenceRow = findRowWithSource(references.value?.rows ?? [], 'referenceKind', assertion.expected.referenceKind, context.fixtureRoot, expectedSpan);
   expect(referenceRow != null, `References should include ${assertion.expected.referenceKind} at ${spanLabel(expectedSpan)}.`, failures);
 
@@ -283,7 +283,7 @@ async function assertSourcePrecisionAgreement(assertion, failures, notes) {
     ...cursorQuery(SemanticAppQueryKind.TemplateRename, context.sourceFilePath, cursor),
     newName: assertion.expected.renameNewName,
   });
-  expectAnswer(rename, [ 'hit', 'partial' ], 'template-rename', failures);
+  expectAnswer(rename, [ 'answered' ], 'template-rename', failures);
   expectEqual(rename.value?.status, 'available', 'rename status', failures);
   expectSource(rename.value?.activeSource, context.fixtureRoot, expectedSpan, 'rename activeSource', failures);
   const renameEdit = findRowWithSource(rename.value?.edits ?? [], 'editKind', assertion.expected.renameEditKind, context.fixtureRoot, expectedSpan);
@@ -294,7 +294,7 @@ async function assertSourcePrecisionAgreement(assertion, failures, notes) {
   }
 
   const semanticTokens = await runtime.answerAppQuery(sourceFileQuery(SemanticAppQueryKind.TemplateSemanticTokens, context.sourceFilePath, { page: { size: 1000 } }));
-  expectAnswer(semanticTokens, [ 'hit', 'partial' ], 'template-semantic-tokens', failures);
+  expectAnswer(semanticTokens, [ 'answered' ], 'template-semantic-tokens', failures);
   const tokenRow = (semanticTokens.value?.rows ?? []).find((row) =>
     row.tokenType === assertion.expected.semanticTokenType
     && sourceMatches(row.source, context.fixtureRoot, expectedSpan)
@@ -317,7 +317,7 @@ async function assertLineCharacterCursorParity(assertion, failures, notes) {
     includeDeclaration: true,
     page: { size: 50 },
   });
-  expectAnswer(references, [ 'hit', 'partial' ], 'line/character template-references', failures);
+  expectAnswer(references, [ 'answered' ], 'line/character template-references', failures);
   expect(
     findRowWithSource(references.value?.rows ?? [], 'referenceKind', assertion.expected.referenceKind, context.fixtureRoot, expectedSpan) != null,
     `Line/character references should resolve ${assertion.expected.referenceKind} at ${spanLabel(expectedSpan)}.`,
@@ -328,7 +328,7 @@ async function assertLineCharacterCursorParity(assertion, failures, notes) {
     ...cursorQuery(SemanticAppQueryKind.TemplateRename, context.sourceFilePath, lineCharacterCursor),
     newName: assertion.expected.renameNewName,
   });
-  expectAnswer(rename, [ 'hit', 'partial' ], 'line/character template-rename', failures);
+  expectAnswer(rename, [ 'answered' ], 'line/character template-rename', failures);
   expectEqual(rename.value?.status, 'available', 'line/character rename status', failures);
   expectSource(rename.value?.activeSource, context.fixtureRoot, expectedSpan, 'line/character rename activeSource', failures);
   expect(
@@ -349,8 +349,8 @@ async function assertCandidateHonesty(assertion, failures, notes) {
     detail: 'handles',
     page: { size: 50 },
   });
-  expectAnswer(answer, [ 'hit', 'partial' ], 'template-references candidate honesty', failures);
-  expectEqual(answer.closure, assertion.expected.closure, 'reference answer closure', failures);
+  expectAnswer(answer, [ 'answered' ], 'template-references candidate honesty', failures);
+  expectEqual(answer.coverage, assertion.expected.coverage, 'reference answer coverage', failures);
   expectEqual(answer.value?.selectedMemberName, assertion.expected.memberName, 'selected member name', failures);
   expectEqual(answer.value?.rows?.length, assertion.expected.rows, 'proven reference row count', failures);
   expectEqual(
@@ -386,8 +386,8 @@ async function assertDiagnosticProvenanceAgreement(assertion, failures, notes) {
   const appDiagnostics = await runtime.answerAppQuery({
     ...sourceFileQuery(SemanticAppQueryKind.AppDiagnostics, context.sourceFilePath, { detail: 'full', page: { size: 50 } }),
   });
-  expectAnswer(templateDiagnostics, [ 'hit', 'partial' ], 'template-diagnostics', failures);
-  expectAnswer(appDiagnostics, [ 'hit', 'partial' ], 'app-diagnostics', failures);
+  expectAnswer(templateDiagnostics, [ 'answered' ], 'template-diagnostics', failures);
+  expectAnswer(appDiagnostics, [ 'answered' ], 'app-diagnostics', failures);
 
   const templateRow = diagnosticRow(templateDiagnostics.value?.rows ?? [], assertion.expected);
   const appRow = diagnosticRowAtSource(appDiagnostics.value?.rows ?? [], assertion.expected, context.fixtureRoot, expectedSpan);
@@ -417,7 +417,7 @@ async function assertEditPlanOldText(assertion, failures, notes) {
   const answer = await runtime.answerAppQuery({
     ...cursorQuery(SemanticAppQueryKind.TemplateCodeActions, context.sourceFilePath, cursorForSpan(context.sourceFilePath, context.sourceText, expectedSpan)),
   });
-  expectAnswer(answer, [ 'hit', 'partial' ], 'template-code-actions', failures);
+  expectAnswer(answer, [ 'answered' ], 'template-code-actions', failures);
   const action = (answer.value?.rows ?? []).find((candidate) => candidate.title === assertion.expected.title) ?? null;
   expect(action != null, `Expected code action '${assertion.expected.title}'.`, failures);
   const edit = action?.edits?.find((candidate) => candidate.editKind === assertion.expected.editKind) ?? null;
@@ -444,9 +444,9 @@ async function assertQueryExpectations(assertion, failures, notes) {
     const runtime = await runtimeForAssertion(assertion);
     const answer = await answerForExpectation(context, runtime, query, expectation);
     const label = expectation.name ?? query.kind;
-    expectAnswer(answer, expectation.outcomes ?? ['hit', 'partial'], label, failures);
-    if (expectation.closure != null) {
-      expectEqual(answer.closure, expectation.closure, `${label} closure`, failures);
+    expectAnswer(answer, expectation.results ?? ['answered'], label, failures);
+    if (expectation.coverage != null) {
+      expectEqual(answer.coverage, expectation.coverage, `${label} coverage`, failures);
     }
     for (const [pathExpression, expectedValue] of Object.entries(expectation.equals ?? {})) {
       expectEqual(valueAtPath(answer, pathExpression), expectedValue, `${label} ${pathExpression}`, failures);
@@ -958,8 +958,8 @@ function validateCatalog(kind, expected, failures) {
   }
 }
 
-function expectAnswer(answer, allowedOutcomes, label, failures) {
-  expect(allowedOutcomes.includes(answer.outcome), `${label} outcome should be ${allowedOutcomes.join('/')} but was ${answer.outcome}: ${answer.summary}`, failures);
+function expectAnswer(answer, allowedResults, label, failures) {
+  expect(allowedResults.includes(answer.result), `${label} result should be ${allowedResults.join('/')} but was ${answer.result}: ${answer.summary}`, failures);
 }
 
 function diagnosticRow(rows, expected) {

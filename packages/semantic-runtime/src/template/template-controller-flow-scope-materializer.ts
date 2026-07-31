@@ -10,6 +10,7 @@ import {
 } from '../configuration/scope-materializer.js';
 import type { ExpressionAstNode } from '../expression/ast.js';
 import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
+import { MaterializationRecord } from '../kernel/materialization.js';
 import { OpenSeam, OpenSeamReasonKind } from '../kernel/open-seam.js';
 import type { KernelStore } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
@@ -676,9 +677,10 @@ export class TemplateControllerFlowScopeMaterializer {
     sourceAddressHandle: AddressHandle | null,
     summary: string,
   ): void {
-    frame.addOpenSeam(new OpenSeam(
+    const local = `${frame.input.localKey}:scope:${localSuffix}:app-template-controller:open`;
+    const seam = new OpenSeam(
       this.store.handles.openSeam(
-        `${frame.input.localKey}:scope:${localSuffix}:app-template-controller:open`,
+        local,
       ),
       KernelVocabulary.Template.OpenTemplateControllerScope.key,
       summary,
@@ -690,7 +692,17 @@ export class TemplateControllerFlowScopeMaterializer {
         summary,
         addressHandle: sourceAddressHandle ?? instruction.sourceAddressHandle,
       }],
-    ));
+    );
+    frame.addOpenSeam(seam);
+    frame.addScopeSupportRecords([
+      new MaterializationRecord(
+        this.store.handles.materialization(`${local}:scope-attempt`),
+        instruction.identityHandle,
+        [],
+        [],
+        [seam.handle],
+      ),
+    ]);
   }
 
   private recordTemplateControllerLink(

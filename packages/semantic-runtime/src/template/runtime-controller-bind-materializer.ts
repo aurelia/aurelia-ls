@@ -2,7 +2,10 @@ import type { SemanticClaim } from '../kernel/claim.js';
 import type {
   ProductHandle,
 } from '../kernel/handles.js';
-import { OpenSeam } from '../kernel/open-seam.js';
+import {
+  OpenSeam,
+  OpenSeamReasonKind,
+} from '../kernel/open-seam.js';
 import {
   KernelPublicationPlan,
   publishProductDetails,
@@ -442,7 +445,8 @@ export class RuntimeControllerBindMaterializer {
         RuntimeBindingTargetAccessAuthority.BindingBehavior,
       );
     const local = `${request.localKey}:target-access`;
-    const openSeam = lookup.openReason == null
+    const setupOpenSeamHandles = setup?.openSeamHandles ?? [];
+    const openSeam = lookup.openReason == null || setupOpenSeamHandles.length > 0
       ? null
       : this.publisher.recordOpenSeam(
         `${local}:open`,
@@ -452,7 +456,12 @@ export class RuntimeControllerBindMaterializer {
         records,
         openSeams,
         KernelVocabulary.Binding.OpenTargetAccess.key,
+        [OpenSeamReasonKind.BindingObserverSelectionOpen],
       );
+    const openSeamHandles = [...new Set([
+      ...setupOpenSeamHandles,
+      ...(openSeam == null ? [] : [openSeam.handle]),
+    ])].sort();
     const publication = this.publisher.targetAccessPublication(
       local,
       request,
@@ -460,7 +469,7 @@ export class RuntimeControllerBindMaterializer {
       lookup,
       this.bindingOperationReachability(input, request.binding),
       source,
-      openSeam == null ? [] : [openSeam.handle],
+      openSeamHandles,
     );
     publication.appendTo(records, claims, targetAccesses);
     return publication.product;
@@ -496,6 +505,9 @@ export class RuntimeControllerBindMaterializer {
         records,
         openSeams,
         KernelVocabulary.Binding.OpenTargetOperation.key,
+        [request.binding instanceof LetBinding
+          ? OpenSeamReasonKind.BindingScopeOpen
+          : OpenSeamReasonKind.BindingTargetProductMissing],
       );
     const publication = this.publisher.targetOperationPublication(
       local,
@@ -544,6 +556,7 @@ export class RuntimeControllerBindMaterializer {
         records,
         openSeams,
         KernelVocabulary.Binding.OpenSourceOperation.key,
+        [OpenSeamReasonKind.BindingSourceAssignmentOpen],
       );
     const publication = this.publisher.sourceOperationPublication(
       local,

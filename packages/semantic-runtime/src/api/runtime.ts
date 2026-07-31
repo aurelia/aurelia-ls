@@ -73,6 +73,7 @@ import {
   readSemanticAppQueryCatalog,
   semanticAppQueryCatalogShape,
   semanticAppQueryCatalogRow,
+  unsupportedSemanticAppQuerySelectorFields,
 } from './app-query-catalog.js';
 import {
   answerSemanticRuntimeAppBuilderQuery,
@@ -86,7 +87,8 @@ import {
   type SemanticRuntimeAppBuilderQueryResult,
 } from './app-builder.js';
 import {
-  filterSemanticAppQueryContinuations,
+  projectSemanticAppQueryBatchContinuations,
+  projectSemanticAppQueryContinuations,
   withSemanticAppQueryContinuations,
 } from './app-query-continuations.js';
 import {
@@ -97,6 +99,8 @@ import {
   semanticAppQueryEpochKeys,
   semanticAppQueryKey,
   semanticAppQueryLocusKey,
+  semanticAppQueryPageScope,
+  semanticAppQueryRequestKey,
   semanticAppProjectEpochKey,
   semanticAppProjectInputEpochKey,
   semanticAppSourceEpochKey,
@@ -109,7 +113,7 @@ import {
   semanticRuntimeRoutedAppQueryEpochKeys,
   semanticRuntimeRoutedAppQueryKey,
   semanticRuntimeSummaryKey,
-  semanticRuntimeStaticAppQueryBatchKey,
+  semanticRuntimePreAppWorldQueryBatchKey,
   semanticRuntimeStaticAppQueryKey,
   semanticRuntimeWorkspaceEpochKey,
   semanticRuntimeWorkspaceLocusKey,
@@ -142,11 +146,9 @@ import {
 } from '../inquiry/answer.js';
 import {
   InquiryContinuationCost,
+  InquiryContinuationEpochDependency,
   InquiryContinuationIntent,
-  InquiryEvidenceCoverage,
-  InquiryEvidenceStaleness,
-  InquiryEvidenceState,
-  InquirySourcePrecision,
+  InquirySourceRequirement,
 } from '../inquiry/continuation-intent.js';
 import {
   queryClaimDisposalPolicy,
@@ -233,11 +235,12 @@ import {
   readRuntimeEffectRows,
 } from './observation-projections.js';
 import {
+  openSeamClusterKey,
+  openSeamProjectionFacts,
+  openSeamRows,
   openSeamSiteRows,
   openSeamSummaryRows,
-  readAppOpenSeams,
-  semanticOpenSeamAttemptForRow,
-  semanticOpenSeamBoundaryForRow,
+  type OpenSeamProjectionFact,
 } from './open-seam-projections.js';
 import {
   readResourceDefinitionRows,
@@ -269,6 +272,7 @@ import {
 import {
   compilerWorldLabel,
   describeAddress,
+  describeSourceAnchorHandle,
   semanticExactSourceReference,
   semanticSourceReferenceMatchesFilePath,
   type SemanticSourceReference,
@@ -279,7 +283,7 @@ import {
 } from '../kernel/source-address.js';
 import {
   SemanticAppQueryKind,
-  SemanticRuntimeAnswerOutcome,
+  SemanticRuntimeAnswerResult,
   SemanticRuntimeDetail,
   SEMANTIC_TYPE_SYSTEM_DEPENDENCY_CACHE_CLEAR_POLICIES,
   type OpenSemanticAppOptions,
@@ -345,6 +349,7 @@ import {
   type SemanticComputedObserverObservedDependenciesResult,
   type SemanticComputedObserverSourcesResult,
   type SemanticObservationIssuesResult,
+  type SemanticObservedDependencyLocus,
   type SemanticProxyObservableEscapesResult,
   type SemanticRuntimeEffectObservedDependenciesResult,
   type SemanticRuntimeEffectResult,
@@ -364,6 +369,7 @@ import {
   type SemanticRuntimeWatcherResult,
   type SemanticRuntimeOptions,
   type SemanticRuntimePageInput,
+  type SemanticRuntimePagePolicy,
   type SemanticRuntimeSourceCursorInput,
   type SemanticRuntimeSourceFileInput,
   type SemanticRuntimeSummary,
@@ -398,9 +404,12 @@ import {
 } from '../telemetry/kernel-density.js';
 import {
   answer,
+  bindSemanticRuntimePageInput,
+  COMPLETE_COLLECTION_ANSWER_OPTIONS,
   includeHandles,
-  outcomeForPagedRows,
+  NON_APPLICABLE_ANSWER_OPTIONS,
   pageRows,
+  semanticRuntimePagePolicyReuseKey,
 } from './answer-helpers.js';
 import { SemanticAppRouteQueries } from './app-route-queries.js';
 import { SemanticAppTemplateQueries } from './app-template-queries.js';
@@ -431,6 +440,7 @@ interface SemanticRuntimeQueryClaimInput {
   readonly inquiryProfile: SemanticRuntimeInquiryProfile;
   readonly queryKind: string;
   readonly queryKey: string;
+  readonly responsePolicyKey: string;
   readonly locusKey?: string;
   readonly epochKeys?: readonly string[];
   readonly materializationPolicy: SemanticQueryMaterializationPolicy;
@@ -447,6 +457,39 @@ interface SemanticRuntimeStaticCatalogRequest {
 type SemanticAppCurrentQueryAnswerer = <TValue>(
   materialize: () => SemanticRuntimeAnswer<TValue>,
 ) => SemanticRuntimeAnswer<TValue>;
+
+function answerUnsupportedSemanticAppQuerySelectors(
+  query: SemanticAppQuery,
+): SemanticRuntimeAnswer<unknown> | null {
+  const catalogRow = semanticAppQueryCatalogRow(query.kind as SemanticAppQueryKind);
+  const unsupportedFields = unsupportedSemanticAppQuerySelectorFields(query);
+  if (unsupportedFields.length === 0) {
+    return null;
+  }
+  const catalogRows = readSemanticAppQueryCatalogRows();
+  return answer(
+    SemanticRuntimeAnswerResult.Unsupported,
+    `Semantic app query '${query.kind}' does not support ${unsupportedFields.join(', ')}; the runtime will not silently drop query selectors.`,
+    {
+      unsupportedFields,
+      catalogRow,
+      acceptedQueryKinds: {
+        sourceFile: catalogRows.filter((row) => row.supportsSourceFile).map((row) => row.queryKind),
+        paging: catalogRows.filter((row) => row.supportsPaging).map((row) => row.queryKind),
+        detail: catalogRows.filter((row) => row.supportsDetail).map((row) => row.queryKind),
+        openSeamFilters: catalogRows.filter((row) => row.supportsOpenSeamFilters).map((row) => row.queryKind),
+        observedDependencyLocus: catalogRows
+          .filter((row) => row.observedDependencyLocusKinds.length > 0)
+          .map((row) => ({
+            queryKind: row.queryKind,
+            locusKinds: row.observedDependencyLocusKinds,
+          })),
+        diagnosticProjection: catalogRows.filter((row) => row.supportsDiagnosticProjection).map((row) => row.queryKind),
+      },
+    },
+    NON_APPLICABLE_ANSWER_OPTIONS,
+  );
+}
 
 /** Booted workspace facade. It owns source admission and app-world opening. */
 export class SemanticRuntime {
@@ -520,6 +563,7 @@ export class SemanticRuntime {
         inquiryProfile: normalizeSemanticRuntimeInquiryProfile(request.inquiryProfile),
         queryKind: 'runtime-summary',
         queryKey: semanticRuntimeSummaryKey(request),
+        responsePolicyKey: semanticRuntimePagePolicyReuseKey(request.pagePolicy),
         locusKey: semanticRuntimeWorkspaceLocusKey(this.workspace.workspaceKey),
         epochKeys: [
           semanticRuntimeWorkspaceEpochKey(this.workspace.workspaceKey),
@@ -562,7 +606,23 @@ export class SemanticRuntime {
         shapeKind: project.shapeKind,
         analysisKind: project.analysisKind,
       }));
-    const pagedProjects = pageRows(projects, summaryProjectPage(request.projectPage ?? undefined));
+    const summaryPage = summaryProjectPage(request.projectPage ?? undefined);
+    const summaryEpoch = capturedProjects
+      .map((project) => `${project.projectKey}:${project.inputGeneration.revision}`)
+      .sort()
+      .join('|');
+    const pagedProjects = pageRows(
+      projects,
+      bindSemanticRuntimePageInput(
+        summaryPage,
+        {
+          queryKey: semanticRuntimeSummaryKey({ projectPage: { size: undefined, cursor: null } }),
+          epochKey: `${this.workspace.workspaceKey}|${summaryEpoch}`,
+          orderingKey: 'runtime-summary-projects',
+        },
+        request.pagePolicy,
+      ),
+    );
     const projectShapeCounts = countProjectShapes(projects);
     const projectAnalysisCounts = countProjectAnalysisKinds(projects);
     const defaultAppProjectKey = appCandidates[0]?.projectKey ?? null;
@@ -586,11 +646,14 @@ export class SemanticRuntime {
       projects: pagedProjects.rows,
     };
     return answer(
-      SemanticRuntimeAnswerOutcome.Hit,
+      SemanticRuntimeAnswerResult.Answered,
       `Booted ${projects.length} semantic-runtime project frame(s) with ${value.appCandidates.length} app candidate(s); returned ${pagedProjects.page.returnedRows} project row(s).`,
       value,
-      pagedProjects.page,
-      semanticRuntimeSummaryContinuations(value),
+      {
+        ...COMPLETE_COLLECTION_ANSWER_OPTIONS,
+        page: pagedProjects.page,
+        continuations: semanticRuntimeSummaryContinuations(value),
+      },
     );
   }
 
@@ -655,9 +718,10 @@ export class SemanticRuntime {
       displayText: semanticRuntimeAnalysisCacheOverviewDisplayText(valueWithoutDisplayText),
     };
     return answer(
-      SemanticRuntimeAnswerOutcome.Hit,
+      SemanticRuntimeAnswerResult.Answered,
       value.summary,
       value,
+      COMPLETE_COLLECTION_ANSWER_OPTIONS,
     );
   }
 
@@ -698,7 +762,12 @@ export class SemanticRuntime {
         `TypeScript dependency source-file cache file(s) using policy '${typeSystemDependencyCacheClearPolicy}'; ` +
         `workspace kernel now retains ${workspaceKernel.totalRecords} record(s).`,
     });
-    return answer(SemanticRuntimeAnswerOutcome.Hit, value.summary, value);
+    return answer(
+      SemanticRuntimeAnswerResult.Answered,
+      value.summary,
+      value,
+      COMPLETE_COLLECTION_ANSWER_OPTIONS,
+    );
   }
 
   disposeQueryClaims(
@@ -747,7 +816,12 @@ export class SemanticRuntime {
         (strategy.sourceFilePath == null ? '' : ` and source '${strategy.sourceFilePath}'`) +
         (strategy.inquiryProfile == null ? '.' : ` in inquiry profile '${strategy.inquiryProfile}'.`),
     };
-    return answer(SemanticRuntimeAnswerOutcome.Hit, value.summary, value);
+    return answer(
+      SemanticRuntimeAnswerResult.Answered,
+      value.summary,
+      value,
+      COMPLETE_COLLECTION_ANSWER_OPTIONS,
+    );
   }
 
   appQueryCatalog(request: SemanticAppQueryCatalogRequest = {}): SemanticRuntimeAnswer<SemanticAppQueryCatalogResult> {
@@ -756,6 +830,7 @@ export class SemanticRuntime {
         inquiryProfile: normalizeSemanticRuntimeInquiryProfile(request.inquiryProfile),
         queryKind: 'app-query-catalog',
         queryKey: semanticRuntimeAppQueryCatalogKey(request),
+        responsePolicyKey: semanticRuntimePagePolicyReuseKey(null),
         materializationPolicy: 'static-catalog',
       },
       () => readSemanticAppQueryCatalog(request),
@@ -775,6 +850,7 @@ export class SemanticRuntime {
         inquiryProfile: normalizeSemanticRuntimeInquiryProfile(request.inquiryProfile),
         queryKind: 'app-builder-catalog',
         queryKey: semanticRuntimeAppBuilderQueryCatalogKey(request),
+        responsePolicyKey: semanticRuntimePagePolicyReuseKey(null),
         materializationPolicy: 'static-catalog',
         kernelBoundary: 'observe-only',
       },
@@ -797,6 +873,7 @@ export class SemanticRuntime {
         inquiryProfile: normalizeSemanticRuntimeInquiryProfile(request.inquiryProfile),
         queryKind: `app-builder:${request.kind}`,
         queryKey: semanticRuntimeAppBuilderQueryKey(request),
+        responsePolicyKey: semanticRuntimePagePolicyReuseKey(null),
         materializationPolicy: semanticRuntimeAppBuilderMaterializationPolicy(request),
         kernelBoundary: 'observe-only',
       },
@@ -813,19 +890,40 @@ export class SemanticRuntime {
     const inquiryProfile = normalizeSemanticRuntimeInquiryProfile(
       request.inquiryProfile ?? defaultInquiryProfileForRoutedAppQuery(request),
     );
+    const unsupportedSelectorAnswer = answerUnsupportedSemanticAppQuerySelectors(request);
+    if (unsupportedSelectorAnswer != null) {
+      return this.answerRuntimeQuery(
+        {
+          inquiryProfile,
+          queryKind: request.kind,
+          queryKey: `selector-preflight|${semanticAppQueryRequestKey(request)}`,
+          responsePolicyKey: semanticRuntimePagePolicyReuseKey(null),
+          locusKey: semanticRuntimeWorkspaceLocusKey(this.workspace.workspaceKey),
+          epochKeys: [semanticRuntimeWorkspaceEpochKey(this.workspace.workspaceKey)],
+          materializationPolicy: semanticAppQueryMaterializationPolicy(request, catalogRow.materializationPolicy),
+          kernelBoundary: 'observe-only',
+        },
+        () => unsupportedSelectorAnswer,
+      );
+    }
     if (catalogRow.runtimeBoundary === 'runtime-static') {
-      return filterSemanticAppQueryContinuations(
+      const scopedRequest = bindRuntimeStaticQueryPage(
+        this.workspace.workspaceKey,
         request,
-        this.answerRuntimeStaticAppQuery(request, catalogRow, inquiryProfile),
+        request.pagePolicy,
+      ) as SemanticRuntimeAppQueryRequest;
+      return projectSemanticAppQueryContinuations(
+        scopedRequest,
+        this.answerRuntimeStaticAppQuery(scopedRequest, catalogRow, inquiryProfile),
       );
     }
     if (isAppWorldFreeAppQuery(request)) {
-      return filterSemanticAppQueryContinuations(
+      return projectSemanticAppQueryContinuations(
         request,
         this.answerAppWorldFreeQuery(request, catalogRow, inquiryProfile),
       );
     }
-    return filterSemanticAppQueryContinuations(
+    return projectSemanticAppQueryContinuations(
       request,
       this.answerAppWorldQuery(request, catalogRow, inquiryProfile),
     );
@@ -836,19 +934,23 @@ export class SemanticRuntime {
     catalogRow: SemanticAppQueryCatalogRow,
     inquiryProfile: SemanticRuntimeInquiryProfile,
   ): SemanticRuntimeAnswer<unknown> {
+    const query = semanticAppQueryCatalogShape(request);
     return this.answerRuntimeQuery(
       {
         inquiryProfile,
-        queryKind: request.kind,
-        queryKey: semanticRuntimeStaticAppQueryKey(request),
+        queryKind: query.kind,
+        queryKey: semanticRuntimeStaticAppQueryKey(query),
+        responsePolicyKey: semanticRuntimePagePolicyReuseKey(
+          catalogRow.supportsPaging ? request.pagePolicy : null,
+        ),
         locusKey: semanticRuntimeWorkspaceLocusKey(this.workspace.workspaceKey),
         epochKeys: [semanticRuntimeWorkspaceEpochKey(this.workspace.workspaceKey)],
-        materializationPolicy: semanticAppQueryMaterializationPolicy(request, catalogRow.materializationPolicy),
+        materializationPolicy: semanticAppQueryMaterializationPolicy(query, catalogRow.materializationPolicy),
         kernelBoundary: 'observe-only',
       },
       () => withSemanticAppQueryContinuations(
-        request,
-        answerRuntimeStaticAppQuery(request),
+        query,
+        answerRuntimeStaticAppQuery(query),
         catalogRow,
       ),
     );
@@ -868,7 +970,12 @@ export class SemanticRuntime {
         inquiryProfile,
       },
     });
-    const canonicalRequest = canonicalizeRuntimeAppQueryRequest(plan.project, request);
+    const canonicalRequest = bindProjectQueryPage(
+      plan.project,
+      canonicalizeRuntimeAppQueryRequest(plan.project, request),
+      request.pagePolicy,
+    ) as SemanticRuntimeAppQueryRequest;
+    const query = semanticAppQueryCatalogShape(canonicalRequest);
     let evaluationAccess: StaticProjectEvaluationAccess<null> | null = null;
     const readEvaluation = (): StaticProjectEvaluationResult => {
       evaluationAccess ??= this.projectEvaluations.acquire(plan.project, aureliaAppProjectEvaluationProfile);
@@ -877,23 +984,26 @@ export class SemanticRuntime {
     const result = this.answerRuntimeQuery(
       {
         inquiryProfile,
-        queryKind: canonicalRequest.kind,
-        queryKey: semanticRuntimeAppWorldFreeQueryKey(plan.project.projectKey, canonicalRequest),
-        locusKey: semanticAppQueryLocusKey(plan.project.projectKey, canonicalRequest),
+        queryKind: query.kind,
+        queryKey: semanticRuntimeAppWorldFreeQueryKey(plan.project.projectKey, query),
+        responsePolicyKey: semanticRuntimePagePolicyReuseKey(
+          catalogRow.supportsPaging ? request.pagePolicy : null,
+        ),
+        locusKey: semanticAppQueryLocusKey(plan.project.projectKey, query),
         epochKeys: semanticRuntimeRoutedAppQueryEpochKeys(
           this.workspace.workspaceKey,
           plan.project.projectKey,
           plan.project.inputGeneration.revision,
-          canonicalRequest,
+          query,
         ),
-        materializationPolicy: semanticAppQueryMaterializationPolicy(canonicalRequest, catalogRow.materializationPolicy),
+        materializationPolicy: semanticAppQueryMaterializationPolicy(query, catalogRow.materializationPolicy),
         kernelBoundary: 'observe-only',
       },
       () => withSemanticAppQueryContinuations(
-        canonicalRequest,
+        query,
         answerAppWorldFreeQuery(
           plan.project,
-          canonicalRequest,
+          query,
           readEvaluation,
         ),
         catalogRow,
@@ -931,13 +1041,20 @@ export class SemanticRuntime {
       plan.authoringTemplateSourceFiles,
       plan.authoringTemplateLimit,
     );
-    const canonicalRequest = canonicalizeRuntimeAppQueryRequest(plan.project, request);
+    const canonicalRequest = bindProjectQueryPage(
+      plan.project,
+      canonicalizeRuntimeAppQueryRequest(plan.project, request),
+      request.pagePolicy,
+    ) as SemanticRuntimeAppQueryRequest;
     let appOpened = false;
     return this.answerRuntimeQuery(
       {
         inquiryProfile,
         queryKind: canonicalRequest.kind,
         queryKey: semanticRuntimeRoutedAppQueryKey(canonicalRequest, plan),
+        responsePolicyKey: semanticRuntimePagePolicyReuseKey(
+          catalogRow.supportsPaging ? request.pagePolicy : null,
+        ),
         locusKey: semanticAppQueryLocusKey(plan.project.projectKey, canonicalRequest),
         epochKeys: semanticRuntimeRoutedAppQueryEpochKeys(
           this.workspace.workspaceKey,
@@ -962,10 +1079,10 @@ export class SemanticRuntime {
       () => {
         const app = this.openPlannedApp(plan);
         appOpened = true;
-        return app.ask({
+        return app.answerRoutedQuery({
           ...canonicalRequest,
           inquiryProfile,
-        });
+        }, request.pagePolicy ?? null);
       },
     );
   }
@@ -973,12 +1090,24 @@ export class SemanticRuntime {
   async answerAppQueries(
     request: SemanticRuntimeAppQueryBatchRequest,
   ): Promise<SemanticRuntimeAnswer<SemanticRuntimeAppQueryBatchResult>> {
-    const queries = [...request.queries];
+    let queries = [...request.queries];
     const inquiryProfile = normalizeSemanticRuntimeInquiryProfile(
       request.inquiryProfile ?? defaultInquiryProfileForRoutedAppQueryBatch(queries),
     );
-    if (queries.every(isRuntimeStaticAppQuery)) {
-      return this.answerRuntimeStaticAppQueryBatch(queries, inquiryProfile);
+    const allRuntimeStatic = queries.every(isRuntimeStaticAppQuery);
+    const allUnsupported = queries.every((query) =>
+      answerUnsupportedSemanticAppQuerySelectors(query) != null
+    );
+    if (allRuntimeStatic || allUnsupported) {
+      if (allRuntimeStatic) {
+        queries = queries.map((query) =>
+          bindRuntimeStaticQueryPage(this.workspace.workspaceKey, query, request.pagePolicy)
+        );
+      }
+      return projectSemanticAppQueryBatchContinuations(
+        queries,
+        this.answerPreAppWorldQueryBatch(queries, inquiryProfile, request.pagePolicy ?? null),
+      );
     }
     const typeSystemDependencyCacheClearPolicy = normalizeTypeSystemDependencyCacheClearPolicy(
       typeSystemDependencyCacheClearPolicyForRoutedQuery(request, inquiryProfile),
@@ -995,9 +1124,23 @@ export class SemanticRuntime {
         inquiryProfile,
       },
     });
-    const canonicalQueries = queries.map((query) => canonicalizeAppQueryForProject(plan.project, query));
+    const canonicalQueries = queries.map((query) =>
+      bindProjectQueryPage(
+        plan.project,
+        canonicalizeAppQueryForProject(plan.project, query),
+        request.pagePolicy,
+      )
+    );
     if (canonicalQueries.every(isAppWorldFreeAppQuery)) {
-      return this.answerAppWorldFreeQueryBatch(plan, canonicalQueries, inquiryProfile);
+      return projectSemanticAppQueryBatchContinuations(
+        canonicalQueries,
+        this.answerAppWorldFreeQueryBatch(
+          plan,
+          canonicalQueries,
+          inquiryProfile,
+          request.pagePolicy ?? null,
+        ),
+      );
     }
     const cachedBefore = this.readCachedApp(
       plan.project.projectKey,
@@ -1007,25 +1150,30 @@ export class SemanticRuntime {
       plan.authoringTemplateSourceFiles,
       plan.authoringTemplateLimit,
     );
-    return this.answerAppWorldQueryBatch(
-      request,
-      plan,
+    return projectSemanticAppQueryBatchContinuations(
       canonicalQueries,
-      inquiryProfile,
-      cachedBefore,
-      typeSystemDependencyCacheClearPolicy,
+      this.answerAppWorldQueryBatch(
+        request,
+        plan,
+        canonicalQueries,
+        inquiryProfile,
+        cachedBefore,
+        typeSystemDependencyCacheClearPolicy,
+      ),
     );
   }
 
-  private answerRuntimeStaticAppQueryBatch(
+  private answerPreAppWorldQueryBatch(
     queries: readonly SemanticAppQuery[],
     inquiryProfile: SemanticRuntimeInquiryProfile,
+    pagePolicy: SemanticRuntimePagePolicy | null,
   ): SemanticRuntimeAnswer<SemanticRuntimeAppQueryBatchResult> {
     return this.answerRuntimeQuery(
       {
         inquiryProfile,
         queryKind: 'app-query-batch',
-        queryKey: semanticRuntimeStaticAppQueryBatchKey(queries),
+        queryKey: semanticRuntimePreAppWorldQueryBatchKey(queries),
+        responsePolicyKey: semanticRuntimePagePolicyReuseKey(pagePolicy),
         locusKey: semanticRuntimeWorkspaceLocusKey(this.workspace.workspaceKey),
         epochKeys: [semanticRuntimeWorkspaceEpochKey(this.workspace.workspaceKey)],
         materializationPolicy: semanticAppQueryBatchMaterializationPolicy(queries),
@@ -1033,7 +1181,7 @@ export class SemanticRuntime {
       },
       () => {
         const rows = queries.map((query, index) =>
-          this.runtimeStaticBatchRow(query, index, inquiryProfile)
+          this.preAppWorldBatchRow(query, index, inquiryProfile, pagePolicy)
         );
         const value: SemanticRuntimeAppQueryBatchResult = {
           projectKey: null,
@@ -1058,47 +1206,53 @@ export class SemanticRuntime {
           appQueryClaimProfiles: [],
         };
         return answer(
-          SemanticRuntimeAnswerOutcome.Hit,
-          `Answered ${rows.length} runtime-static app query claim(s) without selecting a project or opening an app epoch.`,
+          SemanticRuntimeAnswerResult.Answered,
+          `Answered ${rows.length} pre-app-world query claim(s) without selecting a project or opening an app epoch.`,
           value,
+          COMPLETE_COLLECTION_ANSWER_OPTIONS,
         );
       },
     );
   }
 
-  private runtimeStaticBatchRow(
+  private preAppWorldBatchRow(
     query: SemanticAppQuery,
     index: number,
     inquiryProfile: SemanticRuntimeInquiryProfile,
+    pagePolicy: SemanticRuntimePagePolicy | null,
   ): SemanticRuntimeAppQueryBatchResult['rows'][number] {
     const childQuery = {
       ...query,
       inquiryProfile: query.inquiryProfile ?? inquiryProfile,
     };
+    const unsupportedSelectorAnswer = answerUnsupportedSemanticAppQuerySelectors(childQuery);
+    const shapedChildQuery = semanticAppQueryCatalogShape(childQuery);
     const childInquiryProfile = normalizeSemanticRuntimeInquiryProfile(childQuery.inquiryProfile);
-    const catalogRow = semanticAppQueryCatalogRow(childQuery.kind as SemanticAppQueryKind);
-    const materializationPolicy = semanticAppQueryMaterializationPolicy(childQuery, catalogRow.materializationPolicy);
+    const catalogRow = semanticAppQueryCatalogRow(shapedChildQuery.kind as SemanticAppQueryKind);
+    const materializationPolicy = semanticAppQueryMaterializationPolicy(shapedChildQuery, catalogRow.materializationPolicy);
     return {
       index,
-      queryKind: childQuery.kind,
+      queryKind: shapedChildQuery.kind,
       materializationPolicy,
-      answer: filterSemanticAppQueryContinuations(
-        childQuery,
-        this.answerRuntimeQuery(
-          {
-            inquiryProfile: childInquiryProfile,
-            queryKind: childQuery.kind,
-            queryKey: semanticRuntimeStaticAppQueryKey(childQuery),
-            locusKey: semanticRuntimeWorkspaceLocusKey(this.workspace.workspaceKey),
-            epochKeys: [semanticRuntimeWorkspaceEpochKey(this.workspace.workspaceKey)],
-            materializationPolicy,
-            kernelBoundary: 'observe-only',
-          },
-          () => withSemanticAppQueryContinuations(
-            childQuery,
-            answerRuntimeStaticAppQuery(childQuery),
-            catalogRow,
+      answer: this.answerRuntimeQuery(
+        {
+          inquiryProfile: childInquiryProfile,
+          queryKind: shapedChildQuery.kind,
+          queryKey: unsupportedSelectorAnswer == null
+            ? semanticRuntimeStaticAppQueryKey(shapedChildQuery)
+            : `selector-preflight|${semanticAppQueryRequestKey(childQuery)}`,
+          responsePolicyKey: semanticRuntimePagePolicyReuseKey(
+            unsupportedSelectorAnswer == null && catalogRow.supportsPaging ? pagePolicy : null,
           ),
+          locusKey: semanticRuntimeWorkspaceLocusKey(this.workspace.workspaceKey),
+          epochKeys: [semanticRuntimeWorkspaceEpochKey(this.workspace.workspaceKey)],
+          materializationPolicy,
+          kernelBoundary: 'observe-only',
+        },
+        () => unsupportedSelectorAnswer ?? withSemanticAppQueryContinuations(
+          shapedChildQuery,
+          answerRuntimeStaticAppQuery(shapedChildQuery),
+          catalogRow,
         ),
       ),
     };
@@ -1108,6 +1262,7 @@ export class SemanticRuntime {
     plan: SemanticAppOpenPlan,
     canonicalQueries: readonly SemanticAppQuery[],
     inquiryProfile: SemanticRuntimeInquiryProfile,
+    pagePolicy: SemanticRuntimePagePolicy | null,
   ): SemanticRuntimeAnswer<SemanticRuntimeAppQueryBatchResult> {
     let evaluationAccess: StaticProjectEvaluationAccess<null> | null = null;
     const result = this.answerRuntimeQuery(
@@ -1115,6 +1270,7 @@ export class SemanticRuntime {
         inquiryProfile,
         queryKind: 'app-query-batch',
         queryKey: semanticRuntimeAppWorldFreeQueryBatchKey(plan.project.projectKey, canonicalQueries),
+        responsePolicyKey: semanticRuntimePagePolicyReuseKey(pagePolicy),
         locusKey: semanticRuntimeRoutedAppQueryBatchLocusKey(plan.project.projectKey, canonicalQueries),
         epochKeys: semanticRuntimeRoutedAppQueryBatchEpochKeys(
           this.workspace.workspaceKey,
@@ -1131,7 +1287,7 @@ export class SemanticRuntime {
           return evaluationAccess.readBaseline();
         };
         const rows = canonicalQueries.map((query, index) =>
-          this.appWorldFreeBatchRow(plan, query, index, inquiryProfile, readEvaluation)
+          this.appWorldFreeBatchRow(plan, query, index, inquiryProfile, readEvaluation, pagePolicy)
         );
         const value: SemanticRuntimeAppQueryBatchResult = {
           projectKey: plan.project.projectKey,
@@ -1156,9 +1312,10 @@ export class SemanticRuntime {
           appQueryClaimProfiles: [],
         };
         return answer(
-          SemanticRuntimeAnswerOutcome.Hit,
+          SemanticRuntimeAnswerResult.Answered,
           `Answered ${rows.length} app-world-free query claim(s) for '${plan.project.projectKey}' without opening an app epoch.`,
           value,
+          COMPLETE_COLLECTION_ANSWER_OPTIONS,
         );
       },
     );
@@ -1171,40 +1328,45 @@ export class SemanticRuntime {
     index: number,
     inquiryProfile: SemanticRuntimeInquiryProfile,
     readEvaluation: () => StaticProjectEvaluationResult,
+    pagePolicy: SemanticRuntimePagePolicy | null,
   ): SemanticRuntimeAppQueryBatchResult['rows'][number] {
     const childQuery = {
       ...query,
       inquiryProfile: query.inquiryProfile ?? inquiryProfile,
     };
+    const unsupportedSelectorAnswer = answerUnsupportedSemanticAppQuerySelectors(childQuery);
+    const shapedChildQuery = semanticAppQueryCatalogShape(childQuery);
     const childInquiryProfile = normalizeSemanticRuntimeInquiryProfile(childQuery.inquiryProfile);
-    const catalogRow = semanticAppQueryCatalogRow(childQuery.kind as SemanticAppQueryKind);
-    const materializationPolicy = semanticAppQueryMaterializationPolicy(childQuery, catalogRow.materializationPolicy);
+    const catalogRow = semanticAppQueryCatalogRow(shapedChildQuery.kind as SemanticAppQueryKind);
+    const materializationPolicy = semanticAppQueryMaterializationPolicy(shapedChildQuery, catalogRow.materializationPolicy);
     return {
       index,
-      queryKind: childQuery.kind,
+      queryKind: shapedChildQuery.kind,
       materializationPolicy,
-      answer: filterSemanticAppQueryContinuations(
-        childQuery,
-        this.answerRuntimeQuery(
-          {
-            inquiryProfile: childInquiryProfile,
-            queryKind: childQuery.kind,
-            queryKey: semanticRuntimeAppWorldFreeQueryKey(plan.project.projectKey, childQuery),
-            locusKey: semanticAppQueryLocusKey(plan.project.projectKey, childQuery),
-            epochKeys: semanticRuntimeRoutedAppQueryEpochKeys(
-              this.workspace.workspaceKey,
-              plan.project.projectKey,
-              plan.project.inputGeneration.revision,
-              childQuery,
-            ),
-            materializationPolicy,
-            kernelBoundary: 'observe-only',
-          },
-          () => withSemanticAppQueryContinuations(
-            childQuery,
-            answerAppWorldFreeQuery(plan.project, childQuery, readEvaluation),
-            catalogRow,
+      answer: this.answerRuntimeQuery(
+        {
+          inquiryProfile: childInquiryProfile,
+          queryKind: shapedChildQuery.kind,
+          queryKey: unsupportedSelectorAnswer == null
+            ? semanticRuntimeAppWorldFreeQueryKey(plan.project.projectKey, shapedChildQuery)
+            : `selector-preflight|${semanticAppQueryRequestKey(childQuery)}`,
+          responsePolicyKey: semanticRuntimePagePolicyReuseKey(
+            unsupportedSelectorAnswer == null && catalogRow.supportsPaging ? pagePolicy : null,
           ),
+          locusKey: semanticAppQueryLocusKey(plan.project.projectKey, shapedChildQuery),
+          epochKeys: semanticRuntimeRoutedAppQueryEpochKeys(
+            this.workspace.workspaceKey,
+            plan.project.projectKey,
+            plan.project.inputGeneration.revision,
+            shapedChildQuery,
+          ),
+          materializationPolicy,
+          kernelBoundary: 'observe-only',
+        },
+        () => unsupportedSelectorAnswer ?? withSemanticAppQueryContinuations(
+          shapedChildQuery,
+          answerAppWorldFreeQuery(plan.project, shapedChildQuery, readEvaluation),
+          catalogRow,
         ),
       ),
     };
@@ -1225,6 +1387,7 @@ export class SemanticRuntime {
         inquiryProfile,
         queryKind: 'app-query-batch',
         queryKey: semanticRuntimeRoutedAppQueryBatchKey({ ...request, queries: canonicalQueries }, plan),
+        responsePolicyKey: semanticRuntimePagePolicyReuseKey(request.pagePolicy),
         locusKey: semanticRuntimeRoutedAppQueryBatchLocusKey(plan.project.projectKey, canonicalQueries),
         epochKeys: semanticRuntimeRoutedAppQueryBatchEpochKeys(
           this.workspace.workspaceKey,
@@ -1252,7 +1415,7 @@ export class SemanticRuntime {
         const app = this.openPlannedApp(plan);
         appOpened = true;
         const rows = canonicalQueries.map((query, index) =>
-          this.appWorldBatchRow(app, query, index, inquiryProfile)
+          this.appWorldBatchRow(app, query, index, inquiryProfile, request.pagePolicy ?? null)
         );
         const includeAppProfile = request.includeAppProfile === true;
         const includeAppQueryClaimProfiles = request.includeAppQueryClaimProfiles === true;
@@ -1283,9 +1446,10 @@ export class SemanticRuntime {
         };
         return withAnswerAnalysisDepth(
           answer(
-            SemanticRuntimeAnswerOutcome.Hit,
+            SemanticRuntimeAnswerResult.Answered,
             `Answered ${rows.length} routed app query claim(s) for '${plan.project.projectKey}' at analysisDepth='${plan.analysisDepth}'.`,
             value,
+            COMPLETE_COLLECTION_ANSWER_OPTIONS,
           ),
           plan.analysisDepth,
         );
@@ -1298,6 +1462,7 @@ export class SemanticRuntime {
     query: SemanticAppQuery,
     index: number,
     inquiryProfile: SemanticRuntimeInquiryProfile,
+    pagePolicy: SemanticRuntimePagePolicy | null,
   ): SemanticRuntimeAppQueryBatchResult['rows'][number] {
     const childQuery = {
       ...query,
@@ -1308,7 +1473,7 @@ export class SemanticRuntime {
       index,
       queryKind: childQuery.kind,
       materializationPolicy: semanticAppQueryMaterializationPolicy(childQuery, catalogRow.materializationPolicy),
-      answer: app.ask(childQuery),
+      answer: app.answerRoutedQuery(childQuery, pagePolicy),
     };
   }
 
@@ -1338,6 +1503,7 @@ export class SemanticRuntime {
     return queryClaims.answer({
       queryKind: input.queryKind,
       queryKey: input.queryKey,
+      responsePolicyKey: input.responsePolicyKey,
       locusKey: input.locusKey ?? semanticRuntimeWorkspaceLocusKey(this.workspace.workspaceKey),
       epochKeys: input.epochKeys ?? [semanticRuntimeWorkspaceEpochKey(this.workspace.workspaceKey)],
       materializationPolicy: input.materializationPolicy,
@@ -1993,10 +2159,12 @@ function semanticRuntimeSummaryAppContinuation(
     intents,
     cost: InquiryContinuationCost.AppWorld,
     evidence: {
-      evidenceState: blockers.length === 0 ? InquiryEvidenceState.Inferred : InquiryEvidenceState.Open,
-      coverage: InquiryEvidenceCoverage.PartialKnownGaps,
-      sourcePrecision: InquirySourcePrecision.NotRequired,
-      staleness: InquiryEvidenceStaleness.ProjectEpochSensitive,
+      sourceRequirement: InquirySourceRequirement.NotRequired,
+      sourceFacts: [],
+      epochDependencies: [
+        InquiryContinuationEpochDependency.ProjectInput,
+        InquiryContinuationEpochDependency.AppWorld,
+      ],
     },
     blockers,
   };
@@ -2146,8 +2314,9 @@ function openSeamsDisplayText(
     lines.push('Pressure: no open semantic seams in this app emission.');
   } else {
     lines.push(`Seam kinds: ${runtimeCountMapDisplay(runtimeCountValues(rows, (row) => row.seamKindKey))}.`);
-    lines.push(`Attempt kinds: ${runtimeCountMapDisplay(runtimeCountValues(rows, (row) => row.attempt.kind))}.`);
-    lines.push(`Boundary kinds: ${runtimeCountMapDisplay(runtimeCountValues(rows, (row) => row.boundary.kind))}.`);
+    lines.push(`Boundary kinds: ${runtimeCountMapDisplay(runtimeCountValuesFromMany(rows, (row) => row.boundaryKinds))}.`);
+    lines.push(`Pressure kinds: ${runtimeCountMapDisplay(runtimeCountValues(rows, (row) => row.pressureKind))}.`);
+    lines.push(`Product impact: ${rows.reduce((sum, row) => sum + row.affectedMaterializationCount, 0)} materialization reference(s), ${rows.reduce((sum, row) => sum + row.affectedProductCount, 0)} product reference(s).`);
     lines.push(`Source roles: ${runtimeCountMapDisplay(runtimeCountValues(rows, (row) => row.sourceRole ?? 'unknown'))}.`);
     lines.push(`Reason kinds: ${runtimeListDisplay(runtimeUniqueValuesFromMany(rows, (row) => row.reasonKinds, RUNTIME_DISPLAY_LIST_LIMIT))}.`);
     lines.push(`Samples: ${semanticOpenSeamRowSampleDisplays(rows).join(' | ')}.`);
@@ -2162,7 +2331,7 @@ function semanticOpenSeamRowSampleDisplays(
   const samples: string[] = [];
   const seen = new Set<string>();
   for (const row of rows) {
-    const display = `${row.seamKindKey} (${row.attempt.kind}/${row.boundary.kind}) at ${semanticOpenSeamRowSourceDisplay(row)}: ${trimDisplayLine(row.summary)}`;
+    const display = `${row.seamKindKey} (${runtimeListDisplay(row.boundaryKinds)}; ${row.pressureKind}; materializations=${row.affectedMaterializationCount}, products=${row.affectedProductCount}) at ${semanticOpenSeamRowSourceDisplay(row)}: ${trimDisplayLine(row.summary)}`;
     const key = `${row.seamKindKey}\0${semanticOpenSeamRowSourceDisplay(row)}\0${row.summary}`;
     if (seen.has(key)) {
       continue;
@@ -2187,11 +2356,11 @@ function openSeamSummaryDisplayText(
   if (totalOpenSeamRows === 0) {
     lines.push('Pressure: no open semantic seams in this app emission.');
   } else {
-    lines.push(`Attempt kinds: ${runtimeCountMapDisplay(runtimeCountValues(rows, (row) => row.attempt.kind))}.`);
-    lines.push(`Boundary kinds: ${runtimeCountMapDisplay(runtimeCountValues(rows, (row) => row.boundary.kind))}.`);
+    lines.push(`Boundary kinds: ${runtimeCountMapDisplay(runtimeCountKeyRows(rows.flatMap((row) => row.boundaryCounts)))}.`);
+    lines.push(`Pressure kinds: ${runtimeCountMapDisplay(runtimeCountKeyRows(rows.flatMap((row) => row.pressureCounts)))}.`);
     lines.push(`Source roles: ${runtimeCountMapDisplay(runtimeCountSemanticRoleRows(rows.flatMap((row) => row.sourceRoles)))}.`);
     lines.push(`Clusters: ${rows.slice(0, RUNTIME_DISPLAY_SAMPLE_LIMIT).map((row) =>
-      `${row.seamKindKey} raw=${row.count} sites=${row.uniqueSiteCount} (${row.attempt.kind}/${row.boundary.kind}; ${runtimeListDisplay(row.reasonKinds)}) at ${runtimeListDisplay(row.sampleSourceSites.map(semanticOpenSeamSummarySampleSourceDisplay))}: ${trimDisplayLine(row.sampleSummary)}`
+      `${row.seamKindKey} raw=${row.count} sites=${row.uniqueSiteCount} materializations=${row.affectedMaterializationCount} products=${row.affectedProductCount} (${runtimeListDisplay(row.boundaryKinds)}; ${runtimeListDisplay(row.pressureKinds)}; ${runtimeListDisplay(row.reasonKinds)}) at ${runtimeListDisplay(row.sampleSourceSites.map(semanticOpenSeamSummarySampleSourceDisplay))}: ${trimDisplayLine(row.sampleSummary)}`
     ).join(' | ')}.`);
     lines.push(`Source-file coverage: ${rows.reduce((sum, row) => sum + row.sourceFileCount, 0)} cluster source-file reference(s).`);
     lines.push('Next: page raw open-seams with the selected sourceFile/sourceRole/openSeamKindKey/openSeamReasonKind filter to inspect exact occurrences.');
@@ -2210,15 +2379,15 @@ function openSeamSitesDisplayText(
   if (totalOpenSeamRows === 0) {
     lines.push('Pressure: no open semantic seams in this app emission.');
   } else {
-    lines.push(`Seam kinds: ${runtimeCountMapDisplay(runtimeCountValues(rows, (row) => row.seamKindKey))}.`);
-    lines.push(`Attempt kinds: ${runtimeCountMapDisplay(runtimeCountValuesFromMany(rows, (row) => row.attemptKinds))}.`);
-    lines.push(`Boundary kinds: ${runtimeCountMapDisplay(runtimeCountValuesFromMany(rows, (row) => row.boundaryKinds))}.`);
+    lines.push(`Seam kinds: ${runtimeCountMapDisplay(runtimeCountValuesFromMany(rows, (row) => row.seamKindKeys))}.`);
+    lines.push(`Boundary kinds: ${runtimeCountMapDisplay(runtimeCountKeyRows(rows.flatMap((row) => row.boundaryCounts)))}.`);
+    lines.push(`Pressure kinds: ${runtimeCountMapDisplay(runtimeCountKeyRows(rows.flatMap((row) => row.pressureCounts)))}.`);
     lines.push(`Source roles: ${runtimeCountMapDisplay(runtimeCountValues(rows, (row) => row.sourceRole ?? 'unknown'))}.`);
     lines.push(`Application roles: ${runtimeCountMapDisplay(runtimeCountValuesFromMany(rows, (row) => row.applicationFileRoles))}.`);
     lines.push(`Static evaluation origins: ${runtimeCountMapDisplay(runtimeCountValuesFromMany(rows, openSeamStaticEvaluationOriginKinds))}.`);
-    lines.push(`Reason kinds: ${runtimeCountMapDisplay(runtimeCountValuesFromMany(rows, (row) => row.reasonKinds))}.`);
+    lines.push(`Reason kinds: ${runtimeCountMapDisplay(runtimeCountKeyRows(rows.flatMap((row) => row.reasonCounts)))}.`);
     lines.push(`Sites: ${rows.slice(0, RUNTIME_DISPLAY_SAMPLE_LIMIT).map((row) =>
-      `${row.seamKindKey} raw=${row.rawRowCount} variants=${row.variantCount} (${runtimeListDisplay(row.attemptKinds)}/${runtimeListDisplay(row.boundaryKinds)}; ${runtimeListDisplay(row.reasonKinds)}; sourceRole=${row.sourceRole ?? 'unknown'}; appRoles=${runtimeListDisplay(row.applicationFileRoles)}; evalOrigins=${runtimeListDisplay(openSeamStaticEvaluationOriginKinds(row))}) at ${semanticOpenSeamSiteSourceDisplay(row)}: ${trimDisplayLine(row.sampleSummary)}`
+      `${runtimeListDisplay(row.seamKindKeys)} raw=${row.rawRowCount} variants=${row.variantCount} materializations=${row.affectedMaterializationCount} products=${row.affectedProductCount} (${runtimeListDisplay(row.boundaryKinds)}; ${runtimeListDisplay(row.pressureKinds)}; ${runtimeListDisplay(row.reasonKinds)}; sourceRole=${row.sourceRole ?? 'unknown'}; appRoles=${runtimeListDisplay(row.applicationFileRoles)}; evalOrigins=${runtimeListDisplay(openSeamStaticEvaluationOriginKinds(row))}) at ${semanticOpenSeamSiteSourceDisplay(row)}: ${trimDisplayLine(row.sampleSummary)}`
     ).join(' | ')}.`);
     lines.push('Next: page raw open-seams with the selected sourceFile/sourceRole/openSeamKindKey/openSeamReasonKind when one site needs derivation-level inspection.');
   }
@@ -2236,24 +2405,27 @@ interface SemanticOpenSeamQueryFilter {
   readonly openSeamKindKey?: string | null;
   readonly openSeamReasonKind?: string | null;
   readonly sourceRole?: string | null;
+  readonly openSeamClusterKey?: string | null;
+  readonly openSeamSiteKey?: string | null;
 }
 
 function semanticOpenSeamRowMatchesFilter(
-  row: SemanticOpenSeamRow,
+  row: OpenSeamProjectionFact,
   filter: SemanticOpenSeamQueryFilter,
 ): boolean {
   return (filter.openSeamKindKey == null || row.seamKindKey === filter.openSeamKindKey)
     && (filter.openSeamReasonKind == null || row.reasonKinds.some((reason) => reason === filter.openSeamReasonKind))
     && (filter.sourceRole == null || row.sourceRole === filter.sourceRole)
+    && (filter.openSeamClusterKey == null || openSeamClusterKey(row) === filter.openSeamClusterKey)
+    && (filter.openSeamSiteKey == null || row.siteKey === filter.openSeamSiteKey)
     && (filter.sourceFile?.filePath == null || semanticOpenSeamRowMatchesSourceFile(row, filter.sourceFile.filePath));
 }
 
 function semanticOpenSeamRowMatchesSourceFile(
-  row: SemanticOpenSeamRow,
+  row: OpenSeamProjectionFact,
   filePath: string,
 ): boolean {
-  return semanticSourceReferenceMatchesFilePath(row.source, filePath)
-    || row.reasonSources.some((source) => semanticSourceReferenceMatchesFilePath(source.source, filePath));
+  return semanticSourceReferenceMatchesFilePath(row.source, filePath);
 }
 
 function sourceRoleForAppSourceReference(
@@ -2301,6 +2473,16 @@ function runtimeCountSemanticRoleRows(
   return counts;
 }
 
+function runtimeCountKeyRows(
+  rows: readonly { readonly key: string; readonly count: number }[],
+): ReadonlyMap<string, number> {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    counts.set(row.key, (counts.get(row.key) ?? 0) + row.count);
+  }
+  return counts;
+}
+
 function semanticOpenSeamFilterDisplayText(
   filter: SemanticOpenSeamQueryFilter,
 ): string {
@@ -2308,6 +2490,8 @@ function semanticOpenSeamFilterDisplayText(
     filter.openSeamKindKey == null ? null : `kind=${filter.openSeamKindKey}`,
     filter.openSeamReasonKind == null ? null : `reason=${filter.openSeamReasonKind}`,
     filter.sourceRole == null ? null : `sourceRole=${filter.sourceRole}`,
+    filter.openSeamClusterKey == null ? null : `cluster=${filter.openSeamClusterKey}`,
+    filter.openSeamSiteKey == null ? null : `site=${filter.openSeamSiteKey}`,
     filter.sourceFile?.filePath == null ? null : `sourceFile=${filter.sourceFile.filePath}`,
   ].filter((part): part is string => part != null);
   return parts.length === 0 ? '' : ` for ${parts.join(', ')}`;
@@ -2517,6 +2701,7 @@ export class SemanticApp {
   private readonly defaultQueryClaims: QueryClaimGraph;
   private readonly queryClaimsByProfile = new Map<SemanticRuntimeInquiryProfile, QueryClaimGraph>();
   private readonly activeInquiryProfileStack: SemanticRuntimeInquiryProfile[] = [];
+  private readonly activePagePolicyStack: (SemanticRuntimePagePolicy | null)[] = [];
   private applicationFileRolesByPathCache: ReadonlyMap<string, readonly ApplicationFileRole[]> | null = null;
   private staticEvaluationOriginsByPathCache: ReadonlyMap<string, SemanticOpenSeamSiteRow['staticEvaluationOrigins']> | null = null;
   private readonly currentTemplateQueries: SemanticAppTemplateQueries;
@@ -2639,17 +2824,62 @@ export class SemanticApp {
     };
   }
 
-  ask(query: SemanticAppQuery): SemanticRuntimeAnswer<unknown> {
+  ask(
+    query: SemanticAppQuery,
+    pagePolicy: SemanticRuntimePagePolicy | null = this.activePagePolicyStack[this.activePagePolicyStack.length - 1] ?? null,
+  ): SemanticRuntimeAnswer<unknown> {
+    return projectSemanticAppQueryContinuations(
+      query,
+      this.answerRoutedQuery(query, pagePolicy),
+    );
+  }
+
+  /**
+   * Answer an app query with neutral continuations so an enclosing reusable runtime or batch claim
+   * can apply response-envelope policy only after reading its own claim.
+   */
+  answerRoutedQuery(
+    query: SemanticAppQuery,
+    pagePolicy: SemanticRuntimePagePolicy | null = this.activePagePolicyStack[this.activePagePolicyStack.length - 1] ?? null,
+  ): SemanticRuntimeAnswer<unknown> {
     this.project.inputGeneration.requireCurrent();
-    const unsupportedFilterAnswer = this.answerUnsupportedQueryFilters(query);
+    const unsupportedFilterAnswer = answerUnsupportedSemanticAppQuerySelectors(query);
     if (unsupportedFilterAnswer != null) {
-      return unsupportedFilterAnswer;
+      const requestKey = semanticAppQueryRequestKey(query);
+      return this.answerQuery(
+        semanticAppQueryCatalogShape(query),
+        `selector-preflight|${requestKey}`,
+        () => unsupportedFilterAnswer,
+        pagePolicy,
+      );
     }
-    const continuationQuery = query;
     query = semanticAppQueryCatalogShape(query);
+    if (semanticAppQueryCatalogRow(query.kind).supportsPaging) {
+      query = {
+        ...query,
+        page: bindSemanticRuntimePageInput(
+          query.page,
+          semanticAppQueryPageScope(
+            this.project.projectKey,
+            this.appGeneration.key,
+            query,
+          ),
+          pagePolicy,
+        ),
+      };
+    }
     const answerCurrentQuery = <TValue>(
       materialize: () => SemanticRuntimeAnswer<TValue>,
-    ): SemanticRuntimeAnswer<TValue> => this.answerQuery(query, materialize, continuationQuery);
+    ): SemanticRuntimeAnswer<TValue> => this.answerQuery(
+      query,
+      semanticAppQueryKey(query),
+      () => withSemanticAppQueryContinuations(
+        query,
+        materialize(),
+        semanticAppQueryCatalogRow(query.kind),
+      ),
+      pagePolicy,
+    );
     if (semanticRouteQueryDescriptorFor(query.kind) != null) {
       return answerCurrentQuery(() => {
         const routeAnswer = this.routeQueries.answer(query.kind, query.page, query.detail);
@@ -2660,55 +2890,6 @@ export class SemanticApp {
       });
     }
     return this.answerCatalogQuery(query, answerCurrentQuery);
-  }
-
-  private answerUnsupportedQueryFilters(
-    query: SemanticAppQuery,
-  ): SemanticRuntimeAnswer<unknown> | null {
-    const catalogRow = semanticAppQueryCatalogRow(query.kind as SemanticAppQueryKind);
-    const unsupportedFields: string[] = [];
-    if (query.sourceFile != null && !catalogRow.supportsSourceFile) {
-      unsupportedFields.push('sourceFile');
-    }
-    if (query.cursor != null && !catalogRow.requiresCursor && !catalogRow.supportsSourceFile) {
-      unsupportedFields.push('cursor');
-    }
-    if (query.openSeamKindKey != null && !catalogRow.supportsOpenSeamFilters) {
-      unsupportedFields.push('openSeamKindKey');
-    }
-    if (query.openSeamReasonKind != null && !catalogRow.supportsOpenSeamFilters) {
-      unsupportedFields.push('openSeamReasonKind');
-    }
-    if (query.sourceRole != null && !catalogRow.supportsOpenSeamFilters) {
-      unsupportedFields.push('sourceRole');
-    }
-    if (unsupportedFields.length === 0) {
-      return null;
-    }
-    const catalogRows = readSemanticAppQueryCatalogRows();
-    const sourceFileQueryKinds = catalogRows
-      .filter((row) => row.supportsSourceFile)
-      .map((row) => row.queryKind);
-    const openSeamFilterQueryKinds = catalogRows
-      .filter((row) => row.supportsOpenSeamFilters)
-      .map((row) => row.queryKind);
-    const diagnosticProjectionQueryKinds = catalogRows
-      .filter((row) => row.supportsDiagnosticProjection)
-      .map((row) => row.queryKind);
-    return answer(
-      SemanticRuntimeAnswerOutcome.Unsupported,
-      `Semantic app query '${query.kind}' does not support ${unsupportedFields.join(', ')}; the runtime will not silently drop query selectors.`,
-      {
-        query,
-        unsupportedFields,
-        catalogRow,
-        acceptedQueryKinds: {
-          sourceFile: sourceFileQueryKinds,
-          openSeamFilters: openSeamFilterQueryKinds,
-          diagnosticProjection: diagnosticProjectionQueryKinds,
-        },
-      },
-    );
   }
 
   private answerCatalogQuery(
@@ -2764,9 +2945,9 @@ export class SemanticApp {
       case SemanticAppQueryKind.OpenSeams:
         return answerCurrentQuery(() => this.openSeams(query.page, query.detail, query));
       case SemanticAppQueryKind.OpenSeamSummary:
-        return answerCurrentQuery(() => this.openSeamSummary(query.page, query.detail, query));
+        return answerCurrentQuery(() => this.openSeamSummary(query.page, query));
       case SemanticAppQueryKind.OpenSeamSites:
-        return answerCurrentQuery(() => this.openSeamSites(query.page, query.detail, query));
+        return answerCurrentQuery(() => this.openSeamSites(query.page, query));
       case SemanticAppQueryKind.AppDiagnostics:
         return answerCurrentQuery(() => this.appDiagnostics(query));
       case SemanticAppQueryKind.AppDiagnosticSummary:
@@ -2813,11 +2994,19 @@ export class SemanticApp {
       case SemanticAppQueryKind.ComputedObserverSources:
         return answerCurrentQuery(() => this.computedObserverSources(query.page, query.detail));
       case SemanticAppQueryKind.ComputedObserverObservedDependencies:
-        return answerCurrentQuery(() => this.computedObserverObservedDependencies(query.page, query.detail));
+        return answerCurrentQuery(() => this.computedObserverObservedDependencies(
+          query.page,
+          query.detail,
+          query.observedDependencyLocus,
+        ));
       case SemanticAppQueryKind.RuntimeEffects:
         return answerCurrentQuery(() => this.runtimeEffects(query.page, query.detail));
       case SemanticAppQueryKind.RuntimeEffectObservedDependencies:
-        return answerCurrentQuery(() => this.runtimeEffectObservedDependencies(query.page, query.detail));
+        return answerCurrentQuery(() => this.runtimeEffectObservedDependencies(
+          query.page,
+          query.detail,
+          query.observedDependencyLocus,
+        ));
       case SemanticAppQueryKind.ProxyObservableEscapes:
         return answerCurrentQuery(() => this.proxyObservableEscapes(query.page, query.detail));
       case SemanticAppQueryKind.RuntimeExpressionAccessUses:
@@ -2875,7 +3064,11 @@ export class SemanticApp {
       case SemanticAppQueryKind.RuntimeWatchers:
         return answerCurrentQuery(() => this.runtimeWatchers(query.page, query.detail));
       case SemanticAppQueryKind.RuntimeWatcherObservedDependencies:
-        return answerCurrentQuery(() => this.runtimeWatcherObservedDependencies(query.page, query.detail));
+        return answerCurrentQuery(() => this.runtimeWatcherObservedDependencies(
+          query.page,
+          query.detail,
+          query.observedDependencyLocus,
+        ));
       case SemanticAppQueryKind.RuntimeCompositions:
         return answerCurrentQuery(() => this.runtimeCompositions(query.page, query.detail));
       case SemanticAppQueryKind.TemplateContentProjections:
@@ -2913,9 +3106,16 @@ export class SemanticApp {
       case SemanticAppQueryKind.ControlUseInventory:
         return answerCurrentQuery(() => this.controlUseInventory(query.page, query.detail));
       case SemanticAppQueryKind.BindingObservedDependencySummary:
-        return answerCurrentQuery(() => this.bindingObservedDependencySummary(query.page));
+        return answerCurrentQuery(() => this.bindingObservedDependencySummary(
+          query.page,
+          query.observedDependencyLocus,
+        ));
       case SemanticAppQueryKind.BindingObservedDependencies:
-        return answerCurrentQuery(() => this.bindingObservedDependencies(query.page, query.detail));
+        return answerCurrentQuery(() => this.bindingObservedDependencies(
+          query.page,
+          query.detail,
+          query.observedDependencyLocus,
+        ));
       default:
         return this.answerUnsupportedCatalogQuery(query, answerCurrentQuery);
     }
@@ -2926,55 +3126,55 @@ export class SemanticApp {
     answerCurrentQuery: SemanticAppCurrentQueryAnswerer,
   ): SemanticRuntimeAnswer<unknown> {
     return answerCurrentQuery(() => answer(
-      SemanticRuntimeAnswerOutcome.Unsupported,
+      SemanticRuntimeAnswerResult.Unsupported,
       `Semantic app query '${query.kind}' is not supported by the operational API surface.`,
       { query },
+      NON_APPLICABLE_ANSWER_OPTIONS,
     ));
   }
 
   private answerQuery<TValue>(
     query: SemanticAppQuery,
+    queryKey: string,
     materialize: () => SemanticRuntimeAnswer<TValue>,
-    continuationQuery: SemanticAppQuery = query,
+    pagePolicy: SemanticRuntimePagePolicy | null = null,
   ): SemanticRuntimeAnswer<TValue> {
     const catalogRow = semanticAppQueryCatalogRow(query.kind as SemanticAppQueryKind);
     const inquiryProfile = this.inquiryProfileForQuery(query);
     const queryClaims = this.queryClaimsForProfile(inquiryProfile);
     const retainNavigableHandles = query.detail === SemanticRuntimeDetail.Handles;
     return withAnswerAnalysisDepth(
-      filterSemanticAppQueryContinuations(
-        continuationQuery,
-        queryClaims.answer({
-          queryKind: query.kind,
-          queryKey: semanticAppQueryKey(query),
-          locusKey: semanticAppQueryLocusKey(this.project.projectKey, query),
-          epochKeys: semanticAppQueryEpochKeys(
-            this.project.projectKey,
-            this.project.inputGeneration.revision,
-            query,
-          ),
-          materializationPolicy: semanticAppQueryMaterializationPolicy(query, catalogRow.materializationPolicy),
-        }, () => {
-          this.activeInquiryProfileStack.push(inquiryProfile);
-          try {
-            return withSemanticAppQueryContinuations(
-              continuationQuery,
-              materialize(),
-              catalogRow,
-            );
-          } finally {
-            this.activeInquiryProfileStack.pop();
-          }
-        }, {
-          readKernelMarker: () => this.runtime.workspace.store.markLifetime(),
-          readKernelSnapshot: () => this.runtime.workspace.store.readTelemetrySnapshot(),
-          // Handle-detail answers promise exact in-process follow-up navigation, so any lazily projected targets must
-          // survive with the app epoch instead of becoming dead handles before the caller receives the answer.
-          disposeKernelSince: retainNavigableHandles
-            ? undefined
-            : (marker) => this.runtime.workspace.store.disposeSince(marker),
-        }),
-      ),
+      queryClaims.answer({
+        queryKind: query.kind,
+        queryKey,
+        responsePolicyKey: semanticRuntimePagePolicyReuseKey(
+          catalogRow.supportsPaging ? pagePolicy : null,
+        ),
+        locusKey: semanticAppQueryLocusKey(this.project.projectKey, query),
+        epochKeys: semanticAppQueryEpochKeys(
+          this.project.projectKey,
+          this.project.inputGeneration.revision,
+          query,
+        ),
+        materializationPolicy: semanticAppQueryMaterializationPolicy(query, catalogRow.materializationPolicy),
+      }, () => {
+        this.activeInquiryProfileStack.push(inquiryProfile);
+        this.activePagePolicyStack.push(pagePolicy);
+        try {
+          return materialize();
+        } finally {
+          this.activePagePolicyStack.pop();
+          this.activeInquiryProfileStack.pop();
+        }
+      }, {
+        readKernelMarker: () => this.runtime.workspace.store.markLifetime(),
+        readKernelSnapshot: () => this.runtime.workspace.store.readTelemetrySnapshot(),
+        // Handle-detail answers promise exact in-process follow-up navigation, so any lazily projected targets must
+        // survive with the app epoch instead of becoming dead handles before the caller receives the answer.
+        disposeKernelSince: retainNavigableHandles
+          ? undefined
+          : (marker) => this.runtime.workspace.store.disposeSince(marker),
+      }),
       this.emission.analysisDepth,
     );
   }
@@ -3095,9 +3295,10 @@ export class SemanticApp {
     }
     const value = readSemanticAppSummary(this.project, this.emission, this.runtime.workspace.store);
     return answer(
-      SemanticRuntimeAnswerOutcome.Hit,
+      SemanticRuntimeAnswerResult.Answered,
       `Opened semantic app '${value.projectKey}' with ${value.appRoots} app root(s), ${value.evaluationIssues} evaluation issue(s), ${value.stateStores} state store(s), ${value.routeConfigs} route config(s), ${value.routePatterns} route pattern(s), ${value.routeEndpoints} route endpoint(s), ${value.routeRecognizerIssues} route recognizer issue(s), ${value.compilerWorlds} compiler world(s), and ${value.compiledResources} compiled resource template(s).`,
       value,
+      COMPLETE_COLLECTION_ANSWER_OPTIONS,
     );
   }
 
@@ -3121,9 +3322,10 @@ export class SemanticApp {
   private appTopologySummary(): SemanticRuntimeAnswer<SemanticAppOverviewCollectionSummary> {
     const value = readSemanticApplicationTopologySummary(this.runtime.workspace.store, this.emission);
     return answer(
-      SemanticRuntimeAnswerOutcome.Hit,
+      SemanticRuntimeAnswerResult.Answered,
       `Read compact app topology summary for '${value.scalars.projectKey}' with ${value.counts.components ?? 0} component(s), ${value.counts.routes ?? 0} route(s), and ${value.counts.services ?? 0} service/model source(s).`,
       value,
+      COMPLETE_COLLECTION_ANSWER_OPTIONS,
     );
   }
 
@@ -3180,6 +3382,8 @@ export class SemanticApp {
       openSeamKindKey: filter.openSeamKindKey,
       openSeamReasonKind: filter.openSeamReasonKind,
       sourceRole: filter.sourceRole,
+      openSeamClusterKey: filter.openSeamClusterKey,
+      openSeamSiteKey: filter.openSeamSiteKey,
     });
     if (claimed != null) {
       return claimed;
@@ -3187,93 +3391,93 @@ export class SemanticApp {
     const rows = this.openSeamRows(detail, filter);
     const paged = pageRows(rows, page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} open semantic seam(s).`,
       {
         displayText: openSeamsDisplayText(paged.rows, rows.length, filter),
         rows: paged.rows,
       },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
   openSeamSummary(
     page?: SemanticRuntimePageInput,
-    detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
     filter: SemanticOpenSeamQueryFilter = {},
   ): SemanticRuntimeAnswer<SemanticOpenSeamSummaryResult> {
     const claimed = this.answerPublicQueryIfNeeded<SemanticOpenSeamSummaryResult>({
       kind: SemanticAppQueryKind.OpenSeamSummary,
       page,
-      detail,
       sourceFile: filter.sourceFile,
       openSeamKindKey: filter.openSeamKindKey,
       openSeamReasonKind: filter.openSeamReasonKind,
       sourceRole: filter.sourceRole,
+      openSeamClusterKey: filter.openSeamClusterKey,
+      openSeamSiteKey: filter.openSeamSiteKey,
     });
     if (claimed != null) {
       return claimed;
     }
-    const seamRows = this.openSeamRows(detail, filter);
+    const seamFacts = this.openSeamFacts(filter);
     const sourceTextCache = new AuthoredSourceTextCache('', this.project.inputGeneration.host);
     const rows = openSeamSummaryRows(
-      seamRows,
+      seamFacts,
       (source) => this.sourceRangeForSourceReference(source, sourceTextCache),
     );
     const siteRows = openSeamSiteRows(
-      seamRows,
+      seamFacts,
       (source) => this.sourceRangeForSourceReference(source, sourceTextCache),
     );
     const paged = pageRows(rows, page);
     return answer(
-      outcomeForPagedRows(paged),
-      `Returned ${paged.rows.length} of ${rows.length} open seam cluster(s) covering ${seamRows.length} raw open seam row(s) across ${siteRows.length} unique authored site(s).`,
+      SemanticRuntimeAnswerResult.Answered,
+      `Returned ${paged.rows.length} of ${rows.length} open seam cluster(s) covering ${seamFacts.length} raw open seam row(s) across ${siteRows.length} unique authored site(s).`,
       {
-        totalOpenSeamRows: seamRows.length,
+        totalOpenSeamRows: seamFacts.length,
         totalOpenSeamSites: siteRows.length,
-        displayText: openSeamSummaryDisplayText(paged.rows, seamRows.length, siteRows.length, filter),
+        displayText: openSeamSummaryDisplayText(paged.rows, seamFacts.length, siteRows.length, filter),
         rows: paged.rows,
       },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
   openSeamSites(
     page?: SemanticRuntimePageInput,
-    detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
     filter: SemanticOpenSeamQueryFilter = {},
   ): SemanticRuntimeAnswer<SemanticOpenSeamSitesResult> {
     const claimed = this.answerPublicQueryIfNeeded<SemanticOpenSeamSitesResult>({
       kind: SemanticAppQueryKind.OpenSeamSites,
       page,
-      detail,
       sourceFile: filter.sourceFile,
       openSeamKindKey: filter.openSeamKindKey,
       openSeamReasonKind: filter.openSeamReasonKind,
       sourceRole: filter.sourceRole,
+      openSeamClusterKey: filter.openSeamClusterKey,
+      openSeamSiteKey: filter.openSeamSiteKey,
     });
     if (claimed != null) {
       return claimed;
     }
-    const seamRows = this.openSeamRows(detail, filter);
+    const seamFacts = this.openSeamFacts(filter);
     const sourceTextCache = new AuthoredSourceTextCache('', this.project.inputGeneration.host);
     const rows = openSeamSiteRows(
-      seamRows,
+      seamFacts,
       (source) => this.sourceRangeForSourceReference(source, sourceTextCache),
       (source) => this.applicationFileRolesForSourceReference(source),
       (source) => this.staticEvaluationOriginsForSourceReference(source),
     );
     const paged = pageRows(rows, page);
     return answer(
-      outcomeForPagedRows(paged),
-      `Returned ${paged.rows.length} of ${rows.length} open seam site(s) covering ${seamRows.length} raw open semantic seam row(s).`,
+      SemanticRuntimeAnswerResult.Answered,
+      `Returned ${paged.rows.length} of ${rows.length} open seam site(s) covering ${seamFacts.length} raw open semantic seam row(s).`,
       {
-        totalOpenSeamRows: seamRows.length,
+        totalOpenSeamRows: seamFacts.length,
         totalOpenSeamSites: rows.length,
-        displayText: openSeamSitesDisplayText(paged.rows, seamRows.length, rows.length, filter),
+        displayText: openSeamSitesDisplayText(paged.rows, seamFacts.length, rows.length, filter),
         rows: paged.rows,
       },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
@@ -3283,45 +3487,21 @@ export class SemanticApp {
   ): readonly SemanticOpenSeamRow[] {
     const handles = includeHandles(detail);
     const sourceTextCache = new AuthoredSourceTextCache('', this.project.inputGeneration.host);
-    return readAppOpenSeams(this.emission, this.runtime.workspace.store)
-      .map((seam): SemanticOpenSeamRow => {
-        const source = describeAddress(this.runtime.workspace.store, seam.addressHandle);
-        return {
-          seamKindKey: seam.seamKindKey,
-          summary: seam.summary,
-          attempt: semanticOpenSeamAttemptForRow(seam),
-          boundary: semanticOpenSeamBoundaryForRow(seam),
-          reasonKinds: seam.reasonKinds,
-          reasonSources: seam.reasonSources.map((reasonSource) => {
-            const reasonSourceReference = describeAddress(this.runtime.workspace.store, reasonSource.addressHandle);
-            return {
-              reasonKind: reasonSource.reasonKind,
-              summary: reasonSource.summary,
-              source: reasonSourceReference,
-              sourceRange: this.sourceRangeForSourceReference(reasonSourceReference, sourceTextCache),
-              ...(handles ? {
-                handles: {
-                  addressHandle: reasonSource.addressHandle,
-                  evidenceHandle: reasonSource.evidenceHandle ?? null,
-                },
-              } : {}),
-            };
-          }),
-          source,
-          sourceRange: this.sourceRangeForSourceReference(source, sourceTextCache),
-          sourceRole: this.openSeamSourceRole(source),
-          ...(handles ? {
-            handles: {
-              handle: seam.handle,
-              addressHandle: seam.addressHandle,
-            },
-          } : {}),
-        };
-      })
-      .filter((row) => semanticOpenSeamRowMatchesFilter(row, filter))
-      .sort((left, right) =>
-        `${left.seamKindKey}:${left.summary}`.localeCompare(`${right.seamKindKey}:${right.summary}`)
-      );
+    return openSeamRows(
+      this.openSeamFacts(filter),
+      handles,
+      (source) => this.sourceRangeForSourceReference(source, sourceTextCache),
+    );
+  }
+
+  private openSeamFacts(
+    filter: SemanticOpenSeamQueryFilter = {},
+  ): readonly OpenSeamProjectionFact[] {
+    return openSeamProjectionFacts(
+      this.emission,
+      this.runtime.workspace.store,
+      (source) => this.openSeamSourceRole(source),
+    ).filter((row) => semanticOpenSeamRowMatchesFilter(row, filter));
   }
 
   private openSeamSourceRole(source: SemanticSourceReference | null): SemanticOpenSeamRow['sourceRole'] {
@@ -3428,7 +3608,7 @@ export class SemanticApp {
       ? semanticTypeScriptEnvironmentSummary(this.emission.typeSystem)
       : null;
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} app diagnostic row(s).`,
       {
         displayText: appDiagnosticsDisplayText(paged.rows, rows.length, typeScript),
@@ -3436,7 +3616,7 @@ export class SemanticApp {
         rows: paged.rows,
         presentation: appDiagnosticPresentation(paged.rows, paged.rows.length === rows.length),
       },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
@@ -3459,7 +3639,7 @@ export class SemanticApp {
       ? semanticTypeScriptEnvironmentSummary(this.emission.typeSystem)
       : null;
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} app diagnostic cluster(s) covering ${diagnosticRows.length} diagnostic row(s).`,
       {
         totalDiagnosticRows: diagnosticRows.length,
@@ -3467,7 +3647,7 @@ export class SemanticApp {
         typeScript,
         rows: paged.rows,
       },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
@@ -3577,10 +3757,10 @@ export class SemanticApp {
     const rows = readEvaluationIssueRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
     const paged = pageRows(rows, page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} evaluation issue row(s).`,
       { rows: paged.rows },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
@@ -3599,10 +3779,10 @@ export class SemanticApp {
     const rows = readConfigurationIssueRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
     const paged = pageRows(rows, page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} configuration issue row(s).`,
       { rows: paged.rows },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
@@ -3621,10 +3801,10 @@ export class SemanticApp {
     const rows = readDiIssueRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
     const paged = pageRows(rows, page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} DI issue row(s).`,
       { rows: paged.rows },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
@@ -3643,10 +3823,10 @@ export class SemanticApp {
     const rows = readObservationIssueRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
     const paged = pageRows(rows, page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} observation issue row(s).`,
       { rows: paged.rows },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
@@ -3665,10 +3845,10 @@ export class SemanticApp {
     const rows = readComputedObservationDefinitionRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
     const paged = pageRows(rows, page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} computed observation definition row(s).`,
       { rows: paged.rows },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
@@ -3687,32 +3867,39 @@ export class SemanticApp {
     const rows = readComputedObserverSourceRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
     const paged = pageRows(rows, page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} computed observer source row(s).`,
       { rows: paged.rows },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
   computedObserverObservedDependencies(
     page?: SemanticRuntimePageInput,
     detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
+    locus?: SemanticObservedDependencyLocus | null,
   ): SemanticRuntimeAnswer<SemanticComputedObserverObservedDependenciesResult> {
     const claimed = this.answerPublicQueryIfNeeded<SemanticComputedObserverObservedDependenciesResult>({
       kind: SemanticAppQueryKind.ComputedObserverObservedDependencies,
       page,
       detail,
+      observedDependencyLocus: locus,
     });
     if (claimed != null) {
       return claimed;
     }
-    const rows = readComputedObserverObservedDependencyRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
+    const rows = readComputedObserverObservedDependencyRows(
+      this.emission,
+      this.runtime.workspace.store,
+      includeHandles(detail),
+      locus,
+    );
     const paged = pageRows(rows, page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} computed observer observed dependency row(s).`,
       { rows: paged.rows },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
@@ -3731,32 +3918,39 @@ export class SemanticApp {
     const rows = readRuntimeEffectRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
     const paged = pageRows(rows, page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} source-level runtime effect row(s).`,
       { rows: paged.rows },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
   runtimeEffectObservedDependencies(
     page?: SemanticRuntimePageInput,
     detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
+    locus?: SemanticObservedDependencyLocus | null,
   ): SemanticRuntimeAnswer<SemanticRuntimeEffectObservedDependenciesResult> {
     const claimed = this.answerPublicQueryIfNeeded<SemanticRuntimeEffectObservedDependenciesResult>({
       kind: SemanticAppQueryKind.RuntimeEffectObservedDependencies,
       page,
       detail,
+      observedDependencyLocus: locus,
     });
     if (claimed != null) {
       return claimed;
     }
-    const rows = readRuntimeEffectObservedDependencyRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
+    const rows = readRuntimeEffectObservedDependencyRows(
+      this.emission,
+      this.runtime.workspace.store,
+      includeHandles(detail),
+      locus,
+    );
     const paged = pageRows(rows, page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} source-level runtime effect observed-dependency row(s).`,
       { rows: paged.rows },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
@@ -3775,10 +3969,10 @@ export class SemanticApp {
     const rows = readProxyObservableEscapeRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
     const paged = pageRows(rows, page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} source-level ProxyObservable escape row(s).`,
       { rows: paged.rows },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
@@ -3799,9 +3993,10 @@ export class SemanticApp {
       includeTypeSurfaces: includeTypeSurfaces === true,
     });
     return answer(
-      SemanticRuntimeAnswerOutcome.Hit,
+      SemanticRuntimeAnswerResult.Answered,
       `Recovered ${value.appRoots.length} app root(s), ${value.components.length} component(s), ${value.routes.length} route config(s), and ${value.files.length} roleful app file(s).`,
       value,
+      COMPLETE_COLLECTION_ANSWER_OPTIONS,
     );
   }
 
@@ -3820,10 +4015,10 @@ export class SemanticApp {
     const rows = readStateStoreRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
     const paged = pageRows(rows, page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} @aurelia/state store configuration row(s).`,
       { rows: paged.rows },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
@@ -3842,10 +4037,10 @@ export class SemanticApp {
     const rows = readStateGetterBindingRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
     const paged = pageRows(rows, page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} source-level @fromState binding definition row(s).`,
       { rows: paged.rows },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
@@ -3864,10 +4059,10 @@ export class SemanticApp {
     const rows = readStateIssueRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
     const paged = pageRows(rows, page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} @aurelia/state issue row(s).`,
       { rows: paged.rows },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
@@ -3886,10 +4081,10 @@ export class SemanticApp {
     const rows = readI18nTranslationKeyRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
     const paged = pageRows(rows, page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} static i18n translation key row(s).`,
       { rows: paged.rows },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
@@ -3908,10 +4103,10 @@ export class SemanticApp {
     const rows = readI18nTranslationBindingRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
     const paged = pageRows(rows, page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} rendered i18n translation binding row(s).`,
       { rows: paged.rows },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
@@ -3930,10 +4125,10 @@ export class SemanticApp {
     const rows = readValidationIssueRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
     const paged = pageRows(rows, page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} @aurelia/validation issue row(s).`,
       { rows: paged.rows },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
@@ -3952,10 +4147,10 @@ export class SemanticApp {
     const rows = readFetchClientIssueRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
     const paged = pageRows(rows, page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} @aurelia/fetch-client issue row(s).`,
       { rows: paged.rows },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
@@ -3974,10 +4169,10 @@ export class SemanticApp {
     const rows = readDialogIssueRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
     const paged = pageRows(rows, page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} @aurelia/dialog issue row(s).`,
       { rows: paged.rows },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
@@ -4003,13 +4198,13 @@ export class SemanticApp {
     );
     const paged = pageRows(rows, page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} framework capability demand row(s).`,
       {
         displayText: frameworkCapabilityDemandsDisplayText(paged.rows, rows.length),
         rows: paged.rows,
       },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
@@ -4028,10 +4223,10 @@ export class SemanticApp {
     const rows = readResourceDefinitionRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
     const paged = pageRows(rows, page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} recognized resource definition row(s).`,
       { rows: paged.rows },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
@@ -4050,10 +4245,10 @@ export class SemanticApp {
     const rows = readResourceIssueRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
     const paged = pageRows(rows, page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} resource metadata issue row(s).`,
       { rows: paged.rows },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
@@ -4098,10 +4293,10 @@ export class SemanticApp {
       );
     const paged = pageRows(rows, page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} compiler-visible resource row(s).`,
       { rows: paged.rows },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
@@ -4120,10 +4315,10 @@ export class SemanticApp {
     const rows = readRuntimeControllerRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
     const paged = pageRows(rows, page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} runtime controller hydration row(s).`,
       { rows: paged.rows },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
@@ -4142,32 +4337,39 @@ export class SemanticApp {
     const rows = readRuntimeWatcherRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
     const paged = pageRows(rows, page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} runtime watcher row(s).`,
       { rows: paged.rows },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
   runtimeWatcherObservedDependencies(
     page?: SemanticRuntimePageInput,
     detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
+    locus?: SemanticObservedDependencyLocus | null,
   ): SemanticRuntimeAnswer<SemanticRuntimeWatcherObservedDependencyResult> {
     const claimed = this.answerPublicQueryIfNeeded<SemanticRuntimeWatcherObservedDependencyResult>({
       kind: SemanticAppQueryKind.RuntimeWatcherObservedDependencies,
       page,
       detail,
+      observedDependencyLocus: locus,
     });
     if (claimed != null) {
       return claimed;
     }
-    const rows = readRuntimeWatcherObservedDependencyRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
+    const rows = readRuntimeWatcherObservedDependencyRows(
+      this.emission,
+      this.runtime.workspace.store,
+      includeHandles(detail),
+      locus,
+    );
     const paged = pageRows(rows, page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} runtime watcher observed-dependency row(s).`,
       { rows: paged.rows },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
@@ -4194,10 +4396,10 @@ export class SemanticApp {
     const rows = readRuntimeCompositionRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
     const paged = pageRows(rows, page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} runtime composition row(s).`,
       { rows: paged.rows },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
@@ -4220,10 +4422,10 @@ export class SemanticApp {
     );
     const paged = pageRows(rows, page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} template content-projection row(s).`,
       { rows: paged.rows },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
@@ -4250,10 +4452,10 @@ export class SemanticApp {
     const rows = readBindingTargetAccessRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
     const paged = pageRows(rows, page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} runtime binding target-access row(s).`,
       { rows: paged.rows },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
@@ -4280,10 +4482,10 @@ export class SemanticApp {
     const rows = readTargetOperationRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
     const paged = pageRows(rows, page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} runtime target-operation row(s).`,
       { rows: paged.rows },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
@@ -4325,10 +4527,10 @@ export class SemanticApp {
     const rows = readBindingSourceOperationRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
     const paged = pageRows(rows, page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} runtime binding source-operation row(s).`,
       { rows: paged.rows },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
@@ -4355,10 +4557,10 @@ export class SemanticApp {
     const rows = readBindingBehaviorApplicationRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
     const paged = pageRows(rows, page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} runtime binding-behavior application row(s).`,
       { rows: paged.rows },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
@@ -4385,10 +4587,10 @@ export class SemanticApp {
     const rows = readValueConverterApplicationRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
     const paged = pageRows(rows, page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} runtime value-converter application row(s).`,
       { rows: paged.rows },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
@@ -4415,10 +4617,10 @@ export class SemanticApp {
     const rows = readBindingValueChannelRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
     const paged = pageRows(rows, page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} runtime binding value-channel row(s).`,
       { rows: paged.rows },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
@@ -4451,10 +4653,10 @@ export class SemanticApp {
     const summary = readBindingValueChannelSummary(this.emission, this.runtime.workspace.store);
     const paged = pageRows(summary.rows, page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${summary.summaryRows} runtime binding value-channel summary row(s) over ${summary.totalRows} value-channel row(s).`,
       { ...summary, rows: paged.rows },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
@@ -4481,10 +4683,10 @@ export class SemanticApp {
     const rows = readBindingDataFlowRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
     const paged = pageRows(rows, page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} runtime binding data-flow row(s).`,
       { rows: paged.rows },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
@@ -4515,10 +4717,10 @@ export class SemanticApp {
     );
     const paged = pageRows(rows, page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} runtime expression access-use row(s).`,
       { rows: paged.rows },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
@@ -4549,10 +4751,10 @@ export class SemanticApp {
     const summary = readBindingDataFlowSummary(this.emission, this.runtime.workspace.store);
     const paged = pageRows(summary.rows, page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${summary.summaryRows} runtime binding data-flow summary row(s) over ${summary.totalRows} data-flow row(s), with ${summary.issueRows.length} issue summary row(s).`,
       { ...summary, rows: paged.rows },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
@@ -4579,21 +4781,23 @@ export class SemanticApp {
     const rows = readControlUseInventoryRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
     const paged = pageRows(rows, page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} authored control-use inventory row(s).`,
       { rows: paged.rows },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
   bindingObservedDependencies(
     page?: SemanticRuntimePageInput,
     detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
+    locus?: SemanticObservedDependencyLocus | null,
   ): SemanticRuntimeAnswer<SemanticBindingObservedDependencyResult> {
     const claimed = this.answerPublicQueryIfNeeded<SemanticBindingObservedDependencyResult>({
       kind: SemanticAppQueryKind.BindingObservedDependencies,
       page,
       detail,
+      observedDependencyLocus: locus,
     });
     if (claimed != null) {
       return claimed;
@@ -4606,22 +4810,29 @@ export class SemanticApp {
     if (unsupported != null) {
       return unsupported;
     }
-    const rows = readBindingObservedDependencyRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
+    const rows = readBindingObservedDependencyRows(
+      this.emission,
+      this.runtime.workspace.store,
+      includeHandles(detail),
+      locus,
+    );
     const paged = pageRows(rows, page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} runtime binding observed-dependency row(s).`,
       { rows: paged.rows },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
   bindingObservedDependencySummary(
     page?: SemanticRuntimePageInput,
+    locus?: SemanticObservedDependencyLocus | null,
   ): SemanticRuntimeAnswer<SemanticBindingObservedDependencySummaryResult> {
     const claimed = this.answerPublicQueryIfNeeded<SemanticBindingObservedDependencySummaryResult>({
       kind: SemanticAppQueryKind.BindingObservedDependencySummary,
       page,
+      observedDependencyLocus: locus,
     });
     if (claimed != null) {
       return claimed;
@@ -4640,13 +4851,17 @@ export class SemanticApp {
     if (unsupported != null) {
       return unsupported;
     }
-    const summary = readBindingObservedDependencySummary(this.emission, this.runtime.workspace.store);
+    const summary = readBindingObservedDependencySummary(
+      this.emission,
+      this.runtime.workspace.store,
+      locus,
+    );
     const paged = pageRows(summary.rows, page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${summary.summaryRows} runtime binding observed-dependency summary row(s) over ${summary.totalRows} observed-dependency row(s), with ${summary.memberSourceStateRows.length} member-source-state summary row(s).`,
       { ...summary, rows: paged.rows },
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 
@@ -4659,9 +4874,10 @@ export class SemanticApp {
       return null;
     }
     return answer(
-      SemanticRuntimeAnswerOutcome.Unsupported,
+      SemanticRuntimeAnswerResult.Unsupported,
       `${label} require analysisDepth='${requiredDepth}', but this app was opened with analysisDepth='${this.emission.analysisDepth}'.`,
       value,
+      NON_APPLICABLE_ANSWER_OPTIONS,
     );
   }
 }
@@ -5458,6 +5674,51 @@ function canonicalizeRuntimeAppQueryRequest(
     ...(request.sourceFilePath == null
       ? {}
       : { sourceFilePath: canonicalProjectSourceFilePath(project, request.sourceFilePath) }),
+  };
+}
+
+function bindProjectQueryPage(
+  project: ProjectBootFrame,
+  query: SemanticAppQuery,
+  policy?: SemanticRuntimePagePolicy | null,
+): SemanticAppQuery {
+  if (!semanticAppQueryCatalogRow(query.kind).supportsPaging) {
+    return query;
+  }
+  return {
+    ...query,
+    page: bindSemanticRuntimePageInput(
+      query.page,
+      semanticAppQueryPageScope(
+        project.projectKey,
+        semanticAppProjectInputEpochKey(project.projectKey, project.inputGeneration.revision),
+        query,
+      ),
+      policy,
+    ),
+  };
+}
+
+function bindRuntimeStaticQueryPage(
+  workspaceKey: string,
+  query: SemanticAppQuery,
+  policy?: SemanticRuntimePagePolicy | null,
+): SemanticAppQuery {
+  if (!semanticAppQueryCatalogRow(query.kind).supportsPaging) {
+    return query;
+  }
+  const shaped = semanticAppQueryCatalogShape(query);
+  return {
+    ...query,
+    page: bindSemanticRuntimePageInput(
+      query.page,
+      {
+        queryKey: `runtime-static|${semanticAppQueryKey({ ...shaped, page: undefined })}`,
+        epochKey: semanticRuntimeWorkspaceEpochKey(workspaceKey),
+        orderingKey: String(shaped.kind),
+      },
+      policy,
+    ),
   };
 }
 

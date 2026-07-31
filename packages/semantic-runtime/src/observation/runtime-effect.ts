@@ -3,9 +3,8 @@ import type {
   IdentityHandle,
   ProductHandle,
 } from '../kernel/handles.js';
-import type { RuntimeObservedDependencyKind } from './runtime-binding-observation.js';
-import type { CheckerTypeMemberKind } from '../type-system/type-shape.js';
 import type { RuntimeExpressionAccessUse } from '../runtime-expression/runtime-expression-access-use.js';
+import type { RuntimeObservedDependencyOccurrence } from './runtime-observed-dependency.js';
 
 export const enum RuntimeEffectKind {
   /** Direct IObservation.watch(...) effect. */
@@ -46,20 +45,7 @@ export class RuntimeEffectObservedDependency {
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
     readonly effect: RuntimeEffectReference,
-    /** Exact authored or generated access occurrence that induced this observation effect. */
-    readonly accessUseProductHandle: ProductHandle,
-    readonly dependencyKind: RuntimeObservedDependencyKind,
-    readonly expressionKind: string,
-    readonly sourceName: string | null,
-    readonly sourceRootName: string | null,
-    readonly memberName: string | null,
-    readonly keyExpression: string | null,
-    readonly methodName: string | null,
-    readonly observedMemberKind: CheckerTypeMemberKind | `${CheckerTypeMemberKind}` | null,
-    readonly observedMemberSourceAddressHandle: AddressHandle | null,
-    readonly spanStart: number | null,
-    readonly spanEnd: number | null,
-    readonly sourceAddressHandle: AddressHandle | null,
+    readonly occurrence: RuntimeObservedDependencyOccurrence,
   ) {}
 }
 

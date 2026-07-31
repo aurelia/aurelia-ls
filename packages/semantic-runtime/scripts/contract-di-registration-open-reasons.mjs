@@ -68,12 +68,12 @@ for (const row of sites.rows) {
 
 function expectReason(rows, seamKindKey, reasonKind, label) {
   const row = rows.find((candidate) =>
-    candidate.seamKindKey === seamKindKey
+    rowHasSeamKind(candidate, seamKindKey)
     && candidate.reasonKinds.includes(reasonKind)
   );
   if (row == null) {
     failures.push(`Expected ${label} to carry ${reasonKind}, observed ${JSON.stringify(rows.map((candidate) => ({
-      seamKindKey: candidate.seamKindKey,
+      seamKindKeys: candidate.seamKindKeys ?? [candidate.seamKindKey],
       reasonKinds: candidate.reasonKinds,
       source: candidate.source?.label,
       sampleSummary: candidate.sampleSummary,
@@ -86,6 +86,11 @@ function expectAbsentReason(rows, reasonKind, label) {
   if (rows.some((candidate) => candidate.reasonKinds.includes(reasonKind))) {
     failures.push(`Expected ${label} to be absent, observed ${JSON.stringify(rows)}.`);
   }
+}
+
+function rowHasSeamKind(row, seamKindKey) {
+  return row.seamKindKey === seamKindKey
+    || row.seamKindKeys?.includes(seamKindKey) === true;
 }
 
 if (failures.length > 0) {
@@ -108,7 +113,7 @@ if (failures.length > 0) {
 
 function rowSummary(row) {
   return {
-    seamKindKey: row.seamKindKey,
+    seamKindKeys: row.seamKindKeys ?? [row.seamKindKey],
     reasonKinds: row.reasonKinds,
     source: row.source?.label,
     sampleSummary: row.sampleSummary,

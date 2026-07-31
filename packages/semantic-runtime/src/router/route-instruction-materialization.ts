@@ -1681,7 +1681,7 @@ function staticLoadRouterResourceValue(
       return {
         state: 'dynamic',
         reason: 'Load router resource route bindable reduced to an eager instruction object while a sibling params bindable was supplied; the framework would treat the route value as the component, not merge two instruction objects.',
-        reasonKinds: [OpenSeamReasonKind.BindingSourceUnsupportedExpression],
+        reasonKinds: [OpenSeamReasonKind.RouterInstructionValueInvalid],
         sourceAddressHandle: routeValue.sourceAddressHandle ?? params.sourceAddressHandle,
       };
     case 'dynamic':
@@ -1913,7 +1913,7 @@ function loadRouteParametersFromExpression(
     return {
       state: 'dynamic',
       reason: 'Load router resource params binding did not expose a parsed expression.',
-      reasonKinds: [OpenSeamReasonKind.BindingSourceUnsupportedExpression],
+      reasonKinds: [OpenSeamReasonKind.BindingExpressionOpen],
       sourceAddressHandle,
     };
   }
@@ -2339,7 +2339,7 @@ function eagerRouteComponentFromValue(
   return {
     state: 'dynamic',
     reason: `Eager router instruction component reduced to '${value.kind}' instead of a string or routeable component.`,
-    reasonKinds: [OpenSeamReasonKind.BindingSourceUnsupportedExpression],
+    reasonKinds: [OpenSeamReasonKind.RouterInstructionValueInvalid],
   };
 }
 
@@ -2386,7 +2386,7 @@ function eagerRouteParameters(
     return {
       state: 'dynamic',
       reason: `Eager router instruction params reduced to '${evaluated.value.kind}' instead of an object.`,
-      reasonKinds: [OpenSeamReasonKind.BindingSourceUnsupportedExpression],
+      reasonKinds: [OpenSeamReasonKind.RouterInstructionValueInvalid],
     };
   }
   const params = paramsFromObjectValue(evaluated.value);
@@ -2413,7 +2413,7 @@ function eagerRouteParametersFromValue(
     return {
       state: 'dynamic',
       reason: `Eager router instruction params reduced to '${value.kind}' instead of an object.`,
-      reasonKinds: [OpenSeamReasonKind.BindingSourceUnsupportedExpression],
+      reasonKinds: [OpenSeamReasonKind.RouterInstructionValueInvalid],
     };
   }
   return paramsFromObjectValue(value);
@@ -2476,7 +2476,7 @@ function eagerRouteViewportFromValue(
   return {
     state: 'dynamic',
     reason: `Eager router instruction viewport reduced to '${value.kind}' instead of a string.`,
-    reasonKinds: [OpenSeamReasonKind.BindingSourceUnsupportedExpression],
+    reasonKinds: [OpenSeamReasonKind.RouterInstructionValueInvalid],
   };
 }
 
@@ -2525,7 +2525,7 @@ function eagerRouteChildren(
     return {
       state: 'dynamic',
       reason: `Eager router instruction children reduced from '${expression.$kind}' instead of a static array literal.`,
-      reasonKinds: [OpenSeamReasonKind.BindingSourceUnsupportedExpression],
+      reasonKinds: [OpenSeamReasonKind.RouterInstructionNeedsStaticValue],
     };
   }
   return eagerRouteChildrenFromArray(expression, site, bindingInstructionProductHandle, sourceValueEvaluator, resourceIndex);
@@ -2586,7 +2586,7 @@ function eagerRouteChildrenFromValue(
     return {
       state: 'dynamic',
       reason: `Eager router instruction children reduced to '${value.kind}' instead of an array.`,
-      reasonKinds: [OpenSeamReasonKind.BindingSourceUnsupportedExpression],
+      reasonKinds: [OpenSeamReasonKind.RouterInstructionValueInvalid],
     };
   }
   return eagerRouteChildrenFromArrayValue(value, resourceIndex);

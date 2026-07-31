@@ -27,12 +27,12 @@ const reasonSite = sites.rows.find((row) =>
 );
 const attributeMapperSite = sites.rows.find((row) =>
   row.reasonKinds.includes('host-environment-value')
-  && row.sampleSummary.includes('Attribute-mapper global mappings may contain additional attributes')
+  && row.sourceRange?.start?.line === 18
 );
 
 const failures = [
   reasonSite == null
-    ? `Expected configuration option seam to preserve evaluator unresolved-identifier reason, observed ${JSON.stringify(sites.rows.map((row) => ({ seamKindKey: row.seamKindKey, reasonKinds: row.reasonKinds, sampleSummary: row.sampleSummary })))}.`
+    ? `Expected configuration option seam to preserve evaluator unresolved-identifier reason, observed ${JSON.stringify(sites.rows.map((row) => ({ seamKindKeys: row.seamKindKeys, reasonKinds: row.reasonKinds, sampleSummary: row.sampleSummary })))}.`
     : null,
   reasonSite?.source?.path?.endsWith('src/main.ts') === true
     ? null
@@ -56,7 +56,7 @@ if (failures.length > 0) {
   console.log(JSON.stringify({
     ok: true,
     reasonSite: {
-      seamKindKey: reasonSite.seamKindKey,
+      seamKindKeys: reasonSite.seamKindKeys,
       reasonKinds: reasonSite.reasonKinds,
       source: reasonSite.source?.label,
       sourceRange: reasonSite.sourceRange,

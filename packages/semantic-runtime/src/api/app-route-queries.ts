@@ -2,12 +2,13 @@ import type { KernelStore } from '../kernel/store.js';
 import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-project-pass.js';
 import {
   answer,
+  COMPLETE_COLLECTION_ANSWER_OPTIONS,
   includeHandles,
-  outcomeForPagedRows,
   pageRows,
 } from './answer-helpers.js';
 import {
   SemanticAppQueryKind,
+  SemanticRuntimeAnswerResult,
   SemanticRuntimeDetail,
   type SemanticComponentAgentsResult,
   type SemanticRecognizedRoutesResult,
@@ -208,10 +209,10 @@ export class SemanticAppRouteQueries {
     const rows = descriptor.readRows(this.emission, this.store, includeHandles(detail));
     const paged = pageRows(rows, page);
     return answer(
-      outcomeForPagedRows(paged),
+      SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} ${descriptor.answerRowLabel}.`,
       { rows: paged.rows } as TResult,
-      paged.page,
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );
   }
 }

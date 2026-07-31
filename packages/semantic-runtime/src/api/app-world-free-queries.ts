@@ -2,12 +2,13 @@ import type { ProjectBootFrame } from '../boot/frames.js';
 import type { StaticProjectEvaluationResult } from '../evaluation/project-evaluation.js';
 import {
   SemanticAppQueryKind,
-  SemanticRuntimeAnswerOutcome,
+  SemanticRuntimeAnswerResult,
   type SemanticAppQuery,
   type SemanticRuntimeAnswer,
 } from './contracts.js';
 import {
   answer,
+  NON_APPLICABLE_ANSWER_OPTIONS,
 } from './answer-helpers.js';
 import {
   readSemanticSourceFiles,
@@ -22,9 +23,10 @@ export function answerRuntimeStaticAppQuery(
   query: SemanticAppQuery,
 ): SemanticRuntimeAnswer<unknown> {
   return answer(
-    SemanticRuntimeAnswerOutcome.Unsupported,
+    SemanticRuntimeAnswerResult.Unsupported,
     `Semantic app query '${query.kind}' is not a runtime-static query.`,
     { query },
+    NON_APPLICABLE_ANSWER_OPTIONS,
   );
 }
 
@@ -40,9 +42,10 @@ export function answerAppWorldFreeQuery(
       return readSemanticUnresolvedModules(readEvaluation(), query.page);
     default:
       return answer(
-        SemanticRuntimeAnswerOutcome.Unsupported,
+        SemanticRuntimeAnswerResult.Unsupported,
         `Semantic app query '${query.kind}' is not an app-world-free query.`,
         { query },
+        NON_APPLICABLE_ANSWER_OPTIONS,
       );
   }
 }

@@ -327,6 +327,7 @@ export class RuntimeControllerPublicationMaterializer {
         controller.identityHandle,
         [controller.productHandle],
         publication.materializationClaimHandles,
+        [...new Set(controller.readObserverSetups().flatMap((setup) => setup.openSeamHandles))].sort(),
       ),
       ...runtimeWatcherRecordsForController(
         this.store,

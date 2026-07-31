@@ -21,7 +21,12 @@ const single = await adapter.appQuery({
 });
 
 expect(single.tool === 'aurelia_app_query', 'single app-query should report the public MCP tool name.');
-expectContinuation(single.value, 'open-seam-summary', 'single app-query should pass semantic-runtime continuation rows through unchanged.');
+expectContinuation(
+  single.value,
+  'open-seam-summary',
+  'single app-query should pass semantic-runtime continuation rows through unchanged.',
+  { sourceRequirement: 'not-required' },
+);
 expect(
   aureliaMcpResultText(single).includes('Continuations: open-seam-summary'),
   'single app-query text should expose compact continuation targets without requiring structured JSON inspection.',
@@ -39,7 +44,11 @@ const syntheticNextPageFirstText = aureliaMcpResultText({
         targetQuery: { kind: 'open-seams', page: { cursor: 'after:0', size: 1 } },
         intents: ['inspect'],
         cost: 'free',
-        evidence: { evidenceState: 'not-required', coverage: 'partial-known-gaps', sourcePrecision: 'not-required' },
+        evidence: {
+          sourceRequirement: 'not-required',
+          sourceFacts: [],
+          epochDependencies: ['project-input', 'app-world'],
+        },
         blockers: [],
       },
       {
@@ -49,7 +58,23 @@ const syntheticNextPageFirstText = aureliaMcpResultText({
         targetQuery: { kind: 'open-seam-summary', page: { size: 1 } },
         intents: ['orient', 'inspect'],
         cost: 'free',
-        evidence: { evidenceState: 'open', coverage: 'partial-known-gaps', sourcePrecision: 'exact-authored-span' },
+        evidence: {
+          sourceRequirement: 'exact-authored-span',
+          epochDependencies: ['project-input', 'app-world', 'source-input'],
+          sourceFacts: [
+            {
+              source: {
+                kind: 'source-span-address',
+                label: 'src/route-link.html@66..79',
+                path: 'src/route-link.html',
+                start: 66,
+                end: 79,
+              },
+              facets: ['authored-source', 'carrier-span', 'exact-authored-span'],
+              count: 1,
+            },
+          ],
+        },
         blockers: [],
       },
     ],
@@ -63,14 +88,32 @@ expect(
   syntheticNextPageFirstText.indexOf('open-seam-summary') < syntheticNextPageFirstText.indexOf('open-seams'),
   'MCP compact continuation text should order semantic follow-ups before next-page rows.',
 );
+expect(
+  syntheticNextPageFirstText.includes('source: exact-authored-span'),
+  'MCP compact continuation text should expose the continuation source requirement.',
+);
+expect(
+  syntheticNextPageFirstText.includes('[authored-source+carrier-span+exact-authored-span]'),
+  'MCP compact continuation text should preserve mixed source facets on one fact.',
+);
 
 const diagnosticFiltered = await adapter.appQuery({
   workspaceRoot: fixtureRoot,
   storeKey: 'mcp-contract-continuation-pass-through-filtered',
-  queryKind: 'summary',
+  queryKind: 'app-diagnostic-summary',
+  page: { size: 50 },
   continuationIntents: ['diagnose'],
 });
 
+expectContinuation(
+  diagnosticFiltered.value,
+  'template-diagnostics',
+  'diagnostic app-query should pass continuation evidence through unchanged.',
+  {
+    sourceRequirement: 'exact-authored-span',
+    sourceFacets: ['authored-source', 'carrier-span', 'exact-authored-span'],
+  },
+);
 expect(
   (diagnosticFiltered.value.continuations ?? []).every((row) =>
     row.intents.length === 0 || row.intents.includes('diagnose')
@@ -106,7 +149,12 @@ const batch = await adapter.appQueryBatch({
 });
 
 const openSeamChild = batch.value.value?.rows?.find((row) => row.queryKind === 'open-seams')?.answer;
-expectContinuation(openSeamChild, 'open-seam-summary', 'batch child answer should retain semantic-runtime continuation rows.');
+expectContinuation(
+  openSeamChild,
+  'open-seam-summary',
+  'batch child answer should retain semantic-runtime continuation rows.',
+  { sourceRequirement: 'not-required' },
+);
 expect(
   (openSeamChild?.continuations ?? []).every((row) =>
     row.intents.length === 0 || row.intents.includes('inspect')
@@ -129,11 +177,34 @@ if (failures.length > 0) {
 
 console.log('contract ok: MCP app-query surfaces pass through semantic-runtime continuation rows.');
 
-function expectContinuation(answer, targetQueryKind, message) {
-  const continuation = answer?.continuations?.find((row) => row.targetQueryKind === targetQueryKind);
+function expectContinuation(answer, targetQueryKind, message, evidence) {
+  const targetContinuations = answer?.continuations?.filter((row) => row.targetQueryKind === targetQueryKind) ?? [];
+  const continuation = targetContinuations.find((row) =>
+    row.evidence?.sourceRequirement === evidence.sourceRequirement
+  ) ?? targetContinuations[0];
   expect(continuation != null, message);
   expect(continuation?.targetQuery?.kind === targetQueryKind, `${message} targetQuery should be followable.`);
-  expect(continuation?.evidence?.sourcePrecision === 'exact-authored-span', `${message} should preserve semantic-runtime evidence metadata.`);
+  expect(
+    continuation?.evidence?.sourceRequirement === evidence.sourceRequirement,
+    `${message} should preserve the semantic-runtime source requirement.`,
+  );
+  expect(
+    Array.isArray(continuation?.evidence?.epochDependencies),
+    `${message} should preserve semantic-runtime epoch dependencies.`,
+  );
+  if (evidence.sourceFacets != null) {
+    const mixedFacetFact = continuation?.evidence?.sourceFacts?.find((fact) =>
+      evidence.sourceFacets.every((facet) => fact.facets.includes(facet))
+    );
+    expect(
+      mixedFacetFact != null,
+      `${message} should preserve mixed facets on one semantic-runtime source fact.`,
+    );
+    expect(
+      Number.isInteger(mixedFacetFact?.count) && mixedFacetFact.count > 0,
+      `${message} should preserve the semantic-runtime source fact count.`,
+    );
+  }
 }
 
 function expect(condition, message) {

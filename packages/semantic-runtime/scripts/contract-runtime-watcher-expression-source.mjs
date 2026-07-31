@@ -8,7 +8,7 @@ import {
   readFixtureVerificationSnapshot,
   verifyFixtureEffects,
 } from '../out/index.js';
-import { exactSourceSpanFailures } from './contract-source-span-assertions.mjs';
+import { exactObservedDependencySourceSpanFailures } from './contract-source-span-assertions.mjs';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/resource-metadata-errors');
@@ -69,16 +69,18 @@ const expressionWatchers = snapshot.runtimeWatchers.filter((watcher) =>
 if (expressionWatchers.length !== 2) {
   failures.push(`Expected exactly two static property-key expression watchers; observed ${expressionWatchers.length}.`);
 }
-failures.push(...exactSourceSpanFailures(snapshot.runtimeWatcherObservedDependencies, [
+failures.push(...exactObservedDependencySourceSpanFailures(snapshot.runtimeWatcherObservedDependencies, [
   {
     summary: 'First property-key expression watcher dependency should publish the exact string-body source span.',
     path: 'src/resource-metadata-errors-app.ts',
-    match: { watchIndex: 0, sourceName: 'name' },
+    owner: { watchIndex: 0 },
+    occurrence: { sourceName: 'name' },
   },
   {
     summary: 'Second property-key expression watcher dependency should publish the exact string-body source span.',
     path: 'src/resource-metadata-errors-app.ts',
-    match: { watchIndex: 1, sourceName: 'name' },
+    owner: { watchIndex: 1 },
+    occurrence: { sourceName: 'name' },
   },
 ]));
 

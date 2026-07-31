@@ -141,16 +141,19 @@ const expectedSemanticEffectRowSources: Partial<Record<ExpectedSemanticEffectKin
   [ExpectedSemanticEffectKind.ObservationIssue]: (snapshot) => snapshot.observationIssues,
   [ExpectedSemanticEffectKind.RuntimeController]: (snapshot) => snapshot.runtimeControllers,
   [ExpectedSemanticEffectKind.RuntimeWatcher]: (snapshot) => snapshot.runtimeWatchers,
-  [ExpectedSemanticEffectKind.RuntimeWatcherObservedDependency]: (snapshot) => snapshot.runtimeWatcherObservedDependencies,
+  [ExpectedSemanticEffectKind.RuntimeWatcherObservedDependency]: (snapshot) =>
+    observedDependencyRowsForVerification(snapshot.runtimeWatcherObservedDependencies),
   [ExpectedSemanticEffectKind.RuntimeComposition]: (snapshot) => snapshot.runtimeCompositions,
   [ExpectedSemanticEffectKind.BindingTargetAccess]: (snapshot) => snapshot.bindingTargetAccesses,
   [ExpectedSemanticEffectKind.BindingSourceOperation]: (snapshot) => snapshot.bindingSourceOperations,
   [ExpectedSemanticEffectKind.TargetOperation]: (snapshot) => snapshot.targetOperations,
   [ExpectedSemanticEffectKind.BindingValueChannel]: (snapshot) => snapshot.bindingValueChannels,
-  [ExpectedSemanticEffectKind.BindingObservedDependency]: (snapshot) => snapshot.bindingObservedDependencies,
+  [ExpectedSemanticEffectKind.BindingObservedDependency]: (snapshot) =>
+    observedDependencyRowsForVerification(snapshot.bindingObservedDependencies),
   [ExpectedSemanticEffectKind.ComputedObservationDefinition]: (snapshot) => snapshot.computedObservationDefinitions,
   [ExpectedSemanticEffectKind.ComputedObserverSource]: (snapshot) => snapshot.computedObserverSources,
-  [ExpectedSemanticEffectKind.ComputedObserverObservedDependency]: (snapshot) => snapshot.computedObserverObservedDependencies,
+  [ExpectedSemanticEffectKind.ComputedObserverObservedDependency]: (snapshot) =>
+    observedDependencyRowsForVerification(snapshot.computedObserverObservedDependencies),
   [ExpectedSemanticEffectKind.BindingBehaviorApplication]: (snapshot) => snapshot.bindingBehaviorApplications,
   [ExpectedSemanticEffectKind.I18nTranslationKey]: (snapshot) => snapshot.i18nTranslationKeys,
   [ExpectedSemanticEffectKind.I18nTranslationBinding]: (snapshot) => snapshot.i18nTranslationBindings,
@@ -159,6 +162,25 @@ const expectedSemanticEffectRowSources: Partial<Record<ExpectedSemanticEffectKin
   [ExpectedSemanticEffectKind.OpenSeam]: (snapshot) => snapshot.openSeams,
   [ExpectedSemanticEffectKind.OpenSeamClosure]: (snapshot) => snapshot.openSeams,
 };
+
+/**
+ * Fixture plans use one flat dependency vocabulary across owner families. Derive
+ * that test vocabulary from the conserved public occurrence instead of making
+ * every owner projection copy occurrence fields.
+ */
+function observedDependencyRowsForVerification(
+  rows: ExpectedSemanticEffectObservableRows,
+): ExpectedSemanticEffectObservableRows {
+  if (typeof rows === 'number') {
+    return rows;
+  }
+  return rows.map((row) => {
+    const occurrence = readPath(row, 'occurrence');
+    return isRecord(occurrence)
+      ? { ...occurrence, ...row }
+      : row;
+  });
+}
 
 export function observeExpectedSemanticEffect(
   expectedEffect: ExpectedSemanticEffect,
@@ -268,6 +290,10 @@ function readObjectArray(row: object, field: string): readonly object[] {
   return Array.isArray(value)
     ? value.filter((item): item is object => item != null && typeof item === 'object')
     : [];
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value != null && typeof value === 'object' && !Array.isArray(value);
 }
 
 function readPath(row: object, fieldPath: string): unknown {

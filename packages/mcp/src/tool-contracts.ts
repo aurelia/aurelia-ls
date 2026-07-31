@@ -118,9 +118,18 @@ export interface AureliaMcpAppQueryInput extends AureliaMcpOpenAppInput, Aurelia
   readonly cursor?: SemanticRuntimeSourceCursorInput | null;
   readonly sourceFile?: SemanticRuntimeSourceFileInput | null;
   readonly diagnosticProjection?: SemanticAppQuery['diagnosticProjection'];
+  readonly includeTypeSurfaces?: SemanticAppQuery['includeTypeSurfaces'];
+  readonly diagnosticPageSize?: SemanticAppQuery['diagnosticPageSize'];
+  readonly openSeamPageSize?: SemanticAppQuery['openSeamPageSize'];
   readonly openSeamKindKey?: SemanticAppQuery['openSeamKindKey'];
   readonly openSeamReasonKind?: SemanticAppQuery['openSeamReasonKind'];
   readonly sourceRole?: SemanticAppQuery['sourceRole'];
+  readonly openSeamClusterKey?: SemanticAppQuery['openSeamClusterKey'];
+  readonly openSeamSiteKey?: SemanticAppQuery['openSeamSiteKey'];
+  readonly observedDependencyLocus?: SemanticAppQuery['observedDependencyLocus'];
+  readonly rowPageSize?: SemanticAppQuery['rowPageSize'];
+  readonly includeDeclaration?: SemanticAppQuery['includeDeclaration'];
+  readonly newName?: SemanticAppQuery['newName'];
 }
 
 export interface AureliaMcpAppQueryBatchInput extends AureliaMcpOpenAppInput {
@@ -151,6 +160,8 @@ export interface AureliaMcpOpenSeamOverviewInput extends AureliaMcpOpenAppInput,
   readonly openSeamKindKey?: SemanticAppQuery['openSeamKindKey'];
   readonly openSeamReasonKind?: SemanticAppQuery['openSeamReasonKind'];
   readonly sourceRole?: SemanticAppQuery['sourceRole'];
+  readonly openSeamClusterKey?: SemanticAppQuery['openSeamClusterKey'];
+  readonly openSeamSiteKey?: SemanticAppQuery['openSeamSiteKey'];
 }
 
 export interface AureliaMcpTemplateCursorInput extends AureliaMcpWorkspaceInput, AureliaMcpPagedInput {

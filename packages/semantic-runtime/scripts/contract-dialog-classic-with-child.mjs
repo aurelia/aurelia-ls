@@ -3,8 +3,8 @@ import { fileURLToPath } from 'node:url';
 import {
   createSemanticRuntime,
   SemanticAppQueryKind,
-  SemanticOpenSeamAttemptKind,
 } from '../out/index.js';
+import { KernelOpenSeamKinds } from '../out/kernel/vocabulary/index.js';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/dialog-classic-with-child');
@@ -25,13 +25,14 @@ const openSeams = app.ask({
   kind: SemanticAppQueryKind.OpenSeams,
   page: { size: 20 },
 }).value.rows;
+const childConfigurationSeamKinds = new Set([
+  ...vocabularyKeys(KernelOpenSeamKinds.Registration),
+  ...vocabularyKeys(KernelOpenSeamKinds.Configuration),
+  ...vocabularyKeys(KernelOpenSeamKinds.Di),
+]);
 const childConfigurationOpenSeams = openSeams.filter((row) =>
-  row.attempt.kind === SemanticOpenSeamAttemptKind.RegistrationRecognition
-  || row.attempt.kind === SemanticOpenSeamAttemptKind.ConfigurationRecognition
-  || (
-    row.attempt.kind === SemanticOpenSeamAttemptKind.DiWorldConstruction
-    && !isStandardConfigurationDiCoverageSeam(row)
-  )
+  childConfigurationSeamKinds.has(row.seamKindKey)
+  && !isStandardConfigurationDiCoverageSeam(row)
 );
 const dialogIssues = app.ask({
   kind: SemanticAppQueryKind.DialogIssues,
@@ -76,4 +77,8 @@ if (failures.length > 0) {
 function isStandardConfigurationDiCoverageSeam(row) {
   return row.seamKindKey === 'di.open-registry-body'
     && row.summary.startsWith('StandardConfiguration catalogs and compiler-world services are modeled');
+}
+
+function vocabularyKeys(namespace) {
+  return Object.values(namespace).map((entry) => entry.key);
 }

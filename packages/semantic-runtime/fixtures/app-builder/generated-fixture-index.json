@@ -7,14 +7,14 @@
   "reviewArtifactByteCountSummary": {
     "fixtureCount": 70,
     "appBuilderRequestJsonTotal": 718910,
-    "appBuilderResponseJsonTotal": 1344592,
+    "appBuilderResponseJsonTotal": 1349002,
     "semanticFixtureJsonTotal": 3421668,
     "generatedSourceTextTotal": 281972,
     "generatedProjectToolingTextTotal": 105365,
     "generatedSourceAndProjectToolingTextTotal": 387337,
     "largestAppBuilderResponseJsonFixture": {
       "fixtureId": "application-assembly-projects-and-milestones",
-      "byteCount": 57185
+      "byteCount": 57248
     },
     "largestGeneratedSourceTextFixture": {
       "fixtureId": "application-assembly-projects-and-milestones",
@@ -16523,7 +16523,7 @@
       "semanticVerificationPath": "minimal-app-shell-convention/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 1599,
-        "appBuilderResponseJson": 9994,
+        "appBuilderResponseJson": 10057,
         "semanticFixtureJson": 13085,
         "generatedSourceText": 193,
         "generatedProjectToolingText": 1465,
@@ -16696,7 +16696,7 @@
       "semanticVerificationPath": "minimal-app-shell-decorator/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 1382,
-        "appBuilderResponseJson": 9986,
+        "appBuilderResponseJson": 10049,
         "semanticFixtureJson": 15294,
         "generatedSourceText": 312,
         "generatedProjectToolingText": 1489,
@@ -16868,7 +16868,7 @@
       "semanticVerificationPath": "application-assembly-projects-and-milestones/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 36736,
-        "appBuilderResponseJson": 57185,
+        "appBuilderResponseJson": 57248,
         "semanticFixtureJson": 177237,
         "generatedSourceText": 19464,
         "generatedProjectToolingText": 1523,
@@ -17340,7 +17340,7 @@
       "semanticVerificationPath": "router-backed-task-browser/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 7550,
-        "appBuilderResponseJson": 19372,
+        "appBuilderResponseJson": 19435,
         "semanticFixtureJson": 48756,
         "generatedSourceText": 3636,
         "generatedProjectToolingText": 1505,
@@ -17591,7 +17591,7 @@
       "semanticVerificationPath": "router-backed-task-create-browser/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 5477,
-        "appBuilderResponseJson": 28839,
+        "appBuilderResponseJson": 28902,
         "semanticFixtureJson": 54171,
         "generatedSourceText": 3441,
         "generatedProjectToolingText": 1519,
@@ -17887,7 +17887,7 @@
       "semanticVerificationPath": "router-backed-task-service-browser/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 5507,
-        "appBuilderResponseJson": 32553,
+        "appBuilderResponseJson": 32616,
         "semanticFixtureJson": 61728,
         "generatedSourceText": 4723,
         "generatedProjectToolingText": 1521,
@@ -18195,7 +18195,7 @@
       "semanticVerificationPath": "router-backed-task-service-vocabulary-browser/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 6320,
-        "appBuilderResponseJson": 33630,
+        "appBuilderResponseJson": 33693,
         "semanticFixtureJson": 64209,
         "generatedSourceText": 4969,
         "generatedProjectToolingText": 1543,
@@ -18520,7 +18520,7 @@
       "semanticVerificationPath": "router-backed-task-service-search-browser/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 7986,
-        "appBuilderResponseJson": 34160,
+        "appBuilderResponseJson": 34223,
         "semanticFixtureJson": 68915,
         "generatedSourceText": 5819,
         "generatedProjectToolingText": 1535,
@@ -18892,7 +18892,7 @@
       "semanticVerificationPath": "router-backed-contact-service-search-create-browser/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 12127,
-        "appBuilderResponseJson": 48656,
+        "appBuilderResponseJson": 48719,
         "semanticFixtureJson": 101214,
         "generatedSourceText": 9982,
         "generatedProjectToolingText": 1555,
@@ -19425,7 +19425,7 @@
       "semanticVerificationPath": "router-backed-task-create-options-browser/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 6806,
-        "appBuilderResponseJson": 31112,
+        "appBuilderResponseJson": 31175,
         "semanticFixtureJson": 58968,
         "generatedSourceText": 5304,
         "generatedProjectToolingText": 1535,
@@ -19733,7 +19733,7 @@
       "semanticVerificationPath": "router-backed-task-create-assignment-browser/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 9320,
-        "appBuilderResponseJson": 31477,
+        "appBuilderResponseJson": 31540,
         "semanticFixtureJson": 63670,
         "generatedSourceText": 5596,
         "generatedProjectToolingText": 1541,
@@ -20054,7 +20054,7 @@
       "semanticVerificationPath": "router-backed-task-assignment-table-browser/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 10051,
-        "appBuilderResponseJson": 31475,
+        "appBuilderResponseJson": 31538,
         "semanticFixtureJson": 65359,
         "generatedSourceText": 5847,
         "generatedProjectToolingText": 1539,
@@ -20375,7 +20375,7 @@
       "semanticVerificationPath": "router-backed-task-object-assignment-table-browser/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 9139,
-        "appBuilderResponseJson": 32385,
+        "appBuilderResponseJson": 32448,
         "semanticFixtureJson": 66160,
         "generatedSourceText": 5630,
         "generatedProjectToolingText": 1553,
@@ -20705,7 +20705,7 @@
       "semanticVerificationPath": "router-backed-task-service-object-assignment-table-browser/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 9493,
-        "appBuilderResponseJson": 36411,
+        "appBuilderResponseJson": 36474,
         "semanticFixtureJson": 74245,
         "generatedSourceText": 7464,
         "generatedProjectToolingText": 1569,
@@ -21052,7 +21052,7 @@
       "semanticVerificationPath": "router-backed-task-service-object-reviewers-table-browser/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 9648,
-        "appBuilderResponseJson": 36403,
+        "appBuilderResponseJson": 36466,
         "semanticFixtureJson": 74247,
         "generatedSourceText": 7475,
         "generatedProjectToolingText": 1567,
@@ -21399,7 +21399,7 @@
       "semanticVerificationPath": "router-backed-task-service-assignment-table-browser/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 10940,
-        "appBuilderResponseJson": 36405,
+        "appBuilderResponseJson": 36468,
         "semanticFixtureJson": 75426,
         "generatedSourceText": 7609,
         "generatedProjectToolingText": 1555,
@@ -21749,7 +21749,7 @@
       "semanticVerificationPath": "router-backed-task-relationship-overview-browser/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 14798,
-        "appBuilderResponseJson": 20865,
+        "appBuilderResponseJson": 20928,
         "semanticFixtureJson": 60593,
         "generatedSourceText": 7165,
         "generatedProjectToolingText": 1531,
@@ -22021,7 +22021,7 @@
       "semanticVerificationPath": "router-backed-task-service-relationship-overview-browser/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 15091,
-        "appBuilderResponseJson": 23607,
+        "appBuilderResponseJson": 23670,
         "semanticFixtureJson": 68190,
         "generatedSourceText": 8515,
         "generatedProjectToolingText": 1565,
@@ -22309,7 +22309,7 @@
       "semanticVerificationPath": "router-backed-task-service-relationship-search-browser/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 17487,
-        "appBuilderResponseJson": 34656,
+        "appBuilderResponseJson": 34719,
         "semanticFixtureJson": 82580,
         "generatedSourceText": 10441,
         "generatedProjectToolingText": 1561,
@@ -22716,7 +22716,7 @@
       "semanticVerificationPath": "router-backed-task-service-relationship-search-create-browser/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 18513,
-        "appBuilderResponseJson": 46873,
+        "appBuilderResponseJson": 46936,
         "semanticFixtureJson": 100172,
         "generatedSourceText": 12845,
         "generatedProjectToolingText": 1575,
@@ -23165,7 +23165,7 @@
       "semanticVerificationPath": "router-backed-task-service-relationship-search-create-complete-browser/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 18571,
-        "appBuilderResponseJson": 49371,
+        "appBuilderResponseJson": 49434,
         "semanticFixtureJson": 99886,
         "generatedSourceText": 13459,
         "generatedProjectToolingText": 1593,
@@ -23625,7 +23625,7 @@
       "semanticVerificationPath": "router-backed-task-review-browser/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 8642,
-        "appBuilderResponseJson": 19380,
+        "appBuilderResponseJson": 19443,
         "semanticFixtureJson": 51292,
         "generatedSourceText": 4278,
         "generatedProjectToolingText": 1519,
@@ -23880,7 +23880,7 @@
       "semanticVerificationPath": "router-backed-task-table-browser/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 9383,
-        "appBuilderResponseJson": 19378,
+        "appBuilderResponseJson": 19441,
         "semanticFixtureJson": 52980,
         "generatedSourceText": 4532,
         "generatedProjectToolingText": 1517,
@@ -24135,7 +24135,7 @@
       "semanticVerificationPath": "router-backed-note-browser-string-id/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 4516,
-        "appBuilderResponseJson": 18116,
+        "appBuilderResponseJson": 18179,
         "semanticFixtureJson": 43091,
         "generatedSourceText": 2719,
         "generatedProjectToolingText": 1505,
@@ -24353,7 +24353,7 @@
       "semanticVerificationPath": "di-state-task-state/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 2642,
-        "appBuilderResponseJson": 4956,
+        "appBuilderResponseJson": 5019,
         "semanticFixtureJson": 1558,
         "generatedSourceText": 310,
         "generatedProjectToolingText": 0,
@@ -24530,7 +24530,7 @@
       "semanticVerificationPath": "component-pair-contact-card-string-id/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 6325,
-        "appBuilderResponseJson": 10819,
+        "appBuilderResponseJson": 10882,
         "semanticFixtureJson": 28901,
         "generatedSourceText": 1875,
         "generatedProjectToolingText": 1483,
@@ -24781,7 +24781,7 @@
       "semanticVerificationPath": "component-pair-task-draft-app-shell/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 4157,
-        "appBuilderResponseJson": 11251,
+        "appBuilderResponseJson": 11314,
         "semanticFixtureJson": 22943,
         "generatedSourceText": 559,
         "generatedProjectToolingText": 1471,
@@ -25045,7 +25045,7 @@
       "semanticVerificationPath": "component-pair-task-section-create-and-table/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 7384,
-        "appBuilderResponseJson": 13714,
+        "appBuilderResponseJson": 13777,
         "semanticFixtureJson": 33412,
         "generatedSourceText": 1542,
         "generatedProjectToolingText": 1479,
@@ -25363,7 +25363,7 @@
       "semanticVerificationPath": "component-pair-task-section-create-feedback/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 8514,
-        "appBuilderResponseJson": 14528,
+        "appBuilderResponseJson": 14591,
         "semanticFixtureJson": 36209,
         "generatedSourceText": 1793,
         "generatedProjectToolingText": 1515,
@@ -25693,7 +25693,7 @@
       "semanticVerificationPath": "component-pair-task-assignment-section/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 11146,
-        "appBuilderResponseJson": 13782,
+        "appBuilderResponseJson": 13845,
         "semanticFixtureJson": 40474,
         "generatedSourceText": 2777,
         "generatedProjectToolingText": 1523,
@@ -26063,7 +26063,7 @@
       "semanticVerificationPath": "component-pair-task-object-assignment-section/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 11147,
-        "appBuilderResponseJson": 14494,
+        "appBuilderResponseJson": 14557,
         "semanticFixtureJson": 40970,
         "generatedSourceText": 3117,
         "generatedProjectToolingText": 1551,
@@ -26458,7 +26458,7 @@
       "semanticVerificationPath": "component-pair-task-operations-section/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 18854,
-        "appBuilderResponseJson": 15851,
+        "appBuilderResponseJson": 15914,
         "semanticFixtureJson": 81905,
         "generatedSourceText": 6842,
         "generatedProjectToolingText": 1523,
@@ -26988,7 +26988,7 @@
       "semanticVerificationPath": "component-pair-task-relationship-overview-section/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 15941,
-        "appBuilderResponseJson": 11688,
+        "appBuilderResponseJson": 11751,
         "semanticFixtureJson": 39226,
         "generatedSourceText": 4786,
         "generatedProjectToolingText": 1567,
@@ -27283,7 +27283,7 @@
       "semanticVerificationPath": "component-pair-task-relationship-operations-section/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 21219,
-        "appBuilderResponseJson": 13131,
+        "appBuilderResponseJson": 13194,
         "semanticFixtureJson": 76406,
         "generatedSourceText": 7858,
         "generatedProjectToolingText": 1575,
@@ -27730,7 +27730,7 @@
       "semanticVerificationPath": "component-pair-task-relationship-async-section/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 17552,
-        "appBuilderResponseJson": 13181,
+        "appBuilderResponseJson": 13244,
         "semanticFixtureJson": 46154,
         "generatedSourceText": 5356,
         "generatedProjectToolingText": 1555,
@@ -28070,7 +28070,7 @@
       "semanticVerificationPath": "component-pair-task-review-workflow-section/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 15926,
-        "appBuilderResponseJson": 16083,
+        "appBuilderResponseJson": 16146,
         "semanticFixtureJson": 55540,
         "generatedSourceText": 4547,
         "generatedProjectToolingText": 1543,
@@ -28525,7 +28525,7 @@
       "semanticVerificationPath": "component-pair-task-review-workbench-section/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 20322,
-        "appBuilderResponseJson": 15219,
+        "appBuilderResponseJson": 15282,
         "semanticFixtureJson": 87537,
         "generatedSourceText": 7272,
         "generatedProjectToolingText": 1547,
@@ -29061,7 +29061,7 @@
       "semanticVerificationPath": "component-pair-task-reviewers-section/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 11360,
-        "appBuilderResponseJson": 13776,
+        "appBuilderResponseJson": 13839,
         "semanticFixtureJson": 40410,
         "generatedSourceText": 2853,
         "generatedProjectToolingText": 1519,
@@ -29432,7 +29432,7 @@
       "semanticVerificationPath": "component-pair-task-schedule-section/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 8221,
-        "appBuilderResponseJson": 11608,
+        "appBuilderResponseJson": 11671,
         "semanticFixtureJson": 26109,
         "generatedSourceText": 1398,
         "generatedProjectToolingText": 1515,
@@ -29703,7 +29703,7 @@
       "semanticVerificationPath": "component-pair-task-checkpoints-section/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 8552,
-        "appBuilderResponseJson": 11626,
+        "appBuilderResponseJson": 11689,
         "semanticFixtureJson": 26184,
         "generatedSourceText": 1607,
         "generatedProjectToolingText": 1527,
@@ -29972,7 +29972,7 @@
       "semanticVerificationPath": "component-pair-task-effort-section/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 7798,
-        "appBuilderResponseJson": 11596,
+        "appBuilderResponseJson": 11659,
         "semanticFixtureJson": 26066,
         "generatedSourceText": 1322,
         "generatedProjectToolingText": 1507,
@@ -30241,7 +30241,7 @@
       "semanticVerificationPath": "component-pair-task-section-create-and-async-table/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 8976,
-        "appBuilderResponseJson": 15261,
+        "appBuilderResponseJson": 15324,
         "semanticFixtureJson": 40650,
         "generatedSourceText": 2068,
         "generatedProjectToolingText": 1503,
@@ -30602,7 +30602,7 @@
       "semanticVerificationPath": "component-pair-task-draft-object/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 4245,
-        "appBuilderResponseJson": 11293,
+        "appBuilderResponseJson": 11356,
         "semanticFixtureJson": 23060,
         "generatedSourceText": 710,
         "generatedProjectToolingText": 1499,
@@ -30880,7 +30880,7 @@
       "semanticVerificationPath": "component-pair-task-domain-backed-submit-form/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 4418,
-        "appBuilderResponseJson": 11716,
+        "appBuilderResponseJson": 11779,
         "semanticFixtureJson": 26033,
         "generatedSourceText": 943,
         "generatedProjectToolingText": 1551,
@@ -31195,7 +31195,7 @@
       "semanticVerificationPath": "component-pair-task-draft-field-variety/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 16464,
-        "appBuilderResponseJson": 11800,
+        "appBuilderResponseJson": 11863,
         "semanticFixtureJson": 85145,
         "generatedSourceText": 8612,
         "generatedProjectToolingText": 1501,
@@ -31744,7 +31744,7 @@
       "semanticVerificationPath": "component-pair-task-draft-explicit-field-overrides/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 13204,
-        "appBuilderResponseJson": 11814,
+        "appBuilderResponseJson": 11877,
         "semanticFixtureJson": 36042,
         "generatedSourceText": 2766,
         "generatedProjectToolingText": 1511,
@@ -32207,7 +32207,7 @@
       "semanticVerificationPath": "component-pair-task-preferences-named-value-sets/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 6422,
-        "appBuilderResponseJson": 11287,
+        "appBuilderResponseJson": 11350,
         "semanticFixtureJson": 28832,
         "generatedSourceText": 1753,
         "generatedProjectToolingText": 1495,
@@ -32491,7 +32491,7 @@
       "semanticVerificationPath": "component-pair-task-draft-reset-button/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 5238,
-        "appBuilderResponseJson": 11791,
+        "appBuilderResponseJson": 11854,
         "semanticFixtureJson": 25991,
         "generatedSourceText": 718,
         "generatedProjectToolingText": 1497,
@@ -32780,7 +32780,7 @@
       "semanticVerificationPath": "component-pair-task-table-local-collection/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 4702,
-        "appBuilderResponseJson": 10805,
+        "appBuilderResponseJson": 10868,
         "semanticFixtureJson": 21821,
         "generatedSourceText": 730,
         "generatedProjectToolingText": 1471,
@@ -33028,7 +33028,7 @@
       "semanticVerificationPath": "component-pair-task-list-local-collection/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 4684,
-        "appBuilderResponseJson": 10794,
+        "appBuilderResponseJson": 10857,
         "semanticFixtureJson": 21375,
         "generatedSourceText": 633,
         "generatedProjectToolingText": 1467,
@@ -33272,7 +33272,7 @@
       "semanticVerificationPath": "component-pair-task-card-local-collection/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 4682,
-        "appBuilderResponseJson": 10800,
+        "appBuilderResponseJson": 10863,
         "semanticFixtureJson": 21391,
         "generatedSourceText": 637,
         "generatedProjectToolingText": 1471,
@@ -33520,7 +33520,7 @@
       "semanticVerificationPath": "component-pair-task-table-loading-empty-error/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 7071,
-        "appBuilderResponseJson": 12351,
+        "appBuilderResponseJson": 12414,
         "semanticFixtureJson": 28848,
         "generatedSourceText": 1282,
         "generatedProjectToolingText": 1495,
@@ -33814,7 +33814,7 @@
       "semanticVerificationPath": "component-pair-task-table-service-loading/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 7131,
-        "appBuilderResponseJson": 12917,
+        "appBuilderResponseJson": 12980,
         "semanticFixtureJson": 31527,
         "generatedSourceText": 1673,
         "generatedProjectToolingText": 1503,
@@ -34117,7 +34117,7 @@
       "semanticVerificationPath": "component-pair-task-table-service-refresh/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 11171,
-        "appBuilderResponseJson": 16708,
+        "appBuilderResponseJson": 16771,
         "semanticFixtureJson": 38729,
         "generatedSourceText": 2278,
         "generatedProjectToolingText": 1551,
@@ -34485,7 +34485,7 @@
       "semanticVerificationPath": "component-pair-task-table-service-filter/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 11592,
-        "appBuilderResponseJson": 16702,
+        "appBuilderResponseJson": 16765,
         "semanticFixtureJson": 38744,
         "generatedSourceText": 2471,
         "generatedProjectToolingText": 1547,
@@ -34869,7 +34869,7 @@
       "semanticVerificationPath": "component-pair-task-section-service-create/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 12111,
-        "appBuilderResponseJson": 17421,
+        "appBuilderResponseJson": 17484,
         "semanticFixtureJson": 46194,
         "generatedSourceText": 2908,
         "generatedProjectToolingText": 1539,
@@ -35288,7 +35288,7 @@
       "semanticVerificationPath": "component-pair-task-table-service-complete/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 9848,
-        "appBuilderResponseJson": 15930,
+        "appBuilderResponseJson": 15993,
         "semanticFixtureJson": 37944,
         "generatedSourceText": 2509,
         "generatedProjectToolingText": 1539,
@@ -35676,7 +35676,7 @@
       "semanticVerificationPath": "component-pair-task-section-service-create-and-complete/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 14212,
-        "appBuilderResponseJson": 18111,
+        "appBuilderResponseJson": 18174,
         "semanticFixtureJson": 53882,
         "generatedSourceText": 3937,
         "generatedProjectToolingText": 1575,
@@ -36134,7 +36134,7 @@
       "semanticVerificationPath": "component-pair-task-section-service-filter-create-complete/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 21334,
-        "appBuilderResponseJson": 18154,
+        "appBuilderResponseJson": 18217,
         "semanticFixtureJson": 71258,
         "generatedSourceText": 5973,
         "generatedProjectToolingText": 1603,
@@ -36656,7 +36656,7 @@
       "semanticVerificationPath": "component-pair-task-section-service-search/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 15430,
-        "appBuilderResponseJson": 17316,
+        "appBuilderResponseJson": 17379,
         "semanticFixtureJson": 47078,
         "generatedSourceText": 3604,
         "generatedProjectToolingText": 1539,
@@ -37113,7 +37113,7 @@
       "semanticVerificationPath": "component-pair-task-section-service-search-create-complete/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 20290,
-        "appBuilderResponseJson": 18154,
+        "appBuilderResponseJson": 18217,
         "semanticFixtureJson": 67962,
         "generatedSourceText": 5863,
         "generatedProjectToolingText": 1603,
@@ -37642,7 +37642,7 @@
       "semanticVerificationPath": "component-pair-task-table-local-sort/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 6166,
-        "appBuilderResponseJson": 11614,
+        "appBuilderResponseJson": 11677,
         "semanticFixtureJson": 25483,
         "generatedSourceText": 944,
         "generatedProjectToolingText": 1507,
@@ -37924,7 +37924,7 @@
       "semanticVerificationPath": "component-pair-task-table-local-filter/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 5663,
-        "appBuilderResponseJson": 10871,
+        "appBuilderResponseJson": 10934,
         "semanticFixtureJson": 26496,
         "generatedSourceText": 1281,
         "generatedProjectToolingText": 1515,
@@ -38203,7 +38203,7 @@
       "semanticVerificationPath": "component-pair-task-table-local-pagination/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 6100,
-        "appBuilderResponseJson": 10866,
+        "appBuilderResponseJson": 10929,
         "semanticFixtureJson": 36336,
         "generatedSourceText": 1984,
         "generatedProjectToolingText": 1511,
@@ -38501,7 +38501,7 @@
       "semanticVerificationPath": "component-pair-task-table-row-selection/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 6136,
-        "appBuilderResponseJson": 10871,
+        "appBuilderResponseJson": 10934,
         "semanticFixtureJson": 29673,
         "generatedSourceText": 1457,
         "generatedProjectToolingText": 1515,
@@ -38793,7 +38793,7 @@
       "semanticVerificationPath": "component-pair-task-table-batch-actions/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 7615,
-        "appBuilderResponseJson": 12304,
+        "appBuilderResponseJson": 12367,
         "semanticFixtureJson": 36696,
         "generatedSourceText": 1959,
         "generatedProjectToolingText": 1495,
@@ -39117,7 +39117,7 @@
       "semanticVerificationPath": "component-pair-task-table-visual-hooks/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 7426,
-        "appBuilderResponseJson": 10841,
+        "appBuilderResponseJson": 10904,
         "semanticFixtureJson": 21945,
         "generatedSourceText": 980,
         "generatedProjectToolingText": 1495,
@@ -39367,7 +39367,7 @@
       "semanticVerificationPath": "component-pair-task-table-row-action/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 6067,
-        "appBuilderResponseJson": 12333,
+        "appBuilderResponseJson": 12396,
         "semanticFixtureJson": 26939,
         "generatedSourceText": 981,
         "generatedProjectToolingText": 1515,
@@ -39663,7 +39663,7 @@
       "semanticVerificationPath": "component-pair-task-table-route-action/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 5838,
-        "appBuilderResponseJson": 11848,
+        "appBuilderResponseJson": 11911,
         "semanticFixtureJson": 27755,
         "generatedSourceText": 1003,
         "generatedProjectToolingText": 1561,
@@ -39939,7 +39939,7 @@
       "semanticVerificationPath": "component-pair-task-command-actions/semantic-verification.json",
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 10532,
-        "appBuilderResponseJson": 12327,
+        "appBuilderResponseJson": 12390,
         "semanticFixtureJson": 46367,
         "generatedSourceText": 2083,
         "generatedProjectToolingText": 1511,
@@ -40286,7 +40286,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 1599,
-        "appBuilderResponseJson": 9994,
+        "appBuilderResponseJson": 10057,
         "semanticFixtureJson": 13085,
         "generatedSourceText": 193,
         "generatedProjectToolingText": 1465,
@@ -40657,7 +40657,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 1382,
-        "appBuilderResponseJson": 9986,
+        "appBuilderResponseJson": 10049,
         "semanticFixtureJson": 15294,
         "generatedSourceText": 312,
         "generatedProjectToolingText": 1489,
@@ -41215,7 +41215,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 36736,
-        "appBuilderResponseJson": 57185,
+        "appBuilderResponseJson": 57248,
         "semanticFixtureJson": 177237,
         "generatedSourceText": 19464,
         "generatedProjectToolingText": 1523,
@@ -43018,7 +43018,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 7550,
-        "appBuilderResponseJson": 19372,
+        "appBuilderResponseJson": 19435,
         "semanticFixtureJson": 48756,
         "generatedSourceText": 3636,
         "generatedProjectToolingText": 1505,
@@ -43626,7 +43626,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 5477,
-        "appBuilderResponseJson": 28839,
+        "appBuilderResponseJson": 28902,
         "semanticFixtureJson": 54171,
         "generatedSourceText": 3441,
         "generatedProjectToolingText": 1519,
@@ -44695,7 +44695,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 5507,
-        "appBuilderResponseJson": 32553,
+        "appBuilderResponseJson": 32616,
         "semanticFixtureJson": 61728,
         "generatedSourceText": 4723,
         "generatedProjectToolingText": 1521,
@@ -45883,7 +45883,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 6320,
-        "appBuilderResponseJson": 33630,
+        "appBuilderResponseJson": 33693,
         "semanticFixtureJson": 64209,
         "generatedSourceText": 4969,
         "generatedProjectToolingText": 1543,
@@ -47191,7 +47191,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 7986,
-        "appBuilderResponseJson": 34160,
+        "appBuilderResponseJson": 34223,
         "semanticFixtureJson": 68915,
         "generatedSourceText": 5819,
         "generatedProjectToolingText": 1535,
@@ -48557,7 +48557,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 12127,
-        "appBuilderResponseJson": 48656,
+        "appBuilderResponseJson": 48719,
         "semanticFixtureJson": 101214,
         "generatedSourceText": 9982,
         "generatedProjectToolingText": 1555,
@@ -50611,7 +50611,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 6806,
-        "appBuilderResponseJson": 31112,
+        "appBuilderResponseJson": 31175,
         "semanticFixtureJson": 58968,
         "generatedSourceText": 5304,
         "generatedProjectToolingText": 1535,
@@ -51768,7 +51768,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 9320,
-        "appBuilderResponseJson": 31477,
+        "appBuilderResponseJson": 31540,
         "semanticFixtureJson": 63670,
         "generatedSourceText": 5596,
         "generatedProjectToolingText": 1541,
@@ -52943,7 +52943,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 10051,
-        "appBuilderResponseJson": 31475,
+        "appBuilderResponseJson": 31538,
         "semanticFixtureJson": 65359,
         "generatedSourceText": 5847,
         "generatedProjectToolingText": 1539,
@@ -54118,7 +54118,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 9139,
-        "appBuilderResponseJson": 32385,
+        "appBuilderResponseJson": 32448,
         "semanticFixtureJson": 66160,
         "generatedSourceText": 5630,
         "generatedProjectToolingText": 1553,
@@ -55362,7 +55362,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 9493,
-        "appBuilderResponseJson": 36411,
+        "appBuilderResponseJson": 36474,
         "semanticFixtureJson": 74245,
         "generatedSourceText": 7464,
         "generatedProjectToolingText": 1569,
@@ -56785,7 +56785,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 9648,
-        "appBuilderResponseJson": 36403,
+        "appBuilderResponseJson": 36466,
         "semanticFixtureJson": 74247,
         "generatedSourceText": 7475,
         "generatedProjectToolingText": 1567,
@@ -58208,7 +58208,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 10940,
-        "appBuilderResponseJson": 36405,
+        "appBuilderResponseJson": 36468,
         "semanticFixtureJson": 75426,
         "generatedSourceText": 7609,
         "generatedProjectToolingText": 1555,
@@ -59627,7 +59627,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 14798,
-        "appBuilderResponseJson": 20865,
+        "appBuilderResponseJson": 20928,
         "semanticFixtureJson": 60593,
         "generatedSourceText": 7165,
         "generatedProjectToolingText": 1531,
@@ -60270,7 +60270,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 15091,
-        "appBuilderResponseJson": 23607,
+        "appBuilderResponseJson": 23670,
         "semanticFixtureJson": 68190,
         "generatedSourceText": 8515,
         "generatedProjectToolingText": 1565,
@@ -61047,7 +61047,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 17487,
-        "appBuilderResponseJson": 34656,
+        "appBuilderResponseJson": 34719,
         "semanticFixtureJson": 82580,
         "generatedSourceText": 10441,
         "generatedProjectToolingText": 1561,
@@ -62455,7 +62455,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 18513,
-        "appBuilderResponseJson": 46873,
+        "appBuilderResponseJson": 46936,
         "semanticFixtureJson": 100172,
         "generatedSourceText": 12845,
         "generatedProjectToolingText": 1575,
@@ -64352,7 +64352,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 18571,
-        "appBuilderResponseJson": 49371,
+        "appBuilderResponseJson": 49434,
         "semanticFixtureJson": 99886,
         "generatedSourceText": 13459,
         "generatedProjectToolingText": 1593,
@@ -66337,7 +66337,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 8642,
-        "appBuilderResponseJson": 19380,
+        "appBuilderResponseJson": 19443,
         "semanticFixtureJson": 51292,
         "generatedSourceText": 4278,
         "generatedProjectToolingText": 1519,
@@ -66956,7 +66956,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 9383,
-        "appBuilderResponseJson": 19378,
+        "appBuilderResponseJson": 19441,
         "semanticFixtureJson": 52980,
         "generatedSourceText": 4532,
         "generatedProjectToolingText": 1517,
@@ -67568,7 +67568,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 4516,
-        "appBuilderResponseJson": 18116,
+        "appBuilderResponseJson": 18179,
         "semanticFixtureJson": 43091,
         "generatedSourceText": 2719,
         "generatedProjectToolingText": 1505,
@@ -67992,7 +67992,7 @@
       "generatedProjectToolingFiles": [],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 2642,
-        "appBuilderResponseJson": 4956,
+        "appBuilderResponseJson": 5019,
         "semanticFixtureJson": 1558,
         "generatedSourceText": 310,
         "generatedProjectToolingText": 0,
@@ -68372,7 +68372,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 6325,
-        "appBuilderResponseJson": 10819,
+        "appBuilderResponseJson": 10882,
         "semanticFixtureJson": 28901,
         "generatedSourceText": 1875,
         "generatedProjectToolingText": 1483,
@@ -68986,7 +68986,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 4157,
-        "appBuilderResponseJson": 11251,
+        "appBuilderResponseJson": 11314,
         "semanticFixtureJson": 22943,
         "generatedSourceText": 559,
         "generatedProjectToolingText": 1471,
@@ -69792,7 +69792,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 7384,
-        "appBuilderResponseJson": 13714,
+        "appBuilderResponseJson": 13777,
         "semanticFixtureJson": 33412,
         "generatedSourceText": 1542,
         "generatedProjectToolingText": 1479,
@@ -70840,7 +70840,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 8514,
-        "appBuilderResponseJson": 14528,
+        "appBuilderResponseJson": 14591,
         "semanticFixtureJson": 36209,
         "generatedSourceText": 1793,
         "generatedProjectToolingText": 1515,
@@ -71966,7 +71966,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 11146,
-        "appBuilderResponseJson": 13782,
+        "appBuilderResponseJson": 13845,
         "semanticFixtureJson": 40474,
         "generatedSourceText": 2777,
         "generatedProjectToolingText": 1523,
@@ -73186,7 +73186,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 11147,
-        "appBuilderResponseJson": 14494,
+        "appBuilderResponseJson": 14557,
         "semanticFixtureJson": 40970,
         "generatedSourceText": 3117,
         "generatedProjectToolingText": 1551,
@@ -74507,7 +74507,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 18854,
-        "appBuilderResponseJson": 15851,
+        "appBuilderResponseJson": 15914,
         "semanticFixtureJson": 81905,
         "generatedSourceText": 6842,
         "generatedProjectToolingText": 1523,
@@ -76300,7 +76300,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 15941,
-        "appBuilderResponseJson": 11688,
+        "appBuilderResponseJson": 11751,
         "semanticFixtureJson": 39226,
         "generatedSourceText": 4786,
         "generatedProjectToolingText": 1567,
@@ -77025,7 +77025,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 21219,
-        "appBuilderResponseJson": 13131,
+        "appBuilderResponseJson": 13194,
         "semanticFixtureJson": 76406,
         "generatedSourceText": 7858,
         "generatedProjectToolingText": 1575,
@@ -78251,7 +78251,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 17552,
-        "appBuilderResponseJson": 13181,
+        "appBuilderResponseJson": 13244,
         "semanticFixtureJson": 46154,
         "generatedSourceText": 5356,
         "generatedProjectToolingText": 1555,
@@ -79207,7 +79207,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 15926,
-        "appBuilderResponseJson": 16083,
+        "appBuilderResponseJson": 16146,
         "semanticFixtureJson": 55540,
         "generatedSourceText": 4547,
         "generatedProjectToolingText": 1543,
@@ -80874,7 +80874,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 20322,
-        "appBuilderResponseJson": 15219,
+        "appBuilderResponseJson": 15282,
         "semanticFixtureJson": 87537,
         "generatedSourceText": 7272,
         "generatedProjectToolingText": 1547,
@@ -82706,7 +82706,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 11360,
-        "appBuilderResponseJson": 13776,
+        "appBuilderResponseJson": 13839,
         "semanticFixtureJson": 40410,
         "generatedSourceText": 2853,
         "generatedProjectToolingText": 1519,
@@ -83927,7 +83927,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 8221,
-        "appBuilderResponseJson": 11608,
+        "appBuilderResponseJson": 11671,
         "semanticFixtureJson": 26109,
         "generatedSourceText": 1398,
         "generatedProjectToolingText": 1515,
@@ -84628,7 +84628,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 8552,
-        "appBuilderResponseJson": 11626,
+        "appBuilderResponseJson": 11689,
         "semanticFixtureJson": 26184,
         "generatedSourceText": 1607,
         "generatedProjectToolingText": 1527,
@@ -85327,7 +85327,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 7798,
-        "appBuilderResponseJson": 11596,
+        "appBuilderResponseJson": 11659,
         "semanticFixtureJson": 26066,
         "generatedSourceText": 1322,
         "generatedProjectToolingText": 1507,
@@ -86026,7 +86026,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 8976,
-        "appBuilderResponseJson": 15261,
+        "appBuilderResponseJson": 15324,
         "semanticFixtureJson": 40650,
         "generatedSourceText": 2068,
         "generatedProjectToolingText": 1503,
@@ -87304,7 +87304,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 4245,
-        "appBuilderResponseJson": 11293,
+        "appBuilderResponseJson": 11356,
         "semanticFixtureJson": 23060,
         "generatedSourceText": 710,
         "generatedProjectToolingText": 1499,
@@ -88133,7 +88133,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 4418,
-        "appBuilderResponseJson": 11716,
+        "appBuilderResponseJson": 11779,
         "semanticFixtureJson": 26033,
         "generatedSourceText": 943,
         "generatedProjectToolingText": 1551,
@@ -88998,7 +88998,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 16464,
-        "appBuilderResponseJson": 11800,
+        "appBuilderResponseJson": 11863,
         "semanticFixtureJson": 85145,
         "generatedSourceText": 8612,
         "generatedProjectToolingText": 1501,
@@ -90718,7 +90718,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 13204,
-        "appBuilderResponseJson": 11814,
+        "appBuilderResponseJson": 11877,
         "semanticFixtureJson": 36042,
         "generatedSourceText": 2766,
         "generatedProjectToolingText": 1511,
@@ -92175,7 +92175,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 6422,
-        "appBuilderResponseJson": 11287,
+        "appBuilderResponseJson": 11350,
         "semanticFixtureJson": 28832,
         "generatedSourceText": 1753,
         "generatedProjectToolingText": 1495,
@@ -93107,7 +93107,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 5238,
-        "appBuilderResponseJson": 11791,
+        "appBuilderResponseJson": 11854,
         "semanticFixtureJson": 25991,
         "generatedSourceText": 718,
         "generatedProjectToolingText": 1497,
@@ -94064,7 +94064,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 4702,
-        "appBuilderResponseJson": 10805,
+        "appBuilderResponseJson": 10868,
         "semanticFixtureJson": 21821,
         "generatedSourceText": 730,
         "generatedProjectToolingText": 1471,
@@ -94674,7 +94674,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 4684,
-        "appBuilderResponseJson": 10794,
+        "appBuilderResponseJson": 10857,
         "semanticFixtureJson": 21375,
         "generatedSourceText": 633,
         "generatedProjectToolingText": 1467,
@@ -95283,7 +95283,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 4682,
-        "appBuilderResponseJson": 10800,
+        "appBuilderResponseJson": 10863,
         "semanticFixtureJson": 21391,
         "generatedSourceText": 637,
         "generatedProjectToolingText": 1471,
@@ -95894,7 +95894,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 7071,
-        "appBuilderResponseJson": 12351,
+        "appBuilderResponseJson": 12414,
         "semanticFixtureJson": 28848,
         "generatedSourceText": 1282,
         "generatedProjectToolingText": 1495,
@@ -96740,7 +96740,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 7131,
-        "appBuilderResponseJson": 12917,
+        "appBuilderResponseJson": 12980,
         "semanticFixtureJson": 31527,
         "generatedSourceText": 1673,
         "generatedProjectToolingText": 1503,
@@ -97645,7 +97645,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 11171,
-        "appBuilderResponseJson": 16708,
+        "appBuilderResponseJson": 16771,
         "semanticFixtureJson": 38729,
         "generatedSourceText": 2278,
         "generatedProjectToolingText": 1551,
@@ -99005,7 +99005,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 11592,
-        "appBuilderResponseJson": 16702,
+        "appBuilderResponseJson": 16765,
         "semanticFixtureJson": 38744,
         "generatedSourceText": 2471,
         "generatedProjectToolingText": 1547,
@@ -100437,7 +100437,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 12111,
-        "appBuilderResponseJson": 17421,
+        "appBuilderResponseJson": 17484,
         "semanticFixtureJson": 46194,
         "generatedSourceText": 2908,
         "generatedProjectToolingText": 1539,
@@ -102029,7 +102029,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 9848,
-        "appBuilderResponseJson": 15930,
+        "appBuilderResponseJson": 15993,
         "semanticFixtureJson": 37944,
         "generatedSourceText": 2509,
         "generatedProjectToolingText": 1539,
@@ -103383,7 +103383,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 14212,
-        "appBuilderResponseJson": 18111,
+        "appBuilderResponseJson": 18174,
         "semanticFixtureJson": 53882,
         "generatedSourceText": 3937,
         "generatedProjectToolingText": 1575,
@@ -105185,7 +105185,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 21334,
-        "appBuilderResponseJson": 18154,
+        "appBuilderResponseJson": 18217,
         "semanticFixtureJson": 71258,
         "generatedSourceText": 5973,
         "generatedProjectToolingText": 1603,
@@ -107407,7 +107407,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 15430,
-        "appBuilderResponseJson": 17316,
+        "appBuilderResponseJson": 17379,
         "semanticFixtureJson": 47078,
         "generatedSourceText": 3604,
         "generatedProjectToolingText": 1539,
@@ -109189,7 +109189,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 20290,
-        "appBuilderResponseJson": 18154,
+        "appBuilderResponseJson": 18217,
         "semanticFixtureJson": 67962,
         "generatedSourceText": 5863,
         "generatedProjectToolingText": 1603,
@@ -111401,7 +111401,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 6166,
-        "appBuilderResponseJson": 11614,
+        "appBuilderResponseJson": 11677,
         "semanticFixtureJson": 25483,
         "generatedSourceText": 944,
         "generatedProjectToolingText": 1507,
@@ -112156,7 +112156,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 5663,
-        "appBuilderResponseJson": 10871,
+        "appBuilderResponseJson": 10934,
         "semanticFixtureJson": 26496,
         "generatedSourceText": 1281,
         "generatedProjectToolingText": 1515,
@@ -112830,7 +112830,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 6100,
-        "appBuilderResponseJson": 10866,
+        "appBuilderResponseJson": 10929,
         "semanticFixtureJson": 36336,
         "generatedSourceText": 1984,
         "generatedProjectToolingText": 1511,
@@ -113572,7 +113572,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 6136,
-        "appBuilderResponseJson": 10871,
+        "appBuilderResponseJson": 10934,
         "semanticFixtureJson": 29673,
         "generatedSourceText": 1457,
         "generatedProjectToolingText": 1515,
@@ -114291,7 +114291,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 7615,
-        "appBuilderResponseJson": 12304,
+        "appBuilderResponseJson": 12367,
         "semanticFixtureJson": 36696,
         "generatedSourceText": 1959,
         "generatedProjectToolingText": 1495,
@@ -115203,7 +115203,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 7426,
-        "appBuilderResponseJson": 10841,
+        "appBuilderResponseJson": 10904,
         "semanticFixtureJson": 21945,
         "generatedSourceText": 980,
         "generatedProjectToolingText": 1495,
@@ -115821,7 +115821,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 6067,
-        "appBuilderResponseJson": 12333,
+        "appBuilderResponseJson": 12396,
         "semanticFixtureJson": 26939,
         "generatedSourceText": 981,
         "generatedProjectToolingText": 1515,
@@ -116650,7 +116650,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 5838,
-        "appBuilderResponseJson": 11848,
+        "appBuilderResponseJson": 11911,
         "semanticFixtureJson": 27755,
         "generatedSourceText": 1003,
         "generatedProjectToolingText": 1561,
@@ -117330,7 +117330,7 @@
       ],
       "reviewArtifactByteCounts": {
         "appBuilderRequestJson": 10532,
-        "appBuilderResponseJson": 12327,
+        "appBuilderResponseJson": 12390,
         "semanticFixtureJson": 46367,
         "generatedSourceText": 2083,
         "generatedProjectToolingText": 1511,

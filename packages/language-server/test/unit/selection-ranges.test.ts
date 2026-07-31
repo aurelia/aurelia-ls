@@ -31,14 +31,17 @@ function createMockContext(value: Record<string, unknown>) {
     logger: { log: vi.fn(), info: vi.fn(), error: vi.fn(), warn: vi.fn() },
     ensureProgramDocument: vi.fn(() => doc),
     semanticRuntime: {
-      templateCursorInfo: vi.fn(() => Promise.resolve({
-        schemaVersion: "0.1",
-        outcome: "hit",
-        closure: "complete",
-        summary: "mock",
-        value,
-        page: null,
-      })),
+      templateCursorInfo: vi.fn(() =>
+        Promise.resolve({
+          schemaVersion: "0.2",
+          result: "answered",
+          selection: "not-applicable",
+          coverage: "complete",
+          summary: "mock",
+          value,
+          page: null,
+        }),
+      ),
     },
   };
 }
@@ -49,7 +52,10 @@ function cursorInfo(overrides: Record<string, unknown> = {}) {
     siteKind: "expression-member",
     expressionFrontier: null,
     missingInputs: [],
-    template: { compilationLane: "app-runtime", source: source(0, text.length) },
+    template: {
+      compilationLane: "app-runtime",
+      source: source(0, text.length),
+    },
     activeSource: source(titleStart, titleEnd),
     html: {
       nodeKind: "element",
@@ -98,10 +104,14 @@ describe("runtime-backed selection ranges", () => {
     const ctx = createMockContext(cursorInfo());
     const position = doc.positionAt(titleStart + 2);
 
-    const result = await handleSelectionRanges(ctx as never, {
-      textDocument: { uri },
-      positions: [position],
-    }, testRequestGuard);
+    const result = await handleSelectionRanges(
+      ctx as never,
+      {
+        textDocument: { uri },
+        positions: [position],
+      },
+      testRequestGuard,
+    );
 
     expect(ctx.semanticRuntime.templateCursorInfo).toHaveBeenCalledWith(
       doc,
@@ -110,34 +120,46 @@ describe("runtime-backed selection ranges", () => {
     );
     expect(result).toHaveLength(1);
     expect(result?.[0]?.range).toEqual(range(titleStart, titleEnd));
-    expect(result?.[0]?.parent?.range).toEqual(range(attributeStart, attributeEnd));
-    expect(result?.[0]?.parent?.parent?.range).toEqual(range(elementStart, elementEnd));
-    expect(result?.[0]?.parent?.parent?.parent?.range).toEqual(range(0, text.length));
+    expect(result?.[0]?.parent?.range).toEqual(
+      range(attributeStart, attributeEnd),
+    );
+    expect(result?.[0]?.parent?.parent?.range).toEqual(
+      range(elementStart, elementEnd),
+    );
+    expect(result?.[0]?.parent?.parent?.parent?.range).toEqual(
+      range(0, text.length),
+    );
   });
 
   test("returns null when runtime has no source-backed active-document span", async () => {
-    const ctx = createMockContext(cursorInfo({
-      template: { compilationLane: "app-runtime", source: null },
-      activeSource: null,
-      html: {
-        nodeKind: null,
-        tagName: null,
-        attributeName: null,
-        attributeValue: null,
-        source: null,
-        attributeSource: null,
-        tagNameSource: null,
-        closingTagNameSource: null,
-      },
-      valueSite: null,
-      selectedMemberName: null,
-      memberOwnerType: null,
-    }));
+    const ctx = createMockContext(
+      cursorInfo({
+        template: { compilationLane: "app-runtime", source: null },
+        activeSource: null,
+        html: {
+          nodeKind: null,
+          tagName: null,
+          attributeName: null,
+          attributeValue: null,
+          source: null,
+          attributeSource: null,
+          tagNameSource: null,
+          closingTagNameSource: null,
+        },
+        valueSite: null,
+        selectedMemberName: null,
+        memberOwnerType: null,
+      }),
+    );
 
-    const result = await handleSelectionRanges(ctx as never, {
-      textDocument: { uri },
-      positions: [doc.positionAt(titleStart + 2)],
-    }, testRequestGuard);
+    const result = await handleSelectionRanges(
+      ctx as never,
+      {
+        textDocument: { uri },
+        positions: [doc.positionAt(titleStart + 2)],
+      },
+      testRequestGuard,
+    );
 
     expect(result).toBeNull();
   });

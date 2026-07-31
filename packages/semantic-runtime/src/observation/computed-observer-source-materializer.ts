@@ -118,6 +118,7 @@ import { ProxyObservable } from './proxy-observable-dependency.js';
 import {
   observedMemberSourceFields,
   observedMemberSourceForCheckerSymbol,
+  runtimeObservedDependencyOccurrence,
 } from './observed-dependency-member-source.js';
 import {
   type RuntimeObservedDependencyAccessUseDraft,
@@ -126,7 +127,7 @@ import {
 import {
   observedDependencyAccessUseDrafts,
 } from './runtime-observed-dependency-access-use.js';
-import { RuntimeObservedDependencyKind } from './runtime-binding-observation.js';
+import { RuntimeObservedDependencyKind } from './runtime-observed-dependency.js';
 import { sourceObservationProductRecords } from './source-observation-product-publication.js';
 import { sourceObservedDependencyRecords } from './source-observed-dependency-publication.js';
 
@@ -157,8 +158,6 @@ interface ComputedDependencyExpressionOperation {
   readonly expression: ExpressionAstNode | null;
   readonly observedDependencies: readonly RuntimeConnectableObservedDependencyDraft[];
 }
-
-type ComputedObserverObservedDependencyDraft = RuntimeObservedDependencyAccessUseDraft;
 
 interface RuntimeControlledComputedDeepObservedDependencyDraft extends RuntimeObservedDependencyDraft {
   readonly dependencyKind: RuntimeObservedDependencyKind.DeepPropertyRead | RuntimeObservedDependencyKind.DeepCollectionRead;
@@ -977,15 +976,19 @@ function computedObserverObservedDependencyForDraft(
     readonly identityHandle: IdentityHandle;
     readonly addressHandle: AddressHandle;
   },
-  draft: ComputedObserverObservedDependencyDraft,
+  draft: RuntimeObservedDependencyAccessUseDraft,
   index: number,
   provenanceHandle: ProvenanceHandle,
 ): ComputedObserverObservedDependencyPublication {
+  const occurrence = runtimeObservedDependencyOccurrence({
+    dependency: draft,
+    scope: null,
+  });
   const dependencyPublication = sourceObservedDependencyRecords({
     store,
     local,
     owner: observer,
-    draft,
+    occurrence,
     index,
     provenanceHandle,
     claimPredicateKey: KernelVocabulary.Observation.SourceObserverUsesObservedDependency.key,
@@ -995,17 +998,7 @@ function computedObserverObservedDependencyForDraft(
     dependencyPublication.productHandle,
     dependencyPublication.identityHandle,
     observer,
-    draft.accessUseProductHandle,
-    draft.dependencyKind,
-    draft.expressionKind,
-    draft.sourceName,
-    draft.sourceRootName,
-    draft.memberName,
-    draft.keyExpression,
-    draft.methodName,
-    draft.spanStart,
-    draft.spanEnd,
-    dependencyPublication.sourceAddressHandle,
+    occurrence,
   );
   return {
     detail,

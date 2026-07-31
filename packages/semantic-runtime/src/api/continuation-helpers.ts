@@ -13,7 +13,7 @@ export function semanticRuntimeContinuationPageInput(
   query: { readonly page?: SemanticRuntimePageInput | null },
 ): SemanticRuntimePageInput {
   return {
-    size: query.page?.size ?? 50,
+    size: query.page?.size == null || query.page.size === 0 ? 50 : query.page.size,
   };
 }
 

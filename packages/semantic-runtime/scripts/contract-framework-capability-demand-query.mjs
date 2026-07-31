@@ -123,8 +123,8 @@ const templatePage = await templateBuiltIns.runtime.answerAppQuery({
   page: { size: 5 },
 });
 const templateTotalRows = templatePage.page?.totalRows ?? 0;
-if (templatePage.outcome !== 'partial' || templatePage.page?.nextCursor == null) {
-  failures.push('Expected template built-in capability query to page through many rows.');
+if (templatePage.result !== 'answered' || templatePage.coverage !== 'complete' || templatePage.page?.nextCursor == null) {
+  failures.push('Expected template built-in capability query to page through a complete semantic basis.');
 }
 if (templatePage.value.rows.some((row) => row.handles != null)) {
   failures.push('Expected compact capability demand rows not to expose handles.');

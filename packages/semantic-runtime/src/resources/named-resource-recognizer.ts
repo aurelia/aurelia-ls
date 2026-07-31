@@ -9,6 +9,7 @@ import {
 import { ModuleEnvironmentRecord } from '../evaluation/environment.js';
 import { unwrapExpression } from '../evaluation/ts-syntax.js';
 import { EvaluationValueKind } from '../evaluation/values.js';
+import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
   readConventionalTemplateAdmission,
@@ -419,7 +420,9 @@ function recognizeDefineCall(
       KernelVocabulary.Resource.OpenTargetExpression.key,
       'Define call did not expose a statically named resource target.',
       targetExpression ?? call,
-      targetRead?.openReasonKinds ?? [],
+      targetRead?.openReasonKinds.length
+        ? targetRead.openReasonKinds
+        : [OpenSeamReasonKind.ResourceDefinitionTargetOpen],
     ));
   } else if (targetRead != null) {
     appendTargetReadOpen(openSeams, targetRead, 'Define-call target evaluation remained open.');

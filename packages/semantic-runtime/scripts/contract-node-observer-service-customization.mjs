@@ -74,7 +74,7 @@ const closedSpellcheckObserver = pressureTargetAccessRows.find((row) =>
 );
 const runtimeFieldPressure = pressureSites.find((row) =>
   row.reasonKinds.includes('host-environment-value')
-  && row.sampleSummary.includes('Node observer type may be replaced')
+  && row.sourceRange?.start?.line === 93
 );
 const obsoleteTwoWayPressure = pressureSites.find((row) =>
   row.sampleSummary.includes('useTwoWay predicate could not be reduced')
