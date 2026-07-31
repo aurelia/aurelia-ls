@@ -21,20 +21,21 @@ static type surfaces rather than hydrated runtime values.
   targets. Other odd decorator forms stay unclaimed until the framework source shows the same mapped error path. Shared
   decorator target classification lives in `decorator-target.ts` so new observation decorator lanes do not grow their
   own class/member taxonomy.
-- `runtime-effect.ts` models the framework-shaped `IEffect` stop lifecycle shared by `Observation.watch(...)` effects
-  and `RunEffect`. The first `stop()` closes as a normal lifecycle transition; a second `stop()` claims exact runtime
-  `stopping_a_stopped_effect` (`AUR0225`). The sibling runtime `method_not_implemented` (`AUR0099`) usages in
-  AST-evaluator mixins and connectable defaults stay intentionally unclaimed until semantic-runtime admits user-extensible
-  evaluator/connectable classes rather than concrete observation products. Source-level `IObservation.watch(...)` and
-  `IObservation.run(...)` calls now publish `runtime-effect` rows plus effect-owned observed-dependency rows. This mirrors framework
+- `runtime-effect.ts` owns immutable construction-site plans for direct `Observation.watch(...)` and
+  `Observation.run(...)` calls. It does not claim a live `IEffect` instance, subscription state, repeated `stop()`, or
+  `stopping_a_stopped_effect` (`AUR0225`); those require source-visible effect identity and lifecycle operations that
+  are not currently modeled. Runtime `method_not_implemented` (`AUR0099`) usages in AST-evaluator mixins and connectable
+  defaults likewise stay unclaimed until semantic-runtime admits user-extensible evaluator/connectable classes rather
+  than concrete observation products. Source-level `IObservation.watch(...)` and `IObservation.run(...)` calls now
+  publish `runtime-effect` rows plus effect-owned observed-dependency rows. This mirrors framework
   `Observation._doWatch(...)`: string expressions route through `getExpressionObserver(...)`, function getters route
   through `ObserverLocator.getObserver(obj, function)`, and those dependency rows remain source-effect-owned instead of
   being collapsed into renderer-owned binding or resource-watch products. `Container.get(IObservation)` roots are
   admitted through the shared TypeChecker-backed container API receiver check, not by method-name shape alone.
   Dynamic watch expressions still publish the source effect but keep dependency evaluation open until a static evaluator
   or flow-specific product can prove the string expression.
-  `Observation.run(...)` rows mirror `RunEffect`: they execute immediately and collect synchronous `@observable` getter
-  reads inside the active connectable window while nested async callbacks stay unclaimed.
+  `Observation.run(...)` rows project `RunEffect`'s immediate execution by collecting synchronous `@observable` getter
+  reads inside the active connectable window; the rows do not execute effects, and nested async callbacks stay unclaimed.
 - `proxy-observable-escape.ts` and `proxy-observable-escape-materializer.ts` publish direct
   `ProxyObservable.getRaw(...)` and `ProxyObservable.unwrap(...)` source calls as neutral observation facts. These rows
   make explicit places where authored code leaves the proxy wrapper surface, which can later feed diagnostics or
@@ -190,7 +191,7 @@ static type surfaces rather than hydrated runtime values.
   excluded by the generator. Native DOM type and AttrMapper consumers spend that shared projection.
   The `href`/`src`/`role`/`size`/popover-style attr-accessor list is a `NodeObserverLocator.getAccessor(...)` branch:
   observer-forcing bindings such as `.two-way` still follow `getObserver(...)`, where a known native property with dirty
-  checking disabled can throw `AUR0652`. Semantic-runtime therefore uses the framework `DataAttributeAccessor` mirror for
+  checking disabled can throw `AUR0652`. Semantic-runtime therefore selects the framework `DataAttributeAccessor` strategy for
   accessor-time attr writes and does not keep a separate invented `AttributeAccessor` strategy.
   Dash-cased tag names are not treated as custom elements here; renderer target selection decides whether a binding
   targets a controller view-model or a host node. Unknown host-node tag names fall back to `HTMLElement`/`SVGElement`
@@ -668,7 +669,8 @@ a readonly two-way binding can retain target-to-source transport and connectable
 initial target mutation.
 
 Select and checked observers are modeled in three layers. `observer-locator.ts` owns the framework-shaped
-`SelectValueObserver` and `CheckedObserver` target-access identities, `binding-value-channel-drafts.ts` owns the value
+`SelectValueObserver` and `CheckedObserver` target-access decisions without constructing observer instances,
+`binding-value-channel-drafts.ts` owns the value
 channel they imply, and `binding-value-channel-materializer.ts` publishes the resulting product records. That split
 matters because the observers select the accessor branch, but the actual value domain depends on authored option/input
 nodes plus TypeChecker-visible source facts. The current value-channel model

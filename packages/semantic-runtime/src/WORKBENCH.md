@@ -51,9 +51,10 @@ consumers pressure these layers and then refactor horizontally when the boundari
 - When adding a prominent framework-shaped product concept, add or verify the corresponding `auLink` decorator while
   the framework source is fresh in context. If the bridge view is noisy, improve Atlas role/topology classification
   before treating the semantic-runtime concept as ungrounded.
-- Use `auLink` placement facets only when one framework symbol is deliberately modeled by several product concepts.
-  Current examples are built-in resource definitions, built-in template-controller semantics, and router runtime models;
-  same-facet duplicate placements should still be treated as split-brain.
+- Use facetless `auLink` for unqualified framework correspondence; it does not promise whole-target parity. Use a named
+  facet when a product owns one framework decision without recreating the target's complete member surface. Current examples are resource definitions,
+  binding-behavior/value-converter/template-controller semantics, router runtime models, and observer selection;
+  same-link/same-facet duplicate placements should still be treated as split-brain.
 - Put durable semantics in product records and vocabulary, not in documentation tables.
 - Keep uncertainty explicit with open seams instead of flattening partial knowledge into resolved-looking facts.
 - If a framework-shaped fact is consumed by more than one domain, or justifies any framework-coded positive diagnostic,
@@ -446,8 +447,8 @@ operation semantics such as select option domains, checked collection/map behavi
 writes, and lazy source-type reads. Inside that draft layer, direct binding, select, and checked observer collaborators
 depend on explicit TypeChecker/type support rather than on a catch-all materializer-as-service-object. `binding-value-channel-materializer.ts` owns kernel publication only: product
 handles, identities, claims, provenance, materialization records, and open seams. Keep that split intact; future
-observer semantics should move into the draft layer or into framework-shaped observer classes, not back into product
-publication.
+observer semantics should move into the draft layer or the `ObserverLocator` selection authority, not back into product
+publication or class-shaped observer instance shells.
 
 The data-flow layer now follows the same publication-vs-semantics split. `binding-data-flow-materializer.ts` still owns
 the `RuntimeBindingDataFlow` product records, claims, and open seams, while local collaborators own draft assembly,
@@ -775,8 +776,9 @@ until their owning runtime state is modeled: withStore-after-register needs orde
 invalid `fromState` decorator usage needs plugin decorator-target recognition, missing store lookup needs store-name
 consumer analysis, and DevTools errors need host extension/dispatch lifecycle semantics.
 
-Observation runtime-effect lifecycle owns `stopping_a_stopped_effect` (`AUR0225`) through the framework-shaped
-`RuntimeEffect` model: first stop transitions, a second stop carries the exact framework code. Runtime
+Observation `RuntimeEffect` is an immutable source-call and dependency-collection plan, not a live `IEffect` instance.
+The `stopping_a_stopped_effect` (`AUR0225`) lifecycle remains unclaimed until a consumer requires effect identity and
+source-visible repeated `stop()` operations. Runtime
 `method_not_implemented` (`AUR0099`) usages in AST-evaluator mixins and connectable default methods stay intentionally
 unclaimed because semantic-runtime currently models concrete evaluator/observation products, not user-extensible
 framework mixin stubs.

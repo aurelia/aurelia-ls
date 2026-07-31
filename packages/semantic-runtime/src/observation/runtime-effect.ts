@@ -27,20 +27,20 @@ export const enum RuntimeEffectDependencyEvaluationKind {
 
 export class RuntimeEffectReference {
   constructor(
-    /** Direct effect shape represented by this reference. */
+    /** Direct effect shape represented by this construction plan. */
     readonly effectKind: RuntimeEffectKind,
     /** Dependency-evaluation handoff selected by the framework call. */
     readonly dependencyEvaluationKind: RuntimeEffectDependencyEvaluationKind,
     /** Product handle for the materialized effect product, when publication owns one. */
     readonly productHandle: ProductHandle | null,
-    /** Identity for this modeled effect. */
+    /** Identity for this modeled construction plan. */
     readonly identityHandle: IdentityHandle | null,
-    /** Source address for the call that produced this effect. */
+    /** Source address for the call represented by this plan. */
     readonly addressHandle: AddressHandle | null,
   ) {}
 }
 
-/** Dependency read projected from a source-level Observation.watch(...) or Observation.run(...) effect. */
+/** Dependency read projected from a source-level Observation.watch(...) or Observation.run(...) construction plan. */
 export class RuntimeEffectObservedDependency {
   constructor(
     readonly productHandle: ProductHandle,
@@ -66,13 +66,13 @@ export class RuntimeEffectObservedDependency {
 /** Immutable construction-site plan for one direct `Observation.watch(...)` or `Observation.run(...)` call. */
 export class RuntimeEffect {
   constructor(
-    /** Direct effect shape represented by this instance. */
+    /** Direct effect shape represented by this construction plan. */
     readonly effectKind: RuntimeEffectKind,
     /** Dependency-evaluation handoff selected by the framework call. */
     readonly dependencyEvaluationKind: RuntimeEffectDependencyEvaluationKind,
     /** Product handle for the materialized effect product, when publication owns one. */
     readonly productHandle: ProductHandle | null,
-    /** Identity for this modeled effect. */
+    /** Identity for this modeled construction plan. */
     readonly identityHandle: IdentityHandle | null,
     /** Whether the source call closed the immediate option statically; null means open. */
     readonly immediate: boolean | null,
@@ -80,7 +80,7 @@ export class RuntimeEffect {
     readonly accessUses: readonly RuntimeExpressionAccessUse[],
     /** Dependency reads collected for this effect's observer path. */
     readonly observedDependencies: readonly RuntimeEffectObservedDependency[],
-    /** Source address for the watch/effect declaration or runtime setup that produced this effect. */
+    /** Source address for the watch/run call represented by this plan. */
     readonly sourceAddressHandle: AddressHandle | null,
   ) {}
 

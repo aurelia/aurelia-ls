@@ -25,7 +25,7 @@ describe('runtime captured-attribute compilation', () => {
     }
 
     const capturedSyntaxSpans = resource.runtimeAnalysis.runtimeRendering.dynamicInstructions.flatMap((instruction) => {
-      const syntax = capturedAttributeSyntaxForDynamicInstruction(runtime.workspace.store, instruction);
+      const syntax = capturedAttributeSyntaxForDynamicInstruction(resource, instruction);
       const span = syntax == null
         ? null
         : sourceSpanAddressForAddress(runtime.workspace.store, syntax.sourceAddressHandle);
@@ -86,11 +86,12 @@ describe('runtime captured-attribute compilation', () => {
     const diagnostics = await runtime.templateDiagnostics({
       sourceFile: { filePath: templateFile },
     });
-    expect(diagnostics.value?.rows).toHaveLength(7);
+    expect(diagnostics.value?.rows).toHaveLength(8);
     expect(diagnostics.value?.rows.filter((row) =>
       row.diagnosticKind === 'binding-target-assignment-strictness'
     )).toHaveLength(2);
     expect(diagnostics.value?.rows.some((row) => row.diagnosticKind === 'missing-expression-member')).toBe(false);
+    expect(diagnostics.value?.rows.some((row) => row.frameworkErrorCode === 'AUR0101')).toBe(true);
     expect(diagnostics.value?.rows.some((row) => row.frameworkErrorCode === 'AUR9998')).toBe(true);
   }, 45_000);
 });

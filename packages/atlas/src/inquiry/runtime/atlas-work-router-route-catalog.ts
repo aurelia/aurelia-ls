@@ -6993,7 +6993,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         symbolName: "RuntimeEffect",
         role: "primary",
         summary:
-          "Source-level IEffect model for direct Observation.watch(...) and Observation.run(...) effects, distinct from resource watchers and template bindings.",
+          "Immutable construction-site plan for direct Observation.watch(...) and Observation.run(...) calls, distinct from resource watchers and template bindings.",
       },
       {
         kind: "source",
@@ -7455,7 +7455,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "Do not turn ID binding into universal truth; direct object binding can be appropriate when the domain model and view model are intentionally close.",
       "Do not use ProxyObservable as a reason to add view-model forwarding getters for ordinary state.member template reads.",
       "Keep observed-dependency rows product-owned: binding data-flow owns source-to-target binding reads; computed-observation definitions own source declarations; ComputedObserverSource owns getter source-observer availability/projection; RuntimeEffect owns direct Observation.watch/run source-call reads; runtime watchers own controller watcher admission; ExpressionWatcher owns string-expression watcher reads; ComputedWatcher owns first ProxyObservable dependency reads; binding-owned trackable method calls own @computed/@astTrack method dependency rows.",
-      "Do not collapse source-level Observation.watch/run effects into resource @watch metadata or renderer-owned binding rows; they are source-call IEffect products.",
+      "Do not collapse source-level Observation.watch/run plans into resource @watch metadata or renderer-owned binding rows; they are source-call construction plans, not live IEffect instances.",
       "Controlled-computed deep rows are source-observer-owned TypeChecker projections of observeDeep, not live object graph traversal and not binding-owned template reads.",
       "Observed-dependency rows should dedupe repeated reads by semantic dependency identity rather than parser span; preserve source spans as evidence, not as row identity.",
       "When TypeChecker receiver facts are available, collection-call proxy rows should be array/map/set-shaped. String and plain object methods are property-read pressure, not collection dependency rows.",

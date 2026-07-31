@@ -16,7 +16,7 @@ import { SourceFileAddress } from '../src/kernel/address.js';
 import { EvidenceRecord } from '../src/kernel/evidence.js';
 import { ProvenanceRecord } from '../src/kernel/provenance.js';
 import { ObservationProductDetails } from '../src/observation/product-details.js';
-import { RuntimeBindingRealization } from '../src/observation/runtime-binding-observation.js';
+import { RuntimeOperationRealization } from '../src/runtime-expression/runtime-operation.js';
 import { TemplateProductDetails } from '../src/template/product-details.js';
 import { StaticProjectEvaluationAcquisitionKind } from '../src/evaluation/project-evaluation.js';
 import { readTypeSystemProjectDiagnostics } from '../src/type-system/diagnostics.js';
@@ -377,7 +377,7 @@ describe('app analysis computation', () => {
     const firstCountFlow = spreadDataFlow(first, 'optionalSpread.count');
     const firstTitleFlow = spreadDataFlow(first, 'optionalSpread.title');
     expect(firstCountFlow).not.toBeNull();
-    expect(firstTitleFlow?.realization).toBe(RuntimeBindingRealization.Open);
+    expect(firstTitleFlow?.realization).toBe(RuntimeOperationRealization.Open);
 
     sourceOverlay.write(sourceFileName, originalSource);
     projectInputAuthority.advance();
@@ -388,7 +388,7 @@ describe('app analysis computation', () => {
     const secondCountFlow = spreadDataFlow(second, 'optionalSpread.count');
     const secondTitleFlow = spreadDataFlow(second, 'optionalSpread.title');
     expect(secondCountFlow).not.toBeNull();
-    expect(secondTitleFlow?.realization).toBe(RuntimeBindingRealization.Conditional);
+    expect(secondTitleFlow?.realization).toBe(RuntimeOperationRealization.Conditional);
     expect(secondCountFlow?.productHandle).toBe(firstCountFlow?.productHandle);
     expect(secondTitleFlow?.productHandle).toBe(firstTitleFlow?.productHandle);
   }, 60_000);

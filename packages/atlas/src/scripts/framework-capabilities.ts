@@ -11,6 +11,7 @@ import type {
 } from "../inquiry/runtime/framework-capability-lenses.js";
 import type {
   FrameworkReverseCoverageFamily,
+  FrameworkReverseCoverageShapeGroup,
   FrameworkTerritoryConstruct,
 } from "../inquiry/runtime/framework-capability-territory.js";
 import { createApi } from "../session/index.js";
@@ -145,22 +146,35 @@ function printReverseCoverageRows(
     return;
   }
   console.log("");
-  console.log("reverse coverage (concrete constructs vs auLink mirror)");
+  console.log("reverse coverage (concrete constructs vs auLink unqualified correspondences and semantic facets)");
   for (const row of rows) {
     console.log(
-      `- ${row.family}: ${row.mirrored}/${row.total} mirrored (role evidence ${row.mirroredWithRoleEvidence}); instantiable ${row.instantiableMirrored}/${row.instantiableTotal}`,
+      `- ${row.family}: ${row.modeled}/${row.total} modeled (unqualified ${row.unqualifiedModeled}, facet-only ${row.facetOnlyModeled}, unresolved ${row.unresolvedMappings}, role evidence ${row.modeledWithRoleEvidence}); instantiable ${row.instantiableModeled}/${row.instantiableTotal} (unqualified ${row.instantiableUnqualifiedModeled}, facet-only ${row.instantiableFacetOnlyModeled}, unresolved ${row.instantiableUnresolvedMappings})`,
+    );
+    console.log(
+      `  basis: framework ${row.basisClosure} ${row.basisRowCount}/${row.basisTotalRows ?? "unknown"}; `
+        + `auLink mappings ${row.mappingBasisClosure} ${row.mappingBasisRowCount}/${row.mappingBasisTotalRows ?? "unknown"}`,
     );
     if (!includeDetail) {
       continue;
     }
-    for (const group of row.notMirroredByShape) {
-      const cap = group.instantiable ? group.symbols.length : 12;
-      const shown = group.symbols.slice(0, cap);
-      const more = group.symbols.length - shown.length;
-      console.log(
-        `  not mirrored [${group.shape}] (${group.symbols.length}): ${shown.join(", ")}${more > 0 ? `, +${more} more` : ""}`,
-      );
-    }
+    printReverseCoverageGroups(row.facetOnlyByShape, "facet-only");
+    printReverseCoverageGroups(row.unresolvedByShape, "unresolved");
+    printReverseCoverageGroups(row.notModeledByShape, "not modeled");
+  }
+}
+
+function printReverseCoverageGroups(
+  groups: readonly FrameworkReverseCoverageShapeGroup[],
+  label: string,
+): void {
+  for (const group of groups) {
+    const cap = group.instantiable ? group.symbols.length : 12;
+    const shown = group.symbols.slice(0, cap);
+    const more = group.symbols.length - shown.length;
+    console.log(
+      `  ${label} [${group.shape}] (${group.symbols.length}): ${shown.join(", ")}${more > 0 ? `, +${more} more` : ""}`,
+    );
   }
 }
 

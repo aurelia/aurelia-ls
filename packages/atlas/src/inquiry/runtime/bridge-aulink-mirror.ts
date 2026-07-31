@@ -10,6 +10,7 @@ import {
 } from "../../framework/relationships.js";
 import { readFrameworkDiIndex } from "../../framework/di-index.js";
 import {
+  AuLinkFacetState,
   readAuLinkModel,
   sourceRangeForAuLinkFileSpan,
   sourceRangeForAuLinkTarget,
@@ -57,7 +58,7 @@ import {
 import { auLinkModelFilters } from "./bridge-aulink-lens-support.js";
 import { countBy } from "./framework-support.js";
 
-/** Filters accepted by auLink mirror projections. */
+/** Filters accepted by the legacy-named auLink `mirror` mapping projection. */
 export interface AuLinkMirrorFilters extends AuLinkFilters {
   readonly roleFamily?: string;
   readonly relation?: string;
@@ -90,10 +91,16 @@ export interface AuLinkMirrorFilters extends AuLinkFilters {
   readonly orderBy?: string;
 }
 
-/** Compact rollup for the product-to-framework mirror graph. */
+/** Compact rollup for the product-to-framework auLink mapping graph. */
 export interface AuLinkMirrorRollup {
   readonly linkCount: number;
   readonly placedLinkCount: number;
+  /** Links with at least one facetless placement whose correspondence breadth is unqualified. */
+  readonly unqualifiedLinkCount: number;
+  /** Links with at least one named semantic-facet placement. */
+  readonly semanticFacetLinkCount: number;
+  /** Links with at least one placement whose final facet cannot be recovered. */
+  readonly unresolvedFacetLinkCount: number;
   readonly resolvedTargetCount: number;
   readonly ambiguousTargetCount: number;
   readonly unresolvedTargetCount: number;
@@ -111,6 +118,8 @@ export interface AuLinkMirrorRollup {
   readonly obligationKinds: Readonly<Record<string, number>>;
   readonly productAreas: Readonly<Record<string, number>>;
   readonly productDeclarationKinds: Readonly<Record<string, number>>;
+  /** Named semantic facets represented by returned placements. */
+  readonly semanticFacets: Readonly<Record<string, number>>;
 }
 
 /** One auLink id joined to framework semantic role evidence and product placement facts. */
@@ -121,6 +130,12 @@ export interface AuLinkMirrorRow {
   readonly symbolName: string;
   readonly targetStatus: string;
   readonly placementCount: number;
+  /** Facetless placements whose correspondence breadth is intentionally unqualified. */
+  readonly unqualifiedPlacementCount: number;
+  /** Faceted placements that promise only one named semantic decision. */
+  readonly semanticFacetPlacementCount: number;
+  /** Placements whose final facet cannot be recovered statically. */
+  readonly unresolvedFacetPlacementCount: number;
   readonly frameworkCandidateCount: number;
   readonly roleEvidenceCount: number;
   readonly emulationObligationCount: number;
@@ -132,6 +147,7 @@ export interface AuLinkMirrorRow {
   readonly obligationKinds: Readonly<Record<string, number>>;
   readonly productAreas: Readonly<Record<string, number>>;
   readonly productDeclarationKinds: Readonly<Record<string, number>>;
+  readonly semanticFacets: Readonly<Record<string, number>>;
   readonly productPlacements: readonly AuLinkMirrorPlacementRef[];
   readonly frameworkTargets: readonly AuLinkMirrorTargetRef[];
   readonly firstProductSource?: SourceRange;
@@ -139,15 +155,16 @@ export interface AuLinkMirrorRow {
   readonly summary: string;
 }
 
-/** Product-side placement reference for a mirror row. */
+/** Product-side placement reference for a mapping row. */
 export interface AuLinkMirrorPlacementRef {
   readonly name: string | null;
   readonly kind: string;
   readonly facet: string | null;
+  readonly facetState: AuLinkFacetState;
   readonly source: SourceRange;
 }
 
-/** Framework-side declaration reference for a mirror row. */
+/** Framework-side declaration reference for a mapping row. */
 export interface AuLinkMirrorTargetRef {
   readonly name: string;
   readonly kind: string;
@@ -209,7 +226,7 @@ export interface AuLinkMirrorObligationEvidenceRow {
   readonly summary: string;
 }
 
-/** Endpoint subset carried by mirror role evidence. */
+/** Endpoint subset carried by framework-role evidence for a mapping. */
 export interface FrameworkRelationshipEndpointRef {
   readonly kind: string;
   readonly name: string;
@@ -220,7 +237,7 @@ export interface FrameworkRelationshipEndpointRef {
   readonly source?: SourceRange;
 }
 
-/** Full auLink mirror model. */
+/** Full auLink mapping model exposed through the legacy-named `mirror` projection. */
 export interface AuLinkMirrorModel {
   readonly filters: AuLinkMirrorFilters;
   readonly rollup: AuLinkMirrorRollup;
@@ -253,7 +270,7 @@ interface RoleMatch {
   readonly matchedEndpoint: AuLinkMirrorRoleEvidenceRow["matchedEndpoint"];
 }
 
-/** Build the exact auLink mirror over current product placements and framework relationship substrates. */
+/** Build exact auLink mappings over current product placements and framework relationship substrates. */
 export function readAuLinkMirrorModel(
   sourceProject: SourceProject,
   filters: AuLinkMirrorFilters = {},
@@ -683,6 +700,15 @@ function mirrorRow(
 ): AuLinkMirrorRow {
   const firstAnchor = anchors[0];
   const firstCandidate = target.candidates[0];
+  const unqualifiedPlacementCount = anchors.filter(
+    (anchor) => anchor.facetState === AuLinkFacetState.Unqualified,
+  ).length;
+  const semanticFacetPlacementCount = anchors.filter(
+    (anchor) => anchor.facetState === AuLinkFacetState.Exact,
+  ).length;
+  const unresolvedFacetPlacementCount = anchors.filter(
+    (anchor) => anchor.facetState === AuLinkFacetState.Unresolved,
+  ).length;
   return {
     id: `aulink-mirror:${target.linkId}`,
     linkId: target.linkId,
@@ -690,6 +716,9 @@ function mirrorRow(
     symbolName: target.symbolName,
     targetStatus: target.status,
     placementCount: anchors.length,
+    unqualifiedPlacementCount,
+    semanticFacetPlacementCount,
+    unresolvedFacetPlacementCount,
     frameworkCandidateCount: target.candidates.length,
     roleEvidenceCount: roleEvidence.length,
     emulationObligationCount: obligationEvidence.length,
@@ -703,13 +732,17 @@ function mirrorRow(
       productAreaForSource(sourceRangeForAuLinkTarget(anchor)),
     ),
     productDeclarationKinds: countBy(anchors, (anchor) => anchor.target.kind),
+    semanticFacets: countBy(
+      anchors.filter((anchor) => anchor.facetState === AuLinkFacetState.Exact),
+      (anchor) => anchor.facet as string,
+    ),
     productPlacements: anchors.map(placementRef),
     frameworkTargets: target.candidates.map(targetRef),
     firstProductSource: firstAnchor === undefined ? undefined : sourceRangeForAuLinkTarget(firstAnchor),
     firstFrameworkSource: firstCandidate === undefined
       ? undefined
       : sourceRangeForAuLinkFileSpan(firstCandidate),
-    summary: `${target.linkId} has ${anchors.length} product placement(s), ${target.candidates.length} framework candidate(s), ${roleEvidence.length} framework role row(s), and ${obligationEvidence.length} emulation obligation row(s).`,
+    summary: `${target.linkId} has ${unqualifiedPlacementCount} unqualified correspondence placement(s), ${semanticFacetPlacementCount} semantic-facet placement(s), ${unresolvedFacetPlacementCount} unresolved-facet placement(s), ${target.candidates.length} framework candidate(s), ${roleEvidence.length} framework role row(s), and ${obligationEvidence.length} emulation obligation row(s).`,
   };
 }
 
@@ -718,6 +751,7 @@ function placementRef(anchor: AuLinkAnchorRow): AuLinkMirrorPlacementRef {
     name: anchor.target.name,
     kind: anchor.target.kind,
     facet: anchor.facet,
+    facetState: anchor.facetState,
     source: sourceRangeForAuLinkTarget(anchor),
   };
 }
@@ -753,6 +787,9 @@ function auLinkMirrorRollup(
   return {
     linkCount: rows.length,
     placedLinkCount: rows.filter((row) => row.placementCount > 0).length,
+    unqualifiedLinkCount: rows.filter((row) => row.unqualifiedPlacementCount > 0).length,
+    semanticFacetLinkCount: rows.filter((row) => row.semanticFacetPlacementCount > 0).length,
+    unresolvedFacetLinkCount: rows.filter((row) => row.unresolvedFacetPlacementCount > 0).length,
     resolvedTargetCount: rows.filter((row) => row.targetStatus === "resolved").length,
     ambiguousTargetCount: rows.filter((row) => row.targetStatus === "ambiguous").length,
     unresolvedTargetCount: rows.filter((row) => row.targetStatus === "unresolved").length,
@@ -777,6 +814,7 @@ function auLinkMirrorRollup(
       rows,
       (row) => row.productDeclarationKinds,
     ),
+    semanticFacets: countMirrorRowRecords(rows, (row) => row.semanticFacets),
   };
 }
 
@@ -900,6 +938,7 @@ function mirrorRowContains(row: AuLinkMirrorRow, query: string): boolean {
     row.firstFrameworkSource?.filePath,
     ...Object.keys(row.productAreas),
     ...Object.keys(row.productDeclarationKinds),
+    ...Object.keys(row.semanticFacets),
     ...row.productPlacements.map((placement) => placement.name ?? ""),
     ...row.frameworkTargets.map((target) => target.name),
   ].some((value) => value?.includes(query) === true);

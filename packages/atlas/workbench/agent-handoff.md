@@ -872,11 +872,11 @@ Inferred maintenance heuristics:
   that a semantic-runtime template diagnostic is framework-grounded. Rows can
   be filtered by package, enum name, mechanism, effect, or query and followed
   into exact framework source.
-- Observation runtime-effect lifecycle now claims runtime
-  `stopping_a_stopped_effect` / `AUR0225` through `RuntimeEffect`; runtime
-  `method_not_implemented` / `AUR0099` in AST evaluator mixins and connectable
-  defaults is intentionally unclaimed until semantic-runtime admits
-  user-extensible evaluator/connectable classes.
+- Observation `RuntimeEffect` is an immutable source-call/dependency plan rather
+  than a live `IEffect` lifecycle mirror. `stopping_a_stopped_effect` /
+  `AUR0225` and runtime `method_not_implemented` / `AUR0099` remain unclaimed
+  until semantic-runtime has the source-visible lifecycle or extensible
+  evaluator/connectable products needed to own them honestly.
 - Runtime `Scope` API nullish-argument diagnostics are configuration-owned
   source/API issues: direct `Scope.fromParent(...)`/`Scope.getContext(...)`
   calls spend `null_scope` / `AUR0203`, while direct `Scope.create(...)` calls

@@ -567,12 +567,12 @@ export const KernelProductKinds = {
       'A source-backed observer selected by ObserverLocator source-side semantics, such as ComputedObserver or ControlledComputedObserver for an authored getter.',
     ),
 
-    /** Product kind for a source-level IEffect produced by Aurelia observation APIs. */
+    /** Product kind for an immutable source-call plan for Aurelia observation APIs. */
     RuntimeEffect: defineVocabulary(
       KernelVocabularyNamespace.Observation,
       'runtime-effect',
       KernelVocabularySlot.ProductKind,
-      'A source-level IEffect produced by Observation.watch(...) or Observation.run(...).',
+      'An immutable construction-site plan for a direct Observation.watch(...) or Observation.run(...) call.',
     ),
 
     /** Product kind for source-level ProxyObservable raw/unwrap escape calls. */

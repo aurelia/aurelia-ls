@@ -1899,8 +1899,9 @@ should be modeled by a call-site product, not folded into getter availability ro
 with binding observed dependencies, runtime-effect rows, watcher rows, or target-access rows when the question is
 whether a concrete runtime lookup is actually used by a template, source API call, or watcher.
 
-`RuntimeEffects` exposes direct source-level `Observation.watch(...)` / `IObservation.watch(...)` and
-`Observation.run(...)` / `IObservation.run(...)` effects. Rows preserve the effect kind, the framework
+`RuntimeEffects` exposes immutable construction-site plans for direct source-level `Observation.watch(...)` /
+`IObservation.watch(...)` and `Observation.run(...)` / `IObservation.run(...)` calls. These rows do not claim live
+`IEffect` identity, subscription state, or stop lifecycle. They preserve the effect kind, the framework
 dependency-evaluation handoff, the static `immediate` option when closed, observed dependency count, source reference,
 and optional product handles. `RuntimeEffectObservedDependencies` is the source API companion row family: string watch
 expressions use the `ast-evaluate` path that mirrors `getExpressionObserver(...)`, function getters use the

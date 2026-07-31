@@ -102,13 +102,13 @@ export interface BridgeAuLinkUsageValue {
   readonly rollup: AuLinkRollup;
   /** Rollup for framework/product usage comparison, when requested. */
   readonly usageComparisonRollup?: AuLinkUsageComparisonRollup;
-  /** Per-link comparison between Aurelia-side API usage and semantic-runtime mirror usage. */
+  /** Per-link usage comparison pressure for unqualified framework/product correspondences. */
   readonly usageComparison?: readonly AuLinkUsageComparisonSummaryRow[];
   /** Member declaration surface comparison between auLink framework and product targets. */
   readonly memberSurface?: readonly AuLinkMemberSurfaceRow[];
-  /** Member-level framework/product usage comparison rows for auLink mirror targets. */
+  /** Member-level framework/product usage comparison rows for unqualified auLink correspondences. */
   readonly usageMembers?: readonly AuLinkUsageMemberComparisonRow[];
-  /** Exact framework-side or product-side source usage rows for auLink mirror targets. */
+  /** Exact framework-side or product-side source usage rows for unqualified auLink correspondences. */
   readonly usageSites?: readonly AuLinkUsageSiteRow[];
   /** Usage-site groups by the declaration owner consuming one auLink target/member. */
   readonly usageConsumers?: readonly AuLinkUsageConsumerRow[];
@@ -652,7 +652,7 @@ function usageComparisonBasis(sourceProject: SourceProject): readonly Basis[] {
       authority: BasisAuthority.Checker,
       freshness: BasisFreshness.Live,
       summary:
-        "Compared framework API usage rows with semantic-runtime usage rows for auLink mirror target symbols.",
+        "Compared framework API usage rows with semantic-runtime usage rows for unqualified auLink correspondences.",
       identity: sourceProject.snapshot().identity,
     },
   ];

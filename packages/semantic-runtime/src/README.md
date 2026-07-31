@@ -54,7 +54,7 @@ Template parser and compiler materializers should be built on these layers, not 
 
 ## Atlas And auLink
 
-Atlas is the live orientation and inspection layer over this package. `auLink` is deliberately narrower: it is only the framework-symbol bridge between local model classes and Aurelia runtime/compiler concepts.
+Atlas is the live orientation and inspection layer over this package. `auLink` is deliberately narrower: it is only the framework-symbol bridge between local model classes and Aurelia runtime/compiler concepts. A facetless link records unqualified correspondence without promising whole-target parity; a link with a named facet claims only that the product declaration models that semantic decision. Atlas must preserve authored facet text losslessly, exclude faceted links from whole-member comparison, and treat unqualified-link comparisons as review pressure rather than proof of parity.
 
 Do not put product taxonomy, pass roles, or model-surface classification into `auLink`; those belong in product models, vocabulary, claims, or Atlas source lenses when they are real obligations rather than bridge metadata.
 

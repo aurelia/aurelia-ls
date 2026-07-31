@@ -252,19 +252,18 @@
       "updatedAt": "2026-07-20"
     },
     {
-      "id": "frontier:runtime-effect-lifecycle",
+      "id": "frontier:runtime-effect-source-projection",
       "kind": "pressure-frontier",
       "domains": [
         "semantic-runtime",
         "observation",
-        "framework-errors",
         "source-api",
         "effect"
       ],
-      "summary": "RuntimeEffect owns source-level Observation.watch/run effects, effect-owned observed dependencies, and the framework-shaped IEffect stop lifecycle.",
-      "rationale": "Aurelia runtime throws stopping_a_stopped_effect from Observation.watch and RunEffect stop guards, while method_not_implemented in ast evaluator/connectable mixins is an internal stub guard. Semantic-runtime should model the concrete effect lifecycle without claiming user-extensible evaluator/connectable stubs until those products exist.",
+      "summary": "RuntimeEffect owns immutable source-level Observation.watch/run construction plans and effect-owned observed dependencies.",
+      "rationale": "Source analysis can prove where Observation.watch/run constructs an effect and which synchronous dependency routes are visible there. It cannot prove a live effect instance, subscription lifetime, cleanup invocation, or repeated stop operation without source-visible effect identity and lifecycle calls. RuntimeEffect therefore remains a source-plan product rather than a class-shaped mirror of Aurelia's IEffect.",
       "guidance": [
-        "Use RuntimeEffect when a product needs direct Observation.watch/run source-call rows or IEffect stop-state semantics.",
+        "Use RuntimeEffect when a product needs direct Observation.watch/run source-call rows or effect-owned dependency plans.",
         "RuntimeEffect source product publication goes through source-observation-product-publication.ts; only effect-owned dependency rows go through source-observed-dependency-publication.ts. Both publishers now prepare explicit publication frames before spending them into kernel records, so exact source spans, evidence/provenance handles, source-observer claims, and fallback owner addresses stay visible to Atlas.",
         "Source-level IObservation.watch(...) calls publish runtime-effect products and effect-owned observed-dependency rows; do not route those facts through resource watchers or renderer-owned bindings.",
         "Effect-owned observed-dependency publication goes through source-observed-dependency-publication.ts so exact source-file handles flow from the recognized source site instead of being rediscovered from the broader effect carrier address.",
@@ -274,7 +273,7 @@
         "Observation.run(...) nested async callbacks and explicit cleanup/recursion diagnostics remain open because they require separate connectable-window and effect-recursion projection.",
         "Effect-owned observed dependencies should be kept separate from binding-observed-dependencies and runtime-watcher-observed-dependencies; direct Observation.watch/run calls are source API effects, not renderer-owned binding setup.",
         "Framework corpus queries for `IObservation watch` expose promoted docs and behavior-grounding tests; use those as pressure seeds before inventing app-local watch semantics.",
-        "A first stop is a normal lifecycle transition; a second stop carries runtime stopping_a_stopped_effect / AUR0225.",
+        "Do not claim subscription lifetime, cleanup invocation, repeated stop state, or stopping_a_stopped_effect / AUR0225 until source-visible effect identity and lifecycle operations exist.",
         "Leave runtime method_not_implemented / AUR0099 unclaimed for AST evaluator mixins and connectable defaults until semantic-runtime admits user-extensible evaluator or connectable classes.",
         "Check framework.errors usages before reclassifying runtime observation lifecycle diagnostics."
       ],
@@ -283,7 +282,7 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/observation/runtime-effect.ts",
           "symbolName": "RuntimeEffect",
-          "summary": "Source-level IEffect and Observation.watch/run product model."
+          "summary": "Immutable source-level Observation.watch/run construction-site plan."
         },
         {
           "kind": "source",
@@ -334,13 +333,6 @@
         },
         {
           "kind": "lens",
-          "lensId": "framework.errors",
-          "projection": "diagnostic-codes",
-          "query": "stopping_a_stopped_effect",
-          "summary": "Exact framework usage and disposition for AUR0225."
-        },
-        {
-          "kind": "lens",
           "lensId": "framework.observation",
           "projection": "dependency-circuit",
           "filters": {
@@ -364,7 +356,7 @@
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-05-20"
+      "updatedAt": "2026-07-30"
     },
     {
       "id": "frontier:observer-locator",
@@ -375,10 +367,12 @@
         "observer-locator",
         "binding"
       ],
-      "summary": "ObserverLocator and NodeObserverLocator are first-class framework-shaped semantic-runtime pressure points, not heuristic DOM reconciliation helpers.",
-      "rationale": "The user explicitly flagged custom-element heuristics and hard-coded tag logic as red flags. Observer locator work should stay grounded in Aurelia's ObserverLocator/NodeObserverLocator concepts while remaining TypeChecker-backed in semantic-runtime.",
+      "summary": "ObserverLocator and NodeObserverLocator are static observer-selection authorities whose products preserve strategy, capability, cache, and provenance without pretending to be live framework observers.",
+      "rationale": "Aurelia's locator classes select concrete accessors and observers from target shape, descriptors, configuration, and framework policy. Semantic-runtime needs those decisions, not fabricated live instances of every selected framework class. The locator results are therefore the honest static boundary: they retain the selected strategy and its evidence while downstream products spend that decision.",
       "guidance": [
         "Check framework.observation before extending target access, accessors, or observer selection.",
+        "Link framework observer/accessor classes to the real ObserverLocator or NodeObserverLocator selector owner with the `observer-selection-semantics` auLink facet; do not reintroduce class-shaped shells for live instances that semantic-runtime never constructs.",
+        "A faceted auLink claims one semantic decision, not unqualified correspondence. Keep observer-selection facet links out of whole-member comparison and unqualified reverse-coverage buckets.",
         "Do not add likely-custom-element or tag-list heuristics where Aurelia runtime semantics already provide resource/observer ownership.",
         "If observer modeling needs TS-specific policy, keep the framework concept name and make the static strategy visible underneath it.",
         "Target-access rows preserve targetTypeSource; dom-global-fallback means the exact tag was absent from TypeScript DOM tag maps and should be treated as host-node/web-component typing pressure, not as a custom-element guess.",
@@ -401,15 +395,19 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/observation/observer-locator.ts",
           "symbolName": "ObserverLocator",
-          "line": 603,
           "summary": "Semantic-runtime observer locator."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/observation/observer-locator.ts",
           "symbolName": "NodeObserverLocator",
-          "line": 430,
           "summary": "Node-specific observer locator."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/observer-locator.ts",
+          "symbolName": "ObserverLocatorLookupResult",
+          "summary": "Lossless selected observer/accessor strategy, capability, cache, and provenance result."
         },
         {
           "kind": "source",
@@ -459,6 +457,15 @@
           "summary": "Framework observation relationship grounding."
         },
         {
+          "kind": "lens",
+          "lensId": "bridge.aulink",
+          "projection": "anchors",
+          "filters": {
+            "facet": "observer-selection-semantics"
+          },
+          "summary": "Exact selector-owner placements for observer and accessor selection semantics."
+        },
+        {
           "kind": "script",
           "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:node-observer-service-customization",
           "summary": "Focused semantic contract for NodeObserverLocator service state consumed by observer lookup rather than host-node accessor lookup."
@@ -474,15 +481,22 @@
           "kind": "product-large-class",
           "className": "ObserverLocator",
           "filePath": "packages/semantic-runtime/src/observation/observer-locator.ts",
-          "minLineCount": 80,
-          "minMethodCount": 15
+          "minLineCount": 300,
+          "minMethodCount": 10
         },
         {
           "kind": "product-large-class",
           "className": "NodeObserverLocator",
           "filePath": "packages/semantic-runtime/src/observation/observer-locator.ts",
-          "minLineCount": 80,
-          "minMethodCount": 10
+          "minLineCount": 200,
+          "minMethodCount": 9
+        },
+        {
+          "kind": "product-large-class",
+          "className": "ObserverLocatorLookupResult",
+          "filePath": "packages/semantic-runtime/src/observation/observer-locator.ts",
+          "minLineCount": 120,
+          "minMethodCount": 2
         },
         {
           "kind": "source-declaration-exists",
@@ -496,7 +510,87 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-07-13"
+      "updatedAt": "2026-07-30"
+    },
+    {
+      "id": "decision:aulink-unqualified-correspondence-vs-semantic-facet",
+      "kind": "decision",
+      "domains": [
+        "atlas",
+        "semantic-runtime",
+        "aulink",
+        "framework-evidence",
+        "observation"
+      ],
+      "summary": "Facetless auLink placements record unqualified framework correspondence; named facets bound the claim to one explicitly modeled semantic decision.",
+      "rationale": "A single semantic-runtime selector can model decisions made by many concrete Aurelia classes without constructing those live instances. Existing facetless links also predate a precise claim vocabulary and often connect partial product concepts to framework targets, so absence of a facet cannot honestly imply whole-target parity. Authored facets provide an exact bounded claim when one is known. Atlas must preserve them losslessly, distinguish them from unqualified correspondence, and never promote either category into a stronger parity claim.",
+      "guidance": [
+        "Use a facetless auLink when a framework correspondence is useful but its semantic breadth is intentionally unqualified; do not infer whole-target parity from absence of a facet.",
+        "Use a named facet when the product declaration owns one framework decision, branch, or semantic role without mirroring the target's class shape or live identity.",
+        "Atlas must preserve any authored facet string even when its own vocabulary has not yet been updated; semantic-runtime owns the closed authoring vocabulary.",
+        "Atlas classifies facet syntax as unqualified, exact, or unresolved. A non-literal or otherwise unrecoverable final facet is an explicit gap and must never fall back to unqualified correspondence.",
+        "Whole-member usage and member-surface comparisons may consume only unqualified placements as review pressure. They are not parity assertions; named facets are known partial and must be excluded.",
+        "Framework composition claims use ModelsFrameworkFacet for faceted placements and retain the exact facet; facetless placements use CorrespondsToFrameworkTarget.",
+        "Coverage reports should distinguish unqualified correspondence, facet-only modeling, unresolved mappings, and unmodeled constructs rather than merging all linked targets into one mirrored bucket. They must also publish closure for both the framework inventory page and the auLink mapping page.",
+        "The bridge.aulink projection is still named `mirror` for the existing Atlas query surface, but its rows are mappings and must not be interpreted as whole-target mirror promises.",
+        "If a future consumer needs a machine-checkable whole-target parity promise, add explicit vocabulary for that promise instead of inferring it from legacy facetless links."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/au-link.ts",
+          "symbolName": "AuLinkFacet",
+          "summary": "Closed semantic-runtime authoring vocabulary for named framework-semantic facets."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/source/aulink.ts",
+          "symbolName": "AuLinkFacetState",
+          "summary": "Lossless unqualified, exact, and unresolved authored-facet state."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/composition.ts",
+          "symbolName": "SemanticClaimPredicate",
+          "summary": "Distinct unqualified-correspondence and semantic-facet composition predicates."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/bridge-aulink-usage.ts",
+          "symbolName": "readAuLinkUsageComparisonModel",
+          "summary": "Member comparison pressure restricted to unqualified facetless placements."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-capability-territory.ts",
+          "symbolName": "frameworkReverseCoverage",
+          "summary": "Reverse coverage partitioned into unqualified, facet-only, and unmodeled evidence."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/atlas self-check",
+          "summary": "Atlas self-check verifies observer-selection facet ownership and parity exclusion."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/kernel/au-link.ts",
+          "symbolName": "AuLinkFacet"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/atlas/src/inquiry/composition.ts",
+          "symbolName": "SemanticClaimPredicate"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-capability-territory.ts",
+          "symbolName": "frameworkReverseCoverage"
+        }
+      ],
+      "createdAt": "2026-07-30",
+      "updatedAt": "2026-07-30"
     },
     {
       "id": "frontier:bound-controller-value-flow",

@@ -63,6 +63,7 @@ console.log(`- unplaced catalog entries: ${summary.unplacedCatalogEntries}`);
 console.log(`- placements without catalog: ${summary.placementsWithoutCatalog}`);
 console.log(`- duplicate placement groups: ${summary.duplicatePlacementGroups}`);
 console.log(`- multi-facet placement groups: ${summary.multiFacetPlacementGroups}`);
+console.log(`- unresolved facet placements: ${summary.unresolvedFacetPlacements}`);
 console.log(`- resolved framework targets: ${summary.resolvedFrameworkTargets}`);
 console.log(`- ambiguous framework targets: ${summary.ambiguousFrameworkTargets}`);
 console.log(`- unresolved framework targets: ${summary.unresolvedFrameworkTargets}`);
@@ -157,6 +158,9 @@ async function timedAsk<TAnswer>(
 function mirrorRowLabel(row: AuLinkMirrorRow): string {
   return [
     row.linkId,
+    `unqualified=${row.unqualifiedPlacementCount}`,
+    `semanticFacets=${row.semanticFacetPlacementCount}`,
+    `unresolvedFacets=${row.unresolvedFacetPlacementCount}`,
     `roles=${row.roleEvidenceCount}`,
     `obligations=${row.emulationObligationCount}`,
     `areas=${countKeys(row.productAreas).join(",") || "none"}`,

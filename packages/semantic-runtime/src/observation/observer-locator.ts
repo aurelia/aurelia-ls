@@ -304,11 +304,6 @@ interface ObjectAccessSelection {
   readonly provenanceHandles: readonly ProvenanceHandle[];
 }
 
-type ComputedObserverExplicitDependency =
-  | string
-  | symbol
-  | ((obj: unknown, observer?: unknown) => unknown);
-
 export class NodeObserverLocatorNodeConfig {
   constructor(
     /** Runtime nodeName lane consumed by NodeObserverLocator.useConfig. */
@@ -396,448 +391,9 @@ export class ObserverLocatorConfiguration {
   ) {}
 }
 
-/**
- * Semantic-runtime model of Aurelia's runtime PropertyAccessor.
- *
- * Aurelia's object getAccessor path falls back to this accessor for ordinary object keys; TypeChecker facts are
- * evidence for tooling policy, not the rule that admits or rejects the framework accessor.
- */
-@auLink('runtime:PropertyAccessor')
-export class PropertyAccessor {
-  readonly type = RuntimeBindingTargetAccessStrategy.PropertyAccessor;
-  private value: unknown = undefined;
-
-  getValue(): unknown {
-    return this.value;
-  }
-
-  setValue(value: unknown): void {
-    this.value = value;
-  }
-}
-
-/**
- * Semantic-runtime model of Aurelia's DataAttributeAccessor.
- *
- * The accessor identity is separate from RuntimeBindingTargetAccess records: the accessor owns the framework operation
- * shape, while target-access records own per-binding provenance and TypeChecker facts.
- */
-@auLink('runtime-html:DataAttributeAccessor')
-export class DataAttributeAccessor {
-  readonly type = RuntimeBindingTargetAccessStrategy.DataAttributeAccessor;
-  private value: string | null = null;
-
-  getValue(): string | null {
-    return this.value;
-  }
-
-  setValue(newValue: string | null): void {
-    this.value = newValue;
-  }
-
-  subscribe(): void {}
-
-  unsubscribe(): void {}
-}
-
-/**
- * Semantic-runtime model of Aurelia's AttributeNSAccessor.
- *
- * Runtime-html selects this accessor for a small XML namespace table before falling back to the generic SVG/data
- * attribute accessor. The semantic model keeps the namespace URI visible so future projections can explain why an
- * authored `xlink:*`, `xml:*`, or `xmlns*` target did not follow the ordinary attribute path.
- */
-@auLink('runtime-html:AttributeNSAccessor')
-export class AttributeNSAccessor {
-  readonly type = RuntimeBindingTargetAccessStrategy.AttributeNSAccessor;
-  private value: string | null = null;
-
-  constructor(
-    readonly namespace: string,
-  ) {}
-
-  getValue(): string | null {
-    return this.value;
-  }
-
-  setValue(newValue: string | null): void {
-    this.value = newValue;
-  }
-
-  subscribe(): void {}
-
-  unsubscribe(): void {}
-}
-
-/**
- * Semantic-runtime model of Aurelia's SetterObserver.
- *
- * Runtime creates a setter observer for ordinary data properties and for missing object keys. The static emulator keeps
- * the property-exists fact beside the selected observer so a later policy layer can decide how strict to be.
- */
-@auLink('runtime:SetterObserver')
-export class SetterObserver {
-  readonly type = RuntimeBindingTargetAccessStrategy.SetterObserver;
-  readonly doNotCache = true;
-  readonly subs: readonly unknown[] = [];
-  private value: unknown = undefined;
-  private callback: ((newValue: unknown, oldValue: unknown) => void) | null = null;
-
-  constructor() {}
-
-  getValue(): unknown {
-    return this.value;
-  }
-
-  setValue(value: unknown): void {
-    const oldValue = this.value;
-    this.value = value;
-    this.callback?.(value, oldValue);
-  }
-
-  start(): void {}
-
-  stop(): void {}
-
-  subscribe(): void {}
-
-  unsubscribe(): void {}
-
-  useCallback(callback: (newValue: unknown, oldValue: unknown) => void): void {
-    this.callback = callback;
-  }
-
-  useCoercer(): void {}
-
-  useFlush(): void {}
-}
-
-/**
- * Semantic-runtime model of Aurelia's ComputedObserver branch.
- *
- * The framework reaches this when object observer creation sees a configurable accessor descriptor or receives a
- * function key directly. The static variant uses TypeScript accessor declarations as the descriptor signal; `readonly`
- * data fields are TypeScript write-policy facts, not proof that runtime `ObserverLocator` would choose this branch.
- */
-@auLink('runtime:ComputedObserver')
-export class ComputedObserver {
-  readonly type = RuntimeBindingTargetAccessStrategy.ComputedObserver;
-  readonly doNotCache = true;
-  readonly obs: readonly unknown[] = [];
-  readonly oL: ObserverLocator | null = null;
-  readonly subs: readonly unknown[] = [];
-  $get: (() => unknown) | null = null;
-  $set: ((value: unknown) => void) | null = null;
-  private value: unknown = undefined;
-
-  constructor() {}
-
-  getValue(): unknown {
-    return this.value;
-  }
-
-  setValue(value: unknown): void {
-    this.value = value;
-  }
-
-  compute(): unknown {
-    return this.value;
-  }
-
-  handleChange(): void {}
-
-  handleCollectionChange(): void {}
-
-  handleDirty(): void {}
-
-  init(): void {}
-
-  observe(): void {}
-
-  observeCollection(): void {}
-
-  observeExpression(): void {}
-
-  run(): void {}
-
-  subscribe(): void {}
-
-  subscribeTo(): void {}
-
-  unsubscribe(): void {}
-
-  useCallback(): void {}
-
-  useCoercer(): void {}
-
-  useFlush(): void {}
-}
-
-/**
- * Semantic-runtime model of Aurelia's ControlledComputedObserver branch.
- *
- * The public target-access strategy is still computed-observer shaped, but the framework uses this separate observer
- * when computed metadata provides explicit dependencies. Keep it named so source-observer projection work can
- * distinguish explicit dependency observation from proxy/body collection without routing through decorator metadata
- * alone.
- */
-@auLink('runtime:ControlledComputedObserver')
-export class ControlledComputedObserver {
-  readonly type = RuntimeBindingTargetAccessStrategy.ComputedObserver;
-  readonly doNotCache = false;
-  readonly observers: readonly unknown[] = [];
-  private value: unknown = undefined;
-  private callback: ((newValue: unknown, oldValue: unknown) => void) | null = null;
-
-  constructor(
-    readonly dependencies: readonly ComputedObserverExplicitDependency[] = [],
-    readonly flush: 'sync' | 'async' = 'async',
-    readonly deep = false,
-  ) {}
-
-  getValue(): unknown {
-    return this.value;
-  }
-
-  setValue(value: unknown): void {
-    const oldValue = this.value;
-    this.value = value;
-    this.callback?.(value, oldValue);
-  }
-
-  handleChange(): void {}
-
-  handleCollectionChange(): void {}
-
-  subscribe(): void {}
-
-  unsubscribe(): void {}
-
-  useCallback(callback: (newValue: unknown, oldValue: unknown) => void): void {
-    this.callback = callback;
-  }
-
-  useCoercer(): void {}
-
-  useFlush(): void {}
-}
-
-/** Semantic-runtime model of Aurelia's array `length` observer branch. */
-@auLink('runtime:CollectionLengthObserver')
-export class CollectionLengthObserver {
-  readonly type = RuntimeBindingTargetAccessStrategy.CollectionLengthObserver;
-
-  getValue(): number {
-    return 0;
-  }
-
-  setValue(_newValue: number): void {}
-
-  subscribe(): void {}
-
-  unsubscribe(): void {}
-}
-
-/** Semantic-runtime model of Aurelia's map/set `size` observer branch. */
-@auLink('runtime:CollectionSizeObserver')
-export class CollectionSizeObserver {
-  readonly type = RuntimeBindingTargetAccessStrategy.CollectionSizeObserver;
-
-  getValue(): number {
-    return 0;
-  }
-
-  setValue(): void {}
-
-  subscribe(): void {}
-
-  unsubscribe(): void {}
-}
-
-/** Semantic-runtime model of Aurelia's array index observer branch. */
-@auLink('runtime:ArrayIndexObserver')
-export class ArrayIndexObserver {
-  readonly type = RuntimeBindingTargetAccessStrategy.ArrayIndexObserver;
-
-  getValue(): unknown {
-    return undefined;
-  }
-
-  setValue(_newValue: unknown): void {}
-
-  subscribe(): void {}
-
-  unsubscribe(): void {}
-}
-
-/**
- * Semantic-runtime model of Aurelia's ValueAttributeObserver.
- *
- * This mirrors NodeObserverLocator's built-in value observer config for input, textarea, content, and scroll targets.
- */
-@auLink('runtime-html:ValueAttributeObserver')
-export class ValueAttributeObserver {
-  readonly type = RuntimeBindingTargetAccessStrategy.ValueAttributeObserver;
-  private value: unknown = '';
-  private oldValue: unknown = '';
-  private hasChanges = false;
-  private config = frameworkNodeObserverConfig(
-    RuntimeNodeObserverKind.ValueAttribute,
-    'ValueAttributeObserver',
-    RuntimeNodeObserverConfigFieldState.Absent,
-    inputEvents,
-    false,
-    RuntimeNodeObserverConfigFieldState.Absent,
-    '',
-    RuntimeNodeObserverConfigFieldState.Closed,
-  );
-
-  constructor() {}
-
-  useConfig(config: RuntimeNodeObserverConfig): void {
-    this.config = config;
-  }
-
-  getValue(): unknown {
-    return this.value;
-  }
-
-  setValue(newValue: string | null): void {
-    if (Object.is(newValue, this.value)) {
-      return;
-    }
-    this.oldValue = this.value;
-    this.value = newValue ?? this.config.defaultValue;
-    this.hasChanges = true;
-    if (this.config.readonlyValue !== true) {
-      this.flushChanges();
-    }
-  }
-
-  handleEvent(): void {
-    this.oldValue = this.value;
-    this.hasChanges = false;
-  }
-
-  private flushChanges(): void {
-    this.hasChanges = false;
-  }
-}
-
-/**
- * Semantic-runtime model of Aurelia's CheckedObserver selection branch.
- *
- * The static model owns the observer identity and event surface; value-domain closure is materialized later by the
- * binding value-channel pass because it needs the authored input plus source expression facts.
- */
-@auLink('runtime-html:CheckedObserver')
-export class CheckedObserver {
-  readonly type = RuntimeBindingTargetAccessStrategy.CheckedObserver;
-  readonly oL: ObserverLocator | null = null;
-  private value: unknown = undefined;
-  private oldValue: unknown = undefined;
-  private config = frameworkNodeObserverConfig(
-    RuntimeNodeObserverKind.Checked,
-    'CheckedObserver',
-    RuntimeNodeObserverConfigFieldState.Closed,
-    checkedEvents,
-  );
-
-  constructor() {}
-
-  useConfig(config: RuntimeNodeObserverConfig): void {
-    this.config = config;
-  }
-
-  getValue(): unknown {
-    return this.value;
-  }
-
-  setValue(newValue: unknown): void {
-    this.oldValue = this.value;
-    this.value = newValue;
-  }
-
-  handleCollectionChange(): void {}
-
-  handleChange(): void {}
-
-  handleEvent(): void {
-    this.oldValue = this.value;
-  }
-}
-
-/**
- * Semantic-runtime model of Aurelia's SelectValueObserver selection branch.
- *
- * The observer owns the target-access choice. Single/multiple option value semantics stay with value-channel
- * materialization, where the authored option graph and TypeChecker-visible source value can be joined.
- */
-@auLink('runtime-html:SelectValueObserver')
-export class SelectValueObserver {
-  readonly type = RuntimeBindingTargetAccessStrategy.SelectValueObserver;
-  private value: unknown = undefined;
-  private oldValue: unknown = undefined;
-  private hasChanges = false;
-  private config = frameworkNodeObserverConfig(
-    RuntimeNodeObserverKind.Select,
-    'SelectValueObserver',
-    RuntimeNodeObserverConfigFieldState.Closed,
-    selectEvents,
-    false,
-    RuntimeNodeObserverConfigFieldState.Absent,
-    '',
-    RuntimeNodeObserverConfigFieldState.Closed,
-  );
-
-  constructor() {}
-
-  useConfig(config: RuntimeNodeObserverConfig): void {
-    this.config = config;
-  }
-
-  getValue(): unknown {
-    return this.value ?? this.config.defaultValue;
-  }
-
-  setValue(newValue: unknown): void {
-    this.oldValue = this.value;
-    this.value = newValue;
-    this.hasChanges = !Object.is(newValue, this.oldValue);
-    this.flushChanges();
-  }
-
-  handleCollectionChange(): void {
-    this.syncOptions();
-  }
-
-  syncOptions(): void {}
-
-  syncValue(): boolean {
-    this.oldValue = this.value;
-    return !Object.is(this.value, this.oldValue);
-  }
-
-  handleEvent(): void {
-    if (this.syncValue()) {
-      this.flush();
-    }
-  }
-
-  private flushChanges(): void {
-    if (this.hasChanges) {
-      this.hasChanges = false;
-      this.syncOptions();
-    }
-  }
-
-  private flush(): void {}
-}
-
 const inputEvents = ['change', 'input'] as const;
 const contentEvents = ['change', 'input', 'blur', 'keyup', 'paste'] as const;
 const scrollEvents = ['scroll'] as const;
-const checkedEvents = ['change'] as const;
 const selectEvents = ['change'] as const;
 
 function frameworkNodeObserverConfig(
@@ -867,12 +423,16 @@ function frameworkNodeObserverConfig(
 }
 
 /**
- * Semantic-runtime model of Aurelia's ObserverLocator.
+ * Static owner of Aurelia's node observer-selection semantics.
  *
- * The runtime framework shape is the public product noun; the implementation remains TypeChecker-backed because this
- * substrate needs static closure rather than live DOM/JS mutation.
+ * The linked framework classes are possible decisions of this selector, not live observer instances mirrored here.
  */
-@auLink('runtime-html:NodeObserverLocator')
+@auLink('runtime-html:NodeObserverLocator', { facet: 'observer-selection-semantics' })
+@auLink('runtime-html:DataAttributeAccessor', { facet: 'observer-selection-semantics' })
+@auLink('runtime-html:AttributeNSAccessor', { facet: 'observer-selection-semantics' })
+@auLink('runtime-html:ValueAttributeObserver', { facet: 'observer-selection-semantics' })
+@auLink('runtime-html:CheckedObserver', { facet: 'observer-selection-semantics' })
+@auLink('runtime-html:SelectValueObserver', { facet: 'observer-selection-semantics' })
 export class NodeObserverLocator {
   static readonly register = 'runtime-html:INodeObserverLocator';
 
@@ -980,10 +540,6 @@ export class NodeObserverLocator {
     configuration.applyTo(this);
   }
 
-  handles(input: ObserverLocatorLookupRequest): boolean {
-    return input.targetKind === RuntimeBindingTargetKind.Node;
-  }
-
   useConfig(config: Record<string, Record<string, RuntimeNodeObserverConfig>>): void;
   useConfig(nodeName: string, key: string, events: RuntimeNodeObserverConfig): void;
   useConfig(
@@ -1053,17 +609,6 @@ export class NodeObserverLocator {
       ?? this.globalEvents.get(key);
   }
 
-  getNodeObserver(input: ObserverLocatorLookupRequest): RuntimeBindingTargetAccessStrategy | null {
-    const tagName = input.tagName == null
-      ? null
-      : runtimeNodeName(input.tagName, input.namespace ?? HtmlNamespaceKind.Html);
-    if (tagName == null) {
-      return null;
-    }
-    const config = this.getNodeObserverConfig(tagName, input.targetProperty);
-    return config == null ? null : nodeObserverStrategyForConfig(config);
-  }
-
   private lookup(input: ObserverLocatorLookupRequest): ObserverLocatorLookupResult {
     const tagName = input.tagName == null
       ? null
@@ -1108,8 +653,16 @@ export class NodeObserverLocator {
   }
 }
 
-@auLink('runtime:IObserverLocator')
-@auLink('runtime:ObserverLocator')
+/** Static owner of Aurelia's object and node observer-selection decisions. */
+@auLink('runtime:IObserverLocator', { facet: 'observer-selection-semantics' })
+@auLink('runtime:ObserverLocator', { facet: 'observer-selection-semantics' })
+@auLink('runtime:PropertyAccessor', { facet: 'observer-selection-semantics' })
+@auLink('runtime:SetterObserver', { facet: 'observer-selection-semantics' })
+@auLink('runtime:ComputedObserver', { facet: 'observer-selection-semantics' })
+@auLink('runtime:ControlledComputedObserver', { facet: 'observer-selection-semantics' })
+@auLink('runtime:CollectionLengthObserver', { facet: 'observer-selection-semantics' })
+@auLink('runtime:CollectionSizeObserver', { facet: 'observer-selection-semantics' })
+@auLink('runtime:ArrayIndexObserver', { facet: 'observer-selection-semantics' })
 export class ObserverLocator {
   private readonly projector: CheckerTypeProjector;
   private readonly typeAccess: CheckerTypeShapeAccess;

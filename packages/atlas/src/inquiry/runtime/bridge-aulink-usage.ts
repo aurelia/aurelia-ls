@@ -17,6 +17,7 @@ import {
   AURELIA_FRAMEWORK_PACKAGE_IDS,
   declarationNameNode,
   memberSurfacesForDeclaration,
+  AuLinkFacetState,
   readAuLinkModel,
   requiredSourceFileIdentity,
   requiredSourceRangeForNode,
@@ -63,7 +64,7 @@ export type AuLinkUsageMemberPresence =
   | "framework-only"
   | "product-only";
 
-/** Compact rollup for comparing framework API usage with semantic-runtime mirror usage. */
+/** Compact review-pressure rollup comparing framework API usage with an unqualified product correspondence. */
 export interface AuLinkUsageComparisonRollup {
   readonly linkCount: number;
   readonly placedLinkCount: number;
@@ -118,7 +119,7 @@ export interface AuLinkUsageComparisonRow {
   readonly summary: string;
 }
 
-/** Member-level comparison row between one framework target and product mirror target. */
+/** Member-level comparison row between one framework target and an unqualified product correspondence. */
 export interface AuLinkUsageMemberComparisonRow {
   readonly id: string;
   readonly linkId: string;
@@ -157,7 +158,7 @@ export interface AuLinkUsageSiteRow {
   readonly call?: TypeScriptUsageCallSite;
 }
 
-/** Member declaration surface comparison between an auLink framework target and product mirror. */
+/** Member declaration surface comparison for one unqualified auLink correspondence. */
 export interface AuLinkMemberSurfaceRow {
   readonly id: string;
   readonly linkId: string;
@@ -312,7 +313,11 @@ interface MemberSurfaceRef {
   readonly source: SourceRange;
 }
 
-/** Compare exact Aurelia-side API usage with exact semantic-runtime usage of auLink mirror targets. */
+/**
+ * Compare exact Aurelia-side API usage with exact product usage for unqualified auLink correspondences.
+ *
+ * This is review pressure, not a promise that the product mirrors the framework target's complete API or behavior.
+ */
 export function readAuLinkUsageComparisonModel(
   sourceProject: SourceProject,
   filters: AuLinkMirrorFilters = {},
@@ -322,7 +327,16 @@ export function readAuLinkUsageComparisonModel(
   const frameworkApi = readAureliaApiUsageIndex(sourceProject);
   const frameworkTargetUsage = readAuLinkFrameworkTargetUsageIndex(sourceProject);
   const productUsage = readAuLinkProductUsageIndex(sourceProject);
-  const anchorsByLinkId = groupBy(auLink.anchors, (anchor) => anchor.linkId);
+  const allAuLink = readAuLinkModel(sourceProject, {});
+  const unqualifiedLinkIds = new Set(
+    allAuLink.anchors
+      .filter((anchor) => anchor.facetState === AuLinkFacetState.Unqualified)
+      .map((anchor) => anchor.linkId),
+  );
+  const anchorsByLinkId = groupBy(
+    auLink.anchors.filter((anchor) => anchor.facetState === AuLinkFacetState.Unqualified),
+    (anchor) => anchor.linkId,
+  );
   const frameworkTargetUsagesByLinkId = groupBy(
     frameworkTargetUsage.usages,
     (usage) => usage.linkId,
@@ -336,6 +350,16 @@ export function readAuLinkUsageComparisonModel(
   const consumerRows: AuLinkUsageConsumerRow[] = [];
 
   for (const target of auLink.frameworkTargets) {
+    if (
+      filters.facet !== undefined
+      || (
+        filters.facetState !== undefined
+        && filters.facetState !== AuLinkFacetState.Unqualified
+      )
+      || !unqualifiedLinkIds.has(target.linkId)
+    ) {
+      continue;
+    }
     const anchors = anchorsByLinkId.get(target.linkId) ?? [];
     const frameworkScope = frameworkUsageScope(
       frameworkApi,
@@ -442,6 +466,9 @@ function buildProductUsageIndex(sourceProject: SourceProject): AuLinkProductUsag
   const auLink = readAuLinkModel(sourceProject, {});
 
   for (const anchor of auLink.anchors) {
+    if (anchor.facetState !== AuLinkFacetState.Unqualified) {
+      continue;
+    }
     const declaration = productAnchorDeclaration(sourceProject, anchor);
     if (declaration === null || declaration.name === undefined) {
       continue;

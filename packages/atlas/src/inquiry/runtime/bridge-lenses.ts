@@ -388,6 +388,8 @@ function auLinkMirrorFiltersFromRecord(
     targetName: nonEmptyString(source.targetName),
     filePath: nonEmptyString(source.filePath),
     frameworkStatus: nonEmptyString(source.frameworkStatus),
+    facet: nonEmptyString(source.facet),
+    facetState: nonEmptyString(source.facetState),
     roleFamily: nonEmptyString(source.roleFamily),
     relation: nonEmptyString(source.relation),
     sourceLens: nonEmptyString(source.sourceLens),
@@ -488,7 +490,7 @@ function auLinkSummaryContinuations(
       kind: ContinuationKind.SwitchProjection,
       priority: ContinuationPriority.Primary,
       rationale:
-        "Compare Aurelia-side framework API usage with semantic-runtime usage of the auLink mirror targets.",
+        "Compare Aurelia-side framework API usage with semantic-runtime usage for unqualified auLink correspondences.",
       inquiry: {
         lens: LensId.BridgeAuLink,
         locus: inquiry.locus,
@@ -1121,6 +1123,8 @@ function summaryForGap(gap: AuLinkGapRow): string {
       return `Decorator placement ${gap.linkId} is not declared by the auLink catalog.`;
     case AuLinkGapKind.DuplicatePlacement:
       return `auLink id ${gap.linkId} has ${gap.count} decorator placements.`;
+    case AuLinkGapKind.FacetUnresolved:
+      return `Decorator placement ${gap.linkId} has an unresolved final facet value.`;
   }
 }
 

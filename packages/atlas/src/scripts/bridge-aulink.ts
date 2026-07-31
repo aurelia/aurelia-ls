@@ -29,6 +29,8 @@ const filters = {
   ...scriptOptionalStringFilter("frameworkSymbol"),
   ...scriptOptionalStringFilter("filePath"),
   ...scriptOptionalStringFilter("frameworkStatus"),
+  ...scriptOptionalStringFilter("facet"),
+  ...scriptOptionalStringFilter("facetState"),
   ...scriptOptionalStringFilter("roleFamily"),
   ...scriptOptionalStringFilter("relation"),
   ...scriptOptionalStringFilter("sourceLens"),
@@ -128,6 +130,7 @@ function printAuLinkRollup(
   console.log(`- unadmitted framework packages: ${rollup.unadmittedFrameworkPackages}`);
   console.log(`- duplicate placement groups: ${rollup.duplicatePlacementGroups}`);
   console.log(`- multi-facet placement groups: ${rollup.multiFacetPlacementGroups}`);
+  console.log(`- unresolved facet placements: ${rollup.unresolvedFacetPlacements}`);
   if (includeCounts) {
     printCounts(
       "packages",
@@ -151,6 +154,9 @@ function printMirrorRollup(
   console.log("mirror rollup");
   console.log(`- link rows: ${rollup.linkCount}`);
   console.log(`- placed links: ${rollup.placedLinkCount}`);
+  console.log(`- unqualified correspondence links: ${rollup.unqualifiedLinkCount}`);
+  console.log(`- semantic-facet links: ${rollup.semanticFacetLinkCount}`);
+  console.log(`- unresolved-facet links: ${rollup.unresolvedFacetLinkCount}`);
   console.log(`- resolved targets: ${rollup.resolvedTargetCount}`);
   console.log(`- links with role evidence: ${rollup.linksWithRoleEvidence}`);
   console.log(`- links without role evidence: ${rollup.linksWithoutRoleEvidence}`);
@@ -167,6 +173,7 @@ function printMirrorRollup(
   printCounts("emulation modes", rollup.emulationModes, 30);
   printCounts("obligation kinds", rollup.obligationKinds, 30);
   printCounts("product areas", rollup.productAreas, 30);
+  printCounts("semantic facets", rollup.semanticFacets, 30);
 }
 
 function printUsageRollup(
@@ -280,10 +287,11 @@ function printMirrorRows(
   printEmptyRows(rows, "no auLink mirror rows returned");
   for (const row of rows.slice(0, limit)) {
     console.log(
-      `- ${row.linkId}; target=${row.targetStatus}; placements=${row.placementCount}; roleEvidence=${row.roleEvidenceCount}; obligations=${row.emulationObligationCount}; productAreas=${recordKeys(row.productAreas)}; ${sourceLabel({ source: row.firstProductSource ?? row.firstFrameworkSource })}`,
+      `- ${row.linkId}; target=${row.targetStatus}; unqualified=${row.unqualifiedPlacementCount}; semanticFacets=${row.semanticFacetPlacementCount}; unresolvedFacets=${row.unresolvedFacetPlacementCount}; roleEvidence=${row.roleEvidenceCount}; obligations=${row.emulationObligationCount}; productAreas=${recordKeys(row.productAreas)}; ${sourceLabel({ source: row.firstProductSource ?? row.firstFrameworkSource })}`,
     );
     if (includeDetail) {
       console.log(`  roles=${recordKeys(row.roleFamilies)} relations=${recordKeys(row.relations)}`);
+      console.log(`  facets=${recordKeys(row.semanticFacets)}`);
       console.log(`  obligations=${recordKeys(row.obligationKinds)} modes=${recordKeys(row.emulationModes)}`);
     }
   }

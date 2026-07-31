@@ -29,6 +29,8 @@ export const enum AuLinkGapKind {
   PlacementWithoutCatalog = "placement-without-catalog",
   /** More than one admitted source placement uses the same auLink id. */
   DuplicatePlacement = "duplicate-placement",
+  /** The decorator has options whose final facet value cannot be recovered statically. */
+  FacetUnresolved = "facet-unresolved",
 }
 
 /** Framework-side resolution state for one auLink id. */
@@ -63,14 +65,22 @@ export const enum AuLinkFrameworkTargetCompositionKind {
   MultipleDeclarations = "multiple-declarations",
 }
 
-/** Product-side semantic facet carried by an auLink placement. */
-export const enum AuLinkPlacementFacet {
-  /** Product row models the framework resource definition/catalog aspect. */
-  ResourceDefinition = "resource-definition",
-  /** Product row models static template-controller child-scope/cardinality behavior. */
-  TemplateControllerSemantics = "template-controller-semantics",
-  /** Product row models a router runtime topology/product record. */
-  RouterRuntimeModel = "router-runtime-model",
+/**
+ * Losslessly authored product-side semantic facet carried by an auLink placement.
+ *
+ * The closed authoring vocabulary belongs to semantic-runtime's auLink contract. Atlas reads source text and must not
+ * maintain a second enum that silently erases newer facets.
+ */
+export type AuLinkPlacementFacet = string;
+
+/** Epistemic state of one auLink placement's authored facet. */
+export const enum AuLinkFacetState {
+  /** No facet option was authored, so the correspondence breadth is unqualified. */
+  Unqualified = "unqualified",
+  /** One exact authored facet string was recovered. */
+  Exact = "exact",
+  /** Options may provide a facet, but Atlas cannot recover its final value. */
+  Unresolved = "unresolved",
 }
 
 /** Exact filter lanes accepted by auLink substrate reads. */
@@ -87,6 +97,10 @@ export interface AuLinkFilters {
   readonly filePath?: string;
   /** Exact framework target resolution state. */
   readonly frameworkStatus?: AuLinkFrameworkTargetStatus | string;
+  /** Exact authored semantic facet. Unqualified facetless correspondences do not match this filter. */
+  readonly facet?: string;
+  /** Exact facet epistemic state, including explicit selection of unqualified placements. */
+  readonly facetState?: AuLinkFacetState | string;
   /** Exact substring filter across auLink ids, names, and source paths. */
   readonly query?: string;
 }
@@ -181,8 +195,10 @@ export interface AuLinkAnchorRow extends AuLinkIdParts {
   readonly file: SourceFileIdentity;
   /** Exact source span for the decorator call. */
   readonly decoratorSpan: SourceSpan;
-  /** Product-side facet when several semantic-runtime models intentionally mirror the same framework symbol. */
+  /** Product-side facet when the placement owns one bounded semantic decision. */
   readonly facet: AuLinkPlacementFacet | null;
+  /** Whether the facet is unqualified, exact, or unresolved from authored options. */
+  readonly facetState: AuLinkFacetState;
   /** Product-side declaration that carries the decorator. */
   readonly target: AuLinkTarget;
   /** Framework-side target resolution for this anchor. */
@@ -201,6 +217,8 @@ export interface AuLinkGapRow extends AuLinkIdParts {
   readonly count: number;
   /** Product-side facet involved in the gap, when duplicate detection is facet-scoped. */
   readonly facet?: AuLinkPlacementFacet | null;
+  /** Facet state involved in the gap, when placement syntax owns one. */
+  readonly facetState?: AuLinkFacetState;
   /** Catalog entry involved in the gap, when any. */
   readonly catalog?: AuLinkCatalogEntry;
   /** Anchor placements involved in the gap, when any. */
@@ -223,8 +241,10 @@ export interface AuLinkPackageRollup {
   readonly placementsWithoutCatalog: number;
   /** Duplicate placement gap rows in this package. */
   readonly duplicatePlacementGroups: number;
-  /** auLink ids intentionally mirrored by multiple product-side facets in this package. */
+  /** auLink ids represented by more than one known unqualified/exact facet identity in this package. */
   readonly multiFacetPlacementGroups: number;
+  /** Placements whose final facet value cannot be recovered statically. */
+  readonly unresolvedFacetPlacements: number;
 }
 
 /** Compact rollup for the auLink bridge substrate. */
@@ -243,8 +263,10 @@ export interface AuLinkRollup {
   readonly placementsWithoutCatalog: number;
   /** auLink ids with multiple placements after exact filters. */
   readonly duplicatePlacementGroups: number;
-  /** auLink ids intentionally mirrored by multiple product-side facets after exact filters. */
+  /** auLink ids represented by more than one known unqualified/exact facet identity after exact filters. */
   readonly multiFacetPlacementGroups: number;
+  /** Placements whose final facet value cannot be recovered statically after exact filters. */
+  readonly unresolvedFacetPlacements: number;
   /** auLink ids whose framework side resolved to exactly one declaration. */
   readonly resolvedFrameworkTargets: number;
   /** auLink ids whose framework side resolved to more than one declaration. */
@@ -426,7 +448,7 @@ function collectAuLinkAnchors(
         if (metadata === null) {
           continue;
         }
-        const { id, facet } = metadata;
+        const { id, facet, facetState } = metadata;
         const parts = splitAuLinkId(id);
         const name = node.name?.text ?? null;
         anchors.push({
@@ -435,6 +457,7 @@ function collectAuLinkAnchors(
           file,
           decoratorSpan: sourceSpanForNode(sourceFile, decorator),
           facet,
+          facetState,
           target: {
             name,
             kind: SourceDeclarationKind.Class,
@@ -497,6 +520,23 @@ function collectAuLinkGaps(
         packageId: anchor.packageId,
         symbolName: anchor.symbolName,
         count: 1,
+        facet: anchor.facet,
+        facetState: anchor.facetState,
+        anchors: [anchor],
+        frameworkTarget: anchor.frameworkTarget,
+      });
+    }
+    if (anchor.facetState === AuLinkFacetState.Unresolved) {
+      gaps.push({
+        id: `aulink-gap:${AuLinkGapKind.FacetUnresolved}:${anchor.id}`,
+        kind: AuLinkGapKind.FacetUnresolved,
+        linkId: anchor.linkId,
+        packageId: anchor.packageId,
+        symbolName: anchor.symbolName,
+        count: 1,
+        facet: null,
+        facetState: anchor.facetState,
+        catalog: catalogById.get(anchor.linkId),
         anchors: [anchor],
         frameworkTarget: anchor.frameworkTarget,
       });
@@ -504,21 +544,26 @@ function collectAuLinkGaps(
   }
 
   for (const [linkId, entryAnchors] of anchorsById) {
-    for (const [facetKey, facetAnchors] of groupAnchorsByFacet(entryAnchors)) {
+    for (const [facetIdentity, facetAnchors] of groupAnchorsByFacet(entryAnchors)) {
       if (facetAnchors.length <= 1) {
         continue;
       }
       const parts = splitAuLinkId(linkId);
-      const facet = auLinkFacetFromGroupKey(facetKey);
+      const firstAnchor = facetAnchors[0];
+      // Unknown final facets cannot prove that two placements own the same semantic decision.
+      if (firstAnchor?.facetState === AuLinkFacetState.Unresolved) {
+        continue;
+      }
       gaps.push({
-        id: `aulink-gap:${AuLinkGapKind.DuplicatePlacement}:${linkId}:${facetKey}`,
+        id: `aulink-gap:${AuLinkGapKind.DuplicatePlacement}:${linkId}:${facetIdentity}`,
         kind: AuLinkGapKind.DuplicatePlacement,
         ...parts,
         count: facetAnchors.length,
-        facet,
+        facet: firstAnchor?.facet,
+        facetState: firstAnchor?.facetState,
         catalog: catalogById.get(linkId),
         anchors: facetAnchors,
-        frameworkTarget: facetAnchors[0]?.frameworkTarget ?? frameworkTargetForPartsFromLinkId(parts),
+        frameworkTarget: firstAnchor?.frameworkTarget ?? frameworkTargetForPartsFromLinkId(parts),
       });
     }
   }
@@ -778,6 +823,9 @@ function targetRowsForFilters(
 }
 
 function targetPartsFromFilters(filters: AuLinkFilters): AuLinkIdParts | null {
+  if (filters.facet !== undefined || filters.facetState !== undefined) {
+    return null;
+  }
   if (filters.linkId !== undefined) {
     return splitAuLinkId(filters.linkId);
   }
@@ -797,6 +845,7 @@ function auLinkIdFromParameterType(type: ts.TypeNode): string | null {
 interface AuLinkDecoratorMetadata {
   readonly id: string;
   readonly facet: AuLinkPlacementFacet | null;
+  readonly facetState: AuLinkFacetState;
 }
 
 function auLinkMetadataFromDecorator(
@@ -815,39 +864,66 @@ function auLinkMetadataFromDecorator(
   if (id === null) {
     return null;
   }
+  return { id, ...auLinkFacetFromDecoratorCall(expression) };
+}
+
+export interface AuLinkFacetMetadata {
+  readonly facet: AuLinkPlacementFacet | null;
+  readonly facetState: AuLinkFacetState;
+}
+
+export function auLinkFacetFromDecoratorCall(
+  expression: ts.CallExpression,
+): AuLinkFacetMetadata {
+  const options = expression.arguments[1];
+  if (options === undefined) {
+    return unqualifiedAuLinkFacet();
+  }
+  if (!ts.isObjectLiteralExpression(options)) {
+    return unresolvedAuLinkFacet();
+  }
+
+  let result = unqualifiedAuLinkFacet();
+  for (const property of options.properties) {
+    if (ts.isSpreadAssignment(property)) {
+      result = unresolvedAuLinkFacet();
+      continue;
+    }
+    const propertyName = propertyNameText(property.name);
+    if (propertyName === null) {
+      result = unresolvedAuLinkFacet();
+      continue;
+    }
+    if (propertyName !== "facet") {
+      continue;
+    }
+    if (!ts.isPropertyAssignment(property)) {
+      result = unresolvedAuLinkFacet();
+      continue;
+    }
+    const facet = stringLiteralText(property.initializer);
+    result = facet === null
+      ? unresolvedAuLinkFacet()
+      : {
+          facet,
+          facetState: AuLinkFacetState.Exact,
+        };
+  }
+  return result;
+}
+
+function unqualifiedAuLinkFacet(): AuLinkFacetMetadata {
   return {
-    id,
-    facet: auLinkFacetFromDecoratorCall(expression),
+    facet: null,
+    facetState: AuLinkFacetState.Unqualified,
   };
 }
 
-function auLinkFacetFromDecoratorCall(
-  expression: ts.CallExpression,
-): AuLinkPlacementFacet | null {
-  const options = expression.arguments[1];
-  if (options === undefined || !ts.isObjectLiteralExpression(options)) {
-    return null;
-  }
-  for (const property of options.properties) {
-    if (!ts.isPropertyAssignment(property) || propertyNameText(property.name) !== "facet") {
-      continue;
-    }
-    return auLinkPlacementFacetFromString(stringLiteralText(property.initializer));
-  }
-  return null;
-}
-
-function auLinkPlacementFacetFromString(
-  value: string | null,
-): AuLinkPlacementFacet | null {
-  switch (value) {
-    case AuLinkPlacementFacet.ResourceDefinition:
-    case AuLinkPlacementFacet.TemplateControllerSemantics:
-    case AuLinkPlacementFacet.RouterRuntimeModel:
-      return value;
-    default:
-      return null;
-  }
+function unresolvedAuLinkFacet(): AuLinkFacetMetadata {
+  return {
+    facet: null,
+    facetState: AuLinkFacetState.Unresolved,
+  };
 }
 
 function isAuLinkCallee(expression: ts.Expression, markerNames: ReadonlySet<string>): boolean {
@@ -942,6 +1018,8 @@ function splitAuLinkId(linkId: string): AuLinkIdParts {
 function catalogMatches(entry: AuLinkCatalogEntry, filters: AuLinkFilters): boolean {
   return idMatches(entry, filters)
     && targetMatches(entry.frameworkTarget, filters)
+    && filters.facet === undefined
+    && filters.facetState === undefined
     && (filters.targetName === undefined)
     && (filters.filePath === undefined || entry.file.repoPath === filters.filePath)
     && (filters.query === undefined || catalogContains(entry, filters.query));
@@ -950,6 +1028,8 @@ function catalogMatches(entry: AuLinkCatalogEntry, filters: AuLinkFilters): bool
 function auLinkAnchorMatches(anchor: AuLinkAnchorRow, filters: AuLinkFilters): boolean {
   return idMatches(anchor, filters)
     && targetMatches(anchor.frameworkTarget, filters)
+    && (filters.facet === undefined || anchor.facet === filters.facet)
+    && (filters.facetState === undefined || anchor.facetState === filters.facetState)
     && (filters.targetName === undefined || anchor.target.name === filters.targetName)
     && (filters.filePath === undefined || anchor.file.repoPath === filters.filePath)
     && (filters.query === undefined || anchorContains(anchor, filters.query));
@@ -959,6 +1039,16 @@ function gapMatches(gap: AuLinkGapRow, filters: AuLinkFilters): boolean {
   if (
     !idMatches(gap, filters)
     || !targetMatches(gap.frameworkTarget, filters)
+    || (
+      filters.facet !== undefined
+      && gap.facet !== filters.facet
+      && !gap.anchors.some((anchor) => anchor.facet === filters.facet)
+    )
+    || (
+      filters.facetState !== undefined
+      && gap.facetState !== filters.facetState
+      && !gap.anchors.some((anchor) => anchor.facetState === filters.facetState)
+    )
     || (filters.query !== undefined && !gapContains(gap, filters.query))
   ) {
     return false;
@@ -1002,6 +1092,7 @@ function anchorContains(anchor: AuLinkAnchorRow, query: string): boolean {
     anchor.packageId,
     anchor.symbolName,
     anchor.facet,
+    anchor.facetState,
     anchor.file.repoPath,
     anchor.target.name,
     anchor.target.kind,
@@ -1017,6 +1108,8 @@ function gapContains(gap: AuLinkGapRow, query: string): boolean {
     gap.packageId,
     gap.symbolName,
     gap.kind,
+    gap.facet,
+    gap.facetState,
     gap.catalog?.file.repoPath,
   ].some((value) => value?.includes(query) === true)
     || gap.catalog !== undefined && catalogContains(gap.catalog, query)
@@ -1061,6 +1154,9 @@ function rollupFor(
   const unplacedCatalogEntries = gaps.filter((gap) => gap.kind === AuLinkGapKind.CatalogUnplaced).length;
   const placementsWithoutCatalog = gaps.filter((gap) => gap.kind === AuLinkGapKind.PlacementWithoutCatalog).length;
   const multiFacetPlacementGroups = multiFacetPlacementGroupCount(anchors);
+  const unresolvedFacetPlacements = anchors.filter(
+    (anchor) => anchor.facetState === AuLinkFacetState.Unresolved,
+  ).length;
   return {
     catalogEntries: catalog.length,
     anchors: anchors.length,
@@ -1070,6 +1166,7 @@ function rollupFor(
     placementsWithoutCatalog,
     duplicatePlacementGroups,
     multiFacetPlacementGroups,
+    unresolvedFacetPlacements,
     resolvedFrameworkTargets: frameworkTargets.filter((target) => target.status === AuLinkFrameworkTargetStatus.Resolved).length,
     ambiguousFrameworkTargets: frameworkTargets.filter((target) => target.status === AuLinkFrameworkTargetStatus.Ambiguous).length,
     unresolvedFrameworkTargets: frameworkTargets.filter((target) => target.status === AuLinkFrameworkTargetStatus.Unresolved).length,
@@ -1096,13 +1193,20 @@ function packageRollups(
     placementsWithoutCatalog: gaps.filter((gap) => gap.packageId === packageId && gap.kind === AuLinkGapKind.PlacementWithoutCatalog).length,
     duplicatePlacementGroups: gaps.filter((gap) => gap.packageId === packageId && gap.kind === AuLinkGapKind.DuplicatePlacement).length,
     multiFacetPlacementGroups: multiFacetPlacementGroupCount(anchors.filter((anchor) => anchor.packageId === packageId)),
+    unresolvedFacetPlacements: anchors.filter(
+      (anchor) => anchor.packageId === packageId && anchor.facetState === AuLinkFacetState.Unresolved,
+    ).length,
   }));
 }
 
 function multiFacetPlacementGroupCount(anchors: readonly AuLinkAnchorRow[]): number {
   let count = 0;
   for (const entryAnchors of groupAnchorsByLinkId(anchors).values()) {
-    const facets = new Set(entryAnchors.map((anchor) => auLinkFacetGroupKey(anchor.facet)));
+    const facets = new Set(
+      entryAnchors
+        .filter((anchor) => anchor.facetState !== AuLinkFacetState.Unresolved)
+        .map(auLinkFacetIdentity),
+    );
     if (facets.size > 1) {
       count += 1;
     }
@@ -1126,13 +1230,15 @@ function groupAnchorsByLinkId(anchors: readonly AuLinkAnchorRow[]): Map<string, 
   return grouped;
 }
 
-function groupAnchorsByFacet(anchors: readonly AuLinkAnchorRow[]): Map<string, readonly AuLinkAnchorRow[]> {
+function groupAnchorsByFacet(
+  anchors: readonly AuLinkAnchorRow[],
+): Map<string, readonly AuLinkAnchorRow[]> {
   const grouped = new Map<string, AuLinkAnchorRow[]>();
   for (const anchor of anchors) {
-    const key = auLinkFacetGroupKey(anchor.facet);
-    const existing = grouped.get(key);
+    const identity = auLinkFacetIdentity(anchor);
+    const existing = grouped.get(identity);
     if (existing === undefined) {
-      grouped.set(key, [anchor]);
+      grouped.set(identity, [anchor]);
     } else {
       existing.push(anchor);
     }
@@ -1143,12 +1249,10 @@ function groupAnchorsByFacet(anchors: readonly AuLinkAnchorRow[]): Map<string, r
   return grouped;
 }
 
-function auLinkFacetGroupKey(facet: AuLinkPlacementFacet | null): string {
-  return facet ?? "unfaceted";
-}
-
-function auLinkFacetFromGroupKey(key: string): AuLinkPlacementFacet | null {
-  return key === "unfaceted" ? null : auLinkPlacementFacetFromString(key);
+function auLinkFacetIdentity(anchor: AuLinkAnchorRow): string {
+  return anchor.facetState === AuLinkFacetState.Exact
+    ? `${anchor.facetState}:${anchor.facet ?? ""}`
+    : anchor.facetState;
 }
 
 function uniqueCatalogEntries(entries: readonly AuLinkCatalogEntry[]): readonly AuLinkCatalogEntry[] {
@@ -1171,9 +1275,26 @@ function compareCatalogEntries(left: AuLinkCatalogEntry, right: AuLinkCatalogEnt
 
 function compareAnchors(left: AuLinkAnchorRow, right: AuLinkAnchorRow): number {
   return left.linkId.localeCompare(right.linkId)
-    || auLinkFacetGroupKey(left.facet).localeCompare(auLinkFacetGroupKey(right.facet))
+    || left.facetState.localeCompare(right.facetState)
+    || compareAuLinkFacets(left.facet, right.facet)
     || left.file.repoPath.localeCompare(right.file.repoPath)
     || left.decoratorSpan.start - right.decoratorSpan.start;
+}
+
+function compareAuLinkFacets(
+  left: AuLinkPlacementFacet | null,
+  right: AuLinkPlacementFacet | null,
+): number {
+  if (left === right) {
+    return 0;
+  }
+  if (left === null) {
+    return -1;
+  }
+  if (right === null) {
+    return 1;
+  }
+  return left.localeCompare(right);
 }
 
 function compareGaps(left: AuLinkGapRow, right: AuLinkGapRow): number {

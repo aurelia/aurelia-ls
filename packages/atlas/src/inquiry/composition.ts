@@ -20,8 +20,6 @@ export const SEMANTIC_COMPOSITION_SCHEMA_VERSION =
 
 /** Composition entity kinds that do not come directly from framework endpoints or TypeScript declarations. */
 export const SemanticEntityKind = {
-  /** Semantic-runtime class that carries an auLink mirror anchor. */
-  ProductClass: "product-class",
   /** Framework symbol referenced by an auLink id before an exact declaration candidate is known. */
   FrameworkTarget: "framework-target",
   /** Framework-side symbol identity used for stable actor ids across type/value declaration pairs. */
@@ -65,7 +63,10 @@ export type SemanticClaimFamily =
 
 /** Answer-level predicates that do not originate in a framework relationship enum. */
 export const SemanticClaimPredicate = {
-  MirrorsFrameworkTarget: "mirrors-framework-target",
+  /** Product declaration has an unqualified correspondence to one framework target. */
+  CorrespondsToFrameworkTarget: "corresponds-to-framework-target",
+  /** Product declaration owns one named semantic decision made by a framework target. */
+  ModelsFrameworkFacet: "models-framework-facet",
 } as const;
 
 /** Signed predicate asserted from subject to object. */
@@ -110,6 +111,8 @@ export interface SemanticClaim {
   readonly mechanism?: SemanticClaimMechanism;
   /** Semantic or runtime phase, when the producing substrate has one. */
   readonly phase?: SemanticClaimPhase;
+  /** Exact auLink semantic facet when the correspondence is explicitly bounded rather than unqualified. */
+  readonly facet?: string;
   /** Package id that owns the source evidence for the claim. */
   readonly packageId?: string;
   /** Package name that owns the source evidence for the claim. */

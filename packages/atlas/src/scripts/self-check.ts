@@ -4,6 +4,10 @@ import path from "node:path";
 import ts from "typescript";
 
 import { OutcomeKind } from "../inquiry/answer.js";
+import {
+  SemanticClaimPredicate,
+  type SemanticCompositionValue,
+} from "../inquiry/composition.js";
 import { LensId, LensStage } from "../inquiry/lens.js";
 import { LocusKind } from "../inquiry/locus.js";
 import { isRouterExportName } from "../inquiry/runtime/aurelia-source-imports.js";
@@ -15,13 +19,24 @@ import {
   type FrameworkDiscoveryValue,
 } from "../inquiry/runtime/framework-entities.js";
 import type { FrameworkResourcesValue } from "../inquiry/runtime/framework-resource-lenses.js";
+import type { BridgeAuLinkValue } from "../inquiry/runtime/bridge-lenses.js";
+import type { FrameworkCapabilitiesValue } from "../inquiry/runtime/framework-capability-lenses.js";
+import {
+  FrameworkCoverageBasisClosure,
+} from "../inquiry/runtime/framework-capability-territory.js";
 import type { SelfValue } from "../inquiry/runtime/self-value.js";
 import type { PluginArchitectureValue } from "../inquiry/runtime/plugin-architecture-lenses.js";
 import type { WorkspaceArchitectureValue } from "../inquiry/runtime/workspace-architecture-lenses.js";
 import { createApi } from "../session/index.js";
-import { findRepoRoot } from "../source/index.js";
+import {
+  AuLinkFacetState,
+  auLinkFacetFromDecoratorCall,
+  findRepoRoot,
+} from "../source/index.js";
 
 const api = createApi({ idleTtlMs: 30_000, requestTimeoutMs: 180_000 });
+
+assertAuLinkFacetParsing();
 
 const mapAnswer = await api.map("script-self-check");
 const map = mapAnswer.value;
@@ -89,6 +104,91 @@ const impossibleContinuationCoverage = await api.ask({
     coverageDepth: "verified",
   },
   budget: { rows: 20, evidencePerSubject: 0 },
+});
+const observerFacetAnchors = await api.ask({
+  lens: LensId.BridgeAuLink,
+  locus: { kind: LocusKind.Repo },
+  projection: "anchors",
+  filters: { facet: "observer-selection-semantics" },
+  budget: { rows: 50, evidencePerSubject: 0 },
+});
+const observerFacetUsageComparison = await api.ask({
+  lens: LensId.BridgeAuLink,
+  locus: { kind: LocusKind.Repo },
+  projection: "usage-comparison",
+  filters: { linkId: "runtime:ComputedObserver" },
+  budget: { rows: 10, evidencePerSubject: 0 },
+});
+const observerFacetMemberSurface = await api.ask({
+  lens: LensId.BridgeAuLink,
+  locus: { kind: LocusKind.Repo },
+  projection: "member-surface",
+  filters: { linkId: "runtime:ComputedObserver" },
+  budget: { rows: 10, evidencePerSubject: 0 },
+});
+const observerFacetUsageMembers = await api.ask({
+  lens: LensId.BridgeAuLink,
+  locus: { kind: LocusKind.Repo },
+  projection: "usage-members",
+  filters: { linkId: "runtime:ComputedObserver" },
+  budget: { rows: 10, evidencePerSubject: 0 },
+});
+const catalogOnlyUsageComparison = await api.ask({
+  lens: LensId.BridgeAuLink,
+  locus: { kind: LocusKind.Repo },
+  projection: "usage-comparison",
+  filters: { linkId: "runtime-html:IController" },
+  budget: { rows: 10, evidencePerSubject: 0 },
+});
+const observerFacetClaims = await api.ask({
+  lens: LensId.FrameworkComposition,
+  locus: { kind: LocusKind.Repo },
+  projection: "claims",
+  filters: { facet: "observer-selection-semantics" },
+  budget: { rows: 50, evidencePerSubject: 0 },
+});
+const unresolvedFacetAnchors = await api.ask({
+  lens: LensId.BridgeAuLink,
+  locus: { kind: LocusKind.Repo },
+  projection: "anchors",
+  filters: { facetState: AuLinkFacetState.Unresolved },
+  budget: { rows: 50, evidencePerSubject: 0 },
+});
+const unresolvedFacetGaps = await api.ask({
+  lens: LensId.BridgeAuLink,
+  locus: { kind: LocusKind.Repo },
+  projection: "gaps",
+  filters: { facetState: AuLinkFacetState.Unresolved },
+  budget: { rows: 50, evidencePerSubject: 0 },
+});
+const scopeUnqualifiedAnchors = await api.ask({
+  lens: LensId.BridgeAuLink,
+  locus: { kind: LocusKind.Repo },
+  projection: "anchors",
+  filters: {
+    linkId: "runtime:Scope",
+    facetState: AuLinkFacetState.Unqualified,
+  },
+  budget: { rows: 10, evidencePerSubject: 0 },
+});
+const scopeUnqualifiedClaims = await api.ask({
+  lens: LensId.FrameworkComposition,
+  locus: { kind: LocusKind.Repo },
+  projection: "claims",
+  filters: { query: "runtime:Scope" },
+  budget: { rows: 20, evidencePerSubject: 0 },
+});
+const frameworkReverseCoverage = await api.ask({
+  lens: LensId.FrameworkCapabilities,
+  locus: { kind: LocusKind.Repo },
+  projection: "reverse-coverage",
+  budget: { rows: 20, evidencePerSubject: 0 },
+});
+const frameworkReverseCoverageFirstPage = await api.ask({
+  lens: LensId.FrameworkCapabilities,
+  locus: { kind: LocusKind.Repo },
+  projection: "reverse-coverage",
+  budget: { rows: 1, evidencePerSubject: 0 },
 });
 
 if (mapAnswer.outcome !== OutcomeKind.Hit || map === undefined) {
@@ -329,6 +429,154 @@ if ((impossibleContinuationCoverageValue?.routeCoverage?.length ?? 0) !== 0) {
   );
 }
 
+const observerFacetAnchorValue = observerFacetAnchors.value as BridgeAuLinkValue | null | undefined;
+const observerAnchors = observerFacetAnchorValue?.anchors ?? [];
+const observerAnchorIds = new Set(observerAnchors.map((row) => row.linkId));
+const expectedObserverAnchorIds = new Set([
+  "runtime-html:NodeObserverLocator",
+  "runtime-html:DataAttributeAccessor",
+  "runtime-html:AttributeNSAccessor",
+  "runtime-html:ValueAttributeObserver",
+  "runtime-html:CheckedObserver",
+  "runtime-html:SelectValueObserver",
+  "runtime:IObserverLocator",
+  "runtime:ObserverLocator",
+  "runtime:PropertyAccessor",
+  "runtime:SetterObserver",
+  "runtime:ComputedObserver",
+  "runtime:ControlledComputedObserver",
+  "runtime:CollectionLengthObserver",
+  "runtime:CollectionSizeObserver",
+  "runtime:ArrayIndexObserver",
+]);
+if (
+  observerFacetAnchors.outcome !== OutcomeKind.Hit
+  || observerAnchorIds.size !== expectedObserverAnchorIds.size
+  || [...expectedObserverAnchorIds].some((linkId) => !observerAnchorIds.has(linkId))
+  || observerAnchors.some(
+    (row) =>
+      row.facet !== "observer-selection-semantics"
+      || row.facetState !== AuLinkFacetState.Exact
+      || (row.target.name !== "ObserverLocator" && row.target.name !== "NodeObserverLocator"),
+  )
+) {
+  throw new Error("auLink did not preserve observer-selection facets on the real selector owners.");
+}
+
+const observerFacetUsageValue =
+  observerFacetUsageComparison.value as BridgeAuLinkValue | null | undefined;
+const observerFacetMemberSurfaceValue =
+  observerFacetMemberSurface.value as BridgeAuLinkValue | null | undefined;
+const observerFacetUsageMembersValue =
+  observerFacetUsageMembers.value as BridgeAuLinkValue | null | undefined;
+const catalogOnlyUsageValue =
+  catalogOnlyUsageComparison.value as BridgeAuLinkValue | null | undefined;
+if (
+  (observerFacetUsageValue?.usageComparison?.length ?? 0) !== 0
+  || (observerFacetMemberSurfaceValue?.memberSurface?.length ?? 0) !== 0
+  || (observerFacetUsageMembersValue?.usageMembers?.length ?? 0) !== 0
+  || (catalogOnlyUsageValue?.usageComparison?.length ?? 0) !== 0
+) {
+  throw new Error("auLink usage-pressure projections admitted a facet-only or catalog-only target.");
+}
+
+const observerFacetClaimValue =
+  observerFacetClaims.value as SemanticCompositionValue | null | undefined;
+const facetClaims = observerFacetClaimValue?.claims ?? [];
+if (
+  observerFacetClaims.outcome !== OutcomeKind.Hit
+  || facetClaims.length === 0
+  || facetClaims.some(
+    (claim) =>
+      claim.predicate !== SemanticClaimPredicate.ModelsFrameworkFacet
+      || claim.facet !== "observer-selection-semantics",
+  )
+  || !observerFacetClaims.continuations.some(
+    (continuation) =>
+      continuation.inquiry.lens === LensId.BridgeAuLink
+      && continuation.inquiry.filters?.packageId !== undefined
+      && continuation.inquiry.filters?.facet === "observer-selection-semantics"
+      && continuation.inquiry.filters?.facetState === AuLinkFacetState.Exact,
+  )
+) {
+  throw new Error("Framework composition did not retain observer-selection semantic-facet claims.");
+}
+
+const unresolvedAnchorValue =
+  unresolvedFacetAnchors.value as BridgeAuLinkValue | null | undefined;
+const unresolvedGapValue = unresolvedFacetGaps.value as BridgeAuLinkValue | null | undefined;
+if (
+  (unresolvedAnchorValue?.anchors?.length ?? 0) !== 0
+  || (unresolvedGapValue?.gaps?.length ?? 0) !== 0
+) {
+  throw new Error("Current auLink source contains an unresolved authored facet.");
+}
+
+const scopeAnchorValue =
+  scopeUnqualifiedAnchors.value as BridgeAuLinkValue | null | undefined;
+const scopeAnchors = scopeAnchorValue?.anchors ?? [];
+if (
+  scopeUnqualifiedAnchors.outcome !== OutcomeKind.Hit
+  || scopeAnchors.length !== 1
+  || scopeAnchors[0]?.linkId !== "runtime:Scope"
+  || scopeAnchors[0]?.facet !== null
+  || scopeAnchors[0]?.facetState !== AuLinkFacetState.Unqualified
+) {
+  throw new Error("auLink did not preserve the explicit unqualified correspondence state.");
+}
+
+const scopeClaimValue =
+  scopeUnqualifiedClaims.value as SemanticCompositionValue | null | undefined;
+const scopeClaims = (scopeClaimValue?.claims ?? []).filter(
+  (claim) => claim.object.packageId === "runtime" && claim.object.name === "Scope",
+);
+if (
+  scopeClaims.length !== 1
+  || scopeClaims[0]?.predicate !== SemanticClaimPredicate.CorrespondsToFrameworkTarget
+  || scopeClaims[0]?.facet !== undefined
+  || !scopeUnqualifiedClaims.continuations.some(
+    (continuation) =>
+      continuation.inquiry.lens === LensId.BridgeAuLink
+      && continuation.inquiry.filters?.packageId === "runtime"
+      && continuation.inquiry.filters?.facetState === AuLinkFacetState.Unqualified,
+  )
+) {
+  throw new Error("Framework composition did not retain unqualified auLink correspondence provenance.");
+}
+
+const reverseCoverageValue =
+  frameworkReverseCoverage.value as FrameworkCapabilitiesValue | null | undefined;
+const reverseCoverageRows = reverseCoverageValue?.reverseCoverageRows ?? [];
+const observationCoverage = reverseCoverageRows.find((row) => row.family === "observation");
+if (
+  frameworkReverseCoverage.outcome !== OutcomeKind.Hit
+  || reverseCoverageRows.length === 0
+  || reverseCoverageRows.some(
+    (row) =>
+      row.basisClosure !== FrameworkCoverageBasisClosure.Complete
+      || row.mappingBasisClosure !== FrameworkCoverageBasisClosure.Complete
+      || row.unresolvedMappings !== 0,
+  )
+  || observationCoverage === undefined
+  || !observationCoverage.facetOnlyByShape.some(
+    (group) =>
+      group.symbols.includes("runtime:ComputedObserver")
+      && group.symbols.includes("runtime:ObserverLocator"),
+  )
+) {
+  throw new Error("Framework reverse coverage lost package-qualified facet or basis-closure honesty.");
+}
+if (
+  frameworkReverseCoverageFirstPage.page?.nextCursor === undefined
+  || !frameworkReverseCoverageFirstPage.continuations.some(
+    (continuation) =>
+      continuation.id === "framework.capabilities:reverse-coverage:next-page"
+      && continuation.inquiry.page?.cursor === frameworkReverseCoverageFirstPage.page?.nextCursor,
+  )
+) {
+  throw new Error("Framework reverse coverage did not preserve its family-page continuation.");
+}
+
 const semanticRouteIds = new Set(
   (selfValue.semanticRoutes ?? []).map((row) => row.semanticRouteId),
 );
@@ -377,4 +625,79 @@ function routerPublicExportNames(): readonly string[] {
     }
   }
   return [...new Set(names)].sort((left, right) => left.localeCompare(right));
+}
+
+function assertAuLinkFacetParsing(): void {
+  const cases = [
+    {
+      options: undefined,
+      facet: null,
+      facetState: AuLinkFacetState.Unqualified,
+    },
+    {
+      options: '{ facet: "exact" }',
+      facet: "exact",
+      facetState: AuLinkFacetState.Exact,
+    },
+    {
+      options: '{ ["facet"]: "computed-literal" }',
+      facet: "computed-literal",
+      facetState: AuLinkFacetState.Exact,
+    },
+    {
+      options: '{ ...options, facet: "later-exact" }',
+      facet: "later-exact",
+      facetState: AuLinkFacetState.Exact,
+    },
+    {
+      options: '{ facet: "overridden", ...options }',
+      facet: null,
+      facetState: AuLinkFacetState.Unresolved,
+    },
+    {
+      options: '{ facet: "possibly-overridden", [dynamicKey]: "unknown" }',
+      facet: null,
+      facetState: AuLinkFacetState.Unresolved,
+    },
+    {
+      options: '{ [dynamicKey]: "unknown", facet: "later-exact" }',
+      facet: "later-exact",
+      facetState: AuLinkFacetState.Exact,
+    },
+    {
+      options: "{ facet }",
+      facet: null,
+      facetState: AuLinkFacetState.Unresolved,
+    },
+  ] as const;
+
+  for (const testCase of cases) {
+    const sourceText = testCase.options === undefined
+      ? 'auLink("runtime:Example");'
+      : `auLink("runtime:Example", ${testCase.options});`;
+    const sourceFile = ts.createSourceFile(
+      "aulink-facet-self-check.ts",
+      sourceText,
+      ts.ScriptTarget.ES2023,
+      true,
+      ts.ScriptKind.TS,
+    );
+    const statement = sourceFile.statements[0];
+    if (
+      statement === undefined
+      || !ts.isExpressionStatement(statement)
+      || !ts.isCallExpression(statement.expression)
+    ) {
+      throw new Error("Could not parse synthetic auLink facet self-check input.");
+    }
+    const metadata = auLinkFacetFromDecoratorCall(statement.expression);
+    if (
+      metadata.facet !== testCase.facet
+      || metadata.facetState !== testCase.facetState
+    ) {
+      throw new Error(
+        `auLink facet parser misclassified ${testCase.options ?? "an omitted options argument"}.`,
+      );
+    }
+  }
 }

@@ -1364,11 +1364,11 @@ export const KernelClaimPredicates = {
       ),
     ),
 
-    /** A source-level IEffect exposes a dependency read collected by its observer path. */
+    /** A source-call observation plan exposes a dependency read projected from its observer path. */
     RuntimeEffectUsesObservedDependency: defineClaimPredicate(
       KernelVocabularyNamespace.Observation,
       'runtime-effect-uses-observed-dependency',
-      'A source-level IEffect exposes a dependency read collected by Observation.watch(...) execution.',
+      'An Observation.watch(...) or Observation.run(...) construction-site plan exposes a projected dependency read.',
       claimSignature(
         productEndpoint(KernelProductKinds.Observation.RuntimeEffect),
         productEndpoint(KernelProductKinds.Binding.ObservedDependency),

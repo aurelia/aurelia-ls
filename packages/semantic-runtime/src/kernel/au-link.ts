@@ -17,9 +17,11 @@ export type AuLinkFacet =
   | 'value-converter-semantics'
   | 'template-controller-semantics'
   | 'validation-controller-semantics'
-  | 'router-runtime-model';
+  | 'router-runtime-model'
+  | 'observer-selection-semantics';
 
 export interface AuLinkOptions {
+  /** Exact bounded semantic decision; absence leaves correspondence breadth unqualified. */
   readonly facet?: AuLinkFacet;
 }
 
@@ -42,7 +44,6 @@ export function auLink(id: 'kernel:ModuleItem'): ClassDecorator;
 export function auLink(id: 'runtime:Scope'): ClassDecorator;
 export function auLink(id: 'runtime:BindingContext'): ClassDecorator;
 export function auLink(id: 'runtime:IOverrideContext'): ClassDecorator;
-export function auLink(id: 'runtime:IEffect'): ClassDecorator;
 export function auLink(id: 'runtime:IObserverLocator'): ClassDecorator;
 export function auLink(id: 'runtime:ObserverLocator'): ClassDecorator;
 export function auLink(id: 'runtime:PropertyAccessor'): ClassDecorator;
