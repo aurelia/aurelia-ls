@@ -9,6 +9,7 @@ const repoRoot = path.resolve(packageRoot, '../..');
 const tempRoot = path.join(tmpdir(), 'aurelia-ls2-semantic-runtime-typescript-compat', 'typescript-5.9.3');
 const tempPackageRoot = path.join(tempRoot, 'semantic-runtime');
 const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/typescript-program-fidelity-node-types');
+const relatedMemberFixtureRoot = path.join(packageRoot, 'fixtures/pressure/typescript-related-member-closure');
 const pnpmCliPath = path.join(path.dirname(process.execPath), 'node_modules/corepack/dist/pnpm.js');
 const packageManifest = JSON.parse(readFileSync(path.join(packageRoot, 'package.json'), 'utf8'));
 
@@ -31,6 +32,8 @@ cpSync(path.join(packageRoot, 'out'), path.join(tempPackageRoot, 'out'), { recur
 
 const runnerPath = path.join(tempRoot, 'runner.mjs');
 writeFileSync(runnerPath, `
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import ts from 'typescript';
 import {
   createSemanticRuntime,
@@ -38,6 +41,7 @@ import {
 } from './semantic-runtime/out/index.js';
 
 const fixtureRoot = ${JSON.stringify(fixtureRoot)};
+const relatedMemberFixtureRoot = ${JSON.stringify(relatedMemberFixtureRoot)};
 const failures = [];
 if (ts.version !== '5.9.3') {
   failures.push(\`Expected runner TypeScript 5.9.3, observed \${ts.version}.\`);
@@ -69,6 +73,36 @@ if (summary.totalDiagnosticRows !== 0) {
 if (!diagnostics.displayText.includes('TypeScript: analyzer=5.9.3')) {
   failures.push('Expected diagnostics display text to expose analyzer TypeScript 5.9.3.');
 }
+const relatedTemplatePath = path.join(relatedMemberFixtureRoot, 'src/app.html');
+const relatedTemplateText = readFileSync(relatedTemplatePath, 'utf8');
+const relatedRuntime = await createSemanticRuntime({
+  workspaceRoot: relatedMemberFixtureRoot,
+  storeKey: 'typescript-5-related-member-contract',
+});
+const valueReferences = await relatedRuntime.answerAppQuery({
+  ...relatedMemberQuery('value'),
+  kind: SemanticAppQueryKind.TemplateReferences,
+  includeDeclaration: true,
+  page: { size: 100 },
+});
+const valueRename = await relatedRuntime.answerAppQuery({
+  ...relatedMemberQuery('value'),
+  kind: SemanticAppQueryKind.TemplateRename,
+  newName: 'valueNext',
+});
+const lengthPrepare = await relatedRuntime.answerAppQuery({
+  ...relatedMemberQuery('length'),
+  kind: SemanticAppQueryKind.TemplateRename,
+});
+if (valueReferences.coverage !== 'complete' || valueReferences.value?.rows?.length !== 11) {
+  failures.push(\`Expected TypeScript 5.9 to preserve the 11-site value related-symbol family, observed \${valueReferences.value?.rows?.length ?? 0} row(s) with \${valueReferences.coverage} coverage.\`);
+}
+if (valueRename.value?.status !== 'available' || valueRename.value?.edits?.length !== 11) {
+  failures.push(\`Expected TypeScript 5.9 to preserve all 11 value rename sites, observed \${valueRename.value?.edits?.length ?? 0} edit(s) with status \${valueRename.value?.status ?? 'missing'}.\`);
+}
+if (lengthPrepare.value?.status !== 'not-available' || lengthPrepare.value?.reason !== 'typescript-rename-not-allowed') {
+  failures.push(\`Expected TypeScript 5.9 to refuse template-origin Array.length rename, observed \${lengthPrepare.value?.status ?? 'missing'} / \${lengthPrepare.value?.reason ?? 'missing'}.\`);
+}
 if (failures.length > 0) {
   console.error(JSON.stringify({
     ok: false,
@@ -85,8 +119,23 @@ if (failures.length > 0) {
       workspaceVersion: diagnostics.typeScript.workspace?.version ?? null,
       versionRelation: diagnostics.typeScript.versionRelation,
       diagnosticRows: diagnostics.rows.length,
+      relatedMemberReferences: valueReferences.value.rows.length,
+      relatedMemberRenameEdits: valueRename.value.edits.length,
+      nativeMemberRenameReason: lengthPrepare.value.reason,
     },
   }, null, 2));
+}
+
+function relatedMemberQuery(name) {
+  const offset = relatedTemplateText.indexOf(name);
+  return {
+    sourceFilePath: relatedTemplatePath,
+    cursor: { filePath: relatedTemplatePath, offset: offset + 1 },
+    detail: 'handles',
+    analysisDepth: 'binding-observation',
+    includeAuthoringTemplates: true,
+    appRetention: 'retain-app',
+  };
 }
 `);
 

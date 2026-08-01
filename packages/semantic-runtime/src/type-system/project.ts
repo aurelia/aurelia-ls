@@ -41,7 +41,6 @@ import {
   type TypeSystemOverlaySourceSegment,
 } from './overlay.js';
 import { checkerConstructReturnTypeUnion } from './checker-signature-parameters.js';
-import { checkerPropertySymbol } from './checker-node-helpers.js';
 import {
   readTypeSystemTypeScriptEnvironment,
   type TypeSystemTypeScriptEnvironment,
@@ -56,6 +55,11 @@ import {
 } from './declaration-source.js';
 import type { TypeSystemProgramSourceCatalog } from './program-source-authority.js';
 import { typeSystemSourceAdmissionIndex } from './source-path-index.js';
+import {
+  readTypeSystemRelatedMemberFamily,
+  TypeSystemRelatedMemberFamilyReadState,
+  type TypeSystemRelatedMemberFamilyRead,
+} from './related-member-symbols.js';
 export {
   clearTypeSystemCompilerHostSourceFileCache,
   readTypeSystemCompilerHostSourceFileCacheOverview,
@@ -440,31 +444,28 @@ export class TypeSystemProject {
     return symbol == null ? null : this.resolveAliasedSymbol(symbol);
   }
 
-  /**
-   * Read every alias-resolved symbol identity that TypeScript assigns to a reference site.
-   * Contextually typed object and binding keys have a transient local symbol as well as the
-   * declared property they satisfy; reference and rename consumers need both identities.
-   */
-  readProgramReferenceSymbolsAtLocation(node: ts.Node): readonly ts.Symbol[] {
-    const checkerNode = this.readProgramNode(node);
-    if (checkerNode == null) {
-      return [];
+  /** Read TypeScript's complete related-member relation in this exact Program epoch. */
+  readProgramRelatedMemberFamily(
+    fileName: string,
+    start: number,
+    end: number,
+  ): TypeSystemRelatedMemberFamilyRead {
+    const sourceFile = this.readProgramSourceFileByPath(fileName);
+    if (sourceFile == null) {
+      return {
+        state: TypeSystemRelatedMemberFamilyReadState.TargetUnavailable,
+        reason: `TypeScript Program source is unavailable for ${fileName}.`,
+        family: null,
+      };
     }
-    const candidates = [
-      this.checker.getSymbolAtLocation(checkerNode) ?? null,
-      contextualPropertySymbolAtLocation(this.checker, checkerNode),
-    ];
-    const symbols: ts.Symbol[] = [];
-    for (const candidate of candidates) {
-      if (candidate == null) {
-        continue;
-      }
-      const symbol = this.resolveAliasedSymbol(candidate);
-      if (!symbols.includes(symbol)) {
-        symbols.push(symbol);
-      }
-    }
-    return symbols;
+    return readTypeSystemRelatedMemberFamily({
+      program: this.program,
+      sourceFile,
+      start,
+      end,
+      editableSourceFiles: this.readProjectProgramSourceFiles(),
+      sourceFileRole: (path) => this.readProgramSourceFileRole(path),
+    });
   }
 
   /** Read a symbol's value type at a Program-remapped location. */
@@ -649,47 +650,6 @@ export class TypeSystemProject {
     }
     return null;
   }
-}
-
-function contextualPropertySymbolAtLocation(
-  checker: ts.TypeChecker,
-  node: ts.Node,
-): ts.Symbol | null {
-  const parent = node.parent;
-  if (
-    ts.isIdentifier(node)
-    && isNamedObjectLiteralElement(parent)
-    && parent.name === node
-    && ts.isObjectLiteralExpression(parent.parent)
-  ) {
-    const contextualType = checker.getContextualType(parent.parent);
-    return contextualType == null
-      ? null
-      : checkerPropertySymbol(checker, checker.getNonNullableType(contextualType), node.text);
-  }
-  if (
-    ts.isIdentifier(node)
-    && ts.isBindingElement(parent)
-    && ts.isObjectBindingPattern(parent.parent)
-    && (parent.propertyName === node || (parent.propertyName == null && parent.name === node))
-  ) {
-    return checkerPropertySymbol(
-      checker,
-      checker.getNonNullableType(checker.getTypeAtLocation(parent.parent)),
-      node.text,
-    );
-  }
-  return null;
-}
-
-function isNamedObjectLiteralElement(
-  node: ts.Node,
-): node is ts.PropertyAssignment | ts.ShorthandPropertyAssignment | ts.MethodDeclaration | ts.AccessorDeclaration {
-  return ts.isPropertyAssignment(node)
-    || ts.isShorthandPropertyAssignment(node)
-    || ts.isMethodDeclaration(node)
-    || ts.isGetAccessorDeclaration(node)
-    || ts.isSetAccessorDeclaration(node);
 }
 
 /** Builds the TypeChecker epoch shared by resource, template, and inquiry passes. */

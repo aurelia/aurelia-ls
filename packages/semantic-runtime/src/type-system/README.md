@@ -21,7 +21,7 @@ source, value, expression, or template-local slot.
 - Remap evaluator/source-discovery AST nodes to their Program-owned counterparts before calling TypeScript checker APIs.
 - Use `TypeSystemProject.readProgramTypeAtLocation(...)`, `readProgramTypeFromTypeNode(...)`,
   `readProgramSymbolAtLocation(...)`, `readProgramAliasedSymbolAtLocation(...)`,
-  `readProgramReferenceSymbolsAtLocation(...)`, or
+  `readProgramRelatedMemberFamily(...)`, or
   `readProgramTypeOfSymbolAtLocation(...)` when a caller needs TypeChecker facts for a node that may have come from
   evaluation, source discovery, or semantic materialization rather than the Program AST.
 - Keep the checker epoch project-local: use the booted project root's `tsconfig.json` when present, otherwise fall back
@@ -438,13 +438,25 @@ different AST identity from the Program epoch. Prefer `TypeSystemProject.readPro
 `readProgramSourceFileByModuleKey(...)` when scanning source for checker-backed materialization. Use
 `TypeSystemProject.readProgramNode(...)`, `readProgramTypeAtLocation(...)`, `readProgramSymbolAtLocation(...)`,
 `readProgramTypeFromTypeNode(...)`, `readProgramAliasedSymbolAtLocation(...)`,
-`readProgramReferenceSymbolsAtLocation(...)`,
+`readProgramRelatedMemberFamily(...)`,
 `readProgramTypeOfSymbolAtLocation(...)`, or higher-level helpers such as `readRuntimeTargetType(...)` before asking the
 checker about a node that originated outside the Program SourceFile.
-Reference consumers should use `readProgramReferenceSymbolsAtLocation(...)` rather than raw symbol equality. TypeScript
-publishes a transient symbol for a contextually typed object-literal or destructuring key while its references/rename
-semantics also associate that authored key with the declared contextual property. The type-system boundary preserves
-both proven identities so template-origin references and rename do not reconstruct contextual typing in the API layer.
+Cross-file member references and rename must use `readProgramRelatedMemberFamily(...)`, not raw symbol equality or a
+Program-wide identifier scan. Interface implementations, base/override members, getter/setter pairs, overloads,
+contextual object members, and destructuring property intent can be distinct checker symbols while TypeScript treats
+them as one authoring relation. `related-member-symbols.ts` delegates that relation to TypeScript's own related-symbol
+engine against the existing `TypeSystemProject.program`; it must not create a second LanguageService or Program. The
+adapter preserves every declaration site, TypeScript's prefix/suffix rename rewrites, source-file role, and whether each
+rename source belongs to the current editable project set. References may expose dependency and standard-library
+declarations, but rename is all-or-nothing: TypeScript denial, an unavailable engine, or any non-editable related source
+blocks the plan rather than shrinking it.
+
+The related-symbol engine is runtime-exported TypeScript implementation API rather than declared public API. Keep the
+semantic-runtime and root TypeScript dependency pinned, keep the runtime shape guard, and run both
+`contract:typescript-related-member-closure` and `contract:typescript-5-compat` before changing TypeScript versions.
+The adapter's current no-op cancellation token reflects the synchronous semantic-runtime query boundary; request-token
+plumbing belongs to the separate cancellation/performance gate. If the engine shape is unavailable, references report
+open coverage and rename refuses. Never revive the equal-symbol scanner as a fallback.
 Returning unknown/open is better than asking the checker about an alien node and crashing the public API. Do not
 manufacture empty SourceFiles as fallback checker locations; a checker location must be a Program-owned source, a
 checker-owned declaration, or a missing overlay/source admission signal.

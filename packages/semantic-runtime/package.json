@@ -81,6 +81,7 @@
     "contract:template-references": "pnpm build && node scripts/contract-template-references.mjs",
     "contract:template-rename": "pnpm build && node scripts/contract-template-rename.mjs",
     "contract:template-rename-from-typescript": "pnpm build && node scripts/contract-template-rename-from-typescript.mjs",
+    "contract:typescript-related-member-closure": "pnpm build && node scripts/contract-typescript-related-member-closure.mjs",
     "contract:template-code-actions": "pnpm build && node scripts/contract-template-code-actions.mjs",
     "contract:template-semantic-tokens": "pnpm build && node scripts/contract-template-semantic-tokens.mjs",
     "contract:template-folding-ranges": "pnpm build && node scripts/contract-template-folding-ranges.mjs",
@@ -123,7 +124,7 @@
   },
   "dependencies": {
     "@rollup/pluginutils": "5.0.2",
-    "typescript": "^6.0.3"
+    "typescript": "6.0.3"
   },
   "devDependencies": {
     "@types/node": "^22.5.4"

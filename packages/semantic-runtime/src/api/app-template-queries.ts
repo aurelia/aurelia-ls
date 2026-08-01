@@ -49,6 +49,7 @@ import {
   semanticSourceReferenceMatchesFilePath,
   semanticSourceReferenceContainsFileOffset,
   sourceReferenceForParserSpan,
+  sourceReferenceForTypeScriptSpan,
   sourceReferenceForTsNode,
 } from './source-reference.js';
 import {
@@ -150,6 +151,12 @@ import {
 import { ResourceProductDetails } from '../resources/product-details.js';
 import { TypeSystemHotDetails } from '../type-system/product-details.js';
 import { checkerTypeMemberValueSourceAddressHandle } from '../type-system/checker-type-member-source.js';
+import {
+  TypeSystemRelatedMemberFamilyReadState,
+  TypeSystemRelatedMemberRenameState,
+  type TypeSystemRelatedMemberFamily,
+  type TypeSystemRelatedMemberFamilyRead,
+} from '../type-system/related-member-symbols.js';
 import {
   findVisibleTemplateResource,
   readVisibleTemplateResourceDefinition,
@@ -269,15 +276,18 @@ export class SemanticAppTemplateQueries {
       );
     }
 
-    // References and rename share one occurrence set: template rows from the reference context plus
-    // TypeScript usages from the same collector rename edits are built from.
-    const tsUsageRows = context.includeTypeScriptReferences
-      ? typeScriptUsageReferenceRows(
-          this.emission,
+    const relatedMemberRead = context.includeTypeScriptReferences
+      ? typeScriptRelatedMemberFamilyRead(this.emission, context.targetSource)
+      : null;
+    // References and rename consume the same TypeScript-owned related-symbol family. The API layer
+    // projects that family; it does not rediscover member relations by scanning equal symbols.
+    const tsUsageRows = relatedMemberRead?.family == null
+      ? []
+      : typeScriptRelatedMemberReferenceRows(
+          relatedMemberRead.family,
           context.selectedMemberName,
           context.targetSource,
-        )
-      : [];
+        );
     const allRows = [...uniqueTemplateReferenceRows([...context.rows, ...tsUsageRows])]
       .sort((left, right) =>
         (left.source?.path ?? '').localeCompare(right.source?.path ?? '')
@@ -301,7 +311,9 @@ export class SemanticAppTemplateQueries {
       {
         page: paged.page,
         selection: SemanticRuntimeAnswerSelection.Exact,
-        coverage: context.forceOpen || context.candidateRows.length > 0
+        coverage: context.forceOpen
+          || context.candidateRows.length > 0
+          || (relatedMemberRead != null && relatedMemberRead.state !== TypeSystemRelatedMemberFamilyReadState.Complete)
           ? SemanticRuntimeAnswerCoverage.Open
           : SemanticRuntimeAnswerCoverage.Complete,
       },
@@ -359,6 +371,41 @@ export class SemanticAppTemplateQueries {
       ? SemanticRuntimeAnswerCoverage.Open
       : SemanticRuntimeAnswerCoverage.Complete;
     const newName = query.newName ?? null;
+    if (newName != null && !isValidRenameName(newName, context.renameSurface)) {
+      return templateRenameUnavailable(
+        SemanticTemplateRenameUnavailableReason.InvalidNewName,
+        invalidRenameNameMessage(newName, context.renameSurface),
+        context.selectedMemberName,
+        context.targetSource,
+        activeSource,
+        SemanticTemplateRenameStatus.InvalidName,
+      );
+    }
+
+    const relatedMemberRead = context.includeTypeScriptReferences
+      ? typeScriptRelatedMemberFamilyRead(this.emission, context.targetSource)
+      : null;
+    const callbackFamilyReads = isBindablePropertyRenameSurface(context.renameSurface)
+      ? context.bindableConventionCallbackTargetSources.map((targetSource) =>
+          typeScriptRelatedMemberFamilyRead(this.emission, targetSource)
+        )
+      : [];
+    const blocker = relatedMemberRead == null
+      ? firstTypeScriptRenameBlocker(callbackFamilyReads, `${placeholder}Changed callback`)
+      : typeScriptRenameBlocker(relatedMemberRead, placeholder)
+        ?? firstTypeScriptRenameBlocker(callbackFamilyReads, `${placeholder}Changed callback`);
+    if (blocker != null) {
+      return templateRenameUnavailable(
+        blocker.reason,
+        blocker.summary,
+        context.selectedMemberName,
+        context.targetSource,
+        activeSource,
+        SemanticTemplateRenameStatus.NotAvailable,
+        blocker.coverage,
+      );
+    }
+
     if (newName == null) {
       return answer(
         SemanticRuntimeAnswerResult.Answered,
@@ -383,40 +430,14 @@ export class SemanticAppTemplateQueries {
       );
     }
 
-    if (!isValidRenameName(newName, context.renameSurface)) {
-      return templateRenameUnavailable(
-        SemanticTemplateRenameUnavailableReason.InvalidNewName,
-        invalidRenameNameMessage(newName, context.renameSurface),
-        context.selectedMemberName,
-        context.targetSource,
-        activeSource,
-        SemanticTemplateRenameStatus.InvalidName,
-      );
-    }
-
-    const typeScriptEdits = context.includeTypeScriptReferences
-      ? typeScriptReferenceRenameEdits(
-          this.emission,
-          context.targetSource,
-          newName,
-        )
-      : [];
-    if (
-      context.includeTypeScriptReferences
-      && typeScriptEdits == null
-      && sourceReferenceLooksTypeScript(context.targetSource)
-    ) {
-      return templateRenameUnavailable(
-        SemanticTemplateRenameUnavailableReason.TypeScriptSymbolUnavailable,
-        'The TypeScript symbol for this template member could not be proven in the current Program.',
-        context.selectedMemberName,
-        context.targetSource,
-        activeSource,
-      );
-    }
-
-    const provenTypeScriptEdits = typeScriptEdits ?? [];
-    const bindableConventionCallbackEdits = bindableConventionCallbackRenameEdits(this.emission, context, newName);
+    const provenTypeScriptEdits = relatedMemberRead?.family == null
+      ? []
+      : typeScriptRelatedMemberRenameEdits(relatedMemberRead.family, newName);
+    const bindableConventionCallbackEdits = uniqueTemplateRenameEditRows(
+      callbackFamilyReads.flatMap((read) =>
+        typeScriptRelatedMemberRenameEdits(read.family!, `${newName}Changed`)
+      ),
+    );
     // Reference rows carry authored token sources, so each edit replaces exactly the token.
     const templateEdits = context.rows
       .filter((row) => referenceRowNeedsTemplateRenameEdit(row, context.renameSurface, context.selectedMemberName))
@@ -430,7 +451,10 @@ export class SemanticAppTemplateQueries {
           templateRenameNewText(row, context.renameSurface, editKind, oldText, newName),
         );
       });
-    const typeScriptLikeEdits = [...provenTypeScriptEdits, ...bindableConventionCallbackEdits];
+    const typeScriptLikeEdits = uniqueTemplateRenameEditRows([
+      ...provenTypeScriptEdits,
+      ...bindableConventionCallbackEdits,
+    ]);
     const edits = [...uniqueTemplateRenameEditRows([...typeScriptLikeEdits, ...templateEdits])]
       .sort((left, right) =>
         (left.source?.path ?? '').localeCompare(right.source?.path ?? '')
@@ -511,6 +535,36 @@ export class SemanticAppTemplateQueries {
       ? SemanticRuntimeAnswerCoverage.Open
       : SemanticRuntimeAnswerCoverage.Complete;
     const newName = query.newName ?? null;
+    if (newName != null && !isValidRenameIdentifier(newName)) {
+      return templateRenameUnavailable(
+        SemanticTemplateRenameUnavailableReason.InvalidNewName,
+        `Rename target '${newName}' is not a valid TypeScript identifier.`,
+        context.selectedMemberName,
+        context.targetSource,
+        context.activeSource,
+        SemanticTemplateRenameStatus.InvalidName,
+      );
+    }
+
+    const callbackFamilyReads = context.bindableConventionCallbackTargetSources.map((targetSource) =>
+      typeScriptRelatedMemberFamilyRead(this.emission, targetSource)
+    );
+    const callbackBlocker = firstTypeScriptRenameBlocker(
+      callbackFamilyReads,
+      `${placeholder}Changed callback`,
+    );
+    if (callbackBlocker != null) {
+      return templateRenameUnavailable(
+        callbackBlocker.reason,
+        callbackBlocker.summary,
+        context.selectedMemberName,
+        context.targetSource,
+        context.activeSource,
+        SemanticTemplateRenameStatus.NotAvailable,
+        callbackBlocker.coverage,
+      );
+    }
+
     if (newName == null) {
       return answer(
         SemanticRuntimeAnswerResult.Answered,
@@ -535,17 +589,6 @@ export class SemanticAppTemplateQueries {
       );
     }
 
-    if (!isValidRenameIdentifier(newName)) {
-      return templateRenameUnavailable(
-        SemanticTemplateRenameUnavailableReason.InvalidNewName,
-        `Rename target '${newName}' is not a valid TypeScript identifier.`,
-        context.selectedMemberName,
-        context.targetSource,
-        context.activeSource,
-        SemanticTemplateRenameStatus.InvalidName,
-      );
-    }
-
     const aureliaEdits = context.templateUsageRows
       .filter(referenceRowNeedsTypeScriptRenamePropagationEdit)
       .map((row) =>
@@ -556,9 +599,9 @@ export class SemanticAppTemplateQueries {
           templateRenameFromTypeScriptNewText(row, newName),
         )
       );
-    const callbackEdits = context.bindableConventionCallbackTargetSources.flatMap((targetSource) =>
-      typeScriptReferenceRenameEdits(this.emission, targetSource, `${newName}Changed`) ?? []
-    );
+    const callbackEdits = uniqueTemplateRenameEditRows(callbackFamilyReads.flatMap((read) =>
+      typeScriptRelatedMemberRenameEdits(read.family!, `${newName}Changed`)
+    ));
     const uniqueEdits = [...uniqueTemplateRenameEditRows([...aureliaEdits, ...callbackEdits])]
       .sort((left, right) =>
         (left.source?.path ?? '').localeCompare(right.source?.path ?? '')
@@ -2097,6 +2140,7 @@ function templateRenameUnavailable(
   targetSource: SemanticSourceReference | null,
   activeSource: SemanticSourceReference | null,
   status: SemanticTemplateRenameStatus = SemanticTemplateRenameStatus.NotAvailable,
+  coverage: SemanticRuntimeAnswerCoverage = SemanticRuntimeAnswerCoverage.Complete,
 ): SemanticRuntimeAnswer<SemanticTemplateRenameResult> {
   return answer(
     SemanticRuntimeAnswerResult.Answered,
@@ -2118,7 +2162,7 @@ function templateRenameUnavailable(
       selection: selectedMemberName == null && targetSource == null
         ? SemanticRuntimeAnswerSelection.Absent
         : SemanticRuntimeAnswerSelection.Exact,
-      coverage: SemanticRuntimeAnswerCoverage.Complete,
+      coverage,
     },
   );
 }
@@ -2285,130 +2329,102 @@ const TYPESCRIPT_RESERVED_IDENTIFIER_WORDS = new Set([
   'yield',
 ]);
 
-/** One TypeScript identifier occurrence of a selected symbol, shared by references and rename. */
-interface TypeScriptReferenceSite {
-  readonly source: SemanticSourceReference;
-  readonly text: string;
-  readonly renameSuffixText: string | null;
+interface TypeScriptRenameBlocker {
+  readonly reason: SemanticTemplateRenameUnavailableReason;
+  readonly summary: string;
+  readonly coverage: SemanticRuntimeAnswerCoverage;
 }
 
-/**
- * Enumerate every TypeScript identifier occurrence of the symbol declared at `targetSource`,
- * including the declaration itself. Rename maps these to edits and references maps them to
- * locations, so both lanes see the same occurrence set by construction.
- */
-function typeScriptReferenceSites(
+function typeScriptRelatedMemberFamilyRead(
   emission: AureliaAppWorldProjectEmission,
   targetSource: SemanticSourceReference,
-): readonly TypeScriptReferenceSite[] | null {
-  if (targetSource.path == null || targetSource.start == null || targetSource.end == null) {
-    return null;
+): TypeSystemRelatedMemberFamilyRead {
+  const exact = semanticExactSourceReference(targetSource);
+  if (exact?.path == null || exact.start == null || exact.end == null) {
+    return {
+      state: TypeSystemRelatedMemberFamilyReadState.TargetUnavailable,
+      reason: 'The selected member has no exact TypeScript declaration source.',
+      family: null,
+    };
   }
-  const sourceFile = emission.typeSystem.readProgramSourceFileByPath(targetSource.path);
-  if (sourceFile == null) {
-    return null;
-  }
-  const targetIdentifier = identifierAtExactSpan(sourceFile, targetSource.start, targetSource.end);
-  if (targetIdentifier == null) {
-    return null;
-  }
-  const targetSymbols = emission.typeSystem.readProgramReferenceSymbolsAtLocation(targetIdentifier);
-  if (targetSymbols.length === 0) {
-    return null;
-  }
-
-  const sites: TypeScriptReferenceSite[] = [];
-  for (const projectSourceFile of emission.typeSystem.readProjectProgramSourceFiles()) {
-    visit(projectSourceFile, (node) => {
-      if (!ts.isIdentifier(node)) {
-        return;
-      }
-      const referenceSymbols = emission.typeSystem.readProgramReferenceSymbolsAtLocation(node);
-      if (!referenceSymbols.some((symbol) => targetSymbols.some((targetSymbol) =>
-        sameTsSymbol(symbol, targetSymbol)
-      ))) {
-        return;
-      }
-      const directSymbol = emission.typeSystem.readProgramAliasedSymbolAtLocation(node);
-      const matchesDirectSymbol = targetSymbols.some((targetSymbol) =>
-        sameTsSymbol(directSymbol, targetSymbol)
-      );
-      sites.push({
-        source: sourceReferenceForTsNode(node),
-        text: node.getText(projectSourceFile),
-        renameSuffixText: matchesDirectSymbol ? null : contextualPropertyRenameSuffix(node),
-      });
-    });
-  }
-  return sites.length === 0 ? null : sites;
+  return emission.typeSystem.readProgramRelatedMemberFamily(exact.path, exact.start, exact.end);
 }
 
-function typeScriptReferenceRenameEdits(
-  emission: AureliaAppWorldProjectEmission,
-  targetSource: SemanticSourceReference,
-  newName: string,
-): readonly SemanticTemplateRenameEditRow[] | null {
-  const sites = typeScriptReferenceSites(emission, targetSource);
-  if (sites == null) {
-    return null;
-  }
-  return uniqueTemplateRenameEditRows(sites.map((site) => templateRenameEditRow(
-    SemanticTemplateRenameEditKind.TypeScriptReference,
-    site.source,
-    site.text,
-    `${newName}${site.renameSuffixText ?? ''}`,
-  )));
-}
-
-function contextualPropertyRenameSuffix(node: ts.Identifier): string | null {
-  const parent = node.parent;
-  if (ts.isShorthandPropertyAssignment(parent) && parent.name === node) {
-    return `: ${node.text}`;
-  }
-  if (
-    ts.isBindingElement(parent)
-    && ts.isObjectBindingPattern(parent.parent)
-    && parent.propertyName == null
-    && parent.name === node
-  ) {
-    return `: ${node.text}`;
-  }
-  return null;
-}
-
-function bindableConventionCallbackRenameEdits(
-  emission: AureliaAppWorldProjectEmission,
-  context: TemplateReferenceContext,
-  newName: string,
-): readonly SemanticTemplateRenameEditRow[] {
-  if (!isBindablePropertyRenameSurface(context.renameSurface)) {
-    return [];
-  }
-  return uniqueTemplateRenameEditRows(
-    context.bindableConventionCallbackTargetSources.flatMap((targetSource) =>
-      typeScriptReferenceRenameEdits(emission, targetSource, `${newName}Changed`) ?? []
-    ),
-  );
-}
-
-/** Non-declaration TypeScript usages of the selected symbol as reference rows. */
-function typeScriptUsageReferenceRows(
-  emission: AureliaAppWorldProjectEmission,
+function typeScriptRelatedMemberReferenceRows(
+  family: TypeSystemRelatedMemberFamily,
   selectedMemberName: string,
   targetSource: SemanticSourceReference,
 ): readonly SemanticTemplateReferenceRow[] {
-  const sites = typeScriptReferenceSites(emission, targetSource) ?? [];
-  return sites
-    .filter((site) => !sourceReferencesMatchExactSpan(site.source, targetSource))
+  return family.references
+    .filter((site) => !sourceReferencesMatchExactSpan(
+      sourceReferenceForTypeScriptSpan(site.fileName, site.start, site.end, site.sourceFileRole),
+      targetSource,
+    ))
     .map((site) => ({
-      referenceKind: SemanticTemplateReferenceKind.TypeScriptUsage,
+      referenceKind: site.isDeclaration
+        ? SemanticTemplateReferenceKind.Declaration
+        : SemanticTemplateReferenceKind.TypeScriptUsage,
       name: site.text.length > 0 ? site.text : selectedMemberName,
       definitionName: null,
       bindingKind: null,
       dependencyKinds: [],
-      source: semanticExactSourceReference(site.source),
+      source: sourceReferenceForTypeScriptSpan(site.fileName, site.start, site.end, site.sourceFileRole),
       targetSource,
     }));
+}
+
+function typeScriptRelatedMemberRenameEdits(
+  family: TypeSystemRelatedMemberFamily,
+  newName: string,
+): readonly SemanticTemplateRenameEditRow[] {
+  return uniqueTemplateRenameEditRows(family.rename.sites.map((site) => templateRenameEditRow(
+    SemanticTemplateRenameEditKind.TypeScriptReference,
+    sourceReferenceForTypeScriptSpan(site.fileName, site.start, site.end, site.sourceFileRole),
+    site.text,
+    `${site.prefixText ?? ''}${newName}${site.suffixText ?? ''}`,
+  )));
+}
+
+function typeScriptRenameBlocker(
+  read: TypeSystemRelatedMemberFamilyRead,
+  subject: string,
+): TypeScriptRenameBlocker | null {
+  if (read.state !== TypeSystemRelatedMemberFamilyReadState.Complete || read.family == null) {
+    return {
+      reason: SemanticTemplateRenameUnavailableReason.TypeScriptSymbolUnavailable,
+      summary: `Rename is blocked because the TypeScript symbol family for ${subject} could not be proven. ${read.reason ?? ''}`.trim(),
+      coverage: SemanticRuntimeAnswerCoverage.Open,
+    };
+  }
+  switch (read.family.rename.state) {
+    case TypeSystemRelatedMemberRenameState.Available:
+      return null;
+    case TypeSystemRelatedMemberRenameState.TypeScriptDenied:
+      return {
+        reason: SemanticTemplateRenameUnavailableReason.TypeScriptRenameNotAllowed,
+        summary: `TypeScript does not allow ${subject} to be renamed. ${read.family.rename.reason ?? ''}`.trim(),
+        coverage: SemanticRuntimeAnswerCoverage.Complete,
+      };
+    case TypeSystemRelatedMemberRenameState.NonEditableSource:
+      return {
+        reason: SemanticTemplateRenameUnavailableReason.TypeScriptRelatedSourceNotEditable,
+        summary: `Rename is blocked because the TypeScript symbol family for ${subject} includes non-editable source. ${read.family.rename.nonEditableFileNames.join(', ')}`.trim(),
+        coverage: SemanticRuntimeAnswerCoverage.Complete,
+      };
+  }
+}
+
+function firstTypeScriptRenameBlocker(
+  reads: readonly TypeSystemRelatedMemberFamilyRead[],
+  subject: string,
+): TypeScriptRenameBlocker | null {
+  for (const read of reads) {
+    const blocker = typeScriptRenameBlocker(read, subject);
+    if (blocker != null) {
+      return blocker;
+    }
+  }
+  return null;
 }
 
 function templateRenameSurfaceForResourceKind(
@@ -2471,49 +2487,12 @@ function identifierAtOffset(
   return best;
 }
 
-function identifierAtExactSpan(
-  sourceFile: ts.SourceFile,
-  start: number,
-  end: number,
-): ts.Identifier | null {
-  let found: ts.Identifier | null = null;
-  visit(sourceFile, (node) => {
-    if (found != null || !ts.isIdentifier(node)) {
-      return;
-    }
-    if (node.getStart(sourceFile) === start && node.getEnd() === end) {
-      found = node;
-    }
-  });
-  return found;
-}
-
 function visit(
   node: ts.Node,
   callback: (node: ts.Node) => void,
 ): void {
   callback(node);
   ts.forEachChild(node, (child) => visit(child, callback));
-}
-
-function sameTsSymbol(
-  left: ts.Symbol | null,
-  right: ts.Symbol,
-): boolean {
-  if (left == null) {
-    return false;
-  }
-  if (left === right) {
-    return true;
-  }
-  const rightDeclarations = right.declarations ?? [];
-  return (left.declarations ?? []).some((leftDeclaration) =>
-    rightDeclarations.some((rightDeclaration) =>
-      leftDeclaration.getSourceFile().fileName === rightDeclaration.getSourceFile().fileName
-      && leftDeclaration.getStart(leftDeclaration.getSourceFile()) === rightDeclaration.getStart(rightDeclaration.getSourceFile())
-      && leftDeclaration.getEnd() === rightDeclaration.getEnd()
-    )
-  );
 }
 
 function templateRenameEditRow(

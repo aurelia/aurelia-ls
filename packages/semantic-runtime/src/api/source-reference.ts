@@ -398,12 +398,22 @@ export function sourceReferenceForTsNode(node: ts.Node): SemanticSourceReference
   const sourceFile = node.getSourceFile();
   const start = node.getStart(sourceFile);
   const end = node.getEnd();
+  return sourceReferenceForTypeScriptSpan(sourceFile.fileName, start, end);
+}
+
+export function sourceReferenceForTypeScriptSpan(
+  fileName: string,
+  start: number,
+  end: number,
+  sourceFileRole: SourceFileRole | null = null,
+): SemanticSourceReference {
   return {
     kind: 'typescript-node',
-    label: `${sourceFile.fileName}@${start}..${end}`,
-    path: sourceFile.fileName,
+    label: `${fileName}@${start}..${end}`,
+    path: fileName,
     start,
     end,
+    ...(sourceFileRole == null ? {} : { sourceFileRole }),
   };
 }
 

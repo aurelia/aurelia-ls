@@ -669,7 +669,13 @@ navigable and renameable without falsely reporting a source read or data-flow ed
 the TypeScript property and distinct bindable metadata names, with `bindableDeclarationKind` preserving the authored
 form. Default-derived attribute spellings join through the bindable's property target, explicit aliases remain a
 separate public-name surface, and conventional `${name}Changed` propagation spends the converged callback target rather
-than reconstructing a class AST locally. Declaration rows are included only when `includeDeclaration` is true.
+than reconstructing a class AST locally. TypeScript member closure is projected from the Program-owned related-symbol
+adapter, so interfaces and implementations, base members and overrides, accessor pairs, overload declarations,
+contextual object properties, and destructuring sites remain one family without an API-local symbol scan. Related
+declarations are all retained when `includeDeclaration` is true. References may include external or standard-library
+declarations; rename first asks TypeScript for eligibility and then requires every related source to be editable.
+TypeScript denial or one non-editable source refuses both prepare and execution, including conventional bindable
+callback propagation, rather than returning a partial `WorkspaceEdit`.
 Lexical and member references join parse-owned occurrences through the binding-context resolution and materialized
 `BindingScope`; they do not require a runtime use or observed-dependency row. That distinction keeps listener, dispatch,
 one-time, non-evaluated, blocked, and other intentionally untracked syntax navigable. When runtime uses and observed

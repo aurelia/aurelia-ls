@@ -1024,6 +1024,77 @@
       ],
       "createdAt": "2026-07-21",
       "updatedAt": "2026-07-21"
+    },
+    {
+      "id": "decision:typescript-related-member-closure",
+      "kind": "decision",
+      "domains": [
+        "semantic-runtime",
+        "type-system",
+        "typescript",
+        "references",
+        "rename",
+        "lsp"
+      ],
+      "summary": "TypeScript owns cross-symbol member reference and rename closure inside the existing Program epoch.",
+      "rationale": "TypeScript member families can cross distinct checker symbols through interface implementation, inheritance and overrides, accessor pairs, overloads, contextual object properties, destructuring, and inferred shorthand. A semantic-runtime whole-Program equal-symbol scan therefore produced partial reference and rename answers. The TypeSystemProject epoch now delegates related-symbol closure to TypeScript's own reference and rename engine without constructing a second Program or LanguageService.",
+      "guidance": [
+        "Use TypeSystemProject.readProgramRelatedMemberFamily when a template or TypeScript-origin operation needs cross-file member references or rename edits; do not restore a Program-wide checker-symbol equality scan.",
+        "Preserve every TypeScript-authored declaration and reference returned by the family, including prefix/suffix rewrites for shorthand forms. References may report external sources, but rename must refuse the complete operation when any related site is native, dependency-owned, generated, or otherwise non-editable.",
+        "The adapter consumes an undeclared TypeScript runtime API from the existing Program epoch. Keep TypeScript pinned exactly, retain the runtime shape guard, and treat the current-version plus TypeScript 5 compatibility contracts as the upgrade gate; do not add a lossy fallback scanner.",
+        "When TypeScript's related-symbol engine is unavailable, references remain explicitly open and rename refuses. Unavailability must not masquerade as a complete declaration-only family.",
+        "Bracket/string-literal template member selection is an upstream expression cursor-surface concern. Do not compensate for missing template dispatch inside related-member closure."
+      ],
+      "nextActionPolicy": "when-touched",
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/related-member-symbols.ts",
+          "symbolName": "readTypeSystemRelatedMemberFamily",
+          "summary": "Adapter over TypeScript's related reference and rename engine, including source-role and editability classification."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/project.ts",
+          "symbolName": "TypeSystemProject.readProgramRelatedMemberFamily",
+          "summary": "Existing Program-epoch entry point for related member closure."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/app-template-queries.ts",
+          "symbolName": "typeScriptRelatedMemberFamilyRead",
+          "summary": "Shared API consumption by template references, template rename, and TypeScript-origin propagation."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/type-system/README.md",
+          "summary": "Related-member ownership, conservative failure behavior, and TypeScript version boundary."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/typescript-related-member-closure",
+          "summary": "Cross-symbol member families spanning interfaces, inheritance, accessors, overloads, contextual properties, destructuring, shorthand, and native members."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/type-system/related-member-symbols.ts",
+          "symbolName": "readTypeSystemRelatedMemberFamily"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/type-system/project.ts",
+          "symbolName": "TypeSystemProject.readProgramRelatedMemberFamily"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/app-template-queries.ts",
+          "symbolName": "typeScriptRelatedMemberFamilyRead"
+        }
+      ],
+      "createdAt": "2026-08-01",
+      "updatedAt": "2026-08-01"
     }
   ]
 }

@@ -476,6 +476,12 @@ const contractSuites = [
   ], 'contract-template-rename-from-typescript.mjs', 'TypeScript-initiated member rename produces source-linked template-side edit rows through semantic-runtime.'),
   contract('template', 'fast', [
     'template',
+    'references',
+    'rename',
+    'type-system',
+  ], 'contract-typescript-related-member-closure.mjs', 'Template-origin references and rename spend TypeScript related-symbol families across interfaces, inheritance, accessors, overloads, contextual properties, and native-library refusal.'),
+  contract('template', 'fast', [
+    'template',
     'completion',
     'callback',
     'type-system',

@@ -1,0 +1,104 @@
+{
+  "fixture": "packages/semantic-runtime/fixtures/pressure/typescript-related-member-closure",
+  "lanes": {
+    "rename": [
+      {
+        "id": "interface-implementation-value-family",
+        "file": "src/app.html",
+        "anchor": "${value}",
+        "at": "value",
+        "newName": "valueNext",
+        "verdict": "correct",
+        "reason": "Template-origin rename should spend TypeScript's complete related-symbol family: both interfaces, the implementation, contextual object members, shorthand/destructuring property intent, ordinary TS usages, and the template token.",
+        "note": "NEW 2026-08-01. TypeScript related-symbol closure and prefix/suffix rewrite projection. Structurally assignable but unrelated StructuralContract members must remain untouched."
+      },
+      {
+        "id": "base-override-overridden-family",
+        "file": "src/app.html",
+        "anchor": "${overridden}",
+        "at": "overridden",
+        "newName": "replacement",
+        "verdict": "correct",
+        "reason": "A template cursor on an override-backed member should rename the base declaration, override declaration, TypeScript usage, and template usage as one family.",
+        "note": "NEW 2026-08-01. Regression probe for the old equal-symbol scanner, which saw only the selected declaration symbol."
+      },
+      {
+        "id": "accessor-pair-accessorValue-family",
+        "file": "src/app.html",
+        "anchor": "${accessorValue}",
+        "at": "accessorValue",
+        "newName": "displayValue",
+        "verdict": "correct",
+        "reason": "Getter, setter, interface declaration, TypeScript usage, and template usage are one TypeScript rename family.",
+        "note": "NEW 2026-08-01. Verifies that multiple declaration sites survive the semantic-runtime and LSP projections."
+      },
+      {
+        "id": "overload-overloaded-family",
+        "file": "src/app.html",
+        "anchor": "${overloaded('')}",
+        "at": "overloaded",
+        "newName": "invoke",
+        "verdict": "correct",
+        "reason": "All overload declarations, the implementation, interface declaration, TS usage, and template usage should rename atomically.",
+        "note": "NEW 2026-08-01. Multiple declaration carrier pressure at the LSP boundary."
+      },
+      {
+        "id": "native-array-length-refusal",
+        "file": "src/app.html",
+        "anchor": "${items.length}",
+        "at": "length",
+        "newName": "size",
+        "verdict": "correct",
+        "reason": "TypeScript owns Array.length and refuses renaming standard-library declarations; prepareRename and rename must both decline with zero edits rather than applying a local partial rename.",
+        "note": "NEW 2026-08-01. Live refusal canary for non-editable/native TypeScript member families."
+      }
+    ],
+    "references": [
+      {
+        "id": "interface-implementation-value-family",
+        "file": "src/app.html",
+        "anchor": "${value}",
+        "at": "value",
+        "verdict": "correct",
+        "reason": "References should return both interface declarations, the implementation declaration, contextual property sites, shorthand/destructuring sites, ordinary TS usages, and the template occurrence.",
+        "note": "NEW 2026-08-01. Comparable to the rename probe and intentionally excludes unrelated structural members."
+      },
+      {
+        "id": "base-override-overridden-family",
+        "file": "src/app.html",
+        "anchor": "${overridden}",
+        "at": "overridden",
+        "verdict": "correct",
+        "reason": "References should retain both base and override declarations plus TS and template usages.",
+        "note": "NEW 2026-08-01. Confirms declaration cardinality is no longer collapsed to one target source."
+      },
+      {
+        "id": "accessor-pair-accessorValue-family",
+        "file": "src/app.html",
+        "anchor": "${accessorValue}",
+        "at": "accessorValue",
+        "verdict": "correct",
+        "reason": "References should retain getter and setter declarations, the interface declaration, the TS usage, and the template occurrence.",
+        "note": "NEW 2026-08-01. Accessor declaration-family projection."
+      },
+      {
+        "id": "overload-overloaded-family",
+        "file": "src/app.html",
+        "anchor": "${overloaded('')}",
+        "at": "overloaded",
+        "verdict": "correct",
+        "reason": "References should preserve every overload declaration and implementation alongside interface, TS, and template sites.",
+        "note": "NEW 2026-08-01. Overload declaration-family projection."
+      },
+      {
+        "id": "native-array-length-family",
+        "file": "src/app.html",
+        "anchor": "${items.length}",
+        "at": "length",
+        "verdict": "correct",
+        "reason": "References should honestly expose the standard-library declaration plus local TypeScript and template usages even though rename is refused.",
+        "note": "NEW 2026-08-01. Read and write policy intentionally diverge: external declarations remain navigable but are not editable."
+      }
+    ]
+  }
+}

@@ -4137,6 +4137,8 @@ export enum SemanticTemplateRenameUnavailableReason {
   NoSourceBackedMember = 'no-source-backed-member',
   CursorNotOnRenameableReference = 'cursor-not-on-renameable-reference',
   TypeScriptSymbolUnavailable = 'typescript-symbol-unavailable',
+  TypeScriptRenameNotAllowed = 'typescript-rename-not-allowed',
+  TypeScriptRelatedSourceNotEditable = 'typescript-related-source-not-editable',
   InvalidNewName = 'invalid-new-name',
   ResourceNameHasNoAuthoredSource = 'resource-name-has-no-authored-source',
   UnsupportedResourceKind = 'unsupported-resource-kind',
