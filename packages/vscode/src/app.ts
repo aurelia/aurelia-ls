@@ -25,6 +25,8 @@ export class ClientApp {
   #options: ClientAppOptions;
   #ctx: ClientContext | null = null;
   #clientStateTransition: Promise<void> = Promise.resolve();
+  #documentContextTransition: Promise<void> = Promise.resolve();
+  #documentContextRequest = 0;
 
   constructor(context: ExtensionContext, options: ClientAppOptions = {}) {
     this.#context = context;
@@ -42,7 +44,10 @@ export class ClientApp {
     const observability = new ObservabilityService(vscode, logger, config.current);
     const languageClient = this.#options.languageClient ?? new AureliaLanguageClient(logger, vscode);
 
-    await vscode.commands.executeCommand("setContext", "aurelia.active", false);
+    await Promise.all([
+      vscode.commands.executeCommand("setContext", "aurelia.active", false),
+      vscode.commands.executeCommand("setContext", "aurelia.documentOwned", false),
+    ]);
     await languageClient.start(this.#context, { serverEnv: observability.serverEnv });
     const lsp = new LspFacade(languageClient, observability);
 
@@ -78,8 +83,13 @@ export class ClientApp {
     features.register(...featureModules);
 
     const synchronizeClientState = () => this.#queueClientStateTransition(ctx);
+    const synchronizeDocumentContext = () => this.#queueDocumentContextTransition(ctx);
     ctx.disposables.add(languageClient.onDidChangeSessions(() => {
       void synchronizeClientState();
+      void synchronizeDocumentContext();
+    }));
+    ctx.disposables.add(vscode.window.onDidChangeActiveTextEditor(() => {
+      void synchronizeDocumentContext();
     }));
     ctx.disposables.add(config.onDidChange(async (next) => {
       const serverEnvChanged = observability.update(next);
@@ -91,14 +101,10 @@ export class ClientApp {
       }
       await languageClient.reconcile({ reconfirmExisting: true });
       await synchronizeClientState();
+      await synchronizeDocumentContext();
     }));
-    ctx.disposables.add(capabilities.onDidChange(() => {
-      if (languageClient.hasSessions) {
-        void features.reconcile(ctx);
-      }
-    }));
-
     await synchronizeClientState();
+    await synchronizeDocumentContext();
     return ctx;
   }
 
@@ -106,6 +112,7 @@ export class ClientApp {
     const ctx = this.#ctx;
     if (ctx) {
       await this.#clientStateTransition.catch(() => {});
+      await this.#documentContextTransition.catch(() => {});
       ctx.features.deactivateAll(ctx);
       ctx.disposables.dispose();
     }
@@ -115,29 +122,55 @@ export class ClientApp {
       /* ignore */
     }
     if (ctx) {
-      await ctx.vscode.commands.executeCommand("setContext", "aurelia.active", false);
+      await Promise.all([
+        ctx.vscode.commands.executeCommand("setContext", "aurelia.active", false),
+        ctx.vscode.commands.executeCommand("setContext", "aurelia.documentOwned", false),
+      ]);
     }
     this.#ctx = null;
   }
 
   #queueClientStateTransition(ctx: ClientContext): Promise<void> {
+    const generation = ctx.languageClient.sessionGeneration;
     const transition = this.#clientStateTransition.then(async () => {
+      if (generation !== ctx.languageClient.sessionGeneration) return;
       const active = ctx.languageClient.hasSessions;
       ctx.queries.clear();
       await ctx.vscode.commands.executeCommand("setContext", "aurelia.active", active);
+      if (generation !== ctx.languageClient.sessionGeneration) return;
       if (!active) {
         ctx.features.deactivateAll(ctx);
         ctx.capabilities.clear();
         return;
       }
+      ctx.features.deactivateAll(ctx);
+      ctx.capabilities.clear();
       const caps = await ctx.lsp.getCapabilities();
+      if (generation !== ctx.languageClient.sessionGeneration) return;
       if (caps != null) {
         ctx.capabilities.set(caps);
       }
       await ctx.features.activateAll(ctx);
+      if (generation !== ctx.languageClient.sessionGeneration) {
+        ctx.features.deactivateAll(ctx);
+      }
     });
     this.#clientStateTransition = transition.catch((error) => {
       ctx.logger.warn(`[client] session-state transition failed: ${error instanceof Error ? error.message : String(error)}`);
+    });
+    return transition;
+  }
+
+  #queueDocumentContextTransition(ctx: ClientContext): Promise<void> {
+    const request = ++this.#documentContextRequest;
+    const transition = this.#documentContextTransition.then(async () => {
+      if (request !== this.#documentContextRequest) return;
+      const document = ctx.vscode.window.activeTextEditor?.document;
+      const owned = document != null && ctx.languageClient.sessionForUri(document.uri) != null;
+      await ctx.vscode.commands.executeCommand("setContext", "aurelia.documentOwned", owned);
+    });
+    this.#documentContextTransition = transition.catch((error) => {
+      ctx.logger.warn(`[client] document-context transition failed: ${error instanceof Error ? error.message : String(error)}`);
     });
     return transition;
   }

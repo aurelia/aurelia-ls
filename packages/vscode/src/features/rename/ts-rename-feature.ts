@@ -1,153 +1,153 @@
 /**
- * TypeScript-side rename propagation to Aurelia templates.
+ * Atomic TypeScript-origin rename across TypeScript and Aurelia-authored surfaces.
  *
- * When the user renames a VM property/method in a TypeScript file,
- * VS Code's built-in TypeScript extension handles the TS-side edits.
- * This feature augments those edits with template-side edits by asking
- * the Aurelia language server for binding expression references.
- *
- * Architecture: registers a RenameProvider for TS files with a
- * pattern-augmented document selector (scores higher than the built-in
- * TS provider). Our prepareRename validates the position using
- * getWordRangeAtPosition (NOT vscode.prepareDocumentRenameProvider,
- * which doesn't exist as a command — calling it throws silently and
- * causes VS Code to fall back to the built-in TS provider, skipping
- * our provideRenameEdits entirely). Our provideRenameEdits delegates
- * to the built-in TS rename, then augments with template edits from
- * the Aurelia LS.
+ * The semantic runtime owns the complete related-symbol edit plan whenever a
+ * TypeScript symbol participates in Aurelia semantics. Returning undefined for
+ * other symbols deliberately lets VS Code continue to its built-in TypeScript
+ * provider. Calling vscode.executeDocumentRenameProvider from this provider is
+ * not a delegation mechanism: VS Code extension providers rank ahead of the
+ * built-in provider and the command re-enters this provider through RPC.
  */
 import type { FeatureModule } from "../../core/feature-graph.js";
-import { DisposableStore } from "../../core/disposables.js";
+import { DisposableStore, toDisposable, type DisposableLike } from "../../core/disposables.js";
 import type { ProtocolWorkspaceEdit, RenameFromTsResponse } from "../../types.js";
 import { assertWorkspaceEditVersionsCurrent } from "../../workspace-edit-versions.js";
 
 export const TsRenameFeature: FeatureModule = {
   id: "rename.tsPropagate",
   isEnabled: () => true,
-  activate: (ctx) => {
+  activate: async (ctx) => {
     const store = new DisposableStore();
     const vscode = ctx.vscode;
     const log = ctx.logger;
 
-    let delegating = false;
-
     const provider: import("vscode").RenameProvider = {
       provideRenameEdits: async (document, position, newName, token) => {
-        if (delegating) return undefined;
-
-        const isTs = document.languageId === "typescript" || document.languageId === "typescriptreact";
-        if (!isTs) return undefined;
+        if (
+          isCancelled(token)
+          || !isTypeScriptDocument(document)
+          || ctx.languageClient.sessionForUri(document.uri) == null
+        ) {
+          return undefined;
+        }
 
         log.debug(`[TsRename] rename: ${document.uri.fsPath}:${position.line}:${position.character} -> "${newName}"`);
 
-        // Step 1: Delegate to the built-in TS rename (reentrancy-guarded)
-        let tsEdit: import("vscode").WorkspaceEdit | undefined;
-        delegating = true;
-        try {
-          tsEdit = await vscode.commands.executeCommand<import("vscode").WorkspaceEdit>(
-            "vscode.executeDocumentRenameProvider",
-            document.uri,
-            position,
-            newName,
-          );
-        } catch (e) {
-          log.warn(`[TsRename] built-in TS rename failed: ${e instanceof Error ? e.message : e}`);
-          return undefined;
-        } finally {
-          delegating = false;
-        }
-
-        // Step 2: Ask Aurelia LS for template edits
         const aureliaRename = await ctx.lsp.renameFromTs(
           document.uri.toString(),
           { line: position.line, character: position.character },
           newName,
           token,
         );
-        if (token?.isCancellationRequested === true) return undefined;
+        if (isCancelled(token)) return undefined;
 
         if (aureliaRename.status === "blocked" || aureliaRename.status === "refused") {
-          const message = renamePropagationFailureMessage(aureliaRename);
+          const message = renameFailureMessage(aureliaRename);
           log.warn(`[TsRename] ${message}`);
           throw new Error(message);
         }
 
         if (aureliaRename.status === "not-applicable") {
           notifyUnverifiedCandidates(ctx, aureliaRename);
-          log.debug(`[TsRename] no template edits, TS-only rename: ${aureliaRename.reason}`);
-          return tsEdit;
+          log.debug(`[TsRename] falling through to TypeScript rename: ${aureliaRename.reason}`);
+          return undefined;
         }
 
-        const templateEdit = await ctx.lsp.convertWorkspaceEdit(
+        if (aureliaRename.status === "available") {
+          throw new Error("Aurelia cross-domain rename returned a prepare result for an edit request.");
+        }
+
+        const edit = await ctx.lsp.convertWorkspaceEdit(
           document.uri.toString(),
           aureliaRename.workspaceEdit as ProtocolWorkspaceEdit,
           token,
         );
-        if (templateEdit == null) {
-          throw new Error("Aurelia template rename propagation returned no convertible workspace edit.");
+        if (isCancelled(token)) return undefined;
+        if (edit == null) {
+          throw new Error("Aurelia cross-domain rename returned no convertible workspace edit.");
         }
         assertWorkspaceEditVersionsCurrent(
           ctx.vscode,
           aureliaRename.workspaceEdit,
-          "Aurelia template rename propagation was blocked because editor documents changed",
+          "Aurelia cross-domain rename was blocked because editor documents changed",
         );
 
-        // Step 3: Merge TS + template edits
-        const merged = tsEdit ?? new vscode.WorkspaceEdit();
-        let templateEditCount = 0;
-        for (const [uri, edits] of templateEdit.entries()) {
-          const existingEdits = merged.get(uri);
-          merged.set(uri, [...existingEdits, ...edits]);
-          templateEditCount += edits.length;
-        }
-        if (templateEditCount === 0) {
-          log.debug("[TsRename] template propagation returned an empty workspace edit");
-        }
-
         notifyUnverifiedCandidates(ctx, aureliaRename);
-        log.debug(`[TsRename] merged: ${merged.entries().length} files, ${templateEditCount} template edits`);
-        return merged;
+        log.debug(`[TsRename] atomic plan: ${edit.entries().length} files`);
+        return edit;
       },
 
       prepareRename: async (document, position, token) => {
-        if (delegating) return undefined;
-
-        const isTs = document.languageId === "typescript" || document.languageId === "typescriptreact";
-        if (!isTs) return undefined;
-
-        // Extract the word at the cursor position directly from the document.
-        // Do NOT use vscode.prepareDocumentRenameProvider — that command does
-        // not exist. Calling it throws, which causes VS Code to skip our
-        // provider and fall back to the built-in TS provider, meaning our
-        // provideRenameEdits is never called.
-        const wordRange = document.getWordRangeAtPosition(position);
-        if (!wordRange) return undefined;
-
-        const placeholder = document.getText(wordRange);
-        log.debug(`[TsRename] prepare: ${document.uri.fsPath}:${position.line}:${position.character} -> "${placeholder}"`);
-        return { range: wordRange, placeholder };
+        if (
+          isCancelled(token)
+          || !isTypeScriptDocument(document)
+          || ctx.languageClient.sessionForUri(document.uri) == null
+        ) {
+          return undefined;
+        }
+        const response = await ctx.lsp.renameFromTs(
+          document.uri.toString(),
+          { line: position.line, character: position.character },
+          undefined,
+          token,
+        );
+        if (isCancelled(token)) return undefined;
+        if (response.status === "not-applicable") return undefined;
+        if (response.status === "blocked" || response.status === "refused") {
+          throw new Error(renameFailureMessage(response));
+        }
+        if (response.status !== "available") {
+          throw new Error("Aurelia cross-domain rename returned an edit result during preparation.");
+        }
+        return {
+          range: new vscode.Range(
+            new vscode.Position(response.range.start.line, response.range.start.character),
+            new vscode.Position(response.range.end.line, response.range.end.character),
+          ),
+          placeholder: response.placeholder,
+        };
       },
     };
 
-    // Pattern-augmented selector scores higher than the built-in TS provider.
-    // VS Code ranks by specificity: language+scheme+pattern > language+scheme.
-    store.add(
-      vscode.languages.registerRenameProvider(
-        [
-          { language: "typescript", scheme: "file", pattern: "**/*.ts" },
-          { language: "typescriptreact", scheme: "file", pattern: "**/*.tsx" },
-        ],
-        provider,
-      ),
-    );
+    let registration: DisposableLike | null = null;
+    const registerForOwnedWorkspaces = () => {
+      registration?.dispose();
+      registration = null;
+      const selector = ctx.languageClient.sessions.flatMap((session) => [
+        {
+          language: "typescript",
+          scheme: session.folder.uri.scheme,
+          pattern: new vscode.RelativePattern(session.folder, "**/*.ts"),
+        },
+        {
+          language: "typescriptreact",
+          scheme: session.folder.uri.scheme,
+          pattern: new vscode.RelativePattern(session.folder, "**/*.tsx"),
+        },
+      ]);
+      if (selector.length > 0) {
+        registration = vscode.languages.registerRenameProvider(selector, provider);
+      }
+    };
+    registerForOwnedWorkspaces();
+    store.add(ctx.languageClient.onDidChangeSessions(registerForOwnedWorkspaces));
+    store.add(toDisposable(() => registration?.dispose()));
 
     log.debug("[TsRename] activated");
     return store;
   },
 };
 
-function renamePropagationFailureMessage(response: Extract<RenameFromTsResponse, { status: "blocked" | "refused" }>): string {
-  return response.message || `Aurelia template rename propagation ${response.status}: ${response.reason}`;
+function isTypeScriptDocument(document: import("vscode").TextDocument): boolean {
+  return document.languageId === "typescript" || document.languageId === "typescriptreact";
+}
+
+function isCancelled(token: import("vscode").CancellationToken | undefined): boolean {
+  return token?.isCancellationRequested === true;
+}
+
+function renameFailureMessage(response: Extract<RenameFromTsResponse, { status: "blocked" | "refused" }>): string {
+  return response.message || `Aurelia cross-domain rename ${response.status}: ${response.reason}`;
 }
 
 function notifyUnverifiedCandidates(ctx: Parameters<FeatureModule["activate"]>[0], response: RenameFromTsResponse): void {

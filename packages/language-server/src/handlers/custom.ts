@@ -6,7 +6,7 @@
  */
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import type { CancellationToken, Position, WorkspaceEdit } from "vscode-languageserver/node";
+import type { CancellationToken, Position, Range, WorkspaceEdit } from "vscode-languageserver/node";
 import { URI } from "vscode-uri";
 import type {
   SemanticResourceDefinitionRow,
@@ -42,6 +42,7 @@ import type {
 import { canonicalDocumentUri } from "../utils/document-uri.js";
 import { buildCapabilities, buildCapabilitiesFallback, type CapabilitiesResponse } from "../capabilities.js";
 import {
+  mapSemanticRuntimeTemplatePrepareRename,
   mapSemanticRuntimeTemplateRenameEdit,
   semanticRuntimeDiagnosticCode,
   semanticRuntimeDiagnosticSnapshotData,
@@ -822,27 +823,38 @@ export async function handleWorkspaceStatus(
 export type RenameFromTsParams = {
   uri: string;
   position: Position;
-  newName: string;
+  newName?: string;
 };
 
 export type RenameFromTsResponse = {
+  status: "available";
+  range: Range;
+  placeholder: string;
+  message: string;
+  templateReferenceCount: number;
+  typeScriptReferenceCount: number;
+  candidateCount: number;
+} | {
   status: "success";
-  /** Template-side edits only (TS edits come from the built-in TS rename). */
+  /** One validated edit plan spanning the TypeScript family and Aurelia-authored surfaces. */
   workspaceEdit: WorkspaceEdit;
   message: string;
   templateReferenceCount: number;
+  typeScriptReferenceCount: number;
   candidateCount: number;
 } | {
   status: "not-applicable";
   reason: string;
   message: string;
   templateReferenceCount: number;
+  typeScriptReferenceCount: number;
   candidateCount: number;
 } | {
   status: "refused";
   reason: string;
   message: string;
   templateReferenceCount: number;
+  typeScriptReferenceCount: number;
   candidateCount: number;
 } | {
   status: "blocked";
@@ -850,6 +862,7 @@ export type RenameFromTsResponse = {
   message: string;
   failures?: readonly string[];
   templateReferenceCount?: number;
+  typeScriptReferenceCount?: number;
   candidateCount?: number;
 };
 
@@ -859,56 +872,104 @@ export async function handleRenameFromTs(
   guard: SemanticRuntimeLspRequestGuard,
 ): Promise<RenameFromTsResponse> {
   try {
-    if (!params?.uri || !params.position || !params.newName) {
-      return renameFromTsBlocked("invalid-request", "Aurelia template rename propagation requires a URI, position, and new name.");
+    if (!params?.uri || !params.position || (params.newName != null && typeof params.newName !== "string")) {
+      return renameFromTsBlocked("invalid-request", "Aurelia cross-domain rename requires a URI and position, with an optional new name.");
     }
 
     const canonical = canonicalDocumentUri(params.uri);
     const doc = ctx.ensureProgramDocument(params.uri);
     if (!doc) {
-      return renameFromTsBlocked("document-unavailable", "Aurelia template rename propagation could not read the TypeScript document.");
+      return renameFromTsBlocked("document-unavailable", "Aurelia cross-domain rename could not read the TypeScript document.");
     }
     const answer = await ctx.semanticRuntime.templateRenameFromTypeScript(
       doc,
       params.position,
       guard,
-      params.newName,
+      params.newName ?? null,
     );
     const templateReferenceCount = answer.value.templateReferenceCount;
+    const typeScriptReferenceCount = answer.value.typeScriptReferenceCount;
     const candidateCount = answer.value.candidateRows.length;
     if (answer.value.status !== "available") {
       const reason = answer.value.reason ?? answer.value.status;
       const message = answer.value.displayText || answer.summary;
-      ctx.logger.info(`[renameFromTs] template propagation refused for ${canonical.path}: ${reason}`);
-      return {
-        status: answer.value.status === "invalid-name" ? "refused" : "not-applicable",
+      ctx.logger.info(`[renameFromTs] cross-domain rename declined for ${canonical.path}: ${reason}`);
+      if (reason === "no-aurelia-references" || reason === "no-source-backed-member") {
+        return {
+          status: "not-applicable",
+          reason,
+          message,
+          templateReferenceCount,
+          typeScriptReferenceCount,
+          candidateCount,
+        };
+      }
+      if (answer.value.status === "invalid-name") {
+        return {
+          status: "refused",
+          reason,
+          message,
+          templateReferenceCount,
+          typeScriptReferenceCount,
+          candidateCount,
+        };
+      }
+      return renameFromTsBlocked(
         reason,
         message,
+        undefined,
         templateReferenceCount,
+        typeScriptReferenceCount,
+        candidateCount,
+      );
+    }
+
+    if (params.newName == null) {
+      const prepared = mapSemanticRuntimeTemplatePrepareRename(answer, {
+        workspaceRoot: ctx.workspaceRoot,
+        originDocument: doc,
+      });
+      if (prepared == null) {
+        return renameFromTsBlocked(
+          "prepare-mapping-failed",
+          "Aurelia cross-domain rename could not map the selected TypeScript token.",
+          undefined,
+          templateReferenceCount,
+          typeScriptReferenceCount,
+          candidateCount,
+        );
+      }
+      return {
+        status: "available",
+        ...prepared,
+        message: answer.value.displayText || answer.summary,
+        templateReferenceCount,
+        typeScriptReferenceCount,
         candidateCount,
       };
     }
     if (answer.value.edits.length === 0) {
-      ctx.logger.info(`[renameFromTs] no cross-domain edits for ${canonical.path}`);
-      return {
-        status: "not-applicable",
-        reason: candidateCount > 0 ? "unverified-candidates-only" : "no-template-edits",
-        message: answer.value.displayText || answer.summary,
+      return renameFromTsBlocked(
+        "empty-edit-plan",
+        `Aurelia claimed a cross-domain rename for ${canonical.path} but produced no edits.`,
+        undefined,
         templateReferenceCount,
+        typeScriptReferenceCount,
         candidateCount,
-      };
+      );
     }
     const mapping = mapSemanticRuntimeTemplateRenameEdit(answer, (uri) => ctx.lookupDocumentSnapshot(uri), {
       workspaceRoot: ctx.workspaceRoot,
       originDocument: doc,
     });
     if (mapping.edit == null) {
-      ctx.logger.warn(`[renameFromTs] template edit mapping was blocked: ${mapping.failures.join(" ")}`);
+      ctx.logger.warn(`[renameFromTs] cross-domain edit mapping was blocked: ${mapping.failures.join(" ")}`);
       return renameFromTsBlocked(
         "mapping-failed",
-        `Aurelia template rename propagation was blocked: ${mapping.failures.join(" ")}`,
+        `Aurelia cross-domain rename was blocked: ${mapping.failures.join(" ")}`,
         mapping.failures,
         templateReferenceCount,
+        typeScriptReferenceCount,
         candidateCount,
       );
     }
@@ -918,7 +979,7 @@ export async function handleRenameFromTs(
       .map((change) => change.textDocument.uri)).size;
 
     if (fileCount > 0) {
-      ctx.logger.info(`[renameFromTs] propagating to ${fileCount} template(s), ${templateReferenceCount} runtime reference(s)`);
+      ctx.logger.info(`[renameFromTs] prepared ${fileCount} file(s), ${typeScriptReferenceCount} TypeScript and ${templateReferenceCount} Aurelia reference(s)`);
     }
     return fileCount
       ? {
@@ -926,13 +987,15 @@ export async function handleRenameFromTs(
         workspaceEdit: mapping.edit,
         message: answer.value.displayText || answer.summary,
         templateReferenceCount,
+        typeScriptReferenceCount,
         candidateCount,
       }
       : {
-        status: "not-applicable",
-        reason: "no-template-edits",
-        message: answer.value.displayText || answer.summary,
+        status: "blocked",
+        reason: "empty-workspace-edit",
+        message: "Aurelia cross-domain rename produced no mappable file edits.",
         templateReferenceCount,
+        typeScriptReferenceCount,
         candidateCount,
       };
   } catch (e) {
@@ -940,13 +1003,13 @@ export async function handleRenameFromTs(
       const reason = e.reason === "cancelled" ? "request-cancelled" : "request-stale";
       return renameFromTsBlocked(
         reason,
-        `Aurelia template rename propagation was skipped because the request was ${e.reason}.`,
+        `Aurelia cross-domain rename was skipped because the request was ${e.reason}.`,
       );
     }
     const msg = e instanceof Error ? e.message : String(e);
     const stack = e instanceof Error ? e.stack : undefined;
     ctx.logger.error(`[renameFromTs] ${msg}${stack ? `\n${stack}` : ""}`);
-    return renameFromTsBlocked("server-error", `Aurelia template rename propagation failed: ${msg}`);
+    return renameFromTsBlocked("server-error", `Aurelia cross-domain rename failed: ${msg}`);
   }
 }
 
@@ -955,6 +1018,7 @@ function renameFromTsBlocked(
   message: string,
   failures?: readonly string[],
   templateReferenceCount?: number,
+  typeScriptReferenceCount?: number,
   candidateCount?: number,
 ): RenameFromTsResponse {
   return {
@@ -963,6 +1027,7 @@ function renameFromTsBlocked(
     message,
     ...(failures == null ? {} : { failures }),
     ...(templateReferenceCount == null ? {} : { templateReferenceCount }),
+    ...(typeScriptReferenceCount == null ? {} : { typeScriptReferenceCount }),
     ...(candidateCount == null ? {} : { candidateCount }),
   };
 }

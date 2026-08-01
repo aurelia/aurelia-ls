@@ -74,6 +74,7 @@ interface RecordedActions {
   contextValues: Map<string, unknown>;
   fireWorkspaceFoldersChanged(): void;
   fireConfigurationChanged(section?: string): void;
+  fireActiveTextEditorChanged(editor: unknown): void;
   fireDocumentOpened(document: StubDocument): void;
   fireDocumentChanged(document: StubDocument): void;
   fireDocumentSaved(document: StubDocument): void;
@@ -114,6 +115,7 @@ export interface StubVscodeApi {
     openTextDocument: (target: unknown) => Promise<StubDocument>;
     createOutputChannel: (name: string) => { name: string; appendLine: (line: string) => void; lines: string[]; dispose: () => void };
     createStatusBarItem: (alignment: number, priority: number) => StubStatusBarItem;
+    onDidChangeActiveTextEditor: (listener: (editor: unknown) => void) => VscodeDisposable;
   };
   Uri: {
     file: (fsPath: string) => StubUri;
@@ -305,6 +307,7 @@ export function createVscodeApi(options: CreateVscodeApiOptions = {}): { vscode:
   const documentChanged = new EventEmitter<{ document: StubDocument }>();
   const documentSaved = new EventEmitter<StubDocument>();
   const documentClosed = new EventEmitter<StubDocument>();
+  const activeTextEditorChanged = new EventEmitter<unknown>();
   const workspaceFolders = options.workspaceFolders?.map((folder, index) => ({
     name: folder.name,
     index,
@@ -456,6 +459,7 @@ export function createVscodeApi(options: CreateVscodeApiOptions = {}): { vscode:
       statusItems.push(item);
       return item;
     },
+    onDidChangeActiveTextEditor: (listener: (editor: unknown) => void) => activeTextEditorChanged.event(listener),
   };
 
   const Uri = {
@@ -493,6 +497,10 @@ export function createVscodeApi(options: CreateVscodeApiOptions = {}): { vscode:
       fireConfigurationChanged: (section = "aurelia") => configurationChanged.fire({
         affectsConfiguration: (candidate) => candidate === section || candidate.startsWith(`${section}.`),
       }),
+      fireActiveTextEditorChanged: (editor) => {
+        options.activeTextEditor = editor;
+        activeTextEditorChanged.fire(editor);
+      },
       fireDocumentOpened: (document) => {
         if (!textDocuments.includes(document)) textDocuments.push(document);
         documentOpened.fire(document);

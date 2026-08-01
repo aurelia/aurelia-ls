@@ -153,13 +153,13 @@
         "command": "aurelia.inspectAtCursor",
         "key": "ctrl+alt+i",
         "mac": "cmd+alt+i",
-        "when": "aurelia.active && editorTextFocus && editorLangId == html"
+        "when": "aurelia.active && aurelia.documentOwned && editorTextFocus && editorLangId == html"
       },
       {
         "command": "aurelia.openRelatedFile",
         "key": "alt+o",
         "mac": "alt+o",
-        "when": "aurelia.active && editorTextFocus"
+        "when": "aurelia.active && aurelia.documentOwned && editorTextFocus"
       }
     ],
     "menus": {
@@ -178,22 +178,22 @@
       "editor/context": [
         {
           "command": "aurelia.inspectAtCursor",
-          "when": "aurelia.active && editorLangId == html",
+          "when": "aurelia.active && aurelia.documentOwned && editorLangId == html",
           "group": "aurelia@1"
         },
         {
           "command": "aurelia.showAvailableResources",
-          "when": "aurelia.active && editorLangId == html",
+          "when": "aurelia.active && aurelia.documentOwned && editorLangId == html",
           "group": "aurelia@2"
         },
         {
           "command": "aurelia.openRelatedFile",
-          "when": "aurelia.active && (editorLangId == html || editorLangId == typescript)",
+          "when": "aurelia.active && aurelia.documentOwned && (editorLangId == html || editorLangId == typescript)",
           "group": "aurelia@3"
         },
         {
           "command": "aurelia.diagnosticsReport",
-          "when": "aurelia.active && editorLangId == html",
+          "when": "aurelia.active && aurelia.documentOwned && editorLangId == html",
           "group": "aurelia@4"
         }
       ],
@@ -204,11 +204,11 @@
         },
         {
           "command": "aurelia.diagnosticsReport",
-          "when": "aurelia.active"
+          "when": "aurelia.active && aurelia.documentOwned"
         },
         {
           "command": "aurelia.inspectAtCursor",
-          "when": "aurelia.active"
+          "when": "aurelia.active && aurelia.documentOwned"
         },
         {
           "command": "aurelia.findResource",
@@ -216,11 +216,11 @@
         },
         {
           "command": "aurelia.showAvailableResources",
-          "when": "aurelia.active"
+          "when": "aurelia.active && aurelia.documentOwned"
         },
         {
           "command": "aurelia.openRelatedFile",
-          "when": "aurelia.active"
+          "when": "aurelia.active && aurelia.documentOwned"
         },
         {
           "command": "aurelia.dumpState",

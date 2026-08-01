@@ -1,3 +1,5 @@
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { test, expect, describe, vi } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import {
@@ -640,15 +642,19 @@ describe("handleInspectEntity", () => {
 });
 
 describe("handleRenameFromTs", () => {
-  test("maps semantic-runtime template rename propagation edits", async () => {
+  const renameWorkspaceRoot = path.resolve("test-workspace");
+  const renameTypeScriptUri = pathToFileURL(path.join(renameWorkspaceRoot, "src/app.ts")).toString();
+
+  test("maps one validated TypeScript and Aurelia rename plan", async () => {
     const tsDocument = TextDocument.create(
-      "file:///test/workspace/src/app.ts",
+      renameTypeScriptUri,
       "typescript",
       1,
       "class App { title = ''; }",
     );
     const templateText = "<p>${title}</p>";
     const ctx = createMockContext({
+      workspaceRoot: renameWorkspaceRoot,
       ensureProgramDocument: vi.fn(() => tsDocument),
       lookupText: vi.fn(() => templateText),
       lookupDocumentSnapshot: vi.fn((uri: string) =>
@@ -685,6 +691,18 @@ describe("handleRenameFromTs", () => {
         },
         edits: [
           {
+            editKind: "typescript-reference",
+            source: {
+              kind: "source-span-address",
+              label: "src/app.ts@12..17",
+              path: "src/app.ts",
+              start: 12,
+              end: 17,
+            },
+            oldText: "title",
+            newText: "heading",
+          },
+          {
             editKind: "template-usage",
             source: {
               kind: "source-span-address",
@@ -699,7 +717,7 @@ describe("handleRenameFromTs", () => {
         ],
         candidateRows: [],
         templateReferenceCount: 1,
-        typeScriptReferenceCount: 0,
+        typeScriptReferenceCount: 1,
       },
       page: null,
     });
@@ -725,19 +743,27 @@ describe("handleRenameFromTs", () => {
     expect(result).toMatchObject({
       status: "success",
       templateReferenceCount: 1,
+      typeScriptReferenceCount: 1,
       candidateCount: 0,
     });
     if (result.status !== "success") {
       throw new Error("Expected successful rename propagation.");
     }
-    const [change] = result.workspaceEdit.documentChanges ?? [];
-    expect(change).toMatchObject({
+    const changes = result.workspaceEdit.documentChanges ?? [];
+    expect(changes).toHaveLength(2);
+    expect(changes[0]).toMatchObject({
+      textDocument: {
+        uri: expect.stringContaining("src/app.ts"),
+        version: 1,
+      },
+    });
+    expect(changes[1]).toMatchObject({
       textDocument: {
         uri: expect.stringContaining("src/app.html"),
         version: 4,
       },
     });
-    expect("edits" in change! ? change.edits : []).toEqual([
+    expect("edits" in changes[1]! ? changes[1].edits : []).toEqual([
       {
         range: {
           start: { line: 0, character: 5 },
@@ -748,15 +774,102 @@ describe("handleRenameFromTs", () => {
     ]);
   });
 
-  test("returns not-applicable when runtime has no template propagation edits", async () => {
+  test("maps semantic-runtime preparation for a cross-domain symbol", async () => {
     const tsDocument = TextDocument.create(
-      "file:///test/workspace/src/app.ts",
+      renameTypeScriptUri,
       "typescript",
       1,
       "class App { title = ''; }",
     );
     const ctx = createMockContext({
+      workspaceRoot: renameWorkspaceRoot,
       ensureProgramDocument: vi.fn(() => tsDocument),
+    });
+    ctx.semanticRuntime.templateRenameFromTypeScript.mockResolvedValue({
+      schemaVersion: "0.2",
+      result: "answered",
+      selection: "exact",
+      coverage: "complete",
+      summary: "available",
+      value: {
+        displayText: "available",
+        status: "available",
+        reason: null,
+        selectedMemberName: "title",
+        placeholder: "title",
+        targetSource: null,
+        activeSource: {
+          kind: "source-span-address",
+          label: "src/app.ts@12..17",
+          path: "src/app.ts",
+          start: 12,
+          end: 17,
+        },
+        edits: [],
+        candidateRows: [],
+        templateReferenceCount: 1,
+        typeScriptReferenceCount: 0,
+      },
+      page: null,
+    });
+
+    const result = await handleRenameFromTs(
+      ctx as never,
+      { uri: tsDocument.uri, position: { line: 0, character: 13 } },
+      testRequestGuard,
+    );
+
+    expect(result).toEqual({
+      status: "available",
+      range: {
+        start: { line: 0, character: 12 },
+        end: { line: 0, character: 17 },
+      },
+      placeholder: "title",
+      message: "available",
+      templateReferenceCount: 1,
+      typeScriptReferenceCount: 0,
+      candidateCount: 0,
+    });
+    expect(ctx.semanticRuntime.templateRenameFromTypeScript).toHaveBeenCalledWith(
+      tsDocument,
+      { line: 0, character: 13 },
+      testRequestGuard,
+      null,
+    );
+  });
+
+  test("returns not-applicable when a TypeScript symbol has no Aurelia references", async () => {
+    const tsDocument = TextDocument.create(
+      renameTypeScriptUri,
+      "typescript",
+      1,
+      "class App { title = ''; }",
+    );
+    const ctx = createMockContext({
+      workspaceRoot: renameWorkspaceRoot,
+      ensureProgramDocument: vi.fn(() => tsDocument),
+    });
+    ctx.semanticRuntime.templateRenameFromTypeScript.mockResolvedValue({
+      schemaVersion: "0.2",
+      result: "answered",
+      selection: "not-applicable",
+      coverage: "complete",
+      summary: "not applicable",
+      value: {
+        displayText: "No proven Aurelia references.",
+        status: "not-available",
+        reason: "no-aurelia-references",
+        selectedMemberName: "title",
+        placeholder: "title",
+        targetSource: null,
+        activeSource: null,
+        edits: [],
+        candidateRows: [],
+        templateReferenceCount: 0,
+        typeScriptReferenceCount: 0,
+      },
+      page: null,
     });
 
     const result = await handleRenameFromTs(
@@ -771,20 +884,22 @@ describe("handleRenameFromTs", () => {
 
     expect(result).toMatchObject({
       status: "not-applicable",
-      reason: "no-template-edits",
+      reason: "no-aurelia-references",
       templateReferenceCount: 0,
+      typeScriptReferenceCount: 0,
       candidateCount: 0,
     });
   });
 
-  test("returns blocked when template propagation edits fail old-text validation", async () => {
+  test("returns blocked when any cross-domain edit fails old-text validation", async () => {
     const tsDocument = TextDocument.create(
-      "file:///test/workspace/src/app.ts",
+      renameTypeScriptUri,
       "typescript",
       1,
       "class App { title = ''; }",
     );
     const ctx = createMockContext({
+      workspaceRoot: renameWorkspaceRoot,
       ensureProgramDocument: vi.fn(() => tsDocument),
       lookupText: vi.fn(() => "<p>${stale}</p>"),
       lookupDocumentSnapshot: vi.fn((uri: string) =>
@@ -842,6 +957,7 @@ describe("handleRenameFromTs", () => {
       status: "blocked",
       reason: "mapping-failed",
       templateReferenceCount: 1,
+      typeScriptReferenceCount: 0,
       candidateCount: 0,
     });
     expect(result.status === "blocked" ? result.failures?.[0] : "").toContain(

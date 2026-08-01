@@ -9,6 +9,7 @@ class StubLanguageClient {
   stopCalls = 0;
   #lsp: LanguageClient;
   sessions: unknown[];
+  sessionGeneration = 0;
   #listeners = new Set<() => void>();
 
   constructor(lsp: LanguageClient, active = true) {
@@ -31,7 +32,15 @@ class StubLanguageClient {
     this.#listeners.add(listener);
     return { dispose: () => this.#listeners.delete(listener) };
   }
-  sessionForUri() { return this.sessions[0]; }
+  sessionForUri(uri: { toString(): string }) {
+    const session = this.sessions[0] as { workspace?: { uri?: string } } | undefined;
+    const workspaceUri = session?.workspace?.uri;
+    const documentUri = uri?.toString();
+    return workspaceUri != null
+      && (documentUri === workspaceUri || documentUri.startsWith(`${workspaceUri}/`))
+      ? session
+      : undefined;
+  }
   clientForUri() { return this.#lsp; }
 
   async stop() {
@@ -44,6 +53,7 @@ class StubLanguageClient {
       workspace: { key: "file:///workspace", name: "workspace", uri: "file:///workspace" },
       client: this.#lsp,
     }] : [];
+    this.sessionGeneration += 1;
     for (const listener of this.#listeners) listener();
   }
 }
@@ -115,6 +125,187 @@ activationTest("keeps product features inactive until a workspace session is own
   expect(disposed).toBe(1);
   expect(recorded.contextValues.get("aurelia.active")).toBe(false);
 
+  await deactivate();
+});
+
+activationTest("scopes editor contributions to the active document's owning session", async () => {
+  const { activate, deactivate } = await import("../../out/extension.js");
+  const { vscode: stubVscode, recorded } = createVscodeApi({
+    activeTextEditor: {
+      document: { uri: "placeholder" },
+    },
+  });
+  const vscode = stubVscode as unknown as VscodeApi;
+  stubVscode.window.activeTextEditor = {
+    document: { uri: stubVscode.Uri.parse("file:///workspace/src/app.html") },
+  };
+  const lsp = {
+    onNotification: vi.fn(() => ({ dispose: () => {} })),
+    sendRequest: vi.fn(async () => ({ contracts: { query: { version: "1" } } })),
+  } as unknown as LanguageClient;
+  const languageClient = new StubLanguageClient(lsp);
+
+  await activate(stubExtensionContext(stubVscode), {
+    vscode,
+    languageClient: languageClient as never,
+    features: [],
+  });
+  expect(recorded.contextValues.get("aurelia.active")).toBe(true);
+  expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(true);
+
+  recorded.fireActiveTextEditorChanged({
+    document: { uri: stubVscode.Uri.parse("file:///plain/src/plain.ts") },
+  });
+  await settleAsyncWork();
+  expect(recorded.contextValues.get("aurelia.active")).toBe(true);
+  expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(false);
+
+  recorded.fireActiveTextEditorChanged(undefined);
+  await settleAsyncWork();
+  expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(false);
+
+  recorded.fireActiveTextEditorChanged({
+    document: { uri: stubVscode.Uri.parse("file:///workspace/src/app.html") },
+  });
+  await settleAsyncWork();
+  expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(true);
+
+  languageClient.setActive(false);
+  await settleAsyncWork();
+  expect(recorded.contextValues.get("aurelia.active")).toBe(false);
+  expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(false);
+
+  await deactivate();
+});
+
+activationTest("does not publish capabilities or features from a retired session generation", async () => {
+  const { activate, deactivate } = await import("../../out/extension.js");
+  const { vscode: stubVscode, recorded } = createVscodeApi();
+  const vscode = stubVscode as unknown as VscodeApi;
+  let resolveCapabilities!: (value: unknown) => void;
+  const capabilities = new Promise((resolve) => {
+    resolveCapabilities = resolve;
+  });
+  const lsp = {
+    onNotification: vi.fn(() => ({ dispose: () => {} })),
+    sendRequest: vi.fn(async () => capabilities),
+  } as unknown as LanguageClient;
+  const languageClient = new StubLanguageClient(lsp, false);
+  const activated: string[] = [];
+  const feature: FeatureModule = {
+    id: "test.feature",
+    activate: () => {
+      activated.push("test.feature");
+    },
+  };
+
+  await activate(stubExtensionContext(stubVscode), {
+    vscode,
+    languageClient: languageClient as never,
+    features: [feature],
+  });
+  languageClient.setActive(true);
+  await vi.waitFor(() => expect(lsp.sendRequest).toHaveBeenCalled());
+  languageClient.setActive(false);
+  resolveCapabilities({ contracts: { query: { version: "1" } } });
+  await settleAsyncWork();
+
+  expect(activated).toEqual([]);
+  expect(recorded.contextValues.get("aurelia.active")).toBe(false);
+  await deactivate();
+});
+
+activationTest("does not retain capability-gated features when a current refresh has no answer", async () => {
+  const { activate, deactivate } = await import("../../out/extension.js");
+  const { vscode: stubVscode } = createVscodeApi();
+  const vscode = stubVscode as unknown as VscodeApi;
+  let capabilityRequest = 0;
+  const lsp = {
+    onNotification: vi.fn(() => ({ dispose: () => {} })),
+    sendRequest: vi.fn(async () => capabilityRequest++ === 0
+      ? { contracts: { query: { version: "1" } } }
+      : null),
+  } as unknown as LanguageClient;
+  const languageClient = new StubLanguageClient(lsp);
+  let activations = 0;
+  let disposals = 0;
+  const feature: FeatureModule = {
+    id: "test.capability",
+    isAvailable: (ctx) => Boolean(ctx.capabilities.current.contracts?.query),
+    activate: () => {
+      activations += 1;
+      return { dispose: () => { disposals += 1; } };
+    },
+  };
+
+  await activate(stubExtensionContext(stubVscode), {
+    vscode,
+    languageClient: languageClient as never,
+    features: [feature],
+  });
+  expect(activations).toBe(1);
+
+  languageClient.setActive(true);
+  await settleAsyncWork();
+
+  expect(activations).toBe(1);
+  expect(disposals).toBe(1);
+  await deactivate();
+});
+
+activationTest("deactivates feature work that completes after its session generation retires", async () => {
+  const { activate, deactivate } = await import("../../out/extension.js");
+  const { vscode: stubVscode } = createVscodeApi();
+  const vscode = stubVscode as unknown as VscodeApi;
+  const executeCommand = stubVscode.commands.executeCommand;
+  let blockInactiveContext = false;
+  let inactiveContextRequests = 0;
+  let releaseInactiveContext!: () => void;
+  const inactiveContext = new Promise<void>((resolve) => {
+    releaseInactiveContext = resolve;
+  });
+  stubVscode.commands.executeCommand = async (command, ...args) => {
+    if (blockInactiveContext && command === "setContext" && args[0] === "aurelia.active" && args[1] === false) {
+      inactiveContextRequests += 1;
+      await inactiveContext;
+    }
+    return executeCommand(command, ...args);
+  };
+  const lsp = {
+    onNotification: vi.fn(() => ({ dispose: () => {} })),
+    sendRequest: vi.fn(async () => ({ contracts: { query: { version: "1" } } })),
+  } as unknown as LanguageClient;
+  const languageClient = new StubLanguageClient(lsp, false);
+  let activationStarted = false;
+  let resolveActivation!: () => void;
+  const activationGate = new Promise<void>((resolve) => {
+    resolveActivation = resolve;
+  });
+  let disposals = 0;
+  const feature: FeatureModule = {
+    id: "test.slow",
+    activate: async () => {
+      activationStarted = true;
+      await activationGate;
+      return { dispose: () => { disposals += 1; } };
+    },
+  };
+
+  await activate(stubExtensionContext(stubVscode), {
+    vscode,
+    languageClient: languageClient as never,
+    features: [feature],
+  });
+  languageClient.setActive(true);
+  await vi.waitFor(() => expect(activationStarted).toBe(true));
+  blockInactiveContext = true;
+  languageClient.setActive(false);
+  resolveActivation();
+  await vi.waitFor(() => expect(inactiveContextRequests).toBe(1));
+
+  expect(disposals).toBe(1);
+  releaseInactiveContext();
+  await settleAsyncWork();
   await deactivate();
 });
 

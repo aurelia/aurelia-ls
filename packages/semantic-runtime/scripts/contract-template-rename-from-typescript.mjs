@@ -52,6 +52,7 @@ const firstTitleStart = templateText.indexOf('title');
 const secondTitleStart = templateText.indexOf('title', firstTitleStart + 'title'.length);
 const declarationStart = viewModelText.indexOf('title');
 const tsUsageStart = viewModelText.indexOf('title', declarationStart + 'title'.length);
+const publicCountDeclarationStart = viewModelText.indexOf('publicCount');
 
 const prepare = await askRenameFromTypeScript(null, declarationStart + 1);
 assert.equal(prepare.result, 'answered');
@@ -60,7 +61,7 @@ assert.equal(prepare.coverage, 'complete');
 assert.equal(prepare.value.status, 'available');
 assert.equal(prepare.value.placeholder, 'title');
 assert.equal(prepare.value.templateReferenceCount, 2);
-assert.equal(prepare.value.typeScriptReferenceCount, 0, 'TS rename propagation query should leave TS edits to the TS provider.');
+assert.equal(prepare.value.typeScriptReferenceCount, 0, 'Prepare rename should not emit edits before a new name is supplied.');
 assert.ok(
   samePath(prepare.value.activeSource?.path ?? '', viewModelPath),
   `Expected active TS source to point at app.ts, observed ${prepare.value.activeSource?.path ?? 'missing'}.`,
@@ -79,6 +80,12 @@ assertTemplateRenameEdits(fromDeclaration, 'declaration cursor');
 
 const fromTsUsage = await askRenameFromTypeScript('heading', tsUsageStart + 1);
 assertTemplateRenameEdits(fromTsUsage, 'TS usage cursor');
+
+const typeScriptOnlyMember = await askRenameFromTypeScript('count', publicCountDeclarationStart + 1);
+assert.equal(typeScriptOnlyMember.result, 'answered');
+assert.equal(typeScriptOnlyMember.value.status, 'not-available');
+assert.equal(typeScriptOnlyMember.value.reason, 'no-aurelia-references');
+assert.deepEqual(typeScriptOnlyMember.value.edits, []);
 
 const titleDeclarationStart = aliasedBindableProductDefinitionText.indexOf('title');
 const titleTemplateStart = aliasedBindableProductTemplateText.indexOf('title');
@@ -99,9 +106,11 @@ assert.equal(defaultBindablePropagation.selection, 'exact');
 assert.equal(defaultBindablePropagation.coverage, 'complete');
 assert.equal(defaultBindablePropagation.value.status, 'available');
 assert.equal(defaultBindablePropagation.value.templateReferenceCount, 2);
-assert.equal(defaultBindablePropagation.value.edits.length, 2);
+assert.ok(defaultBindablePropagation.value.typeScriptReferenceCount > 0);
+assert.ok(defaultBindablePropagation.value.edits.length > 2);
 expectAliasedEdit(defaultBindablePropagation.value.edits, 'src/app.html', titleAttributeStart, titleAttributeStart + 'title'.length, 'headline');
 expectAliasedEdit(defaultBindablePropagation.value.edits, 'src/product-card.html', titleTemplateStart, titleTemplateStart + 'title'.length, 'headline');
+expectAliasedEdit(defaultBindablePropagation.value.edits, 'src/product-card.ts', titleDeclarationStart, titleDeclarationStart + 'title'.length, 'headline');
 
 const explicitAliasPropagation = await askAliasedBindableRenameFromTypeScript('headlineText', labelTextDeclarationStart + 1);
 assert.equal(explicitAliasPropagation.result, 'answered');
@@ -109,10 +118,12 @@ assert.equal(explicitAliasPropagation.selection, 'exact');
 assert.equal(explicitAliasPropagation.coverage, 'complete');
 assert.equal(explicitAliasPropagation.value.status, 'available');
 assert.equal(explicitAliasPropagation.value.templateReferenceCount, 2);
-assert.equal(explicitAliasPropagation.value.edits.length, 1, 'TS-origin property rename should not rewrite explicit bindable aliases.');
+assert.ok(explicitAliasPropagation.value.typeScriptReferenceCount > 0);
+assert.ok(explicitAliasPropagation.value.edits.length > 1, 'TS-origin property rename should include its TypeScript symbol family.');
 expectAliasedEdit(explicitAliasPropagation.value.edits, 'src/product-card.html', labelTextTemplateStart, labelTextTemplateStart + 'labelText'.length, 'headlineText');
+expectAliasedEdit(explicitAliasPropagation.value.edits, 'src/product-card.ts', labelTextDeclarationStart, labelTextDeclarationStart + 'labelText'.length, 'headlineText');
 assert.equal(
-  explicitAliasPropagation.value.edits.some((edit) =>
+    explicitAliasPropagation.value.edits.some((edit) =>
     edit.source?.path?.replace(/\\/g, '/') === 'src/app.html'
     && edit.oldText === 'display-label'
   ),
@@ -124,7 +135,7 @@ console.log(`Template rename-from-TypeScript contract passed (${
   fromDeclaration.value.edits.length
   + defaultBindablePropagation.value.edits.length
   + explicitAliasPropagation.value.edits.length
-} template edit row(s)).`);
+} cross-domain edit row(s)).`);
 
 async function askRenameFromTypeScript(newName, offset) {
   const answer = await runtime.answerAppQuery({
@@ -157,12 +168,15 @@ async function askAliasedBindableRenameFromTypeScript(newName, offset) {
 function assertTemplateRenameEdits(answer, label) {
   assert.equal(answer.result, 'answered', `${label}: expected an answered query.`);
   assert.equal(answer.selection, 'exact', `${label}: expected exact TypeScript symbol selection.`);
-  assert.equal(answer.coverage, 'complete', `${label}: expected complete template propagation coverage.`);
-  assert.equal(answer.value.status, 'available', `${label}: expected available rename propagation.`);
+  assert.equal(answer.coverage, 'complete', `${label}: expected complete cross-domain rename coverage.`);
+  assert.equal(answer.value.status, 'available', `${label}: expected available cross-domain rename.`);
   assert.equal(answer.value.templateReferenceCount, 2, `${label}: expected two template references.`);
-  assert.equal(answer.value.typeScriptReferenceCount, 0, `${label}: TS edits should be excluded.`);
-  assert.equal(answer.value.edits.length, 2, `${label}: expected two template edit rows.`);
-  assert.ok(answer.value.edits.every((edit) => edit.editKind === 'template-usage'), `${label}: expected only template-usage edits.`);
+  assert.equal(answer.value.typeScriptReferenceCount, 2, `${label}: expected declaration and TS usage edits.`);
+  assert.equal(answer.value.edits.length, 4, `${label}: expected the complete TypeScript and template edit set.`);
+  assert.equal(answer.value.edits.filter((edit) => edit.editKind === 'template-usage').length, 2);
+  assert.equal(answer.value.edits.filter((edit) => edit.editKind === 'typescript-reference').length, 2);
+  expectEdit(answer.value.edits, 'src/app.ts', declarationStart, declarationStart + 'title'.length, 'heading');
+  expectEdit(answer.value.edits, 'src/app.ts', tsUsageStart, tsUsageStart + 'title'.length, 'heading');
   expectEdit(answer.value.edits, 'src/app.html', firstTitleStart, firstTitleStart + 'title'.length, 'heading');
   expectEdit(answer.value.edits, 'src/app.html', secondTitleStart, secondTitleStart + 'title'.length, 'heading');
 }

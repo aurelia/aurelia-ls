@@ -172,7 +172,7 @@ export class LspFacade implements DisposableLike {
   async renameFromTs(
     uri: string,
     position: { line: number; character: number },
-    newName: string,
+    newName: string | undefined,
     token?: CancellationToken,
   ): Promise<RenameFromTsResponse> {
     const session = this.#sessionForUri(uri);
@@ -187,13 +187,13 @@ export class LspFacade implements DisposableLike {
       const response = await this.#sendRequest<RenameFromTsResponse | null>(
         session,
         "aurelia/renameFromTs",
-        { uri, position, newName },
+        { uri, position, ...(newName == null ? {} : { newName }) },
         token,
       );
       return response ?? {
         status: "blocked",
         reason: "empty-response",
-        message: "Aurelia template rename propagation returned no status.",
+        message: "Aurelia cross-domain rename returned no status.",
       };
     } catch (err) {
       const message = errorMessage(err);
@@ -201,7 +201,7 @@ export class LspFacade implements DisposableLike {
       return {
         status: "blocked",
         reason: "request-failed",
-        message: `Aurelia template rename propagation request failed: ${message}`,
+        message: `Aurelia cross-domain rename request failed: ${message}`,
       };
     }
   }

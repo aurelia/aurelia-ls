@@ -52,6 +52,21 @@ interface ReconcileOptions {
   readonly reconfirmExisting?: boolean;
 }
 
+interface LifecycleIntent {
+  readonly generation: number;
+  readonly invalidated: Promise<void>;
+  invalidate(): void;
+}
+
+interface PendingPackageChange {
+  readonly uri: Uri;
+  readonly type: LspFileChangeType;
+}
+
+type LifecycleAwaitResult<T> =
+  | { readonly status: "completed"; readonly value: T }
+  | { readonly status: "invalidated" };
+
 const SOURCE_LANGUAGE_IDS = new Set([
   "typescript",
   "typescriptreact",
@@ -121,10 +136,13 @@ export class AureliaLanguageClient {
   #serverModule: Promise<string> | null = null;
   #lifecycle: DisposableStore | null = null;
   #sessionsChanged = new SimpleEmitter<readonly AureliaLanguageClientSession[]>();
+  #transitionTail: Promise<void> = Promise.resolve();
+  #lifecycleIntent = createLifecycleIntent(0);
+  #sessionGeneration = 0;
+  #detachedRetirements = new Set<Promise<void>>();
+  #pendingPackageChanges = new Map<string, PendingPackageChange>();
+  #acceptingLifecycleRequests = false;
   #started = false;
-  #reconciling = false;
-  #reconcilePending = false;
-  #reconfirmPending = false;
   #sourceAdmissionTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
@@ -172,6 +190,10 @@ export class AureliaLanguageClient {
     return this.#sessions.size > 0;
   }
 
+  get sessionGeneration(): number {
+    return this.#sessionGeneration;
+  }
+
   onDidChangeSessions(listener: Listener<readonly AureliaLanguageClientSession[]>): DisposableLike {
     return this.#sessionsChanged.on(listener);
   }
@@ -191,72 +213,54 @@ export class AureliaLanguageClient {
     context: ExtensionContext,
     options: { serverEnv?: Record<string, string> } = {},
   ): Promise<void> {
-    this.#context = context;
-    if (options.serverEnv) {
-      this.#serverEnv = options.serverEnv;
+    if (!this.#acceptingLifecycleRequests) {
+      this.#acceptingLifecycleRequests = true;
+      this.#advanceLifecycleIntent();
     }
-    if (!this.#started) {
-      this.#started = true;
-      this.#lifecycle = new DisposableStore();
-      this.#installLifecycleListeners();
-    }
-    await this.reconcile();
+    const intent = this.#lifecycleIntent;
+    await this.#enqueueTransition(async () => {
+      if (!this.#isCurrentLifecycle(intent)) return;
+      this.#context = context;
+      if (options.serverEnv) {
+        this.#serverEnv = options.serverEnv;
+      }
+      this.#ensureLifecycleStarted();
+      await this.#runReconcile(false, intent);
+    });
   }
 
-  async reconcile(options: ReconcileOptions = {}): Promise<void> {
-    if (!this.#started) {
-      return;
-    }
-    this.#reconcilePending = true;
-    this.#reconfirmPending ||= options.reconfirmExisting === true;
-    if (this.#reconciling) {
-      return;
-    }
-    this.#reconciling = true;
-    try {
-      while (this.#reconcilePending) {
-        this.#reconcilePending = false;
-        const reconfirmExisting = this.#reconfirmPending;
-        this.#reconfirmPending = false;
-        await this.#reconcileSessions(reconfirmExisting);
-      }
-    } finally {
-      this.#reconciling = false;
-    }
+  reconcile(options: ReconcileOptions = {}): Promise<void> {
+    if (!this.#acceptingLifecycleRequests) return Promise.resolve();
+    const intent = this.#advanceLifecycleIntent();
+    return this.#enqueueTransition(async () => {
+      if (!this.#isCurrentLifecycle(intent)) return;
+      await this.#runReconcile(options.reconfirmExisting === true, intent);
+    });
   }
 
   async restart(
     context: ExtensionContext,
     options: { serverEnv?: Record<string, string> } = {},
   ): Promise<void> {
-    this.#context = context;
-    if (options.serverEnv) {
-      this.#serverEnv = options.serverEnv;
-    }
-    let changed = false;
-    for (const existing of this.sessions) {
-      try {
-        const replacement = await this.#createStartedSession({
-          folder: existing.folder,
-          mode: existing.activationMode,
-          evidence: existing.activationEvidence,
-        });
-        if (replacement == null) {
-          continue;
-        }
-        this.#sessions.set(existing.workspace.key, replacement);
-        await stopSession(existing);
-        changed = true;
-      } catch (error) {
-        this.#logger.warn(`[client] restart failed for ${existing.workspace.uri}: ${errorMessage(error)}`);
+    if (!this.#acceptingLifecycleRequests) return;
+    const intent = this.#advanceLifecycleIntent();
+    await this.#enqueueTransition(async () => {
+      if (!this.#isCurrentLifecycle(intent)) return;
+      this.#context = context;
+      if (options.serverEnv) {
+        this.#serverEnv = options.serverEnv;
       }
-    }
-    if (changed) {
-      this.#emitSessionsChanged();
-    }
+      this.#ensureLifecycleStarted();
+      await this.#restartSessions(intent);
+      if (this.#isCurrentLifecycle(intent)) {
+        await this.#runReconcile(false, intent);
+      }
+    });
   }
 
   async stop(): Promise<void> {
+    this.#acceptingLifecycleRequests = false;
+    this.#advanceLifecycleIntent();
     this.#started = false;
     if (this.#sourceAdmissionTimer != null) {
       clearTimeout(this.#sourceAdmissionTimer);
@@ -264,33 +268,44 @@ export class AureliaLanguageClient {
     }
     this.#lifecycle?.dispose();
     this.#lifecycle = null;
+    this.#pendingPackageChanges.clear();
     const sessions = this.sessions;
-    this.#sessions.clear();
-    await Promise.all(sessions.map(stopSession));
-    if (sessions.length > 0) {
-      this.#emitSessionsChanged();
-    }
-    this.#logger.log("[client] stopped");
+    this.#publishSessions(new Map());
+    await this.#enqueueTransition(async () => {
+      await Promise.all(sessions.map(stopSession));
+      this.#logger.log("[client] stopped");
+    });
   }
 
-  #installLifecycleListeners(): void {
-    const lifecycle = this.#lifecycle;
-    if (lifecycle == null) {
-      throw new Error("Cannot install workspace listeners before the client manager starts.");
+  #ensureLifecycleStarted(): void {
+    if (this.#started) return;
+    const lifecycle = new DisposableStore();
+    try {
+      this.#installLifecycleListeners(lifecycle);
+      this.#lifecycle = lifecycle;
+      this.#started = true;
+    } catch (error) {
+      lifecycle.dispose();
+      this.#lifecycle = null;
+      this.#started = false;
+      throw error;
     }
+  }
+
+  #installLifecycleListeners(lifecycle: DisposableStore): void {
     const packageWatcher = this.#vscode.workspace.createFileSystemWatcher("**/package.json");
+    lifecycle.add(packageWatcher);
     lifecycle.add(packageWatcher.onDidCreate((uri) => {
-      void this.#handlePackageChange(uri, LspFileChangeType.Created);
+      this.#handlePackageChange(uri, LspFileChangeType.Created);
     }));
     lifecycle.add(packageWatcher.onDidChange((uri) => {
-      void this.#handlePackageChange(uri, LspFileChangeType.Changed);
+      this.#handlePackageChange(uri, LspFileChangeType.Changed);
     }));
     lifecycle.add(packageWatcher.onDidDelete((uri) => {
-      void this.#handlePackageChange(uri, LspFileChangeType.Deleted);
+      this.#handlePackageChange(uri, LspFileChangeType.Deleted);
     }));
-    lifecycle.add(packageWatcher);
     lifecycle.add(this.#vscode.workspace.onDidChangeWorkspaceFolders(() => {
-      void this.reconcile({ reconfirmExisting: true });
+      this.#requestReconcile({ reconfirmExisting: true });
     }));
     lifecycle.add(this.#vscode.workspace.onDidOpenTextDocument((document) => {
       if (SOURCE_LANGUAGE_IDS.has(document.languageId) && this.sessionForUri(document.uri) == null) {
@@ -316,24 +331,10 @@ export class AureliaLanguageClient {
     }));
   }
 
-  async #handlePackageChange(uri: Uri, changeType: LspFileChangeType): Promise<void> {
-    if (!isWorkspaceProjectManifestUri(uri)) {
-      return;
-    }
-    const session = this.sessionForUri(uri);
-    if (session != null) {
-      try {
-        // Do not also put package.json in the session synchronize watchers.
-        // Sending this standard notification here guarantees its topology
-        // invalidation is ordered before the status request on the same client.
-        await session.client.sendNotification("workspace/didChangeWatchedFiles", {
-          changes: [{ uri: uri.toString(), type: changeType }],
-        });
-      } catch (error) {
-        this.#logger.warn(`[client] package topology notification failed for ${uri.toString()}: ${errorMessage(error)}`);
-      }
-    }
-    await this.reconcile({ reconfirmExisting: true });
+  #handlePackageChange(uri: Uri, changeType: LspFileChangeType): void {
+    if (!isWorkspaceProjectManifestUri(uri) || !this.#acceptingLifecycleRequests) return;
+    this.#pendingPackageChanges.set(uri.toString(), { uri, type: changeType });
+    this.#requestReconcile({ reconfirmExisting: true });
   }
 
   #scheduleSourceAdmission(): void {
@@ -342,24 +343,86 @@ export class AureliaLanguageClient {
     }
     this.#sourceAdmissionTimer = setTimeout(() => {
       this.#sourceAdmissionTimer = null;
-      void this.reconcile({ reconfirmExisting: true });
+      this.#requestReconcile({ reconfirmExisting: true });
     }, 300);
   }
 
-  async #reconcileSessions(reconfirmExisting: boolean): Promise<void> {
+  async #runReconcile(reconfirmExisting: boolean, intent: LifecycleIntent): Promise<void> {
+    const packageChanges = new Map(this.#pendingPackageChanges);
+    const delivered = await this.#notifyPackageChanges(packageChanges, intent);
+    if (!this.#isCurrentLifecycle(intent)) return;
+    await this.#reconcileSessions(reconfirmExisting || packageChanges.size > 0, intent);
+    if (!delivered || !this.#isCurrentLifecycle(intent)) return;
+    for (const [key, change] of packageChanges) {
+      if (this.#pendingPackageChanges.get(key) === change) {
+        this.#pendingPackageChanges.delete(key);
+      }
+    }
+  }
+
+  async #notifyPackageChanges(
+    packageChanges: ReadonlyMap<string, PendingPackageChange>,
+    intent: LifecycleIntent,
+  ): Promise<boolean> {
+    const bySession = new Map<AureliaLanguageClientSession, PendingPackageChange[]>();
+    for (const change of packageChanges.values()) {
+      const session = this.sessionForUri(change.uri);
+      if (session == null) continue;
+      const changes = bySession.get(session) ?? [];
+      changes.push(change);
+      bySession.set(session, changes);
+    }
+    let delivered = true;
+    for (const [session, changes] of bySession) {
+      try {
+        const result = await this.#awaitLifecycle(
+          session.client.sendNotification("workspace/didChangeWatchedFiles", {
+            changes: changes.map((change) => ({
+              uri: change.uri.toString(),
+              type: change.type,
+            })),
+          }),
+          intent,
+        );
+        if (result.status === "invalidated") return false;
+      } catch (error) {
+        delivered = false;
+        this.#logger.warn(`[client] package topology notification failed for ${session.workspace.uri}: ${errorMessage(error)}`);
+      }
+    }
+    return delivered;
+  }
+
+  async #reconcileSessions(reconfirmExisting: boolean, intent: LifecycleIntent): Promise<void> {
+    const previousSessions = new Map(this.#sessions);
+    const nextSessions = new Map(previousSessions);
+    const retiredSessions = new Set<AureliaLanguageClientSession>();
+    const createdSessions = new Set<AureliaLanguageClientSession>();
     const folders = this.#vscode.workspace.workspaceFolders ?? [];
     const folderKeys = new Set(folders.map(workspaceFolderKey));
     const admissions: WorkspaceActivationAdmission[] = [];
 
     for (const folder of folders) {
       const key = workspaceFolderKey(folder);
-      const existing = this.#sessions.get(key);
+      const existing = previousSessions.get(key);
       const mode = readWorkspaceActivationMode(this.#vscode, folder);
       let admission: WorkspaceActivationAdmission | null = null;
       try {
-        admission = await readWorkspaceActivationAdmission(this.#vscode, folder);
+        const result = await this.#awaitLifecycle(
+          readWorkspaceActivationAdmission(this.#vscode, folder),
+          intent,
+        );
+        if (result.status === "invalidated") {
+          await Promise.all([...createdSessions].map(stopSession));
+          return;
+        }
+        admission = result.value;
       } catch (error) {
         this.#logger.warn(`[client] activation preflight failed for ${key}: ${errorMessage(error)}`);
+      }
+      if (!this.#isCurrentLifecycle(intent)) {
+        await Promise.all([...createdSessions].map(stopSession));
+        return;
       }
       if (admission != null) {
         admissions.push(admission);
@@ -375,35 +438,43 @@ export class AureliaLanguageClient {
     }
 
     const accepted: WorkspaceActivationAdmission[] = [];
-    let changed = false;
     for (const admission of orderWorkspaceAdmissions(admissions)) {
       if (accepted.some((owner) => workspaceFolderContainsUri(owner.folder, admission.folder.uri))) {
         continue;
       }
       const key = workspaceFolderKey(admission.folder);
-      let session = this.#sessions.get(key);
+      let session = previousSessions.get(key);
       if (session == null) {
         try {
-          session = await this.#createStartedSession(admission) ?? undefined;
+          session = await this.#createStartedSession(admission, intent) ?? undefined;
         } catch (error) {
           this.#logger.warn(`[client] failed to start ${key}: ${errorMessage(error)}`);
+        }
+        if (session != null) createdSessions.add(session);
+        if (!this.#isCurrentLifecycle(intent)) {
+          await Promise.all([...createdSessions].map(stopSession));
+          return;
         }
         if (session == null) {
           continue;
         }
-        this.#sessions.set(key, session);
-        changed = true;
       } else if (reconfirmExisting && admission.mode === AureliaActivationMode.Auto) {
-        const status = await readWorkspaceStatus(session.client, this.#logger, session.workspace.uri);
+        const statusResult = await this.#awaitLifecycle(
+          readWorkspaceStatus(session.client, this.#logger, session.workspace.uri),
+          intent,
+        );
+        if (statusResult.status === "invalidated" || !this.#isCurrentLifecycle(intent)) {
+          await Promise.all([...createdSessions].map(stopSession));
+          return;
+        }
+        const status = statusResult.value;
         if (status != null && !workspaceStatusConfirmsAurelia(status)) {
-          this.#sessions.delete(key);
-          await stopSession(session);
-          changed = true;
+          nextSessions.delete(key);
+          retiredSessions.add(session);
           continue;
         }
         if (status != null && status !== session.status) {
           session = { ...session, status };
-          this.#sessions.set(key, session);
         }
       }
       if (
@@ -415,33 +486,69 @@ export class AureliaLanguageClient {
           activationMode: admission.mode,
           activationEvidence: admission.evidence,
         };
-        this.#sessions.set(key, session);
       }
+      nextSessions.set(key, session);
       accepted.push(admission);
     }
 
     const acceptedKeys = new Set(accepted.map((admission) => workspaceFolderKey(admission.folder)));
-    for (const session of this.sessions) {
+    for (const session of previousSessions.values()) {
       if (!folderKeys.has(session.workspace.key) || !acceptedKeys.has(session.workspace.key)) {
-        this.#sessions.delete(session.workspace.key);
-        await stopSession(session);
-        changed = true;
+        nextSessions.delete(session.workspace.key);
+        retiredSessions.add(session);
       }
     }
-    if (changed) {
-      this.#emitSessionsChanged();
+    if (!this.#isCurrentLifecycle(intent)) {
+      await Promise.all([...createdSessions].map(stopSession));
+      return;
+    }
+    this.#publishSessions(nextSessions);
+    await Promise.all([...retiredSessions].map(stopSession));
+  }
+
+  async #restartSessions(intent: LifecycleIntent): Promise<void> {
+    for (const existing of this.sessions) {
+      let replacement: AureliaLanguageClientSession | null = null;
+      try {
+        replacement = await this.#createStartedSession({
+          folder: existing.folder,
+          mode: existing.activationMode,
+          evidence: existing.activationEvidence,
+        }, intent);
+      } catch (error) {
+        this.#logger.warn(`[client] restart failed for ${existing.workspace.uri}: ${errorMessage(error)}`);
+      }
+      if (!this.#isCurrentLifecycle(intent)) {
+        if (replacement != null) await stopSession(replacement);
+        return;
+      }
+      if (replacement == null) continue;
+      const nextSessions = new Map(this.#sessions);
+      nextSessions.set(existing.workspace.key, replacement);
+      this.#publishSessions(nextSessions);
+      await stopSession(existing);
+      if (!this.#isCurrentLifecycle(intent)) return;
     }
   }
 
   async #createStartedSession(
     admission: WorkspaceActivationAdmission,
+    intent: LifecycleIntent,
   ): Promise<AureliaLanguageClientSession | null> {
     const context = this.#context;
     if (context == null) {
       throw new Error("Cannot create an Aurelia workspace session before extension activation.");
     }
-    this.#serverModule ??= resolveServerModule(context, this.#logger, this.#vscode);
-    const serverModule = await this.#serverModule;
+    if (this.#serverModule == null) {
+      const pending = resolveServerModule(context, this.#logger, this.#vscode);
+      this.#serverModule = pending;
+      void pending.catch(() => {
+        if (this.#serverModule === pending) this.#serverModule = null;
+      });
+    }
+    const serverModuleResult = await this.#awaitLifecycle(this.#serverModule, intent);
+    if (serverModuleResult.status === "invalidated") return null;
+    const serverModule = serverModuleResult.value;
     const execOptions = this.#serverEnv ? { env: { ...process.env, ...this.#serverEnv } } : undefined;
     const serverOptions: ServerOptions = {
       run: { module: serverModule, transport: IPC_TRANSPORT, options: execOptions },
@@ -483,16 +590,39 @@ export class AureliaLanguageClient {
       uri: admission.folder.uri.toString(),
     };
     try {
-      client = await this.#newLanguageClient(
-        `aurelia-ls:${key}`,
-        `Aurelia Language Server (${admission.folder.name})`,
-        serverOptions,
-        clientOptions,
+      const clientResult = await this.#awaitLifecycle(
+        this.#newLanguageClient(
+          `aurelia-ls:${key}`,
+          `Aurelia Language Server (${admission.folder.name})`,
+          serverOptions,
+          clientOptions,
+        ),
+        intent,
       );
-      await client.start();
-      const status = admission.mode === AureliaActivationMode.Auto
-        ? await readWorkspaceStatus(client, this.#logger, workspace.uri)
-        : null;
+      if (clientResult.status === "invalidated") {
+        disposeWatchers(fileEvents);
+        return null;
+      }
+      client = clientResult.value;
+      const start = client.start();
+      const startResult = await this.#awaitLifecycle(start, intent);
+      if (startResult.status === "invalidated") {
+        this.#retireAfterStart(client, start, fileEvents);
+        return null;
+      }
+      let status: WorkspaceStatusResponse | null = null;
+      if (admission.mode === AureliaActivationMode.Auto) {
+        const statusResult = await this.#awaitLifecycle(
+          readWorkspaceStatus(client, this.#logger, workspace.uri),
+          intent,
+        );
+        if (statusResult.status === "invalidated") {
+          await client.stop().catch(() => {});
+          disposeWatchers(fileEvents);
+          return null;
+        }
+        status = statusResult.value;
+      }
       if (admission.mode === AureliaActivationMode.Auto && !workspaceStatusConfirmsAurelia(status)) {
         this.#logger.log(`[client] semantic project shape did not confirm candidate workspace ${workspace.uri}`);
         await client.stop().catch(() => {});
@@ -552,7 +682,65 @@ export class AureliaLanguageClient {
     return createClient(id, name, serverOptions, clientOptions);
   }
 
-  #emitSessionsChanged(): void {
+  #requestReconcile(options: ReconcileOptions): void {
+    void this.reconcile(options).catch((error) => {
+      this.#logger.warn(`[client] workspace reconciliation failed: ${errorMessage(error)}`);
+    });
+  }
+
+  #retireAfterStart(
+    client: LanguageClient,
+    start: Promise<void>,
+    fileEvents: readonly FileSystemWatcher[],
+  ): void {
+    disposeWatchers(fileEvents);
+    let retirement: Promise<void>;
+    retirement = start
+      .then(async () => {
+        try {
+          await client.stop();
+        } catch (error) {
+          this.#logger.warn(`[client] detached client retirement failed: ${errorMessage(error)}`);
+        }
+      }, () => {})
+      .finally(() => {
+        disposeWatchers(fileEvents);
+        this.#detachedRetirements.delete(retirement);
+      });
+    this.#detachedRetirements.add(retirement);
+  }
+
+  #enqueueTransition(operation: () => Promise<void>): Promise<void> {
+    const result = this.#transitionTail.then(operation, operation);
+    this.#transitionTail = result.catch(() => {});
+    return result;
+  }
+
+  #advanceLifecycleIntent(): LifecycleIntent {
+    const previous = this.#lifecycleIntent;
+    const next = createLifecycleIntent(previous.generation + 1);
+    this.#lifecycleIntent = next;
+    previous.invalidate();
+    return next;
+  }
+
+  async #awaitLifecycle<T>(promise: Promise<T>, intent: LifecycleIntent): Promise<LifecycleAwaitResult<T>> {
+    if (!this.#isCurrentLifecycle(intent)) return { status: "invalidated" };
+    return Promise.race([
+      promise.then((value): LifecycleAwaitResult<T> => ({ status: "completed", value })),
+      intent.invalidated.then((): LifecycleAwaitResult<T> => ({ status: "invalidated" })),
+    ]);
+  }
+
+  #isCurrentLifecycle(intent: LifecycleIntent): boolean {
+    return this.#acceptingLifecycleRequests
+      && intent === this.#lifecycleIntent;
+  }
+
+  #publishSessions(nextSessions: Map<string, AureliaLanguageClientSession>): void {
+    if (sameSessions(this.#sessions, nextSessions)) return;
+    this.#sessions = nextSessions;
+    this.#sessionGeneration += 1;
     this.#sessionsChanged.emit(this.sessions);
   }
 }
@@ -609,4 +797,32 @@ function disposeWatchers(watchers: readonly FileSystemWatcher[]): void {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function sameSessions(
+  left: ReadonlyMap<string, AureliaLanguageClientSession>,
+  right: ReadonlyMap<string, AureliaLanguageClientSession>,
+): boolean {
+  if (left.size !== right.size) return false;
+  for (const [key, session] of left) {
+    if (right.get(key) !== session) return false;
+  }
+  return true;
+}
+
+function createLifecycleIntent(generation: number): LifecycleIntent {
+  let invalidated = false;
+  let resolveInvalidation!: () => void;
+  const invalidation = new Promise<void>((resolve) => {
+    resolveInvalidation = resolve;
+  });
+  return {
+    generation,
+    invalidated: invalidation,
+    invalidate() {
+      if (invalidated) return;
+      invalidated = true;
+      resolveInvalidation();
+    },
+  };
 }

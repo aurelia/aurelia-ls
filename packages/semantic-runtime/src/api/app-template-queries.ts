@@ -546,31 +546,43 @@ export class SemanticAppTemplateQueries {
       );
     }
 
+    if (
+      context.templateUsageRows.length === 0
+      && context.bindableConventionCallbackTargetSources.length === 0
+    ) {
+      return templateRenameUnavailable(
+        SemanticTemplateRenameUnavailableReason.NoAureliaReferences,
+        `No proven Aurelia references participate in the TypeScript symbol family for ${placeholder}.`,
+        context.selectedMemberName,
+        context.targetSource,
+        context.activeSource,
+      );
+    }
+
+    const relatedMemberRead = typeScriptRelatedMemberFamilyRead(this.emission, context.targetSource);
     const callbackFamilyReads = context.bindableConventionCallbackTargetSources.map((targetSource) =>
       typeScriptRelatedMemberFamilyRead(this.emission, targetSource)
     );
-    const callbackBlocker = firstTypeScriptRenameBlocker(
-      callbackFamilyReads,
-      `${placeholder}Changed callback`,
-    );
-    if (callbackBlocker != null) {
+    const blocker = typeScriptRenameBlocker(relatedMemberRead, placeholder)
+      ?? firstTypeScriptRenameBlocker(callbackFamilyReads, `${placeholder}Changed callback`);
+    if (blocker != null) {
       return templateRenameUnavailable(
-        callbackBlocker.reason,
-        callbackBlocker.summary,
+        blocker.reason,
+        blocker.summary,
         context.selectedMemberName,
         context.targetSource,
         context.activeSource,
         SemanticTemplateRenameStatus.NotAvailable,
-        callbackBlocker.coverage,
+        blocker.coverage,
       );
     }
 
     if (newName == null) {
       return answer(
         SemanticRuntimeAnswerResult.Answered,
-        `Template rename propagation is available for ${placeholder}.`,
+        `Cross-domain rename is available for ${placeholder}.`,
         {
-          displayText: `Template rename propagation is available for ${placeholder}.`,
+          displayText: `Cross-domain rename is available for ${placeholder}.`,
           status: SemanticTemplateRenameStatus.Available,
           reason: null,
           selectedMemberName: context.selectedMemberName,
@@ -595,14 +607,16 @@ export class SemanticAppTemplateQueries {
         templateRenameEditRow(
           templateRenameFromTypeScriptEditKindForReferenceRow(row),
           row.source,
-          row.name,
+          this.authoredTextForSource(row.source) ?? row.name,
           templateRenameFromTypeScriptNewText(row, newName),
         )
       );
+    const typeScriptEdits = typeScriptRelatedMemberRenameEdits(relatedMemberRead.family!, newName);
     const callbackEdits = uniqueTemplateRenameEditRows(callbackFamilyReads.flatMap((read) =>
       typeScriptRelatedMemberRenameEdits(read.family!, `${newName}Changed`)
     ));
-    const uniqueEdits = [...uniqueTemplateRenameEditRows([...aureliaEdits, ...callbackEdits])]
+    const typeScriptLikeEdits = uniqueTemplateRenameEditRows([...typeScriptEdits, ...callbackEdits]);
+    const uniqueEdits = [...uniqueTemplateRenameEditRows([...typeScriptLikeEdits, ...aureliaEdits])]
       .sort((left, right) =>
         (left.source?.path ?? '').localeCompare(right.source?.path ?? '')
         || (left.source?.start ?? -1) - (right.source?.start ?? -1)
@@ -610,9 +624,9 @@ export class SemanticAppTemplateQueries {
 
     return answer(
       SemanticRuntimeAnswerResult.Answered,
-      `Prepared ${uniqueEdits.length} template rename propagation edit(s) for ${placeholder}.`,
+      `Prepared ${uniqueEdits.length} cross-domain rename edit(s) for ${placeholder}.`,
       {
-        displayText: `${uniqueEdits.length} template rename propagation edit(s) for ${placeholder}.`,
+        displayText: `${uniqueEdits.length} cross-domain rename edit(s) for ${placeholder}.`,
         status: SemanticTemplateRenameStatus.Available,
         reason: null,
         selectedMemberName: context.selectedMemberName,
@@ -622,7 +636,7 @@ export class SemanticAppTemplateQueries {
         edits: uniqueEdits,
         candidateRows: context.candidateRows,
         templateReferenceCount: context.templateUsageRows.length,
-        typeScriptReferenceCount: callbackEdits.length,
+        typeScriptReferenceCount: typeScriptLikeEdits.length,
       },
       {
         selection: SemanticRuntimeAnswerSelection.Exact,

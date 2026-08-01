@@ -4135,6 +4135,7 @@ export enum SemanticTemplateRenameStatus {
 
 export enum SemanticTemplateRenameUnavailableReason {
   NoSourceBackedMember = 'no-source-backed-member',
+  NoAureliaReferences = 'no-aurelia-references',
   CursorNotOnRenameableReference = 'cursor-not-on-renameable-reference',
   TypeScriptSymbolUnavailable = 'typescript-symbol-unavailable',
   TypeScriptRenameNotAllowed = 'typescript-rename-not-allowed',

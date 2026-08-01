@@ -216,22 +216,33 @@ export type RelatedFileResponse = {
 } | null;
 
 export type RenameFromTsResponse = {
+  status: "available";
+  range: ProtocolRange;
+  placeholder: string;
+  message: string;
+  templateReferenceCount: number;
+  typeScriptReferenceCount: number;
+  candidateCount: number;
+} | {
   status: "success";
   workspaceEdit: ProtocolWorkspaceEdit;
   message: string;
   templateReferenceCount: number;
+  typeScriptReferenceCount: number;
   candidateCount: number;
 } | {
   status: "not-applicable";
   reason: string;
   message: string;
   templateReferenceCount: number;
+  typeScriptReferenceCount: number;
   candidateCount: number;
 } | {
   status: "refused";
   reason: string;
   message: string;
   templateReferenceCount: number;
+  typeScriptReferenceCount: number;
   candidateCount: number;
 } | {
   status: "blocked";
@@ -239,5 +250,6 @@ export type RenameFromTsResponse = {
   message: string;
   failures?: readonly string[];
   templateReferenceCount?: number;
+  typeScriptReferenceCount?: number;
   candidateCount?: number;
 };

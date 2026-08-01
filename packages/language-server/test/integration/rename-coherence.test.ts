@@ -129,18 +129,13 @@ test("TypeScript-origin bindable rename propagation stays coherent across merged
 
     const first = await renameFromTsAtNeedle(connection, productCardTs, "@bindable item", "item2");
     expectRenameFromTsSuccess(first);
-    const firstChanged = [
-      ...applyWorkspaceEditToTrackedDocuments(first.workspaceEdit, documents),
-      renameWordInTrackedDocument(productCardTs, "item", "item2"),
-    ];
+    expect(editPaths(first.workspaceEdit)).toContain(normalizedUriPath(productCardTs.uri));
+    const firstChanged = applyWorkspaceEditToTrackedDocuments(first.workspaceEdit, documents);
     notifyChangedOpenDocuments(connection, firstChanged, openUris);
 
     const second = await renameFromTsAtNeedle(connection, productCardTs, "@bindable item2", "item");
     expectRenameFromTsSuccess(second);
-    const secondChanged = [
-      ...applyWorkspaceEditToTrackedDocuments(second.workspaceEdit, documents),
-      renameWordInTrackedDocument(productCardTs, "item2", "item"),
-    ];
+    const secondChanged = applyWorkspaceEditToTrackedDocuments(second.workspaceEdit, documents);
     notifyChangedOpenDocuments(connection, secondChanged, openUris);
 
     const third = await renameFromTsAtNeedle(connection, productCardTs, "@bindable item", "item2");
@@ -291,14 +286,16 @@ type RenameFromTsResponse =
     workspaceEdit: RenameResult;
     message: string;
     templateReferenceCount: number;
+    typeScriptReferenceCount: number;
     candidateCount: number;
   }
   | {
-    status: "not-applicable" | "refused" | "blocked";
+    status: "available" | "not-applicable" | "refused" | "blocked";
     reason: string;
     message: string;
     failures?: readonly string[];
     templateReferenceCount?: number;
+    typeScriptReferenceCount?: number;
     candidateCount?: number;
   };
 
@@ -319,19 +316,6 @@ async function renameFromTsAtNeedle(
     position: positionAtNeedle(document, needle),
     newName,
   }) as Promise<RenameFromTsResponse>;
-}
-
-function renameWordInTrackedDocument(
-  document: TrackedDocument,
-  oldName: string,
-  newName: string,
-): TrackedDocument {
-  const next = document.text.replace(new RegExp(`\\b${oldName}\\b`, "g"), newName);
-  expect(next, `expected ${document.uri} to contain ${oldName}`).not.toBe(document.text);
-  document.text = next;
-  document.version += 1;
-  fs.writeFileSync(fileURLToPath(document.uri), document.text, "utf8");
-  return document;
 }
 
 function positionAtNeedle(document: TrackedDocument, needle: string): { line: number; character: number } {
