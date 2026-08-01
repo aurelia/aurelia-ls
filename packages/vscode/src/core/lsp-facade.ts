@@ -1,10 +1,9 @@
 import type { CancellationToken, WorkspaceEdit } from "vscode";
-import type { LanguageClient } from "vscode-languageclient/node";
+import { AureliaProtocolNotification, AureliaProtocolRequest } from "@aurelia-ls/language-server/protocol";
 import type { AureliaLanguageClient, AureliaLanguageClientSession } from "../client-core.js";
 import type { ClientLogger } from "../log.js";
 import type {
   AnalysisReadyPayload,
-  CapabilitiesResponse,
   DiagnosticsSnapshotResponse,
   InspectEntityResponse,
   ProtocolWorkspaceEdit,
@@ -16,7 +15,6 @@ import type {
   WorkspaceNotificationPayload,
 } from "../types.js";
 import { toDisposable, type DisposableLike } from "./disposables.js";
-import type { DebugChannel, ObservabilityService, TraceService } from "./observability.js";
 
 type NotificationHandler = (payload: unknown) => void;
 
@@ -24,18 +22,14 @@ type NotificationHandler = (payload: unknown) => void;
 export class LspFacade implements DisposableLike {
   #clients: AureliaLanguageClient;
   #logger: ClientLogger;
-  #trace: TraceService;
-  #debug: DebugChannel;
   #notificationHandlers = new Map<string, Set<NotificationHandler>>();
   #rawNotificationSubscriptions: DisposableLike[] = [];
   #sessionSubscription: DisposableLike;
   #disposed = false;
 
-  constructor(clients: AureliaLanguageClient, observability: ObservabilityService) {
+  constructor(clients: AureliaLanguageClient, logger: ClientLogger) {
     this.#clients = clients;
-    this.#logger = observability.logger;
-    this.#trace = observability.trace;
-    this.#debug = observability.debug.channel("lsp");
+    this.#logger = logger.child("lsp");
     this.#sessionSubscription = clients.onDidChangeSessions(() => this.#rebindNotifications());
   }
 
@@ -72,15 +66,7 @@ export class LspFacade implements DisposableLike {
     const session = this.#sessionForUri(uri);
     return session == null
       ? null
-      : this.#sendRequest(session, "aurelia/getDiagnostics", { uri });
-  }
-
-  async dumpState(): Promise<unknown> {
-    const workspaces = await Promise.all(this.#clients.sessions.map(async (session) => ({
-      workspace: session.workspace,
-      state: await this.#sendRequest<unknown>(session, "aurelia/dumpState"),
-    })));
-    return { workspaces };
+      : this.#sendRequest(session, AureliaProtocolRequest.Diagnostics, { uri });
   }
 
   async inspectEntity(
@@ -90,7 +76,7 @@ export class LspFacade implements DisposableLike {
     const session = this.#sessionForUri(uri);
     if (session == null) return null;
     try {
-      return await this.#sendRequest<InspectEntityResponse | null>(session, "aurelia/inspectEntity", { uri, position });
+      return await this.#sendRequest<InspectEntityResponse>(session, AureliaProtocolRequest.InspectEntity, { uri, position });
     } catch (err) {
       this.#logger.warn("inspectEntity.request.failed", { message: errorMessage(err) });
       return null;
@@ -100,7 +86,7 @@ export class LspFacade implements DisposableLike {
   async getResources(): Promise<ResourceExplorerResponse | null> {
     const rows = await Promise.all(this.#clients.sessions.map(async (session) => {
       try {
-        const response = await this.#sendRequest<ResourceExplorerResponse | null>(session, "aurelia/getResources");
+        const response = await this.#sendRequest<ResourceExplorerResponse | null>(session, AureliaProtocolRequest.Resources);
         return response == null ? null : { session, response };
       } catch (err) {
         this.#logger.warn("resources.request.failed", {
@@ -131,28 +117,17 @@ export class LspFacade implements DisposableLike {
     };
   }
 
-  async getCapabilities(): Promise<CapabilitiesResponse | null> {
-    const session = this.#clients.sessions[0];
-    if (session == null) return null;
-    try {
-      return await this.#sendRequest<CapabilitiesResponse | null>(session, "aurelia/capabilities");
-    } catch (err) {
-      this.#logger.warn("capabilities.request.failed", { message: errorMessage(err) });
-      return null;
-    }
-  }
-
   onAnalysisReady(
     handler: (payload: WorkspaceNotificationPayload<AnalysisReadyPayload>) => void,
   ): DisposableLike {
-    return this.onNotification("aurelia/analysisReady", handler);
+    return this.onNotification(AureliaProtocolNotification.AnalysisReady, handler);
   }
 
   async getScopeResources(uri: string): Promise<ScopeResourcesResponse | null> {
     const session = this.#sessionForUri(uri);
     if (session == null) return null;
     try {
-      return await this.#sendRequest<ScopeResourcesResponse | null>(session, "aurelia/getScopeResources", { uri });
+      return await this.#sendRequest<ScopeResourcesResponse>(session, AureliaProtocolRequest.ScopeResources, { uri });
     } catch (err) {
       this.#logger.warn("scopeResources.request.failed", { message: errorMessage(err) });
       return null;
@@ -163,7 +138,7 @@ export class LspFacade implements DisposableLike {
     const session = this.#sessionForUri(uri);
     if (session == null) return null;
     try {
-      return await this.#sendRequest<RelatedFileResponse>(session, "aurelia/getRelatedFile", { uri });
+      return await this.#sendRequest<RelatedFileResponse>(session, AureliaProtocolRequest.RelatedFile, { uri });
     } catch {
       return null;
     }
@@ -186,7 +161,7 @@ export class LspFacade implements DisposableLike {
     try {
       const response = await this.#sendRequest<RenameFromTsResponse | null>(
         session,
-        "aurelia/renameFromTs",
+        AureliaProtocolRequest.RenameFromTypeScript,
         { uri, position, ...(newName == null ? {} : { newName }) },
         token,
       );
@@ -221,7 +196,7 @@ export class LspFacade implements DisposableLike {
   onWorkspaceChanged(
     handler: (payload: WorkspaceNotificationPayload<WorkspaceChangedPayload>) => void,
   ): DisposableLike {
-    return this.onNotification("aurelia/workspaceChanged", handler);
+    return this.onNotification(AureliaProtocolNotification.WorkspaceChanged, handler);
   }
 
   #sessionForUri(uri: string): AureliaLanguageClientSession | undefined {
@@ -234,24 +209,24 @@ export class LspFacade implements DisposableLike {
     params?: unknown,
     token?: CancellationToken,
   ): Promise<T> {
-    return this.#trace.spanAsync(`lsp.${method}`, async () => {
-      this.#debug("request", { method, workspace: session.workspace.uri });
-      this.#logger.info(`[lsp] → ${method} (${session.workspace.name})`);
-      this.#trace.setAttribute("lsp.method", method);
-      this.#trace.setAttribute("lsp.workspace", session.workspace.uri);
-      this.#trace.setAttribute("lsp.hasParams", Boolean(params));
-      try {
-        const result = await session.client.sendRequest<T>(method, params, token);
-        this.#debug("response", { method, workspace: session.workspace.uri });
-        this.#logger.info(`[lsp] ← ${method} ok (${session.workspace.name})`);
-        return result;
-      } catch (err) {
-        const message = errorMessage(err);
-        this.#debug("error", { method, workspace: session.workspace.uri, message });
-        this.#logger.info(`[lsp] ← ${method} ERROR (${session.workspace.name}): ${message}`);
-        throw err;
-      }
-    });
+    const started = performance.now();
+    this.#logger.debug("request", { method, workspace: session.workspace.uri, hasParams: params != null });
+    try {
+      const result = await session.client.sendRequest<T>(method, params, token);
+      this.#logger.debug("response", {
+        method,
+        workspace: session.workspace.uri,
+        durationMs: Math.round((performance.now() - started) * 10) / 10,
+      });
+      return result;
+    } catch (error) {
+      this.#logger.warn("request.failed", {
+        method,
+        workspace: session.workspace.uri,
+        durationMs: Math.round((performance.now() - started) * 10) / 10,
+      }, error);
+      throw error;
+    }
   }
 
   #rebindNotifications(): void {

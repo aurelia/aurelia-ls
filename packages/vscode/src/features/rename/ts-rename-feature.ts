@@ -8,12 +8,12 @@
  * not a delegation mechanism: VS Code extension providers rank ahead of the
  * built-in provider and the command re-enters this provider through RPC.
  */
-import type { FeatureModule } from "../../core/feature-graph.js";
+import type { ClientFeature } from "../../core/feature.js";
 import { DisposableStore, toDisposable, type DisposableLike } from "../../core/disposables.js";
 import type { ProtocolWorkspaceEdit, RenameFromTsResponse } from "../../types.js";
 import { assertWorkspaceEditVersionsCurrent } from "../../workspace-edit-versions.js";
 
-export const TsRenameFeature: FeatureModule = {
+export const TsRenameFeature: ClientFeature = {
   id: "rename.tsPropagate",
   isEnabled: () => true,
   activate: async (ctx) => {
@@ -150,7 +150,7 @@ function renameFailureMessage(response: Extract<RenameFromTsResponse, { status: 
   return response.message || `Aurelia cross-domain rename ${response.status}: ${response.reason}`;
 }
 
-function notifyUnverifiedCandidates(ctx: Parameters<FeatureModule["activate"]>[0], response: RenameFromTsResponse): void {
+function notifyUnverifiedCandidates(ctx: Parameters<ClientFeature["activate"]>[0], response: RenameFromTsResponse): void {
   const candidateCount = typeof response.candidateCount === "number" ? response.candidateCount : 0;
   if (candidateCount <= 0) {
     return;

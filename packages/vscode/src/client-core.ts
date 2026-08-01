@@ -2,14 +2,13 @@ import type { LanguageClient, LanguageClientOptions, ServerOptions, TransportKin
 import type {
   ExtensionContext,
   FileSystemWatcher,
-  SemanticTokens,
-  TextDocument,
   Uri,
   WorkspaceFolder,
 } from "vscode";
+import { AureliaProtocolRequest } from "@aurelia-ls/language-server/protocol";
 import type { WorkspaceStatusResponse } from "@aurelia-ls/language-server/protocol";
 import type { AureliaWorkspaceIdentity } from "./types.js";
-import { createMiddleware, type DiagnosticsUxState, type InlineUxState } from "./client-middleware.js";
+import { createMiddleware, type DiagnosticsUxState } from "./client-middleware.js";
 import { DisposableStore, type DisposableLike } from "./core/disposables.js";
 import { SimpleEmitter, type Listener } from "./core/events.js";
 import { type ClientLogger } from "./log.js";
@@ -128,9 +127,7 @@ export class AureliaLanguageClient {
   #logger: ClientLogger;
   #vscode: VscodeApi;
   #createClient: LanguageClientFactory | null;
-  #serverEnv: Record<string, string> | null = null;
   #diagnosticsUx: DiagnosticsUxState = { enabled: false };
-  #inlineUx: InlineUxState = { enabled: false, onSemanticTokens: null };
   #inlayHintsEnabled = true;
   #context: ExtensionContext | null = null;
   #serverModule: Promise<string> | null = null;
@@ -155,16 +152,8 @@ export class AureliaLanguageClient {
     this.#createClient = options.createClient ?? null;
   }
 
-  setServerEnv(env: Record<string, string> | null): void {
-    this.#serverEnv = env;
-  }
-
   setDiagnosticsUxEnabled(enabled: boolean): void {
     this.#diagnosticsUx.enabled = enabled;
-  }
-
-  setInlineUxEnabled(enabled: boolean): void {
-    this.#inlineUx.enabled = enabled;
   }
 
   get inlayHintsEnabled(): boolean {
@@ -173,12 +162,6 @@ export class AureliaLanguageClient {
 
   setInlayHintsEnabled(enabled: boolean): void {
     this.#inlayHintsEnabled = enabled;
-  }
-
-  setInlineUxSemanticTokensConsumer(
-    consumer: ((document: TextDocument, tokens: SemanticTokens) => void) | null,
-  ): void {
-    this.#inlineUx.onSemanticTokens = consumer;
   }
 
   get sessions(): readonly AureliaLanguageClientSession[] {
@@ -209,10 +192,7 @@ export class AureliaLanguageClient {
       .sort((left, right) => right.folder.uri.fsPath.length - left.folder.uri.fsPath.length)[0];
   }
 
-  async start(
-    context: ExtensionContext,
-    options: { serverEnv?: Record<string, string> } = {},
-  ): Promise<void> {
+  async start(context: ExtensionContext): Promise<void> {
     if (!this.#acceptingLifecycleRequests) {
       this.#acceptingLifecycleRequests = true;
       this.#advanceLifecycleIntent();
@@ -221,9 +201,6 @@ export class AureliaLanguageClient {
     await this.#enqueueTransition(async () => {
       if (!this.#isCurrentLifecycle(intent)) return;
       this.#context = context;
-      if (options.serverEnv) {
-        this.#serverEnv = options.serverEnv;
-      }
       this.#ensureLifecycleStarted();
       await this.#runReconcile(false, intent);
     });
@@ -238,18 +215,12 @@ export class AureliaLanguageClient {
     });
   }
 
-  async restart(
-    context: ExtensionContext,
-    options: { serverEnv?: Record<string, string> } = {},
-  ): Promise<void> {
+  async restart(context: ExtensionContext): Promise<void> {
     if (!this.#acceptingLifecycleRequests) return;
     const intent = this.#advanceLifecycleIntent();
     await this.#enqueueTransition(async () => {
       if (!this.#isCurrentLifecycle(intent)) return;
       this.#context = context;
-      if (options.serverEnv) {
-        this.#serverEnv = options.serverEnv;
-      }
       this.#ensureLifecycleStarted();
       await this.#restartSessions(intent);
       if (this.#isCurrentLifecycle(intent)) {
@@ -549,15 +520,12 @@ export class AureliaLanguageClient {
     const serverModuleResult = await this.#awaitLifecycle(this.#serverModule, intent);
     if (serverModuleResult.status === "invalidated") return null;
     const serverModule = serverModuleResult.value;
-    const execOptions = this.#serverEnv ? { env: { ...process.env, ...this.#serverEnv } } : undefined;
     const serverOptions: ServerOptions = {
-      run: { module: serverModule, transport: IPC_TRANSPORT, options: execOptions },
+      run: { module: serverModule, transport: IPC_TRANSPORT },
       debug: {
         module: serverModule,
         transport: IPC_TRANSPORT,
-        options: execOptions
-          ? { ...execOptions, execArgv: ["--inspect=6009"] }
-          : { execArgv: ["--inspect=6009"] },
+        options: { execArgv: ["--inspect=6009"] },
       },
     };
     const fileEvents = this.#createSessionWatchers(admission.folder);
@@ -579,7 +547,6 @@ export class AureliaLanguageClient {
         this.#vscode,
         this.#logger,
         this.#diagnosticsUx,
-        this.#inlineUx,
         middlewareClient,
       ),
     };
@@ -767,7 +734,7 @@ async function readWorkspaceStatus(
   workspaceUri: string,
 ): Promise<WorkspaceStatusResponse | null> {
   try {
-    return await client.sendRequest<WorkspaceStatusResponse | null>("aurelia/workspaceStatus");
+    return await client.sendRequest<WorkspaceStatusResponse | null>(AureliaProtocolRequest.WorkspaceStatus);
   } catch (error) {
     // Initial admission fails closed on null; an established session may keep
     // running through a transient reconfirmation failure.

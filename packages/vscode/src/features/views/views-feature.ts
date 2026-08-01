@@ -1,14 +1,14 @@
-import type { FeatureModule } from "../../core/feature-graph.js";
+import type { ClientFeature } from "../../core/feature.js";
 import { DisposableStore } from "../../core/disposables.js";
 import { ResourceExplorerProvider } from "./resource-explorer.js";
 
-export const ViewsFeature: FeatureModule = {
+export const ViewsFeature: ClientFeature = {
   id: "views.workspace",
   isEnabled: (ctx) => ctx.config.current.features.views,
   activate: (ctx) => {
     const store = new DisposableStore();
 
-    const explorer = new ResourceExplorerProvider(ctx.vscode, ctx.queries, ctx.logger);
+    const explorer = new ResourceExplorerProvider(ctx.vscode, ctx.lsp, ctx.logger);
 
     const treeView = ctx.vscode.window.createTreeView("aureliaResourceExplorer", {
       treeDataProvider: explorer,

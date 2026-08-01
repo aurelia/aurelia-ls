@@ -1,6 +1,6 @@
 import { test, expect, vi } from "vitest";
 import type { LanguageClient } from "vscode-languageclient/node";
-import type { FeatureModule } from "../../out/core/feature-graph.js";
+import type { ClientFeature } from "../../out/core/feature.js";
 import type { VscodeApi } from "../../out/vscode-api.js";
 import { createVscodeApi, stubExtensionContext } from "../helpers/vscode-stub.js";
 
@@ -60,7 +60,7 @@ class StubLanguageClient {
 
 const activationTest = test;
 
-activationTest("activate wires language client and feature graph", async () => {
+activationTest("activate wires the language client and explicit product features", async () => {
   const { activate, deactivate } = await import("../../out/extension.js");
   const { vscode: stubVscode } = createVscodeApi();
   const vscode = stubVscode as unknown as VscodeApi;
@@ -70,7 +70,7 @@ activationTest("activate wires language client and feature graph", async () => {
   } as unknown as LanguageClient;
   const languageClient = new StubLanguageClient(lsp);
   const activated: string[] = [];
-  const feature: FeatureModule = {
+  const feature: ClientFeature = {
     id: "test.feature",
     activate: () => {
       activated.push("test.feature");
@@ -99,7 +99,7 @@ activationTest("keeps product features inactive until a workspace session is own
   const languageClient = new StubLanguageClient(lsp, false);
   const activated: string[] = [];
   let disposed = 0;
-  const feature: FeatureModule = {
+  const feature: ClientFeature = {
     id: "test.feature",
     activate: () => {
       activated.push("test.feature");
@@ -178,81 +178,6 @@ activationTest("scopes editor contributions to the active document's owning sess
   await deactivate();
 });
 
-activationTest("does not publish capabilities or features from a retired session generation", async () => {
-  const { activate, deactivate } = await import("../../out/extension.js");
-  const { vscode: stubVscode, recorded } = createVscodeApi();
-  const vscode = stubVscode as unknown as VscodeApi;
-  let resolveCapabilities!: (value: unknown) => void;
-  const capabilities = new Promise((resolve) => {
-    resolveCapabilities = resolve;
-  });
-  const lsp = {
-    onNotification: vi.fn(() => ({ dispose: () => {} })),
-    sendRequest: vi.fn(async () => capabilities),
-  } as unknown as LanguageClient;
-  const languageClient = new StubLanguageClient(lsp, false);
-  const activated: string[] = [];
-  const feature: FeatureModule = {
-    id: "test.feature",
-    activate: () => {
-      activated.push("test.feature");
-    },
-  };
-
-  await activate(stubExtensionContext(stubVscode), {
-    vscode,
-    languageClient: languageClient as never,
-    features: [feature],
-  });
-  languageClient.setActive(true);
-  await vi.waitFor(() => expect(lsp.sendRequest).toHaveBeenCalled());
-  languageClient.setActive(false);
-  resolveCapabilities({ contracts: { query: { version: "1" } } });
-  await settleAsyncWork();
-
-  expect(activated).toEqual([]);
-  expect(recorded.contextValues.get("aurelia.active")).toBe(false);
-  await deactivate();
-});
-
-activationTest("does not retain capability-gated features when a current refresh has no answer", async () => {
-  const { activate, deactivate } = await import("../../out/extension.js");
-  const { vscode: stubVscode } = createVscodeApi();
-  const vscode = stubVscode as unknown as VscodeApi;
-  let capabilityRequest = 0;
-  const lsp = {
-    onNotification: vi.fn(() => ({ dispose: () => {} })),
-    sendRequest: vi.fn(async () => capabilityRequest++ === 0
-      ? { contracts: { query: { version: "1" } } }
-      : null),
-  } as unknown as LanguageClient;
-  const languageClient = new StubLanguageClient(lsp);
-  let activations = 0;
-  let disposals = 0;
-  const feature: FeatureModule = {
-    id: "test.capability",
-    isAvailable: (ctx) => Boolean(ctx.capabilities.current.contracts?.query),
-    activate: () => {
-      activations += 1;
-      return { dispose: () => { disposals += 1; } };
-    },
-  };
-
-  await activate(stubExtensionContext(stubVscode), {
-    vscode,
-    languageClient: languageClient as never,
-    features: [feature],
-  });
-  expect(activations).toBe(1);
-
-  languageClient.setActive(true);
-  await settleAsyncWork();
-
-  expect(activations).toBe(1);
-  expect(disposals).toBe(1);
-  await deactivate();
-});
-
 activationTest("deactivates feature work that completes after its session generation retires", async () => {
   const { activate, deactivate } = await import("../../out/extension.js");
   const { vscode: stubVscode } = createVscodeApi();
@@ -282,7 +207,7 @@ activationTest("deactivates feature work that completes after its session genera
     resolveActivation = resolve;
   });
   let disposals = 0;
-  const feature: FeatureModule = {
+  const feature: ClientFeature = {
     id: "test.slow",
     activate: async () => {
       activationStarted = true;

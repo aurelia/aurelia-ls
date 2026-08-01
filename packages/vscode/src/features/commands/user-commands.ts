@@ -5,12 +5,9 @@
  * - Diagnostics Report → Teaching + Revelation
  * - Inspect at Cursor → Revelation
  *
- * Debug/framework-developer commands remain in debug-commands.ts behind
- * the features.debugCommands gate.
  */
 import type { TextEditor } from "vscode";
-import type { FeatureModule } from "../../core/feature-graph.js";
-import { QueryPolicies } from "../../core/query-policy.js";
+import type { ClientFeature } from "../../core/feature.js";
 import { DisposableStore } from "../../core/disposables.js";
 import type { VscodeApi } from "../../vscode-api.js";
 import type {
@@ -100,7 +97,7 @@ function formatDiagnosticsReport(snapshot: DiagnosticsSnapshotResponse): string 
 }
 
 function formatInspectEntityReport(
-  entity: InspectEntityResponse,
+  entity: NonNullable<InspectEntityResponse>,
   position: { line: number; character: number },
 ): string {
   const lines: string[] = ["# Aurelia Inspect", ""];
@@ -140,19 +137,17 @@ function formatDetailValue(value: unknown): string {
   }
 }
 
-export const UserCommandsFeature: FeatureModule = {
+export const UserCommandsFeature: ClientFeature = {
   id: "commands.user",
   isEnabled: (ctx) => ctx.config.current.features.commands,
   activate: (ctx) => {
     const store = new DisposableStore();
-    const queries = ctx.queries;
+    const lsp = ctx.lsp;
     const vscode = ctx.vscode;
-    const logger = ctx.observability.logger.child("commands");
-    const errors = ctx.observability.errors;
-    const trace = ctx.observability.trace;
+    const errors = ctx.errors;
 
     const run = <T>(id: string, fn: () => Promise<T>) =>
-      errors.capture(`command.${id}`, () => trace.spanAsync(`command.${id}`, fn), { context: { command: id } });
+      errors.capture(`command.${id}`, fn, { context: { command: id } });
 
     // "Aurelia: Diagnostics Report" — the human-readable diagnostics view
     store.add(
@@ -164,7 +159,7 @@ export const UserCommandsFeature: FeatureModule = {
             return;
           }
           const uri = editor.document.uri.toString();
-          const snapshot = await queries.getDiagnostics(uri, QueryPolicies.diagnostics);
+          const snapshot = await lsp.getDiagnostics(uri);
           if (!snapshot) {
             vscode.window.showInformationMessage("No diagnostics available for this document");
             return;
@@ -191,7 +186,7 @@ export const UserCommandsFeature: FeatureModule = {
           const uri = editor.document.uri.toString();
           const position = editor.selection.active;
 
-          const entity = await queries.inspectEntity(uri, position, { timeoutMs: 1_500 });
+          const entity = await lsp.inspectEntity(uri, position);
 
           if (entity) {
             const doc = await vscode.workspace.openTextDocument({
@@ -211,7 +206,7 @@ export const UserCommandsFeature: FeatureModule = {
     store.add(
       vscode.commands.registerCommand("aurelia.findResource", () => {
         return run("findResource", async () => {
-          const response = await queries.getResources({ timeoutMs: 1_500 });
+          const response = await lsp.getResources();
           if (!response || response.resources.length === 0) {
             vscode.window.showInformationMessage("No resources available");
             return;
@@ -276,7 +271,7 @@ export const UserCommandsFeature: FeatureModule = {
           }
           const uri = editor.document.uri.toString();
 
-          const response = await queries.getScopeResources(uri, { timeoutMs: 1_500 });
+          const response = await lsp.getScopeResources(uri);
           if (!response || response.resources.length === 0) {
             vscode.window.showInformationMessage("No Aurelia resources available in this scope");
             return;
@@ -346,7 +341,7 @@ export const UserCommandsFeature: FeatureModule = {
             return;
           }
           const uri = editor.document.uri.toString();
-          const related = await queries.getRelatedFile(uri, { timeoutMs: 1_500 });
+          const related = await lsp.getRelatedFile(uri);
           if (!related) {
             vscode.window.showInformationMessage("No related Aurelia file found");
             return;

@@ -504,10 +504,7 @@ async function configureAureliaForReliabilityTests() {
     config.update("features.commands", false, vscode.ConfigurationTarget.Workspace),
     config.update("features.statusBar", false, vscode.ConfigurationTarget.Workspace),
     config.update("features.views", false, vscode.ConfigurationTarget.Workspace),
-    config.update("features.inline", false, vscode.ConfigurationTarget.Workspace),
     config.update("features.inlayHints", false, vscode.ConfigurationTarget.Workspace),
-    config.update("observability.errors.notify", false, vscode.ConfigurationTarget.Workspace),
-    config.update("observability.errors.showOutput", false, vscode.ConfigurationTarget.Workspace),
   ]);
 }
 

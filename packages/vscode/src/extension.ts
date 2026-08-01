@@ -1,7 +1,7 @@
 import type { ClientLogger } from "./log.js";
 import type { VscodeApi } from "./vscode-api.js";
 import type { AureliaLanguageClient } from "./client-core.js";
-import type { FeatureModule } from "./core/feature-graph.js";
+import type { ClientFeature } from "./core/feature.js";
 import { ClientApp } from "./app.js";
 import type { ExtensionContext } from "vscode";
 
@@ -11,7 +11,7 @@ export interface ActivationServices {
   vscode?: VscodeApi;
   logger?: ClientLogger;
   languageClient?: AureliaLanguageClient;
-  features?: FeatureModule[];
+  features?: readonly ClientFeature[];
 }
 
 export async function activate(context: ExtensionContext, services: ActivationServices = {}) {

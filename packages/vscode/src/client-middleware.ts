@@ -1,4 +1,4 @@
-import type { CancellationToken, CodeAction, SemanticTokens, TextDocument } from "vscode";
+import type { CancellationToken, CodeAction } from "vscode";
 import type { CodeAction as ProtocolCodeAction, Middleware } from "vscode-languageclient/node";
 import { AURELIA_TEMPLATE_CODE_ACTION_RESOLVE_SCHEMA } from "@aurelia-ls/language-server/protocol";
 import type { ClientLogger } from "./log.js";
@@ -8,11 +8,6 @@ import { workspaceEditVersionMismatches } from "./workspace-edit-versions.js";
 
 export type DiagnosticsUxState = {
   enabled: boolean;
-};
-
-export type InlineUxState = {
-  enabled: boolean;
-  onSemanticTokens: ((document: TextDocument, tokens: SemanticTokens) => void) | null;
 };
 
 type MiddlewareLanguageClient = {
@@ -32,23 +27,9 @@ export function createMiddleware(
   vscode: VscodeApi,
   logger: ClientLogger,
   diagnosticsUx: DiagnosticsUxState,
-  inlineUx: InlineUxState,
   client: MiddlewareLanguageClient,
 ): Middleware {
   return {
-    provideHover: async (document, position, token, next) => {
-      const hover = await next(document, position, token);
-      if (!hover) return hover;
-      // Upgrade MarkdownString contents to enable command links and theme icons
-      hover.contents = hover.contents.map((c) => {
-        if (typeof c === "string" || !("value" in c)) return c;
-        const md = new vscode.MarkdownString(c.value);
-        md.isTrusted = true;
-        md.supportThemeIcons = true;
-        return md;
-      });
-      return hover;
-    },
     resolveCodeAction: async (action, token, next) => {
       if (!isAureliaTemplateCodeAction(action)) {
         return next(action, token);
@@ -88,17 +69,6 @@ export function createMiddleware(
         applyDiagnosticsUxAugmentation(diagnostics);
       }
       next(uri, diagnostics);
-    },
-    provideDocumentSemanticTokens: async (document, token, next) => {
-      const semanticTokens = await next(document, token);
-      if (semanticTokens && inlineUx.enabled && inlineUx.onSemanticTokens) {
-        try {
-          inlineUx.onSemanticTokens(document, semanticTokens);
-        } catch (error) {
-          logger.warn(`[client] inline semantic token hook failed: ${error instanceof Error ? error.message : String(error)}`);
-        }
-      }
-      return semanticTokens;
     },
     provideInlayHints: async (document, range, token, next) => {
       if (!client.inlayHintsEnabled) return [];

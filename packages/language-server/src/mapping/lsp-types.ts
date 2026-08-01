@@ -47,7 +47,7 @@ import {
   AURELIA_TEMPLATE_CODE_ACTION_RESOLVE_SCHEMA,
   type TemplateCodeActionResolveData,
 } from "../protocol.js";
-import { stableDigest } from "../utils/stable-hash.js";
+import { stableDigest } from "../utils/stable-digest.js";
 import {
   semanticSourceRangeForDocument,
   semanticSourceReferencePath,

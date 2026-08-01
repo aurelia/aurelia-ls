@@ -1,5 +1,4 @@
-import type { FeatureModule } from "../../core/feature-graph.js";
-import { DebugCommandsFeature } from "./debug-commands.js";
+import type { ClientFeature } from "../../core/feature.js";
 import { UserCommandsFeature } from "./user-commands.js";
 
-export const CommandFeatures: FeatureModule[] = [UserCommandsFeature, DebugCommandsFeature];
+export const CommandFeatures: readonly ClientFeature[] = [UserCommandsFeature];

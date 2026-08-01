@@ -1,5 +1,5 @@
-import type { FeatureModule } from "../../core/feature-graph.js";
+import type { ClientFeature } from "../../core/feature.js";
 import { ViewsFeature } from "./views-feature.js";
 
-export const ViewFeatures: FeatureModule[] = [ViewsFeature];
+export const ViewFeatures: readonly ClientFeature[] = [ViewsFeature];
 

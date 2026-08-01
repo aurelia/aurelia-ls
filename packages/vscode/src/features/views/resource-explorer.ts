@@ -10,10 +10,9 @@
  */
 import type { TreeDataProvider, TreeItem, ProviderResult, Event } from "vscode";
 import type { VscodeApi } from "../../vscode-api.js";
-import type { QueryClient } from "../../core/query-client.js";
+import type { LspFacade } from "../../core/lsp-facade.js";
 import type { ClientLogger } from "../../log.js";
 import type { ResourceExplorerItem, ResourceExplorerResponse } from "../../types.js";
-import { SimpleEmitter } from "../../core/events.js";
 
 /** Display grouping for the Resource Explorer tree — derived from runtime source provenance. */
 type ExplorerGroup = "project" | "package" | "framework";
@@ -280,14 +279,15 @@ function prefixedId(prefix: string, id: string): string {
 
 export class ResourceExplorerProvider implements TreeDataProvider<TreeNode> {
   #vscode: VscodeApi;
-  #queries: QueryClient;
+  #lsp: LspFacade;
   #logger: ClientLogger;
   #tree: TreeNode[] = [];
   #changeEmitter: { fire: () => void; event: Event<void> };
+  #refreshGeneration = 0;
 
-  constructor(vscode: VscodeApi, queries: QueryClient, logger: ClientLogger) {
+  constructor(vscode: VscodeApi, lsp: LspFacade, logger: ClientLogger) {
     this.#vscode = vscode;
-    this.#queries = queries;
+    this.#lsp = lsp;
     this.#logger = logger;
 
     const eventEmitter = new vscode.EventEmitter<void>();
@@ -329,9 +329,11 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode> {
   }
 
   async refresh(): Promise<void> {
+    const generation = ++this.#refreshGeneration;
     try {
       this.#logger.debug("resourceExplorer.refresh.start");
-      const response = await this.#queries.getResources({ timeoutMs: 1_500 });
+      const response = await this.#lsp.getResources();
+      if (generation !== this.#refreshGeneration) return;
       if (!response) {
         this.#tree = [{
           nodeKind: "info",
@@ -357,6 +359,7 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode> {
         resources: response?.resources.length ?? 0,
       });
     } catch (err) {
+      if (generation !== this.#refreshGeneration) return;
       this.#logger.warn(`resourceExplorer.refresh.failed: ${err instanceof Error ? err.message : String(err)}`);
       this.#tree = [{
         nodeKind: "info",

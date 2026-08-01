@@ -3,31 +3,18 @@ import type { VscodeApi } from "../vscode-api.js";
 import type { ClientLogger } from "../log.js";
 import type { AureliaLanguageClient } from "../client-core.js";
 import { DisposableStore } from "./disposables.js";
-import type { CapabilityStore } from "./capabilities.js";
 import type { ConfigService } from "./config.js";
-import type { FeatureGraph } from "./feature-graph.js";
 import type { LspFacade } from "./lsp-facade.js";
-import type { DebugService, ErrorReporter, ObservabilityService, TraceService } from "./observability.js";
-import type { PresentationStore } from "./presentation-store.js";
-import type { QueryClient } from "./query-client.js";
-import type { ServiceRegistry } from "./service-registry.js";
+import type { ErrorReporter } from "./errors.js";
 
 export interface ClientContext {
   extension: ExtensionContext;
   vscode: VscodeApi;
   logger: ClientLogger;
-  observability: ObservabilityService;
-  debug: DebugService;
-  trace: TraceService;
   errors: ErrorReporter;
   languageClient: AureliaLanguageClient;
   lsp: LspFacade;
   config: ConfigService;
-  capabilities: CapabilityStore;
-  presentation: PresentationStore;
-  queries: QueryClient;
-  features: FeatureGraph;
-  services: ServiceRegistry;
   disposables: DisposableStore;
 }
 

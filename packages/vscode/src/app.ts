@@ -2,22 +2,19 @@ import type { ExtensionContext } from "vscode";
 import { AureliaLanguageClient } from "./client-core.js";
 import { ClientLogger } from "./log.js";
 import { getVscodeApi, type VscodeApi } from "./vscode-api.js";
-import { CapabilityStore } from "./core/capabilities.js";
 import { ConfigService } from "./core/config.js";
 import { createClientContext, type ClientContext } from "./core/context.js";
-import { FeatureGraph, type FeatureModule } from "./core/feature-graph.js";
+import { ErrorReporter } from "./core/errors.js";
+import type { ClientFeature } from "./core/feature.js";
 import { LspFacade } from "./core/lsp-facade.js";
-import { ObservabilityService } from "./core/observability.js";
-import { PresentationStore } from "./core/presentation-store.js";
-import { QueryClient } from "./core/query-client.js";
-import { ServiceRegistry } from "./core/service-registry.js";
+import { DisposableStore, type DisposableLike } from "./core/disposables.js";
 import { DefaultFeatures } from "./features/index.js";
 
 export interface ClientAppOptions {
   vscode?: VscodeApi;
   logger?: ClientLogger;
   languageClient?: AureliaLanguageClient;
-  features?: FeatureModule[];
+  features?: readonly ClientFeature[];
 }
 
 export class ClientApp {
@@ -27,6 +24,7 @@ export class ClientApp {
   #clientStateTransition: Promise<void> = Promise.resolve();
   #documentContextTransition: Promise<void> = Promise.resolve();
   #documentContextRequest = 0;
+  #featureActivations: DisposableLike | null = null;
 
   constructor(context: ExtensionContext, options: ClientAppOptions = {}) {
     this.#context = context;
@@ -41,46 +39,29 @@ export class ClientApp {
     const vscode = this.#options.vscode ?? getVscodeApi();
     const logger = this.#options.logger ?? new ClientLogger("Aurelia LS (Client)", vscode);
     const config = new ConfigService(vscode, logger);
-    const observability = new ObservabilityService(vscode, logger, config.current);
+    const errors = new ErrorReporter(logger, vscode);
     const languageClient = this.#options.languageClient ?? new AureliaLanguageClient(logger, vscode);
 
     await Promise.all([
       vscode.commands.executeCommand("setContext", "aurelia.active", false),
       vscode.commands.executeCommand("setContext", "aurelia.documentOwned", false),
     ]);
-    await languageClient.start(this.#context, { serverEnv: observability.serverEnv });
-    const lsp = new LspFacade(languageClient, observability);
-
-    const capabilities = new CapabilityStore();
-    const presentation = new PresentationStore();
-    const queries = new QueryClient(lsp, observability);
-    const features = new FeatureGraph();
-    const services = new ServiceRegistry();
+    await languageClient.start(this.#context);
+    const lsp = new LspFacade(languageClient, logger);
 
     const ctx = createClientContext({
       extension: this.#context,
       vscode,
       logger,
-      observability,
-      debug: observability.debug,
-      trace: observability.trace,
-      errors: observability.errors,
+      errors,
       languageClient,
       lsp,
       config,
-      capabilities,
-      presentation,
-      queries,
-      features,
-      services,
     });
 
     this.#ctx = ctx;
-    ctx.disposables.add(services);
     ctx.disposables.add(lsp);
-
-    const featureModules = this.#options.features ?? DefaultFeatures;
-    features.register(...featureModules);
+    ctx.disposables.add(logger);
 
     const synchronizeClientState = () => this.#queueClientStateTransition(ctx);
     const synchronizeDocumentContext = () => this.#queueDocumentContextTransition(ctx);
@@ -91,14 +72,7 @@ export class ClientApp {
     ctx.disposables.add(vscode.window.onDidChangeActiveTextEditor(() => {
       void synchronizeDocumentContext();
     }));
-    ctx.disposables.add(config.onDidChange(async (next) => {
-      const serverEnvChanged = observability.update(next);
-      if (serverEnvChanged) {
-        await ctx.errors.capture("lsp.restart", async () => {
-          logger.info("restarting Aurelia workspace clients for updated observability config");
-          await languageClient.restart(this.#context, { serverEnv: observability.serverEnv });
-        }, { notify: false });
-      }
+    ctx.disposables.add(config.onDidChange(async () => {
       await languageClient.reconcile({ reconfirmExisting: true });
       await synchronizeClientState();
       await synchronizeDocumentContext();
@@ -113,14 +87,14 @@ export class ClientApp {
     if (ctx) {
       await this.#clientStateTransition.catch(() => {});
       await this.#documentContextTransition.catch(() => {});
-      ctx.features.deactivateAll(ctx);
-      ctx.disposables.dispose();
+      this.#disposeFeatures();
     }
     try {
       await ctx?.languageClient.stop();
     } catch {
       /* ignore */
     }
+    ctx?.disposables.dispose();
     if (ctx) {
       await Promise.all([
         ctx.vscode.commands.executeCommand("setContext", "aurelia.active", false),
@@ -135,25 +109,18 @@ export class ClientApp {
     const transition = this.#clientStateTransition.then(async () => {
       if (generation !== ctx.languageClient.sessionGeneration) return;
       const active = ctx.languageClient.hasSessions;
-      ctx.queries.clear();
       await ctx.vscode.commands.executeCommand("setContext", "aurelia.active", active);
       if (generation !== ctx.languageClient.sessionGeneration) return;
+      this.#disposeFeatures();
       if (!active) {
-        ctx.features.deactivateAll(ctx);
-        ctx.capabilities.clear();
         return;
       }
-      ctx.features.deactivateAll(ctx);
-      ctx.capabilities.clear();
-      const caps = await ctx.lsp.getCapabilities();
-      if (generation !== ctx.languageClient.sessionGeneration) return;
-      if (caps != null) {
-        ctx.capabilities.set(caps);
-      }
-      await ctx.features.activateAll(ctx);
+      const activations = await activateFeatures(ctx, this.#options.features ?? DefaultFeatures);
       if (generation !== ctx.languageClient.sessionGeneration) {
-        ctx.features.deactivateAll(ctx);
+        activations.dispose();
+        return;
       }
+      this.#featureActivations = activations;
     });
     this.#clientStateTransition = transition.catch((error) => {
       ctx.logger.warn(`[client] session-state transition failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -174,4 +141,39 @@ export class ClientApp {
     });
     return transition;
   }
+
+  #disposeFeatures(): void {
+    this.#featureActivations?.dispose();
+    this.#featureActivations = null;
+  }
+}
+
+async function activateFeatures(
+  ctx: ClientContext,
+  features: readonly ClientFeature[],
+): Promise<DisposableLike> {
+  const activations = new DisposableStore();
+  for (const feature of features) {
+    try {
+      if (feature.isEnabled?.(ctx) === false) continue;
+      ctx.logger.info(`[features] activating: ${feature.id}`);
+      const activation = await feature.activate(ctx);
+      if (isDisposableList(activation)) {
+        for (const disposable of activation) activations.add(disposable);
+      } else if (activation != null) {
+        activations.add(activation as DisposableLike);
+      }
+    } catch (error) {
+      ctx.errors.report(error, `feature.activate.${feature.id}`, {
+        context: { feature: feature.id },
+      });
+    }
+  }
+  return activations;
+}
+
+function isDisposableList(
+  value: void | DisposableLike | readonly DisposableLike[],
+): value is readonly DisposableLike[] {
+  return Array.isArray(value);
 }

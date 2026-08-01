@@ -13,6 +13,7 @@ import type { TextDocument } from "vscode-languageserver-textdocument";
 import { URI } from "vscode-uri";
 import path from "node:path";
 import type { ServerContext } from "../context.js";
+import { AureliaProtocolNotification } from "../protocol.js";
 import type { AnalysisReadyPayload, WorkspaceChangedPayload } from "../protocol.js";
 import { mapSemanticRuntimeAppDiagnostics } from "../mapping/lsp-types.js";
 import {
@@ -283,7 +284,7 @@ async function publishDocumentDiagnostics(
       diags: lspDiagnostics.length,
       fingerprint: guard.generation.fingerprint,
     };
-    await ctx.connection.sendNotification("aurelia/analysisReady", analysisReady);
+    await ctx.connection.sendNotification(AureliaProtocolNotification.AnalysisReady, analysisReady);
     return "published";
   } catch (e: unknown) {
     if (isSemanticRuntimeLspRequestAborted(e) && e.reason === "stale") {
@@ -451,7 +452,7 @@ async function notifyWorkspaceChanged(
     domains,
     ...(reason == null ? {} : { reason }),
   };
-  await ctx.connection.sendNotification("aurelia/workspaceChanged", workspaceChanged);
+  await ctx.connection.sendNotification(AureliaProtocolNotification.WorkspaceChanged, workspaceChanged);
   if (domains.includes("diagnostics") || domains.includes("types")) {
     void ctx.connection.sendRequest("workspace/diagnostics/refresh").catch(() => {});
   }

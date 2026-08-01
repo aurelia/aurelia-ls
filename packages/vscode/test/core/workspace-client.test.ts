@@ -8,7 +8,7 @@ import {
 } from "../../out/workspace-activation.js";
 import type { WorkspaceStatusResponse } from "@aurelia-ls/language-server/protocol";
 import type { VscodeApi } from "../../out/vscode-api.js";
-import { createTestObservability } from "../helpers/test-helpers.js";
+import { createTestServices } from "../helpers/test-helpers.js";
 import { createVscodeApi, stubExtensionContext } from "../helpers/vscode-stub.js";
 
 type ProjectAnalysisKind = "app-world" | "resource-library-authoring" | "aurelia-package-inspection" | "outside-aurelia";
@@ -713,8 +713,8 @@ describe("LspFacade workspace routing", () => {
     ]));
     const manager = createManager(vscode, harness);
     await manager.start(stubExtensionContext(vscode));
-    const { observability } = createTestObservability(vscode as unknown as VscodeApi);
-    const facade = new LspFacade(manager, observability);
+    const { logger } = createTestServices(vscode as unknown as VscodeApi);
+    const facade = new LspFacade(manager, logger);
 
     const related = await facade.getRelatedFile("file:///work/b/src/card.ts");
     expect(related).toEqual({ uri: "file:///work/b/related.html", kind: "template" });
@@ -752,8 +752,8 @@ describe("LspFacade workspace routing", () => {
     ]));
     const manager = createManager(vscode, harness);
     await manager.start(stubExtensionContext(vscode));
-    const { observability } = createTestObservability(vscode as unknown as VscodeApi);
-    const facade = new LspFacade(manager, observability);
+    const { logger } = createTestServices(vscode as unknown as VscodeApi);
+    const facade = new LspFacade(manager, logger);
     const first = vi.fn();
     const second = vi.fn();
     const firstSubscription = facade.onWorkspaceChanged(first);
@@ -795,7 +795,7 @@ function twoWorkspaceApi() {
 }
 
 function createManager(vscode: ReturnType<typeof createVscodeApi>["vscode"], harness: ClientHarness) {
-  const { logger } = createTestObservability(vscode as unknown as VscodeApi);
+  const { logger } = createTestServices(vscode as unknown as VscodeApi);
   return new AureliaLanguageClient(logger, vscode as unknown as VscodeApi, {
     createClient: harness.createClient as never,
   });
@@ -835,8 +835,6 @@ function createClientHarness(
           }
           return statusByWorkspace.get(workspaceUri) ?? null;
         }
-        case "aurelia/capabilities":
-          return { contracts: { query: { version: "1" } } };
         case "aurelia/getResources":
           return {
             fingerprint: workspaceUri,

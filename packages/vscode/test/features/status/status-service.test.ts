@@ -17,47 +17,35 @@ describe("StatusService", () => {
     expect(statusItem.alignment).toBe(stubVscode.StatusBarAlignment.Left);
   });
 
-  test("initial text shows starting phase", () => {
+  test("describes active analysis", () => {
     const { statusItem } = createService();
-    expect(statusItem.text).toContain("Aurelia");
-    expect(statusItem.text).toContain("starting");
+    expect(statusItem.text).toBe("$(loading~spin) Aurelia: analyzing...");
+    expect(statusItem.tooltip).toBe("Analyzing Aurelia project changes");
   });
 
-  test("command is set to aurelia.findResource", () => {
+  test("does not turn progress into a command surface", () => {
     const { statusItem } = createService();
-    expect(statusItem.command).toBe("aurelia.findResource");
+    expect(statusItem.command).toBeUndefined();
   });
 
-  test("status bar item is shown on creation", () => {
+  test("healthy idle state stays out of permanent chrome", () => {
     const { statusItem } = createService();
+    expect(statusItem.visible).toBe(false);
+  });
+
+  test("analyzing() exposes transient progress", () => {
+    const { service, statusItem } = createService();
+    service.analyzing();
     expect(statusItem.visible).toBe(true);
+    expect(service.phase).toBe("analyzing");
   });
 
-  test("discovering() shows discovering phase", () => {
+  test("ready() returns to the hidden idle state", () => {
     const { service, statusItem } = createService();
-    service.discovering();
-    expect(statusItem.text).toContain("discovering");
-  });
-
-  test("analyzing() shows resource count", () => {
-    const { service, statusItem } = createService();
-    service.analyzing(12);
-    expect(statusItem.text).toContain("12 resources");
-  });
-
-  test("ready() shows resource and template summary", () => {
-    const { service, statusItem } = createService();
-    service.ready(12, 3);
-    expect(statusItem.text).toContain("12 resources");
-    expect(statusItem.text).toContain("3 templates");
-    expect(statusItem.text).toContain("$(check)");
-  });
-
-  test("ready() keeps a quiet success state for runtime resource facts", () => {
-    const { service, statusItem } = createService();
-    service.ready(12, 3);
-    expect(statusItem.text).toContain("$(check)");
-    expect(statusItem.text).not.toContain("$(warning)");
+    service.analyzing();
+    service.ready();
+    expect(statusItem.visible).toBe(false);
+    expect(service.phase).toBe("idle");
   });
 
   test("dispose() disposes status bar item", () => {
@@ -68,12 +56,10 @@ describe("StatusService", () => {
 
   test("phase tracks lifecycle state", () => {
     const { service } = createService();
-    expect(service.phase).toBe("starting");
-    service.discovering();
-    expect(service.phase).toBe("discovering");
-    service.analyzing(5);
+    expect(service.phase).toBe("idle");
+    service.analyzing();
     expect(service.phase).toBe("analyzing");
-    service.ready(5, 2);
-    expect(service.phase).toBe("ready");
+    service.ready();
+    expect(service.phase).toBe("idle");
   });
 });

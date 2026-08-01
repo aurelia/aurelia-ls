@@ -1,20 +1,22 @@
 import { describe, expect, test, vi } from "vitest";
 import { UserCommandsFeature } from "../../../out/features/commands/user-commands.js";
 import type { VscodeApi } from "../../../out/vscode-api.js";
-import { createTestObservability } from "../../helpers/test-helpers.js";
+import { createTestServices } from "../../helpers/test-helpers.js";
 import { createVscodeApi, stubExtensionContext } from "../../helpers/vscode-stub.js";
 
 function createHarness(options: { inspectResult?: unknown; diagnosticsResult?: unknown } = {}) {
   const { vscode: stubVscode, recorded } = createVscodeApi();
   const vscode = stubVscode as unknown as VscodeApi;
-  const { observability } = createTestObservability(vscode);
+  const { errors, logger, config } = createTestServices(vscode);
   const inspectEntity = vi.fn(async () => options.inspectResult ?? null);
   const getDiagnostics = vi.fn(async () => options.diagnosticsResult ?? null);
   const ctx = {
     extension: stubExtensionContext(stubVscode),
     vscode,
-    observability,
-    queries: {
+    logger,
+    errors,
+    config: { current: config },
+    lsp: {
       getDiagnostics,
       inspectEntity,
     },
@@ -71,7 +73,7 @@ describe("UserCommandsFeature", () => {
 
     await recorded.commandHandlers.get("aurelia.diagnosticsReport")?.();
 
-    expect(getDiagnostics).toHaveBeenCalledWith("file:///component.html", expect.objectContaining({ timeoutMs: 1500 }));
+    expect(getDiagnostics).toHaveBeenCalledWith("file:///component.html");
     expect(recorded.infoMessages).toEqual([]);
     const opened = recorded.openedDocuments.at(-1);
     expect(opened?.languageId).toBe("markdown");
@@ -144,7 +146,6 @@ describe("UserCommandsFeature", () => {
     expect(inspectEntity).toHaveBeenCalledWith(
       "file:///component.html",
       position,
-      expect.objectContaining({ timeoutMs: 1500 }),
     );
     expect(recorded.infoMessages).toEqual([]);
     const opened = recorded.openedDocuments.at(-1);

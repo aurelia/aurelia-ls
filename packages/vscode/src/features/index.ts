@@ -1,19 +1,16 @@
-import type { FeatureModule } from "../core/feature-graph.js";
+import type { ClientFeature } from "../core/feature.js";
 import { CommandFeatures } from "./commands/index.js";
 import { DiagnosticsFeatures } from "./diagnostics/index.js";
-import { InlineFeatures } from "./inline/index.js";
-import { ObservabilityFeatures } from "./observability/index.js";
 import { StatusFeatures } from "./status/index.js";
 import { InlayHintsFeatures } from "./inlay-hints/inlay-hints-feature.js";
 import { TsRenameFeature } from "./rename/ts-rename-feature.js";
 import { ViewFeatures } from "./views/index.js";
 
-export const DefaultFeatures: FeatureModule[] = [
+/** Explicit activation order for the retained client-owned surfaces. */
+export const DefaultFeatures: readonly ClientFeature[] = [
   ...CommandFeatures,
   ...DiagnosticsFeatures,
   ...InlayHintsFeatures,
-  ...InlineFeatures,
-  ...ObservabilityFeatures,
   ...StatusFeatures,
   TsRenameFeature,
   ...ViewFeatures,

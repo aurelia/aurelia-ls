@@ -4,9 +4,7 @@ import { test, expect, describe, vi } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import {
   canonicalDocumentUri,
-  handleDumpState,
   handleGetDiagnostics,
-  handleCapabilities,
   handleInspectEntity,
   handleRenameFromTs,
   handleWorkspaceStatus,
@@ -963,75 +961,5 @@ describe("handleRenameFromTs", () => {
     expect(result.status === "blocked" ? result.failures?.[0] : "").toContain(
       'expected "title"',
     );
-  });
-});
-
-describe("handleDumpState", () => {
-  test("returns server state summary", () => {
-    const ctx = createMockContext();
-    ctx.documents.all.mockReturnValue([{}, {}]);
-
-    const result = handleDumpState(ctx as never);
-
-    expect(result).toEqual({
-      workspaceRoot: "/test/workspace",
-      fingerprint: "semantic-runtime:/test/workspace:2",
-      openDocumentCount: 2,
-      engine: "semantic-runtime",
-    });
-  });
-
-  test("returns error object on failure", () => {
-    const ctx = createMockContext({
-      documents: {
-        all: vi.fn(() => {
-          throw new Error("document registry crashed");
-        }),
-      },
-    });
-
-    const result = handleDumpState(ctx as never);
-
-    expect(result).toHaveProperty("error");
-    expect((result as { error: string }).error).toContain(
-      "document registry crashed",
-    );
-    expect(ctx.logger.error).toHaveBeenCalledWith(
-      expect.stringContaining("dumpState"),
-    );
-  });
-});
-
-describe("handleCapabilities", () => {
-  test("advertises live semantic-runtime contracts without retired custom artifacts", () => {
-    const ctx = createMockContext();
-
-    const result = handleCapabilities(ctx as never);
-
-    expect(result.contracts).toEqual(
-      expect.objectContaining({
-        query: { version: "query/1" },
-        diagnostics: {
-          version: "diagnostics/1",
-          taxonomy: "diagnostics-taxonomy/1",
-        },
-        semanticTokens: expect.objectContaining({ version: "tokens/1" }),
-        presentation: { version: "presentation/1" },
-      }),
-    );
-    expect(result.contracts).not.toHaveProperty("mapping");
-    expect(result).not.toHaveProperty("custom");
-    expect(result.notifications).toEqual({
-      analysisReady: true,
-      workspaceChanged: true,
-    });
-    expect(result.lsp.optional.documentSymbol).toBe(true);
-    expect(result.lsp.optional.workspaceSymbol).toBe(true);
-    expect(result.lsp.optional.documentHighlight).toBe(true);
-    expect(result.lsp.optional.selectionRange).toBe(true);
-    expect(result.lsp.optional.linkedEditingRange).toBe(true);
-    expect(result.lsp.optional.foldingRange).toBe(true);
-    expect(result.lsp.optional.inlayHint).toBe(true);
-    expect(result.lsp.optional.codeLens).toBe(true);
   });
 });

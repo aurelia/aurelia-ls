@@ -72,7 +72,6 @@ function createHarness(options: {
     vscode as never,
     logger as never,
     { enabled: false },
-    { enabled: false, onSemanticTokens: null },
     { client: rawClient, inlayHintsEnabled: true } as never,
   );
   return { action, convertedAction, logger, middleware, rawClient, showWarningMessage };

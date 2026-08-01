@@ -5,7 +5,6 @@ import { createTestConfig } from "../../helpers/test-helpers.js";
 
 function createContext(options: {
   diagnosticsEnabled?: boolean;
-  diagnosticsContract: boolean;
 }): ClientContext {
   const config = createTestConfig({
     features: {
@@ -16,13 +15,6 @@ function createContext(options: {
   return {
     config: {
       current: config,
-    },
-    capabilities: {
-      current: {
-        contracts: {
-          diagnostics: options.diagnosticsContract ? { version: "diagnostics/1" } : false,
-        },
-      },
     },
     languageClient: {
       setDiagnosticsUxEnabled: vi.fn(),
@@ -35,21 +27,16 @@ function createContext(options: {
 
 describe("DiagnosticsFeature", () => {
   test("isEnabled defaults off to keep diagnostic messages quiet", () => {
-    expect(DiagnosticsFeature.isEnabled?.(createContext({ diagnosticsContract: true }))).toBe(false);
+    expect(DiagnosticsFeature.isEnabled?.(createContext({}))).toBe(false);
   });
 
   test("isEnabled follows diagnostics feature toggle", () => {
-    expect(DiagnosticsFeature.isEnabled?.(createContext({ diagnosticsEnabled: true, diagnosticsContract: true }))).toBe(true);
-    expect(DiagnosticsFeature.isEnabled?.(createContext({ diagnosticsEnabled: false, diagnosticsContract: true }))).toBe(false);
-  });
-
-  test("isAvailable requires diagnostics contract", () => {
-    expect(DiagnosticsFeature.isAvailable?.(createContext({ diagnosticsEnabled: true, diagnosticsContract: true }))).toBe(true);
-    expect(DiagnosticsFeature.isAvailable?.(createContext({ diagnosticsEnabled: true, diagnosticsContract: false }))).toBe(false);
+    expect(DiagnosticsFeature.isEnabled?.(createContext({ diagnosticsEnabled: true }))).toBe(true);
+    expect(DiagnosticsFeature.isEnabled?.(createContext({ diagnosticsEnabled: false }))).toBe(false);
   });
 
   test("activation toggles diagnostics middleware bridge on and off", () => {
-    const ctx = createContext({ diagnosticsEnabled: true, diagnosticsContract: true });
+    const ctx = createContext({ diagnosticsEnabled: true });
     const setDiagnosticsUxEnabled = ctx.languageClient.setDiagnosticsUxEnabled as unknown as {
       (...args: unknown[]): unknown;
       mock: unknown;

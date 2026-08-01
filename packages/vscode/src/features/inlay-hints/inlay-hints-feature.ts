@@ -1,6 +1,6 @@
-import type { FeatureModule } from "../../core/feature-graph.js";
+import type { ClientFeature } from "../../core/feature.js";
 
-export const InlayHintsFeature: FeatureModule = {
+export const InlayHintsFeature: ClientFeature = {
   id: "inlayHints.bindingModes",
   isEnabled: (ctx) => ctx.config.current.features.inlayHints,
   activate: (ctx) => {
@@ -15,4 +15,4 @@ export const InlayHintsFeature: FeatureModule = {
   },
 };
 
-export const InlayHintsFeatures: FeatureModule[] = [InlayHintsFeature];
+export const InlayHintsFeatures: readonly ClientFeature[] = [InlayHintsFeature];

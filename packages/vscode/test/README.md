@@ -1,10 +1,11 @@
 # VS Code Tests
 
-Goal: keep the VS Code client test suite aligned with the presentation
-architecture (FeatureGraph, QueryClient, ServiceRegistry).
+Goal: keep the VS Code client tests aligned with concrete product owners:
+workspace sessions, the typed LSP facade, feature-owned contributions, and
+native VS Code presentation primitives.
 
 Structure:
-- `core/`: infrastructure units (feature graph, query client, services, logger)
+- `core/`: workspace/session ownership, protocol routing, lifecycle, and logging units
 - `features/`: feature modules and command flows
 - `integration/`: activation smoke (VS Code runner) + bundled server smoke
 - `extension-host/`: opt-in VS Code Extension Development Host reliability tests
@@ -12,7 +13,11 @@ Structure:
 
 Guidelines:
 - Tests import compiled output (`packages/vscode/out`) to match runtime shape.
-- Features should call `ctx.queries`, not raw `ctx.lsp`.
+- Custom protocol calls go through the typed `ctx.lsp` facade. Long-lived
+  presenters own their own latest-wins sequencing rather than a generic query
+  cache.
+- Every feature activation returns all registrations and presenters it owns so
+  session retirement can dispose them as one unit.
 - Avoid real filesystem/network; use stubs.
 - Activation test runs under `@vscode/test-electron` (set `VSCODE_RUNNER=1`).
 - Extension-host reliability tests launch real VS Code against a disposable

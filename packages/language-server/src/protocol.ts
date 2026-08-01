@@ -5,6 +5,22 @@ import type {
   SemanticRuntimeAnswer,
   SemanticRuntimeSummary,
 } from "@aurelia-ls/semantic-runtime";
+import type { Position, Range, WorkspaceEdit } from "vscode-languageserver/node";
+
+export const AureliaProtocolRequest = {
+  Diagnostics: "aurelia/getDiagnostics",
+  Resources: "aurelia/getResources",
+  InspectEntity: "aurelia/inspectEntity",
+  ScopeResources: "aurelia/getScopeResources",
+  RelatedFile: "aurelia/getRelatedFile",
+  WorkspaceStatus: "aurelia/workspaceStatus",
+  RenameFromTypeScript: "aurelia/renameFromTs",
+} as const;
+
+export const AureliaProtocolNotification = {
+  AnalysisReady: "aurelia/analysisReady",
+  WorkspaceChanged: "aurelia/workspaceChanged",
+} as const;
 
 export const AURELIA_TEMPLATE_CODE_ACTION_RESOLVE_SCHEMA = "aurelia.template-code-action-resolve/1" as const;
 
@@ -132,4 +148,128 @@ export type DiagnosticsSnapshotResponse = {
   uri: string;
   answer: DiagnosticsSnapshotAnswer;
   diagnostics: DiagnosticsSnapshotBundle;
+};
+
+export type ProtocolWorkspaceEdit = WorkspaceEdit;
+export type ProtocolRange = Range;
+
+export type DocumentUriParams = { uri: string };
+
+export type ResourceExplorerBindable = {
+  name: string;
+  attribute?: string;
+  mode?: string;
+  primary?: boolean;
+  type?: string;
+};
+
+export type ResourceScope = "global" | "local" | "orphan";
+
+export type ResourceExplorerItem = {
+  name: string;
+  kind: string;
+  className?: string;
+  file?: string;
+  package?: string;
+  bindableCount: number;
+  bindables: ResourceExplorerBindable[];
+  origin?: string;
+  scope: ResourceScope;
+  scopeOwner?: string;
+  declarationForm?: string;
+};
+
+export type ResourceExplorerResponse = {
+  fingerprint: string;
+  resources: ResourceExplorerItem[];
+  templateCount: number;
+  inlineTemplateCount: number;
+};
+
+export type InspectEntityParams = {
+  uri: string;
+  position: Position;
+};
+
+export type InspectEntityResponse = {
+  uri: string;
+  entityKind: string;
+  confidence: {
+    resource: string;
+    type: string;
+    scope: string;
+    expression: string;
+    composite: string;
+  };
+  expressionLabel?: string;
+  exprId?: string | number;
+  nodeId?: string | number;
+  detail: Record<string, unknown>;
+} | null;
+
+export type ScopeResourceItem = {
+  name: string;
+  kind: string;
+  origin?: string;
+  className?: string;
+  file?: string;
+  package?: string;
+  bindableCount: number;
+  scope: "global" | "local";
+};
+
+export type ScopeResourcesResponse = {
+  scopeId: string;
+  scopeLabel?: string;
+  resources: ScopeResourceItem[];
+} | null;
+
+export type RelatedFileResponse = {
+  uri: string;
+  kind: "template" | "component";
+} | null;
+
+export type RenameFromTsParams = {
+  uri: string;
+  position: Position;
+  newName?: string;
+};
+
+export type RenameFromTsResponse = {
+  status: "available";
+  range: ProtocolRange;
+  placeholder: string;
+  message: string;
+  templateReferenceCount: number;
+  typeScriptReferenceCount: number;
+  candidateCount: number;
+} | {
+  status: "success";
+  workspaceEdit: ProtocolWorkspaceEdit;
+  message: string;
+  templateReferenceCount: number;
+  typeScriptReferenceCount: number;
+  candidateCount: number;
+} | {
+  status: "not-applicable";
+  reason: string;
+  message: string;
+  templateReferenceCount: number;
+  typeScriptReferenceCount: number;
+  candidateCount: number;
+} | {
+  status: "refused";
+  reason: string;
+  message: string;
+  templateReferenceCount: number;
+  typeScriptReferenceCount: number;
+  candidateCount: number;
+} | {
+  status: "blocked";
+  reason: string;
+  message: string;
+  failures?: readonly string[];
+  templateReferenceCount?: number;
+  typeScriptReferenceCount?: number;
+  candidateCount?: number;
 };

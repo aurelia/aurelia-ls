@@ -6,7 +6,7 @@
  */
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import type { CancellationToken, Position, Range, WorkspaceEdit } from "vscode-languageserver/node";
+import type { CancellationToken } from "vscode-languageserver/node";
 import { URI } from "vscode-uri";
 import type {
   SemanticResourceDefinitionRow,
@@ -36,11 +36,23 @@ import type {
   DiagnosticsSnapshotPresentationItem,
   DiagnosticsSnapshotRelated,
   DiagnosticsSnapshotResponse,
+  DocumentUriParams,
+  InspectEntityParams,
+  InspectEntityResponse,
+  RelatedFileResponse,
+  RenameFromTsParams,
+  RenameFromTsResponse,
+  ResourceExplorerBindable,
+  ResourceExplorerItem,
+  ResourceExplorerResponse,
+  ResourceScope,
+  ScopeResourceItem,
+  ScopeResourcesResponse,
   SourceSpan,
   WorkspaceStatusResponse,
 } from "../protocol.js";
+import { AureliaProtocolRequest } from "../protocol.js";
 import { canonicalDocumentUri } from "../utils/document-uri.js";
-import { buildCapabilities, buildCapabilitiesFallback, type CapabilitiesResponse } from "../capabilities.js";
 import {
   mapSemanticRuntimeTemplatePrepareRename,
   mapSemanticRuntimeTemplateRenameEdit,
@@ -58,6 +70,18 @@ import {
 import type { SemanticRuntimeLspRequestGuard } from "../runtime/semantic-runtime-session.js";
 
 type ResourceOrigin = "builtin" | "source" | "external" | string;
+
+export type {
+  InspectEntityResponse,
+  RenameFromTsParams,
+  RenameFromTsResponse,
+  ResourceExplorerBindable,
+  ResourceExplorerItem,
+  ResourceExplorerResponse,
+  ResourceScope,
+  ScopeResourceItem,
+  ScopeResourcesResponse,
+} from "../protocol.js";
 
 type MaybeUriParam = { uri?: string } | string | null;
 
@@ -291,67 +315,6 @@ export async function handleGetDiagnostics(
   }
 }
 
-export type DumpStateResponse =
-  | {
-    workspaceRoot: string | null;
-    fingerprint: string;
-    openDocumentCount: number;
-    engine: string;
-    error?: undefined;
-  }
-  | {
-    error: string;
-    workspaceRoot?: undefined;
-    fingerprint?: undefined;
-    openDocumentCount?: undefined;
-    engine?: undefined;
-  };
-
-export function handleDumpState(ctx: ServerContext): DumpStateResponse {
-  try {
-    return {
-      workspaceRoot: ctx.workspaceRoot,
-      fingerprint: `semantic-runtime:${ctx.workspaceRoot ?? "no-root"}:${ctx.documents.all().length}`,
-      openDocumentCount: ctx.documents.all().length,
-      engine: "semantic-runtime",
-    };
-  } catch (e) {
-    ctx.logger.error(`[dumpState] failed: ${formatError(e)}`);
-    return { error: formatError(e) };
-  }
-}
-
-export type ResourceExplorerBindable = {
-  name: string;
-  attribute?: string;
-  mode?: string;
-  primary?: boolean;
-  type?: string;
-};
-
-export type ResourceScope = "global" | "local" | "orphan";
-
-export type ResourceExplorerItem = {
-  name: string;
-  kind: string;
-  className?: string;
-  file?: string;
-  package?: string;
-  bindableCount: number;
-  bindables: ResourceExplorerBindable[];
-  origin?: ResourceOrigin;
-  scope: ResourceScope;
-  scopeOwner?: string;
-  declarationForm?: string;
-};
-
-export type ResourceExplorerResponse = {
-  fingerprint: string;
-  resources: ResourceExplorerItem[];
-  templateCount: number;
-  inlineTemplateCount: number;
-};
-
 export async function handleGetResources(
   ctx: ServerContext,
   guard: SemanticRuntimeLspRequestGuard,
@@ -551,25 +514,9 @@ function packageNameFromNodeModulesPath(sourcePath: string): string | undefined 
   return first;
 }
 
-export type InspectEntityResponse = {
-  uri: string;
-  entityKind: string;
-  confidence: {
-    resource: string;
-    type: string;
-    scope: string;
-    expression: string;
-    composite: string;
-  };
-  expressionLabel?: string;
-  exprId?: string | number;
-  nodeId?: string | number;
-  detail: Record<string, unknown>;
-} | null;
-
 export async function handleInspectEntity(
   ctx: ServerContext,
-  params: { uri: string; position: Position },
+  params: InspectEntityParams,
   guard: SemanticRuntimeLspRequestGuard,
 ): Promise<InspectEntityResponse> {
   try {
@@ -712,26 +659,9 @@ function inspectEntityDetail(
   return detail;
 }
 
-export type ScopeResourceItem = {
-  name: string;
-  kind: string;
-  origin?: ResourceOrigin;
-  className?: string;
-  file?: string;
-  package?: string;
-  bindableCount: number;
-  scope: "global" | "local";
-};
-
-export type ScopeResourcesResponse = {
-  scopeId: string;
-  scopeLabel?: string;
-  resources: ScopeResourceItem[];
-} | null;
-
 export async function handleGetScopeResources(
   ctx: ServerContext,
-  params: { uri: string },
+  params: DocumentUriParams,
   guard: SemanticRuntimeLspRequestGuard,
 ): Promise<ScopeResourcesResponse> {
   try {
@@ -792,15 +722,6 @@ function scopeResourcesForVisibility(
   ));
 }
 
-export function handleCapabilities(ctx: ServerContext): CapabilitiesResponse {
-  try {
-    return buildCapabilities(ctx);
-  } catch (e) {
-    ctx.logger.error(`[capabilities] failed: ${formatError(e)}`);
-    return buildCapabilitiesFallback();
-  }
-}
-
 export async function handleWorkspaceStatus(
   ctx: ServerContext,
   guard: SemanticRuntimeLspRequestGuard,
@@ -819,52 +740,6 @@ export async function handleWorkspaceStatus(
 // ============================================================================
 // TS-side rename → template propagation
 // ============================================================================
-
-export type RenameFromTsParams = {
-  uri: string;
-  position: Position;
-  newName?: string;
-};
-
-export type RenameFromTsResponse = {
-  status: "available";
-  range: Range;
-  placeholder: string;
-  message: string;
-  templateReferenceCount: number;
-  typeScriptReferenceCount: number;
-  candidateCount: number;
-} | {
-  status: "success";
-  /** One validated edit plan spanning the TypeScript family and Aurelia-authored surfaces. */
-  workspaceEdit: WorkspaceEdit;
-  message: string;
-  templateReferenceCount: number;
-  typeScriptReferenceCount: number;
-  candidateCount: number;
-} | {
-  status: "not-applicable";
-  reason: string;
-  message: string;
-  templateReferenceCount: number;
-  typeScriptReferenceCount: number;
-  candidateCount: number;
-} | {
-  status: "refused";
-  reason: string;
-  message: string;
-  templateReferenceCount: number;
-  typeScriptReferenceCount: number;
-  candidateCount: number;
-} | {
-  status: "blocked";
-  reason: string;
-  message: string;
-  failures?: readonly string[];
-  templateReferenceCount?: number;
-  typeScriptReferenceCount?: number;
-  candidateCount?: number;
-};
 
 export async function handleRenameFromTs(
   ctx: ServerContext,
@@ -1034,9 +909,9 @@ function renameFromTsBlocked(
 
 export async function handleGetRelatedFile(
   ctx: ServerContext,
-  params: { uri: string },
+  params: DocumentUriParams,
   guard: SemanticRuntimeLspRequestGuard,
-): Promise<{ uri: string; kind: "template" | "component" } | null> {
+): Promise<RelatedFileResponse> {
   try {
     const uri = params?.uri;
     if (!uri) return null;
@@ -1086,21 +961,19 @@ function normalizedFilePath(filePath: string): string {
  * Registers all custom Aurelia request handlers on the connection.
  */
 export function registerCustomHandlers(ctx: ServerContext): void {
-  ctx.connection.onRequest("aurelia/getDiagnostics", (params: MaybeUriParam, token: CancellationToken) =>
+  ctx.connection.onRequest(AureliaProtocolRequest.Diagnostics, (params: MaybeUriParam, token: CancellationToken) =>
     handleGetDiagnostics(ctx, params, requestGuard(ctx, token)));
-  ctx.connection.onRequest<DumpStateResponse, unknown>("aurelia/dumpState", () => handleDumpState(ctx));
-  ctx.connection.onRequest("aurelia/getResources", (token: CancellationToken) =>
+  ctx.connection.onRequest(AureliaProtocolRequest.Resources, (token: CancellationToken) =>
     handleGetResources(ctx, requestGuard(ctx, token)));
-  ctx.connection.onRequest("aurelia/inspectEntity", (params: { uri: string; position: Position }, token: CancellationToken) =>
+  ctx.connection.onRequest(AureliaProtocolRequest.InspectEntity, (params: InspectEntityParams, token: CancellationToken) =>
     handleInspectEntity(ctx, params, requestGuard(ctx, token)));
-  ctx.connection.onRequest("aurelia/getScopeResources", (params: { uri: string }, token: CancellationToken) =>
+  ctx.connection.onRequest(AureliaProtocolRequest.ScopeResources, (params: DocumentUriParams, token: CancellationToken) =>
     handleGetScopeResources(ctx, params, requestGuard(ctx, token)));
-  ctx.connection.onRequest("aurelia/getRelatedFile", (params: { uri: string }, token: CancellationToken) =>
+  ctx.connection.onRequest(AureliaProtocolRequest.RelatedFile, (params: DocumentUriParams, token: CancellationToken) =>
     handleGetRelatedFile(ctx, params, requestGuard(ctx, token)));
-  ctx.connection.onRequest("aurelia/workspaceStatus", (_params: unknown, token: CancellationToken) =>
+  ctx.connection.onRequest(AureliaProtocolRequest.WorkspaceStatus, (_params: unknown, token: CancellationToken) =>
     handleWorkspaceStatus(ctx, requestGuard(ctx, token)));
-  ctx.connection.onRequest("aurelia/capabilities", () => handleCapabilities(ctx));
-  ctx.connection.onRequest("aurelia/renameFromTs", (params: RenameFromTsParams, token: CancellationToken) =>
+  ctx.connection.onRequest(AureliaProtocolRequest.RenameFromTypeScript, (params: RenameFromTsParams, token: CancellationToken) =>
     handleRenameFromTs(ctx, params, requestGuard(ctx, token)));
 }
 

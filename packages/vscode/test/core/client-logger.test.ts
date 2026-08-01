@@ -31,10 +31,10 @@ describe("ClientLogger", () => {
     expect(channel.lines[1]).toBe("[ERROR] error message");
   });
 
-  test("debug is suppressed by default", () => {
+  test("delegates debug filtering to the native log channel", () => {
     const { logger, channel } = createLogger();
     logger.debug("debug message");
-    expect(channel.lines).toHaveLength(0);
+    expect(channel.lines).toEqual(["[DEBUG] debug message"]);
   });
 
   test("child scope is included in output", () => {

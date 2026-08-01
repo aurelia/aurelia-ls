@@ -45,6 +45,7 @@ interface StubStatusBarItem {
   visible: boolean;
   disposed?: boolean;
   show(): void;
+  hide(): void;
   dispose(): void;
 }
 
@@ -57,6 +58,24 @@ interface StubFileWatcher {
   fireCreate(uri: StubUri): void;
   fireChange(uri: StubUri): void;
   fireDelete(uri: StubUri): void;
+  dispose(): void;
+}
+
+interface StubOutputChannel {
+  readonly name: string;
+  readonly lines: string[];
+  readonly entries: Array<{
+    level: "trace" | "debug" | "info" | "warn" | "error";
+    message: string;
+    args: readonly unknown[];
+  }>;
+  appendLine(line: string): void;
+  trace(message: string, ...args: unknown[]): void;
+  debug(message: string, ...args: unknown[]): void;
+  info(message: string, ...args: unknown[]): void;
+  warn(message: string, ...args: unknown[]): void;
+  error(message: string | Error, ...args: unknown[]): void;
+  show(preserveFocus?: boolean): void;
   dispose(): void;
 }
 
@@ -113,7 +132,7 @@ export interface StubVscodeApi {
     showErrorMessage: (message: string) => string;
     showTextDocument: (doc: StubDocument, opts?: unknown) => Promise<{ document: StubDocument }>;
     openTextDocument: (target: unknown) => Promise<StubDocument>;
-    createOutputChannel: (name: string) => { name: string; appendLine: (line: string) => void; lines: string[]; dispose: () => void };
+    createOutputChannel: (name: string, options?: { log: true }) => StubOutputChannel;
     createStatusBarItem: (alignment: number, priority: number) => StubStatusBarItem;
     onDidChangeActiveTextEditor: (listener: (editor: unknown) => void) => VscodeDisposable;
   };
@@ -341,13 +360,29 @@ export function createVscodeApi(options: CreateVscodeApiOptions = {}): { vscode:
     return commandHandlers.get(command)?.(...args);
   }
 
-  function createOutputChannel(name: string) {
+  function createOutputChannel(name: string, _options?: { log: true }): StubOutputChannel {
     const lines: string[] = [];
+    const entries: StubOutputChannel["entries"] = [];
+    const write = (level: StubOutputChannel["entries"][number]["level"], message: string, args: readonly unknown[]) => {
+      entries.push({ level, message, args });
+      lines.push(`[${level.toUpperCase()}] ${message}`);
+      outputLogs.push(`[${level.toUpperCase()}] ${message}`);
+    };
     return {
       name,
       appendLine: (line: string) => lines.push(line),
       lines,
-      dispose: () => lines.splice(0, lines.length),
+      entries,
+      trace: (message: string, ...args: unknown[]) => write("trace", message, args),
+      debug: (message: string, ...args: unknown[]) => write("debug", message, args),
+      info: (message: string, ...args: unknown[]) => write("info", message, args),
+      warn: (message: string, ...args: unknown[]) => write("warn", message, args),
+      error: (message: string | Error, ...args: unknown[]) => write("error", String(message), args),
+      show: () => {},
+      dispose: () => {
+        lines.splice(0, lines.length);
+        entries.splice(0, entries.length);
+      },
     };
   }
 
@@ -454,6 +489,7 @@ export function createVscodeApi(options: CreateVscodeApiOptions = {}): { vscode:
         tooltip: undefined,
         visible: false,
         show() { this.visible = true; },
+        hide() { this.visible = false; },
         dispose() { this.disposed = true; },
       };
       statusItems.push(item);
