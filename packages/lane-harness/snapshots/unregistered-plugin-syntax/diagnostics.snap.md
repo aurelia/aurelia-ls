@@ -182,7 +182,312 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "fingerprint": "semantic-runtime:hit",
+  "answer": {
+    "analysisDepth": "binding-observation",
+    "continuations": [
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "orient",
+          "inspect"
+        ],
+        "kind": "follow-query",
+        "rationale": "Cluster detailed diagnostics back into a summary view.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "app-diagnostic-summary",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/unregistered-plugin-syntax-app.html"
+          }
+        },
+        "targetQueryKind": "app-diagnostic-summary"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "diagnose"
+        ],
+        "kind": "follow-query",
+        "rationale": "Compare unified diagnostics with ordinary TypeScript diagnostics.",
+        "targetQuery": {
+          "kind": "typescript-diagnostics",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/unregistered-plugin-syntax-app.html"
+          }
+        },
+        "targetQueryKind": "typescript-diagnostics"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "diagnose"
+        ],
+        "kind": "follow-query",
+        "rationale": "Compare unified diagnostics with template diagnostics.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "template-diagnostics",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/unregistered-plugin-syntax-app.html"
+          }
+        },
+        "targetQueryKind": "template-diagnostics"
+      },
+      {
+        "blockers": [
+          "No framework, TypeScript, or semantic-runtime diagnostic authority was returned for this related diagnostic family."
+        ],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world"
+          ],
+          "sourceFacts": [
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/unregistered-plugin-syntax-app.html",
+                  "path": "src/unregistered-plugin-syntax-app.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "unregistered-plugin-syntax"
+                },
+                "end": 50,
+                "kind": "source-span-address",
+                "label": "src/unregistered-plugin-syntax-app.html@33..50",
+                "path": "src/unregistered-plugin-syntax-app.html",
+                "role": "range",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "unregistered-plugin-syntax",
+                "start": 33
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/unregistered-plugin-syntax-app.html",
+                  "path": "src/unregistered-plugin-syntax-app.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "unregistered-plugin-syntax"
+                },
+                "end": 23,
+                "kind": "source-span-address",
+                "label": "src/unregistered-plugin-syntax-app.html@4..23",
+                "path": "src/unregistered-plugin-syntax-app.html",
+                "role": "range",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "unregistered-plugin-syntax",
+                "start": 4
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/unregistered-plugin-syntax-app.html",
+                  "path": "src/unregistered-plugin-syntax-app.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "unregistered-plugin-syntax"
+                },
+                "end": 96,
+                "kind": "source-span-address",
+                "label": "src/unregistered-plugin-syntax-app.html@64..96",
+                "path": "src/unregistered-plugin-syntax-app.html",
+                "role": "range",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "unregistered-plugin-syntax",
+                "start": 64
+              }
+            }
+          ],
+          "sourceRequirement": "exact-authored-span"
+        },
+        "intents": [
+          "diagnose",
+          "repair"
+        ],
+        "kind": "follow-query",
+        "rationale": "Inspect template-diagnostics rows referenced by returned diagnostics.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "template-diagnostics",
+          "page": {
+            "size": 200
+          }
+        },
+        "targetQueryKind": "template-diagnostics"
+      },
+      {
+        "blockers": [],
+        "cost": "app-world",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/unregistered-plugin-syntax-app.html",
+                  "path": "src/unregistered-plugin-syntax-app.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "unregistered-plugin-syntax"
+                },
+                "end": 50,
+                "kind": "source-span-address",
+                "label": "src/unregistered-plugin-syntax-app.html@33..50",
+                "path": "src/unregistered-plugin-syntax-app.html",
+                "role": "range",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "unregistered-plugin-syntax",
+                "start": 33
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/unregistered-plugin-syntax-app.html",
+                  "path": "src/unregistered-plugin-syntax-app.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "unregistered-plugin-syntax"
+                },
+                "end": 23,
+                "kind": "source-span-address",
+                "label": "src/unregistered-plugin-syntax-app.html@4..23",
+                "path": "src/unregistered-plugin-syntax-app.html",
+                "role": "range",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "unregistered-plugin-syntax",
+                "start": 4
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/unregistered-plugin-syntax-app.html",
+                  "path": "src/unregistered-plugin-syntax-app.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "unregistered-plugin-syntax"
+                },
+                "end": 96,
+                "kind": "source-span-address",
+                "label": "src/unregistered-plugin-syntax-app.html@64..96",
+                "path": "src/unregistered-plugin-syntax-app.html",
+                "role": "range",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "unregistered-plugin-syntax",
+                "start": 64
+              }
+            }
+          ],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "inspect"
+        ],
+        "kind": "follow-query",
+        "rationale": "Inspect framework capability-demand rows behind returned registration diagnostics.",
+        "targetQuery": {
+          "kind": "framework-capability-demands",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/unregistered-plugin-syntax-app.html"
+          }
+        },
+        "targetQueryKind": "framework-capability-demands"
+      }
+    ],
+    "coverage": "complete",
+    "page": null,
+    "result": "answered",
+    "schemaVersion": "0.2",
+    "selection": "not-applicable",
+    "summary": "Returned 3 app diagnostic(s)."
+  },
   "outcome": "result",
   "presentation": {
     "complete": true,
@@ -218,14 +523,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "source-edit-policy-open",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/unregistered-plugin-syntax-app.html",
@@ -288,14 +593,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "source-edit-policy-open",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/unregistered-plugin-syntax-app.html",
@@ -358,14 +663,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "source-edit-policy-open",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/unregistered-plugin-syntax-app.html",
@@ -431,14 +736,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "source-edit-policy-open",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/unregistered-plugin-syntax-app.html",
@@ -488,14 +793,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "source-edit-policy-open",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/unregistered-plugin-syntax-app.html",
@@ -545,14 +850,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "source-edit-policy-open",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/unregistered-plugin-syntax-app.html",
@@ -577,10 +882,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "uri": "fixtures://pressure/unregistered-plugin-syntax/src/unregistered-plugin-syntax-app.html"
       }
     ]
-  },
-  "suppressed": {
-    "diagnosticCount": 0,
-    "diagnostics": []
   },
   "surfaces": {
     "lsp": {
@@ -612,14 +913,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "source-edit-policy-open",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/unregistered-plugin-syntax-app.html",
@@ -669,14 +970,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "source-edit-policy-open",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/unregistered-plugin-syntax-app.html",
@@ -726,14 +1027,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "source-edit-policy-open",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/unregistered-plugin-syntax-app.html",

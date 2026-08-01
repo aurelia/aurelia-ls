@@ -1,7 +1,6 @@
 import { describe, test, expect, vi } from "vitest";
 import { CompletionItemKind, ResponseError } from "vscode-languageserver/node";
 import {
-  COMPLETION_GAP_MARKER_LABEL,
   canonicalDocumentUri,
   handleCodeAction,
   handleCodeActionResolve,
@@ -109,6 +108,7 @@ function createMockRenameContext(value: Record<string, unknown>) {
   };
   return {
     workspaceRoot: "/app",
+    connection: { sendNotification: vi.fn() },
     logger: { log: vi.fn(), info: vi.fn(), error: vi.fn(), warn: vi.fn() },
     trace: {
       spanAsync: vi.fn((_name: string, run: () => Promise<unknown>) => run()),
@@ -342,7 +342,10 @@ function createMockDefinitionContext(
   };
 }
 
-function createMockReferencesContext() {
+function createMockReferencesContext(options: {
+  readonly candidateRows?: readonly unknown[];
+  readonly readableDefinition?: boolean;
+} = {}) {
   const messageStart = testText.indexOf("my-el");
   const declarationStart = definitionText.indexOf("message");
   const document = {
@@ -358,6 +361,7 @@ function createMockReferencesContext() {
   };
   return {
     workspaceRoot: "/app",
+    connection: { sendNotification: vi.fn() },
     logger: { log: vi.fn(), info: vi.fn(), error: vi.fn(), warn: vi.fn() },
     ensureProgramDocument: vi.fn(() => document),
     semanticRuntime: {
@@ -366,7 +370,7 @@ function createMockReferencesContext() {
           schemaVersion: "0.2",
           result: "answered",
           selection: "not-applicable",
-          coverage: "complete",
+          coverage: options.candidateRows?.length ? "open" : "complete",
           summary: "mock semantic-runtime references answer",
           value: {
             displayText: "mock",
@@ -416,13 +420,14 @@ function createMockReferencesContext() {
                 targetSource: null,
               },
             ],
+            candidateRows: options.candidateRows ?? [],
           },
           page: null,
         }),
       ),
     },
     lookupText: vi.fn((uri: string) =>
-      uri === definitionUri ? definitionText : null,
+      uri === definitionUri && options.readableDefinition !== false ? definitionText : null,
     ),
   };
 }
@@ -677,6 +682,45 @@ describe("handleReferences", () => {
     expect(result?.[1]?.uri).toBe(definitionLspUri);
     expect(result?.[1]?.range.start).toEqual({ line: 1, character: 2 });
   });
+
+  test("returns verified references and discloses omitted same-name candidates", async () => {
+    const ctx = createMockReferencesContext({
+      candidateRows: [{
+        referenceKind: "template-candidate",
+        name: "message",
+        source: null,
+      }],
+    });
+
+    const result = await handleReferences(ctx as never, params, testRequestGuard);
+
+    expect(result).toHaveLength(2);
+    expect(ctx.connection.sendNotification).toHaveBeenCalledWith(
+      "window/showMessage",
+      expect.objectContaining({
+        type: 3,
+        message: expect.stringContaining("1 same-name usage could not be verified"),
+      }),
+    );
+  });
+
+  test("returns the mapped subset and warns when a source-backed row cannot be transported", async () => {
+    const ctx = createMockReferencesContext({ readableDefinition: false });
+
+    const result = await handleReferences(ctx as never, params, testRequestGuard);
+
+    expect(result).toHaveLength(1);
+    expect(ctx.logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining("omitted source-backed rows"),
+    );
+    expect(ctx.connection.sendNotification).toHaveBeenCalledWith(
+      "window/showMessage",
+      expect.objectContaining({
+        type: 2,
+        message: expect.stringContaining("1 source-backed reference could not be mapped"),
+      }),
+    );
+  });
 });
 
 describe("handleDocumentHighlight", () => {
@@ -747,16 +791,12 @@ describe("handleCodeAction", () => {
             repairAffordance: expect.objectContaining({
               actionability: "guided",
             }),
-            sourceDiagnostics: [
-              expect.objectContaining({
-                diagnosticKind: "missing-expression-member",
-              }),
-            ],
           }),
         }),
       }),
     );
     expect(result?.[0]?.edit).toBeUndefined();
+    expect(result?.[0]?.data).not.toHaveProperty("semanticRuntime.sourceDiagnostics");
     expect(result?.[0]?.data).toEqual(
       expect.objectContaining({
         semanticRuntime: expect.objectContaining({
@@ -989,7 +1029,7 @@ describe("handleCompletion", () => {
     );
   });
 
-  test("signals incomplete list and appends a gap marker when semantic-runtime reports missing inputs", async () => {
+  test("keeps semantic incompleteness out of the LSP transport paging flag", async () => {
     const ctx = createMockCompletionContext({
       completions: [{ name: "summary-panel", candidateKind: "custom-element" }],
       isIncomplete: true,
@@ -1000,18 +1040,14 @@ describe("handleCompletion", () => {
       params,
       testRequestGuard,
     );
-    expect(result.isIncomplete).toBe(true);
-    expect(result.items.some((item) => item.label === "summary-panel")).toBe(
-      true,
+    expect(result.isIncomplete).toBe(false);
+    expect(result.items.map((item) => item.label)).toEqual(["summary-panel"]);
+    expect(ctx.logger.info).toHaveBeenCalledWith(
+      expect.stringContaining("semantic coverage is open"),
     );
-    const marker = result.items.find(
-      (item) => item.label === COMPLETION_GAP_MARKER_LABEL,
-    );
-    expect(marker?.kind).toBe(CompletionItemKind.Text);
-    expect(marker?.insertText).toBe("");
   });
 
-  test("signals incomplete list when semantic-runtime answer outcome is partial", async () => {
+  test("does not add a synthetic completion candidate for an open answer", async () => {
     const ctx = createMockCompletionContext({
       completions: [{ name: "summary-panel", candidateKind: "custom-element" }],
       isIncomplete: true,
@@ -1022,12 +1058,8 @@ describe("handleCompletion", () => {
       params,
       testRequestGuard,
     );
-    expect(result.isIncomplete).toBe(true);
-    const marker = result.items.find(
-      (item) => item.label === COMPLETION_GAP_MARKER_LABEL,
-    );
-    expect(marker).toBeDefined();
-    expect(marker?.insertText).toBe("");
+    expect(result.isIncomplete).toBe(false);
+    expect(result.items.map((item) => item.label)).toEqual(["summary-panel"]);
   });
 
   test("returns empty CompletionList when document is unavailable", async () => {
@@ -1038,6 +1070,19 @@ describe("handleCompletion", () => {
       params,
       testRequestGuard,
     );
+    expect(result).toEqual({ isIncomplete: false, items: [] });
+  });
+
+  test("does not disguise a completion failure as a narrowed list", async () => {
+    const ctx = createMockCompletionContext({ completions: [] });
+    ctx.semanticRuntime.templateCompletions = vi.fn(() => Promise.reject(new Error("completion failed")));
+
+    const result = await handleCompletion(
+      ctx as never,
+      params,
+      testRequestGuard,
+    );
+
     expect(result).toEqual({ isIncomplete: false, items: [] });
   });
 });

@@ -628,7 +628,7 @@ function readTemplateCompletion(
     routeParameterEndpointPlans: emission.routeInstructions.readRouteParameterEndpointPlans(),
     i18nTranslationKeyProductHandles: emission.i18n.readTranslationKeys().map((translationKey) => translationKey.productHandle),
   });
-  const answer = answerTemplateCompletion(store, cursorContext.query, cursorContext.expressionWorld);
+  const answer = answerTemplateCompletion(store, cursorContext);
   return templateCompletionReadResult(
     store,
     { cursorContext, selection: readContext.selection },

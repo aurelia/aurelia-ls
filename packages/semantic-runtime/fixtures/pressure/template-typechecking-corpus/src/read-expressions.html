@@ -4,6 +4,7 @@
   <p class="optional-valid">${maybeItem?.label}</p>
   <p class="nullish-invalid">${maybeItem.label}</p>
   <p class="unknown-invalid">${unknownValue.label}</p>
+  <p class="unknown-repeat">${unknownValue.label}</p>
 
   <section if.bind="maybeItem">
     <p class="truthy-narrow-valid">${maybeItem.label}</p>

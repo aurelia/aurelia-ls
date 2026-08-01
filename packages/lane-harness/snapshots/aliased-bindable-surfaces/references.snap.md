@@ -74,6 +74,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 }
 ```
 
+### Notifications
+
+```json
+{
+  "notificationCount": 0,
+  "notifications": []
+}
+```
+
 ### Resolved locations
 
 ```json
@@ -187,6 +196,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 }
 ```
 
+### Notifications
+
+```json
+{
+  "notificationCount": 0,
+  "notifications": []
+}
+```
+
 ### Resolved locations
 
 ```json
@@ -281,6 +299,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "uri": "fixtures://pressure/aliased-bindable-surfaces/src/display-hint.ts"
     }
   ]
+}
+```
+
+### Notifications
+
+```json
+{
+  "notificationCount": 0,
+  "notifications": []
 }
 ```
 

@@ -165,6 +165,11 @@ describe("handleGetDiagnostics", () => {
               subjectName: "title",
               source: null,
             },
+            diagnosticIdentityHandle: 41,
+            diagnosticRelations: [{
+              relationKind: "same-operation-evidence",
+              relatedDiagnosticIdentityHandle: 42,
+            }],
             relatedInformation: [
               {
                 message: "Subject declaration.",
@@ -228,7 +233,14 @@ describe("handleGetDiagnostics", () => {
     );
     expect(result).toEqual({
       uri: canonicalDocumentUri("file:///test.html").uri,
-      fingerprint: "semantic-runtime:answered:complete",
+      answer: {
+        schemaVersion: "0.2",
+        result: "answered",
+        selection: "not-applicable",
+        coverage: "complete",
+        summary: "mock",
+        page: null,
+      },
       diagnostics: {
         bySurface: {
           lsp: [
@@ -274,10 +286,16 @@ describe("handleGetDiagnostics", () => {
     });
     expect(result?.diagnostics.bySurface.lsp[0]?.data).toEqual(
       expect.objectContaining({
-        semanticRuntime: true,
-        phase: null,
-        diagnosticKind: "missing-expression-member",
-        relatedQueryKind: "template-diagnostics",
+        semanticRuntime: expect.objectContaining({
+          phase: null,
+          diagnosticKind: "missing-expression-member",
+          relatedQueryKind: "template-diagnostics",
+          diagnosticIdentityHandle: 41,
+          diagnosticRelations: [{
+            relationKind: "same-operation-evidence",
+            relatedDiagnosticIdentityHandle: 42,
+          }],
+        }),
       }),
     );
     expect(result?.diagnostics.raw[0]?.related).toEqual([
@@ -456,10 +474,11 @@ describe("handleGetDiagnostics", () => {
     );
     expect(item?.data).toEqual(
       expect.objectContaining({
-        semanticRuntime: true,
-        diagnosticKind: "template-expression-typescript-diagnostic",
-        diagnosticAuthority: "typescript",
-        missingInput: "typescript:TS2345",
+        semanticRuntime: expect.objectContaining({
+          diagnosticKind: "template-expression-typescript-diagnostic",
+          diagnosticAuthority: "typescript",
+          missingInput: "typescript:TS2345",
+        }),
       }),
     );
   });

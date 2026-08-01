@@ -83,7 +83,10 @@ import {
   RuntimeExpressionResourceSignal,
   RuntimeExpressionResourceValueState,
 } from './runtime-expression-resource.js';
-import { RuntimeOperationReachability } from '../runtime-expression/runtime-operation.js';
+import {
+  RuntimeOperationReachability,
+  runtimeOperationMayBeReached,
+} from '../runtime-expression/runtime-operation.js';
 
 export class RuntimeValueConverterMaterializationRequest {
   constructor(
@@ -653,7 +656,7 @@ function valueConverterPhaseOrder(
   conversionOrder: ReturnType<RuntimeExpressionResourcePlan['readValueConverterPhaseOrder']>,
   cleanupOrder: number | null,
 ): number | null {
-  if (reachability !== RuntimeOperationReachability.Reached) {
+  if (!runtimeOperationMayBeReached(reachability)) {
     return null;
   }
   switch (phase) {
@@ -674,7 +677,7 @@ function lifecycleEffectsForValueConverter(
   reachability: RuntimeOperationReachability,
   configuredEffects: RuntimeExpressionResourceLifecycleEffects,
 ): RuntimeExpressionResourceLifecycleEffects {
-  if (reachability !== RuntimeOperationReachability.Reached
+  if (!runtimeOperationMayBeReached(reachability)
     || (phase !== RuntimeValueConverterApplicationPhase.Bind
       && phase !== RuntimeValueConverterApplicationPhase.Unbind)) {
     return RuntimeExpressionResourceLifecycleEffects.none;

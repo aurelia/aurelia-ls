@@ -30,7 +30,9 @@ Jump from template usage to source definition. Works for custom elements, attrib
 
 ### Find References
 
-Find usages of source-backed template members and Aurelia resources across your project.
+Find verified usages of source-backed template members and Aurelia resources across your project. When the runtime has
+concrete candidate sites it could not verify, or a verified source row cannot be mapped into an editor location, the
+request returns the verified subset and reports the omitted count instead of presenting the subset as complete.
 
 ### Rename — refactor safely
 
@@ -50,7 +52,10 @@ Inline hints show the resolved binding mode so you can see whether `.bind` resol
 
 ### Inspect and Reports
 
-Inspect at Cursor opens the semantic-runtime fact at the current template position in a markdown editor. Diagnostics Report opens a source-linked summary of current diagnostics without forcing focus to an output panel.
+Inspect at Cursor opens the semantic-runtime fact at the current template position in a markdown editor. Diagnostics
+Report opens a source-linked summary of current diagnostics without forcing focus to an output panel. The report retains
+the semantic answer state, presentation groups, raw rows, continuations, and source evidence rather than reconstructing
+confidence from the diagnostics that happen to fit the standard LSP surface.
 
 ## What Aurelia constructs are supported
 

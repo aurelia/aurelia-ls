@@ -208,8 +208,13 @@ And small workflow prompts:
 Tool responses return short human text plus machine-readable `structuredContent` that conforms to the shared MCP output
 schema `{ tool, generatedAt, workspaceRoot, value }`. Use the direct invoker when you want the full JSON envelope printed
 in a terminal. Pass `--text` or `--output text` when the question is whether public MCP content is terse enough.
+Compact text omits the ordinary `answered` / `exact`-or-`not-applicable` / `complete` answer state, but always names
+exceptional result, selection, or semantic-coverage states such as `unsupported`, `ambiguous`, `open`, or `truncated`.
 Paged row answers are bounded by row count and estimated row JSON size; when `page.byteClamped` is true, pass the
 returned `nextCursor` for the next slice rather than treating the shorter page as missing data.
+
+Omit `appRetention` for semantic-runtime's query-profile default. Handle-bearing answers automatically retain the app
+generation they need; an explicit `appRetention=dispose-app` remains incompatible with `detail=handles`.
 
 Use `aurelia_workspace_overview` first on monorepos. It returns shape/analysis rollups, `defaultAppProjectKey`, and app
 candidates; project rows are opt-in and paged so large workspaces stay reviewable. Pass a selected `projectKey` or
@@ -251,6 +256,11 @@ flow family or source state needs exact source spans.
 `aurelia_router_overview` summarizes several router row families at once and defaults to no sample rows. Pass
 `rowPageSize` when a few sample rows are worth the token cost. Use `aurelia_app_query` with a specific router query kind
 when one family needs cursor paging.
+
+`aurelia_open_seam_overview` is authored-site-first: it groups derivations at unique source sites while preserving raw
+row counts and causal facets. It supports site paging and filters, but not `detail`; use generic `open-seam-summary` or
+`open-seams` app queries for causal clusters, raw rows, and catalog-supported detail. `aurelia_template_cursor_info`
+returns one cursor-locus answer and therefore does not accept `page`; `aurelia_template_completions` remains paged.
 
 The direct invoker supports `--pageSize`/`--page.size` and `--pageCursor`/`--page.cursor` for cursor-bearing app queries,
 and `--projectPageSize`/`--projectPage.size` plus `--projectPageCursor`/`--projectPage.cursor` for workspace project

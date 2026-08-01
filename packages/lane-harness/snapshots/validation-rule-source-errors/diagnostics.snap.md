@@ -160,7 +160,196 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "fingerprint": "semantic-runtime:hit",
+  "answer": {
+    "analysisDepth": "binding-observation",
+    "continuations": [
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "orient",
+          "inspect"
+        ],
+        "kind": "follow-query",
+        "rationale": "Cluster detailed diagnostics back into a summary view.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "app-diagnostic-summary",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/main.ts"
+          }
+        },
+        "targetQueryKind": "app-diagnostic-summary"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "diagnose"
+        ],
+        "kind": "follow-query",
+        "rationale": "Compare unified diagnostics with ordinary TypeScript diagnostics.",
+        "targetQuery": {
+          "kind": "typescript-diagnostics",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/main.ts"
+          }
+        },
+        "targetQueryKind": "typescript-diagnostics"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "diagnose"
+        ],
+        "kind": "follow-query",
+        "rationale": "Compare unified diagnostics with template diagnostics.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "template-diagnostics",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/main.ts"
+          }
+        },
+        "targetQueryKind": "template-diagnostics"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world"
+          ],
+          "sourceFacts": [
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 694,
+                "kind": "typescript-diagnostic",
+                "label": "c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/validation-rule-source-errors/src/main.ts@671..694",
+                "path": "c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/validation-rule-source-errors/src/main.ts",
+                "role": "line:20:character:23",
+                "start": 671
+              }
+            }
+          ],
+          "sourceRequirement": "exact-authored-span"
+        },
+        "intents": [
+          "diagnose",
+          "repair"
+        ],
+        "kind": "follow-query",
+        "rationale": "Inspect typescript-diagnostics rows referenced by returned diagnostics.",
+        "targetQuery": {
+          "kind": "typescript-diagnostics",
+          "page": {
+            "size": 200
+          }
+        },
+        "targetQueryKind": "typescript-diagnostics"
+      },
+      {
+        "blockers": [],
+        "cost": "app-world",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world"
+          ],
+          "sourceFacts": [
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/main.ts",
+                  "path": "src/main.ts",
+                  "sourceFileRole": "app-source",
+                  "sourceWorkspaceKey": "validation-rule-source-errors"
+                },
+                "end": 638,
+                "kind": "source-span-address",
+                "label": "src/main.ts@509..638",
+                "path": "src/main.ts",
+                "role": "primary",
+                "sourceFileRole": "app-source",
+                "sourceWorkspaceKey": "validation-rule-source-errors",
+                "start": 509
+              }
+            }
+          ],
+          "sourceRequirement": "exact-authored-span"
+        },
+        "intents": [
+          "diagnose",
+          "repair"
+        ],
+        "kind": "follow-query",
+        "rationale": "Inspect validation-issues rows referenced by returned diagnostics.",
+        "targetQuery": {
+          "kind": "validation-issues",
+          "page": {
+            "size": 200
+          }
+        },
+        "targetQueryKind": "validation-issues"
+      }
+    ],
+    "coverage": "complete",
+    "page": null,
+    "result": "answered",
+    "schemaVersion": "0.2",
+    "selection": "not-applicable",
+    "summary": "Returned 2 app diagnostic(s)."
+  },
   "outcome": "result",
   "presentation": {
     "complete": true,
@@ -184,7 +373,21 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInput": null,
               "missingInputs": [],
               "phase": "semantic",
-              "relatedInformation": [],
+              "relatedInformation": [
+                {
+                  "code": "TS2728",
+                  "message": "'LocalValidationRulesKey' is declared here.",
+                  "source": {
+                    "end": 1048,
+                    "kind": "typescript-diagnostic",
+                    "label": "c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/validation-rule-source-errors/src/main.ts@1025..1048",
+                    "path": "c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/validation-rule-source-errors/src/main.ts",
+                    "role": "line:32:character:6",
+                    "start": 1025
+                  },
+                  "sourceRole": "app-source"
+                }
+              ],
               "relatedQueryKind": "typescript-diagnostics",
               "repairAffordance": {
                 "actionKind": "inspect-type-surface",
@@ -194,14 +397,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
-              "sourceRole": null,
+              "sourceRole": "app-source",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "expression",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/main.ts",
@@ -276,14 +479,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
-              "sourceRole": null,
+              "sourceRole": "app-source",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "bindable-validation",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/main.ts",
@@ -337,7 +540,21 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInput": null,
           "missingInputs": [],
           "phase": "semantic",
-          "relatedInformation": [],
+          "relatedInformation": [
+            {
+              "code": "TS2728",
+              "message": "'LocalValidationRulesKey' is declared here.",
+              "source": {
+                "end": 1048,
+                "kind": "typescript-diagnostic",
+                "label": "c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/validation-rule-source-errors/src/main.ts@1025..1048",
+                "path": "c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/validation-rule-source-errors/src/main.ts",
+                "role": "line:32:character:6",
+                "start": 1025
+              },
+              "sourceRole": "app-source"
+            }
+          ],
           "relatedQueryKind": "typescript-diagnostics",
           "repairAffordance": {
             "actionKind": "inspect-type-surface",
@@ -347,14 +564,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
-          "sourceRole": null,
+          "sourceRole": "app-source",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "expression",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/main.ts",
@@ -416,14 +633,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
-          "sourceRole": null,
+          "sourceRole": "app-source",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "bindable-validation",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/main.ts",
@@ -449,10 +666,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       }
     ]
   },
-  "suppressed": {
-    "diagnosticCount": 0,
-    "diagnostics": []
-  },
   "surfaces": {
     "lsp": {
       "diagnosticCount": 2,
@@ -471,7 +684,21 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInput": null,
             "missingInputs": [],
             "phase": "semantic",
-            "relatedInformation": [],
+            "relatedInformation": [
+              {
+                "code": "TS2728",
+                "message": "'LocalValidationRulesKey' is declared here.",
+                "source": {
+                  "end": 1048,
+                  "kind": "typescript-diagnostic",
+                  "label": "c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/validation-rule-source-errors/src/main.ts@1025..1048",
+                  "path": "c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/validation-rule-source-errors/src/main.ts",
+                  "role": "line:32:character:6",
+                  "start": 1025
+                },
+                "sourceRole": "app-source"
+              }
+            ],
             "relatedQueryKind": "typescript-diagnostics",
             "repairAffordance": {
               "actionKind": "inspect-type-surface",
@@ -481,14 +708,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
-            "sourceRole": null,
+            "sourceRole": "app-source",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "expression",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/main.ts",
@@ -550,14 +777,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
-            "sourceRole": null,
+            "sourceRole": "app-source",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "bindable-validation",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/main.ts",
@@ -916,7 +1143,280 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "fingerprint": "semantic-runtime:hit",
+  "answer": {
+    "analysisDepth": "binding-observation",
+    "continuations": [
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "orient",
+          "inspect"
+        ],
+        "kind": "follow-query",
+        "rationale": "Cluster detailed diagnostics back into a summary view.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "app-diagnostic-summary",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/validation-rule-source-errors-app.ts"
+          }
+        },
+        "targetQueryKind": "app-diagnostic-summary"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "diagnose"
+        ],
+        "kind": "follow-query",
+        "rationale": "Compare unified diagnostics with ordinary TypeScript diagnostics.",
+        "targetQuery": {
+          "kind": "typescript-diagnostics",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/validation-rule-source-errors-app.ts"
+          }
+        },
+        "targetQueryKind": "typescript-diagnostics"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "diagnose"
+        ],
+        "kind": "follow-query",
+        "rationale": "Compare unified diagnostics with template diagnostics.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "template-diagnostics",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/validation-rule-source-errors-app.ts"
+          }
+        },
+        "targetQueryKind": "template-diagnostics"
+      },
+      {
+        "blockers": [],
+        "cost": "app-world",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world"
+          ],
+          "sourceFacts": [
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/validation-rule-source-errors-app.ts",
+                  "path": "src/validation-rule-source-errors-app.ts",
+                  "sourceFileRole": "app-source",
+                  "sourceWorkspaceKey": "validation-rule-source-errors"
+                },
+                "end": 1284,
+                "kind": "source-span-address",
+                "label": "src/validation-rule-source-errors-app.ts@1194..1284",
+                "path": "src/validation-rule-source-errors-app.ts",
+                "role": "primary",
+                "sourceFileRole": "app-source",
+                "sourceWorkspaceKey": "validation-rule-source-errors",
+                "start": 1194
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/validation-rule-source-errors-app.ts",
+                  "path": "src/validation-rule-source-errors-app.ts",
+                  "sourceFileRole": "app-source",
+                  "sourceWorkspaceKey": "validation-rule-source-errors"
+                },
+                "end": 1356,
+                "kind": "source-span-address",
+                "label": "src/validation-rule-source-errors-app.ts@1316..1356",
+                "path": "src/validation-rule-source-errors-app.ts",
+                "role": "primary",
+                "sourceFileRole": "app-source",
+                "sourceWorkspaceKey": "validation-rule-source-errors",
+                "start": 1316
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/validation-rule-source-errors-app.ts",
+                  "path": "src/validation-rule-source-errors-app.ts",
+                  "sourceFileRole": "app-source",
+                  "sourceWorkspaceKey": "validation-rule-source-errors"
+                },
+                "end": 1455,
+                "kind": "source-span-address",
+                "label": "src/validation-rule-source-errors-app.ts@1448..1455",
+                "path": "src/validation-rule-source-errors-app.ts",
+                "role": "primary",
+                "sourceFileRole": "app-source",
+                "sourceWorkspaceKey": "validation-rule-source-errors",
+                "start": 1448
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/validation-rule-source-errors-app.ts",
+                  "path": "src/validation-rule-source-errors-app.ts",
+                  "sourceFileRole": "app-source",
+                  "sourceWorkspaceKey": "validation-rule-source-errors"
+                },
+                "end": 1661,
+                "kind": "source-span-address",
+                "label": "src/validation-rule-source-errors-app.ts@1466..1661",
+                "path": "src/validation-rule-source-errors-app.ts",
+                "role": "primary",
+                "sourceFileRole": "app-source",
+                "sourceWorkspaceKey": "validation-rule-source-errors",
+                "start": 1466
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/validation-rule-source-errors-app.ts",
+                  "path": "src/validation-rule-source-errors-app.ts",
+                  "sourceFileRole": "app-source",
+                  "sourceWorkspaceKey": "validation-rule-source-errors"
+                },
+                "end": 1747,
+                "kind": "source-span-address",
+                "label": "src/validation-rule-source-errors-app.ts@1745..1747",
+                "path": "src/validation-rule-source-errors-app.ts",
+                "role": "primary",
+                "sourceFileRole": "app-source",
+                "sourceWorkspaceKey": "validation-rule-source-errors",
+                "start": 1745
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/validation-rule-source-errors-app.ts",
+                  "path": "src/validation-rule-source-errors-app.ts",
+                  "sourceFileRole": "app-source",
+                  "sourceWorkspaceKey": "validation-rule-source-errors"
+                },
+                "end": 1830,
+                "kind": "source-span-address",
+                "label": "src/validation-rule-source-errors-app.ts@1820..1830",
+                "path": "src/validation-rule-source-errors-app.ts",
+                "role": "primary",
+                "sourceFileRole": "app-source",
+                "sourceWorkspaceKey": "validation-rule-source-errors",
+                "start": 1820
+              }
+            }
+          ],
+          "sourceRequirement": "exact-authored-span"
+        },
+        "intents": [
+          "diagnose",
+          "repair"
+        ],
+        "kind": "follow-query",
+        "rationale": "Inspect validation-issues rows referenced by returned diagnostics.",
+        "targetQuery": {
+          "kind": "validation-issues",
+          "page": {
+            "size": 200
+          }
+        },
+        "targetQueryKind": "validation-issues"
+      }
+    ],
+    "coverage": "complete",
+    "page": null,
+    "result": "answered",
+    "schemaVersion": "0.2",
+    "selection": "not-applicable",
+    "summary": "Returned 6 app diagnostic(s)."
+  },
   "outcome": "result",
   "presentation": {
     "complete": true,
@@ -950,14 +1450,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
-              "sourceRole": null,
+              "sourceRole": "app-source",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "bindable-validation",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/validation-rule-source-errors-app.ts",
@@ -1018,14 +1518,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
-              "sourceRole": null,
+              "sourceRole": "app-source",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "bindable-validation",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/validation-rule-source-errors-app.ts",
@@ -1086,14 +1586,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
-              "sourceRole": null,
+              "sourceRole": "app-source",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "bindable-validation",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/validation-rule-source-errors-app.ts",
@@ -1154,14 +1654,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
-              "sourceRole": null,
+              "sourceRole": "app-source",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "bindable-validation",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/validation-rule-source-errors-app.ts",
@@ -1222,14 +1722,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
-              "sourceRole": null,
+              "sourceRole": "app-source",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "bindable-validation",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/validation-rule-source-errors-app.ts",
@@ -1290,14 +1790,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
-              "sourceRole": null,
+              "sourceRole": "app-source",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "bindable-validation",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/validation-rule-source-errors-app.ts",
@@ -1361,14 +1861,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
-          "sourceRole": null,
+          "sourceRole": "app-source",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "bindable-validation",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/validation-rule-source-errors-app.ts",
@@ -1416,14 +1916,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
-          "sourceRole": null,
+          "sourceRole": "app-source",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "bindable-validation",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/validation-rule-source-errors-app.ts",
@@ -1471,14 +1971,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
-          "sourceRole": null,
+          "sourceRole": "app-source",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "bindable-validation",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/validation-rule-source-errors-app.ts",
@@ -1526,14 +2026,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
-          "sourceRole": null,
+          "sourceRole": "app-source",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "bindable-validation",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/validation-rule-source-errors-app.ts",
@@ -1581,14 +2081,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
-          "sourceRole": null,
+          "sourceRole": "app-source",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "bindable-validation",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/validation-rule-source-errors-app.ts",
@@ -1636,14 +2136,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
-          "sourceRole": null,
+          "sourceRole": "app-source",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "bindable-validation",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/validation-rule-source-errors-app.ts",
@@ -1668,10 +2168,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "uri": "fixtures://pressure/validation-rule-source-errors/src/validation-rule-source-errors-app.ts"
       }
     ]
-  },
-  "suppressed": {
-    "diagnosticCount": 0,
-    "diagnostics": []
   },
   "surfaces": {
     "lsp": {
@@ -1701,14 +2197,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
-            "sourceRole": null,
+            "sourceRole": "app-source",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "bindable-validation",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/validation-rule-source-errors-app.ts",
@@ -1756,14 +2252,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
-            "sourceRole": null,
+            "sourceRole": "app-source",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "bindable-validation",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/validation-rule-source-errors-app.ts",
@@ -1811,14 +2307,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
-            "sourceRole": null,
+            "sourceRole": "app-source",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "bindable-validation",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/validation-rule-source-errors-app.ts",
@@ -1866,14 +2362,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
-            "sourceRole": null,
+            "sourceRole": "app-source",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "bindable-validation",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/validation-rule-source-errors-app.ts",
@@ -1921,14 +2417,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
-            "sourceRole": null,
+            "sourceRole": "app-source",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "bindable-validation",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/validation-rule-source-errors-app.ts",
@@ -1976,14 +2472,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
-            "sourceRole": null,
+            "sourceRole": "app-source",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "bindable-validation",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/validation-rule-source-errors-app.ts",

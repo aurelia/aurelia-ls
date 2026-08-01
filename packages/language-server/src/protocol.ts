@@ -2,6 +2,7 @@ import type {
   SemanticAppDiagnosticRow,
   SemanticDiagnosticPresentationRelation,
   SemanticDiagnosticRelatedInformation,
+  SemanticRuntimeAnswer,
 } from "@aurelia-ls/semantic-runtime";
 
 export const AURELIA_TEMPLATE_CODE_ACTION_RESOLVE_SCHEMA = "aurelia.template-code-action-resolve/1" as const;
@@ -103,8 +104,13 @@ export type DiagnosticsSnapshotBundle = {
   presentation?: DiagnosticsSnapshotPresentation;
 };
 
+export type DiagnosticsSnapshotAnswer = Pick<
+  SemanticRuntimeAnswer<unknown>,
+  "schemaVersion" | "result" | "selection" | "coverage" | "summary" | "page" | "analysisDepth" | "continuations"
+>;
+
 export type DiagnosticsSnapshotResponse = {
   uri: string;
-  fingerprint: string;
+  answer: DiagnosticsSnapshotAnswer;
   diagnostics: DiagnosticsSnapshotBundle;
 };

@@ -48,17 +48,18 @@ function formatDiagnosticsReport(snapshot: DiagnosticsSnapshotResponse): string 
 
   const lines: string[] = ["# Aurelia Diagnostics Report", ""];
 
-  // Summary section
   lines.push(`**File:** \`${snapshot.uri}\``);
-  lines.push(`**Analysis:** ${snapshot.fingerprint}`);
+  lines.push(`**Analysis:** ${snapshot.answer.result}; selection=${snapshot.answer.selection}; coverage=${snapshot.answer.coverage}`);
+  lines.push(`**Evidence:** ${diagnostics.raw.length} raw row${diagnostics.raw.length === 1 ? "" : "s"}; ${totalCounts.total} presented issue${totalCounts.total === 1 ? "" : "s"}`);
   lines.push("");
 
   if (totalCounts.total === 0) {
-    lines.push("No diagnostics. Analysis is clean.");
-    return lines.join("\n");
+    lines.push(snapshot.answer.coverage === "complete"
+      ? "No diagnostics. Analysis is clean for the declared semantic basis."
+      : "No diagnostics were presented, but analysis coverage is not complete.");
+    lines.push("");
   }
 
-  // Active diagnostics
   if (totalCounts.total > 0) {
     const parts: string[] = [];
     if (totalCounts.error > 0) parts.push(`${totalCounts.error} error${totalCounts.error > 1 ? "s" : ""}`);
@@ -76,7 +77,6 @@ function formatDiagnosticsReport(snapshot: DiagnosticsSnapshotResponse): string 
     lines.push("");
   }
 
-  // Other surfaces (for framework developers — show if non-empty)
   for (const [surface, items] of surfaceEntries) {
     if (surface === "lsp" || items.length === 0) continue;
     lines.push(`## Surface: ${surface} (${items.length})`, "");
@@ -84,6 +84,16 @@ function formatDiagnosticsReport(snapshot: DiagnosticsSnapshotResponse): string 
       lines.push(`- **${diag.code}**: ${diag.message}`);
     }
     lines.push("");
+  }
+
+  lines.push(`## Raw Evidence (${diagnostics.raw.length})`, "");
+  if (diagnostics.raw.length === 0) {
+    lines.push("No raw diagnostic rows.");
+  } else {
+    for (const diagnostic of diagnostics.raw) {
+      const status = diagnostic.status == null ? "" : ` [${diagnostic.status}]`;
+      lines.push(`- **${diagnostic.code}**${status}: ${diagnostic.message}`);
+    }
   }
 
   return lines.join("\n");

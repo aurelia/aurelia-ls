@@ -75,7 +75,10 @@ import { expressionProductHandlesForRuntimeBinding } from './runtime-binding-exp
 import {
   RuntimeExpressionResourceApplicationOrigin,
 } from './runtime-expression-resource.js';
-import { RuntimeOperationReachability } from '../runtime-expression/runtime-operation.js';
+import {
+  RuntimeOperationReachability,
+  runtimeOperationMayBeReached,
+} from '../runtime-expression/runtime-operation.js';
 import type { RuntimeRenderingEmission } from './runtime-rendering-materializer.js';
 import {
   runtimeBindingAccessTarget,
@@ -162,7 +165,7 @@ export type RuntimeExpressionResourcePlanEntry =
   | RuntimeBindingBehaviorPlanEntry
   | RuntimeValueConverterPlanEntry;
 
-/** Effective mode for one exact source-expression chain after reached binding behaviors have bound. */
+/** Effective mode for one exact source-expression chain after every structurally admitted behavior has bound. */
 export class RuntimeExpressionBindingModePlanEntry {
   constructor(
     readonly bindingProductHandle: ProductHandle,
@@ -259,8 +262,7 @@ export class RuntimeExpressionResourcePlan {
       }
     }
     for (const entry of entries) {
-      if (entry.bindReachability !== RuntimeOperationReachability.Reached
-        || (isBindingBehaviorPlanEntry(entry) && entry.issue != null)
+      if ((isBindingBehaviorPlanEntry(entry) && entry.issue != null)
         || (isValueConverterPlanEntry(entry) && entry.resource == null)) {
         this.failedBindChains.add(expressionChainKey(
           entry.binding.productHandle,
@@ -276,7 +278,7 @@ export class RuntimeExpressionResourcePlan {
         entry.expressionProductHandle,
         entry.chainIndex,
       );
-      if (entry.bindReachability !== RuntimeOperationReachability.Reached
+      if (!runtimeOperationMayBeReached(entry.bindReachability)
         || entry.resource == null
         || this.failedBindChains.has(key)) {
         continue;
@@ -377,28 +379,29 @@ export class RuntimeExpressionResourcePlan {
   readPostBindPhaseReachability(
     entry: RuntimeExpressionResourcePlanEntry,
   ): RuntimeOperationReachability {
-    if (entry.bindReachability !== RuntimeOperationReachability.Reached) {
-      return entry.bindReachability;
-    }
-    return this.failedBindChains.has(expressionChainKey(
+    if (this.failedBindChains.has(expressionChainKey(
       entry.binding.productHandle,
       entry.expressionProductHandle,
       chainIndexForPlanEntry(entry),
-    ))
-      ? RuntimeOperationReachability.BlockedByBindFailure
-      : RuntimeOperationReachability.Reached;
+    ))) {
+      return RuntimeOperationReachability.BlockedByBindFailure;
+    }
+    if (entry.bindReachability !== RuntimeOperationReachability.Reached) {
+      return entry.bindReachability;
+    }
+    return RuntimeOperationReachability.Reached;
   }
 
   /** Whether a resource that completed bind must be cleaned up, including rollback after a later bind failure. */
   readCleanupPhaseReachability(
     entry: RuntimeExpressionResourcePlanEntry,
   ): RuntimeOperationReachability {
-    if (entry.bindReachability !== RuntimeOperationReachability.Reached) {
+    if (this.completedBindEntries.has(entry)) {
       return entry.bindReachability;
     }
-    return this.completedBindEntries.has(entry)
-      ? RuntimeOperationReachability.Reached
-      : RuntimeOperationReachability.BlockedByBindFailure;
+    return runtimeOperationMayBeReached(entry.bindReachability)
+      ? RuntimeOperationReachability.BlockedByBindFailure
+      : entry.bindReachability;
   }
 
   /** Reverse activation order for successful resource cleanup across all expression chains of the binding. */
@@ -607,17 +610,15 @@ export class RuntimeExpressionResourcePlanner {
             }
             chainState = new BindingBehaviorChainState(
               initialMode,
-              activationReachability !== RuntimeOperationReachability.Reached
-                ? activationReachability
-                : ast.$kind === 'Interpolation' && previousChainState?.blockedBy != null
-                  ? RuntimeOperationReachability.BlockedByBindFailure
-                  : null,
+              ast.$kind === 'Interpolation' && previousChainState?.blockedBy != null
+                ? RuntimeOperationReachability.BlockedByBindFailure
+                : null,
             );
             chainStates.set(occurrence.chainIndex, chainState);
           }
-          const reached = chainState.blockedBy == null;
+          const structurallyReached = chainState.blockedBy == null;
           const runtimeChainDepth = chainState.nextRuntimeChainDepth++;
-          const bindOrder = reached ? chainState.nextBindOrder++ : null;
+          const bindOrder = structurallyReached ? chainState.nextBindOrder++ : null;
           if (isBindingBehaviorOccurrence(occurrence)) {
             const resource = findVisibleTemplateResource(
               resourceScope,
@@ -628,7 +629,7 @@ export class RuntimeExpressionResourcePlanner {
               readBuiltInVisibleTemplateResource(input.expressionWorld.projector.publication, resource),
             );
             const resourceBindEffects = bindEffects.readEffects(resource);
-            const issue = reached
+            const issue = structurallyReached
               ? this.issueForBindingBehavior(
                   binding,
                   target,
@@ -652,17 +653,17 @@ export class RuntimeExpressionResourcePlanner {
               occurrence,
               occurrence.chainDepth,
               runtimeChainDepth,
-              reached
-                ? RuntimeOperationReachability.Reached
+              structurallyReached
+                ? activationReachability
                 : chainState.blockedBy!,
               bindOrder,
               issue,
             ));
-            if (reached && issue != null) {
+            if (structurallyReached && issue != null) {
               chainState.blockedBy = RuntimeOperationReachability.BlockedByOuterFailure;
               continue;
             }
-            if (reached
+            if (structurallyReached
               && builtInResource != null
               && bindingBehaviorProjectsThroughValueConverter(occurrence.expression)) {
               const projected = bindingBehaviorValueConverterProjection(occurrence.expression);
@@ -688,7 +689,7 @@ export class RuntimeExpressionResourcePlanner {
                 null,
                 chainState.nextRuntimeChainDepth++,
                 RuntimeExpressionResourceApplicationOrigin.BindingBehaviorProjection,
-                RuntimeOperationReachability.Reached,
+                activationReachability,
                 chainState.nextBindOrder++,
               ));
               if (projectedResource == null) {
@@ -723,12 +724,12 @@ export class RuntimeExpressionResourcePlanner {
             occurrence.chainDepth,
             runtimeChainDepth,
             RuntimeExpressionResourceApplicationOrigin.Authored,
-            reached
-              ? RuntimeOperationReachability.Reached
+            structurallyReached
+              ? activationReachability
               : chainState.blockedBy!,
             bindOrder,
           ));
-          if (reached && resource == null) {
+          if (structurallyReached && resource == null) {
             chainState.blockedBy = RuntimeOperationReachability.BlockedByOuterFailure;
           }
         }
@@ -737,11 +738,9 @@ export class RuntimeExpressionResourcePlanner {
         for (let chainIndex = 0; chainIndex < chainCount; chainIndex++) {
           const chainState = chainStates.get(chainIndex) ?? null;
           const chainFailed = chainState?.blockedBy != null;
-          const reachability = activationReachability !== RuntimeOperationReachability.Reached
-            ? activationReachability
-            : earlierChainFailed || chainFailed
-              ? RuntimeOperationReachability.BlockedByBindFailure
-              : RuntimeOperationReachability.Reached;
+          const reachability = earlierChainFailed || chainFailed
+            ? RuntimeOperationReachability.BlockedByBindFailure
+            : activationReachability;
           sourceEvaluationReachabilityByChain.set(
             expressionChainKey(binding.productHandle, expressionProductHandle, chainIndex),
             reachability,
@@ -974,7 +973,7 @@ function chainIndexForPlanEntry(entry: RuntimeExpressionResourcePlanEntry): numb
 }
 
 function expressionResourceBindCompleted(entry: RuntimeExpressionResourcePlanEntry): boolean {
-  if (entry.bindReachability !== RuntimeOperationReachability.Reached || entry.resource == null) {
+  if (!runtimeOperationMayBeReached(entry.bindReachability) || entry.resource == null) {
     return false;
   }
   return isValueConverterPlanEntry(entry) || entry.issue == null;

@@ -913,28 +913,41 @@
         "api",
         "references",
         "rename",
-        "authoring"
+        "authoring",
+        "lsp"
       ],
       "summary": "Reference and rename answers separate proven rows from same-name unproven candidateRows and retain open coverage when candidates exist; TypeScript parity is the floor, not the ceiling.",
-      "rationale": "Members on unknown owners or missing members on primitives cannot be proven to observe the selected declaration. Refusing the whole operation would be worse than TypeScript; silently excluding them produced the silent-partial class observed on the mixed-form-surfaces fixture (rename answered with complete coverage despite unaccounted same-name usages). Operator ruling 2026-07-07: proceed with proven edits and surface candidates - the product should exceed TypeScript parity. Flat LSP Location[] has no honesty channel, so unproven candidates must not be poured into it; the standard-LSP rename consumer instead notifies 'prepared N verified edits; M same-name usages could not be verified', worded as 'prepared' because the server cannot know whether the client applied the returned WorkspaceEdit.",
+      "rationale": "Members on unknown owners or missing members on primitives cannot be proven to observe the selected declaration. Refusing the whole operation would be worse than TypeScript; silently excluding them produced the silent-partial class observed on the mixed-form-surfaces fixture. Operator ruling 2026-07-07: proceed with proven edits and surface candidates. Gate 7 ruling 2026-08-01: standard LSP references returns the verified Location subset and emits one request-scoped informational notification when concrete candidate sites were omitted; mapping failures raise that notification to warning. Unproven candidates never enter the flat Location list. Rename retains its verified-edit notification, worded as prepared because the server cannot know whether the client applied the WorkspaceEdit.",
       "guidance": [
         "Candidate matching is name-based by design (selected member name or root source name); same-name rows proven to a DIFFERENT declaration are shadowing, not candidates.",
         "Semantic answer coverage must be `open` whenever candidateRows is non-empty; transport paging is independent and does not close or open that coverage.",
-        "References-side candidate UX (candidates as locations or richer surfaces) is deliberately deferred pending operator adjudication; do not invent it.",
+        "Standard LSP references returns only verified locations. When concrete candidateRows were omitted, send one concise request-scoped informational notification with verified and unverified counts; do not add candidates to Location[].",
+        "A source-backed verified row that cannot be mapped is adapter failure, not semantic uncertainty. Keep the verified subset, log the named failures, and use a warning notification rather than silently claiming completeness.",
         "Any new consumer (custom request, MCP, future editor surface) must surface candidate existence before claiming the operation covered the workspace."
       ],
+      "nextActionPolicy": "when-touched",
       "anchors": [
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/inquiry/answer.ts",
           "symbolName": "InquiryAnswerCoverage",
-          "summary": "Semantic coverage vocabulary; `open` signals unproven candidates remain independently from transport paging."
+          "summary": "Semantic coverage vocabulary; open signals unproven candidates remain independently from transport paging."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/api/app-template-queries.ts",
           "symbolName": "runtimeBindingExpressionAccessIsUnprovenSameNameCandidate",
           "summary": "Shared binding-resolution candidate test feeding references, rename, and rename-from-TypeScript answers."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/language-server/src/handlers/features.ts",
+          "summary": "Standard LSP reference handler returns the verified subset and discloses concrete omissions."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/language-server/src/mapping/lsp-types.ts",
+          "summary": "Failure-aware projection of exact semantic reference rows into LSP locations."
         }
       ],
       "liveChecks": [
@@ -942,10 +955,18 @@
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/inquiry/answer.ts",
           "symbolName": "InquiryAnswerCoverage"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/language-server/src/handlers/features.ts"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/language-server/src/mapping/lsp-types.ts"
         }
       ],
       "createdAt": "2026-07-07",
-      "updatedAt": "2026-07-31"
+      "updatedAt": "2026-08-01"
     },
     {
       "id": "decision:lsp-source-lifecycle-bridge",

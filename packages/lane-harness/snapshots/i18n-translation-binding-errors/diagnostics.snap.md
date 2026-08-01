@@ -232,7 +232,231 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "fingerprint": "semantic-runtime:hit",
+  "answer": {
+    "analysisDepth": "binding-observation",
+    "continuations": [
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "orient",
+          "inspect"
+        ],
+        "kind": "follow-query",
+        "rationale": "Cluster detailed diagnostics back into a summary view.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "app-diagnostic-summary",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/i18n-translation-binding-errors-app.html"
+          }
+        },
+        "targetQueryKind": "app-diagnostic-summary"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "diagnose"
+        ],
+        "kind": "follow-query",
+        "rationale": "Compare unified diagnostics with ordinary TypeScript diagnostics.",
+        "targetQuery": {
+          "kind": "typescript-diagnostics",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/i18n-translation-binding-errors-app.html"
+          }
+        },
+        "targetQueryKind": "typescript-diagnostics"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "diagnose"
+        ],
+        "kind": "follow-query",
+        "rationale": "Compare unified diagnostics with template diagnostics.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "template-diagnostics",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/i18n-translation-binding-errors-app.html"
+          }
+        },
+        "targetQueryKind": "template-diagnostics"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world"
+          ],
+          "sourceFacts": [
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/i18n-translation-binding-errors-app.html",
+                  "path": "src/i18n-translation-binding-errors-app.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "i18n-translation-binding-errors"
+                },
+                "end": 56,
+                "kind": "source-span-address",
+                "label": "src/i18n-translation-binding-errors-app.html@18..56",
+                "path": "src/i18n-translation-binding-errors-app.html",
+                "role": "range",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "i18n-translation-binding-errors",
+                "start": 18
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/i18n-translation-binding-errors-app.html",
+                  "path": "src/i18n-translation-binding-errors-app.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "i18n-translation-binding-errors"
+                },
+                "end": 465,
+                "kind": "source-span-address",
+                "label": "src/i18n-translation-binding-errors-app.html@429..465",
+                "path": "src/i18n-translation-binding-errors-app.html",
+                "role": "range",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "i18n-translation-binding-errors",
+                "start": 429
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/i18n-translation-binding-errors-app.html",
+                  "path": "src/i18n-translation-binding-errors-app.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "i18n-translation-binding-errors"
+                },
+                "end": 88,
+                "kind": "source-span-address",
+                "label": "src/i18n-translation-binding-errors-app.html@69..88",
+                "path": "src/i18n-translation-binding-errors-app.html",
+                "role": "range",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "i18n-translation-binding-errors",
+                "start": 69
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/i18n-translation-binding-errors-app.html",
+                  "path": "src/i18n-translation-binding-errors-app.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "i18n-translation-binding-errors"
+                },
+                "end": 126,
+                "kind": "source-span-address",
+                "label": "src/i18n-translation-binding-errors-app.html@99..126",
+                "path": "src/i18n-translation-binding-errors-app.html",
+                "role": "range",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "i18n-translation-binding-errors",
+                "start": 99
+              }
+            }
+          ],
+          "sourceRequirement": "exact-authored-span"
+        },
+        "intents": [
+          "diagnose",
+          "repair"
+        ],
+        "kind": "follow-query",
+        "rationale": "Inspect template-diagnostics rows referenced by returned diagnostics.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "template-diagnostics",
+          "page": {
+            "size": 200
+          }
+        },
+        "targetQueryKind": "template-diagnostics"
+      }
+    ],
+    "coverage": "complete",
+    "page": null,
+    "result": "answered",
+    "schemaVersion": "0.2",
+    "selection": "not-applicable",
+    "summary": "Returned 4 app diagnostic(s)."
+  },
   "outcome": "result",
   "presentation": {
     "complete": true,
@@ -268,14 +492,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/i18n-translation-binding-errors-app.html",
@@ -338,14 +562,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/i18n-translation-binding-errors-app.html",
@@ -408,14 +632,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/i18n-translation-binding-errors-app.html",
@@ -478,14 +702,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/i18n-translation-binding-errors-app.html",
@@ -551,14 +775,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/i18n-translation-binding-errors-app.html",
@@ -608,14 +832,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/i18n-translation-binding-errors-app.html",
@@ -665,14 +889,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/i18n-translation-binding-errors-app.html",
@@ -722,14 +946,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/i18n-translation-binding-errors-app.html",
@@ -754,10 +978,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "uri": "fixtures://pressure/i18n-translation-binding-errors/src/i18n-translation-binding-errors-app.html"
       }
     ]
-  },
-  "suppressed": {
-    "diagnosticCount": 0,
-    "diagnostics": []
   },
   "surfaces": {
     "lsp": {
@@ -789,14 +1009,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/i18n-translation-binding-errors-app.html",
@@ -846,14 +1066,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/i18n-translation-binding-errors-app.html",
@@ -903,14 +1123,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/i18n-translation-binding-errors-app.html",
@@ -960,14 +1180,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/i18n-translation-binding-errors-app.html",

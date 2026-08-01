@@ -99,7 +99,7 @@ describe("refreshDocument", () => {
 
     expect(ctx.connection.sendDiagnostics).toHaveBeenCalledTimes(1);
     expect(ctx.connection.sendDiagnostics).toHaveBeenCalledWith(
-      expect.objectContaining({ uri: doc.uri }),
+      expect.objectContaining({ uri: doc.uri, version: doc.version }),
     );
   });
 

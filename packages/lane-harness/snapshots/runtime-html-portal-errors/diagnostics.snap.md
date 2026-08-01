@@ -182,7 +182,206 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "fingerprint": "semantic-runtime:hit",
+  "answer": {
+    "analysisDepth": "binding-observation",
+    "continuations": [
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "orient",
+          "inspect"
+        ],
+        "kind": "follow-query",
+        "rationale": "Cluster detailed diagnostics back into a summary view.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "app-diagnostic-summary",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/runtime-html-portal-errors-app.html"
+          }
+        },
+        "targetQueryKind": "app-diagnostic-summary"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "diagnose"
+        ],
+        "kind": "follow-query",
+        "rationale": "Compare unified diagnostics with ordinary TypeScript diagnostics.",
+        "targetQuery": {
+          "kind": "typescript-diagnostics",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/runtime-html-portal-errors-app.html"
+          }
+        },
+        "targetQueryKind": "typescript-diagnostics"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "diagnose"
+        ],
+        "kind": "follow-query",
+        "rationale": "Compare unified diagnostics with template diagnostics.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "template-diagnostics",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/runtime-html-portal-errors-app.html"
+          }
+        },
+        "targetQueryKind": "template-diagnostics"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world"
+          ],
+          "sourceFacts": [
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/runtime-html-portal-errors-app.html",
+                  "path": "src/runtime-html-portal-errors-app.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "runtime-html-portal-errors"
+                },
+                "end": 103,
+                "kind": "source-span-address",
+                "label": "src/runtime-html-portal-errors-app.html@103..103",
+                "path": "src/runtime-html-portal-errors-app.html",
+                "role": "value",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "runtime-html-portal-errors",
+                "start": 103
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/runtime-html-portal-errors-app.html",
+                  "path": "src/runtime-html-portal-errors-app.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "runtime-html-portal-errors"
+                },
+                "end": 180,
+                "kind": "source-span-address",
+                "label": "src/runtime-html-portal-errors-app.html@176..180",
+                "path": "src/runtime-html-portal-errors-app.html",
+                "role": "value",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "runtime-html-portal-errors",
+                "start": 176
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/runtime-html-portal-errors-app.html",
+                  "path": "src/runtime-html-portal-errors-app.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "runtime-html-portal-errors"
+                },
+                "end": 51,
+                "kind": "source-span-address",
+                "label": "src/runtime-html-portal-errors-app.html@45..51",
+                "path": "src/runtime-html-portal-errors-app.html",
+                "role": "value",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "runtime-html-portal-errors",
+                "start": 45
+              }
+            }
+          ],
+          "sourceRequirement": "exact-authored-span"
+        },
+        "intents": [
+          "diagnose",
+          "repair"
+        ],
+        "kind": "follow-query",
+        "rationale": "Inspect template-diagnostics rows referenced by returned diagnostics.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "template-diagnostics",
+          "page": {
+            "size": 200
+          }
+        },
+        "targetQueryKind": "template-diagnostics"
+      }
+    ],
+    "coverage": "complete",
+    "page": null,
+    "result": "answered",
+    "schemaVersion": "0.2",
+    "selection": "not-applicable",
+    "summary": "Returned 3 app diagnostic(s)."
+  },
   "outcome": "result",
   "presentation": {
     "complete": true,
@@ -218,14 +417,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/runtime-html-portal-errors-app.html",
@@ -288,14 +487,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/runtime-html-portal-errors-app.html",
@@ -358,14 +557,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/runtime-html-portal-errors-app.html",
@@ -431,14 +630,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/runtime-html-portal-errors-app.html",
@@ -488,14 +687,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/runtime-html-portal-errors-app.html",
@@ -545,14 +744,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/runtime-html-portal-errors-app.html",
@@ -577,10 +776,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "uri": "fixtures://pressure/runtime-html-portal-errors/src/runtime-html-portal-errors-app.html"
       }
     ]
-  },
-  "suppressed": {
-    "diagnosticCount": 0,
-    "diagnostics": []
   },
   "surfaces": {
     "lsp": {
@@ -612,14 +807,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/runtime-html-portal-errors-app.html",
@@ -669,14 +864,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/runtime-html-portal-errors-app.html",
@@ -726,14 +921,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/runtime-html-portal-errors-app.html",

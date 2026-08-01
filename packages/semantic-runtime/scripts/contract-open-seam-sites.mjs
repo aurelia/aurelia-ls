@@ -35,6 +35,21 @@ const summary = app.ask({
   openSeamKindKey: 'evaluation.unresolved-identifier',
   page: { size: 20 },
 }).value;
+const rawRollup = app.ask({
+  kind: SemanticAppQueryKind.OpenSeams,
+  openSeamKindKey: 'evaluation.unresolved-identifier',
+  page: { size: 0 },
+}).value;
+const siteRollup = app.ask({
+  kind: SemanticAppQueryKind.OpenSeamSites,
+  openSeamKindKey: 'evaluation.unresolved-identifier',
+  page: { size: 0 },
+}).value;
+const summaryRollup = app.ask({
+  kind: SemanticAppQueryKind.OpenSeamSummary,
+  openSeamKindKey: 'evaluation.unresolved-identifier',
+  page: { size: 0 },
+}).value;
 const selectedClusterRawAnswer = app.ask({
   kind: SemanticAppQueryKind.OpenSeams,
   openSeamClusterKey: summary.rows[0]?.clusterKey,
@@ -161,6 +176,21 @@ if (summary.totalOpenSeamRows !== raw.rows.length || summary.totalOpenSeamSites 
 }
 if (summary.rows[0]?.uniqueSiteCount !== sites.totalOpenSeamSites) {
   failures.push(`Expected open-seam-summary to expose uniqueSiteCount=${sites.totalOpenSeamSites}, observed ${summary.rows[0]?.uniqueSiteCount}.`);
+}
+for (const [label, rollup] of [
+  ['raw', rawRollup],
+  ['site', siteRollup],
+  ['summary', summaryRollup],
+]) {
+  if (rollup.rows.length !== 0) {
+    failures.push(`Expected ${label} size-zero rollup to return no rows, observed ${rollup.rows.length}.`);
+  }
+  if (/^(?:Seam|Boundary|Pressure|Source) kinds?: none\.$/mu.test(rollup.displayText)) {
+    failures.push(`Expected ${label} size-zero rollup to preserve global dimensions instead of reporting none: ${rollup.displayText}`);
+  }
+  if (!rollup.displayText.includes('app-source')) {
+    failures.push(`Expected ${label} size-zero rollup to preserve app-source coverage: ${rollup.displayText}`);
+  }
 }
 if (selectedClusterRawAnswer.value.rows.length !== raw.rows.length) {
   failures.push(`Expected summary cluster selector to recover all ${raw.rows.length} raw rows, observed ${selectedClusterRawAnswer.value.rows.length}.`);

@@ -85,7 +85,7 @@ const authoringTemplateLimitSchema = z.number().int().nonnegative().nullable().o
   .describe('Optional cap for standalone template compilation.');
 
 const appRetentionSchema = z.enum(SEMANTIC_APP_RETENTION_POLICIES).nullable().optional()
-  .describe('App retention. Use retain-app when follow-up calls should share an epoch.');
+  .describe('App retention override; omit for query-profile policy, use retain-app when follow-up calls should share an epoch.');
 
 const continuationIntentSchema = z.array(z.enum(INQUIRY_CONTINUATION_INTENTS)).nullable().optional()
   .describe('Optional continuation intent filter; omit for all truthful next moves.');
@@ -174,9 +174,12 @@ const openAppShape = {
   ...continuationIntentShape,
 } as const;
 
-const pagedShape = {
+const pageShape = {
   page: pageSchema.nullable().optional()
     .describe('Optional page request; use page.size=0 for rollup-only summaries.'),
+} as const;
+
+const detailShape = {
   detail: detailSchema,
 } as const;
 
@@ -186,7 +189,8 @@ const diagnosticProjectionShape = {
 
 const semanticAppQuerySchema = z.object({
   kind: appQueryKindSchema,
-  ...pagedShape,
+  ...pageShape,
+  ...detailShape,
   ...diagnosticProjectionShape,
   ...continuationIntentShape,
   includeTypeSurfaces: z.boolean().nullable().optional()
@@ -281,7 +285,8 @@ export const docsFetchInputSchema = {
 
 export const appQueryInputSchema = {
   ...openAppShape,
-  ...pagedShape,
+  ...pageShape,
+  ...detailShape,
   ...diagnosticProjectionShape,
   ...continuationIntentShape,
   queryKind: appQueryKindSchema,
@@ -343,7 +348,7 @@ export const routerOverviewInputSchema = {
 
 export const openSeamOverviewInputSchema = {
   ...openAppShape,
-  ...pagedShape,
+  ...pageShape,
   sourceFile: sourceFileSchema.nullable().optional()
     .describe('Per-query open-seam file scope.'),
   openSeamKindKey: z.string().nullable().optional()
@@ -360,7 +365,8 @@ export const openSeamOverviewInputSchema = {
 
 export const appDiagnosticsInputSchema = {
   ...openAppShape,
-  ...pagedShape,
+  ...pageShape,
+  ...detailShape,
   ...diagnosticProjectionShape,
   ...continuationIntentShape,
   sourceFile: sourceFileSchema.nullable().optional()
@@ -369,9 +375,9 @@ export const appDiagnosticsInputSchema = {
 
 export const diagnosticOverviewInputSchema = appDiagnosticsInputSchema;
 
-export const templateCursorInputSchema = {
+const templateCursorShape = {
   ...workspaceShape,
-  ...pagedShape,
+  ...detailShape,
   ...continuationIntentShape,
   ...appRetentionShape,
   cursor: cursorSchema,
@@ -382,9 +388,17 @@ export const templateCursorInputSchema = {
   authoringTemplateLimit: authoringTemplateLimitSchema,
 } as const;
 
+export const templateCursorInfoInputSchema = templateCursorShape;
+
+export const templateCompletionsInputSchema = {
+  ...templateCursorShape,
+  ...pageShape,
+} as const;
+
 export const templateDiagnosticsInputSchema = {
   ...workspaceShape,
-  ...pagedShape,
+  ...pageShape,
+  ...detailShape,
   ...diagnosticProjectionShape,
   ...continuationIntentShape,
   ...appRetentionShape,

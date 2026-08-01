@@ -20,57 +20,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "diagnosticCount": 1,
-  "diagnostics": [
-    {
-      "anomaly": null,
-      "code": "store-not-found",
-      "data": {
-        "diagnosticAuthority": "framework-runtime-behavior",
-        "diagnosticDomain": "state",
-        "diagnosticKind": "store-not-found",
-        "frameworkErrorCode": null,
-        "frameworkRawErrorAuthority": "state:aurelia/packages/state/src/store-registry.ts:16:raw-new-error:throw",
-        "missingInput": null,
-        "missingInputs": [],
-        "phase": "store-lookup",
-        "relatedInformation": [],
-        "relatedQueryKind": "state-issues",
-        "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
-          "changeDomain": "inspection",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
-        },
-        "sourceRole": "template",
-        "subject": null,
-        "taxonomy": {
-          "actionability": "manual",
-          "category": "project",
-          "confidence": null,
-          "impact": "blocking",
-          "schema": "diagnostics-taxonomy/1"
-        }
-      },
-      "message": "The dispatch binding command references store \"main\", but no @aurelia/state store with that name is configured.",
-      "range": {
-        "end": {
-          "character": 40,
-          "line": 2
-        },
-        "start": {
-          "character": 8,
-          "line": 2
-        }
-      },
-      "rangeText": "click.dispatch:main=\"dispatch()\"",
-      "relatedInformation": [],
-      "severity": "error",
-      "source": "aurelia"
-    }
-  ],
+  "diagnosticCount": 0,
+  "diagnostics": [],
   "outcome": "published",
   "uri": "fixtures://pressure/registered-plugin-capabilities/src/registered-plugin-capabilities-app.html"
 }
@@ -80,211 +31,120 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "fingerprint": "semantic-runtime:hit",
+  "answer": {
+    "analysisDepth": "binding-observation",
+    "continuations": [
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "orient",
+          "inspect"
+        ],
+        "kind": "follow-query",
+        "rationale": "Cluster detailed diagnostics back into a summary view.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "app-diagnostic-summary",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/registered-plugin-capabilities-app.html"
+          }
+        },
+        "targetQueryKind": "app-diagnostic-summary"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "diagnose"
+        ],
+        "kind": "follow-query",
+        "rationale": "Compare unified diagnostics with ordinary TypeScript diagnostics.",
+        "targetQuery": {
+          "kind": "typescript-diagnostics",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/registered-plugin-capabilities-app.html"
+          }
+        },
+        "targetQueryKind": "typescript-diagnostics"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "diagnose"
+        ],
+        "kind": "follow-query",
+        "rationale": "Compare unified diagnostics with template diagnostics.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "template-diagnostics",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/registered-plugin-capabilities-app.html"
+          }
+        },
+        "targetQueryKind": "template-diagnostics"
+      }
+    ],
+    "coverage": "complete",
+    "page": null,
+    "result": "answered",
+    "schemaVersion": "0.2",
+    "selection": "not-applicable",
+    "summary": "Returned 0 app diagnostic(s)."
+  },
   "outcome": "result",
   "presentation": {
     "complete": true,
     "contextualCount": 0,
-    "groups": [
-      {
-        "groupKey": "row:diagnostic:0:state:store-not-found:framework-runtime-behavior:no-framework-code:src/registered-plugin-capabilities-app.html:64:96:no-missing-input",
-        "maxRawSeverity": "error",
-        "primary": {
-          "diagnostic": {
-            "actionability": "manual",
-            "anomaly": null,
-            "category": "project",
-            "code": "store-not-found",
-            "data": {
-              "diagnosticAuthority": "framework-runtime-behavior",
-              "diagnosticDomain": "state",
-              "diagnosticKind": "store-not-found",
-              "frameworkErrorCode": null,
-              "frameworkRawErrorAuthority": null,
-              "missingInput": null,
-              "missingInputs": [],
-              "phase": "store-lookup",
-              "relatedInformation": [],
-              "relatedQueryKind": "state-issues",
-              "repairAffordance": {
-                "actionKind": "inspect-type-surface",
-                "actionability": "manual",
-                "changeDomain": "inspection",
-                "planKind": "manual-inspection",
-                "readiness": "inspection-required",
-                "targetSourceCoverage": "not-applicable"
-              },
-              "sourceRole": null,
-              "subject": null,
-              "taxonomy": {
-                "actionability": null,
-                "category": null,
-                "confidence": null,
-                "impact": null,
-                "schema": null
-              }
-            },
-            "file": "src/registered-plugin-capabilities-app.html",
-            "impact": "blocking",
-            "issues": [
-              {
-                "code": "store-not-found",
-                "kind": "store-not-found",
-                "message": "The dispatch binding command references store \"main\", but no @aurelia/state store with that name is configured.",
-                "rawCode": "state:aurelia/packages/state/src/store-registry.ts:16:raw-new-error:throw"
-              }
-            ],
-            "message": "The dispatch binding command references store \"main\", but no @aurelia/state store with that name is configured.",
-            "related": [],
-            "severity": "error",
-            "source": "semantic-runtime:state",
-            "span": {
-              "end": 96,
-              "start": 64
-            },
-            "spanText": "click.dispatch:main=\"dispatch()\"",
-            "status": "primary",
-            "uri": "fixtures://pressure/registered-plugin-capabilities/src/registered-plugin-capabilities-app.html"
-          },
-          "relation": null,
-          "role": "primary",
-          "rowId": "diagnostic:0:state:store-not-found:framework-runtime-behavior:no-framework-code:src/registered-plugin-capabilities-app.html:64:96:no-missing-input"
-        },
-        "primarySeverity": "error",
-        "rawRowCount": 1,
-        "related": [],
-        "subject": null
-      }
-    ],
-    "primaryCount": 1,
-    "rawRowCount": 1
+    "groups": [],
+    "primaryCount": 0,
+    "rawRowCount": 0
   },
   "raw": {
-    "diagnosticCount": 1,
-    "diagnostics": [
-      {
-        "actionability": "manual",
-        "anomaly": null,
-        "category": "project",
-        "code": "store-not-found",
-        "data": {
-          "diagnosticAuthority": "framework-runtime-behavior",
-          "diagnosticDomain": "state",
-          "diagnosticKind": "store-not-found",
-          "frameworkErrorCode": null,
-          "frameworkRawErrorAuthority": null,
-          "missingInput": null,
-          "missingInputs": [],
-          "phase": "store-lookup",
-          "relatedInformation": [],
-          "relatedQueryKind": "state-issues",
-          "repairAffordance": {
-            "actionKind": "inspect-type-surface",
-            "actionability": "manual",
-            "changeDomain": "inspection",
-            "planKind": "manual-inspection",
-            "readiness": "inspection-required",
-            "targetSourceCoverage": "not-applicable"
-          },
-          "sourceRole": null,
-          "subject": null,
-          "taxonomy": {
-            "actionability": null,
-            "category": null,
-            "confidence": null,
-            "impact": null,
-            "schema": null
-          }
-        },
-        "file": "src/registered-plugin-capabilities-app.html",
-        "impact": "blocking",
-        "issues": [
-          {
-            "code": "store-not-found",
-            "kind": "store-not-found",
-            "message": "The dispatch binding command references store \"main\", but no @aurelia/state store with that name is configured.",
-            "rawCode": "state:aurelia/packages/state/src/store-registry.ts:16:raw-new-error:throw"
-          }
-        ],
-        "message": "The dispatch binding command references store \"main\", but no @aurelia/state store with that name is configured.",
-        "related": [],
-        "severity": "error",
-        "source": "semantic-runtime:state",
-        "span": {
-          "end": 96,
-          "start": 64
-        },
-        "spanText": "click.dispatch:main=\"dispatch()\"",
-        "status": "canonical",
-        "uri": "fixtures://pressure/registered-plugin-capabilities/src/registered-plugin-capabilities-app.html"
-      }
-    ]
-  },
-  "suppressed": {
     "diagnosticCount": 0,
     "diagnostics": []
   },
   "surfaces": {
     "lsp": {
-      "diagnosticCount": 1,
-      "diagnostics": [
-        {
-          "actionability": "manual",
-          "anomaly": null,
-          "category": "project",
-          "code": "store-not-found",
-          "data": {
-            "diagnosticAuthority": "framework-runtime-behavior",
-            "diagnosticDomain": "state",
-            "diagnosticKind": "store-not-found",
-            "frameworkErrorCode": null,
-            "frameworkRawErrorAuthority": null,
-            "missingInput": null,
-            "missingInputs": [],
-            "phase": "store-lookup",
-            "relatedInformation": [],
-            "relatedQueryKind": "state-issues",
-            "repairAffordance": {
-              "actionKind": "inspect-type-surface",
-              "actionability": "manual",
-              "changeDomain": "inspection",
-              "planKind": "manual-inspection",
-              "readiness": "inspection-required",
-              "targetSourceCoverage": "not-applicable"
-            },
-            "sourceRole": null,
-            "subject": null,
-            "taxonomy": {
-              "actionability": null,
-              "category": null,
-              "confidence": null,
-              "impact": null,
-              "schema": null
-            }
-          },
-          "file": "src/registered-plugin-capabilities-app.html",
-          "impact": "blocking",
-          "issues": [
-            {
-              "code": "store-not-found",
-              "kind": "store-not-found",
-              "message": "The dispatch binding command references store \"main\", but no @aurelia/state store with that name is configured.",
-              "rawCode": "state:aurelia/packages/state/src/store-registry.ts:16:raw-new-error:throw"
-            }
-          ],
-          "message": "The dispatch binding command references store \"main\", but no @aurelia/state store with that name is configured.",
-          "related": [],
-          "severity": "error",
-          "source": "semantic-runtime:state",
-          "span": {
-            "end": 96,
-            "start": 64
-          },
-          "spanText": "click.dispatch:main=\"dispatch()\"",
-          "status": "primary",
-          "uri": "fixtures://pressure/registered-plugin-capabilities/src/registered-plugin-capabilities-app.html"
-        }
-      ]
+      "diagnosticCount": 0,
+      "diagnostics": []
     }
   },
   "uri": "fixtures://pressure/registered-plugin-capabilities/src/registered-plugin-capabilities-app.html"
@@ -297,10 +157,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 {
   "comparisonKey": "domain/kind/code/severity/text/message",
   "countsMatch": true,
-  "customLspSurfaceCount": 1,
+  "customLspSurfaceCount": 0,
   "customOnly": [],
   "lspOnly": [],
-  "lspPublishCount": 1,
+  "lspPublishCount": 0,
   "suppressedCount": 0
 }
 ```

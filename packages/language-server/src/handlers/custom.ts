@@ -40,7 +40,11 @@ import type {
 } from "../protocol.js";
 import { canonicalDocumentUri } from "../utils/document-uri.js";
 import { buildCapabilities, buildCapabilitiesFallback, type CapabilitiesResponse } from "../capabilities.js";
-import { mapSemanticRuntimeTemplateRenameEdit, semanticRuntimeDiagnosticCode } from "../mapping/lsp-types.js";
+import {
+  mapSemanticRuntimeTemplateRenameEdit,
+  semanticRuntimeDiagnosticCode,
+  semanticRuntimeDiagnosticSnapshotData,
+} from "../mapping/lsp-types.js";
 import {
   semanticSourceReferenceFilePath,
   semanticSourceReferencePath,
@@ -106,20 +110,7 @@ function toRuntimeSnapshotItem(
     source: `semantic-runtime:${row.diagnosticDomain}`,
     uri: file == null ? undefined : pathToFileURL(file).toString(),
     span,
-    data: {
-      semanticRuntime: true,
-      diagnosticDomain: row.diagnosticDomain,
-      phase: row.phase,
-      diagnosticKind: row.diagnosticKind,
-      diagnosticAuthority: row.diagnosticAuthority,
-      frameworkErrorCode: row.frameworkErrorCode,
-      relatedQueryKind: row.relatedQueryKind,
-      missingInput: row.missingInput,
-      missingInputs: row.missingInputs,
-      subject: row.subject,
-      suggestion: row.suggestion,
-      repairAffordance: diagnosticRepairAffordanceForSuggestion(row.suggestion),
-    },
+    data: semanticRuntimeDiagnosticSnapshotData(row),
     related: runtimeDiagnosticRelatedInformation(workspaceRoot, row.relatedInformation),
     surfaces: ["lsp", "vscode-panel"],
     issues: [
@@ -275,8 +266,20 @@ export async function handleGetDiagnostics(
     if (!doc) return null;
     const answer = await ctx.semanticRuntime.appDiagnostics(doc, guard);
     const diagnostics = serializeRuntimeDiagnosticsSnapshot(ctx.workspaceRoot, answer.value);
-    const fingerprint = `semantic-runtime:${answer.result}:${answer.coverage}`;
-    return { uri: canonical.uri, fingerprint, diagnostics };
+    return {
+      uri: canonical.uri,
+      answer: {
+        schemaVersion: answer.schemaVersion,
+        result: answer.result,
+        selection: answer.selection,
+        coverage: answer.coverage,
+        summary: answer.summary,
+        page: answer.page,
+        ...(answer.analysisDepth == null ? {} : { analysisDepth: answer.analysisDepth }),
+        ...(answer.continuations == null ? {} : { continuations: answer.continuations }),
+      },
+      diagnostics,
+    };
   } catch (e) {
     if (logIfSemanticRuntimeRequestAborted(ctx, "getDiagnostics", e, uriFromParam(params))) {
       return null;

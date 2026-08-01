@@ -1043,6 +1043,8 @@
         "Opaque cursors are scoped to the normalized query, effective app-world generation (including analysis depth and authoring-template plan), and row ordering. Reject stale or cross-query cursors instead of interpreting their payload in adapters.",
         "Reject unsupported selector fields before opening or materializing an app. Catalog shaping must never silently erase caller intent.",
         "MCP, LSP, and AOT consumers may choose different paging budgets, but none may rewrite the semantic answer axes. Page policy stays outside semantic query identity while remaining part of retained-answer response-policy identity so one caller's clamp cannot poison another caller's replay.",
+        "A page-draining adapter must verify that result, selection, and coverage remain invariant, retain every non-page continuation, reject cursor cycles or contradictory exhaustion, and clear page state only after exhaustion.",
+        "LSP completion `isIncomplete` means the client should requery an intentionally narrowed list after more typing. It is neither transport continuation nor semantic open coverage and must not be set for missing inputs or handler failure.",
         "Store every answer axis and page fact in the query claim graph so invalidation and replay do not reintroduce the collapsed vocabulary."
       ],
       "nextActionPolicy": "when-touched",
@@ -1070,6 +1072,11 @@
           "filePath": "packages/semantic-runtime/src/inquiry/query-claim-graph.ts",
           "symbolName": "QueryClaimGraph",
           "summary": "Answer-boundary claim storage retaining every semantic and transport axis."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/language-server/src/runtime/semantic-runtime-session.ts",
+          "summary": "Shared LSP page drain validates semantic axes, page metadata, exhaustion, and non-page continuation conservation."
         },
         {
           "kind": "script",
@@ -1105,6 +1112,10 @@
         },
         {
           "kind": "source-file-exists",
+          "filePath": "packages/language-server/src/runtime/semantic-runtime-session.ts"
+        },
+        {
+          "kind": "source-file-exists",
           "filePath": "packages/semantic-runtime/scripts/contract-public-answer-pagination.mjs"
         },
         {
@@ -1113,7 +1124,7 @@
         }
       ],
       "createdAt": "2026-07-31",
-      "updatedAt": "2026-07-31"
+      "updatedAt": "2026-08-01"
     },
     {
       "id": "decision:open-seam-causal-public-projection",
@@ -1139,7 +1150,9 @@
         "Build raw rows, authored-site rows, and summaries from `openSeamProjectionFacts`. Do not let each public query rediscover causality or identity.",
         "Group site rows by the exact root seam source while retaining every seam-kind variant at that site. Group summaries by typed seam kind and reason signature, not human wording.",
         "Use answer-local opaque keys for seams, sites, impacts, and products. Expose kernel handles only when the caller explicitly requests handle detail.",
-        "Treat missing source as honest evidence locality, not permission to synthesize a carrier from an adjacent product."
+        "Treat missing source as honest evidence locality, not permission to synthesize a carrier from an adjacent product.",
+        "Consumer policy spends product pressure by exact impact key. Evidence-only seams and pressure on unrelated products proceed; an exact impacted transform uses a semantics-preserving runtime fallback when available and blocks only that transform otherwise.",
+        "Do not add global seam severity, diagnostics, or AOT-blocking flags to kernel or public seam facts. IDE, MCP, and future AOT contracts choose presentation and fallback while preserving the same causal evidence."
       ],
       "nextActionPolicy": "when-touched",
       "anchors": [
@@ -1164,7 +1177,7 @@
         {
           "kind": "script",
           "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:open-seam-causality",
-          "summary": "Focused contract proving one root cause, materialization links, and derived pressure."
+          "summary": "Focused contract proving one root cause, materialization links, and local consumer fallback/blocking semantics."
         },
         {
           "kind": "script",
@@ -1198,7 +1211,7 @@
         }
       ],
       "createdAt": "2026-07-31",
-      "updatedAt": "2026-07-31"
+      "updatedAt": "2026-08-01"
     }
   ]
 }

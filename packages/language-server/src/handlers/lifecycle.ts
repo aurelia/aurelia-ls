@@ -248,16 +248,23 @@ async function publishDocumentDiagnostics(
     if (!ctx.semanticRuntime.isCurrentGeneration(guard.generation)) {
       return "stale";
     }
-    const lspDiagnostics = mapSemanticRuntimeAppDiagnostics(
+    const diagnosticMapping = mapSemanticRuntimeAppDiagnostics(
       diagnostics,
       doc,
       ctx.workspaceRoot,
       (uri) => ctx.lookupText(uri),
     );
+    if (diagnosticMapping.failures.length > 0) {
+      ctx.logger.warn(
+        `[diagnostics] omitted ${diagnosticMapping.failures.length} source-backed row(s): ${diagnosticMapping.failures.join(" ")}`,
+      );
+    }
+    const lspDiagnostics = diagnosticMapping.value;
     if (!ctx.semanticRuntime.isCurrentGeneration(guard.generation)) {
       return "stale";
     }
-    await ctx.connection.sendDiagnostics({ uri: doc.uri, diagnostics: lspDiagnostics });
+    // Diagnostic.data is detached from the semantic answer; version the batch so the client can reject stale evidence.
+    await ctx.connection.sendDiagnostics({ uri: doc.uri, version: doc.version, diagnostics: lspDiagnostics });
     await ctx.connection.sendNotification("aurelia/analysisReady", {
       uri: doc.uri,
       diags: lspDiagnostics.length,

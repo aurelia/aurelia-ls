@@ -1,0 +1,80 @@
+{
+  "fixture": "packages/semantic-runtime/fixtures/pressure/observation-binding-lifecycle",
+  "lanes": {
+    "rename": [
+      {
+        "id": "inert-attribute-source-member",
+        "file": "src/observation-binding-lifecycle-app.html",
+        "anchor": "data-lifecycle.attr=\"attributeFromView & fromView\"",
+        "at": "attributeFromView",
+        "newName": "attributeAfterView",
+        "verdict": "correct",
+        "reason": "The inert from-view .attr binding performs no source read or write, but its authored expression remains an exact member occurrence; rename should update both inert template occurrences and the TypeScript declaration."
+      }
+    ],
+    "references": [
+      {
+        "id": "inert-attribute-source-member",
+        "file": "src/observation-binding-lifecycle-app.html",
+        "anchor": "data-lifecycle.attr=\"attributeFromView & fromView\"",
+        "at": "attributeFromView",
+        "verdict": "correct",
+        "reason": "References should conserve the two authored template occurrences and TypeScript declaration even though lifecycle semantics deliberately emit no runtime access-use operation for this source."
+      }
+    ],
+    "hover": [
+      {
+        "id": "inert-attribute-source-member",
+        "file": "src/observation-binding-lifecycle-app.html",
+        "anchor": "data-lifecycle.attr=\"attributeFromView & fromView\"",
+        "at": "attributeFromView",
+        "verdict": "correct",
+        "reason": "Hover should resolve the exact string member from authored binding-resolution evidence without pretending the inert source is runtime-evaluated."
+      },
+      {
+        "id": "reached-effective-two-way-assignment",
+        "file": "src/observation-binding-lifecycle-app.html",
+        "anchor": "<p>${reachedChildValue}</p>",
+        "at": "reachedChildValue",
+        "verdict": "correct",
+        "reason": "The reached twoWay behavior permits the numeric child assignment to shape the later source member as number."
+      },
+      {
+        "id": "blocked-effective-two-way-assignment",
+        "file": "src/observation-binding-lifecycle-app.html",
+        "anchor": "<p>${blockedChildValue}</p>",
+        "at": "blockedChildValue",
+        "verdict": "correct",
+        "reason": "The outer self failure blocks the inner twoWay effect, so hover must preserve the authored string type instead of spending the unreachable child assignment."
+      }
+    ],
+    "definition": [
+      {
+        "id": "inert-attribute-source-member",
+        "file": "src/observation-binding-lifecycle-app.html",
+        "anchor": "data-lifecycle.attr=\"attributeFromView & fromView\"",
+        "at": "attributeFromView",
+        "verdict": "correct",
+        "reason": "Definition should navigate from the authored inert source occurrence to the exact TypeScript field declaration."
+      }
+    ],
+    "documentHighlight": [
+      {
+        "id": "inert-attribute-source-member",
+        "file": "src/observation-binding-lifecycle-app.html",
+        "anchor": "data-lifecycle.attr=\"attributeFromView & fromView\"",
+        "at": "attributeFromView",
+        "verdict": "correct",
+        "reason": "Document highlights should include both inert template occurrences while excluding the cross-file declaration by LSP definition."
+      }
+    ],
+    "diagnostics": [
+      {
+        "id": "binding-behavior-reachability-and-order",
+        "file": "src/observation-binding-lifecycle-app.html",
+        "verdict": "correct",
+        "reason": "Diagnostics should report the exact invalid self uses, missing behaviors, invalid updateTrigger order, and reached/blocked assignment strictness warnings while avoiding a fabricated writeback error for the blocked inner twoWay effect."
+      }
+    ]
+  }
+}

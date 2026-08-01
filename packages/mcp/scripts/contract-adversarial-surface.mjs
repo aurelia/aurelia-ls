@@ -55,10 +55,12 @@ try {
   await verifyPatternFollowUpHints();
   await verifyBundledDocsTools();
   await verifyStrictTopLevelEnvelope();
+  await verifyStrictCuratedSelectors();
   await verifyPageClampAndTextPreview();
   await verifyObservedDependencyLocus();
   await verifyWorkspaceOverviewContinuations();
   await verifyAnalysisDepthEnvelope();
+  await verifyProfileDrivenRetention();
   await verifySourceFilePathUnsupportedPreflight();
   await verifyAnalysisCacheClearVocabulary();
   await verifyDiagnosticTextPreviewIdentity();
@@ -145,6 +147,16 @@ async function verifyToolInputSchemaDescriptions() {
   expect(JSON.stringify(appQuery?.inputSchema).includes('Check supportsSourceFile'), 'sourceFile schema description should point callers to supportsSourceFile.');
   expect(JSON.stringify(appQuery?.inputSchema).includes('result=unsupported'), 'sourceFilePath schema description should promise honest unsupported answers.');
   expect(JSON.stringify(appQuery?.inputSchema).includes('observedDependencyLocus'), 'Generic app-query schema should expose family-owned observed-dependency loci.');
+  const openSeamOverview = tools.find((tool) => tool.name === 'aurelia_open_seam_overview');
+  expect(openSeamOverview?.description?.includes('unique authored source site'), 'Open-seam overview should describe its authored-site-first projection.');
+  expect(!('detail' in (openSeamOverview?.inputSchema?.properties ?? {})), 'Open-seam overview should not advertise unsupported detail.');
+  expect('page' in (openSeamOverview?.inputSchema?.properties ?? {}), 'Open-seam overview should retain its supported page selector.');
+  const cursorInfo = tools.find((tool) => tool.name === 'aurelia_template_cursor_info');
+  expect(!('page' in (cursorInfo?.inputSchema?.properties ?? {})), 'Template cursor info should not advertise unsupported paging.');
+  expect('detail' in (cursorInfo?.inputSchema?.properties ?? {}), 'Template cursor info should retain its supported detail selector.');
+  const completions = tools.find((tool) => tool.name === 'aurelia_template_completions');
+  expect('page' in (completions?.inputSchema?.properties ?? {}), 'Template completions should retain its supported page selector.');
+  expect('detail' in (completions?.inputSchema?.properties ?? {}), 'Template completions should retain its supported detail selector.');
 }
 
 async function verifyPatternFollowUpHints() {
@@ -254,6 +266,23 @@ async function verifyStrictTopLevelEnvelope() {
   expect(text.includes('pageSize'), 'Strict-envelope validation should name the unknown top-level key.');
 }
 
+async function verifyStrictCuratedSelectors() {
+  const cursorInfo = await callTool('aurelia_template_cursor_info', {
+    workspaceRoot: fixtureRoot,
+    cursor: { filePath: 'src/app.html', line: 0, character: 0 },
+    page: { size: 1 },
+  });
+  expect(cursorInfo.result?.isError === true, 'Template cursor info should reject unsupported page input at its curated schema boundary.');
+  expect(resultText(cursorInfo).includes('page'), 'Template cursor page rejection should name the unsupported selector.');
+
+  const openSeams = await callTool('aurelia_open_seam_overview', {
+    workspaceRoot: openSeamSitesFixtureRoot,
+    detail: 'handles',
+  });
+  expect(openSeams.result?.isError === true, 'Open-seam overview should reject unsupported detail input at its curated schema boundary.');
+  expect(resultText(openSeams).includes('detail'), 'Open-seam detail rejection should name the unsupported selector.');
+}
+
 async function verifyPageClampAndTextPreview() {
   const response = await callTool('aurelia_app_query', {
     workspaceRoot: fixtureRoot,
@@ -322,6 +351,38 @@ async function verifyAnalysisDepthEnvelope() {
   const answer = response.result?.structuredContent?.value;
   expect(answer?.analysisDepth === 'binding-observation', `Binding data-flow summary should report binding-observation analysisDepth, observed ${answer?.analysisDepth}.`);
   expect(resultText(response).includes('Analysis depth used: binding-observation'), 'Text preview should expose answer analysis depth.');
+}
+
+async function verifyProfileDrivenRetention() {
+  const automatic = await callTool('aurelia_app_query', {
+    workspaceRoot: fixtureRoot,
+    queryKind: 'resource-definitions',
+    detail: 'handles',
+    page: { size: 1 },
+  });
+  expect(automatic.result?.isError !== true, 'Omitted appRetention should let semantic-runtime select retention for handle-bearing answers.');
+  expect(automatic.result?.structuredContent?.value?.result === 'answered', 'Profile-retained handle detail should return an answered semantic result.');
+
+  const automaticBatch = await callTool('aurelia_app_query_batch', {
+    workspaceRoot: fixtureRoot,
+    queries: [{
+      kind: 'resource-definitions',
+      detail: 'handles',
+      page: { size: 1 },
+    }],
+  });
+  expect(automaticBatch.result?.isError !== true, 'Omitted batch appRetention should also let semantic-runtime select retention for handle-bearing answers.');
+  expect(automaticBatch.result?.structuredContent?.value?.result === 'answered', 'Profile-retained handle detail should answer through the batch adapter path.');
+
+  const incompatible = await callTool('aurelia_app_query', {
+    workspaceRoot: fixtureRoot,
+    queryKind: 'resource-definitions',
+    detail: 'handles',
+    appRetention: 'dispose-app',
+    page: { size: 1 },
+  });
+  expect(incompatible.result?.isError === true, 'Explicit dispose-app should remain incompatible with handle-bearing answers.');
+  expect(resultText(incompatible).includes("detail='handles'"), 'Explicit retention incompatibility should explain the handle-detail constraint.');
 }
 
 async function verifySourceFilePathUnsupportedPreflight() {

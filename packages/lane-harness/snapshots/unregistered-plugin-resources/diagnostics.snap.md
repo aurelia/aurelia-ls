@@ -20,7 +20,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "diagnosticCount": 12,
+  "diagnosticCount": 8,
   "diagnostics": [
     {
       "anomaly": null,
@@ -318,57 +318,25 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         }
       },
       "rangeText": "t",
-      "relatedInformation": [],
-      "severity": "error",
-      "source": "aurelia"
-    },
-    {
-      "anomaly": null,
-      "code": "AUR0103",
-      "data": {
-        "diagnosticAuthority": "framework-error-code",
-        "diagnosticDomain": "template",
-        "diagnosticKind": "runtime-value-converter-framework-error",
-        "frameworkErrorCode": "AUR0103",
-        "frameworkRawErrorAuthority": null,
-        "missingInput": "runtime-value-converter:AUR0103",
-        "missingInputs": [
-          "runtime-value-converter:AUR0103"
-        ],
-        "phase": "bind",
-        "relatedInformation": [],
-        "relatedQueryKind": "template-diagnostics",
-        "repairAffordance": {
-          "actionKind": "register-resource",
-          "actionability": "guided",
-          "changeDomain": "app-source",
-          "planKind": "resource-registration",
-          "readiness": "ready-to-plan",
-          "targetSourceCoverage": "all"
-        },
-        "sourceRole": "template",
-        "subject": null,
-        "taxonomy": {
-          "actionability": "guided",
-          "category": "template-syntax",
-          "confidence": null,
-          "impact": "blocking",
-          "schema": "diagnostics-taxonomy/1"
+      "relatedInformation": [
+        {
+          "anomaly": null,
+          "file": "src/unregistered-plugin-resources-app.html",
+          "message": "Aurelia runtime value converter AUR0103 rejects this binding: Value converter 't' was not resolved through the current compiler resource scope..",
+          "range": {
+            "end": {
+              "character": 17,
+              "line": 11
+            },
+            "start": {
+              "character": 16,
+              "line": 11
+            }
+          },
+          "rangeText": "t",
+          "uri": "fixtures://pressure/unregistered-plugin-resources/src/unregistered-plugin-resources-app.html"
         }
-      },
-      "message": "Aurelia runtime value converter AUR0103 rejects this binding: Value converter 't' was not resolved through the current compiler resource scope..",
-      "range": {
-        "end": {
-          "character": 17,
-          "line": 11
-        },
-        "start": {
-          "character": 16,
-          "line": 11
-        }
-      },
-      "rangeText": "t",
-      "relatedInformation": [],
+      ],
       "severity": "error",
       "source": "aurelia"
     },
@@ -418,120 +386,26 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         }
       },
       "rangeText": "validate",
-      "relatedInformation": [],
-      "severity": "error",
-      "source": "aurelia"
-    },
-    {
-      "anomaly": null,
-      "code": "AUR0101",
-      "data": {
-        "diagnosticAuthority": "framework-error-code",
-        "diagnosticDomain": "template",
-        "diagnosticKind": "runtime-binding-behavior-framework-error",
-        "frameworkErrorCode": "AUR0101",
-        "frameworkRawErrorAuthority": null,
-        "missingInput": "runtime-binding-behavior:AUR0101",
-        "missingInputs": [
-          "runtime-binding-behavior:AUR0101"
-        ],
-        "phase": "bind",
-        "relatedInformation": [],
-        "relatedQueryKind": "template-diagnostics",
-        "repairAffordance": {
-          "actionKind": "register-resource",
-          "actionability": "guided",
-          "changeDomain": "app-source",
-          "planKind": "resource-registration",
-          "readiness": "ready-to-plan",
-          "targetSourceCoverage": "all"
-        },
-        "sourceRole": "template",
-        "subject": null,
-        "taxonomy": {
-          "actionability": "guided",
-          "category": "template-syntax",
-          "confidence": null,
-          "impact": "blocking",
-          "schema": "diagnostics-taxonomy/1"
-        }
-      },
-      "message": "Aurelia runtime binding behavior AUR0101 rejects this binding: Binding behavior 'validate' was not resolved through the current compiler resource scope..",
-      "range": {
-        "end": {
-          "character": 41,
-          "line": 12
-        },
-        "start": {
-          "character": 33,
-          "line": 12
-        }
-      },
-      "rangeText": "validate",
-      "relatedInformation": [],
-      "severity": "error",
-      "source": "aurelia"
-    },
-    {
-      "anomaly": null,
-      "code": "binding-target-assignment-strictness",
-      "data": {
-        "diagnosticAuthority": "semantic-runtime-product",
-        "diagnosticDomain": "template",
-        "diagnosticKind": "binding-target-assignment-strictness",
-        "frameworkErrorCode": null,
-        "frameworkRawErrorAuthority": null,
-        "missingInput": "binding-target-assignment:source-to-target-type-mismatch",
-        "missingInputs": [
-          "binding-target-assignment:source-to-target-type-mismatch"
-        ],
-        "phase": null,
-        "relatedInformation": [],
-        "relatedQueryKind": "template-diagnostics",
-        "repairAffordance": {
-          "actionKind": "rewrite-expression",
-          "actionability": "guided",
-          "changeDomain": "app-source",
-          "planKind": "template-expression-rewrite",
-          "readiness": "ready-to-plan",
-          "targetSourceCoverage": "all"
-        },
-        "sourceRole": "template",
-        "subject": {
-          "source": {
-            "end": 335,
-            "kind": "source-span-address",
-            "label": "src/unregistered-plugin-resources-app.html@321..335",
-            "path": "src/unregistered-plugin-resources-app.html",
-            "role": "binding-source-assignment",
-            "start": 321
+      "relatedInformation": [
+        {
+          "anomaly": null,
+          "file": "src/unregistered-plugin-resources-app.html",
+          "message": "Aurelia runtime binding behavior AUR0101 rejects this binding: Binding behavior 'validate' was not resolved through the current compiler resource scope..",
+          "range": {
+            "end": {
+              "character": 41,
+              "line": 12
+            },
+            "start": {
+              "character": 33,
+              "line": 12
+            }
           },
-          "span": null,
-          "subjectKind": "template-expression",
-          "uri": null
-        },
-        "taxonomy": {
-          "actionability": "guided",
-          "category": "template-syntax",
-          "confidence": null,
-          "impact": "degraded",
-          "schema": "diagnostics-taxonomy/1"
+          "rangeText": "validate",
+          "uri": "fixtures://pressure/unregistered-plugin-resources/src/unregistered-plugin-resources-app.html"
         }
-      },
-      "message": "Binding source type { ready: boolean; } is not assignable to target 'textContent' of type string.",
-      "range": {
-        "end": {
-          "character": 41,
-          "line": 13
-        },
-        "start": {
-          "character": 27,
-          "line": 13
-        }
-      },
-      "rangeText": "dashboardState",
-      "relatedInformation": [],
-      "severity": "warning",
+      ],
+      "severity": "error",
       "source": "aurelia"
     },
     {
@@ -580,57 +454,42 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         }
       },
       "rangeText": "state",
-      "relatedInformation": [],
-      "severity": "error",
-      "source": "aurelia"
-    },
-    {
-      "anomaly": null,
-      "code": "AUR0101",
-      "data": {
-        "diagnosticAuthority": "framework-error-code",
-        "diagnosticDomain": "template",
-        "diagnosticKind": "runtime-binding-behavior-framework-error",
-        "frameworkErrorCode": "AUR0101",
-        "frameworkRawErrorAuthority": null,
-        "missingInput": "runtime-binding-behavior:AUR0101",
-        "missingInputs": [
-          "runtime-binding-behavior:AUR0101"
-        ],
-        "phase": "bind",
-        "relatedInformation": [],
-        "relatedQueryKind": "template-diagnostics",
-        "repairAffordance": {
-          "actionKind": "register-resource",
-          "actionability": "guided",
-          "changeDomain": "app-source",
-          "planKind": "resource-registration",
-          "readiness": "ready-to-plan",
-          "targetSourceCoverage": "all"
+      "relatedInformation": [
+        {
+          "anomaly": null,
+          "file": "src/unregistered-plugin-resources-app.html",
+          "message": "Binding source type { ready: boolean; } is not assignable to target 'textContent' of type string.",
+          "range": {
+            "end": {
+              "character": 41,
+              "line": 13
+            },
+            "start": {
+              "character": 27,
+              "line": 13
+            }
+          },
+          "rangeText": "dashboardState",
+          "uri": "fixtures://pressure/unregistered-plugin-resources/src/unregistered-plugin-resources-app.html"
         },
-        "sourceRole": "template",
-        "subject": null,
-        "taxonomy": {
-          "actionability": "guided",
-          "category": "template-syntax",
-          "confidence": null,
-          "impact": "blocking",
-          "schema": "diagnostics-taxonomy/1"
+        {
+          "anomaly": null,
+          "file": "src/unregistered-plugin-resources-app.html",
+          "message": "Aurelia runtime binding behavior AUR0101 rejects this binding: Binding behavior 'state' was not resolved through the current compiler resource scope..",
+          "range": {
+            "end": {
+              "character": 49,
+              "line": 13
+            },
+            "start": {
+              "character": 44,
+              "line": 13
+            }
+          },
+          "rangeText": "state",
+          "uri": "fixtures://pressure/unregistered-plugin-resources/src/unregistered-plugin-resources-app.html"
         }
-      },
-      "message": "Aurelia runtime binding behavior AUR0101 rejects this binding: Binding behavior 'state' was not resolved through the current compiler resource scope..",
-      "range": {
-        "end": {
-          "character": 49,
-          "line": 13
-        },
-        "start": {
-          "character": 44,
-          "line": 13
-        }
-      },
-      "rangeText": "state",
-      "relatedInformation": [],
+      ],
       "severity": "error",
       "source": "aurelia"
     }
@@ -644,11 +503,579 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "fingerprint": "semantic-runtime:hit",
+  "answer": {
+    "analysisDepth": "binding-observation",
+    "continuations": [
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "orient",
+          "inspect"
+        ],
+        "kind": "follow-query",
+        "rationale": "Cluster detailed diagnostics back into a summary view.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "app-diagnostic-summary",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/unregistered-plugin-resources-app.html"
+          }
+        },
+        "targetQueryKind": "app-diagnostic-summary"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "diagnose"
+        ],
+        "kind": "follow-query",
+        "rationale": "Compare unified diagnostics with ordinary TypeScript diagnostics.",
+        "targetQuery": {
+          "kind": "typescript-diagnostics",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/unregistered-plugin-resources-app.html"
+          }
+        },
+        "targetQueryKind": "typescript-diagnostics"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "diagnose"
+        ],
+        "kind": "follow-query",
+        "rationale": "Compare unified diagnostics with template diagnostics.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "template-diagnostics",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/unregistered-plugin-resources-app.html"
+          }
+        },
+        "targetQueryKind": "template-diagnostics"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world"
+          ],
+          "sourceFacts": [
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/unregistered-plugin-resources-app.html",
+                  "path": "src/unregistered-plugin-resources-app.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "unregistered-plugin-resources"
+                },
+                "end": 225,
+                "kind": "source-span-address",
+                "label": "src/unregistered-plugin-resources-app.html@133..225",
+                "path": "src/unregistered-plugin-resources-app.html",
+                "role": "range",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "unregistered-plugin-resources",
+                "start": 133
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/unregistered-plugin-resources-app.html",
+                  "path": "src/unregistered-plugin-resources-app.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "unregistered-plugin-resources"
+                },
+                "end": 194,
+                "kind": "source-span-address",
+                "label": "src/unregistered-plugin-resources-app.html@163..194",
+                "path": "src/unregistered-plugin-resources-app.html",
+                "role": "range",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "unregistered-plugin-resources",
+                "start": 163
+              }
+            },
+            {
+              "count": 2,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/unregistered-plugin-resources-app.html",
+                  "path": "src/unregistered-plugin-resources-app.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "unregistered-plugin-resources"
+                },
+                "end": 244,
+                "kind": "source-span-address",
+                "label": "src/unregistered-plugin-resources-app.html@243..244",
+                "path": "src/unregistered-plugin-resources-app.html",
+                "role": "name",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "unregistered-plugin-resources",
+                "start": 243
+              }
+            },
+            {
+              "count": 2,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/unregistered-plugin-resources-app.html",
+                  "path": "src/unregistered-plugin-resources-app.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "unregistered-plugin-resources"
+                },
+                "end": 291,
+                "kind": "source-span-address",
+                "label": "src/unregistered-plugin-resources-app.html@283..291",
+                "path": "src/unregistered-plugin-resources-app.html",
+                "role": "name",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "unregistered-plugin-resources",
+                "start": 283
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 335,
+                "kind": "source-span-address",
+                "label": "src/unregistered-plugin-resources-app.html@321..335",
+                "path": "src/unregistered-plugin-resources-app.html",
+                "role": "binding-source-assignment",
+                "start": 321
+              }
+            },
+            {
+              "count": 2,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/unregistered-plugin-resources-app.html",
+                  "path": "src/unregistered-plugin-resources-app.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "unregistered-plugin-resources"
+                },
+                "end": 343,
+                "kind": "source-span-address",
+                "label": "src/unregistered-plugin-resources-app.html@338..343",
+                "path": "src/unregistered-plugin-resources-app.html",
+                "role": "name",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "unregistered-plugin-resources",
+                "start": 338
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/unregistered-plugin-resources-app.html",
+                  "path": "src/unregistered-plugin-resources-app.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "unregistered-plugin-resources"
+                },
+                "end": 65,
+                "kind": "source-span-address",
+                "label": "src/unregistered-plugin-resources-app.html@38..65",
+                "path": "src/unregistered-plugin-resources-app.html",
+                "role": "range",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "unregistered-plugin-resources",
+                "start": 38
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/unregistered-plugin-resources-app.html",
+                  "path": "src/unregistered-plugin-resources-app.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "unregistered-plugin-resources"
+                },
+                "end": 112,
+                "kind": "source-span-address",
+                "label": "src/unregistered-plugin-resources-app.html@78..112",
+                "path": "src/unregistered-plugin-resources-app.html",
+                "role": "range",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "unregistered-plugin-resources",
+                "start": 78
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/unregistered-plugin-resources-app.html",
+                  "path": "src/unregistered-plugin-resources-app.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "unregistered-plugin-resources"
+                },
+                "end": 21,
+                "kind": "source-span-address",
+                "label": "src/unregistered-plugin-resources-app.html@8..21",
+                "path": "src/unregistered-plugin-resources-app.html",
+                "role": "range",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "unregistered-plugin-resources",
+                "start": 8
+              }
+            }
+          ],
+          "sourceRequirement": "exact-authored-span"
+        },
+        "intents": [
+          "diagnose",
+          "repair"
+        ],
+        "kind": "follow-query",
+        "rationale": "Inspect template-diagnostics rows referenced by returned diagnostics.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "template-diagnostics",
+          "page": {
+            "size": 200
+          }
+        },
+        "targetQueryKind": "template-diagnostics"
+      },
+      {
+        "blockers": [],
+        "cost": "app-world",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/unregistered-plugin-resources-app.html",
+                  "path": "src/unregistered-plugin-resources-app.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "unregistered-plugin-resources"
+                },
+                "end": 225,
+                "kind": "source-span-address",
+                "label": "src/unregistered-plugin-resources-app.html@133..225",
+                "path": "src/unregistered-plugin-resources-app.html",
+                "role": "range",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "unregistered-plugin-resources",
+                "start": 133
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/unregistered-plugin-resources-app.html",
+                  "path": "src/unregistered-plugin-resources-app.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "unregistered-plugin-resources"
+                },
+                "end": 194,
+                "kind": "source-span-address",
+                "label": "src/unregistered-plugin-resources-app.html@163..194",
+                "path": "src/unregistered-plugin-resources-app.html",
+                "role": "range",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "unregistered-plugin-resources",
+                "start": 163
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/unregistered-plugin-resources-app.html",
+                  "path": "src/unregistered-plugin-resources-app.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "unregistered-plugin-resources"
+                },
+                "end": 244,
+                "kind": "source-span-address",
+                "label": "src/unregistered-plugin-resources-app.html@243..244",
+                "path": "src/unregistered-plugin-resources-app.html",
+                "role": "name",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "unregistered-plugin-resources",
+                "start": 243
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/unregistered-plugin-resources-app.html",
+                  "path": "src/unregistered-plugin-resources-app.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "unregistered-plugin-resources"
+                },
+                "end": 291,
+                "kind": "source-span-address",
+                "label": "src/unregistered-plugin-resources-app.html@283..291",
+                "path": "src/unregistered-plugin-resources-app.html",
+                "role": "name",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "unregistered-plugin-resources",
+                "start": 283
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/unregistered-plugin-resources-app.html",
+                  "path": "src/unregistered-plugin-resources-app.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "unregistered-plugin-resources"
+                },
+                "end": 343,
+                "kind": "source-span-address",
+                "label": "src/unregistered-plugin-resources-app.html@338..343",
+                "path": "src/unregistered-plugin-resources-app.html",
+                "role": "name",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "unregistered-plugin-resources",
+                "start": 338
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/unregistered-plugin-resources-app.html",
+                  "path": "src/unregistered-plugin-resources-app.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "unregistered-plugin-resources"
+                },
+                "end": 65,
+                "kind": "source-span-address",
+                "label": "src/unregistered-plugin-resources-app.html@38..65",
+                "path": "src/unregistered-plugin-resources-app.html",
+                "role": "range",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "unregistered-plugin-resources",
+                "start": 38
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/unregistered-plugin-resources-app.html",
+                  "path": "src/unregistered-plugin-resources-app.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "unregistered-plugin-resources"
+                },
+                "end": 112,
+                "kind": "source-span-address",
+                "label": "src/unregistered-plugin-resources-app.html@78..112",
+                "path": "src/unregistered-plugin-resources-app.html",
+                "role": "range",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "unregistered-plugin-resources",
+                "start": 78
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/unregistered-plugin-resources-app.html",
+                  "path": "src/unregistered-plugin-resources-app.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "unregistered-plugin-resources"
+                },
+                "end": 21,
+                "kind": "source-span-address",
+                "label": "src/unregistered-plugin-resources-app.html@8..21",
+                "path": "src/unregistered-plugin-resources-app.html",
+                "role": "range",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "unregistered-plugin-resources",
+                "start": 8
+              }
+            }
+          ],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "inspect"
+        ],
+        "kind": "follow-query",
+        "rationale": "Inspect framework capability-demand rows behind returned registration diagnostics.",
+        "targetQuery": {
+          "kind": "framework-capability-demands",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/unregistered-plugin-resources-app.html"
+          }
+        },
+        "targetQueryKind": "framework-capability-demands"
+      }
+    ],
+    "coverage": "complete",
+    "page": null,
+    "result": "answered",
+    "schemaVersion": "0.2",
+    "selection": "not-applicable",
+    "summary": "Returned 12 app diagnostic(s)."
+  },
   "outcome": "result",
   "presentation": {
     "complete": true,
-    "contextualCount": 0,
+    "contextualCount": 4,
     "groups": [
       {
         "groupKey": "row:diagnostic:11:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:8:21:router.default-resources",
@@ -680,14 +1107,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "source-edit-policy-open",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/unregistered-plugin-resources-app.html",
@@ -750,14 +1177,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "source-edit-policy-open",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/unregistered-plugin-resources-app.html",
@@ -820,14 +1247,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "source-edit-policy-open",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/unregistered-plugin-resources-app.html",
@@ -890,14 +1317,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "source-edit-policy-open",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/unregistered-plugin-resources-app.html",
@@ -960,14 +1387,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "source-edit-policy-open",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/unregistered-plugin-resources-app.html",
@@ -1001,7 +1428,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null
       },
       {
-        "groupKey": "row:diagnostic:2:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:243:244:i18n.default-resources",
+        "groupKey": "relation:diagnostic:2:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:243:244:i18n.default-resources",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -1030,14 +1457,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "source-edit-policy-open",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/unregistered-plugin-resources-app.html",
@@ -1066,82 +1493,75 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "rowId": "diagnostic:2:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:243:244:i18n.default-resources"
         },
         "primarySeverity": "error",
-        "rawRowCount": 1,
-        "related": [],
-        "subject": null
-      },
-      {
-        "groupKey": "row:diagnostic:3:template:runtime-value-converter-framework-error:framework-error-code:AUR0103:src/unregistered-plugin-resources-app.html:243:244:runtime-value-converter:AUR0103",
-        "maxRawSeverity": "error",
-        "primary": {
-          "diagnostic": {
-            "actionability": "guided",
-            "anomaly": null,
-            "category": "template-syntax",
-            "code": "AUR0103",
-            "data": {
-              "diagnosticAuthority": "framework-error-code",
-              "diagnosticDomain": "template",
-              "diagnosticKind": "runtime-value-converter-framework-error",
-              "frameworkErrorCode": "AUR0103",
-              "frameworkRawErrorAuthority": null,
-              "missingInput": "runtime-value-converter:AUR0103",
-              "missingInputs": [
-                "runtime-value-converter:AUR0103"
-              ],
-              "phase": "bind",
-              "relatedInformation": [],
-              "relatedQueryKind": "template-diagnostics",
-              "repairAffordance": {
-                "actionKind": "register-resource",
-                "actionability": "guided",
-                "changeDomain": "app-source",
-                "planKind": "resource-registration",
-                "readiness": "ready-to-plan",
-                "targetSourceCoverage": "all"
+        "rawRowCount": 2,
+        "related": [
+          {
+            "diagnostic": {
+              "actionability": "guided",
+              "anomaly": null,
+              "category": "template-syntax",
+              "code": "AUR0103",
+              "data": {
+                "diagnosticAuthority": "framework-error-code",
+                "diagnosticDomain": "template",
+                "diagnosticKind": "runtime-value-converter-framework-error",
+                "frameworkErrorCode": "AUR0103",
+                "frameworkRawErrorAuthority": null,
+                "missingInput": "runtime-value-converter:AUR0103",
+                "missingInputs": [
+                  "runtime-value-converter:AUR0103"
+                ],
+                "phase": "bind",
+                "relatedInformation": [],
+                "relatedQueryKind": "template-diagnostics",
+                "repairAffordance": {
+                  "actionKind": "register-resource",
+                  "actionability": "guided",
+                  "changeDomain": "app-source",
+                  "planKind": "resource-registration",
+                  "readiness": "ready-to-plan",
+                  "targetSourceCoverage": "all"
+                },
+                "sourceRole": "template",
+                "subject": null,
+                "taxonomy": {
+                  "actionability": "guided",
+                  "category": "template-syntax",
+                  "confidence": null,
+                  "impact": "blocking",
+                  "schema": "diagnostics-taxonomy/1"
+                }
               },
-              "sourceRole": null,
-              "subject": null,
-              "taxonomy": {
-                "actionability": null,
-                "category": null,
-                "confidence": null,
-                "impact": null,
-                "schema": null
-              }
+              "file": "src/unregistered-plugin-resources-app.html",
+              "impact": "blocking",
+              "issues": [
+                {
+                  "code": "AUR0103",
+                  "kind": "runtime-value-converter-framework-error",
+                  "message": "Aurelia runtime value converter AUR0103 rejects this binding: Value converter 't' was not resolved through the current compiler resource scope.."
+                }
+              ],
+              "message": "Aurelia runtime value converter AUR0103 rejects this binding: Value converter 't' was not resolved through the current compiler resource scope..",
+              "related": [],
+              "severity": "error",
+              "source": "semantic-runtime:template",
+              "span": {
+                "end": 244,
+                "start": 243
+              },
+              "spanText": "t",
+              "status": "contextual",
+              "uri": "fixtures://pressure/unregistered-plugin-resources/src/unregistered-plugin-resources-app.html"
             },
-            "file": "src/unregistered-plugin-resources-app.html",
-            "impact": "blocking",
-            "issues": [
-              {
-                "code": "AUR0103",
-                "kind": "runtime-value-converter-framework-error",
-                "message": "Aurelia runtime value converter AUR0103 rejects this binding: Value converter 't' was not resolved through the current compiler resource scope.."
-              }
-            ],
-            "message": "Aurelia runtime value converter AUR0103 rejects this binding: Value converter 't' was not resolved through the current compiler resource scope..",
-            "related": [],
-            "severity": "error",
-            "source": "semantic-runtime:template",
-            "span": {
-              "end": 244,
-              "start": 243
-            },
-            "spanText": "t",
-            "status": "primary",
-            "uri": "fixtures://pressure/unregistered-plugin-resources/src/unregistered-plugin-resources-app.html"
-          },
-          "relation": null,
-          "role": "primary",
-          "rowId": "diagnostic:3:template:runtime-value-converter-framework-error:framework-error-code:AUR0103:src/unregistered-plugin-resources-app.html:243:244:runtime-value-converter:AUR0103"
-        },
-        "primarySeverity": "error",
-        "rawRowCount": 1,
-        "related": [],
+            "relation": "derived-consequence",
+            "role": "contextual",
+            "rowId": "diagnostic:3:template:runtime-value-converter-framework-error:framework-error-code:AUR0103:src/unregistered-plugin-resources-app.html:243:244:runtime-value-converter:AUR0103"
+          }
+        ],
         "subject": null
       },
       {
-        "groupKey": "row:diagnostic:4:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:283:291:validation-html.default-resources",
+        "groupKey": "relation:diagnostic:4:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:283:291:validation-html.default-resources",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -1170,14 +1590,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "source-edit-policy-open",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/unregistered-plugin-resources-app.html",
@@ -1206,172 +1626,75 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "rowId": "diagnostic:4:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:283:291:validation-html.default-resources"
         },
         "primarySeverity": "error",
-        "rawRowCount": 1,
-        "related": [],
-        "subject": null
-      },
-      {
-        "groupKey": "row:diagnostic:5:template:runtime-binding-behavior-framework-error:framework-error-code:AUR0101:src/unregistered-plugin-resources-app.html:283:291:runtime-binding-behavior:AUR0101",
-        "maxRawSeverity": "error",
-        "primary": {
-          "diagnostic": {
-            "actionability": "guided",
-            "anomaly": null,
-            "category": "template-syntax",
-            "code": "AUR0101",
-            "data": {
-              "diagnosticAuthority": "framework-error-code",
-              "diagnosticDomain": "template",
-              "diagnosticKind": "runtime-binding-behavior-framework-error",
-              "frameworkErrorCode": "AUR0101",
-              "frameworkRawErrorAuthority": null,
-              "missingInput": "runtime-binding-behavior:AUR0101",
-              "missingInputs": [
-                "runtime-binding-behavior:AUR0101"
-              ],
-              "phase": "bind",
-              "relatedInformation": [],
-              "relatedQueryKind": "template-diagnostics",
-              "repairAffordance": {
-                "actionKind": "register-resource",
-                "actionability": "guided",
-                "changeDomain": "app-source",
-                "planKind": "resource-registration",
-                "readiness": "ready-to-plan",
-                "targetSourceCoverage": "all"
-              },
-              "sourceRole": null,
-              "subject": null,
-              "taxonomy": {
-                "actionability": null,
-                "category": null,
-                "confidence": null,
-                "impact": null,
-                "schema": null
-              }
-            },
-            "file": "src/unregistered-plugin-resources-app.html",
-            "impact": "blocking",
-            "issues": [
-              {
-                "code": "AUR0101",
-                "kind": "runtime-binding-behavior-framework-error",
-                "message": "Aurelia runtime binding behavior AUR0101 rejects this binding: Binding behavior 'validate' was not resolved through the current compiler resource scope.."
-              }
-            ],
-            "message": "Aurelia runtime binding behavior AUR0101 rejects this binding: Binding behavior 'validate' was not resolved through the current compiler resource scope..",
-            "related": [],
-            "severity": "error",
-            "source": "semantic-runtime:template",
-            "span": {
-              "end": 291,
-              "start": 283
-            },
-            "spanText": "validate",
-            "status": "primary",
-            "uri": "fixtures://pressure/unregistered-plugin-resources/src/unregistered-plugin-resources-app.html"
-          },
-          "relation": null,
-          "role": "primary",
-          "rowId": "diagnostic:5:template:runtime-binding-behavior-framework-error:framework-error-code:AUR0101:src/unregistered-plugin-resources-app.html:283:291:runtime-binding-behavior:AUR0101"
-        },
-        "primarySeverity": "error",
-        "rawRowCount": 1,
-        "related": [],
-        "subject": null
-      },
-      {
-        "groupKey": "row:diagnostic:6:template:binding-target-assignment-strictness:semantic-runtime-product:no-framework-code:src/unregistered-plugin-resources-app.html:321:335:binding-target-assignment:source-to-target-type-mismatch",
-        "maxRawSeverity": "warning",
-        "primary": {
-          "diagnostic": {
-            "actionability": "guided",
-            "anomaly": null,
-            "category": "template-syntax",
-            "code": "binding-target-assignment-strictness",
-            "data": {
-              "diagnosticAuthority": "semantic-runtime-product",
-              "diagnosticDomain": "template",
-              "diagnosticKind": "binding-target-assignment-strictness",
-              "frameworkErrorCode": null,
-              "frameworkRawErrorAuthority": null,
-              "missingInput": "binding-target-assignment:source-to-target-type-mismatch",
-              "missingInputs": [
-                "binding-target-assignment:source-to-target-type-mismatch"
-              ],
-              "phase": null,
-              "relatedInformation": [],
-              "relatedQueryKind": "template-diagnostics",
-              "repairAffordance": {
-                "actionKind": "rewrite-expression",
-                "actionability": "guided",
-                "changeDomain": "app-source",
-                "planKind": "template-expression-rewrite",
-                "readiness": "ready-to-plan",
-                "targetSourceCoverage": "all"
-              },
-              "sourceRole": null,
-              "subject": {
-                "source": {
-                  "end": 335,
-                  "kind": "source-span-address",
-                  "label": "src/unregistered-plugin-resources-app.html@321..335",
-                  "path": "src/unregistered-plugin-resources-app.html",
-                  "role": "binding-source-assignment",
-                  "start": 321
+        "rawRowCount": 2,
+        "related": [
+          {
+            "diagnostic": {
+              "actionability": "guided",
+              "anomaly": null,
+              "category": "template-syntax",
+              "code": "AUR0101",
+              "data": {
+                "diagnosticAuthority": "framework-error-code",
+                "diagnosticDomain": "template",
+                "diagnosticKind": "runtime-binding-behavior-framework-error",
+                "frameworkErrorCode": "AUR0101",
+                "frameworkRawErrorAuthority": null,
+                "missingInput": "runtime-binding-behavior:AUR0101",
+                "missingInputs": [
+                  "runtime-binding-behavior:AUR0101"
+                ],
+                "phase": "bind",
+                "relatedInformation": [],
+                "relatedQueryKind": "template-diagnostics",
+                "repairAffordance": {
+                  "actionKind": "register-resource",
+                  "actionability": "guided",
+                  "changeDomain": "app-source",
+                  "planKind": "resource-registration",
+                  "readiness": "ready-to-plan",
+                  "targetSourceCoverage": "all"
                 },
-                "span": null,
-                "subjectKind": "template-expression",
-                "uri": null
+                "sourceRole": "template",
+                "subject": null,
+                "taxonomy": {
+                  "actionability": "guided",
+                  "category": "template-syntax",
+                  "confidence": null,
+                  "impact": "blocking",
+                  "schema": "diagnostics-taxonomy/1"
+                }
               },
-              "taxonomy": {
-                "actionability": null,
-                "category": null,
-                "confidence": null,
-                "impact": null,
-                "schema": null
-              }
+              "file": "src/unregistered-plugin-resources-app.html",
+              "impact": "blocking",
+              "issues": [
+                {
+                  "code": "AUR0101",
+                  "kind": "runtime-binding-behavior-framework-error",
+                  "message": "Aurelia runtime binding behavior AUR0101 rejects this binding: Binding behavior 'validate' was not resolved through the current compiler resource scope.."
+                }
+              ],
+              "message": "Aurelia runtime binding behavior AUR0101 rejects this binding: Binding behavior 'validate' was not resolved through the current compiler resource scope..",
+              "related": [],
+              "severity": "error",
+              "source": "semantic-runtime:template",
+              "span": {
+                "end": 291,
+                "start": 283
+              },
+              "spanText": "validate",
+              "status": "contextual",
+              "uri": "fixtures://pressure/unregistered-plugin-resources/src/unregistered-plugin-resources-app.html"
             },
-            "file": "src/unregistered-plugin-resources-app.html",
-            "impact": "degraded",
-            "issues": [
-              {
-                "code": "binding-target-assignment-strictness",
-                "kind": "binding-target-assignment-strictness",
-                "message": "Binding source type { ready: boolean; } is not assignable to target 'textContent' of type string."
-              }
-            ],
-            "message": "Binding source type { ready: boolean; } is not assignable to target 'textContent' of type string.",
-            "related": [],
-            "severity": "warning",
-            "source": "semantic-runtime:template",
-            "span": {
-              "end": 335,
-              "start": 321
-            },
-            "spanText": "dashboardState",
-            "status": "primary",
-            "uri": "fixtures://pressure/unregistered-plugin-resources/src/unregistered-plugin-resources-app.html"
-          },
-          "relation": null,
-          "role": "primary",
-          "rowId": "diagnostic:6:template:binding-target-assignment-strictness:semantic-runtime-product:no-framework-code:src/unregistered-plugin-resources-app.html:321:335:binding-target-assignment:source-to-target-type-mismatch"
-        },
-        "primarySeverity": "warning",
-        "rawRowCount": 1,
-        "related": [],
-        "subject": {
-          "source": null,
-          "span": {
-            "end": 335,
-            "start": 321
-          },
-          "subjectKind": "template-expression",
-          "uri": "file:///c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/unregistered-plugin-resources/src/unregistered-plugin-resources-app.html"
-        }
+            "relation": "derived-consequence",
+            "role": "contextual",
+            "rowId": "diagnostic:5:template:runtime-binding-behavior-framework-error:framework-error-code:AUR0101:src/unregistered-plugin-resources-app.html:283:291:runtime-binding-behavior:AUR0101"
+          }
+        ],
+        "subject": null
       },
       {
-        "groupKey": "row:diagnostic:7:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:338:343:state.default-resources",
+        "groupKey": "relation:diagnostic:7:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:338:343:state.default-resources",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -1400,14 +1723,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "source-edit-policy-open",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/unregistered-plugin-resources-app.html",
@@ -1436,82 +1759,149 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "rowId": "diagnostic:7:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:338:343:state.default-resources"
         },
         "primarySeverity": "error",
-        "rawRowCount": 1,
-        "related": [],
-        "subject": null
-      },
-      {
-        "groupKey": "row:diagnostic:8:template:runtime-binding-behavior-framework-error:framework-error-code:AUR0101:src/unregistered-plugin-resources-app.html:338:343:runtime-binding-behavior:AUR0101",
-        "maxRawSeverity": "error",
-        "primary": {
-          "diagnostic": {
-            "actionability": "guided",
-            "anomaly": null,
-            "category": "template-syntax",
-            "code": "AUR0101",
-            "data": {
-              "diagnosticAuthority": "framework-error-code",
-              "diagnosticDomain": "template",
-              "diagnosticKind": "runtime-binding-behavior-framework-error",
-              "frameworkErrorCode": "AUR0101",
-              "frameworkRawErrorAuthority": null,
-              "missingInput": "runtime-binding-behavior:AUR0101",
-              "missingInputs": [
-                "runtime-binding-behavior:AUR0101"
-              ],
-              "phase": "bind",
-              "relatedInformation": [],
-              "relatedQueryKind": "template-diagnostics",
-              "repairAffordance": {
-                "actionKind": "register-resource",
-                "actionability": "guided",
-                "changeDomain": "app-source",
-                "planKind": "resource-registration",
-                "readiness": "ready-to-plan",
-                "targetSourceCoverage": "all"
+        "rawRowCount": 3,
+        "related": [
+          {
+            "diagnostic": {
+              "actionability": "guided",
+              "anomaly": null,
+              "category": "template-syntax",
+              "code": "binding-target-assignment-strictness",
+              "data": {
+                "diagnosticAuthority": "semantic-runtime-product",
+                "diagnosticDomain": "template",
+                "diagnosticKind": "binding-target-assignment-strictness",
+                "frameworkErrorCode": null,
+                "frameworkRawErrorAuthority": null,
+                "missingInput": "binding-target-assignment:source-to-target-type-mismatch",
+                "missingInputs": [
+                  "binding-target-assignment:source-to-target-type-mismatch"
+                ],
+                "phase": null,
+                "relatedInformation": [],
+                "relatedQueryKind": "template-diagnostics",
+                "repairAffordance": {
+                  "actionKind": "rewrite-expression",
+                  "actionability": "guided",
+                  "changeDomain": "app-source",
+                  "planKind": "template-expression-rewrite",
+                  "readiness": "ready-to-plan",
+                  "targetSourceCoverage": "all"
+                },
+                "sourceRole": "template",
+                "subject": {
+                  "source": {
+                    "end": 335,
+                    "kind": "source-span-address",
+                    "label": "src/unregistered-plugin-resources-app.html@321..335",
+                    "path": "src/unregistered-plugin-resources-app.html",
+                    "role": "binding-source-assignment",
+                    "start": 321
+                  },
+                  "span": null,
+                  "subjectKind": "template-expression",
+                  "uri": null
+                },
+                "taxonomy": {
+                  "actionability": "guided",
+                  "category": "template-syntax",
+                  "confidence": null,
+                  "impact": "degraded",
+                  "schema": "diagnostics-taxonomy/1"
+                }
               },
-              "sourceRole": null,
-              "subject": null,
-              "taxonomy": {
-                "actionability": null,
-                "category": null,
-                "confidence": null,
-                "impact": null,
-                "schema": null
-              }
+              "file": "src/unregistered-plugin-resources-app.html",
+              "impact": "degraded",
+              "issues": [
+                {
+                  "code": "binding-target-assignment-strictness",
+                  "kind": "binding-target-assignment-strictness",
+                  "message": "Binding source type { ready: boolean; } is not assignable to target 'textContent' of type string."
+                }
+              ],
+              "message": "Binding source type { ready: boolean; } is not assignable to target 'textContent' of type string.",
+              "related": [],
+              "severity": "warning",
+              "source": "semantic-runtime:template",
+              "span": {
+                "end": 335,
+                "start": 321
+              },
+              "spanText": "dashboardState",
+              "status": "contextual",
+              "uri": "fixtures://pressure/unregistered-plugin-resources/src/unregistered-plugin-resources-app.html"
             },
-            "file": "src/unregistered-plugin-resources-app.html",
-            "impact": "blocking",
-            "issues": [
-              {
-                "code": "AUR0101",
-                "kind": "runtime-binding-behavior-framework-error",
-                "message": "Aurelia runtime binding behavior AUR0101 rejects this binding: Binding behavior 'state' was not resolved through the current compiler resource scope.."
-              }
-            ],
-            "message": "Aurelia runtime binding behavior AUR0101 rejects this binding: Binding behavior 'state' was not resolved through the current compiler resource scope..",
-            "related": [],
-            "severity": "error",
-            "source": "semantic-runtime:template",
-            "span": {
-              "end": 343,
-              "start": 338
-            },
-            "spanText": "state",
-            "status": "primary",
-            "uri": "fixtures://pressure/unregistered-plugin-resources/src/unregistered-plugin-resources-app.html"
+            "relation": "derived-consequence",
+            "role": "contextual",
+            "rowId": "diagnostic:6:template:binding-target-assignment-strictness:semantic-runtime-product:no-framework-code:src/unregistered-plugin-resources-app.html:321:335:binding-target-assignment:source-to-target-type-mismatch"
           },
-          "relation": null,
-          "role": "primary",
-          "rowId": "diagnostic:8:template:runtime-binding-behavior-framework-error:framework-error-code:AUR0101:src/unregistered-plugin-resources-app.html:338:343:runtime-binding-behavior:AUR0101"
-        },
-        "primarySeverity": "error",
-        "rawRowCount": 1,
-        "related": [],
+          {
+            "diagnostic": {
+              "actionability": "guided",
+              "anomaly": null,
+              "category": "template-syntax",
+              "code": "AUR0101",
+              "data": {
+                "diagnosticAuthority": "framework-error-code",
+                "diagnosticDomain": "template",
+                "diagnosticKind": "runtime-binding-behavior-framework-error",
+                "frameworkErrorCode": "AUR0101",
+                "frameworkRawErrorAuthority": null,
+                "missingInput": "runtime-binding-behavior:AUR0101",
+                "missingInputs": [
+                  "runtime-binding-behavior:AUR0101"
+                ],
+                "phase": "bind",
+                "relatedInformation": [],
+                "relatedQueryKind": "template-diagnostics",
+                "repairAffordance": {
+                  "actionKind": "register-resource",
+                  "actionability": "guided",
+                  "changeDomain": "app-source",
+                  "planKind": "resource-registration",
+                  "readiness": "ready-to-plan",
+                  "targetSourceCoverage": "all"
+                },
+                "sourceRole": "template",
+                "subject": null,
+                "taxonomy": {
+                  "actionability": "guided",
+                  "category": "template-syntax",
+                  "confidence": null,
+                  "impact": "blocking",
+                  "schema": "diagnostics-taxonomy/1"
+                }
+              },
+              "file": "src/unregistered-plugin-resources-app.html",
+              "impact": "blocking",
+              "issues": [
+                {
+                  "code": "AUR0101",
+                  "kind": "runtime-binding-behavior-framework-error",
+                  "message": "Aurelia runtime binding behavior AUR0101 rejects this binding: Binding behavior 'state' was not resolved through the current compiler resource scope.."
+                }
+              ],
+              "message": "Aurelia runtime binding behavior AUR0101 rejects this binding: Binding behavior 'state' was not resolved through the current compiler resource scope..",
+              "related": [],
+              "severity": "error",
+              "source": "semantic-runtime:template",
+              "span": {
+                "end": 343,
+                "start": 338
+              },
+              "spanText": "state",
+              "status": "contextual",
+              "uri": "fixtures://pressure/unregistered-plugin-resources/src/unregistered-plugin-resources-app.html"
+            },
+            "relation": "derived-consequence",
+            "role": "contextual",
+            "rowId": "diagnostic:8:template:runtime-binding-behavior-framework-error:framework-error-code:AUR0101:src/unregistered-plugin-resources-app.html:338:343:runtime-binding-behavior:AUR0101"
+          }
+        ],
         "subject": null
       }
     ],
-    "primaryCount": 12,
+    "primaryCount": 8,
     "rawRowCount": 12
   },
   "raw": {
@@ -1543,14 +1933,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "source-edit-policy-open",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/unregistered-plugin-resources-app.html",
@@ -1600,14 +1990,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "source-edit-policy-open",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/unregistered-plugin-resources-app.html",
@@ -1657,14 +2047,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "source-edit-policy-open",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/unregistered-plugin-resources-app.html",
@@ -1714,14 +2104,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/unregistered-plugin-resources-app.html",
@@ -1771,14 +2161,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "source-edit-policy-open",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/unregistered-plugin-resources-app.html",
@@ -1828,14 +2218,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/unregistered-plugin-resources-app.html",
@@ -1885,7 +2275,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": {
             "source": {
               "end": 335,
@@ -1900,11 +2290,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "degraded",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/unregistered-plugin-resources-app.html",
@@ -1954,14 +2344,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "source-edit-policy-open",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/unregistered-plugin-resources-app.html",
@@ -2011,14 +2401,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/unregistered-plugin-resources-app.html",
@@ -2068,14 +2458,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "source-edit-policy-open",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/unregistered-plugin-resources-app.html",
@@ -2125,14 +2515,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "source-edit-policy-open",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/unregistered-plugin-resources-app.html",
@@ -2182,14 +2572,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "source-edit-policy-open",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/unregistered-plugin-resources-app.html",
@@ -2215,13 +2605,9 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       }
     ]
   },
-  "suppressed": {
-    "diagnosticCount": 0,
-    "diagnostics": []
-  },
   "surfaces": {
     "lsp": {
-      "diagnosticCount": 12,
+      "diagnosticCount": 8,
       "diagnostics": [
         {
           "actionability": "guided",
@@ -2249,14 +2635,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "source-edit-policy-open",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/unregistered-plugin-resources-app.html",
@@ -2306,14 +2692,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "source-edit-policy-open",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/unregistered-plugin-resources-app.html",
@@ -2363,14 +2749,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "source-edit-policy-open",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/unregistered-plugin-resources-app.html",
@@ -2420,14 +2806,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "source-edit-policy-open",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/unregistered-plugin-resources-app.html",
@@ -2477,14 +2863,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "source-edit-policy-open",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/unregistered-plugin-resources-app.html",
@@ -2534,14 +2920,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "source-edit-policy-open",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/unregistered-plugin-resources-app.html",
@@ -2554,63 +2940,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             }
           ],
           "message": "Value converter \"t\" uses Aurelia i18n default resources, but that framework capability is not registered in this app world.",
-          "related": [],
-          "severity": "error",
-          "source": "semantic-runtime:template",
-          "span": {
-            "end": 244,
-            "start": 243
-          },
-          "spanText": "t",
-          "status": "primary",
-          "uri": "fixtures://pressure/unregistered-plugin-resources/src/unregistered-plugin-resources-app.html"
-        },
-        {
-          "actionability": "guided",
-          "anomaly": null,
-          "category": "template-syntax",
-          "code": "AUR0103",
-          "data": {
-            "diagnosticAuthority": "framework-error-code",
-            "diagnosticDomain": "template",
-            "diagnosticKind": "runtime-value-converter-framework-error",
-            "frameworkErrorCode": "AUR0103",
-            "frameworkRawErrorAuthority": null,
-            "missingInput": "runtime-value-converter:AUR0103",
-            "missingInputs": [
-              "runtime-value-converter:AUR0103"
-            ],
-            "phase": "bind",
-            "relatedInformation": [],
-            "relatedQueryKind": "template-diagnostics",
-            "repairAffordance": {
-              "actionKind": "register-resource",
-              "actionability": "guided",
-              "changeDomain": "app-source",
-              "planKind": "resource-registration",
-              "readiness": "ready-to-plan",
-              "targetSourceCoverage": "all"
-            },
-            "sourceRole": null,
-            "subject": null,
-            "taxonomy": {
-              "actionability": null,
-              "category": null,
-              "confidence": null,
-              "impact": null,
-              "schema": null
-            }
-          },
-          "file": "src/unregistered-plugin-resources-app.html",
-          "impact": "blocking",
-          "issues": [
-            {
-              "code": "AUR0103",
-              "kind": "runtime-value-converter-framework-error",
-              "message": "Aurelia runtime value converter AUR0103 rejects this binding: Value converter 't' was not resolved through the current compiler resource scope.."
-            }
-          ],
-          "message": "Aurelia runtime value converter AUR0103 rejects this binding: Value converter 't' was not resolved through the current compiler resource scope..",
           "related": [],
           "severity": "error",
           "source": "semantic-runtime:template",
@@ -2648,14 +2977,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "source-edit-policy-open",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/unregistered-plugin-resources-app.html",
@@ -2676,132 +3005,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "start": 283
           },
           "spanText": "validate",
-          "status": "primary",
-          "uri": "fixtures://pressure/unregistered-plugin-resources/src/unregistered-plugin-resources-app.html"
-        },
-        {
-          "actionability": "guided",
-          "anomaly": null,
-          "category": "template-syntax",
-          "code": "AUR0101",
-          "data": {
-            "diagnosticAuthority": "framework-error-code",
-            "diagnosticDomain": "template",
-            "diagnosticKind": "runtime-binding-behavior-framework-error",
-            "frameworkErrorCode": "AUR0101",
-            "frameworkRawErrorAuthority": null,
-            "missingInput": "runtime-binding-behavior:AUR0101",
-            "missingInputs": [
-              "runtime-binding-behavior:AUR0101"
-            ],
-            "phase": "bind",
-            "relatedInformation": [],
-            "relatedQueryKind": "template-diagnostics",
-            "repairAffordance": {
-              "actionKind": "register-resource",
-              "actionability": "guided",
-              "changeDomain": "app-source",
-              "planKind": "resource-registration",
-              "readiness": "ready-to-plan",
-              "targetSourceCoverage": "all"
-            },
-            "sourceRole": null,
-            "subject": null,
-            "taxonomy": {
-              "actionability": null,
-              "category": null,
-              "confidence": null,
-              "impact": null,
-              "schema": null
-            }
-          },
-          "file": "src/unregistered-plugin-resources-app.html",
-          "impact": "blocking",
-          "issues": [
-            {
-              "code": "AUR0101",
-              "kind": "runtime-binding-behavior-framework-error",
-              "message": "Aurelia runtime binding behavior AUR0101 rejects this binding: Binding behavior 'validate' was not resolved through the current compiler resource scope.."
-            }
-          ],
-          "message": "Aurelia runtime binding behavior AUR0101 rejects this binding: Binding behavior 'validate' was not resolved through the current compiler resource scope..",
-          "related": [],
-          "severity": "error",
-          "source": "semantic-runtime:template",
-          "span": {
-            "end": 291,
-            "start": 283
-          },
-          "spanText": "validate",
-          "status": "primary",
-          "uri": "fixtures://pressure/unregistered-plugin-resources/src/unregistered-plugin-resources-app.html"
-        },
-        {
-          "actionability": "guided",
-          "anomaly": null,
-          "category": "template-syntax",
-          "code": "binding-target-assignment-strictness",
-          "data": {
-            "diagnosticAuthority": "semantic-runtime-product",
-            "diagnosticDomain": "template",
-            "diagnosticKind": "binding-target-assignment-strictness",
-            "frameworkErrorCode": null,
-            "frameworkRawErrorAuthority": null,
-            "missingInput": "binding-target-assignment:source-to-target-type-mismatch",
-            "missingInputs": [
-              "binding-target-assignment:source-to-target-type-mismatch"
-            ],
-            "phase": null,
-            "relatedInformation": [],
-            "relatedQueryKind": "template-diagnostics",
-            "repairAffordance": {
-              "actionKind": "rewrite-expression",
-              "actionability": "guided",
-              "changeDomain": "app-source",
-              "planKind": "template-expression-rewrite",
-              "readiness": "ready-to-plan",
-              "targetSourceCoverage": "all"
-            },
-            "sourceRole": null,
-            "subject": {
-              "source": {
-                "end": 335,
-                "kind": "source-span-address",
-                "label": "src/unregistered-plugin-resources-app.html@321..335",
-                "path": "src/unregistered-plugin-resources-app.html",
-                "role": "binding-source-assignment",
-                "start": 321
-              },
-              "span": null,
-              "subjectKind": "template-expression",
-              "uri": null
-            },
-            "taxonomy": {
-              "actionability": null,
-              "category": null,
-              "confidence": null,
-              "impact": null,
-              "schema": null
-            }
-          },
-          "file": "src/unregistered-plugin-resources-app.html",
-          "impact": "degraded",
-          "issues": [
-            {
-              "code": "binding-target-assignment-strictness",
-              "kind": "binding-target-assignment-strictness",
-              "message": "Binding source type { ready: boolean; } is not assignable to target 'textContent' of type string."
-            }
-          ],
-          "message": "Binding source type { ready: boolean; } is not assignable to target 'textContent' of type string.",
-          "related": [],
-          "severity": "warning",
-          "source": "semantic-runtime:template",
-          "span": {
-            "end": 335,
-            "start": 321
-          },
-          "spanText": "dashboardState",
           "status": "primary",
           "uri": "fixtures://pressure/unregistered-plugin-resources/src/unregistered-plugin-resources-app.html"
         },
@@ -2831,14 +3034,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "source-edit-policy-open",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/unregistered-plugin-resources-app.html",
@@ -2851,63 +3054,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             }
           ],
           "message": "Binding behavior \"state\" uses Aurelia state default resources, but that framework capability is not registered in this app world.",
-          "related": [],
-          "severity": "error",
-          "source": "semantic-runtime:template",
-          "span": {
-            "end": 343,
-            "start": 338
-          },
-          "spanText": "state",
-          "status": "primary",
-          "uri": "fixtures://pressure/unregistered-plugin-resources/src/unregistered-plugin-resources-app.html"
-        },
-        {
-          "actionability": "guided",
-          "anomaly": null,
-          "category": "template-syntax",
-          "code": "AUR0101",
-          "data": {
-            "diagnosticAuthority": "framework-error-code",
-            "diagnosticDomain": "template",
-            "diagnosticKind": "runtime-binding-behavior-framework-error",
-            "frameworkErrorCode": "AUR0101",
-            "frameworkRawErrorAuthority": null,
-            "missingInput": "runtime-binding-behavior:AUR0101",
-            "missingInputs": [
-              "runtime-binding-behavior:AUR0101"
-            ],
-            "phase": "bind",
-            "relatedInformation": [],
-            "relatedQueryKind": "template-diagnostics",
-            "repairAffordance": {
-              "actionKind": "register-resource",
-              "actionability": "guided",
-              "changeDomain": "app-source",
-              "planKind": "resource-registration",
-              "readiness": "ready-to-plan",
-              "targetSourceCoverage": "all"
-            },
-            "sourceRole": null,
-            "subject": null,
-            "taxonomy": {
-              "actionability": null,
-              "category": null,
-              "confidence": null,
-              "impact": null,
-              "schema": null
-            }
-          },
-          "file": "src/unregistered-plugin-resources-app.html",
-          "impact": "blocking",
-          "issues": [
-            {
-              "code": "AUR0101",
-              "kind": "runtime-binding-behavior-framework-error",
-              "message": "Aurelia runtime binding behavior AUR0101 rejects this binding: Binding behavior 'state' was not resolved through the current compiler resource scope.."
-            }
-          ],
-          "message": "Aurelia runtime binding behavior AUR0101 rejects this binding: Binding behavior 'state' was not resolved through the current compiler resource scope..",
           "related": [],
           "severity": "error",
           "source": "semantic-runtime:template",
@@ -2932,10 +3078,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 {
   "comparisonKey": "domain/kind/code/severity/text/message",
   "countsMatch": true,
-  "customLspSurfaceCount": 12,
+  "customLspSurfaceCount": 8,
   "customOnly": [],
   "lspOnly": [],
-  "lspPublishCount": 12,
+  "lspPublishCount": 8,
   "suppressedCount": 0
 }
 ```

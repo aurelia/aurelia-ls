@@ -15,11 +15,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "anchor": "...$element=\"spreadState\"",
   "at": "...$element",
   "atOccurrence": 1,
-  "displayPosition": "src/template-spread-capture-semantics-app.html:13:16",
+  "displayPosition": "src/template-spread-capture-semantics-app.html:24:16",
   "file": "src/template-spread-capture-semantics-app.html",
   "lspPosition": {
     "character": 15,
-    "line": 12
+    "line": 23
   },
   "occurrence": 1
 }
@@ -77,11 +77,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 26,
-          "line": 12
+          "line": 23
         },
         "start": {
           "character": 15,
-          "line": 12
+          "line": 23
         }
       },
       "source": "aurelia"
@@ -123,11 +123,11 @@ _No in-memory diff._
   "anchor": "<div ...$attrs>",
   "at": "...$attrs",
   "atOccurrence": 1,
-  "displayPosition": "src/template-spread-capture-semantics-app.html:16:8",
+  "displayPosition": "src/template-spread-capture-semantics-app.html:27:8",
   "file": "src/template-spread-capture-semantics-app.html",
   "lspPosition": {
     "character": 7,
-    "line": 15
+    "line": 26
   },
   "occurrence": 1
 }
@@ -185,11 +185,11 @@ _No in-memory diff._
       "range": {
         "end": {
           "character": 16,
-          "line": 15
+          "line": 26
         },
         "start": {
           "character": 7,
-          "line": 15
+          "line": 26
         }
       },
       "source": "aurelia"
@@ -231,11 +231,11 @@ _No in-memory diff._
   "anchor": "inner-gate.bind=\"showCapture\"",
   "at": "inner-gate",
   "atOccurrence": 1,
-  "displayPosition": "src/template-spread-capture-semantics-app.html:35:5",
+  "displayPosition": "src/template-spread-capture-semantics-app.html:46:5",
   "file": "src/template-spread-capture-semantics-app.html",
   "lspPosition": {
     "character": 4,
-    "line": 34
+    "line": 45
   },
   "occurrence": 1
 }
@@ -293,11 +293,11 @@ _No in-memory diff._
       "range": {
         "end": {
           "character": 33,
-          "line": 34
+          "line": 45
         },
         "start": {
           "character": 4,
-          "line": 34
+          "line": 45
         }
       },
       "source": "aurelia"

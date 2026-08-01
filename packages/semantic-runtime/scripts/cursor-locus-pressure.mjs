@@ -355,7 +355,7 @@ async function readCursorPressureForRoot(root) {
           routeConfigProductHandles: app.emission.routes.readRouteConfigs().map((routeConfig) => routeConfig.productHandle),
           i18nTranslationKeyProductHandles: app.emission.i18n.readTranslationKeys().map((translationKey) => translationKey.productHandle),
         });
-        const answer = answerTemplateCompletion(runtime.workspace.store, context.query, context.expressionWorld);
+        const answer = answerTemplateCompletion(runtime.workspace.store, context);
         const rows = answer.value.candidates;
         const valueSite = context.valueSiteProductHandle == null
           ? null

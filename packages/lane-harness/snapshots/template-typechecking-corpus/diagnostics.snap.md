@@ -20,7 +20,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "diagnosticCount": 13,
+  "diagnosticCount": 14,
   "diagnostics": [
     {
       "anomaly": null,
@@ -246,6 +246,86 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     },
     {
       "anomaly": null,
+      "code": "TS18046",
+      "data": {
+        "diagnosticAuthority": "typescript",
+        "diagnosticDomain": "template",
+        "diagnosticKind": "template-expression-typescript-diagnostic",
+        "frameworkErrorCode": null,
+        "frameworkRawErrorAuthority": null,
+        "missingInput": "typescript:TS18046",
+        "missingInputs": [
+          "typescript:TS18046"
+        ],
+        "phase": "semantic",
+        "relatedInformation": [],
+        "relatedQueryKind": "template-diagnostics",
+        "repairAffordance": {
+          "actionKind": "inspect-type-surface",
+          "actionability": "manual",
+          "changeDomain": "inspection",
+          "planKind": "manual-inspection",
+          "readiness": "inspection-required",
+          "targetSourceCoverage": "all"
+        },
+        "sourceRole": "template",
+        "subject": {
+          "source": {
+            "end": 331,
+            "kind": "source-span-address",
+            "label": "src/read-expressions.html@313..331",
+            "path": "src/read-expressions.html",
+            "role": "template-member-access",
+            "start": 313
+          },
+          "span": null,
+          "subjectKind": "template-member-access",
+          "uri": null
+        },
+        "taxonomy": {
+          "actionability": "manual",
+          "category": "template-syntax",
+          "confidence": null,
+          "impact": "blocking",
+          "schema": "diagnostics-taxonomy/1"
+        }
+      },
+      "message": "TS18046: 'unknownValue' is of type 'unknown'.",
+      "range": {
+        "end": {
+          "character": 42,
+          "line": 6
+        },
+        "start": {
+          "character": 30,
+          "line": 6
+        }
+      },
+      "rangeText": "unknownValue",
+      "relatedInformation": [
+        {
+          "anomaly": null,
+          "file": "src/read-expressions.html",
+          "message": "The owner type has no projected members at this cursor, so the selected member cannot be validated or navigated.",
+          "range": {
+            "end": {
+              "character": 48,
+              "line": 6
+            },
+            "start": {
+              "character": 43,
+              "line": 6
+            }
+          },
+          "rangeText": "label",
+          "uri": "fixtures://pressure/template-typechecking-corpus/src/read-expressions.html"
+        }
+      ],
+      "severity": "error",
+      "source": "aurelia"
+    },
+    {
+      "anomaly": null,
       "code": "TS2345",
       "data": {
         "diagnosticAuthority": "typescript",
@@ -271,12 +351,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "sourceRole": "template",
         "subject": {
           "source": {
-            "end": 746,
+            "end": 800,
             "kind": "source-span-address",
-            "label": "src/read-expressions.html@733..746",
+            "label": "src/read-expressions.html@787..800",
             "path": "src/read-expressions.html",
             "role": "typescript-overlay:semantic",
-            "start": 733
+            "start": 787
           },
           "span": null,
           "subjectKind": "template-expression",
@@ -294,11 +374,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 61,
-          "line": 15
+          "line": 16
         },
         "start": {
           "character": 48,
-          "line": 15
+          "line": 16
         }
       },
       "rangeText": "'not-an-item'",
@@ -333,12 +413,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "sourceRole": "template",
         "subject": {
           "source": {
-            "end": 824,
+            "end": 878,
             "kind": "source-span-address",
-            "label": "src/read-expressions.html@812..824",
+            "label": "src/read-expressions.html@866..878",
             "path": "src/read-expressions.html",
             "role": "typescript-overlay:semantic",
-            "start": 812
+            "start": 866
           },
           "span": null,
           "subjectKind": "template-expression",
@@ -356,11 +436,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 71,
-          "line": 16
+          "line": 17
         },
         "start": {
           "character": 59,
-          "line": 16
+          "line": 17
         }
       },
       "rangeText": "definiteItem",
@@ -395,12 +475,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "sourceRole": "template",
         "subject": {
           "source": {
-            "end": 990,
+            "end": 1044,
             "kind": "source-span-address",
-            "label": "src/read-expressions.html@986..990",
+            "label": "src/read-expressions.html@1040..1044",
             "path": "src/read-expressions.html",
             "role": "typescript-overlay:semantic",
-            "start": 986
+            "start": 1040
           },
           "span": null,
           "subjectKind": "template-expression",
@@ -418,11 +498,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 45,
-          "line": 19
+          "line": 20
         },
         "start": {
           "character": 41,
-          "line": 19
+          "line": 20
         }
       },
       "rangeText": "true",
@@ -457,12 +537,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "sourceRole": "template",
         "subject": {
           "source": {
-            "end": 1044,
+            "end": 1098,
             "kind": "source-span-address",
-            "label": "src/read-expressions.html@1033..1044",
+            "label": "src/read-expressions.html@1087..1098",
             "path": "src/read-expressions.html",
             "role": "typescript-overlay:semantic",
-            "start": 1033
+            "start": 1087
           },
           "span": null,
           "subjectKind": "template-expression",
@@ -480,11 +560,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 47,
-          "line": 20
+          "line": 21
         },
         "start": {
           "character": 36,
-          "line": 20
+          "line": 21
         }
       },
       "rangeText": "notCallable",
@@ -519,12 +599,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "sourceRole": "template",
         "subject": {
           "source": {
-            "end": 1232,
+            "end": 1286,
             "kind": "source-span-address",
-            "label": "src/read-expressions.html@1215..1232",
+            "label": "src/read-expressions.html@1269..1286",
             "path": "src/read-expressions.html",
             "role": "template-member-access",
-            "start": 1215
+            "start": 1269
           },
           "span": null,
           "subjectKind": "template-member-access",
@@ -542,11 +622,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 74,
-          "line": 23
+          "line": 24
         },
         "start": {
           "character": 62,
-          "line": 23
+          "line": 24
         }
       },
       "rangeText": "missingLabel",
@@ -581,12 +661,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "sourceRole": "template",
         "subject": {
           "source": {
-            "end": 1238,
+            "end": 1292,
             "kind": "source-span-address",
-            "label": "src/read-expressions.html@1197..1238",
+            "label": "src/read-expressions.html@1251..1292",
             "path": "src/read-expressions.html",
             "role": "template-member-call",
-            "start": 1197
+            "start": 1251
           },
           "span": null,
           "subjectKind": "template-member-call",
@@ -604,11 +684,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 74,
-          "line": 23
+          "line": 24
         },
         "start": {
           "character": 62,
-          "line": 23
+          "line": 24
         }
       },
       "rangeText": "missingLabel",
@@ -684,12 +764,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "sourceRole": "template",
         "subject": {
           "source": {
-            "end": 1304,
+            "end": 1358,
             "kind": "source-span-address",
-            "label": "src/read-expressions.html@1289..1304",
+            "label": "src/read-expressions.html@1343..1358",
             "path": "src/read-expressions.html",
             "role": "name",
-            "start": 1289
+            "start": 1343
           },
           "span": null,
           "subjectKind": "observation-member",
@@ -707,11 +787,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 54,
-          "line": 24
+          "line": 25
         },
         "start": {
           "character": 39,
-          "line": 24
+          "line": 25
         }
       },
       "rangeText": "acceptPredicate",
@@ -781,12 +861,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "sourceRole": "template",
         "subject": {
           "source": {
-            "end": 1323,
+            "end": 1377,
             "kind": "source-span-address",
-            "label": "src/read-expressions.html@1313..1323",
+            "label": "src/read-expressions.html@1367..1377",
             "path": "src/read-expressions.html",
             "role": "template-member-access",
-            "start": 1313
+            "start": 1367
           },
           "span": null,
           "subjectKind": "template-member-access",
@@ -804,11 +884,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 73,
-          "line": 24
+          "line": 25
         },
         "start": {
           "character": 63,
-          "line": 24
+          "line": 25
         }
       },
       "rangeText": "item.label",
@@ -843,12 +923,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "sourceRole": "template",
         "subject": {
           "source": {
-            "end": 1448,
+            "end": 1502,
             "kind": "source-span-address",
-            "label": "src/read-expressions.html@1446..1448",
+            "label": "src/read-expressions.html@1500..1502",
             "path": "src/read-expressions.html",
             "role": "typescript-overlay:semantic",
-            "start": 1446
+            "start": 1500
           },
           "span": null,
           "subjectKind": "template-expression",
@@ -866,11 +946,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 52,
-          "line": 27
+          "line": 28
         },
         "start": {
           "character": 50,
-          "line": 27
+          "line": 28
         }
       },
       "rangeText": "42",
@@ -905,12 +985,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "sourceRole": "template",
         "subject": {
           "source": {
-            "end": 1774,
+            "end": 1828,
             "kind": "source-span-address",
-            "label": "src/read-expressions.html@1769..1774",
+            "label": "src/read-expressions.html@1823..1828",
             "path": "src/read-expressions.html",
             "role": "typescript-overlay:semantic",
-            "start": 1769
+            "start": 1823
           },
           "span": null,
           "subjectKind": "template-expression",
@@ -928,11 +1008,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 83,
-          "line": 31
+          "line": 32
         },
         "start": {
           "character": 78,
-          "line": 31
+          "line": 32
         }
       },
       "rangeText": "count",
@@ -950,11 +1030,450 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "fingerprint": "semantic-runtime:hit",
+  "answer": {
+    "analysisDepth": "binding-observation",
+    "continuations": [
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "orient",
+          "inspect"
+        ],
+        "kind": "follow-query",
+        "rationale": "Cluster detailed diagnostics back into a summary view.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "app-diagnostic-summary",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/read-expressions.html"
+          }
+        },
+        "targetQueryKind": "app-diagnostic-summary"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "diagnose"
+        ],
+        "kind": "follow-query",
+        "rationale": "Compare unified diagnostics with ordinary TypeScript diagnostics.",
+        "targetQuery": {
+          "kind": "typescript-diagnostics",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/read-expressions.html"
+          }
+        },
+        "targetQueryKind": "typescript-diagnostics"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "diagnose"
+        ],
+        "kind": "follow-query",
+        "rationale": "Compare unified diagnostics with template diagnostics.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "template-diagnostics",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/read-expressions.html"
+          }
+        },
+        "targetQueryKind": "template-diagnostics"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world"
+          ],
+          "sourceFacts": [
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 1044,
+                "kind": "source-span-address",
+                "label": "src/read-expressions.html@1040..1044",
+                "path": "src/read-expressions.html",
+                "role": "typescript-overlay:semantic",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "aurelia-template-typechecking-corpus",
+                "start": 1040
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 118,
+                "kind": "source-span-address",
+                "label": "src/read-expressions.html@106..118",
+                "path": "src/read-expressions.html",
+                "role": "name",
+                "start": 106
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 118,
+                "kind": "source-span-address",
+                "label": "src/read-expressions.html@106..118",
+                "path": "src/read-expressions.html",
+                "role": "typescript-overlay:semantic",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "aurelia-template-typechecking-corpus",
+                "start": 106
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 1098,
+                "kind": "source-span-address",
+                "label": "src/read-expressions.html@1087..1098",
+                "path": "src/read-expressions.html",
+                "role": "typescript-overlay:semantic",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "aurelia-template-typechecking-corpus",
+                "start": 1087
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 1286,
+                "kind": "source-span-address",
+                "label": "src/read-expressions.html@1274..1286",
+                "path": "src/read-expressions.html",
+                "role": "name",
+                "start": 1274
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 1286,
+                "kind": "source-span-address",
+                "label": "src/read-expressions.html@1274..1286",
+                "path": "src/read-expressions.html",
+                "role": "typescript-overlay:semantic",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "aurelia-template-typechecking-corpus",
+                "start": 1274
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 1377,
+                "kind": "source-span-address",
+                "label": "src/read-expressions.html@1367..1377",
+                "path": "src/read-expressions.html",
+                "role": "typescript-overlay:semantic",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "aurelia-template-typechecking-corpus",
+                "start": 1367
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 1502,
+                "kind": "source-span-address",
+                "label": "src/read-expressions.html@1500..1502",
+                "path": "src/read-expressions.html",
+                "role": "typescript-overlay:semantic",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "aurelia-template-typechecking-corpus",
+                "start": 1500
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 1828,
+                "kind": "source-span-address",
+                "label": "src/read-expressions.html@1823..1828",
+                "path": "src/read-expressions.html",
+                "role": "typescript-overlay:semantic",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "aurelia-template-typechecking-corpus",
+                "start": 1823
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 216,
+                "kind": "source-span-address",
+                "label": "src/read-expressions.html@207..216",
+                "path": "src/read-expressions.html",
+                "role": "typescript-overlay:semantic",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "aurelia-template-typechecking-corpus",
+                "start": 207
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 271,
+                "kind": "source-span-address",
+                "label": "src/read-expressions.html@259..271",
+                "path": "src/read-expressions.html",
+                "role": "typescript-overlay:semantic",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "aurelia-template-typechecking-corpus",
+                "start": 259
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 277,
+                "kind": "source-span-address",
+                "label": "src/read-expressions.html@272..277",
+                "path": "src/read-expressions.html",
+                "role": "name",
+                "start": 272
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 325,
+                "kind": "source-span-address",
+                "label": "src/read-expressions.html@313..325",
+                "path": "src/read-expressions.html",
+                "role": "typescript-overlay:semantic",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "aurelia-template-typechecking-corpus",
+                "start": 313
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 331,
+                "kind": "source-span-address",
+                "label": "src/read-expressions.html@326..331",
+                "path": "src/read-expressions.html",
+                "role": "name",
+                "start": 326
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 800,
+                "kind": "source-span-address",
+                "label": "src/read-expressions.html@787..800",
+                "path": "src/read-expressions.html",
+                "role": "typescript-overlay:semantic",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "aurelia-template-typechecking-corpus",
+                "start": 787
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 878,
+                "kind": "source-span-address",
+                "label": "src/read-expressions.html@866..878",
+                "path": "src/read-expressions.html",
+                "role": "typescript-overlay:semantic",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "aurelia-template-typechecking-corpus",
+                "start": 866
+              }
+            }
+          ],
+          "sourceRequirement": "exact-authored-span"
+        },
+        "intents": [
+          "diagnose",
+          "repair"
+        ],
+        "kind": "follow-query",
+        "rationale": "Inspect template-diagnostics rows referenced by returned diagnostics.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "template-diagnostics",
+          "page": {
+            "size": 200
+          }
+        },
+        "targetQueryKind": "template-diagnostics"
+      },
+      {
+        "blockers": [],
+        "cost": "app-world",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world"
+          ],
+          "sourceFacts": [
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/read-expressions.html",
+                  "path": "src/read-expressions.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "aurelia-template-typechecking-corpus"
+                },
+                "end": 1358,
+                "kind": "source-span-address",
+                "label": "src/read-expressions.html@1343..1358",
+                "path": "src/read-expressions.html",
+                "role": "name",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "aurelia-template-typechecking-corpus",
+                "start": 1343
+              }
+            }
+          ],
+          "sourceRequirement": "exact-authored-span"
+        },
+        "intents": [
+          "diagnose",
+          "repair"
+        ],
+        "kind": "follow-query",
+        "rationale": "Inspect observation-issues rows referenced by returned diagnostics.",
+        "targetQuery": {
+          "kind": "observation-issues",
+          "page": {
+            "size": 200
+          }
+        },
+        "targetQueryKind": "observation-issues"
+      }
+    ],
+    "coverage": "complete",
+    "page": null,
+    "result": "answered",
+    "schemaVersion": "0.2",
+    "selection": "not-applicable",
+    "summary": "Returned 17 app diagnostic(s)."
+  },
   "outcome": "result",
   "presentation": {
     "complete": true,
-    "contextualCount": 2,
+    "contextualCount": 3,
     "groups": [
       {
         "groupKey": "checker-agreement:missing-member:template-member-access:src/read-expressions.html:93:118:diagnostic:1:template:missing-expression-member:semantic-authoring-policy:no-framework-code:src/read-expressions.html:106:118:expression-member:selected-member-missing",
@@ -986,7 +1505,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": {
                 "source": {
                   "end": 118,
@@ -1001,11 +1520,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "degraded",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/read-expressions.html",
@@ -1063,7 +1582,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                   "readiness": "inspection-required",
                   "targetSourceCoverage": "all"
                 },
-                "sourceRole": null,
+                "sourceRole": "template",
                 "subject": {
                   "source": {
                     "end": 118,
@@ -1078,11 +1597,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                   "uri": null
                 },
                 "taxonomy": {
-                  "actionability": null,
-                  "category": null,
+                  "actionability": "manual",
+                  "category": "template-syntax",
                   "confidence": null,
-                  "impact": null,
-                  "schema": null
+                  "impact": "blocking",
+                  "schema": "diagnostics-taxonomy/1"
                 }
               },
               "file": "src/read-expressions.html",
@@ -1122,7 +1641,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         }
       },
       {
-        "groupKey": "row:diagnostic:9:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/read-expressions.html:207:216:typescript:TS18047",
+        "groupKey": "row:diagnostic:10:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/read-expressions.html:207:216:typescript:TS18047",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -1151,7 +1670,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": {
                 "source": {
                   "end": 222,
@@ -1166,11 +1685,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/read-expressions.html",
@@ -1196,7 +1715,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:9:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/read-expressions.html:207:216:typescript:TS18047"
+          "rowId": "diagnostic:10:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/read-expressions.html:207:216:typescript:TS18047"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -1241,7 +1760,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": {
                 "source": {
                   "end": 277,
@@ -1256,11 +1775,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/read-expressions.html",
@@ -1286,7 +1805,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:10:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/read-expressions.html:259:271:typescript:TS18046"
+          "rowId": "diagnostic:11:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/read-expressions.html:259:271:typescript:TS18046"
         },
         "primarySeverity": "error",
         "rawRowCount": 2,
@@ -1318,7 +1837,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                   "readiness": "inspection-required",
                   "targetSourceCoverage": "all"
                 },
-                "sourceRole": null,
+                "sourceRole": "template",
                 "subject": {
                   "source": {
                     "end": 277,
@@ -1333,11 +1852,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                   "uri": null
                 },
                 "taxonomy": {
-                  "actionability": null,
-                  "category": null,
+                  "actionability": "manual",
+                  "category": "template-syntax",
                   "confidence": null,
-                  "impact": null,
-                  "schema": null
+                  "impact": "informational",
+                  "schema": "diagnostics-taxonomy/1"
                 }
               },
               "file": "src/read-expressions.html",
@@ -1363,7 +1882,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             },
             "relation": "semantic-explanation",
             "role": "contextual",
-            "rowId": "diagnostic:11:template:weak-expression-member-owner:semantic-authoring-policy:no-framework-code:src/read-expressions.html:272:277:expression-member-owner-type:no-members"
+            "rowId": "diagnostic:12:template:weak-expression-member-owner:semantic-authoring-policy:no-framework-code:src/read-expressions.html:272:277:expression-member-owner-type:no-members"
           }
         ],
         "subject": {
@@ -1377,7 +1896,172 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         }
       },
       {
-        "groupKey": "row:diagnostic:12:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/read-expressions.html:733:746:typescript:TS2345",
+        "groupKey": "template-member-access:src/read-expressions.html:313:331",
+        "maxRawSeverity": "error",
+        "primary": {
+          "diagnostic": {
+            "actionability": "manual",
+            "anomaly": null,
+            "category": "template-syntax",
+            "code": "TS18046",
+            "data": {
+              "diagnosticAuthority": "typescript",
+              "diagnosticDomain": "template",
+              "diagnosticKind": "template-expression-typescript-diagnostic",
+              "frameworkErrorCode": null,
+              "frameworkRawErrorAuthority": null,
+              "missingInput": "typescript:TS18046",
+              "missingInputs": [
+                "typescript:TS18046"
+              ],
+              "phase": "semantic",
+              "relatedInformation": [],
+              "relatedQueryKind": "template-diagnostics",
+              "repairAffordance": {
+                "actionKind": "inspect-type-surface",
+                "actionability": "manual",
+                "changeDomain": "inspection",
+                "planKind": "manual-inspection",
+                "readiness": "inspection-required",
+                "targetSourceCoverage": "all"
+              },
+              "sourceRole": "template",
+              "subject": {
+                "source": {
+                  "end": 331,
+                  "kind": "source-span-address",
+                  "label": "src/read-expressions.html@313..331",
+                  "path": "src/read-expressions.html",
+                  "role": "template-member-access",
+                  "start": 313
+                },
+                "span": null,
+                "subjectKind": "template-member-access",
+                "uri": null
+              },
+              "taxonomy": {
+                "actionability": "manual",
+                "category": "template-syntax",
+                "confidence": null,
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
+              }
+            },
+            "file": "src/read-expressions.html",
+            "impact": "blocking",
+            "issues": [
+              {
+                "code": "TS18046",
+                "kind": "template-expression-typescript-diagnostic",
+                "message": "TS18046: 'unknownValue' is of type 'unknown'."
+              }
+            ],
+            "message": "TS18046: 'unknownValue' is of type 'unknown'.",
+            "related": [],
+            "severity": "error",
+            "source": "semantic-runtime:template",
+            "span": {
+              "end": 325,
+              "start": 313
+            },
+            "spanText": "unknownValue",
+            "status": "primary",
+            "uri": "fixtures://pressure/template-typechecking-corpus/src/read-expressions.html"
+          },
+          "relation": null,
+          "role": "primary",
+          "rowId": "diagnostic:13:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/read-expressions.html:313:325:typescript:TS18046"
+        },
+        "primarySeverity": "error",
+        "rawRowCount": 2,
+        "related": [
+          {
+            "diagnostic": {
+              "actionability": "manual",
+              "anomaly": null,
+              "category": "template-syntax",
+              "code": "weak-expression-member-owner",
+              "data": {
+                "diagnosticAuthority": "semantic-authoring-policy",
+                "diagnosticDomain": "template",
+                "diagnosticKind": "weak-expression-member-owner",
+                "frameworkErrorCode": null,
+                "frameworkRawErrorAuthority": null,
+                "missingInput": "expression-member-owner-type:no-members",
+                "missingInputs": [
+                  "expression-member-owner-type:no-members"
+                ],
+                "phase": null,
+                "relatedInformation": [],
+                "relatedQueryKind": "template-diagnostics",
+                "repairAffordance": {
+                  "actionKind": "inspect-type-surface",
+                  "actionability": "manual",
+                  "changeDomain": "inspection",
+                  "planKind": "manual-inspection",
+                  "readiness": "inspection-required",
+                  "targetSourceCoverage": "all"
+                },
+                "sourceRole": "template",
+                "subject": {
+                  "source": {
+                    "end": 331,
+                    "kind": "source-span-address",
+                    "label": "src/read-expressions.html@313..331",
+                    "path": "src/read-expressions.html",
+                    "role": "template-member-access",
+                    "start": 313
+                  },
+                  "span": null,
+                  "subjectKind": "template-member-access",
+                  "uri": null
+                },
+                "taxonomy": {
+                  "actionability": "manual",
+                  "category": "template-syntax",
+                  "confidence": null,
+                  "impact": "informational",
+                  "schema": "diagnostics-taxonomy/1"
+                }
+              },
+              "file": "src/read-expressions.html",
+              "impact": "informational",
+              "issues": [
+                {
+                  "code": "weak-expression-member-owner",
+                  "kind": "weak-expression-member-owner",
+                  "message": "The owner type has no projected members at this cursor, so the selected member cannot be validated or navigated."
+                }
+              ],
+              "message": "The owner type has no projected members at this cursor, so the selected member cannot be validated or navigated.",
+              "related": [],
+              "severity": "info",
+              "source": "semantic-runtime:template",
+              "span": {
+                "end": 331,
+                "start": 326
+              },
+              "spanText": "label",
+              "status": "contextual",
+              "uri": "fixtures://pressure/template-typechecking-corpus/src/read-expressions.html"
+            },
+            "relation": "semantic-explanation",
+            "role": "contextual",
+            "rowId": "diagnostic:14:template:weak-expression-member-owner:semantic-authoring-policy:no-framework-code:src/read-expressions.html:326:331:expression-member-owner-type:no-members"
+          }
+        ],
+        "subject": {
+          "source": null,
+          "span": {
+            "end": 331,
+            "start": 313
+          },
+          "subjectKind": "template-member-access",
+          "uri": "file:///c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/template-typechecking-corpus/src/read-expressions.html"
+        }
+      },
+      {
+        "groupKey": "row:diagnostic:15:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/read-expressions.html:787:800:typescript:TS2345",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -1406,26 +2090,26 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": {
                 "source": {
-                  "end": 746,
+                  "end": 800,
                   "kind": "source-span-address",
-                  "label": "src/read-expressions.html@733..746",
+                  "label": "src/read-expressions.html@787..800",
                   "path": "src/read-expressions.html",
                   "role": "typescript-overlay:semantic",
-                  "start": 733
+                  "start": 787
                 },
                 "span": null,
                 "subjectKind": "template-expression",
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/read-expressions.html",
@@ -1442,8 +2126,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "severity": "error",
             "source": "semantic-runtime:template",
             "span": {
-              "end": 746,
-              "start": 733
+              "end": 800,
+              "start": 787
             },
             "spanText": "'not-an-item'",
             "status": "primary",
@@ -1451,7 +2135,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:12:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/read-expressions.html:733:746:typescript:TS2345"
+          "rowId": "diagnostic:15:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/read-expressions.html:787:800:typescript:TS2345"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -1459,15 +2143,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": {
           "source": null,
           "span": {
-            "end": 746,
-            "start": 733
+            "end": 800,
+            "start": 787
           },
           "subjectKind": "template-expression",
           "uri": "file:///c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/template-typechecking-corpus/src/read-expressions.html"
         }
       },
       {
-        "groupKey": "row:diagnostic:13:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/read-expressions.html:812:824:typescript:TS2554",
+        "groupKey": "row:diagnostic:16:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/read-expressions.html:866:878:typescript:TS2554",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -1496,26 +2180,26 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": {
                 "source": {
-                  "end": 824,
+                  "end": 878,
                   "kind": "source-span-address",
-                  "label": "src/read-expressions.html@812..824",
+                  "label": "src/read-expressions.html@866..878",
                   "path": "src/read-expressions.html",
                   "role": "typescript-overlay:semantic",
-                  "start": 812
+                  "start": 866
                 },
                 "span": null,
                 "subjectKind": "template-expression",
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/read-expressions.html",
@@ -1532,8 +2216,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "severity": "error",
             "source": "semantic-runtime:template",
             "span": {
-              "end": 824,
-              "start": 812
+              "end": 878,
+              "start": 866
             },
             "spanText": "definiteItem",
             "status": "primary",
@@ -1541,7 +2225,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:13:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/read-expressions.html:812:824:typescript:TS2554"
+          "rowId": "diagnostic:16:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/read-expressions.html:866:878:typescript:TS2554"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -1549,15 +2233,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": {
           "source": null,
           "span": {
-            "end": 824,
-            "start": 812
+            "end": 878,
+            "start": 866
           },
           "subjectKind": "template-expression",
           "uri": "file:///c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/template-typechecking-corpus/src/read-expressions.html"
         }
       },
       {
-        "groupKey": "row:diagnostic:14:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/read-expressions.html:986:990:typescript:TS2769",
+        "groupKey": "row:diagnostic:0:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/read-expressions.html:1040:1044:typescript:TS2769",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -1586,26 +2270,26 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": {
                 "source": {
-                  "end": 990,
+                  "end": 1044,
                   "kind": "source-span-address",
-                  "label": "src/read-expressions.html@986..990",
+                  "label": "src/read-expressions.html@1040..1044",
                   "path": "src/read-expressions.html",
                   "role": "typescript-overlay:semantic",
-                  "start": 986
+                  "start": 1040
                 },
                 "span": null,
                 "subjectKind": "template-expression",
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/read-expressions.html",
@@ -1622,8 +2306,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "severity": "error",
             "source": "semantic-runtime:template",
             "span": {
-              "end": 990,
-              "start": 986
+              "end": 1044,
+              "start": 1040
             },
             "spanText": "true",
             "status": "primary",
@@ -1631,7 +2315,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:14:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/read-expressions.html:986:990:typescript:TS2769"
+          "rowId": "diagnostic:0:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/read-expressions.html:1040:1044:typescript:TS2769"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -1639,15 +2323,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": {
           "source": null,
           "span": {
-            "end": 990,
-            "start": 986
+            "end": 1044,
+            "start": 1040
           },
           "subjectKind": "template-expression",
           "uri": "file:///c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/template-typechecking-corpus/src/read-expressions.html"
         }
       },
       {
-        "groupKey": "row:diagnostic:0:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/read-expressions.html:1033:1044:typescript:TS2349",
+        "groupKey": "row:diagnostic:3:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/read-expressions.html:1087:1098:typescript:TS2349",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -1676,26 +2360,26 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": {
                 "source": {
-                  "end": 1044,
+                  "end": 1098,
                   "kind": "source-span-address",
-                  "label": "src/read-expressions.html@1033..1044",
+                  "label": "src/read-expressions.html@1087..1098",
                   "path": "src/read-expressions.html",
                   "role": "typescript-overlay:semantic",
-                  "start": 1033
+                  "start": 1087
                 },
                 "span": null,
                 "subjectKind": "template-expression",
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/read-expressions.html",
@@ -1712,8 +2396,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "severity": "error",
             "source": "semantic-runtime:template",
             "span": {
-              "end": 1044,
-              "start": 1033
+              "end": 1098,
+              "start": 1087
             },
             "spanText": "notCallable",
             "status": "primary",
@@ -1721,7 +2405,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:0:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/read-expressions.html:1033:1044:typescript:TS2349"
+          "rowId": "diagnostic:3:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/read-expressions.html:1087:1098:typescript:TS2349"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -1729,15 +2413,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": {
           "source": null,
           "span": {
-            "end": 1044,
-            "start": 1033
+            "end": 1098,
+            "start": 1087
           },
           "subjectKind": "template-expression",
           "uri": "file:///c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/template-typechecking-corpus/src/read-expressions.html"
         }
       },
       {
-        "groupKey": "row:diagnostic:3:template:missing-expression-member:semantic-authoring-policy:no-framework-code:src/read-expressions.html:1220:1232:expression-member:selected-member-missing",
+        "groupKey": "row:diagnostic:4:template:missing-expression-member:semantic-authoring-policy:no-framework-code:src/read-expressions.html:1274:1286:expression-member:selected-member-missing",
         "maxRawSeverity": "warning",
         "primary": {
           "diagnostic": {
@@ -1766,26 +2450,26 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": {
                 "source": {
-                  "end": 1232,
+                  "end": 1286,
                   "kind": "source-span-address",
-                  "label": "src/read-expressions.html@1215..1232",
+                  "label": "src/read-expressions.html@1269..1286",
                   "path": "src/read-expressions.html",
                   "role": "template-member-access",
-                  "start": 1215
+                  "start": 1269
                 },
                 "span": null,
                 "subjectKind": "template-member-access",
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "degraded",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/read-expressions.html",
@@ -1802,8 +2486,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "severity": "warning",
             "source": "semantic-runtime:template",
             "span": {
-              "end": 1232,
-              "start": 1220
+              "end": 1286,
+              "start": 1274
             },
             "spanText": "missingLabel",
             "status": "primary",
@@ -1811,7 +2495,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:3:template:missing-expression-member:semantic-authoring-policy:no-framework-code:src/read-expressions.html:1220:1232:expression-member:selected-member-missing"
+          "rowId": "diagnostic:4:template:missing-expression-member:semantic-authoring-policy:no-framework-code:src/read-expressions.html:1274:1286:expression-member:selected-member-missing"
         },
         "primarySeverity": "warning",
         "rawRowCount": 1,
@@ -1819,15 +2503,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": {
           "source": null,
           "span": {
-            "end": 1232,
-            "start": 1215
+            "end": 1286,
+            "start": 1269
           },
           "subjectKind": "template-member-access",
           "uri": "file:///c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/template-typechecking-corpus/src/read-expressions.html"
         }
       },
       {
-        "groupKey": "row:diagnostic:4:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/read-expressions.html:1220:1232:typescript:TS2339",
+        "groupKey": "row:diagnostic:5:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/read-expressions.html:1274:1286:typescript:TS2339",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -1856,26 +2540,26 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": {
                 "source": {
-                  "end": 1238,
+                  "end": 1292,
                   "kind": "source-span-address",
-                  "label": "src/read-expressions.html@1197..1238",
+                  "label": "src/read-expressions.html@1251..1292",
                   "path": "src/read-expressions.html",
                   "role": "template-member-call",
-                  "start": 1197
+                  "start": 1251
                 },
                 "span": null,
                 "subjectKind": "template-member-call",
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/read-expressions.html",
@@ -1892,8 +2576,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "severity": "error",
             "source": "semantic-runtime:template",
             "span": {
-              "end": 1232,
-              "start": 1220
+              "end": 1286,
+              "start": 1274
             },
             "spanText": "missingLabel",
             "status": "primary",
@@ -1901,7 +2585,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:4:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/read-expressions.html:1220:1232:typescript:TS2339"
+          "rowId": "diagnostic:5:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/read-expressions.html:1274:1286:typescript:TS2339"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -1909,15 +2593,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": {
           "source": null,
           "span": {
-            "end": 1238,
-            "start": 1197
+            "end": 1292,
+            "start": 1251
           },
           "subjectKind": "template-member-call",
           "uri": "file:///c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/template-typechecking-corpus/src/read-expressions.html"
         }
       },
       {
-        "groupKey": "row:diagnostic:5:observation:non-trackable-template-method-call:semantic-runtime-product:no-framework-code:src/read-expressions.html:1289:1304:no-missing-input",
+        "groupKey": "row:diagnostic:6:observation:non-trackable-template-method-call:semantic-runtime-product:no-framework-code:src/read-expressions.html:1343:1358:no-missing-input",
         "maxRawSeverity": "warning",
         "primary": {
           "diagnostic": {
@@ -1934,7 +2618,50 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInput": null,
               "missingInputs": [],
               "phase": "binding-observation",
-              "relatedInformation": [],
+              "relatedInformation": [
+                {
+                  "message": "Method 'acceptPredicate' is declared here.",
+                  "relationKind": "subject-declaration",
+                  "source": {
+                    "anchor": {
+                      "kind": "source-file-address",
+                      "label": "src/read-expressions.ts",
+                      "path": "src/read-expressions.ts",
+                      "sourceFileRole": "app-source",
+                      "sourceWorkspaceKey": "aurelia-template-typechecking-corpus"
+                    },
+                    "end": 925,
+                    "kind": "source-span-address",
+                    "label": "src/read-expressions.ts@910..925",
+                    "path": "src/read-expressions.ts",
+                    "role": "name",
+                    "sourceFileRole": "app-source",
+                    "sourceWorkspaceKey": "aurelia-template-typechecking-corpus",
+                    "start": 910
+                  }
+                },
+                {
+                  "message": "Method-body read 'this.items' is not observed through the template call.",
+                  "relationKind": "hidden-state-read",
+                  "source": {
+                    "anchor": {
+                      "kind": "source-file-address",
+                      "label": "src/read-expressions.ts",
+                      "path": "src/read-expressions.ts",
+                      "sourceFileRole": "app-source",
+                      "sourceWorkspaceKey": "aurelia-template-typechecking-corpus"
+                    },
+                    "end": 1000,
+                    "kind": "source-span-address",
+                    "label": "src/read-expressions.ts@990..1000",
+                    "path": "src/read-expressions.ts",
+                    "role": "range",
+                    "sourceFileRole": "app-source",
+                    "sourceWorkspaceKey": "aurelia-template-typechecking-corpus",
+                    "start": 990
+                  }
+                }
+              ],
               "relatedQueryKind": "observation-issues",
               "repairAffordance": {
                 "actionKind": "configure-observer",
@@ -1944,26 +2671,26 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": {
                 "source": {
-                  "end": 1304,
+                  "end": 1358,
                   "kind": "source-span-address",
-                  "label": "src/read-expressions.html@1289..1304",
+                  "label": "src/read-expressions.html@1343..1358",
                   "path": "src/read-expressions.html",
                   "role": "name",
-                  "start": 1289
+                  "start": 1343
                 },
                 "span": null,
                 "subjectKind": "observation-member",
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "expression",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "degraded",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/read-expressions.html",
@@ -2007,8 +2734,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "severity": "warning",
             "source": "semantic-runtime:observation",
             "span": {
-              "end": 1304,
-              "start": 1289
+              "end": 1358,
+              "start": 1343
             },
             "spanText": "acceptPredicate",
             "status": "primary",
@@ -2016,7 +2743,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:5:observation:non-trackable-template-method-call:semantic-runtime-product:no-framework-code:src/read-expressions.html:1289:1304:no-missing-input"
+          "rowId": "diagnostic:6:observation:non-trackable-template-method-call:semantic-runtime-product:no-framework-code:src/read-expressions.html:1343:1358:no-missing-input"
         },
         "primarySeverity": "warning",
         "rawRowCount": 1,
@@ -2024,15 +2751,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": {
           "source": null,
           "span": {
-            "end": 1304,
-            "start": 1289
+            "end": 1358,
+            "start": 1343
           },
           "subjectKind": "observation-member",
           "uri": "file:///c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/template-typechecking-corpus/src/read-expressions.html"
         }
       },
       {
-        "groupKey": "row:diagnostic:6:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/read-expressions.html:1313:1323:typescript:TS2322",
+        "groupKey": "row:diagnostic:7:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/read-expressions.html:1367:1377:typescript:TS2322",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -2061,26 +2788,26 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": {
                 "source": {
-                  "end": 1323,
+                  "end": 1377,
                   "kind": "source-span-address",
-                  "label": "src/read-expressions.html@1313..1323",
+                  "label": "src/read-expressions.html@1367..1377",
                   "path": "src/read-expressions.html",
                   "role": "template-member-access",
-                  "start": 1313
+                  "start": 1367
                 },
                 "span": null,
                 "subjectKind": "template-member-access",
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/read-expressions.html",
@@ -2097,8 +2824,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "severity": "error",
             "source": "semantic-runtime:template",
             "span": {
-              "end": 1323,
-              "start": 1313
+              "end": 1377,
+              "start": 1367
             },
             "spanText": "item.label",
             "status": "primary",
@@ -2106,7 +2833,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:6:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/read-expressions.html:1313:1323:typescript:TS2322"
+          "rowId": "diagnostic:7:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/read-expressions.html:1367:1377:typescript:TS2322"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -2114,15 +2841,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": {
           "source": null,
           "span": {
-            "end": 1323,
-            "start": 1313
+            "end": 1377,
+            "start": 1367
           },
           "subjectKind": "template-member-access",
           "uri": "file:///c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/template-typechecking-corpus/src/read-expressions.html"
         }
       },
       {
-        "groupKey": "row:diagnostic:7:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/read-expressions.html:1446:1448:typescript:TS2345",
+        "groupKey": "row:diagnostic:8:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/read-expressions.html:1500:1502:typescript:TS2345",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -2151,26 +2878,26 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": {
                 "source": {
-                  "end": 1448,
+                  "end": 1502,
                   "kind": "source-span-address",
-                  "label": "src/read-expressions.html@1446..1448",
+                  "label": "src/read-expressions.html@1500..1502",
                   "path": "src/read-expressions.html",
                   "role": "typescript-overlay:semantic",
-                  "start": 1446
+                  "start": 1500
                 },
                 "span": null,
                 "subjectKind": "template-expression",
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/read-expressions.html",
@@ -2187,8 +2914,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "severity": "error",
             "source": "semantic-runtime:template",
             "span": {
-              "end": 1448,
-              "start": 1446
+              "end": 1502,
+              "start": 1500
             },
             "spanText": "42",
             "status": "primary",
@@ -2196,7 +2923,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:7:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/read-expressions.html:1446:1448:typescript:TS2345"
+          "rowId": "diagnostic:8:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/read-expressions.html:1500:1502:typescript:TS2345"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -2204,15 +2931,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": {
           "source": null,
           "span": {
-            "end": 1448,
-            "start": 1446
+            "end": 1502,
+            "start": 1500
           },
           "subjectKind": "template-expression",
           "uri": "file:///c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/template-typechecking-corpus/src/read-expressions.html"
         }
       },
       {
-        "groupKey": "row:diagnostic:8:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/read-expressions.html:1769:1774:typescript:TS2322",
+        "groupKey": "row:diagnostic:9:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/read-expressions.html:1823:1828:typescript:TS2322",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -2241,26 +2968,26 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": {
                 "source": {
-                  "end": 1774,
+                  "end": 1828,
                   "kind": "source-span-address",
-                  "label": "src/read-expressions.html@1769..1774",
+                  "label": "src/read-expressions.html@1823..1828",
                   "path": "src/read-expressions.html",
                   "role": "typescript-overlay:semantic",
-                  "start": 1769
+                  "start": 1823
                 },
                 "span": null,
                 "subjectKind": "template-expression",
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/read-expressions.html",
@@ -2277,8 +3004,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "severity": "error",
             "source": "semantic-runtime:template",
             "span": {
-              "end": 1774,
-              "start": 1769
+              "end": 1828,
+              "start": 1823
             },
             "spanText": "count",
             "status": "primary",
@@ -2286,7 +3013,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:8:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/read-expressions.html:1769:1774:typescript:TS2322"
+          "rowId": "diagnostic:9:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/read-expressions.html:1823:1828:typescript:TS2322"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -2294,20 +3021,227 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": {
           "source": null,
           "span": {
-            "end": 1774,
-            "start": 1769
+            "end": 1828,
+            "start": 1823
           },
           "subjectKind": "template-expression",
           "uri": "file:///c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/template-typechecking-corpus/src/read-expressions.html"
         }
       }
     ],
-    "primaryCount": 13,
-    "rawRowCount": 15
+    "primaryCount": 14,
+    "rawRowCount": 17
   },
   "raw": {
-    "diagnosticCount": 15,
+    "diagnosticCount": 17,
     "diagnostics": [
+      {
+        "actionability": "manual",
+        "anomaly": null,
+        "category": "template-syntax",
+        "code": "TS2769",
+        "data": {
+          "diagnosticAuthority": "typescript",
+          "diagnosticDomain": "template",
+          "diagnosticKind": "template-expression-typescript-diagnostic",
+          "frameworkErrorCode": null,
+          "frameworkRawErrorAuthority": null,
+          "missingInput": "typescript:TS2769",
+          "missingInputs": [
+            "typescript:TS2769"
+          ],
+          "phase": "semantic",
+          "relatedInformation": [],
+          "relatedQueryKind": "template-diagnostics",
+          "repairAffordance": {
+            "actionKind": "inspect-type-surface",
+            "actionability": "manual",
+            "changeDomain": "inspection",
+            "planKind": "manual-inspection",
+            "readiness": "inspection-required",
+            "targetSourceCoverage": "all"
+          },
+          "sourceRole": "template",
+          "subject": {
+            "source": {
+              "end": 1044,
+              "kind": "source-span-address",
+              "label": "src/read-expressions.html@1040..1044",
+              "path": "src/read-expressions.html",
+              "role": "typescript-overlay:semantic",
+              "start": 1040
+            },
+            "span": null,
+            "subjectKind": "template-expression",
+            "uri": null
+          },
+          "taxonomy": {
+            "actionability": "manual",
+            "category": "template-syntax",
+            "confidence": null,
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
+          }
+        },
+        "file": "src/read-expressions.html",
+        "impact": "blocking",
+        "issues": [
+          {
+            "code": "TS2769",
+            "kind": "template-expression-typescript-diagnostic",
+            "message": "TS2769: No overload matches this call.\nOverload 1 of 2, '(value: string): string', gave the following error.\nArgument of type 'boolean' is not assignable to parameter of type 'string'.\nOverload 2 of 2, '(value: number): number', gave the following error.\nArgument of type 'boolean' is not assignable to parameter of type 'number'."
+          }
+        ],
+        "message": "TS2769: No overload matches this call.\nOverload 1 of 2, '(value: string): string', gave the following error.\nArgument of type 'boolean' is not assignable to parameter of type 'string'.\nOverload 2 of 2, '(value: number): number', gave the following error.\nArgument of type 'boolean' is not assignable to parameter of type 'number'.",
+        "related": [],
+        "severity": "error",
+        "source": "semantic-runtime:template",
+        "span": {
+          "end": 1044,
+          "start": 1040
+        },
+        "spanText": "true",
+        "status": "canonical",
+        "uri": "fixtures://pressure/template-typechecking-corpus/src/read-expressions.html"
+      },
+      {
+        "actionability": "guided",
+        "anomaly": null,
+        "category": "template-syntax",
+        "code": "missing-expression-member",
+        "data": {
+          "diagnosticAuthority": "semantic-authoring-policy",
+          "diagnosticDomain": "template",
+          "diagnosticKind": "missing-expression-member",
+          "frameworkErrorCode": null,
+          "frameworkRawErrorAuthority": null,
+          "missingInput": "expression-member:selected-member-missing",
+          "missingInputs": [
+            "expression-member:selected-member-missing"
+          ],
+          "phase": null,
+          "relatedInformation": [],
+          "relatedQueryKind": "template-diagnostics",
+          "repairAffordance": {
+            "actionKind": "declare-missing-member",
+            "actionability": "guided",
+            "changeDomain": "app-source",
+            "planKind": "source-member-declaration",
+            "readiness": "ready-to-plan",
+            "targetSourceCoverage": "all"
+          },
+          "sourceRole": "template",
+          "subject": {
+            "source": {
+              "end": 118,
+              "kind": "source-span-address",
+              "label": "src/read-expressions.html@93..118",
+              "path": "src/read-expressions.html",
+              "role": "template-member-access",
+              "start": 93
+            },
+            "span": null,
+            "subjectKind": "template-member-access",
+            "uri": null
+          },
+          "taxonomy": {
+            "actionability": "guided",
+            "category": "template-syntax",
+            "confidence": null,
+            "impact": "degraded",
+            "schema": "diagnostics-taxonomy/1"
+          }
+        },
+        "file": "src/read-expressions.html",
+        "impact": "degraded",
+        "issues": [
+          {
+            "code": "missing-expression-member",
+            "kind": "missing-expression-member",
+            "message": "Member \"missingLabel\" is not projected on the owner type, so semantic tooling cannot validate or navigate it."
+          }
+        ],
+        "message": "Member \"missingLabel\" is not projected on the owner type, so semantic tooling cannot validate or navigate it.",
+        "related": [],
+        "severity": "warning",
+        "source": "semantic-runtime:template",
+        "span": {
+          "end": 118,
+          "start": 106
+        },
+        "spanText": "missingLabel",
+        "status": "canonical",
+        "uri": "fixtures://pressure/template-typechecking-corpus/src/read-expressions.html"
+      },
+      {
+        "actionability": "manual",
+        "anomaly": null,
+        "category": "template-syntax",
+        "code": "TS2339",
+        "data": {
+          "diagnosticAuthority": "typescript",
+          "diagnosticDomain": "template",
+          "diagnosticKind": "template-expression-typescript-diagnostic",
+          "frameworkErrorCode": null,
+          "frameworkRawErrorAuthority": null,
+          "missingInput": "typescript:TS2339",
+          "missingInputs": [
+            "typescript:TS2339"
+          ],
+          "phase": "semantic",
+          "relatedInformation": [],
+          "relatedQueryKind": "template-diagnostics",
+          "repairAffordance": {
+            "actionKind": "inspect-type-surface",
+            "actionability": "manual",
+            "changeDomain": "inspection",
+            "planKind": "manual-inspection",
+            "readiness": "inspection-required",
+            "targetSourceCoverage": "all"
+          },
+          "sourceRole": "template",
+          "subject": {
+            "source": {
+              "end": 118,
+              "kind": "source-span-address",
+              "label": "src/read-expressions.html@93..118",
+              "path": "src/read-expressions.html",
+              "role": "template-member-access",
+              "start": 93
+            },
+            "span": null,
+            "subjectKind": "template-member-access",
+            "uri": null
+          },
+          "taxonomy": {
+            "actionability": "manual",
+            "category": "template-syntax",
+            "confidence": null,
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
+          }
+        },
+        "file": "src/read-expressions.html",
+        "impact": "blocking",
+        "issues": [
+          {
+            "code": "TS2339",
+            "kind": "template-expression-typescript-diagnostic",
+            "message": "TS2339: Property 'missingLabel' does not exist on type 'CorpusItem'."
+          }
+        ],
+        "message": "TS2339: Property 'missingLabel' does not exist on type 'CorpusItem'.",
+        "related": [],
+        "severity": "error",
+        "source": "semantic-runtime:template",
+        "span": {
+          "end": 118,
+          "start": 106
+        },
+        "spanText": "missingLabel",
+        "status": "canonical",
+        "uri": "fixtures://pressure/template-typechecking-corpus/src/read-expressions.html"
+      },
       {
         "actionability": "manual",
         "anomaly": null,
@@ -2334,26 +3268,26 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": {
             "source": {
-              "end": 1044,
+              "end": 1098,
               "kind": "source-span-address",
-              "label": "src/read-expressions.html@1033..1044",
+              "label": "src/read-expressions.html@1087..1098",
               "path": "src/read-expressions.html",
               "role": "typescript-overlay:semantic",
-              "start": 1033
+              "start": 1087
             },
             "span": null,
             "subjectKind": "template-expression",
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/read-expressions.html",
@@ -2370,8 +3304,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "severity": "error",
         "source": "semantic-runtime:template",
         "span": {
-          "end": 1044,
-          "start": 1033
+          "end": 1098,
+          "start": 1087
         },
         "spanText": "notCallable",
         "status": "canonical",
@@ -2403,164 +3337,26 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": {
             "source": {
-              "end": 118,
+              "end": 1286,
               "kind": "source-span-address",
-              "label": "src/read-expressions.html@93..118",
+              "label": "src/read-expressions.html@1269..1286",
               "path": "src/read-expressions.html",
               "role": "template-member-access",
-              "start": 93
+              "start": 1269
             },
             "span": null,
             "subjectKind": "template-member-access",
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
-            "confidence": null,
-            "impact": null,
-            "schema": null
-          }
-        },
-        "file": "src/read-expressions.html",
-        "impact": "degraded",
-        "issues": [
-          {
-            "code": "missing-expression-member",
-            "kind": "missing-expression-member",
-            "message": "Member \"missingLabel\" is not projected on the owner type, so semantic tooling cannot validate or navigate it."
-          }
-        ],
-        "message": "Member \"missingLabel\" is not projected on the owner type, so semantic tooling cannot validate or navigate it.",
-        "related": [],
-        "severity": "warning",
-        "source": "semantic-runtime:template",
-        "span": {
-          "end": 118,
-          "start": 106
-        },
-        "spanText": "missingLabel",
-        "status": "canonical",
-        "uri": "fixtures://pressure/template-typechecking-corpus/src/read-expressions.html"
-      },
-      {
-        "actionability": "manual",
-        "anomaly": null,
-        "category": "template-syntax",
-        "code": "TS2339",
-        "data": {
-          "diagnosticAuthority": "typescript",
-          "diagnosticDomain": "template",
-          "diagnosticKind": "template-expression-typescript-diagnostic",
-          "frameworkErrorCode": null,
-          "frameworkRawErrorAuthority": null,
-          "missingInput": "typescript:TS2339",
-          "missingInputs": [
-            "typescript:TS2339"
-          ],
-          "phase": "semantic",
-          "relatedInformation": [],
-          "relatedQueryKind": "template-diagnostics",
-          "repairAffordance": {
-            "actionKind": "inspect-type-surface",
-            "actionability": "manual",
-            "changeDomain": "inspection",
-            "planKind": "manual-inspection",
-            "readiness": "inspection-required",
-            "targetSourceCoverage": "all"
-          },
-          "sourceRole": null,
-          "subject": {
-            "source": {
-              "end": 118,
-              "kind": "source-span-address",
-              "label": "src/read-expressions.html@93..118",
-              "path": "src/read-expressions.html",
-              "role": "template-member-access",
-              "start": 93
-            },
-            "span": null,
-            "subjectKind": "template-member-access",
-            "uri": null
-          },
-          "taxonomy": {
-            "actionability": null,
-            "category": null,
-            "confidence": null,
-            "impact": null,
-            "schema": null
-          }
-        },
-        "file": "src/read-expressions.html",
-        "impact": "blocking",
-        "issues": [
-          {
-            "code": "TS2339",
-            "kind": "template-expression-typescript-diagnostic",
-            "message": "TS2339: Property 'missingLabel' does not exist on type 'CorpusItem'."
-          }
-        ],
-        "message": "TS2339: Property 'missingLabel' does not exist on type 'CorpusItem'.",
-        "related": [],
-        "severity": "error",
-        "source": "semantic-runtime:template",
-        "span": {
-          "end": 118,
-          "start": 106
-        },
-        "spanText": "missingLabel",
-        "status": "canonical",
-        "uri": "fixtures://pressure/template-typechecking-corpus/src/read-expressions.html"
-      },
-      {
-        "actionability": "guided",
-        "anomaly": null,
-        "category": "template-syntax",
-        "code": "missing-expression-member",
-        "data": {
-          "diagnosticAuthority": "semantic-authoring-policy",
-          "diagnosticDomain": "template",
-          "diagnosticKind": "missing-expression-member",
-          "frameworkErrorCode": null,
-          "frameworkRawErrorAuthority": null,
-          "missingInput": "expression-member:selected-member-missing",
-          "missingInputs": [
-            "expression-member:selected-member-missing"
-          ],
-          "phase": null,
-          "relatedInformation": [],
-          "relatedQueryKind": "template-diagnostics",
-          "repairAffordance": {
-            "actionKind": "declare-missing-member",
             "actionability": "guided",
-            "changeDomain": "app-source",
-            "planKind": "source-member-declaration",
-            "readiness": "ready-to-plan",
-            "targetSourceCoverage": "all"
-          },
-          "sourceRole": null,
-          "subject": {
-            "source": {
-              "end": 1232,
-              "kind": "source-span-address",
-              "label": "src/read-expressions.html@1215..1232",
-              "path": "src/read-expressions.html",
-              "role": "template-member-access",
-              "start": 1215
-            },
-            "span": null,
-            "subjectKind": "template-member-access",
-            "uri": null
-          },
-          "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "degraded",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/read-expressions.html",
@@ -2577,8 +3373,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "severity": "warning",
         "source": "semantic-runtime:template",
         "span": {
-          "end": 1232,
-          "start": 1220
+          "end": 1286,
+          "start": 1274
         },
         "spanText": "missingLabel",
         "status": "canonical",
@@ -2610,26 +3406,26 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": {
             "source": {
-              "end": 1238,
+              "end": 1292,
               "kind": "source-span-address",
-              "label": "src/read-expressions.html@1197..1238",
+              "label": "src/read-expressions.html@1251..1292",
               "path": "src/read-expressions.html",
               "role": "template-member-call",
-              "start": 1197
+              "start": 1251
             },
             "span": null,
             "subjectKind": "template-member-call",
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/read-expressions.html",
@@ -2646,8 +3442,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "severity": "error",
         "source": "semantic-runtime:template",
         "span": {
-          "end": 1232,
-          "start": 1220
+          "end": 1286,
+          "start": 1274
         },
         "spanText": "missingLabel",
         "status": "canonical",
@@ -2667,7 +3463,50 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInput": null,
           "missingInputs": [],
           "phase": "binding-observation",
-          "relatedInformation": [],
+          "relatedInformation": [
+            {
+              "message": "Method 'acceptPredicate' is declared here.",
+              "relationKind": "subject-declaration",
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/read-expressions.ts",
+                  "path": "src/read-expressions.ts",
+                  "sourceFileRole": "app-source",
+                  "sourceWorkspaceKey": "aurelia-template-typechecking-corpus"
+                },
+                "end": 925,
+                "kind": "source-span-address",
+                "label": "src/read-expressions.ts@910..925",
+                "path": "src/read-expressions.ts",
+                "role": "name",
+                "sourceFileRole": "app-source",
+                "sourceWorkspaceKey": "aurelia-template-typechecking-corpus",
+                "start": 910
+              }
+            },
+            {
+              "message": "Method-body read 'this.items' is not observed through the template call.",
+              "relationKind": "hidden-state-read",
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/read-expressions.ts",
+                  "path": "src/read-expressions.ts",
+                  "sourceFileRole": "app-source",
+                  "sourceWorkspaceKey": "aurelia-template-typechecking-corpus"
+                },
+                "end": 1000,
+                "kind": "source-span-address",
+                "label": "src/read-expressions.ts@990..1000",
+                "path": "src/read-expressions.ts",
+                "role": "range",
+                "sourceFileRole": "app-source",
+                "sourceWorkspaceKey": "aurelia-template-typechecking-corpus",
+                "start": 990
+              }
+            }
+          ],
           "relatedQueryKind": "observation-issues",
           "repairAffordance": {
             "actionKind": "configure-observer",
@@ -2677,26 +3516,26 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": {
             "source": {
-              "end": 1304,
+              "end": 1358,
               "kind": "source-span-address",
-              "label": "src/read-expressions.html@1289..1304",
+              "label": "src/read-expressions.html@1343..1358",
               "path": "src/read-expressions.html",
               "role": "name",
-              "start": 1289
+              "start": 1343
             },
             "span": null,
             "subjectKind": "observation-member",
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "expression",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "degraded",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/read-expressions.html",
@@ -2740,8 +3579,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "severity": "warning",
         "source": "semantic-runtime:observation",
         "span": {
-          "end": 1304,
-          "start": 1289
+          "end": 1358,
+          "start": 1343
         },
         "spanText": "acceptPredicate",
         "status": "canonical",
@@ -2773,26 +3612,26 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": {
             "source": {
-              "end": 1323,
+              "end": 1377,
               "kind": "source-span-address",
-              "label": "src/read-expressions.html@1313..1323",
+              "label": "src/read-expressions.html@1367..1377",
               "path": "src/read-expressions.html",
               "role": "template-member-access",
-              "start": 1313
+              "start": 1367
             },
             "span": null,
             "subjectKind": "template-member-access",
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/read-expressions.html",
@@ -2809,8 +3648,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "severity": "error",
         "source": "semantic-runtime:template",
         "span": {
-          "end": 1323,
-          "start": 1313
+          "end": 1377,
+          "start": 1367
         },
         "spanText": "item.label",
         "status": "canonical",
@@ -2842,26 +3681,26 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": {
             "source": {
-              "end": 1448,
+              "end": 1502,
               "kind": "source-span-address",
-              "label": "src/read-expressions.html@1446..1448",
+              "label": "src/read-expressions.html@1500..1502",
               "path": "src/read-expressions.html",
               "role": "typescript-overlay:semantic",
-              "start": 1446
+              "start": 1500
             },
             "span": null,
             "subjectKind": "template-expression",
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/read-expressions.html",
@@ -2878,8 +3717,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "severity": "error",
         "source": "semantic-runtime:template",
         "span": {
-          "end": 1448,
-          "start": 1446
+          "end": 1502,
+          "start": 1500
         },
         "spanText": "42",
         "status": "canonical",
@@ -2911,26 +3750,26 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": {
             "source": {
-              "end": 1774,
+              "end": 1828,
               "kind": "source-span-address",
-              "label": "src/read-expressions.html@1769..1774",
+              "label": "src/read-expressions.html@1823..1828",
               "path": "src/read-expressions.html",
               "role": "typescript-overlay:semantic",
-              "start": 1769
+              "start": 1823
             },
             "span": null,
             "subjectKind": "template-expression",
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/read-expressions.html",
@@ -2947,8 +3786,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "severity": "error",
         "source": "semantic-runtime:template",
         "span": {
-          "end": 1774,
-          "start": 1769
+          "end": 1828,
+          "start": 1823
         },
         "spanText": "count",
         "status": "canonical",
@@ -2980,7 +3819,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": {
             "source": {
               "end": 222,
@@ -2995,11 +3834,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/read-expressions.html",
@@ -3049,7 +3888,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": {
             "source": {
               "end": 277,
@@ -3064,11 +3903,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/read-expressions.html",
@@ -3118,7 +3957,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": {
             "source": {
               "end": 277,
@@ -3133,11 +3972,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "informational",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/read-expressions.html",
@@ -3156,6 +3995,144 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "span": {
           "end": 277,
           "start": 272
+        },
+        "spanText": "label",
+        "status": "canonical",
+        "uri": "fixtures://pressure/template-typechecking-corpus/src/read-expressions.html"
+      },
+      {
+        "actionability": "manual",
+        "anomaly": null,
+        "category": "template-syntax",
+        "code": "TS18046",
+        "data": {
+          "diagnosticAuthority": "typescript",
+          "diagnosticDomain": "template",
+          "diagnosticKind": "template-expression-typescript-diagnostic",
+          "frameworkErrorCode": null,
+          "frameworkRawErrorAuthority": null,
+          "missingInput": "typescript:TS18046",
+          "missingInputs": [
+            "typescript:TS18046"
+          ],
+          "phase": "semantic",
+          "relatedInformation": [],
+          "relatedQueryKind": "template-diagnostics",
+          "repairAffordance": {
+            "actionKind": "inspect-type-surface",
+            "actionability": "manual",
+            "changeDomain": "inspection",
+            "planKind": "manual-inspection",
+            "readiness": "inspection-required",
+            "targetSourceCoverage": "all"
+          },
+          "sourceRole": "template",
+          "subject": {
+            "source": {
+              "end": 331,
+              "kind": "source-span-address",
+              "label": "src/read-expressions.html@313..331",
+              "path": "src/read-expressions.html",
+              "role": "template-member-access",
+              "start": 313
+            },
+            "span": null,
+            "subjectKind": "template-member-access",
+            "uri": null
+          },
+          "taxonomy": {
+            "actionability": "manual",
+            "category": "template-syntax",
+            "confidence": null,
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
+          }
+        },
+        "file": "src/read-expressions.html",
+        "impact": "blocking",
+        "issues": [
+          {
+            "code": "TS18046",
+            "kind": "template-expression-typescript-diagnostic",
+            "message": "TS18046: 'unknownValue' is of type 'unknown'."
+          }
+        ],
+        "message": "TS18046: 'unknownValue' is of type 'unknown'.",
+        "related": [],
+        "severity": "error",
+        "source": "semantic-runtime:template",
+        "span": {
+          "end": 325,
+          "start": 313
+        },
+        "spanText": "unknownValue",
+        "status": "canonical",
+        "uri": "fixtures://pressure/template-typechecking-corpus/src/read-expressions.html"
+      },
+      {
+        "actionability": "manual",
+        "anomaly": null,
+        "category": "template-syntax",
+        "code": "weak-expression-member-owner",
+        "data": {
+          "diagnosticAuthority": "semantic-authoring-policy",
+          "diagnosticDomain": "template",
+          "diagnosticKind": "weak-expression-member-owner",
+          "frameworkErrorCode": null,
+          "frameworkRawErrorAuthority": null,
+          "missingInput": "expression-member-owner-type:no-members",
+          "missingInputs": [
+            "expression-member-owner-type:no-members"
+          ],
+          "phase": null,
+          "relatedInformation": [],
+          "relatedQueryKind": "template-diagnostics",
+          "repairAffordance": {
+            "actionKind": "inspect-type-surface",
+            "actionability": "manual",
+            "changeDomain": "inspection",
+            "planKind": "manual-inspection",
+            "readiness": "inspection-required",
+            "targetSourceCoverage": "all"
+          },
+          "sourceRole": "template",
+          "subject": {
+            "source": {
+              "end": 331,
+              "kind": "source-span-address",
+              "label": "src/read-expressions.html@313..331",
+              "path": "src/read-expressions.html",
+              "role": "template-member-access",
+              "start": 313
+            },
+            "span": null,
+            "subjectKind": "template-member-access",
+            "uri": null
+          },
+          "taxonomy": {
+            "actionability": "manual",
+            "category": "template-syntax",
+            "confidence": null,
+            "impact": "informational",
+            "schema": "diagnostics-taxonomy/1"
+          }
+        },
+        "file": "src/read-expressions.html",
+        "impact": "informational",
+        "issues": [
+          {
+            "code": "weak-expression-member-owner",
+            "kind": "weak-expression-member-owner",
+            "message": "The owner type has no projected members at this cursor, so the selected member cannot be validated or navigated."
+          }
+        ],
+        "message": "The owner type has no projected members at this cursor, so the selected member cannot be validated or navigated.",
+        "related": [],
+        "severity": "info",
+        "source": "semantic-runtime:template",
+        "span": {
+          "end": 331,
+          "start": 326
         },
         "spanText": "label",
         "status": "canonical",
@@ -3187,26 +4164,26 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": {
             "source": {
-              "end": 746,
+              "end": 800,
               "kind": "source-span-address",
-              "label": "src/read-expressions.html@733..746",
+              "label": "src/read-expressions.html@787..800",
               "path": "src/read-expressions.html",
               "role": "typescript-overlay:semantic",
-              "start": 733
+              "start": 787
             },
             "span": null,
             "subjectKind": "template-expression",
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/read-expressions.html",
@@ -3223,8 +4200,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "severity": "error",
         "source": "semantic-runtime:template",
         "span": {
-          "end": 746,
-          "start": 733
+          "end": 800,
+          "start": 787
         },
         "spanText": "'not-an-item'",
         "status": "canonical",
@@ -3256,26 +4233,26 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": {
             "source": {
-              "end": 824,
+              "end": 878,
               "kind": "source-span-address",
-              "label": "src/read-expressions.html@812..824",
+              "label": "src/read-expressions.html@866..878",
               "path": "src/read-expressions.html",
               "role": "typescript-overlay:semantic",
-              "start": 812
+              "start": 866
             },
             "span": null,
             "subjectKind": "template-expression",
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/read-expressions.html",
@@ -3292,91 +4269,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "severity": "error",
         "source": "semantic-runtime:template",
         "span": {
-          "end": 824,
-          "start": 812
+          "end": 878,
+          "start": 866
         },
         "spanText": "definiteItem",
-        "status": "canonical",
-        "uri": "fixtures://pressure/template-typechecking-corpus/src/read-expressions.html"
-      },
-      {
-        "actionability": "manual",
-        "anomaly": null,
-        "category": "template-syntax",
-        "code": "TS2769",
-        "data": {
-          "diagnosticAuthority": "typescript",
-          "diagnosticDomain": "template",
-          "diagnosticKind": "template-expression-typescript-diagnostic",
-          "frameworkErrorCode": null,
-          "frameworkRawErrorAuthority": null,
-          "missingInput": "typescript:TS2769",
-          "missingInputs": [
-            "typescript:TS2769"
-          ],
-          "phase": "semantic",
-          "relatedInformation": [],
-          "relatedQueryKind": "template-diagnostics",
-          "repairAffordance": {
-            "actionKind": "inspect-type-surface",
-            "actionability": "manual",
-            "changeDomain": "inspection",
-            "planKind": "manual-inspection",
-            "readiness": "inspection-required",
-            "targetSourceCoverage": "all"
-          },
-          "sourceRole": null,
-          "subject": {
-            "source": {
-              "end": 990,
-              "kind": "source-span-address",
-              "label": "src/read-expressions.html@986..990",
-              "path": "src/read-expressions.html",
-              "role": "typescript-overlay:semantic",
-              "start": 986
-            },
-            "span": null,
-            "subjectKind": "template-expression",
-            "uri": null
-          },
-          "taxonomy": {
-            "actionability": null,
-            "category": null,
-            "confidence": null,
-            "impact": null,
-            "schema": null
-          }
-        },
-        "file": "src/read-expressions.html",
-        "impact": "blocking",
-        "issues": [
-          {
-            "code": "TS2769",
-            "kind": "template-expression-typescript-diagnostic",
-            "message": "TS2769: No overload matches this call.\nOverload 1 of 2, '(value: string): string', gave the following error.\nArgument of type 'boolean' is not assignable to parameter of type 'string'.\nOverload 2 of 2, '(value: number): number', gave the following error.\nArgument of type 'boolean' is not assignable to parameter of type 'number'."
-          }
-        ],
-        "message": "TS2769: No overload matches this call.\nOverload 1 of 2, '(value: string): string', gave the following error.\nArgument of type 'boolean' is not assignable to parameter of type 'string'.\nOverload 2 of 2, '(value: number): number', gave the following error.\nArgument of type 'boolean' is not assignable to parameter of type 'number'.",
-        "related": [],
-        "severity": "error",
-        "source": "semantic-runtime:template",
-        "span": {
-          "end": 990,
-          "start": 986
-        },
-        "spanText": "true",
         "status": "canonical",
         "uri": "fixtures://pressure/template-typechecking-corpus/src/read-expressions.html"
       }
     ]
   },
-  "suppressed": {
-    "diagnosticCount": 0,
-    "diagnostics": []
-  },
   "surfaces": {
     "lsp": {
-      "diagnosticCount": 13,
+      "diagnosticCount": 14,
       "diagnostics": [
         {
           "actionability": "guided",
@@ -3404,7 +4308,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": {
               "source": {
                 "end": 118,
@@ -3419,11 +4323,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "degraded",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/read-expressions.html",
@@ -3473,7 +4377,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": {
               "source": {
                 "end": 222,
@@ -3488,11 +4392,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/read-expressions.html",
@@ -3542,7 +4446,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": {
               "source": {
                 "end": 277,
@@ -3557,11 +4461,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/read-expressions.html",
@@ -3580,6 +4484,75 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "span": {
             "end": 271,
             "start": 259
+          },
+          "spanText": "unknownValue",
+          "status": "primary",
+          "uri": "fixtures://pressure/template-typechecking-corpus/src/read-expressions.html"
+        },
+        {
+          "actionability": "manual",
+          "anomaly": null,
+          "category": "template-syntax",
+          "code": "TS18046",
+          "data": {
+            "diagnosticAuthority": "typescript",
+            "diagnosticDomain": "template",
+            "diagnosticKind": "template-expression-typescript-diagnostic",
+            "frameworkErrorCode": null,
+            "frameworkRawErrorAuthority": null,
+            "missingInput": "typescript:TS18046",
+            "missingInputs": [
+              "typescript:TS18046"
+            ],
+            "phase": "semantic",
+            "relatedInformation": [],
+            "relatedQueryKind": "template-diagnostics",
+            "repairAffordance": {
+              "actionKind": "inspect-type-surface",
+              "actionability": "manual",
+              "changeDomain": "inspection",
+              "planKind": "manual-inspection",
+              "readiness": "inspection-required",
+              "targetSourceCoverage": "all"
+            },
+            "sourceRole": "template",
+            "subject": {
+              "source": {
+                "end": 331,
+                "kind": "source-span-address",
+                "label": "src/read-expressions.html@313..331",
+                "path": "src/read-expressions.html",
+                "role": "template-member-access",
+                "start": 313
+              },
+              "span": null,
+              "subjectKind": "template-member-access",
+              "uri": null
+            },
+            "taxonomy": {
+              "actionability": "manual",
+              "category": "template-syntax",
+              "confidence": null,
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
+            }
+          },
+          "file": "src/read-expressions.html",
+          "impact": "blocking",
+          "issues": [
+            {
+              "code": "TS18046",
+              "kind": "template-expression-typescript-diagnostic",
+              "message": "TS18046: 'unknownValue' is of type 'unknown'."
+            }
+          ],
+          "message": "TS18046: 'unknownValue' is of type 'unknown'.",
+          "related": [],
+          "severity": "error",
+          "source": "semantic-runtime:template",
+          "span": {
+            "end": 325,
+            "start": 313
           },
           "spanText": "unknownValue",
           "status": "primary",
@@ -3611,26 +4584,26 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": {
               "source": {
-                "end": 746,
+                "end": 800,
                 "kind": "source-span-address",
-                "label": "src/read-expressions.html@733..746",
+                "label": "src/read-expressions.html@787..800",
                 "path": "src/read-expressions.html",
                 "role": "typescript-overlay:semantic",
-                "start": 733
+                "start": 787
               },
               "span": null,
               "subjectKind": "template-expression",
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/read-expressions.html",
@@ -3647,8 +4620,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "severity": "error",
           "source": "semantic-runtime:template",
           "span": {
-            "end": 746,
-            "start": 733
+            "end": 800,
+            "start": 787
           },
           "spanText": "'not-an-item'",
           "status": "primary",
@@ -3680,26 +4653,26 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": {
               "source": {
-                "end": 824,
+                "end": 878,
                 "kind": "source-span-address",
-                "label": "src/read-expressions.html@812..824",
+                "label": "src/read-expressions.html@866..878",
                 "path": "src/read-expressions.html",
                 "role": "typescript-overlay:semantic",
-                "start": 812
+                "start": 866
               },
               "span": null,
               "subjectKind": "template-expression",
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/read-expressions.html",
@@ -3716,8 +4689,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "severity": "error",
           "source": "semantic-runtime:template",
           "span": {
-            "end": 824,
-            "start": 812
+            "end": 878,
+            "start": 866
           },
           "spanText": "definiteItem",
           "status": "primary",
@@ -3749,26 +4722,26 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": {
               "source": {
-                "end": 990,
+                "end": 1044,
                 "kind": "source-span-address",
-                "label": "src/read-expressions.html@986..990",
+                "label": "src/read-expressions.html@1040..1044",
                 "path": "src/read-expressions.html",
                 "role": "typescript-overlay:semantic",
-                "start": 986
+                "start": 1040
               },
               "span": null,
               "subjectKind": "template-expression",
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/read-expressions.html",
@@ -3785,8 +4758,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "severity": "error",
           "source": "semantic-runtime:template",
           "span": {
-            "end": 990,
-            "start": 986
+            "end": 1044,
+            "start": 1040
           },
           "spanText": "true",
           "status": "primary",
@@ -3818,26 +4791,26 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": {
               "source": {
-                "end": 1044,
+                "end": 1098,
                 "kind": "source-span-address",
-                "label": "src/read-expressions.html@1033..1044",
+                "label": "src/read-expressions.html@1087..1098",
                 "path": "src/read-expressions.html",
                 "role": "typescript-overlay:semantic",
-                "start": 1033
+                "start": 1087
               },
               "span": null,
               "subjectKind": "template-expression",
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/read-expressions.html",
@@ -3854,8 +4827,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "severity": "error",
           "source": "semantic-runtime:template",
           "span": {
-            "end": 1044,
-            "start": 1033
+            "end": 1098,
+            "start": 1087
           },
           "spanText": "notCallable",
           "status": "primary",
@@ -3887,26 +4860,26 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": {
               "source": {
-                "end": 1232,
+                "end": 1286,
                 "kind": "source-span-address",
-                "label": "src/read-expressions.html@1215..1232",
+                "label": "src/read-expressions.html@1269..1286",
                 "path": "src/read-expressions.html",
                 "role": "template-member-access",
-                "start": 1215
+                "start": 1269
               },
               "span": null,
               "subjectKind": "template-member-access",
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "degraded",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/read-expressions.html",
@@ -3923,8 +4896,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "severity": "warning",
           "source": "semantic-runtime:template",
           "span": {
-            "end": 1232,
-            "start": 1220
+            "end": 1286,
+            "start": 1274
           },
           "spanText": "missingLabel",
           "status": "primary",
@@ -3956,26 +4929,26 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": {
               "source": {
-                "end": 1238,
+                "end": 1292,
                 "kind": "source-span-address",
-                "label": "src/read-expressions.html@1197..1238",
+                "label": "src/read-expressions.html@1251..1292",
                 "path": "src/read-expressions.html",
                 "role": "template-member-call",
-                "start": 1197
+                "start": 1251
               },
               "span": null,
               "subjectKind": "template-member-call",
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/read-expressions.html",
@@ -3992,8 +4965,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "severity": "error",
           "source": "semantic-runtime:template",
           "span": {
-            "end": 1232,
-            "start": 1220
+            "end": 1286,
+            "start": 1274
           },
           "spanText": "missingLabel",
           "status": "primary",
@@ -4013,7 +4986,50 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInput": null,
             "missingInputs": [],
             "phase": "binding-observation",
-            "relatedInformation": [],
+            "relatedInformation": [
+              {
+                "message": "Method 'acceptPredicate' is declared here.",
+                "relationKind": "subject-declaration",
+                "source": {
+                  "anchor": {
+                    "kind": "source-file-address",
+                    "label": "src/read-expressions.ts",
+                    "path": "src/read-expressions.ts",
+                    "sourceFileRole": "app-source",
+                    "sourceWorkspaceKey": "aurelia-template-typechecking-corpus"
+                  },
+                  "end": 925,
+                  "kind": "source-span-address",
+                  "label": "src/read-expressions.ts@910..925",
+                  "path": "src/read-expressions.ts",
+                  "role": "name",
+                  "sourceFileRole": "app-source",
+                  "sourceWorkspaceKey": "aurelia-template-typechecking-corpus",
+                  "start": 910
+                }
+              },
+              {
+                "message": "Method-body read 'this.items' is not observed through the template call.",
+                "relationKind": "hidden-state-read",
+                "source": {
+                  "anchor": {
+                    "kind": "source-file-address",
+                    "label": "src/read-expressions.ts",
+                    "path": "src/read-expressions.ts",
+                    "sourceFileRole": "app-source",
+                    "sourceWorkspaceKey": "aurelia-template-typechecking-corpus"
+                  },
+                  "end": 1000,
+                  "kind": "source-span-address",
+                  "label": "src/read-expressions.ts@990..1000",
+                  "path": "src/read-expressions.ts",
+                  "role": "range",
+                  "sourceFileRole": "app-source",
+                  "sourceWorkspaceKey": "aurelia-template-typechecking-corpus",
+                  "start": 990
+                }
+              }
+            ],
             "relatedQueryKind": "observation-issues",
             "repairAffordance": {
               "actionKind": "configure-observer",
@@ -4023,26 +5039,26 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": {
               "source": {
-                "end": 1304,
+                "end": 1358,
                 "kind": "source-span-address",
-                "label": "src/read-expressions.html@1289..1304",
+                "label": "src/read-expressions.html@1343..1358",
                 "path": "src/read-expressions.html",
                 "role": "name",
-                "start": 1289
+                "start": 1343
               },
               "span": null,
               "subjectKind": "observation-member",
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "expression",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "degraded",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/read-expressions.html",
@@ -4086,8 +5102,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "severity": "warning",
           "source": "semantic-runtime:observation",
           "span": {
-            "end": 1304,
-            "start": 1289
+            "end": 1358,
+            "start": 1343
           },
           "spanText": "acceptPredicate",
           "status": "primary",
@@ -4119,26 +5135,26 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": {
               "source": {
-                "end": 1323,
+                "end": 1377,
                 "kind": "source-span-address",
-                "label": "src/read-expressions.html@1313..1323",
+                "label": "src/read-expressions.html@1367..1377",
                 "path": "src/read-expressions.html",
                 "role": "template-member-access",
-                "start": 1313
+                "start": 1367
               },
               "span": null,
               "subjectKind": "template-member-access",
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/read-expressions.html",
@@ -4155,8 +5171,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "severity": "error",
           "source": "semantic-runtime:template",
           "span": {
-            "end": 1323,
-            "start": 1313
+            "end": 1377,
+            "start": 1367
           },
           "spanText": "item.label",
           "status": "primary",
@@ -4188,26 +5204,26 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": {
               "source": {
-                "end": 1448,
+                "end": 1502,
                 "kind": "source-span-address",
-                "label": "src/read-expressions.html@1446..1448",
+                "label": "src/read-expressions.html@1500..1502",
                 "path": "src/read-expressions.html",
                 "role": "typescript-overlay:semantic",
-                "start": 1446
+                "start": 1500
               },
               "span": null,
               "subjectKind": "template-expression",
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/read-expressions.html",
@@ -4224,8 +5240,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "severity": "error",
           "source": "semantic-runtime:template",
           "span": {
-            "end": 1448,
-            "start": 1446
+            "end": 1502,
+            "start": 1500
           },
           "spanText": "42",
           "status": "primary",
@@ -4257,26 +5273,26 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": {
               "source": {
-                "end": 1774,
+                "end": 1828,
                 "kind": "source-span-address",
-                "label": "src/read-expressions.html@1769..1774",
+                "label": "src/read-expressions.html@1823..1828",
                 "path": "src/read-expressions.html",
                 "role": "typescript-overlay:semantic",
-                "start": 1769
+                "start": 1823
               },
               "span": null,
               "subjectKind": "template-expression",
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/read-expressions.html",
@@ -4293,8 +5309,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "severity": "error",
           "source": "semantic-runtime:template",
           "span": {
-            "end": 1774,
-            "start": 1769
+            "end": 1828,
+            "start": 1823
           },
           "spanText": "count",
           "status": "primary",
@@ -4313,10 +5329,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 {
   "comparisonKey": "domain/kind/code/severity/text/message",
   "countsMatch": true,
-  "customLspSurfaceCount": 13,
+  "customLspSurfaceCount": 14,
   "customOnly": [],
   "lspOnly": [],
-  "lspPublishCount": 13,
+  "lspPublishCount": 14,
   "suppressedCount": 0
 }
 ```
@@ -4970,7 +5986,266 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "fingerprint": "semantic-runtime:hit",
+  "answer": {
+    "analysisDepth": "binding-observation",
+    "continuations": [
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "orient",
+          "inspect"
+        ],
+        "kind": "follow-query",
+        "rationale": "Cluster detailed diagnostics back into a summary view.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "app-diagnostic-summary",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/write-bindings.html"
+          }
+        },
+        "targetQueryKind": "app-diagnostic-summary"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "diagnose"
+        ],
+        "kind": "follow-query",
+        "rationale": "Compare unified diagnostics with ordinary TypeScript diagnostics.",
+        "targetQuery": {
+          "kind": "typescript-diagnostics",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/write-bindings.html"
+          }
+        },
+        "targetQueryKind": "typescript-diagnostics"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "diagnose"
+        ],
+        "kind": "follow-query",
+        "rationale": "Compare unified diagnostics with template diagnostics.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "template-diagnostics",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/write-bindings.html"
+          }
+        },
+        "targetQueryKind": "template-diagnostics"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world"
+          ],
+          "sourceFacts": [
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 1054,
+                "kind": "source-span-address",
+                "label": "src/write-bindings.html@1049..1054",
+                "path": "src/write-bindings.html",
+                "role": "binding-source-assignment",
+                "start": 1049
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 1278,
+                "kind": "source-span-address",
+                "label": "src/write-bindings.html@1273..1278",
+                "path": "src/write-bindings.html",
+                "role": "binding-source-assignment",
+                "start": 1273
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 1372,
+                "kind": "source-span-address",
+                "label": "src/write-bindings.html@1360..1372",
+                "path": "src/write-bindings.html",
+                "role": "binding-source-assignment",
+                "start": 1360
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 1465,
+                "kind": "source-span-address",
+                "label": "src/write-bindings.html@1453..1465",
+                "path": "src/write-bindings.html",
+                "role": "binding-source-assignment",
+                "start": 1453
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 228,
+                "kind": "source-span-address",
+                "label": "src/write-bindings.html@216..228",
+                "path": "src/write-bindings.html",
+                "role": "binding-source-assignment",
+                "start": 216
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 311,
+                "kind": "source-span-address",
+                "label": "src/write-bindings.html@297..311",
+                "path": "src/write-bindings.html",
+                "role": "binding-source-assignment",
+                "start": 297
+              }
+            },
+            {
+              "count": 2,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 458,
+                "kind": "source-span-address",
+                "label": "src/write-bindings.html@453..458",
+                "path": "src/write-bindings.html",
+                "role": "binding-source-assignment",
+                "start": 453
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 644,
+                "kind": "source-span-address",
+                "label": "src/write-bindings.html@619..644",
+                "path": "src/write-bindings.html",
+                "role": "binding-source-assignment",
+                "start": 619
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 891,
+                "kind": "source-span-address",
+                "label": "src/write-bindings.html@879..891",
+                "path": "src/write-bindings.html",
+                "role": "binding-source-assignment",
+                "start": 879
+              }
+            }
+          ],
+          "sourceRequirement": "exact-authored-span"
+        },
+        "intents": [
+          "diagnose",
+          "repair"
+        ],
+        "kind": "follow-query",
+        "rationale": "Inspect template-diagnostics rows referenced by returned diagnostics.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "template-diagnostics",
+          "page": {
+            "size": 200
+          }
+        },
+        "targetQueryKind": "template-diagnostics"
+      }
+    ],
+    "coverage": "complete",
+    "page": null,
+    "result": "answered",
+    "schemaVersion": "0.2",
+    "selection": "not-applicable",
+    "summary": "Returned 10 app diagnostic(s)."
+  },
   "outcome": "result",
   "presentation": {
     "complete": true,
@@ -5007,7 +6282,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": {
                 "source": {
                   "end": 228,
@@ -5022,11 +6297,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "degraded",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/write-bindings.html",
@@ -5097,7 +6372,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": {
                 "source": {
                   "end": 311,
@@ -5112,11 +6387,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "degraded",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/write-bindings.html",
@@ -5187,7 +6462,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": {
                 "source": {
                   "end": 458,
@@ -5202,11 +6477,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "degraded",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/write-bindings.html",
@@ -5277,7 +6552,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": {
                 "source": {
                   "end": 458,
@@ -5292,11 +6567,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "degraded",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/write-bindings.html",
@@ -5367,7 +6642,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": {
                 "source": {
                   "end": 644,
@@ -5382,11 +6657,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "degraded",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/write-bindings.html",
@@ -5458,7 +6733,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": {
                 "source": {
                   "end": 891,
@@ -5473,11 +6748,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "degraded",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/write-bindings.html",
@@ -5548,7 +6823,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": {
                 "source": {
                   "end": 1054,
@@ -5563,11 +6838,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "degraded",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/write-bindings.html",
@@ -5638,7 +6913,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": {
                 "source": {
                   "end": 1278,
@@ -5653,11 +6928,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "degraded",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/write-bindings.html",
@@ -5728,7 +7003,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": {
                 "source": {
                   "end": 1372,
@@ -5743,11 +7018,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "degraded",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/write-bindings.html",
@@ -5819,7 +7094,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": {
                 "source": {
                   "end": 1465,
@@ -5834,11 +7109,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "degraded",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/write-bindings.html",
@@ -5912,7 +7187,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": {
             "source": {
               "end": 1054,
@@ -5927,11 +7202,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "degraded",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/write-bindings.html",
@@ -5981,7 +7256,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": {
             "source": {
               "end": 1278,
@@ -5996,11 +7271,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "degraded",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/write-bindings.html",
@@ -6050,7 +7325,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": {
             "source": {
               "end": 1372,
@@ -6065,11 +7340,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "degraded",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/write-bindings.html",
@@ -6120,7 +7395,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": {
             "source": {
               "end": 1465,
@@ -6135,11 +7410,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "degraded",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/write-bindings.html",
@@ -6190,7 +7465,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": {
             "source": {
               "end": 228,
@@ -6205,11 +7480,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "degraded",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/write-bindings.html",
@@ -6259,7 +7534,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": {
             "source": {
               "end": 311,
@@ -6274,11 +7549,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "degraded",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/write-bindings.html",
@@ -6328,7 +7603,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": {
             "source": {
               "end": 458,
@@ -6343,11 +7618,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "degraded",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/write-bindings.html",
@@ -6397,7 +7672,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": {
             "source": {
               "end": 458,
@@ -6412,11 +7687,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "degraded",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/write-bindings.html",
@@ -6466,7 +7741,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": {
             "source": {
               "end": 644,
@@ -6481,11 +7756,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "degraded",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/write-bindings.html",
@@ -6536,7 +7811,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": {
             "source": {
               "end": 891,
@@ -6551,11 +7826,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "degraded",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/write-bindings.html",
@@ -6580,10 +7855,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "uri": "fixtures://pressure/template-typechecking-corpus/src/write-bindings.html"
       }
     ]
-  },
-  "suppressed": {
-    "diagnosticCount": 0,
-    "diagnostics": []
   },
   "surfaces": {
     "lsp": {
@@ -6616,7 +7887,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": {
               "source": {
                 "end": 228,
@@ -6631,11 +7902,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "degraded",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/write-bindings.html",
@@ -6685,7 +7956,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": {
               "source": {
                 "end": 311,
@@ -6700,11 +7971,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "degraded",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/write-bindings.html",
@@ -6754,7 +8025,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": {
               "source": {
                 "end": 458,
@@ -6769,11 +8040,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "degraded",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/write-bindings.html",
@@ -6823,7 +8094,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": {
               "source": {
                 "end": 458,
@@ -6838,11 +8109,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "degraded",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/write-bindings.html",
@@ -6892,7 +8163,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": {
               "source": {
                 "end": 644,
@@ -6907,11 +8178,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "degraded",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/write-bindings.html",
@@ -6962,7 +8233,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": {
               "source": {
                 "end": 891,
@@ -6977,11 +8248,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "degraded",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/write-bindings.html",
@@ -7031,7 +8302,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": {
               "source": {
                 "end": 1054,
@@ -7046,11 +8317,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "degraded",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/write-bindings.html",
@@ -7100,7 +8371,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": {
               "source": {
                 "end": 1278,
@@ -7115,11 +8386,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "degraded",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/write-bindings.html",
@@ -7169,7 +8440,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": {
               "source": {
                 "end": 1372,
@@ -7184,11 +8455,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "degraded",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/write-bindings.html",
@@ -7239,7 +8510,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": {
               "source": {
                 "end": 1465,
@@ -7254,11 +8525,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "degraded",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/write-bindings.html",
@@ -7745,7 +9016,287 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "fingerprint": "semantic-runtime:hit",
+  "answer": {
+    "analysisDepth": "binding-observation",
+    "continuations": [
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "orient",
+          "inspect"
+        ],
+        "kind": "follow-query",
+        "rationale": "Cluster detailed diagnostics back into a summary view.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "app-diagnostic-summary",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/resource-boundaries.html"
+          }
+        },
+        "targetQueryKind": "app-diagnostic-summary"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "diagnose"
+        ],
+        "kind": "follow-query",
+        "rationale": "Compare unified diagnostics with ordinary TypeScript diagnostics.",
+        "targetQuery": {
+          "kind": "typescript-diagnostics",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/resource-boundaries.html"
+          }
+        },
+        "targetQueryKind": "typescript-diagnostics"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "diagnose"
+        ],
+        "kind": "follow-query",
+        "rationale": "Compare unified diagnostics with template diagnostics.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "template-diagnostics",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/resource-boundaries.html"
+          }
+        },
+        "targetQueryKind": "template-diagnostics"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world"
+          ],
+          "sourceFacts": [
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 1019,
+                "kind": "source-span-address",
+                "label": "src/resource-boundaries.html@1009..1019",
+                "path": "src/resource-boundaries.html",
+                "role": "binding-source-assignment",
+                "start": 1009
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 116,
+                "kind": "source-span-address",
+                "label": "src/resource-boundaries.html@110..116",
+                "path": "src/resource-boundaries.html",
+                "role": "typescript-overlay:semantic",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "aurelia-template-typechecking-corpus",
+                "start": 110
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 205,
+                "kind": "source-span-address",
+                "label": "src/resource-boundaries.html@200..205",
+                "path": "src/resource-boundaries.html",
+                "role": "typescript-overlay:semantic",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "aurelia-template-typechecking-corpus",
+                "start": 200
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/resource-boundaries.html",
+                  "path": "src/resource-boundaries.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "aurelia-template-typechecking-corpus"
+                },
+                "end": 506,
+                "kind": "source-span-address",
+                "label": "src/resource-boundaries.html@491..506",
+                "path": "src/resource-boundaries.html",
+                "role": "name",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "aurelia-template-typechecking-corpus",
+                "start": 491
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 645,
+                "kind": "source-span-address",
+                "label": "src/resource-boundaries.html@633..645",
+                "path": "src/resource-boundaries.html",
+                "role": "name",
+                "start": 633
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 645,
+                "kind": "source-span-address",
+                "label": "src/resource-boundaries.html@633..645",
+                "path": "src/resource-boundaries.html",
+                "role": "typescript-overlay:semantic",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "aurelia-template-typechecking-corpus",
+                "start": 633
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/resource-boundaries.html",
+                  "path": "src/resource-boundaries.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "aurelia-template-typechecking-corpus"
+                },
+                "end": 737,
+                "kind": "source-span-address",
+                "label": "src/resource-boundaries.html@723..737",
+                "path": "src/resource-boundaries.html",
+                "role": "name",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "aurelia-template-typechecking-corpus",
+                "start": 723
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/resource-boundaries.html",
+                  "path": "src/resource-boundaries.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "aurelia-template-typechecking-corpus"
+                },
+                "end": 808,
+                "kind": "source-span-address",
+                "label": "src/resource-boundaries.html@798..808",
+                "path": "src/resource-boundaries.html",
+                "role": "name",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "aurelia-template-typechecking-corpus",
+                "start": 798
+              }
+            }
+          ],
+          "sourceRequirement": "exact-authored-span"
+        },
+        "intents": [
+          "diagnose",
+          "repair"
+        ],
+        "kind": "follow-query",
+        "rationale": "Inspect template-diagnostics rows referenced by returned diagnostics.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "template-diagnostics",
+          "page": {
+            "size": 200
+          }
+        },
+        "targetQueryKind": "template-diagnostics"
+      }
+    ],
+    "coverage": "complete",
+    "page": null,
+    "result": "answered",
+    "schemaVersion": "0.2",
+    "selection": "not-applicable",
+    "summary": "Returned 8 app diagnostic(s)."
+  },
   "outcome": "result",
   "presentation": {
     "complete": true,
@@ -7781,7 +9332,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": {
                 "source": {
                   "end": 116,
@@ -7796,11 +9347,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-boundaries.html",
@@ -7871,7 +9422,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": {
                 "source": {
                   "end": 205,
@@ -7886,11 +9437,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-boundaries.html",
@@ -7961,14 +9512,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-boundaries.html",
@@ -8031,7 +9582,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": {
                 "source": {
                   "end": 645,
@@ -8046,11 +9597,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "degraded",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-boundaries.html",
@@ -8108,7 +9659,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                   "readiness": "inspection-required",
                   "targetSourceCoverage": "all"
                 },
-                "sourceRole": null,
+                "sourceRole": "template",
                 "subject": {
                   "source": {
                     "end": 645,
@@ -8123,11 +9674,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                   "uri": null
                 },
                 "taxonomy": {
-                  "actionability": null,
-                  "category": null,
+                  "actionability": "manual",
+                  "category": "template-syntax",
                   "confidence": null,
-                  "impact": null,
-                  "schema": null
+                  "impact": "blocking",
+                  "schema": "diagnostics-taxonomy/1"
                 }
               },
               "file": "src/resource-boundaries.html",
@@ -8196,14 +9747,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-boundaries.html",
@@ -8266,14 +9817,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-boundaries.html",
@@ -8336,7 +9887,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": {
                 "source": {
                   "end": 1019,
@@ -8351,11 +9902,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "degraded",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-boundaries.html",
@@ -8429,7 +9980,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": {
             "source": {
               "end": 1019,
@@ -8444,11 +9995,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "degraded",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-boundaries.html",
@@ -8498,7 +10049,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": {
             "source": {
               "end": 116,
@@ -8513,11 +10064,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-boundaries.html",
@@ -8567,7 +10118,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": {
             "source": {
               "end": 205,
@@ -8582,11 +10133,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-boundaries.html",
@@ -8636,14 +10187,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-boundaries.html",
@@ -8693,7 +10244,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": {
             "source": {
               "end": 645,
@@ -8708,11 +10259,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "degraded",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-boundaries.html",
@@ -8762,7 +10313,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": {
             "source": {
               "end": 645,
@@ -8777,11 +10328,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-boundaries.html",
@@ -8831,14 +10382,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-boundaries.html",
@@ -8888,14 +10439,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-boundaries.html",
@@ -8920,10 +10471,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "uri": "fixtures://pressure/template-typechecking-corpus/src/resource-boundaries.html"
       }
     ]
-  },
-  "suppressed": {
-    "diagnosticCount": 0,
-    "diagnostics": []
   },
   "surfaces": {
     "lsp": {
@@ -8955,7 +10502,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": {
               "source": {
                 "end": 116,
@@ -8970,11 +10517,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-boundaries.html",
@@ -9024,7 +10571,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": {
               "source": {
                 "end": 205,
@@ -9039,11 +10586,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-boundaries.html",
@@ -9093,14 +10640,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-boundaries.html",
@@ -9150,7 +10697,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": {
               "source": {
                 "end": 645,
@@ -9165,11 +10712,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "degraded",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-boundaries.html",
@@ -9219,14 +10766,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-boundaries.html",
@@ -9276,14 +10823,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-boundaries.html",
@@ -9333,7 +10880,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": {
               "source": {
                 "end": 1019,
@@ -9348,11 +10895,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "degraded",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-boundaries.html",

@@ -28,7 +28,8 @@ import {
   patternExampleInputSchema,
   patternMenuInputSchema,
   routerOverviewInputSchema,
-  templateCursorInputSchema,
+  templateCompletionsInputSchema,
+  templateCursorInfoInputSchema,
   templateDiagnosticsInputSchema,
   workspaceOverviewInputSchema,
 } from './tool-schemas.js';
@@ -49,6 +50,7 @@ import {
   type AureliaMcpPatternMenuInput,
   type AureliaMcpResponse,
   type AureliaMcpRouterOverviewInput,
+  type AureliaMcpTemplateCompletionsInput,
   type AureliaMcpTemplateCursorInput,
   type AureliaMcpTemplateDiagnosticsInput,
   type AureliaMcpWorkspaceOverviewInput,
@@ -224,7 +226,7 @@ export function registerAureliaSemanticRuntimeTools(
     aureliaMcpToolNames.openSeamOverview,
     {
       title: 'Aurelia Open Seam Overview',
-      description: 'Group open semantic seams by seam kind and reason-kind signature before paging raw seam rows.',
+      description: 'Group open semantic seams by unique authored source site while preserving raw derivation counts and causal facets. Use generic open-seam-summary or open-seams app queries for causal clusters or raw rows.',
       inputSchema: strictInputSchema(openSeamOverviewInputSchema),
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,
@@ -261,7 +263,7 @@ export function registerAureliaSemanticRuntimeTools(
     {
       title: 'Aurelia Template Cursor Info',
       description: 'Read the semantic template site, selected resource/member, and cursor diagnostics at a source cursor. Place the cursor on the member token when you need expression-member owner type answers.',
-      inputSchema: strictInputSchema(templateCursorInputSchema),
+      inputSchema: strictInputSchema(templateCursorInfoInputSchema),
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,
     },
@@ -273,11 +275,11 @@ export function registerAureliaSemanticRuntimeTools(
     {
       title: 'Aurelia Template Completions',
       description: 'Read semantic-runtime template completion candidates at a source cursor.',
-      inputSchema: strictInputSchema(templateCursorInputSchema),
+      inputSchema: strictInputSchema(templateCompletionsInputSchema),
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,
     },
-    async (input) => jsonResultFrom(() => adapter.templateCompletions(input as AureliaMcpTemplateCursorInput)),
+    async (input) => jsonResultFrom(() => adapter.templateCompletions(input as AureliaMcpTemplateCompletionsInput)),
   );
 
   server.registerTool(

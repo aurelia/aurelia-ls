@@ -37,7 +37,14 @@ describe("UserCommandsFeature", () => {
     const { recorded, getDiagnostics } = createHarness({
       diagnosticsResult: {
         uri: "file:///component.html",
-        fingerprint: "semantic-runtime:hit",
+        answer: {
+          schemaVersion: "0.2",
+          result: "answered",
+          selection: "not-applicable",
+          coverage: "complete",
+          summary: "One diagnostic.",
+          page: null,
+        },
         diagnostics: {
           bySurface: {
             lsp: [
@@ -50,7 +57,14 @@ describe("UserCommandsFeature", () => {
               },
             ],
           },
-          suppressed: [],
+          raw: [
+            {
+              code: "missing-expression-member",
+              message: "Property title does not exist",
+              severity: "error",
+              status: "primary",
+            },
+          ],
         },
       },
     });
@@ -64,8 +78,42 @@ describe("UserCommandsFeature", () => {
     expect(opened?.text).toContain("# Aurelia Diagnostics Report");
     expect(opened?.text).toContain("## Active (1 error)");
     expect(opened?.text).toContain("**missing-expression-member**");
+    expect(opened?.text).toContain("coverage=complete");
+    expect(opened?.text).toContain("## Raw Evidence (1)");
     const shown = recorded.shownDocuments.at(-1) as { opts?: { viewColumn?: number } } | undefined;
     expect(shown?.opts?.viewColumn).toBe(2);
+  });
+
+  test("diagnosticsReport retains raw evidence when the LSP presentation is empty", async () => {
+    const { recorded } = createHarness({
+      diagnosticsResult: {
+        uri: "file:///component.html",
+        answer: {
+          schemaVersion: "0.2",
+          result: "answered",
+          selection: "not-applicable",
+          coverage: "open",
+          summary: "No presented diagnostic; one contextual row remains.",
+          page: null,
+        },
+        diagnostics: {
+          bySurface: { lsp: [] },
+          raw: [{
+            code: "analysis-context",
+            message: "A contextual diagnostic row remains inspectable.",
+            severity: "information",
+            status: "contextual",
+          }],
+        },
+      },
+    });
+
+    await recorded.commandHandlers.get("aurelia.diagnosticsReport")?.();
+
+    const report = recorded.openedDocuments.at(-1)?.text;
+    expect(report).toContain("No diagnostics were presented, but analysis coverage is not complete.");
+    expect(report).toContain("## Raw Evidence (1)");
+    expect(report).toContain("**analysis-context** [contextual]");
   });
 
   test("inspectAtCursor opens semantic-runtime details in a markdown editor", async () => {

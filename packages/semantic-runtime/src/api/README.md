@@ -598,6 +598,11 @@ inline template references, generated template addresses, and HTML node/value pr
 different authored spans. The API selection path therefore matches the source file and offset against the resource's
 authored HTML span set and prefers the narrowest matching span. The pressure script compares this public API answer with
 the lower-level inquiry answer so wrapper/source-selection drift is visible without printing app source details.
+Cursor dispatch can also select a narrower evaluator-derived lexical scope than the durable parent binding-scope handle,
+for example inside arrow callbacks. Completion answering must spend that selected scope directly; re-reading only the
+parent product loses callback locals and shadowing identity. The public page cursor is transport state. Adapters that need
+a complete candidate family drain it without changing semantic coverage, while LSP `isIncomplete` remains reserved for a
+client requery against a list that is intentionally narrowed as typing changes.
 The API also threads the app emission's modeled `RouteConfig` product handles and router-instruction parameter endpoint
 plans into the completion inquiry. This lets `load="|"` answer from router facts as `router-route` candidates and lets
 `params.bind="{ | }"` answer from selected endpoints as `router-route-parameter` candidates without re-scanning source
@@ -1071,6 +1076,10 @@ facts needed by MCP, AOT, explanation, or future policy consumers. TypeScript-na
 arity mismatch, nullish access, and unknown-owner access remain primary. Template overlay rows share the same TypeScript
 diagnostic severity mapping as ordinary TypeScript diagnostic rows so unified diagnostic answers do not drift by lane.
 Raw diagnostic rows can also carry product-grounded `diagnosticRelations` independently from this presentation policy.
+Adapters must spend those answer-local identities before detaching rows. Standard LSP `Diagnostic.data` and unresolved
+`CodeAction.data` outlive one semantic answer, so they retain stable diagnostic/source facts but not kernel handles or
+answer-local relation identities; custom inspection responses may retain the identities only while carrying the whole
+answer and its related rows together. Published diagnostic batches should include the document version.
 Repeat source rejection spends the retained iterator effect, runtime binding, child-Scope creator, and introduced local
 slot to relate its later facts to the owning `AUR0777` row. Assignment strictness is parallel semantic evidence about
 that same runtime operation; checker and weak-owner diagnostics rooted in the rejected local are derived analysis
@@ -1363,6 +1372,10 @@ does not block a published product; `product-pressure` means a `MaterializationO
 to one or more materialization owners and affected products. Public raw rows preserve structured owner/product impacts,
 site rows conserve their aggregate cardinality, and cluster rows group only by typed seam kind plus reason signature.
 Never infer causality from source containment or manufacture a downstream seam with rewritten summary text.
+Transforming consumers spend that relation locally. Evidence-only seams and pressure on unrelated products do not block
+an operation. Pressure whose `impactKey` matches the exact requested materialization selects a semantics-preserving
+runtime fallback when the product contract provides one and blocks only that transformation when it does not. There is
+no global seam severity from which IDE, MCP, or future AOT consumers may infer whole-app failure.
 Boundary kinds are derived only from typed reason facts. `cause-unresolved` means the producer proved that the result is
 open but did not prove one narrower causal family; do not replace it with a more specific boundary inferred from prose or
 code location. Split the producer reason when stronger evidence exists. Source identity, authored-site grouping, and
@@ -1708,6 +1721,10 @@ runtime chain depths, bind and phase reachability/order, target kind/property, e
 resolved resource, and optional handles. The two depth fields stay distinct because reached behaviors such as i18n can
 project additional runtime resource wrappers that have no authored depth. A null resource is the retained cause of
 AUR0101; blocked rows remain structural facts while `phaseReachability` says whether framework execution reaches them.
+Controller activation reachability is independent from that structural plan. When activation is open, known resource
+identity, chain order, effective mode, and conditional lifecycle effects remain available with open reachability;
+reached-only framework issues wait until execution is proved. Do not erase those facts merely because the owning
+controller may not activate, and do not upgrade their conditional effects to reached execution.
 `lifecycleEffects` reports phase-local closed or open behavior effects such as binding-mode replacement/restoration,
 target-observer or subscriber installation, signal listeners, debounce/throttle state, listener self filtering,
 validation/state connections, and expression projection. Exact signal arguments and rate-limit values keep their own
@@ -1715,7 +1732,7 @@ sources and framework defaults. It does not duplicate ordinary source observatio
 subscriptions remain owned by binding data-flow and target-access products.
 
 `ValueConverterApplications` mirrors that execution lane for both authored `| converter` expressions and converters
-inserted by reached binding behaviors. Rows distinguish `bind`, `to-view`, `from-view`, and `unbind`, retain application
+inserted by structurally admitted binding behaviors. Rows distinguish `bind`, `to-view`, `from-view`, and `unbind`, retain application
 origin plus authored/runtime depths, and use the same bind/phase reachability vocabulary as behaviors. `to-view` phase
 order runs inner-to-outer; `from-view` runs outer-to-inner. Phase order records the static order of a bind-reachable,
 resolved application, not a promise that an app converter cannot throw before a later step. Bind and unbind lifecycle

@@ -128,7 +128,160 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "fingerprint": "semantic-runtime:hit",
+  "answer": {
+    "analysisDepth": "binding-observation",
+    "continuations": [
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "orient",
+          "inspect"
+        ],
+        "kind": "follow-query",
+        "rationale": "Cluster detailed diagnostics back into a summary view.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "app-diagnostic-summary",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/typescript-project-diagnostics-state.ts"
+          }
+        },
+        "targetQueryKind": "app-diagnostic-summary"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "diagnose"
+        ],
+        "kind": "follow-query",
+        "rationale": "Compare unified diagnostics with ordinary TypeScript diagnostics.",
+        "targetQuery": {
+          "kind": "typescript-diagnostics",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/typescript-project-diagnostics-state.ts"
+          }
+        },
+        "targetQueryKind": "typescript-diagnostics"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "diagnose"
+        ],
+        "kind": "follow-query",
+        "rationale": "Compare unified diagnostics with template diagnostics.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "template-diagnostics",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/typescript-project-diagnostics-state.ts"
+          }
+        },
+        "targetQueryKind": "template-diagnostics"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world"
+          ],
+          "sourceFacts": [
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 153,
+                "kind": "typescript-diagnostic",
+                "label": "c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/typescript-project-diagnostics/src/typescript-project-diagnostics-state.ts@150..153",
+                "path": "c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/typescript-project-diagnostics/src/typescript-project-diagnostics-state.ts",
+                "role": "line:4:character:39",
+                "start": 150
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 56,
+                "kind": "typescript-diagnostic",
+                "label": "c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/typescript-project-diagnostics/src/typescript-project-diagnostics-state.ts@49..56",
+                "path": "c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/typescript-project-diagnostics/src/typescript-project-diagnostics-state.ts",
+                "role": "line:1:character:11",
+                "start": 49
+              }
+            }
+          ],
+          "sourceRequirement": "exact-authored-span"
+        },
+        "intents": [
+          "diagnose",
+          "repair"
+        ],
+        "kind": "follow-query",
+        "rationale": "Inspect typescript-diagnostics rows referenced by returned diagnostics.",
+        "targetQuery": {
+          "kind": "typescript-diagnostics",
+          "page": {
+            "size": 200
+          }
+        },
+        "targetQueryKind": "typescript-diagnostics"
+      }
+    ],
+    "coverage": "complete",
+    "page": null,
+    "result": "answered",
+    "schemaVersion": "0.2",
+    "selection": "not-applicable",
+    "summary": "Returned 2 app diagnostic(s)."
+  },
   "outcome": "result",
   "presentation": {
     "complete": true,
@@ -162,14 +315,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
-              "sourceRole": null,
+              "sourceRole": "app-source",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "expression",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/typescript-project-diagnostics-state.ts",
@@ -230,14 +383,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
-              "sourceRole": null,
+              "sourceRole": "app-source",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "expression",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/typescript-project-diagnostics-state.ts",
@@ -301,14 +454,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
-          "sourceRole": null,
+          "sourceRole": "app-source",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "expression",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/typescript-project-diagnostics-state.ts",
@@ -356,14 +509,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
-          "sourceRole": null,
+          "sourceRole": "app-source",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "expression",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/typescript-project-diagnostics-state.ts",
@@ -388,10 +541,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "uri": "fixtures://pressure/typescript-project-diagnostics/src/typescript-project-diagnostics-state.ts"
       }
     ]
-  },
-  "suppressed": {
-    "diagnosticCount": 0,
-    "diagnostics": []
   },
   "surfaces": {
     "lsp": {
@@ -421,14 +570,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
-            "sourceRole": null,
+            "sourceRole": "app-source",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "expression",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/typescript-project-diagnostics-state.ts",
@@ -476,14 +625,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
-            "sourceRole": null,
+            "sourceRole": "app-source",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "expression",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/typescript-project-diagnostics-state.ts",
@@ -634,7 +783,145 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "fingerprint": "semantic-runtime:hit",
+  "answer": {
+    "analysisDepth": "binding-observation",
+    "continuations": [
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "orient",
+          "inspect"
+        ],
+        "kind": "follow-query",
+        "rationale": "Cluster detailed diagnostics back into a summary view.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "app-diagnostic-summary",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/typescript-related-information.ts"
+          }
+        },
+        "targetQueryKind": "app-diagnostic-summary"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "diagnose"
+        ],
+        "kind": "follow-query",
+        "rationale": "Compare unified diagnostics with ordinary TypeScript diagnostics.",
+        "targetQuery": {
+          "kind": "typescript-diagnostics",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/typescript-related-information.ts"
+          }
+        },
+        "targetQueryKind": "typescript-diagnostics"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "diagnose"
+        ],
+        "kind": "follow-query",
+        "rationale": "Compare unified diagnostics with template diagnostics.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "template-diagnostics",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/typescript-related-information.ts"
+          }
+        },
+        "targetQueryKind": "template-diagnostics"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world"
+          ],
+          "sourceFacts": [
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 98,
+                "kind": "typescript-diagnostic",
+                "label": "c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/typescript-project-diagnostics/src/typescript-related-information.ts@79..98",
+                "path": "c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/typescript-project-diagnostics/src/typescript-related-information.ts",
+                "role": "line:2:character:13",
+                "start": 79
+              }
+            }
+          ],
+          "sourceRequirement": "exact-authored-span"
+        },
+        "intents": [
+          "diagnose",
+          "repair"
+        ],
+        "kind": "follow-query",
+        "rationale": "Inspect typescript-diagnostics rows referenced by returned diagnostics.",
+        "targetQuery": {
+          "kind": "typescript-diagnostics",
+          "page": {
+            "size": 200
+          }
+        },
+        "targetQueryKind": "typescript-diagnostics"
+      }
+    ],
+    "coverage": "complete",
+    "page": null,
+    "result": "answered",
+    "schemaVersion": "0.2",
+    "selection": "not-applicable",
+    "summary": "Returned 1 app diagnostic(s)."
+  },
   "outcome": "result",
   "presentation": {
     "complete": true,
@@ -658,7 +945,21 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInput": null,
               "missingInputs": [],
               "phase": "semantic",
-              "relatedInformation": [],
+              "relatedInformation": [
+                {
+                  "code": "TS2728",
+                  "message": "'requiredName' is declared here.",
+                  "source": {
+                    "end": 57,
+                    "kind": "typescript-diagnostic",
+                    "label": "c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/typescript-project-diagnostics/src/diagnostic-contract.ts@45..57",
+                    "path": "c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/typescript-project-diagnostics/src/diagnostic-contract.ts",
+                    "role": "line:1:character:2",
+                    "start": 45
+                  },
+                  "sourceRole": "app-source"
+                }
+              ],
               "relatedQueryKind": "typescript-diagnostics",
               "repairAffordance": {
                 "actionKind": "inspect-type-surface",
@@ -668,14 +969,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
-              "sourceRole": null,
+              "sourceRole": "app-source",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "expression",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/typescript-related-information.ts",
@@ -743,7 +1044,21 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInput": null,
           "missingInputs": [],
           "phase": "semantic",
-          "relatedInformation": [],
+          "relatedInformation": [
+            {
+              "code": "TS2728",
+              "message": "'requiredName' is declared here.",
+              "source": {
+                "end": 57,
+                "kind": "typescript-diagnostic",
+                "label": "c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/typescript-project-diagnostics/src/diagnostic-contract.ts@45..57",
+                "path": "c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/typescript-project-diagnostics/src/diagnostic-contract.ts",
+                "role": "line:1:character:2",
+                "start": 45
+              },
+              "sourceRole": "app-source"
+            }
+          ],
           "relatedQueryKind": "typescript-diagnostics",
           "repairAffordance": {
             "actionKind": "inspect-type-surface",
@@ -753,14 +1068,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
-          "sourceRole": null,
+          "sourceRole": "app-source",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "expression",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/typescript-related-information.ts",
@@ -800,10 +1115,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       }
     ]
   },
-  "suppressed": {
-    "diagnosticCount": 0,
-    "diagnostics": []
-  },
   "surfaces": {
     "lsp": {
       "diagnosticCount": 1,
@@ -822,7 +1133,21 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInput": null,
             "missingInputs": [],
             "phase": "semantic",
-            "relatedInformation": [],
+            "relatedInformation": [
+              {
+                "code": "TS2728",
+                "message": "'requiredName' is declared here.",
+                "source": {
+                  "end": 57,
+                  "kind": "typescript-diagnostic",
+                  "label": "c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/typescript-project-diagnostics/src/diagnostic-contract.ts@45..57",
+                  "path": "c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/typescript-project-diagnostics/src/diagnostic-contract.ts",
+                  "role": "line:1:character:2",
+                  "start": 45
+                },
+                "sourceRole": "app-source"
+              }
+            ],
             "relatedQueryKind": "typescript-diagnostics",
             "repairAffordance": {
               "actionKind": "inspect-type-surface",
@@ -832,14 +1157,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
-            "sourceRole": null,
+            "sourceRole": "app-source",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "expression",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/typescript-related-information.ts",

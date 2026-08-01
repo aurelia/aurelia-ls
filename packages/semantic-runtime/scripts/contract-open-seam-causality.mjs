@@ -30,6 +30,8 @@ const rawRows = readAllRows(app, {
 const observerSetupRows = rawRows.filter((row) =>
   row.seamKindKey === 'binding.open-observer-setup'
 );
+const evidenceOnlyRow = rawRows.find((row) => row.pressureKind === 'evidence-only');
+assert.ok(evidenceOnlyRow, 'The fixture should retain inspectable evidence that pressured no materialization.');
 assert.equal(observerSetupRows.length, 2, 'Expected one root observer-setup seam per open controller setup.');
 assert.equal(
   new Set(observerSetupRows.map((row) => row.siteKey)).size,
@@ -49,6 +51,28 @@ for (const row of observerSetupRows) {
   assert.ok(row.reasonSources.every((reason) => sourceText(reason.source).includes('functionDependency')));
   assert.ok(row.impacts.every((impact) => impact.handles?.materializationHandle != null));
 }
+
+const affectedImpactKey = observerSetupRows[0].impacts[0].impactKey;
+assert.equal(
+  aotMaterializationDecision(evidenceOnlyRow, affectedImpactKey, false),
+  'proceed',
+  'Evidence-only seams never block an AOT transformation.',
+);
+assert.equal(
+  aotMaterializationDecision(observerSetupRows[0], 'unrelated-materialization', false),
+  'proceed',
+  'Product pressure is local to the cited materialization rather than a global seam severity.',
+);
+assert.equal(
+  aotMaterializationDecision(observerSetupRows[0], affectedImpactKey, true),
+  'runtime-fallback',
+  'An affected transformation should retain semantics through its declared runtime fallback.',
+);
+assert.equal(
+  aotMaterializationDecision(observerSetupRows[0], affectedImpactKey, false),
+  'blocked',
+  'An affected transformation blocks only when its product contract requires proof and has no honest fallback.',
+);
 
 const impactKindSets = observerSetupRows
   .map((row) => row.impacts.flatMap((impact) => impact.products.map((product) => product.productKindKey)).sort())
@@ -190,6 +214,11 @@ assert.deepEqual(
   ['open-without-product'],
   'A failed rendering attempt must remain distinguishable from evidence that pressured no materialization.',
 );
+assert.equal(
+  aotMaterializationDecision(missingRenderer, missingRenderer.impacts[0].impactKey, true),
+  'runtime-fallback',
+  'A failed materialization attempt remains fallback-eligible even when it produced no semantic product.',
+);
 
 assert.deepEqual(
   [
@@ -233,6 +262,14 @@ async function openFixtureApp(fixtureName) {
   return runtime.openApp({
     analysisDepth: 'binding-observation',
   });
+}
+
+function aotMaterializationDecision(row, materializationKey, runtimeFallbackAvailable) {
+  const affected = row.impacts.some((impact) => impact.impactKey === materializationKey);
+  if (!affected) {
+    return 'proceed';
+  }
+  return runtimeFallbackAvailable ? 'runtime-fallback' : 'blocked';
 }
 
 function readAllRows(appRuntime, query) {

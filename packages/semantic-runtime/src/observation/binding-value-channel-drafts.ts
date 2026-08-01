@@ -114,7 +114,13 @@ class RuntimeBindingValueChannelDraftFrame {
       return this.openMissingTargetAccess();
     }
     if (this.targetAccess.openReason != null) {
-      return this.openTargetAccess();
+      const resourceChannel = this.resourceValueChannelDraft(this.targetAccess);
+      return resourceChannel == null
+        ? this.openTargetAccess()
+        : {
+            ...resourceChannel,
+            openReason: this.targetAccess.openReason,
+          };
     }
     if (this.targetAccess.frameworkErrorCode != null) {
       return this.rejectedTargetAccess();
@@ -191,11 +197,15 @@ class RuntimeBindingValueChannelDraftFrame {
       case RuntimeBindingTargetAccessStrategy.CustomNodeObserver:
         return this.customNodeObserverDraft(targetAccess);
       default:
-        return this.frameworkCustomAttributeValueChannelDraft(targetAccess)
-          ?? this.routerResourceValueChannelDraft(targetAccess)
-          ?? this.templateControllerValueChannelDraft(targetAccess)
+        return this.resourceValueChannelDraft(targetAccess)
           ?? this.rawPropertyValueChannelDraft(targetAccess);
     }
+  }
+
+  private resourceValueChannelDraft(targetAccess: RuntimeBindingTargetAccess): RuntimeBindingValueChannelDraft | null {
+    return this.frameworkCustomAttributeValueChannelDraft(targetAccess)
+      ?? this.routerResourceValueChannelDraft(targetAccess)
+      ?? this.templateControllerValueChannelDraft(targetAccess);
   }
 
   private valueAttributeObserverDraft(targetAccess: RuntimeBindingTargetAccess): RuntimeBindingValueChannelDraft {

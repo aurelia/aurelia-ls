@@ -7,7 +7,7 @@
         "file": "src/template-overlay-bound-controller-app.html",
         "verdict": "correct",
         "reason": "Publishes zero diagnostics with matching LSP/custom empty results in the host template; parent-local converter and child-bound values do not leak false positives.",
-        "note": "NEW 2026-07-08. Diagnostics lane negative canary for parent-to-child bound-controller values, including a parent-local value converter before the child boundary. VERDICT 2026-07-08: correct. No diagnostics in the host template."
+        "note": "UPDATED 2026-08-01. The child bindable explicitly declares the `(OverlayAction) => boolean` contract its template invokes, so this remains a clean bound-controller/converter projection control rather than relying on an accidentally inferred zero-argument function."
       },
       {
         "id": "overlay-bound-controller-child-template",

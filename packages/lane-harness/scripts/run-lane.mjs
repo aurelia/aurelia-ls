@@ -17,7 +17,7 @@ const OPEN_SETTLE_TIMEOUT_MS = 5000;
 const DIAGNOSTICS_TIMEOUT_MS = 30000;
 const SUPPORTED_LANES = new Set(["rename", "references", "hover", "completions", "definition", "documentHighlight", "diagnostics", "codeAction"]);
 
-// Keep in sync with COMPLETION_GAP_MARKER_LABEL in packages/language-server/src/mapping/lsp-types.ts.
+// Regression guard: analysis qualifications must never become insertable completion candidates.
 const COMPLETION_GAP_MARKER_LABEL = "Aurelia analysis incomplete";
 
 const COMPLETION_ITEM_KIND_NAMES = {
@@ -684,6 +684,7 @@ async function runReferencesProbe(client, fixtureRoot, probe, readFixtureText) {
   const absoluteFile = resolveFixturePath(fixtureRoot, relativeFile);
   const uri = pathToFileURL(absoluteFile).href;
 
+  const referencesNotificationCursor = client.notificationCursor();
   const referencesResponse = await client.request("textDocument/references", {
     textDocument: { uri },
     position: anchor.position,
@@ -691,6 +692,10 @@ async function runReferencesProbe(client, fixtureRoot, probe, readFixtureText) {
       includeDeclaration: true,
     },
   });
+  const referencesNotifications = client.notificationsSince(
+    referencesNotificationCursor,
+    "window/showMessage",
+  );
   const locations = referencesResponse.error
     ? []
     : await summarizeLocations(referencesResponse.result, fixtureRoot, readFixtureText);
@@ -701,6 +706,7 @@ async function runReferencesProbe(client, fixtureRoot, probe, readFixtureText) {
     relativeFile,
     anchor,
     referencesResponse,
+    referencesNotifications,
     locations,
   };
 }
@@ -1065,11 +1071,10 @@ async function summarizeCustomDiagnosticsResponse(response, fixtureRoot, readFix
   }
 
   const raw = Array.isArray(diagnostics.raw) ? diagnostics.raw : [];
-  const suppressed = Array.isArray(diagnostics.suppressed) ? diagnostics.suppressed : [];
   return {
     outcome: "result",
     uri: normalizeSnapshotString(response.result.uri ?? ""),
-    fingerprint: response.result.fingerprint ?? null,
+    answer: summarizeCustomDiagnosticsAnswer(response.result.answer),
     surfaces,
     raw: {
       diagnosticCount: raw.length,
@@ -1078,13 +1083,23 @@ async function summarizeCustomDiagnosticsResponse(response, fixtureRoot, readFix
       )),
     },
     presentation: await summarizeCustomDiagnosticsPresentation(diagnostics.presentation, fixtureRoot, readFixtureText),
-    suppressed: {
-      diagnosticCount: suppressed.length,
-      diagnostics: await Promise.all(suppressed.map((item) =>
-        summarizeCustomDiagnosticsItem(item, fixtureRoot, readFixtureText)
-      )),
-    },
   };
+}
+
+function summarizeCustomDiagnosticsAnswer(answer) {
+  if (answer == null || typeof answer !== "object" || Array.isArray(answer)) {
+    return null;
+  }
+  return normalizeSnapshotValue({
+    schemaVersion: answer.schemaVersion ?? null,
+    result: answer.result ?? null,
+    selection: answer.selection ?? null,
+    coverage: answer.coverage ?? null,
+    summary: answer.summary ?? null,
+    page: answer.page ?? null,
+    analysisDepth: answer.analysisDepth ?? null,
+    continuations: Array.isArray(answer.continuations) ? answer.continuations : [],
+  });
 }
 
 async function summarizeCustomDiagnosticsPresentation(presentation, fixtureRoot, readFixtureText) {
@@ -1900,6 +1915,10 @@ function renderLaneSnapshotSections(lines, result) {
       lines.push("### references");
       lines.push("");
       lines.push(fencedJson(summarizeRpcResponse(result.referencesResponse)));
+      lines.push("");
+      lines.push("### Notifications");
+      lines.push("");
+      lines.push(fencedJson(summarizeNotifications(result.referencesNotifications)));
       lines.push("");
       lines.push("### Resolved locations");
       lines.push("");

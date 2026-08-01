@@ -47,12 +47,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "sourceRole": "app-source",
         "subject": {
           "source": {
-            "end": 486,
+            "end": 593,
             "kind": "source-span-address",
-            "label": "src/main.ts@467..486",
+            "label": "src/main.ts@564..593",
             "path": "src/main.ts",
             "role": "primary",
-            "start": 467
+            "start": 564
           },
           "span": null,
           "subjectKind": "dependency-cycle",
@@ -66,18 +66,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "schema": "diagnostics-taxonomy/1"
         }
       },
-      "message": "Aurelia singleton resolver activation would re-enter \"IFoo\" before construction completes (IFoo->IFoo, IFoo->IFoo).",
+      "message": "Aurelia singleton resolver activation would re-enter \"IFoo\" before construction completes (IFoo->IFoo).",
       "range": {
         "end": {
-          "character": 19,
-          "line": 16
+          "character": 29,
+          "line": 17
         },
         "start": {
           "character": 0,
-          "line": 16
+          "line": 17
         }
       },
-      "rangeText": "container.get(IFoo)",
+      "rangeText": "reexportedContainer.get(IFoo)",
       "relatedInformation": [],
       "severity": "error",
       "source": "aurelia"
@@ -92,14 +92,162 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "fingerprint": "semantic-runtime:hit",
+  "answer": {
+    "analysisDepth": "binding-observation",
+    "continuations": [
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "orient",
+          "inspect"
+        ],
+        "kind": "follow-query",
+        "rationale": "Cluster detailed diagnostics back into a summary view.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "app-diagnostic-summary",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/main.ts"
+          }
+        },
+        "targetQueryKind": "app-diagnostic-summary"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "diagnose"
+        ],
+        "kind": "follow-query",
+        "rationale": "Compare unified diagnostics with ordinary TypeScript diagnostics.",
+        "targetQuery": {
+          "kind": "typescript-diagnostics",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/main.ts"
+          }
+        },
+        "targetQueryKind": "typescript-diagnostics"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "diagnose"
+        ],
+        "kind": "follow-query",
+        "rationale": "Compare unified diagnostics with template diagnostics.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "template-diagnostics",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/main.ts"
+          }
+        },
+        "targetQueryKind": "template-diagnostics"
+      },
+      {
+        "blockers": [],
+        "cost": "app-world",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world"
+          ],
+          "sourceFacts": [
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/main.ts",
+                  "path": "src/main.ts",
+                  "sourceFileRole": "app-source",
+                  "sourceWorkspaceKey": "di-cyclic-dependency"
+                },
+                "end": 593,
+                "kind": "source-span-address",
+                "label": "src/main.ts@564..593",
+                "path": "src/main.ts",
+                "role": "primary",
+                "sourceFileRole": "app-source",
+                "sourceWorkspaceKey": "di-cyclic-dependency",
+                "start": 564
+              }
+            }
+          ],
+          "sourceRequirement": "exact-authored-span"
+        },
+        "intents": [
+          "diagnose",
+          "repair"
+        ],
+        "kind": "follow-query",
+        "rationale": "Inspect di-issues rows referenced by returned diagnostics.",
+        "targetQuery": {
+          "kind": "di-issues",
+          "page": {
+            "size": 200
+          }
+        },
+        "targetQueryKind": "di-issues"
+      }
+    ],
+    "coverage": "complete",
+    "page": null,
+    "result": "answered",
+    "schemaVersion": "0.2",
+    "selection": "not-applicable",
+    "summary": "Returned 1 app diagnostic(s)."
+  },
   "outcome": "result",
   "presentation": {
     "complete": true,
     "contextualCount": 0,
     "groups": [
       {
-        "groupKey": "row:diagnostic:0:di:cyclic-dependency:framework-error-code:AUR0003:src/main.ts:467:486:no-missing-input",
+        "groupKey": "row:diagnostic:0:di:cyclic-dependency:framework-error-code:AUR0003:src/main.ts:564:593:no-missing-input",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -126,26 +274,26 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
-              "sourceRole": null,
+              "sourceRole": "app-source",
               "subject": {
                 "source": {
-                  "end": 486,
+                  "end": 593,
                   "kind": "source-span-address",
-                  "label": "src/main.ts@467..486",
+                  "label": "src/main.ts@564..593",
                   "path": "src/main.ts",
                   "role": "primary",
-                  "start": 467
+                  "start": 564
                 },
                 "span": null,
                 "subjectKind": "dependency-cycle",
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "project",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/main.ts",
@@ -154,24 +302,24 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               {
                 "code": "AUR0003",
                 "kind": "cyclic-dependency",
-                "message": "Aurelia singleton resolver activation would re-enter \"IFoo\" before construction completes (IFoo->IFoo, IFoo->IFoo)."
+                "message": "Aurelia singleton resolver activation would re-enter \"IFoo\" before construction completes (IFoo->IFoo)."
               }
             ],
-            "message": "Aurelia singleton resolver activation would re-enter \"IFoo\" before construction completes (IFoo->IFoo, IFoo->IFoo).",
+            "message": "Aurelia singleton resolver activation would re-enter \"IFoo\" before construction completes (IFoo->IFoo).",
             "related": [],
             "severity": "error",
             "source": "semantic-runtime:di",
             "span": {
-              "end": 486,
-              "start": 467
+              "end": 593,
+              "start": 564
             },
-            "spanText": "container.get(IFoo)",
+            "spanText": "reexportedContainer.get(IFoo)",
             "status": "primary",
             "uri": "fixtures://pressure/di-cyclic-dependency/src/main.ts"
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:0:di:cyclic-dependency:framework-error-code:AUR0003:src/main.ts:467:486:no-missing-input"
+          "rowId": "diagnostic:0:di:cyclic-dependency:framework-error-code:AUR0003:src/main.ts:564:593:no-missing-input"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -179,8 +327,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": {
           "source": null,
           "span": {
-            "end": 486,
-            "start": 467
+            "end": 593,
+            "start": 564
           },
           "subjectKind": "dependency-cycle",
           "uri": "file:///c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/di-cyclic-dependency/src/main.ts"
@@ -217,26 +365,26 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
-          "sourceRole": null,
+          "sourceRole": "app-source",
           "subject": {
             "source": {
-              "end": 486,
+              "end": 593,
               "kind": "source-span-address",
-              "label": "src/main.ts@467..486",
+              "label": "src/main.ts@564..593",
               "path": "src/main.ts",
               "role": "primary",
-              "start": 467
+              "start": 564
             },
             "span": null,
             "subjectKind": "dependency-cycle",
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "project",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/main.ts",
@@ -245,26 +393,22 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           {
             "code": "AUR0003",
             "kind": "cyclic-dependency",
-            "message": "Aurelia singleton resolver activation would re-enter \"IFoo\" before construction completes (IFoo->IFoo, IFoo->IFoo)."
+            "message": "Aurelia singleton resolver activation would re-enter \"IFoo\" before construction completes (IFoo->IFoo)."
           }
         ],
-        "message": "Aurelia singleton resolver activation would re-enter \"IFoo\" before construction completes (IFoo->IFoo, IFoo->IFoo).",
+        "message": "Aurelia singleton resolver activation would re-enter \"IFoo\" before construction completes (IFoo->IFoo).",
         "related": [],
         "severity": "error",
         "source": "semantic-runtime:di",
         "span": {
-          "end": 486,
-          "start": 467
+          "end": 593,
+          "start": 564
         },
-        "spanText": "container.get(IFoo)",
+        "spanText": "reexportedContainer.get(IFoo)",
         "status": "canonical",
         "uri": "fixtures://pressure/di-cyclic-dependency/src/main.ts"
       }
     ]
-  },
-  "suppressed": {
-    "diagnosticCount": 0,
-    "diagnostics": []
   },
   "surfaces": {
     "lsp": {
@@ -294,26 +438,26 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
-            "sourceRole": null,
+            "sourceRole": "app-source",
             "subject": {
               "source": {
-                "end": 486,
+                "end": 593,
                 "kind": "source-span-address",
-                "label": "src/main.ts@467..486",
+                "label": "src/main.ts@564..593",
                 "path": "src/main.ts",
                 "role": "primary",
-                "start": 467
+                "start": 564
               },
               "span": null,
               "subjectKind": "dependency-cycle",
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "project",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/main.ts",
@@ -322,18 +466,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             {
               "code": "AUR0003",
               "kind": "cyclic-dependency",
-              "message": "Aurelia singleton resolver activation would re-enter \"IFoo\" before construction completes (IFoo->IFoo, IFoo->IFoo)."
+              "message": "Aurelia singleton resolver activation would re-enter \"IFoo\" before construction completes (IFoo->IFoo)."
             }
           ],
-          "message": "Aurelia singleton resolver activation would re-enter \"IFoo\" before construction completes (IFoo->IFoo, IFoo->IFoo).",
+          "message": "Aurelia singleton resolver activation would re-enter \"IFoo\" before construction completes (IFoo->IFoo).",
           "related": [],
           "severity": "error",
           "source": "semantic-runtime:di",
           "span": {
-            "end": 486,
-            "start": 467
+            "end": 593,
+            "start": 564
           },
-          "spanText": "container.get(IFoo)",
+          "spanText": "reexportedContainer.get(IFoo)",
           "status": "primary",
           "uri": "fixtures://pressure/di-cyclic-dependency/src/main.ts"
         }

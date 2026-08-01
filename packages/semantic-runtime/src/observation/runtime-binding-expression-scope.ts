@@ -19,7 +19,7 @@ import type { CheckerExpressionTypeWorld } from '../type-system/expression-type-
 import { BuiltInBindingBehaviorName } from '../resources/built-in-resources.js';
 import type { RuntimeExpressionResourcePlan } from '../template/runtime-expression-resource-plan.js';
 import type { TemplateResourceScope } from '../template/compiler-world.js';
-import { RuntimeOperationReachability } from '../runtime-expression/runtime-operation.js';
+import { runtimeOperationMayBeReached } from '../runtime-expression/runtime-operation.js';
 
 export class RuntimeBindingExpressionScopeProjection {
   constructor(
@@ -267,8 +267,8 @@ export class RuntimeBindingExpressionScopeProjector implements RuntimeBindingExp
       unwrapped,
       bindingProductHandle,
     );
-    const reached = planEntry != null
-      && planEntry.bindReachability === RuntimeOperationReachability.Reached
+    const admitted = planEntry != null
+      && runtimeOperationMayBeReached(planEntry.bindReachability)
       && planEntry.issue == null;
     if (planEntry == null && unwrapped.name.name === STATE_BINDING_BEHAVIOR_NAME) {
       return new RuntimeBindingExpressionScopeProjection(
@@ -279,7 +279,7 @@ export class RuntimeBindingExpressionScopeProjector implements RuntimeBindingExp
     }
     if (
       planEntry?.builtInResource?.name === BuiltInBindingBehaviorName.State
-      && !reached
+      && !admitted
     ) {
       return new RuntimeBindingExpressionScopeProjection(
         unwrapped.expression,
@@ -287,7 +287,7 @@ export class RuntimeBindingExpressionScopeProjector implements RuntimeBindingExp
         'The state binding behavior did not reach its source-scope handoff for this rendered binding.',
       );
     }
-    const behaviorScope = reached && planEntry.builtInResource?.name === BuiltInBindingBehaviorName.State
+    const behaviorScope = admitted && planEntry.builtInResource?.name === BuiltInBindingBehaviorName.State
       ? this.projectStateBindingBehaviorScope(
           unwrapped,
           scope,
@@ -296,7 +296,7 @@ export class RuntimeBindingExpressionScopeProjector implements RuntimeBindingExp
           activeContainer,
         )
       : new RuntimeBindingExpressionScopeProjection(unwrapped.expression, scope, null);
-    const projectedConverter = reached
+    const projectedConverter = admitted
       ? this.expressionResourcePlan.readProjectedConverterForBindingBehavior(
           unwrapped,
           bindingProductHandle,

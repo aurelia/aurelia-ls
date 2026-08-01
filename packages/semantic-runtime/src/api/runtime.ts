@@ -2305,21 +2305,24 @@ function trimDisplayLine(line: string): string {
 
 function openSeamsDisplayText(
   rows: readonly SemanticOpenSeamRow[],
-  totalRows: number,
+  allRows: readonly SemanticOpenSeamRow[],
   filter: SemanticOpenSeamQueryFilter = {},
 ): string {
+  const totalRows = allRows.length;
   const filterText = semanticOpenSeamFilterDisplayText(filter);
   const lines = [`Open seams: returned ${rows.length} of ${totalRows} row(s)${filterText}.`];
   if (totalRows === 0) {
     lines.push('Pressure: no open semantic seams in this app emission.');
   } else {
-    lines.push(`Seam kinds: ${runtimeCountMapDisplay(runtimeCountValues(rows, (row) => row.seamKindKey))}.`);
-    lines.push(`Boundary kinds: ${runtimeCountMapDisplay(runtimeCountValuesFromMany(rows, (row) => row.boundaryKinds))}.`);
-    lines.push(`Pressure kinds: ${runtimeCountMapDisplay(runtimeCountValues(rows, (row) => row.pressureKind))}.`);
-    lines.push(`Product impact: ${rows.reduce((sum, row) => sum + row.affectedMaterializationCount, 0)} materialization reference(s), ${rows.reduce((sum, row) => sum + row.affectedProductCount, 0)} product reference(s).`);
-    lines.push(`Source roles: ${runtimeCountMapDisplay(runtimeCountValues(rows, (row) => row.sourceRole ?? 'unknown'))}.`);
-    lines.push(`Reason kinds: ${runtimeListDisplay(runtimeUniqueValuesFromMany(rows, (row) => row.reasonKinds, RUNTIME_DISPLAY_LIST_LIMIT))}.`);
-    lines.push(`Samples: ${semanticOpenSeamRowSampleDisplays(rows).join(' | ')}.`);
+    lines.push(`Seam kinds: ${runtimeCountMapDisplay(runtimeCountValues(allRows, (row) => row.seamKindKey))}.`);
+    lines.push(`Boundary kinds: ${runtimeCountMapDisplay(runtimeCountValuesFromMany(allRows, (row) => row.boundaryKinds))}.`);
+    lines.push(`Pressure kinds: ${runtimeCountMapDisplay(runtimeCountValues(allRows, (row) => row.pressureKind))}.`);
+    lines.push(`Product impact: ${allRows.reduce((sum, row) => sum + row.affectedMaterializationCount, 0)} materialization reference(s), ${allRows.reduce((sum, row) => sum + row.affectedProductCount, 0)} product reference(s).`);
+    lines.push(`Source roles: ${runtimeCountMapDisplay(runtimeCountValues(allRows, (row) => row.sourceRole ?? 'unknown'))}.`);
+    lines.push(`Reason kinds: ${runtimeListDisplay(runtimeUniqueValuesFromMany(allRows, (row) => row.reasonKinds, RUNTIME_DISPLAY_LIST_LIMIT))}.`);
+    lines.push(rows.length === 0
+      ? 'Samples: no rows returned on this page.'
+      : `Samples: ${semanticOpenSeamRowSampleDisplays(rows).join(' | ')}.`);
     lines.push('Next: add sourceFile, sourceRole, openSeamKindKey, openSeamReasonKind, or detail=handles when an exact runtime boundary needs follow-up.');
   }
   return lines.join('\n');
@@ -2347,6 +2350,7 @@ function semanticOpenSeamRowSampleDisplays(
 
 function openSeamSummaryDisplayText(
   rows: readonly SemanticOpenSeamSummaryRow[],
+  allRows: readonly SemanticOpenSeamSummaryRow[],
   totalOpenSeamRows: number,
   totalOpenSeamSites: number,
   filter: SemanticOpenSeamQueryFilter = {},
@@ -2356,13 +2360,15 @@ function openSeamSummaryDisplayText(
   if (totalOpenSeamRows === 0) {
     lines.push('Pressure: no open semantic seams in this app emission.');
   } else {
-    lines.push(`Boundary kinds: ${runtimeCountMapDisplay(runtimeCountKeyRows(rows.flatMap((row) => row.boundaryCounts)))}.`);
-    lines.push(`Pressure kinds: ${runtimeCountMapDisplay(runtimeCountKeyRows(rows.flatMap((row) => row.pressureCounts)))}.`);
-    lines.push(`Source roles: ${runtimeCountMapDisplay(runtimeCountSemanticRoleRows(rows.flatMap((row) => row.sourceRoles)))}.`);
-    lines.push(`Clusters: ${rows.slice(0, RUNTIME_DISPLAY_SAMPLE_LIMIT).map((row) =>
-      `${row.seamKindKey} raw=${row.count} sites=${row.uniqueSiteCount} materializations=${row.affectedMaterializationCount} products=${row.affectedProductCount} (${runtimeListDisplay(row.boundaryKinds)}; ${runtimeListDisplay(row.pressureKinds)}; ${runtimeListDisplay(row.reasonKinds)}) at ${runtimeListDisplay(row.sampleSourceSites.map(semanticOpenSeamSummarySampleSourceDisplay))}: ${trimDisplayLine(row.sampleSummary)}`
-    ).join(' | ')}.`);
-    lines.push(`Source-file coverage: ${rows.reduce((sum, row) => sum + row.sourceFileCount, 0)} cluster source-file reference(s).`);
+    lines.push(`Boundary kinds: ${runtimeCountMapDisplay(runtimeCountKeyRows(allRows.flatMap((row) => row.boundaryCounts)))}.`);
+    lines.push(`Pressure kinds: ${runtimeCountMapDisplay(runtimeCountKeyRows(allRows.flatMap((row) => row.pressureCounts)))}.`);
+    lines.push(`Source roles: ${runtimeCountMapDisplay(runtimeCountSemanticRoleRows(allRows.flatMap((row) => row.sourceRoles)))}.`);
+    lines.push(rows.length === 0
+      ? 'Clusters: no rows returned on this page.'
+      : `Clusters: ${rows.slice(0, RUNTIME_DISPLAY_SAMPLE_LIMIT).map((row) =>
+        `${row.seamKindKey} raw=${row.count} sites=${row.uniqueSiteCount} materializations=${row.affectedMaterializationCount} products=${row.affectedProductCount} (${runtimeListDisplay(row.boundaryKinds)}; ${runtimeListDisplay(row.pressureKinds)}; ${runtimeListDisplay(row.reasonKinds)}) at ${runtimeListDisplay(row.sampleSourceSites.map(semanticOpenSeamSummarySampleSourceDisplay))}: ${trimDisplayLine(row.sampleSummary)}`
+      ).join(' | ')}.`);
+    lines.push(`Source-file coverage: ${allRows.reduce((sum, row) => sum + row.sourceFileCount, 0)} cluster source-file reference(s).`);
     lines.push('Next: page raw open-seams with the selected sourceFile/sourceRole/openSeamKindKey/openSeamReasonKind filter to inspect exact occurrences.');
   }
   return lines.join('\n');
@@ -2370,6 +2376,7 @@ function openSeamSummaryDisplayText(
 
 function openSeamSitesDisplayText(
   rows: readonly SemanticOpenSeamSiteRow[],
+  allRows: readonly SemanticOpenSeamSiteRow[],
   totalOpenSeamRows: number,
   totalOpenSeamSites: number,
   filter: SemanticOpenSeamQueryFilter = {},
@@ -2379,16 +2386,18 @@ function openSeamSitesDisplayText(
   if (totalOpenSeamRows === 0) {
     lines.push('Pressure: no open semantic seams in this app emission.');
   } else {
-    lines.push(`Seam kinds: ${runtimeCountMapDisplay(runtimeCountValuesFromMany(rows, (row) => row.seamKindKeys))}.`);
-    lines.push(`Boundary kinds: ${runtimeCountMapDisplay(runtimeCountKeyRows(rows.flatMap((row) => row.boundaryCounts)))}.`);
-    lines.push(`Pressure kinds: ${runtimeCountMapDisplay(runtimeCountKeyRows(rows.flatMap((row) => row.pressureCounts)))}.`);
-    lines.push(`Source roles: ${runtimeCountMapDisplay(runtimeCountValues(rows, (row) => row.sourceRole ?? 'unknown'))}.`);
-    lines.push(`Application roles: ${runtimeCountMapDisplay(runtimeCountValuesFromMany(rows, (row) => row.applicationFileRoles))}.`);
-    lines.push(`Static evaluation origins: ${runtimeCountMapDisplay(runtimeCountValuesFromMany(rows, openSeamStaticEvaluationOriginKinds))}.`);
-    lines.push(`Reason kinds: ${runtimeCountMapDisplay(runtimeCountKeyRows(rows.flatMap((row) => row.reasonCounts)))}.`);
-    lines.push(`Sites: ${rows.slice(0, RUNTIME_DISPLAY_SAMPLE_LIMIT).map((row) =>
-      `${runtimeListDisplay(row.seamKindKeys)} raw=${row.rawRowCount} variants=${row.variantCount} materializations=${row.affectedMaterializationCount} products=${row.affectedProductCount} (${runtimeListDisplay(row.boundaryKinds)}; ${runtimeListDisplay(row.pressureKinds)}; ${runtimeListDisplay(row.reasonKinds)}; sourceRole=${row.sourceRole ?? 'unknown'}; appRoles=${runtimeListDisplay(row.applicationFileRoles)}; evalOrigins=${runtimeListDisplay(openSeamStaticEvaluationOriginKinds(row))}) at ${semanticOpenSeamSiteSourceDisplay(row)}: ${trimDisplayLine(row.sampleSummary)}`
-    ).join(' | ')}.`);
+    lines.push(`Seam kinds: ${runtimeCountMapDisplay(runtimeCountValuesFromMany(allRows, (row) => row.seamKindKeys))}.`);
+    lines.push(`Boundary kinds: ${runtimeCountMapDisplay(runtimeCountKeyRows(allRows.flatMap((row) => row.boundaryCounts)))}.`);
+    lines.push(`Pressure kinds: ${runtimeCountMapDisplay(runtimeCountKeyRows(allRows.flatMap((row) => row.pressureCounts)))}.`);
+    lines.push(`Source roles: ${runtimeCountMapDisplay(runtimeCountValues(allRows, (row) => row.sourceRole ?? 'unknown'))}.`);
+    lines.push(`Application roles: ${runtimeCountMapDisplay(runtimeCountValuesFromMany(allRows, (row) => row.applicationFileRoles))}.`);
+    lines.push(`Static evaluation origins: ${runtimeCountMapDisplay(runtimeCountValuesFromMany(allRows, openSeamStaticEvaluationOriginKinds))}.`);
+    lines.push(`Reason kinds: ${runtimeCountMapDisplay(runtimeCountKeyRows(allRows.flatMap((row) => row.reasonCounts)))}.`);
+    lines.push(rows.length === 0
+      ? 'Sites: no rows returned on this page.'
+      : `Sites: ${rows.slice(0, RUNTIME_DISPLAY_SAMPLE_LIMIT).map((row) =>
+        `${runtimeListDisplay(row.seamKindKeys)} raw=${row.rawRowCount} variants=${row.variantCount} materializations=${row.affectedMaterializationCount} products=${row.affectedProductCount} (${runtimeListDisplay(row.boundaryKinds)}; ${runtimeListDisplay(row.pressureKinds)}; ${runtimeListDisplay(row.reasonKinds)}; sourceRole=${row.sourceRole ?? 'unknown'}; appRoles=${runtimeListDisplay(row.applicationFileRoles)}; evalOrigins=${runtimeListDisplay(openSeamStaticEvaluationOriginKinds(row))}) at ${semanticOpenSeamSiteSourceDisplay(row)}: ${trimDisplayLine(row.sampleSummary)}`
+      ).join(' | ')}.`);
     lines.push('Next: page raw open-seams with the selected sourceFile/sourceRole/openSeamKindKey/openSeamReasonKind when one site needs derivation-level inspection.');
   }
   return lines.join('\n');
@@ -3394,7 +3403,7 @@ export class SemanticApp {
       SemanticRuntimeAnswerResult.Answered,
       `Returned ${paged.rows.length} of ${rows.length} open semantic seam(s).`,
       {
-        displayText: openSeamsDisplayText(paged.rows, rows.length, filter),
+        displayText: openSeamsDisplayText(paged.rows, rows, filter),
         rows: paged.rows,
       },
       { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
@@ -3435,7 +3444,7 @@ export class SemanticApp {
       {
         totalOpenSeamRows: seamFacts.length,
         totalOpenSeamSites: siteRows.length,
-        displayText: openSeamSummaryDisplayText(paged.rows, seamFacts.length, siteRows.length, filter),
+        displayText: openSeamSummaryDisplayText(paged.rows, rows, seamFacts.length, siteRows.length, filter),
         rows: paged.rows,
       },
       { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
@@ -3474,7 +3483,7 @@ export class SemanticApp {
       {
         totalOpenSeamRows: seamFacts.length,
         totalOpenSeamSites: rows.length,
-        displayText: openSeamSitesDisplayText(paged.rows, seamFacts.length, rows.length, filter),
+        displayText: openSeamSitesDisplayText(paged.rows, rows, seamFacts.length, rows.length, filter),
         rows: paged.rows,
       },
       { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },

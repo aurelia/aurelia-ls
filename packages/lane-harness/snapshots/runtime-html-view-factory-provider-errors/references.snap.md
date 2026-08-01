@@ -61,6 +61,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 }
 ```
 
+### Notifications
+
+```json
+{
+  "notificationCount": 0,
+  "notifications": []
+}
+```
+
 ### Resolved locations
 
 ```json

@@ -37,7 +37,6 @@ import { handleInlayHints } from "./inlay-hints.js";
 import { handleCodeLens } from "./code-lens.js";
 import { canonicalDocumentUri } from "../utils/document-uri.js";
 import {
-  createCompletionGapMarker,
   mapSemanticRuntimeTemplateCodeActions,
   mapSemanticRuntimeUnresolvedTemplateCodeActions,
   mapSemanticRuntimeTemplateDefinition,
@@ -97,6 +96,11 @@ export async function handleCompletion(
       params.position,
       guard,
     );
+    if (response.coverage !== "complete" || response.value.missingInputs.length > 0) {
+      ctx.logger.info(
+        `[completion] semantic coverage is ${response.coverage}; missing inputs: ${response.value.missingInputs.join(", ") || "none"}`,
+      );
+    }
     return mapSemanticRuntimeTemplateCompletions(response);
   } catch (error) {
     if (logIfSemanticRuntimeRequestAborted(ctx, "completion", error, params.textDocument.uri)) {
@@ -104,7 +108,7 @@ export async function handleCompletion(
     }
     const response = degradationFromError("completion", error);
     logDegradation(ctx, "completion", response, params.textDocument.uri);
-    return createCompletionGapMarker([]);
+    return { isIncomplete: false, items: [] };
   }
 }
 
@@ -218,10 +222,26 @@ export async function handleReferences(
       params.context.includeDeclaration,
       guard,
     );
-    return mapSemanticRuntimeTemplateReferences(response, lookupText, {
+    const mapping = mapSemanticRuntimeTemplateReferences(response, lookupText, {
       workspaceRoot: ctx.workspaceRoot,
       originDocument: doc,
+      scope: "workspace",
     });
+    if (mapping.failures.length > 0) {
+      ctx.logger.warn(`[references] omitted source-backed rows: ${mapping.failures.join(" ")}`);
+    }
+    const candidateCount = response.value.candidateRows.length;
+    if (candidateCount > 0 || mapping.failures.length > 0) {
+      await ctx.connection.sendNotification("window/showMessage", {
+        type: mapping.failures.length > 0 ? MessageType.Warning : MessageType.Info,
+        message: referenceCoverageMessage(
+          mapping.value?.length ?? 0,
+          candidateCount,
+          mapping.failures.length,
+        ),
+      });
+    }
+    return mapping.value;
   } catch (error) {
     if (logIfSemanticRuntimeRequestAborted(ctx, "references", error, params.textDocument.uri)) {
       return null;
@@ -253,10 +273,15 @@ export async function handleDocumentHighlight(
       true,
       guard,
     );
-    const locations = mapSemanticRuntimeTemplateReferences(response, lookupText, {
+    const mapping = mapSemanticRuntimeTemplateReferences(response, lookupText, {
       workspaceRoot: ctx.workspaceRoot,
       originDocument: doc,
+      scope: "origin-document",
     });
+    if (mapping.failures.length > 0) {
+      ctx.logger.warn(`[documentHighlight] omitted source-backed rows: ${mapping.failures.join(" ")}`);
+    }
+    const locations = mapping.value;
     if (!locations) return null;
 
     const originUri = canonicalDocumentUri(doc.uri).uri;
@@ -366,6 +391,25 @@ function candidateRenameMessage(verifiedEditCount: number, candidateCount: numbe
   const editNoun = verifiedEditCount === 1 ? "edit" : "edits";
   const candidateNoun = candidateCount === 1 ? "usage" : "usages";
   return `Aurelia rename prepared ${verifiedEditCount} verified ${editNoun}; ${candidateCount} same-name ${candidateNoun} could not be verified and were left unchanged.`;
+}
+
+function referenceCoverageMessage(
+  verifiedLocationCount: number,
+  candidateCount: number,
+  mappingFailureCount: number,
+): string {
+  const qualifications: string[] = [];
+  if (candidateCount > 0) {
+    qualifications.push(
+      `${candidateCount} same-name ${candidateCount === 1 ? "usage could" : "usages could"} not be verified`,
+    );
+  }
+  if (mappingFailureCount > 0) {
+    qualifications.push(
+      `${mappingFailureCount} source-backed ${mappingFailureCount === 1 ? "reference could" : "references could"} not be mapped`,
+    );
+  }
+  return `Aurelia found ${verifiedLocationCount} verified ${verifiedLocationCount === 1 ? "reference" : "references"}; ${qualifications.join("; ")}.`;
 }
 
 // ============================================================================

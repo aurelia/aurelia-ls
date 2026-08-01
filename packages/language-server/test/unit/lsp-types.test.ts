@@ -4,9 +4,6 @@ import { TextDocument } from "vscode-languageserver-textdocument";
 import {
   AURELIA_LSP_DIAGNOSTIC_NAMESPACE_KEY,
   AURELIA_LSP_DIAGNOSTIC_TAXONOMY_SCHEMA,
-  COMPLETION_GAP_MARKER_DETAIL,
-  COMPLETION_GAP_MARKER_LABEL,
-  createCompletionGapMarker,
   canonicalDocumentUri,
   guessLanguage,
   mapSemanticRuntimeAppDiagnostics,
@@ -14,6 +11,7 @@ import {
   mapSemanticRuntimeTemplateDefinition,
   mapSemanticRuntimeTemplateHover,
   mapSemanticRuntimeTemplateCompletions,
+  mapSemanticRuntimeTemplateReferences,
   mapSemanticRuntimeTemplateRenameEdit,
   spanToRange,
   toLspUri,
@@ -122,6 +120,11 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
                 subjectName: "beta",
                 source: null,
               },
+              diagnosticIdentityHandle: 2,
+              diagnosticRelations: [{
+                relationKind: "same-operation-evidence",
+                relatedDiagnosticIdentityHandle: 5,
+              }],
               relatedInformation: [
                 {
                   relationKind: "subject-declaration",
@@ -157,14 +160,15 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
       doc,
     );
 
-    expect(mapped).toHaveLength(1);
-    expect(mapped[0]?.range).toEqual({
+    expect(mapped.failures).toEqual([]);
+    expect(mapped.value).toHaveLength(1);
+    expect(mapped.value[0]?.range).toEqual({
       start: { line: 1, character: 0 },
       end: { line: 1, character: 4 },
     });
-    expect(mapped[0]?.source).toBe("aurelia");
-    expect(mapped[0]?.code).toBe("missing-expression-member");
-    expect(mapped[0]?.data).toMatchObject({
+    expect(mapped.value[0]?.source).toBe("aurelia");
+    expect(mapped.value[0]?.code).toBe("missing-expression-member");
+    expect(mapped.value[0]?.data).toMatchObject({
       semanticRuntime: {
         queryKind: "app-diagnostics",
         diagnosticDomain: "template",
@@ -178,10 +182,6 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
             message: "The member is declared here.",
           },
         ],
-        handles: {
-          productHandle: 1,
-          relatedSourceAddressHandles: [4],
-        },
       },
       [AURELIA_LSP_DIAGNOSTIC_NAMESPACE_KEY]: {
         diagnostics: {
@@ -195,7 +195,10 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
         },
       },
     });
-    expect(mapped[0]?.relatedInformation).toEqual([
+    expect(mapped.value[0]?.data).not.toHaveProperty("semanticRuntime.diagnosticIdentityHandle");
+    expect(mapped.value[0]?.data).not.toHaveProperty("semanticRuntime.diagnosticRelations");
+    expect(mapped.value[0]?.data).not.toHaveProperty("semanticRuntime.handles");
+    expect(mapped.value[0]?.relatedInformation).toEqual([
       expect.objectContaining({ message: "The member is declared here." }),
     ]);
   });
@@ -244,10 +247,11 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
       doc,
     );
 
-    expect(mapped).toHaveLength(1);
-    expect(mapped[0]?.source).toBe("aurelia");
-    expect(mapped[0]?.code).toBe("TS2345");
-    expect(mapped[0]?.data).toMatchObject({
+    expect(mapped.failures).toEqual([]);
+    expect(mapped.value).toHaveLength(1);
+    expect(mapped.value[0]?.source).toBe("aurelia");
+    expect(mapped.value[0]?.code).toBe("TS2345");
+    expect(mapped.value[0]?.data).toMatchObject({
       semanticRuntime: {
         diagnosticDomain: "template",
         diagnosticKind: "template-expression-typescript-diagnostic",
@@ -255,6 +259,111 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
         missingInput: "typescript:TS2345",
       },
     });
+  });
+
+  test("reports a source-backed diagnostic whose authored span cannot be mapped", () => {
+    const doc = TextDocument.create(
+      "file:///C:/projects/app/src/component.html",
+      "html",
+      1,
+      "short",
+    );
+    const mapped = mapSemanticRuntimeAppDiagnostics({
+      value: {
+        rows: [{
+          diagnosticDomain: "template",
+          diagnosticKind: "missing-expression-member",
+          diagnosticAuthority: "semantic-authoring-policy",
+          frameworkErrorCode: null,
+          severity: "error",
+          summary: "Missing member",
+          missingInput: "member",
+          missingInputs: ["member"],
+          source: {
+            kind: "source-span-address",
+            label: "src/component.html@10..16",
+            path: "src/component.html",
+            start: 10,
+            end: 16,
+            role: "expression",
+          },
+          relatedInformation: [],
+          suggestion: null,
+        }],
+      },
+    } as never, doc);
+
+    expect(mapped.value).toEqual([]);
+    expect(mapped.failures).toEqual([
+      expect.stringContaining("src/component.html@10..16"),
+    ]);
+  });
+
+  test("maps broad related evidence without inventing precision and reports unreadable exact evidence", () => {
+    const doc = TextDocument.create(
+      "file:///C:/projects/app/src/component.html",
+      "html",
+      1,
+      "value",
+    );
+    const mapped = mapSemanticRuntimeAppDiagnostics({
+      value: {
+        rows: [{
+          diagnosticDomain: "template",
+          diagnosticKind: "missing-expression-member",
+          diagnosticAuthority: "semantic-authoring-policy",
+          frameworkErrorCode: null,
+          severity: "error",
+          summary: "Missing member",
+          missingInput: "member",
+          missingInputs: ["member"],
+          source: {
+            kind: "source-span-address",
+            label: "src/component.html@0..5",
+            path: "src/component.html",
+            start: 0,
+            end: 5,
+            role: "expression",
+          },
+          relatedInformation: [
+            {
+              message: "Declared by this source file.",
+              source: {
+                kind: "source-file-address",
+                label: "src/owner.ts",
+                path: "src/owner.ts",
+              },
+            },
+            {
+              message: "Exact evidence in an unavailable document.",
+              source: {
+                kind: "source-span-address",
+                label: "src/missing.ts@0..4",
+                path: "src/missing.ts",
+                start: 0,
+                end: 4,
+                role: "name",
+              },
+            },
+          ],
+          suggestion: null,
+        }],
+      },
+    } as never, doc, "C:/projects/app", () => null);
+
+    expect(mapped.value[0]?.relatedInformation).toEqual([{
+      location: {
+        uri: "file:///c:/projects/app/src/owner.ts",
+        range: {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 0 },
+        },
+      },
+      message: "Declared by this source file.",
+    }]);
+    expect(mapped.failures).toEqual([
+      expect.stringContaining("src/missing.ts@0..4 targets a document with no readable text"),
+    ]);
   });
 });
 
@@ -388,33 +497,6 @@ describe("source-backed edit mapping", () => {
   });
 });
 
-describe("createCompletionGapMarker", () => {
-  test("appends a canonical gap marker and sets isIncomplete", () => {
-    const list = createCompletionGapMarker([{ label: "summary-panel" }]);
-    expect(list.isIncomplete).toBe(true);
-    expect(list.items).toHaveLength(2);
-    expect(list.items[1]).toEqual({
-      label: COMPLETION_GAP_MARKER_LABEL,
-      kind: CompletionItemKind.Text,
-      detail: COMPLETION_GAP_MARKER_DETAIL,
-      sortText: "\uffff",
-      insertText: "",
-    });
-  });
-
-  test("does not duplicate an existing gap marker", () => {
-    const list = createCompletionGapMarker([
-      { label: "summary-panel" },
-      { label: COMPLETION_GAP_MARKER_LABEL, kind: CompletionItemKind.Text },
-    ]);
-    const markerCount = list.items.filter(
-      (item) => item.label === COMPLETION_GAP_MARKER_LABEL,
-    ).length;
-    expect(list.isIncomplete).toBe(true);
-    expect(markerCount).toBe(1);
-  });
-});
-
 describe("mapSemanticRuntimeTemplateCompletions", () => {
   test("preserves authorable template-domain roles as specific LSP kinds", () => {
     const mapped = mapSemanticRuntimeTemplateCompletions({
@@ -451,7 +533,7 @@ describe("mapSemanticRuntimeTemplateCompletions", () => {
     ]);
   });
 
-  test("marks semantically truncated completion answers as incomplete", () => {
+  test("does not collapse semantic coverage into the transport paging flag", () => {
     const mapped = mapSemanticRuntimeTemplateCompletions({
       result: "answered",
       coverage: "truncated",
@@ -468,8 +550,29 @@ describe("mapSemanticRuntimeTemplateCompletions", () => {
       page: null,
     } as never);
 
-    expect(mapped.isIncomplete).toBe(true);
-    expect(mapped.items.at(-1)?.label).toBe(COMPLETION_GAP_MARKER_LABEL);
+    expect(mapped.isIncomplete).toBe(false);
+    expect(mapped.items.map((item) => item.label)).toEqual(["component"]);
+  });
+
+  test("does not expose an undisposed transport page as LSP completion narrowing", () => {
+    const mapped = mapSemanticRuntimeTemplateCompletions({
+      result: "answered",
+      coverage: "complete",
+      value: {
+        candidates: [
+          {
+            name: "component",
+            candidateKind: "ref-target",
+            sourceKind: "framework",
+          },
+        ],
+        missingInputs: [],
+      },
+      page: { nextCursor: "next" },
+    } as never);
+
+    expect(mapped.isIncomplete).toBe(false);
+    expect(mapped.items.map((item) => item.label)).toEqual(["component"]);
   });
 });
 
@@ -515,6 +618,133 @@ describe("mapSemanticRuntimeTemplateHover", () => {
     const value = (mapped?.contents as { value?: string }).value ?? "";
     expect(value).toContain("message: string");
     expect(value).toContain("owner: `Component`");
+  });
+
+  test("qualifies an exact hover only when concrete semantic inputs are missing", () => {
+    const mapped = mapSemanticRuntimeTemplateHover({
+      value: {
+        siteKind: "expression",
+        expressionFrontier: null,
+        missingInputs: [
+          "expression-member-owner-type:dynamic",
+          "binding-source-context:ambiguous",
+          "third-gap",
+        ],
+        template: { compilationLane: "authoring", source: null },
+        html: {
+          nodeKind: "element",
+          tagName: "div",
+          attributeName: null,
+          attributeValue: null,
+          source: null,
+          attributeSource: null,
+        },
+        valueSite: null,
+        selectedDefinition: null,
+        selectedBindable: null,
+        selectedMemberName: "message",
+        selectedMember: {
+          name: "message",
+          memberKind: "property",
+          typeDisplay: "string",
+          isOptional: false,
+          isReadonly: false,
+          source: null,
+        },
+        memberOwnerType: null,
+        diagnostics: [],
+      },
+    } as never);
+
+    const value = (mapped?.contents as { value?: string }).value ?? "";
+    expect(value).toContain("message: string");
+    expect(value).toContain("Analysis is incomplete because");
+    expect(value).toContain("`expression-member-owner-type:dynamic`");
+    expect(value).toContain("and 1 more input");
+  });
+});
+
+describe("mapSemanticRuntimeTemplateReferences", () => {
+  test("returns verified locations and names every source-backed mapping failure", () => {
+    const originDocument = TextDocument.create(
+      "file:///C:/projects/app/src/component.html",
+      "html",
+      1,
+      "<template>${message}</template>",
+    );
+    const messageStart = originDocument.getText().indexOf("message");
+    const mapping = mapSemanticRuntimeTemplateReferences({
+      value: {
+        rows: [
+          {
+            referenceKind: "template-usage",
+            name: "message",
+            source: {
+              kind: "source-span-address",
+              label: `src/component.html@${messageStart}..${messageStart + 7}`,
+              path: originDocument.uri,
+              start: messageStart,
+              end: messageStart + 7,
+              role: "name",
+            },
+          },
+          {
+            referenceKind: "typescript-usage",
+            name: "message",
+            source: {
+              kind: "typescript-node",
+              label: "src/component.ts@50..57",
+              path: "src/component.ts",
+              start: 50,
+              end: 57,
+              role: "name",
+            },
+          },
+        ],
+      },
+    } as never, () => "short", {
+      workspaceRoot: "C:/projects/app",
+      originDocument,
+      scope: "workspace",
+    });
+
+    expect(mapping.value).toHaveLength(1);
+    expect(mapping.value?.[0]?.uri).toBe(canonicalDocumentUri(originDocument.uri).uri);
+    expect(mapping.failures).toEqual([
+      expect.stringContaining("src/component.ts@50..57"),
+    ]);
+  });
+
+  test("does not treat references outside document-highlight scope as mapping failures", () => {
+    const originDocument = TextDocument.create(
+      "file:///C:/projects/app/src/component.html",
+      "html",
+      1,
+      "<template>${message}</template>",
+    );
+    const mapping = mapSemanticRuntimeTemplateReferences({
+      value: {
+        rows: [{
+          referenceKind: "typescript-usage",
+          name: "message",
+          source: {
+            kind: "typescript-node",
+            label: "src/component.ts@0..7",
+            path: "src/component.ts",
+            start: 0,
+            end: 7,
+            role: "name",
+          },
+        }],
+      },
+    } as never, () => null, {
+      workspaceRoot: "C:/projects/app",
+      originDocument,
+      scope: "origin-document",
+    });
+
+    expect(mapping.value).toBeNull();
+    expect(mapping.failures).toEqual([]);
   });
 });
 

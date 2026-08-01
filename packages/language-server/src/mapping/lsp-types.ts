@@ -41,7 +41,6 @@ import {
   diagnosticRepairAffordanceForSuggestion,
   semanticExactSourceReference,
   semanticSourceReferenceContainsOffset,
-  SemanticRuntimeAnswerCoverage,
 } from "@aurelia-ls/semantic-runtime";
 import { canonicalDocumentUri, type DocumentUri } from "../utils/document-uri.js";
 import {
@@ -75,6 +74,12 @@ export interface LspDocumentSnapshot {
 export type LookupDocumentSnapshotFn = (uri: DocumentUri) => LspDocumentSnapshot | null;
 export const AURELIA_LSP_DIAGNOSTIC_NAMESPACE_KEY = "__aurelia" as const;
 export const AURELIA_LSP_DIAGNOSTIC_TAXONOMY_SCHEMA = "diagnostics-taxonomy/1" as const;
+
+/** Best-effort read projection plus every source-backed row the adapter could not represent. */
+export interface SemanticRuntimeReadMapping<TValue> {
+  readonly value: TValue;
+  readonly failures: readonly string[];
+}
 
 type DiagnosticImpact = "blocking" | "degraded" | "informational";
 type DiagnosticActionability = "guided" | "manual";
@@ -165,35 +170,55 @@ export function mapSemanticRuntimeAppDiagnostics(
   document: TextDocument,
   workspaceRoot: string | null = null,
   lookupText: LookupTextFn | null = null,
-): Diagnostic[] {
+): SemanticRuntimeReadMapping<Diagnostic[]> {
   const mapped: Diagnostic[] = [];
+  const failures: string[] = [];
   const presentation = answer.value.presentation;
   if (presentation != null) {
     const rows = answer.value.rows;
     for (const group of presentation.groups) {
-      const relatedInformation = group.related.flatMap((related) =>
-        semanticRuntimeDiagnosticRelatedInformation(rows[related.rowIndex] ?? null, document, workspaceRoot, lookupText)
-      );
-      const diagnostic = semanticRuntimeDiagnostic(
+      const relatedInformation: DiagnosticRelatedInformation[] = [];
+      for (const related of group.related) {
+        const row = rows[related.rowIndex] ?? null;
+        if (row == null) {
+          failures.push(`Diagnostic presentation group references missing related row ${related.rowIndex}.`);
+          continue;
+        }
+        const relatedMapping = semanticRuntimeDiagnosticRelatedInformation(row, document, workspaceRoot, lookupText);
+        relatedInformation.push(...relatedMapping.value);
+        failures.push(...relatedMapping.failures);
+      }
+      const diagnosticMapping = semanticRuntimeDiagnostic(
         rows[group.primary.rowIndex] ?? null,
         document,
         workspaceRoot,
         lookupText,
         relatedInformation,
       );
-      if (diagnostic != null) {
-        mapped.push(diagnostic);
+      failures.push(...diagnosticMapping.failures);
+      if (diagnosticMapping.value != null) {
+        mapped.push(diagnosticMapping.value);
+      } else {
+        const row = rows[group.primary.rowIndex] ?? null;
+        failures.push(
+          row == null
+            ? `Diagnostic presentation group references missing row ${group.primary.rowIndex}.`
+            : `Diagnostic ${row.source?.label ?? row.diagnosticKind} has no range valid for the current document.`,
+        );
       }
     }
-    return mapped;
+    return { value: mapped, failures };
   }
   for (const row of answer.value.rows) {
-    const diagnostic = semanticRuntimeDiagnostic(row, document, workspaceRoot, lookupText, []);
-    if (diagnostic != null) {
-      mapped.push(diagnostic);
+    const diagnosticMapping = semanticRuntimeDiagnostic(row, document, workspaceRoot, lookupText, []);
+    failures.push(...diagnosticMapping.failures);
+    if (diagnosticMapping.value != null) {
+      mapped.push(diagnosticMapping.value);
+    } else {
+      failures.push(`Diagnostic ${row.source?.label ?? row.diagnosticKind} has no range valid for the current document.`);
     }
   }
-  return mapped;
+  return { value: mapped, failures };
 }
 
 function semanticRuntimeDiagnostic(
@@ -202,22 +227,34 @@ function semanticRuntimeDiagnostic(
   workspaceRoot: string | null,
   lookupText: LookupTextFn | null,
   relatedInformation: DiagnosticRelatedInformation[],
-): Diagnostic | null {
-  if (row == null) return null;
+): SemanticRuntimeReadMapping<Diagnostic | null> {
+  if (row == null) return { value: null, failures: [] };
   const range = semanticRuntimeDiagnosticRange(row.source, document);
-  if (range == null) return null;
-  const rowRelatedInformation = row.relatedInformation.flatMap((related) =>
-    semanticRuntimeDiagnosticRelatedSourceInformation(related, document, workspaceRoot, lookupText)
-  );
+  if (range == null) return { value: null, failures: [] };
+  const rowRelatedInformation: DiagnosticRelatedInformation[] = [];
+  const failures: string[] = [];
+  for (const related of row.relatedInformation) {
+    const mapping = semanticRuntimeDiagnosticRelatedSourceInformation(
+      related,
+      document,
+      workspaceRoot,
+      lookupText,
+    );
+    rowRelatedInformation.push(...mapping.value);
+    failures.push(...mapping.failures);
+  }
   const allRelatedInformation = [...rowRelatedInformation, ...relatedInformation];
   return {
-    range,
-    message: row.summary,
-    severity: semanticRuntimeSeverityToLsp(row.severity),
-    code: semanticRuntimeDiagnosticCode(row),
-    source: row.diagnosticDomain === "typescript" ? "typescript" : "aurelia",
-    data: semanticRuntimeDiagnosticData(row),
-    ...(allRelatedInformation.length === 0 ? {} : { relatedInformation: allRelatedInformation }),
+    value: {
+      range,
+      message: row.summary,
+      severity: semanticRuntimeSeverityToLsp(row.severity),
+      code: semanticRuntimeDiagnosticCode(row),
+      source: row.diagnosticDomain === "typescript" ? "typescript" : "aurelia",
+      data: semanticRuntimeDiagnosticData(row),
+      ...(allRelatedInformation.length === 0 ? {} : { relatedInformation: allRelatedInformation }),
+    },
+    failures,
   };
 }
 
@@ -244,8 +281,8 @@ function semanticRuntimeDiagnosticRelatedInformation(
   document: TextDocument,
   workspaceRoot: string | null,
   lookupText: LookupTextFn | null,
-): readonly DiagnosticRelatedInformation[] {
-  if (row == null) return [];
+): SemanticRuntimeReadMapping<DiagnosticRelatedInformation[]> {
+  if (row == null) return { value: [], failures: [] };
   return semanticRuntimeRelatedInformationForSource(row.source, row.summary, document, workspaceRoot, lookupText);
 }
 
@@ -254,7 +291,7 @@ function semanticRuntimeDiagnosticRelatedSourceInformation(
   document: TextDocument,
   workspaceRoot: string | null,
   lookupText: LookupTextFn | null,
-): readonly DiagnosticRelatedInformation[] {
+): SemanticRuntimeReadMapping<DiagnosticRelatedInformation[]> {
   return semanticRuntimeRelatedInformationForSource(
     related.source,
     related.message,
@@ -270,29 +307,52 @@ function semanticRuntimeRelatedInformationForSource(
   document: TextDocument,
   workspaceRoot: string | null,
   lookupText: LookupTextFn | null,
-): readonly DiagnosticRelatedInformation[] {
+): SemanticRuntimeReadMapping<DiagnosticRelatedInformation[]> {
   const exact = semanticExactSourceReference(source);
-  if (exact == null) return [];
-  const uri = semanticSourceReferenceUri(exact, workspaceRoot);
-  if (uri == null) return [];
+  if (source == null) return { value: [], failures: [] };
+  const locatedSource = exact ?? source;
+  const uri = semanticSourceReferenceUri(locatedSource, workspaceRoot);
+  if (uri == null) {
+    return {
+      value: [],
+      failures: [`Related diagnostic evidence ${source.label} cannot be resolved to a workspace document.`],
+    };
+  }
   const canonical = canonicalDocumentUri(uri).uri;
   const originCanonical = canonicalDocumentUri(document.uri).uri;
-  const text = canonical === originCanonical
-    ? document.getText()
-    : lookupText?.(canonical);
-  if (text == null) return [];
+  if (exact == null) {
+    return {
+      value: [{
+        location: {
+          uri: canonical,
+          range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+        },
+        message,
+      }],
+      failures: [],
+    };
+  }
+  const text = canonical === originCanonical ? document.getText() : lookupText?.(canonical);
+  if (text == null) {
+    return {
+      value: [],
+      failures: [`Related diagnostic evidence ${source.label} targets a document with no readable text.`],
+    };
+  }
   const targetDocument = canonical === originCanonical
     ? document
     : TextDocument.create(canonical, guessLanguage(canonical), 0, text);
   const range = semanticSourceRangeForDocument(exact, targetDocument);
-  if (range == null) return [];
-  return [{
-    location: {
-      uri: canonical,
-      range,
-    },
-    message,
-  }];
+  if (range == null) {
+    return {
+      value: [],
+      failures: [`Related diagnostic evidence ${source.label} has a span outside the current document text.`],
+    };
+  }
+  return {
+    value: [{ location: { uri: canonical, range }, message }],
+    failures: [],
+  };
 }
 
 function semanticRuntimeDiagnosticRange(
@@ -309,17 +369,54 @@ function semanticRuntimeDiagnosticRange(
   };
 }
 
-function semanticRuntimeDiagnosticData(
+export function semanticRuntimeDiagnosticData(
   row: SemanticAppDiagnosticRow,
+): Record<string, unknown> {
+  return semanticRuntimeDiagnosticDataEnvelope(row, semanticRuntimeDetachedDiagnosticData(row));
+}
+
+/** Preserve answer-local diagnostic relations only while the complete answer travels as one custom response. */
+export function semanticRuntimeDiagnosticSnapshotData(
+  row: SemanticAppDiagnosticRow,
+): Record<string, unknown> {
+  return semanticRuntimeDiagnosticDataEnvelope(row, {
+    ...semanticRuntimeDetachedDiagnosticData(row),
+    diagnosticIdentityHandle: row.diagnosticIdentityHandle,
+    ...(row.diagnosticRelations == null ? {} : { diagnosticRelations: row.diagnosticRelations }),
+  });
+}
+
+function semanticRuntimeDetachedDiagnosticData(row: SemanticAppDiagnosticRow): Record<string, unknown> {
+  return {
+    queryKind: "app-diagnostics",
+    projectKey: row.projectKey,
+    diagnosticDomain: row.diagnosticDomain,
+    phase: row.phase,
+    diagnosticKind: row.diagnosticKind,
+    diagnosticAuthority: row.diagnosticAuthority,
+    frameworkErrorCode: row.frameworkErrorCode,
+    frameworkRawErrorAuthority: row.frameworkRawErrorAuthority,
+    severity: row.severity,
+    summary: row.summary,
+    missingInput: row.missingInput,
+    missingInputs: row.missingInputs,
+    source: row.source,
+    subject: row.subject,
+    relatedInformation: row.relatedInformation,
+    suggestion: row.suggestion,
+    sourceRole: row.sourceRole,
+    relatedQueryKind: row.relatedQueryKind,
+    repairAffordance: diagnosticRepairAffordanceForSuggestion(row.suggestion),
+  };
+}
+
+function semanticRuntimeDiagnosticDataEnvelope(
+  row: SemanticAppDiagnosticRow,
+  runtime: Record<string, unknown>,
 ): Record<string, unknown> {
   const impact = semanticRuntimeDiagnosticImpact(row.severity);
   const actionability = semanticRuntimeDiagnosticActionability(row);
   const category = semanticRuntimeDiagnosticCategory(row);
-  const runtime = {
-    queryKind: "app-diagnostics",
-    ...row,
-    repairAffordance: diagnosticRepairAffordanceForSuggestion(row.suggestion),
-  };
   return {
     semanticRuntime: runtime,
     [AURELIA_LSP_DIAGNOSTIC_NAMESPACE_KEY]: {
@@ -365,16 +462,9 @@ export function mapSemanticRuntimeTemplateCompletions(
   answer: SemanticRuntimeAnswer<SemanticTemplateCompletionResult>,
 ): CompletionList {
   const items = answer.value.candidates.map(mapSemanticRuntimeTemplateCompletionCandidate);
-  const isIncomplete = answer.page?.nextCursor != null
-    || answer.coverage === SemanticRuntimeAnswerCoverage.Open
-    || answer.coverage === SemanticRuntimeAnswerCoverage.Truncated
-    || answer.value.missingInputs.length > 0;
-  if (!isIncomplete) {
-    return { isIncomplete: false, items };
-  }
-  return items.length === 0
-    ? { isIncomplete: true, items: [] }
-    : createCompletionGapMarker(items);
+  // LSP's isIncomplete flag asks the client to requery an intentionally narrowed list after further typing.
+  // The session drains transport pages, and semantic coverage is an independent epistemic axis.
+  return { isIncomplete: false, items };
 }
 
 function mapSemanticRuntimeTemplateCompletionCandidate(
@@ -428,29 +518,6 @@ function semanticRuntimeCompletionDetail(
     candidate.memberIsReadonly === true ? "readonly" : null,
   ];
   return parts.filter((part): part is string => part != null && part.length > 0).join(" | ") || null;
-}
-
-export const COMPLETION_GAP_MARKER_LABEL = "Aurelia analysis incomplete";
-export const COMPLETION_GAP_MARKER_DETAIL = "Results may be partial";
-
-export function createCompletionGapMarker(items: readonly CompletionItem[]): CompletionList {
-  const alreadyPresent = items.some((item) => item.label === COMPLETION_GAP_MARKER_LABEL);
-  if (alreadyPresent) {
-    return { isIncomplete: true, items: [...items] };
-  }
-  return {
-    isIncomplete: true,
-    items: [
-      ...items,
-      {
-        label: COMPLETION_GAP_MARKER_LABEL,
-        kind: CompletionItemKind.Text,
-        detail: COMPLETION_GAP_MARKER_DETAIL,
-        sortText: "\uffff",
-        insertText: "",
-      },
-    ],
-  };
 }
 
 // ============================================================================
@@ -529,6 +596,17 @@ export function mapSemanticRuntimeTemplateHover(
     );
   }
 
+  if (value.missingInputs.length > 0) {
+    addSectionBreak(lines);
+    const visible = value.missingInputs.slice(0, 2).map((input) => `\`${escapeMarkdownCode(input)}\``);
+    const remaining = value.missingInputs.length - visible.length;
+    lines.push(
+      remaining === 0
+        ? `Analysis is incomplete because ${visible.join(" and ")} could not be established.`
+        : `Analysis is incomplete because ${visible.join(", ")} and ${remaining} more input${remaining === 1 ? "" : "s"} could not be established.`,
+    );
+  }
+
   const content = lines.filter((line) => line.length > 0 || lines.length > 1).join("\n");
   if (content.trim().length === 0) {
     return null;
@@ -551,6 +629,10 @@ function truncateHoverValue(value: string): string {
 
 function escapeMarkdown(value: string): string {
   return value.replace(/([\\`*_{}\[\]()#+.!|-])/g, "\\$1");
+}
+
+function escapeMarkdownCode(value: string): string {
+  return value.replace(/`/g, "\\`");
 }
 
 // ============================================================================
@@ -826,25 +908,34 @@ export function mapSemanticRuntimeTemplateReferences(
   options: {
     readonly workspaceRoot: string | null;
     readonly originDocument: TextDocument;
+    readonly scope: "workspace" | "origin-document";
   },
-): Location[] | null {
+): SemanticRuntimeReadMapping<Location[] | null> {
   const mapped: Location[] = [];
+  const failures: string[] = [];
   const originCanonical = canonicalDocumentUri(options.originDocument.uri).uri;
 
   for (const row of answer.value.rows) {
+    const rowLabel = row.source?.label ?? `${row.referenceKind}:${row.name}`;
     const source = semanticExactSourceReference(row.source);
     if (source == null) {
+      failures.push(`Reference ${rowLabel} has no exact authored source span.`);
       continue;
     }
     const uri = semanticSourceReferenceUri(source, options.workspaceRoot);
     if (uri == null) {
+      failures.push(`Reference ${rowLabel} cannot be resolved to a workspace document.`);
       continue;
     }
     const canonical = canonicalDocumentUri(uri).uri;
+    if (options.scope === "origin-document" && canonical !== originCanonical) {
+      continue;
+    }
     const text = canonical === originCanonical
       ? options.originDocument.getText()
       : lookupText(canonical);
     if (text == null) {
+      failures.push(`Reference ${rowLabel} targets a document with no readable text.`);
       continue;
     }
     const document = TextDocument.create(
@@ -855,12 +946,16 @@ export function mapSemanticRuntimeTemplateReferences(
     );
     const range = semanticSourceRangeForDocument(source, document);
     if (range == null) {
+      failures.push(`Reference ${rowLabel} has a span outside the current document text.`);
       continue;
     }
     mapped.push({ uri, range });
   }
 
-  return mapped.length === 0 ? null : mapped;
+  return {
+    value: mapped.length === 0 ? null : mapped,
+    failures,
+  };
 }
 
 export function mapSemanticRuntimeTemplatePrepareRename(
@@ -1034,7 +1129,6 @@ export function mapSemanticRuntimeTemplateCodeActions(
       data: {
         semanticRuntime: {
           queryKind: "template-code-actions",
-          sourceDiagnostics: row.diagnostics,
           repairAffordance: row.repair,
           actionIdentity: semanticRuntimeTemplateCodeActionIdentity(row),
         },

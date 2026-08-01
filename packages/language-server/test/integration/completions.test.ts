@@ -188,7 +188,7 @@ describe("Completions", () => {
       });
 
       const completionList = expectCompletionList(completions);
-      expect(completionList.isIncomplete).toBe(true);
+      expect(completionList.isIncomplete).toBe(false);
       expect(completionList.items).toEqual([]);
     } finally {
       dispose();

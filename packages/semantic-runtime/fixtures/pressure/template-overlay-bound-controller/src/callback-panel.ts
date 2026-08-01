@@ -16,5 +16,5 @@ export class CallbackPanelStableActionHandlerValueConverter {
 })
 export class CallbackPanel {
   @bindable actions: readonly OverlayAction[] = [];
-  @bindable onAction = () => false;
+  @bindable onAction: (action: OverlayAction) => boolean = () => false;
 }

@@ -20,71 +20,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "diagnosticCount": 1,
-  "diagnostics": [
-    {
-      "anomaly": null,
-      "code": "binding-target-assignment-strictness",
-      "data": {
-        "diagnosticAuthority": "semantic-runtime-product",
-        "diagnosticDomain": "template",
-        "diagnosticKind": "binding-target-assignment-strictness",
-        "frameworkErrorCode": null,
-        "frameworkRawErrorAuthority": null,
-        "missingInput": "binding-target-assignment:source-to-target-type-mismatch",
-        "missingInputs": [
-          "binding-target-assignment:source-to-target-type-mismatch"
-        ],
-        "phase": null,
-        "relatedInformation": [],
-        "relatedQueryKind": "template-diagnostics",
-        "repairAffordance": {
-          "actionKind": "rewrite-expression",
-          "actionability": "guided",
-          "changeDomain": "app-source",
-          "planKind": "template-expression-rewrite",
-          "readiness": "ready-to-plan",
-          "targetSourceCoverage": "all"
-        },
-        "sourceRole": "template",
-        "subject": {
-          "source": {
-            "end": 92,
-            "kind": "source-span-address",
-            "label": "src/template-overlay-bound-controller-app.html@74..92",
-            "path": "src/template-overlay-bound-controller-app.html",
-            "role": "template-member-access",
-            "start": 74
-          },
-          "span": null,
-          "subjectKind": "template-member-access",
-          "uri": null
-        },
-        "taxonomy": {
-          "actionability": "guided",
-          "category": "template-syntax",
-          "confidence": null,
-          "impact": "degraded",
-          "schema": "diagnostics-taxonomy/1"
-        }
-      },
-      "message": "Binding source type (action: OverlayAction) => boolean is not assignable to target 'onAction' of type () => boolean.",
-      "range": {
-        "end": {
-          "character": 81,
-          "line": 1
-        },
-        "start": {
-          "character": 63,
-          "line": 1
-        }
-      },
-      "rangeText": "state.handleAction",
-      "relatedInformation": [],
-      "severity": "warning",
-      "source": "aurelia"
-    }
-  ],
+  "diagnosticCount": 0,
+  "diagnostics": [],
   "outcome": "published",
   "uri": "fixtures://pressure/template-overlay-bound-controller/src/template-overlay-bound-controller-app.html"
 }
@@ -94,258 +31,120 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "fingerprint": "semantic-runtime:hit",
+  "answer": {
+    "analysisDepth": "binding-observation",
+    "continuations": [
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "orient",
+          "inspect"
+        ],
+        "kind": "follow-query",
+        "rationale": "Cluster detailed diagnostics back into a summary view.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "app-diagnostic-summary",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/template-overlay-bound-controller-app.html"
+          }
+        },
+        "targetQueryKind": "app-diagnostic-summary"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "diagnose"
+        ],
+        "kind": "follow-query",
+        "rationale": "Compare unified diagnostics with ordinary TypeScript diagnostics.",
+        "targetQuery": {
+          "kind": "typescript-diagnostics",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/template-overlay-bound-controller-app.html"
+          }
+        },
+        "targetQueryKind": "typescript-diagnostics"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "diagnose"
+        ],
+        "kind": "follow-query",
+        "rationale": "Compare unified diagnostics with template diagnostics.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "template-diagnostics",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/template-overlay-bound-controller-app.html"
+          }
+        },
+        "targetQueryKind": "template-diagnostics"
+      }
+    ],
+    "coverage": "complete",
+    "page": null,
+    "result": "answered",
+    "schemaVersion": "0.2",
+    "selection": "not-applicable",
+    "summary": "Returned 0 app diagnostic(s)."
+  },
   "outcome": "result",
   "presentation": {
     "complete": true,
     "contextualCount": 0,
-    "groups": [
-      {
-        "groupKey": "row:diagnostic:0:template:binding-target-assignment-strictness:semantic-runtime-product:no-framework-code:src/template-overlay-bound-controller-app.html:74:92:binding-target-assignment:source-to-target-type-mismatch",
-        "maxRawSeverity": "warning",
-        "primary": {
-          "diagnostic": {
-            "actionability": "guided",
-            "anomaly": null,
-            "category": "template-syntax",
-            "code": "binding-target-assignment-strictness",
-            "data": {
-              "diagnosticAuthority": "semantic-runtime-product",
-              "diagnosticDomain": "template",
-              "diagnosticKind": "binding-target-assignment-strictness",
-              "frameworkErrorCode": null,
-              "frameworkRawErrorAuthority": null,
-              "missingInput": "binding-target-assignment:source-to-target-type-mismatch",
-              "missingInputs": [
-                "binding-target-assignment:source-to-target-type-mismatch"
-              ],
-              "phase": null,
-              "relatedInformation": [],
-              "relatedQueryKind": "template-diagnostics",
-              "repairAffordance": {
-                "actionKind": "rewrite-expression",
-                "actionability": "guided",
-                "changeDomain": "app-source",
-                "planKind": "template-expression-rewrite",
-                "readiness": "ready-to-plan",
-                "targetSourceCoverage": "all"
-              },
-              "sourceRole": null,
-              "subject": {
-                "source": {
-                  "end": 92,
-                  "kind": "source-span-address",
-                  "label": "src/template-overlay-bound-controller-app.html@74..92",
-                  "path": "src/template-overlay-bound-controller-app.html",
-                  "role": "template-member-access",
-                  "start": 74
-                },
-                "span": null,
-                "subjectKind": "template-member-access",
-                "uri": null
-              },
-              "taxonomy": {
-                "actionability": null,
-                "category": null,
-                "confidence": null,
-                "impact": null,
-                "schema": null
-              }
-            },
-            "file": "src/template-overlay-bound-controller-app.html",
-            "impact": "degraded",
-            "issues": [
-              {
-                "code": "binding-target-assignment-strictness",
-                "kind": "binding-target-assignment-strictness",
-                "message": "Binding source type (action: OverlayAction) => boolean is not assignable to target 'onAction' of type () => boolean."
-              }
-            ],
-            "message": "Binding source type (action: OverlayAction) => boolean is not assignable to target 'onAction' of type () => boolean.",
-            "related": [],
-            "severity": "warning",
-            "source": "semantic-runtime:template",
-            "span": {
-              "end": 92,
-              "start": 74
-            },
-            "spanText": "state.handleAction",
-            "status": "primary",
-            "uri": "fixtures://pressure/template-overlay-bound-controller/src/template-overlay-bound-controller-app.html"
-          },
-          "relation": null,
-          "role": "primary",
-          "rowId": "diagnostic:0:template:binding-target-assignment-strictness:semantic-runtime-product:no-framework-code:src/template-overlay-bound-controller-app.html:74:92:binding-target-assignment:source-to-target-type-mismatch"
-        },
-        "primarySeverity": "warning",
-        "rawRowCount": 1,
-        "related": [],
-        "subject": {
-          "source": null,
-          "span": {
-            "end": 92,
-            "start": 74
-          },
-          "subjectKind": "template-member-access",
-          "uri": "file:///c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/template-overlay-bound-controller/src/template-overlay-bound-controller-app.html"
-        }
-      }
-    ],
-    "primaryCount": 1,
-    "rawRowCount": 1
+    "groups": [],
+    "primaryCount": 0,
+    "rawRowCount": 0
   },
   "raw": {
-    "diagnosticCount": 1,
-    "diagnostics": [
-      {
-        "actionability": "guided",
-        "anomaly": null,
-        "category": "template-syntax",
-        "code": "binding-target-assignment-strictness",
-        "data": {
-          "diagnosticAuthority": "semantic-runtime-product",
-          "diagnosticDomain": "template",
-          "diagnosticKind": "binding-target-assignment-strictness",
-          "frameworkErrorCode": null,
-          "frameworkRawErrorAuthority": null,
-          "missingInput": "binding-target-assignment:source-to-target-type-mismatch",
-          "missingInputs": [
-            "binding-target-assignment:source-to-target-type-mismatch"
-          ],
-          "phase": null,
-          "relatedInformation": [],
-          "relatedQueryKind": "template-diagnostics",
-          "repairAffordance": {
-            "actionKind": "rewrite-expression",
-            "actionability": "guided",
-            "changeDomain": "app-source",
-            "planKind": "template-expression-rewrite",
-            "readiness": "ready-to-plan",
-            "targetSourceCoverage": "all"
-          },
-          "sourceRole": null,
-          "subject": {
-            "source": {
-              "end": 92,
-              "kind": "source-span-address",
-              "label": "src/template-overlay-bound-controller-app.html@74..92",
-              "path": "src/template-overlay-bound-controller-app.html",
-              "role": "template-member-access",
-              "start": 74
-            },
-            "span": null,
-            "subjectKind": "template-member-access",
-            "uri": null
-          },
-          "taxonomy": {
-            "actionability": null,
-            "category": null,
-            "confidence": null,
-            "impact": null,
-            "schema": null
-          }
-        },
-        "file": "src/template-overlay-bound-controller-app.html",
-        "impact": "degraded",
-        "issues": [
-          {
-            "code": "binding-target-assignment-strictness",
-            "kind": "binding-target-assignment-strictness",
-            "message": "Binding source type (action: OverlayAction) => boolean is not assignable to target 'onAction' of type () => boolean."
-          }
-        ],
-        "message": "Binding source type (action: OverlayAction) => boolean is not assignable to target 'onAction' of type () => boolean.",
-        "related": [],
-        "severity": "warning",
-        "source": "semantic-runtime:template",
-        "span": {
-          "end": 92,
-          "start": 74
-        },
-        "spanText": "state.handleAction",
-        "status": "canonical",
-        "uri": "fixtures://pressure/template-overlay-bound-controller/src/template-overlay-bound-controller-app.html"
-      }
-    ]
-  },
-  "suppressed": {
     "diagnosticCount": 0,
     "diagnostics": []
   },
   "surfaces": {
     "lsp": {
-      "diagnosticCount": 1,
-      "diagnostics": [
-        {
-          "actionability": "guided",
-          "anomaly": null,
-          "category": "template-syntax",
-          "code": "binding-target-assignment-strictness",
-          "data": {
-            "diagnosticAuthority": "semantic-runtime-product",
-            "diagnosticDomain": "template",
-            "diagnosticKind": "binding-target-assignment-strictness",
-            "frameworkErrorCode": null,
-            "frameworkRawErrorAuthority": null,
-            "missingInput": "binding-target-assignment:source-to-target-type-mismatch",
-            "missingInputs": [
-              "binding-target-assignment:source-to-target-type-mismatch"
-            ],
-            "phase": null,
-            "relatedInformation": [],
-            "relatedQueryKind": "template-diagnostics",
-            "repairAffordance": {
-              "actionKind": "rewrite-expression",
-              "actionability": "guided",
-              "changeDomain": "app-source",
-              "planKind": "template-expression-rewrite",
-              "readiness": "ready-to-plan",
-              "targetSourceCoverage": "all"
-            },
-            "sourceRole": null,
-            "subject": {
-              "source": {
-                "end": 92,
-                "kind": "source-span-address",
-                "label": "src/template-overlay-bound-controller-app.html@74..92",
-                "path": "src/template-overlay-bound-controller-app.html",
-                "role": "template-member-access",
-                "start": 74
-              },
-              "span": null,
-              "subjectKind": "template-member-access",
-              "uri": null
-            },
-            "taxonomy": {
-              "actionability": null,
-              "category": null,
-              "confidence": null,
-              "impact": null,
-              "schema": null
-            }
-          },
-          "file": "src/template-overlay-bound-controller-app.html",
-          "impact": "degraded",
-          "issues": [
-            {
-              "code": "binding-target-assignment-strictness",
-              "kind": "binding-target-assignment-strictness",
-              "message": "Binding source type (action: OverlayAction) => boolean is not assignable to target 'onAction' of type () => boolean."
-            }
-          ],
-          "message": "Binding source type (action: OverlayAction) => boolean is not assignable to target 'onAction' of type () => boolean.",
-          "related": [],
-          "severity": "warning",
-          "source": "semantic-runtime:template",
-          "span": {
-            "end": 92,
-            "start": 74
-          },
-          "spanText": "state.handleAction",
-          "status": "primary",
-          "uri": "fixtures://pressure/template-overlay-bound-controller/src/template-overlay-bound-controller-app.html"
-        }
-      ]
+      "diagnosticCount": 0,
+      "diagnostics": []
     }
   },
   "uri": "fixtures://pressure/template-overlay-bound-controller/src/template-overlay-bound-controller-app.html"
@@ -358,10 +157,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 {
   "comparisonKey": "domain/kind/code/severity/text/message",
   "countsMatch": true,
-  "customLspSurfaceCount": 1,
+  "customLspSurfaceCount": 0,
   "customOnly": [],
   "lspOnly": [],
-  "lspPublishCount": 1,
+  "lspPublishCount": 0,
   "suppressedCount": 0
 }
 ```
@@ -391,7 +190,104 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "fingerprint": "semantic-runtime:hit",
+  "answer": {
+    "analysisDepth": "binding-observation",
+    "continuations": [
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "orient",
+          "inspect"
+        ],
+        "kind": "follow-query",
+        "rationale": "Cluster detailed diagnostics back into a summary view.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "app-diagnostic-summary",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/callback-panel.html"
+          }
+        },
+        "targetQueryKind": "app-diagnostic-summary"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "diagnose"
+        ],
+        "kind": "follow-query",
+        "rationale": "Compare unified diagnostics with ordinary TypeScript diagnostics.",
+        "targetQuery": {
+          "kind": "typescript-diagnostics",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/callback-panel.html"
+          }
+        },
+        "targetQueryKind": "typescript-diagnostics"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "diagnose"
+        ],
+        "kind": "follow-query",
+        "rationale": "Compare unified diagnostics with template diagnostics.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "template-diagnostics",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/callback-panel.html"
+          }
+        },
+        "targetQueryKind": "template-diagnostics"
+      }
+    ],
+    "coverage": "complete",
+    "page": null,
+    "result": "answered",
+    "schemaVersion": "0.2",
+    "selection": "not-applicable",
+    "summary": "Returned 0 app diagnostic(s)."
+  },
   "outcome": "result",
   "presentation": {
     "complete": true,
@@ -401,10 +297,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     "rawRowCount": 0
   },
   "raw": {
-    "diagnosticCount": 0,
-    "diagnostics": []
-  },
-  "suppressed": {
     "diagnosticCount": 0,
     "diagnostics": []
   },

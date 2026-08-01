@@ -1282,7 +1282,506 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "fingerprint": "semantic-runtime:hit",
+  "answer": {
+    "analysisDepth": "binding-observation",
+    "continuations": [
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "orient",
+          "inspect"
+        ],
+        "kind": "follow-query",
+        "rationale": "Cluster detailed diagnostics back into a summary view.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "app-diagnostic-summary",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/invalid-expression-gallery.html"
+          }
+        },
+        "targetQueryKind": "app-diagnostic-summary"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "diagnose"
+        ],
+        "kind": "follow-query",
+        "rationale": "Compare unified diagnostics with ordinary TypeScript diagnostics.",
+        "targetQuery": {
+          "kind": "typescript-diagnostics",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/invalid-expression-gallery.html"
+          }
+        },
+        "targetQueryKind": "typescript-diagnostics"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "diagnose"
+        ],
+        "kind": "follow-query",
+        "rationale": "Compare unified diagnostics with template diagnostics.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "template-diagnostics",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/invalid-expression-gallery.html"
+          }
+        },
+        "targetQueryKind": "template-diagnostics"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world"
+          ],
+          "sourceFacts": [
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 1057,
+                "kind": "source-span-address",
+                "label": "src/invalid-expression-gallery.html@1055..1057",
+                "path": "src/invalid-expression-gallery.html",
+                "role": "name",
+                "start": 1055
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 1129,
+                "kind": "source-span-address",
+                "label": "src/invalid-expression-gallery.html@1123..1129",
+                "path": "src/invalid-expression-gallery.html",
+                "role": "name",
+                "start": 1123
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 1221,
+                "kind": "source-span-address",
+                "label": "src/invalid-expression-gallery.html@1220..1221",
+                "path": "src/invalid-expression-gallery.html",
+                "role": "name",
+                "start": 1220
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 1290,
+                "kind": "source-span-address",
+                "label": "src/invalid-expression-gallery.html@1284..1290",
+                "path": "src/invalid-expression-gallery.html",
+                "role": "name",
+                "start": 1284
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 133,
+                "kind": "source-span-address",
+                "label": "src/invalid-expression-gallery.html@133..133",
+                "path": "src/invalid-expression-gallery.html",
+                "role": "name",
+                "start": 133
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 1350,
+                "kind": "source-span-address",
+                "label": "src/invalid-expression-gallery.html@1350..1350",
+                "path": "src/invalid-expression-gallery.html",
+                "role": "name",
+                "start": 1350
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 1413,
+                "kind": "source-span-address",
+                "label": "src/invalid-expression-gallery.html@1413..1413",
+                "path": "src/invalid-expression-gallery.html",
+                "role": "name",
+                "start": 1413
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 1467,
+                "kind": "source-span-address",
+                "label": "src/invalid-expression-gallery.html@1466..1467",
+                "path": "src/invalid-expression-gallery.html",
+                "role": "name",
+                "start": 1466
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 1549,
+                "kind": "source-span-address",
+                "label": "src/invalid-expression-gallery.html@1547..1549",
+                "path": "src/invalid-expression-gallery.html",
+                "role": "name",
+                "start": 1547
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 1641,
+                "kind": "source-span-address",
+                "label": "src/invalid-expression-gallery.html@1639..1641",
+                "path": "src/invalid-expression-gallery.html",
+                "role": "name",
+                "start": 1639
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 1724,
+                "kind": "source-span-address",
+                "label": "src/invalid-expression-gallery.html@1723..1724",
+                "path": "src/invalid-expression-gallery.html",
+                "role": "name",
+                "start": 1723
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 1812,
+                "kind": "source-span-address",
+                "label": "src/invalid-expression-gallery.html@1811..1812",
+                "path": "src/invalid-expression-gallery.html",
+                "role": "name",
+                "start": 1811
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 212,
+                "kind": "source-span-address",
+                "label": "src/invalid-expression-gallery.html@212..212",
+                "path": "src/invalid-expression-gallery.html",
+                "role": "name",
+                "start": 212
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 271,
+                "kind": "source-span-address",
+                "label": "src/invalid-expression-gallery.html@271..271",
+                "path": "src/invalid-expression-gallery.html",
+                "role": "name",
+                "start": 271
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 324,
+                "kind": "source-span-address",
+                "label": "src/invalid-expression-gallery.html@323..324",
+                "path": "src/invalid-expression-gallery.html",
+                "role": "name",
+                "start": 323
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 374,
+                "kind": "source-span-address",
+                "label": "src/invalid-expression-gallery.html@374..374",
+                "path": "src/invalid-expression-gallery.html",
+                "role": "name",
+                "start": 374
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 426,
+                "kind": "source-span-address",
+                "label": "src/invalid-expression-gallery.html@425..426",
+                "path": "src/invalid-expression-gallery.html",
+                "role": "name",
+                "start": 425
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 493,
+                "kind": "source-span-address",
+                "label": "src/invalid-expression-gallery.html@493..493",
+                "path": "src/invalid-expression-gallery.html",
+                "role": "name",
+                "start": 493
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 562,
+                "kind": "source-span-address",
+                "label": "src/invalid-expression-gallery.html@561..562",
+                "path": "src/invalid-expression-gallery.html",
+                "role": "name",
+                "start": 561
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 647,
+                "kind": "source-span-address",
+                "label": "src/invalid-expression-gallery.html@644..647",
+                "path": "src/invalid-expression-gallery.html",
+                "role": "name",
+                "start": 644
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 730,
+                "kind": "source-span-address",
+                "label": "src/invalid-expression-gallery.html@729..730",
+                "path": "src/invalid-expression-gallery.html",
+                "role": "name",
+                "start": 729
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 79,
+                "kind": "source-span-address",
+                "label": "src/invalid-expression-gallery.html@79..79",
+                "path": "src/invalid-expression-gallery.html",
+                "role": "name",
+                "start": 79
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 814,
+                "kind": "source-span-address",
+                "label": "src/invalid-expression-gallery.html@811..814",
+                "path": "src/invalid-expression-gallery.html",
+                "role": "name",
+                "start": 811
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 893,
+                "kind": "source-span-address",
+                "label": "src/invalid-expression-gallery.html@892..893",
+                "path": "src/invalid-expression-gallery.html",
+                "role": "name",
+                "start": 892
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 989,
+                "kind": "source-span-address",
+                "label": "src/invalid-expression-gallery.html@988..989",
+                "path": "src/invalid-expression-gallery.html",
+                "role": "name",
+                "start": 988
+              }
+            }
+          ],
+          "sourceRequirement": "exact-authored-span"
+        },
+        "intents": [
+          "diagnose",
+          "repair"
+        ],
+        "kind": "follow-query",
+        "rationale": "Inspect template-diagnostics rows referenced by returned diagnostics.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "template-diagnostics",
+          "page": {
+            "size": 200
+          }
+        },
+        "targetQueryKind": "template-diagnostics"
+      }
+    ],
+    "coverage": "complete",
+    "page": null,
+    "result": "answered",
+    "schemaVersion": "0.2",
+    "selection": "not-applicable",
+    "summary": "Returned 25 app diagnostic(s)."
+  },
   "outcome": "result",
   "presentation": {
     "complete": true,
@@ -1318,14 +1817,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/invalid-expression-gallery.html",
@@ -1388,14 +1887,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/invalid-expression-gallery.html",
@@ -1458,14 +1957,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/invalid-expression-gallery.html",
@@ -1528,14 +2027,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/invalid-expression-gallery.html",
@@ -1598,14 +2097,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/invalid-expression-gallery.html",
@@ -1668,14 +2167,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/invalid-expression-gallery.html",
@@ -1738,14 +2237,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/invalid-expression-gallery.html",
@@ -1808,14 +2307,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/invalid-expression-gallery.html",
@@ -1878,14 +2377,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/invalid-expression-gallery.html",
@@ -1948,14 +2447,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/invalid-expression-gallery.html",
@@ -2018,14 +2517,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/invalid-expression-gallery.html",
@@ -2088,14 +2587,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/invalid-expression-gallery.html",
@@ -2158,14 +2657,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/invalid-expression-gallery.html",
@@ -2228,14 +2727,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/invalid-expression-gallery.html",
@@ -2298,14 +2797,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/invalid-expression-gallery.html",
@@ -2368,14 +2867,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/invalid-expression-gallery.html",
@@ -2438,14 +2937,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/invalid-expression-gallery.html",
@@ -2508,14 +3007,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/invalid-expression-gallery.html",
@@ -2578,14 +3077,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/invalid-expression-gallery.html",
@@ -2648,14 +3147,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/invalid-expression-gallery.html",
@@ -2718,14 +3217,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/invalid-expression-gallery.html",
@@ -2788,14 +3287,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/invalid-expression-gallery.html",
@@ -2858,14 +3357,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/invalid-expression-gallery.html",
@@ -2928,14 +3427,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/invalid-expression-gallery.html",
@@ -2998,14 +3497,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/invalid-expression-gallery.html",
@@ -3071,14 +3570,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/invalid-expression-gallery.html",
@@ -3128,14 +3627,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/invalid-expression-gallery.html",
@@ -3185,14 +3684,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/invalid-expression-gallery.html",
@@ -3242,14 +3741,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/invalid-expression-gallery.html",
@@ -3299,14 +3798,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/invalid-expression-gallery.html",
@@ -3356,14 +3855,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/invalid-expression-gallery.html",
@@ -3413,14 +3912,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/invalid-expression-gallery.html",
@@ -3470,14 +3969,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/invalid-expression-gallery.html",
@@ -3527,14 +4026,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/invalid-expression-gallery.html",
@@ -3584,14 +4083,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/invalid-expression-gallery.html",
@@ -3641,14 +4140,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/invalid-expression-gallery.html",
@@ -3698,14 +4197,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/invalid-expression-gallery.html",
@@ -3755,14 +4254,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/invalid-expression-gallery.html",
@@ -3812,14 +4311,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/invalid-expression-gallery.html",
@@ -3869,14 +4368,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/invalid-expression-gallery.html",
@@ -3926,14 +4425,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/invalid-expression-gallery.html",
@@ -3983,14 +4482,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/invalid-expression-gallery.html",
@@ -4040,14 +4539,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/invalid-expression-gallery.html",
@@ -4097,14 +4596,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/invalid-expression-gallery.html",
@@ -4154,14 +4653,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/invalid-expression-gallery.html",
@@ -4211,14 +4710,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/invalid-expression-gallery.html",
@@ -4268,14 +4767,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/invalid-expression-gallery.html",
@@ -4325,14 +4824,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/invalid-expression-gallery.html",
@@ -4382,14 +4881,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/invalid-expression-gallery.html",
@@ -4439,14 +4938,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/invalid-expression-gallery.html",
@@ -4471,10 +4970,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "uri": "fixtures://pressure/template-expression-resource-combinators/src/invalid-expression-gallery.html"
       }
     ]
-  },
-  "suppressed": {
-    "diagnosticCount": 0,
-    "diagnostics": []
   },
   "surfaces": {
     "lsp": {
@@ -4506,14 +5001,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/invalid-expression-gallery.html",
@@ -4563,14 +5058,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/invalid-expression-gallery.html",
@@ -4620,14 +5115,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/invalid-expression-gallery.html",
@@ -4677,14 +5172,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/invalid-expression-gallery.html",
@@ -4734,14 +5229,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/invalid-expression-gallery.html",
@@ -4791,14 +5286,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/invalid-expression-gallery.html",
@@ -4848,14 +5343,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/invalid-expression-gallery.html",
@@ -4905,14 +5400,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/invalid-expression-gallery.html",
@@ -4962,14 +5457,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/invalid-expression-gallery.html",
@@ -5019,14 +5514,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/invalid-expression-gallery.html",
@@ -5076,14 +5571,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/invalid-expression-gallery.html",
@@ -5133,14 +5628,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/invalid-expression-gallery.html",
@@ -5190,14 +5685,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/invalid-expression-gallery.html",
@@ -5247,14 +5742,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/invalid-expression-gallery.html",
@@ -5304,14 +5799,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/invalid-expression-gallery.html",
@@ -5361,14 +5856,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/invalid-expression-gallery.html",
@@ -5418,14 +5913,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/invalid-expression-gallery.html",
@@ -5475,14 +5970,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/invalid-expression-gallery.html",
@@ -5532,14 +6027,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/invalid-expression-gallery.html",
@@ -5589,14 +6084,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/invalid-expression-gallery.html",
@@ -5646,14 +6141,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/invalid-expression-gallery.html",
@@ -5703,14 +6198,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/invalid-expression-gallery.html",
@@ -5760,14 +6255,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/invalid-expression-gallery.html",
@@ -5817,14 +6312,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/invalid-expression-gallery.html",
@@ -5874,14 +6369,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/invalid-expression-gallery.html",
@@ -5940,7 +6435,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "diagnosticCount": 15,
+  "diagnosticCount": 16,
   "diagnostics": [
     {
       "anomaly": null,
@@ -6763,6 +7258,56 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "relatedInformation": [],
       "severity": "error",
       "source": "aurelia"
+    },
+    {
+      "anomaly": null,
+      "code": "AUR0103",
+      "data": {
+        "diagnosticAuthority": "framework-error-code",
+        "diagnosticDomain": "template",
+        "diagnosticKind": "runtime-value-converter-framework-error",
+        "frameworkErrorCode": "AUR0103",
+        "frameworkRawErrorAuthority": null,
+        "missingInput": "runtime-value-converter:AUR0103",
+        "missingInputs": [
+          "runtime-value-converter:AUR0103"
+        ],
+        "phase": "bind",
+        "relatedInformation": [],
+        "relatedQueryKind": "template-diagnostics",
+        "repairAffordance": {
+          "actionKind": "register-resource",
+          "actionability": "guided",
+          "changeDomain": "app-source",
+          "planKind": "resource-registration",
+          "readiness": "ready-to-plan",
+          "targetSourceCoverage": "all"
+        },
+        "sourceRole": "template",
+        "subject": null,
+        "taxonomy": {
+          "actionability": "guided",
+          "category": "template-syntax",
+          "confidence": null,
+          "impact": "blocking",
+          "schema": "diagnostics-taxonomy/1"
+        }
+      },
+      "message": "Aurelia runtime value converter AUR0103 rejects this binding: Value converter 'missingInterpolationConverter' was not resolved through the current compiler resource scope..",
+      "range": {
+        "end": {
+          "character": 92,
+          "line": 23
+        },
+        "start": {
+          "character": 63,
+          "line": 23
+        }
+      },
+      "rangeText": "missingInterpolationConverter",
+      "relatedInformation": [],
+      "severity": "error",
+      "source": "aurelia"
     }
   ],
   "outcome": "published",
@@ -6774,7 +7319,479 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "fingerprint": "semantic-runtime:hit",
+  "answer": {
+    "analysisDepth": "binding-observation",
+    "continuations": [
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "orient",
+          "inspect"
+        ],
+        "kind": "follow-query",
+        "rationale": "Cluster detailed diagnostics back into a summary view.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "app-diagnostic-summary",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/resource-combinator-gallery.html"
+          }
+        },
+        "targetQueryKind": "app-diagnostic-summary"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "diagnose"
+        ],
+        "kind": "follow-query",
+        "rationale": "Compare unified diagnostics with ordinary TypeScript diagnostics.",
+        "targetQuery": {
+          "kind": "typescript-diagnostics",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/resource-combinator-gallery.html"
+          }
+        },
+        "targetQueryKind": "typescript-diagnostics"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "diagnose"
+        ],
+        "kind": "follow-query",
+        "rationale": "Compare unified diagnostics with template diagnostics.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "template-diagnostics",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/resource-combinator-gallery.html"
+          }
+        },
+        "targetQueryKind": "template-diagnostics"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world"
+          ],
+          "sourceFacts": [
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/resource-combinator-gallery.html",
+                  "path": "src/resource-combinator-gallery.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "aurelia-template-expression-resource-combinators"
+                },
+                "end": 1035,
+                "kind": "source-span-address",
+                "label": "src/resource-combinator-gallery.html@1023..1035",
+                "path": "src/resource-combinator-gallery.html",
+                "role": "name",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "aurelia-template-expression-resource-combinators",
+                "start": 1023
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/resource-combinator-gallery.html",
+                  "path": "src/resource-combinator-gallery.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "aurelia-template-expression-resource-combinators"
+                },
+                "end": 1198,
+                "kind": "source-span-address",
+                "label": "src/resource-combinator-gallery.html@1188..1198",
+                "path": "src/resource-combinator-gallery.html",
+                "role": "name",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "aurelia-template-expression-resource-combinators",
+                "start": 1188
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 136,
+                "kind": "source-span-address",
+                "label": "src/resource-combinator-gallery.html@131..136",
+                "path": "src/resource-combinator-gallery.html",
+                "role": "typescript-overlay:semantic",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "aurelia-template-expression-resource-combinators",
+                "start": 131
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/resource-combinator-gallery.html",
+                  "path": "src/resource-combinator-gallery.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "aurelia-template-expression-resource-combinators"
+                },
+                "end": 1334,
+                "kind": "source-span-address",
+                "label": "src/resource-combinator-gallery.html@1319..1334",
+                "path": "src/resource-combinator-gallery.html",
+                "role": "name",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "aurelia-template-expression-resource-combinators",
+                "start": 1319
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/resource-combinator-gallery.html",
+                  "path": "src/resource-combinator-gallery.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "aurelia-template-expression-resource-combinators"
+                },
+                "end": 1432,
+                "kind": "source-span-address",
+                "label": "src/resource-combinator-gallery.html@1417..1432",
+                "path": "src/resource-combinator-gallery.html",
+                "role": "name",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "aurelia-template-expression-resource-combinators",
+                "start": 1417
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 1519,
+                "kind": "source-span-address",
+                "label": "src/resource-combinator-gallery.html@1518..1519",
+                "path": "src/resource-combinator-gallery.html",
+                "role": "name",
+                "start": 1518
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/resource-combinator-gallery.html",
+                  "path": "src/resource-combinator-gallery.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "aurelia-template-expression-resource-combinators"
+                },
+                "end": 1600,
+                "kind": "source-span-address",
+                "label": "src/resource-combinator-gallery.html@1584..1600",
+                "path": "src/resource-combinator-gallery.html",
+                "role": "name",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "aurelia-template-expression-resource-combinators",
+                "start": 1584
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/resource-combinator-gallery.html",
+                  "path": "src/resource-combinator-gallery.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "aurelia-template-expression-resource-combinators"
+                },
+                "end": 1702,
+                "kind": "source-span-address",
+                "label": "src/resource-combinator-gallery.html@1686..1702",
+                "path": "src/resource-combinator-gallery.html",
+                "role": "name",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "aurelia-template-expression-resource-combinators",
+                "start": 1686
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/resource-combinator-gallery.html",
+                  "path": "src/resource-combinator-gallery.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "aurelia-template-expression-resource-combinators"
+                },
+                "end": 1794,
+                "kind": "source-span-address",
+                "label": "src/resource-combinator-gallery.html@1778..1794",
+                "path": "src/resource-combinator-gallery.html",
+                "role": "name",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "aurelia-template-expression-resource-combinators",
+                "start": 1778
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/resource-combinator-gallery.html",
+                  "path": "src/resource-combinator-gallery.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "aurelia-template-expression-resource-combinators"
+                },
+                "end": 1871,
+                "kind": "source-span-address",
+                "label": "src/resource-combinator-gallery.html@1856..1871",
+                "path": "src/resource-combinator-gallery.html",
+                "role": "name",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "aurelia-template-expression-resource-combinators",
+                "start": 1856
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/resource-combinator-gallery.html",
+                  "path": "src/resource-combinator-gallery.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "aurelia-template-expression-resource-combinators"
+                },
+                "end": 1974,
+                "kind": "source-span-address",
+                "label": "src/resource-combinator-gallery.html@1945..1974",
+                "path": "src/resource-combinator-gallery.html",
+                "role": "name",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "aurelia-template-expression-resource-combinators",
+                "start": 1945
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 221,
+                "kind": "source-span-address",
+                "label": "src/resource-combinator-gallery.html@216..221",
+                "path": "src/resource-combinator-gallery.html",
+                "role": "typescript-overlay:semantic",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "aurelia-template-expression-resource-combinators",
+                "start": 216
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 593,
+                "kind": "source-span-address",
+                "label": "src/resource-combinator-gallery.html@588..593",
+                "path": "src/resource-combinator-gallery.html",
+                "role": "binding-source-assignment",
+                "start": 588
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/resource-combinator-gallery.html",
+                  "path": "src/resource-combinator-gallery.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "aurelia-template-expression-resource-combinators"
+                },
+                "end": 648,
+                "kind": "source-span-address",
+                "label": "src/resource-combinator-gallery.html@632..648",
+                "path": "src/resource-combinator-gallery.html",
+                "role": "name",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "aurelia-template-expression-resource-combinators",
+                "start": 632
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 937,
+                "kind": "source-span-address",
+                "label": "src/resource-combinator-gallery.html@932..937",
+                "path": "src/resource-combinator-gallery.html",
+                "role": "typescript-overlay:semantic",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "aurelia-template-expression-resource-combinators",
+                "start": 932
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 945,
+                "kind": "source-span-address",
+                "label": "src/resource-combinator-gallery.html@938..945",
+                "path": "src/resource-combinator-gallery.html",
+                "role": "typescript-overlay:semantic",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "aurelia-template-expression-resource-combinators",
+                "start": 938
+              }
+            }
+          ],
+          "sourceRequirement": "exact-authored-span"
+        },
+        "intents": [
+          "diagnose",
+          "repair"
+        ],
+        "kind": "follow-query",
+        "rationale": "Inspect template-diagnostics rows referenced by returned diagnostics.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "template-diagnostics",
+          "page": {
+            "size": 200
+          }
+        },
+        "targetQueryKind": "template-diagnostics"
+      }
+    ],
+    "coverage": "complete",
+    "page": null,
+    "result": "answered",
+    "schemaVersion": "0.2",
+    "selection": "not-applicable",
+    "summary": "Returned 16 app diagnostic(s)."
+  },
   "outcome": "result",
   "presentation": {
     "complete": true,
@@ -6810,7 +7827,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": {
                 "source": {
                   "end": 136,
@@ -6825,11 +7842,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-combinator-gallery.html",
@@ -6871,7 +7888,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         }
       },
       {
-        "groupKey": "row:diagnostic:10:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/resource-combinator-gallery.html:216:221:typescript:TS2345",
+        "groupKey": "row:diagnostic:11:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/resource-combinator-gallery.html:216:221:typescript:TS2345",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -6900,7 +7917,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": {
                 "source": {
                   "end": 221,
@@ -6915,11 +7932,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-combinator-gallery.html",
@@ -6945,7 +7962,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:10:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/resource-combinator-gallery.html:216:221:typescript:TS2345"
+          "rowId": "diagnostic:11:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/resource-combinator-gallery.html:216:221:typescript:TS2345"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -6961,7 +7978,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         }
       },
       {
-        "groupKey": "row:diagnostic:11:template:expression-runtime-evaluation-error:framework-error-code:AUR0103:src/resource-combinator-gallery.html:588:593:runtime-ast:AUR0103",
+        "groupKey": "row:diagnostic:12:template:expression-runtime-evaluation-error:framework-error-code:AUR0103:src/resource-combinator-gallery.html:588:593:runtime-ast:AUR0103",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -6990,7 +8007,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": {
                 "source": {
                   "end": 593,
@@ -7005,11 +8022,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-combinator-gallery.html",
@@ -7035,7 +8052,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:11:template:expression-runtime-evaluation-error:framework-error-code:AUR0103:src/resource-combinator-gallery.html:588:593:runtime-ast:AUR0103"
+          "rowId": "diagnostic:12:template:expression-runtime-evaluation-error:framework-error-code:AUR0103:src/resource-combinator-gallery.html:588:593:runtime-ast:AUR0103"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -7051,7 +8068,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         }
       },
       {
-        "groupKey": "row:diagnostic:12:template:runtime-value-converter-framework-error:framework-error-code:AUR0103:src/resource-combinator-gallery.html:632:648:runtime-value-converter:AUR0103",
+        "groupKey": "row:diagnostic:13:template:runtime-value-converter-framework-error:framework-error-code:AUR0103:src/resource-combinator-gallery.html:632:648:runtime-value-converter:AUR0103",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -7080,14 +8097,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-combinator-gallery.html",
@@ -7113,7 +8130,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:12:template:runtime-value-converter-framework-error:framework-error-code:AUR0103:src/resource-combinator-gallery.html:632:648:runtime-value-converter:AUR0103"
+          "rowId": "diagnostic:13:template:runtime-value-converter-framework-error:framework-error-code:AUR0103:src/resource-combinator-gallery.html:632:648:runtime-value-converter:AUR0103"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -7121,7 +8138,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null
       },
       {
-        "groupKey": "row:diagnostic:13:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/resource-combinator-gallery.html:932:937:typescript:TS2345",
+        "groupKey": "row:diagnostic:14:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/resource-combinator-gallery.html:932:937:typescript:TS2345",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -7150,7 +8167,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": {
                 "source": {
                   "end": 937,
@@ -7165,11 +8182,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-combinator-gallery.html",
@@ -7195,7 +8212,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:13:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/resource-combinator-gallery.html:932:937:typescript:TS2345"
+          "rowId": "diagnostic:14:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/resource-combinator-gallery.html:932:937:typescript:TS2345"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -7211,7 +8228,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         }
       },
       {
-        "groupKey": "row:diagnostic:14:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/resource-combinator-gallery.html:938:945:typescript:TS2345",
+        "groupKey": "row:diagnostic:15:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/resource-combinator-gallery.html:938:945:typescript:TS2345",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -7240,7 +8257,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": {
                 "source": {
                   "end": 945,
@@ -7255,11 +8272,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-combinator-gallery.html",
@@ -7285,7 +8302,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:14:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/resource-combinator-gallery.html:938:945:typescript:TS2345"
+          "rowId": "diagnostic:15:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/resource-combinator-gallery.html:938:945:typescript:TS2345"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -7330,7 +8347,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": {
                 "source": {
                   "end": 1035,
@@ -7345,11 +8362,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-combinator-gallery.html",
@@ -7420,14 +8437,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-combinator-gallery.html",
@@ -7490,14 +8507,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-combinator-gallery.html",
@@ -7560,14 +8577,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-combinator-gallery.html",
@@ -7630,14 +8647,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-combinator-gallery.html",
@@ -7700,14 +8717,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-combinator-gallery.html",
@@ -7770,14 +8787,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-combinator-gallery.html",
@@ -7840,14 +8857,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-combinator-gallery.html",
@@ -7910,14 +8927,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-combinator-gallery.html",
@@ -7949,13 +8966,83 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "rawRowCount": 1,
         "related": [],
         "subject": null
+      },
+      {
+        "groupKey": "row:diagnostic:10:template:runtime-value-converter-framework-error:framework-error-code:AUR0103:src/resource-combinator-gallery.html:1945:1974:runtime-value-converter:AUR0103",
+        "maxRawSeverity": "error",
+        "primary": {
+          "diagnostic": {
+            "actionability": "guided",
+            "anomaly": null,
+            "category": "template-syntax",
+            "code": "AUR0103",
+            "data": {
+              "diagnosticAuthority": "framework-error-code",
+              "diagnosticDomain": "template",
+              "diagnosticKind": "runtime-value-converter-framework-error",
+              "frameworkErrorCode": "AUR0103",
+              "frameworkRawErrorAuthority": null,
+              "missingInput": "runtime-value-converter:AUR0103",
+              "missingInputs": [
+                "runtime-value-converter:AUR0103"
+              ],
+              "phase": "bind",
+              "relatedInformation": [],
+              "relatedQueryKind": "template-diagnostics",
+              "repairAffordance": {
+                "actionKind": "register-resource",
+                "actionability": "guided",
+                "changeDomain": "app-source",
+                "planKind": "resource-registration",
+                "readiness": "ready-to-plan",
+                "targetSourceCoverage": "all"
+              },
+              "sourceRole": "template",
+              "subject": null,
+              "taxonomy": {
+                "actionability": "guided",
+                "category": "template-syntax",
+                "confidence": null,
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
+              }
+            },
+            "file": "src/resource-combinator-gallery.html",
+            "impact": "blocking",
+            "issues": [
+              {
+                "code": "AUR0103",
+                "kind": "runtime-value-converter-framework-error",
+                "message": "Aurelia runtime value converter AUR0103 rejects this binding: Value converter 'missingInterpolationConverter' was not resolved through the current compiler resource scope.."
+              }
+            ],
+            "message": "Aurelia runtime value converter AUR0103 rejects this binding: Value converter 'missingInterpolationConverter' was not resolved through the current compiler resource scope..",
+            "related": [],
+            "severity": "error",
+            "source": "semantic-runtime:template",
+            "span": {
+              "end": 1974,
+              "start": 1945
+            },
+            "spanText": "missingInterpolationConverter",
+            "status": "primary",
+            "uri": "fixtures://pressure/template-expression-resource-combinators/src/resource-combinator-gallery.html"
+          },
+          "relation": null,
+          "role": "primary",
+          "rowId": "diagnostic:10:template:runtime-value-converter-framework-error:framework-error-code:AUR0103:src/resource-combinator-gallery.html:1945:1974:runtime-value-converter:AUR0103"
+        },
+        "primarySeverity": "error",
+        "rawRowCount": 1,
+        "related": [],
+        "subject": null
       }
     ],
-    "primaryCount": 15,
-    "rawRowCount": 15
+    "primaryCount": 16,
+    "rawRowCount": 16
   },
   "raw": {
-    "diagnosticCount": 15,
+    "diagnosticCount": 16,
     "diagnostics": [
       {
         "actionability": "guided",
@@ -7983,7 +9070,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": {
             "source": {
               "end": 1035,
@@ -7998,11 +9085,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-combinator-gallery.html",
@@ -8052,14 +9139,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-combinator-gallery.html",
@@ -8109,7 +9196,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": {
             "source": {
               "end": 136,
@@ -8124,11 +9211,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-combinator-gallery.html",
@@ -8178,14 +9265,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-combinator-gallery.html",
@@ -8235,14 +9322,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-combinator-gallery.html",
@@ -8292,14 +9379,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-combinator-gallery.html",
@@ -8349,14 +9436,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-combinator-gallery.html",
@@ -8406,14 +9493,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-combinator-gallery.html",
@@ -8463,14 +9550,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-combinator-gallery.html",
@@ -8520,14 +9607,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-combinator-gallery.html",
@@ -8548,6 +9635,63 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "start": 1856
         },
         "spanText": "missingBehavior",
+        "status": "canonical",
+        "uri": "fixtures://pressure/template-expression-resource-combinators/src/resource-combinator-gallery.html"
+      },
+      {
+        "actionability": "guided",
+        "anomaly": null,
+        "category": "template-syntax",
+        "code": "AUR0103",
+        "data": {
+          "diagnosticAuthority": "framework-error-code",
+          "diagnosticDomain": "template",
+          "diagnosticKind": "runtime-value-converter-framework-error",
+          "frameworkErrorCode": "AUR0103",
+          "frameworkRawErrorAuthority": null,
+          "missingInput": "runtime-value-converter:AUR0103",
+          "missingInputs": [
+            "runtime-value-converter:AUR0103"
+          ],
+          "phase": "bind",
+          "relatedInformation": [],
+          "relatedQueryKind": "template-diagnostics",
+          "repairAffordance": {
+            "actionKind": "register-resource",
+            "actionability": "guided",
+            "changeDomain": "app-source",
+            "planKind": "resource-registration",
+            "readiness": "ready-to-plan",
+            "targetSourceCoverage": "all"
+          },
+          "sourceRole": "template",
+          "subject": null,
+          "taxonomy": {
+            "actionability": "guided",
+            "category": "template-syntax",
+            "confidence": null,
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
+          }
+        },
+        "file": "src/resource-combinator-gallery.html",
+        "impact": "blocking",
+        "issues": [
+          {
+            "code": "AUR0103",
+            "kind": "runtime-value-converter-framework-error",
+            "message": "Aurelia runtime value converter AUR0103 rejects this binding: Value converter 'missingInterpolationConverter' was not resolved through the current compiler resource scope.."
+          }
+        ],
+        "message": "Aurelia runtime value converter AUR0103 rejects this binding: Value converter 'missingInterpolationConverter' was not resolved through the current compiler resource scope..",
+        "related": [],
+        "severity": "error",
+        "source": "semantic-runtime:template",
+        "span": {
+          "end": 1974,
+          "start": 1945
+        },
+        "spanText": "missingInterpolationConverter",
         "status": "canonical",
         "uri": "fixtures://pressure/template-expression-resource-combinators/src/resource-combinator-gallery.html"
       },
@@ -8577,7 +9721,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": {
             "source": {
               "end": 221,
@@ -8592,11 +9736,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-combinator-gallery.html",
@@ -8646,7 +9790,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": {
             "source": {
               "end": 593,
@@ -8661,11 +9805,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-combinator-gallery.html",
@@ -8715,14 +9859,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-combinator-gallery.html",
@@ -8772,7 +9916,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": {
             "source": {
               "end": 937,
@@ -8787,11 +9931,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-combinator-gallery.html",
@@ -8841,7 +9985,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": {
             "source": {
               "end": 945,
@@ -8856,11 +10000,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-combinator-gallery.html",
@@ -8886,13 +10030,9 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       }
     ]
   },
-  "suppressed": {
-    "diagnosticCount": 0,
-    "diagnostics": []
-  },
   "surfaces": {
     "lsp": {
-      "diagnosticCount": 15,
+      "diagnosticCount": 16,
       "diagnostics": [
         {
           "actionability": "manual",
@@ -8920,7 +10060,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": {
               "source": {
                 "end": 136,
@@ -8935,11 +10075,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-combinator-gallery.html",
@@ -8989,7 +10129,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": {
               "source": {
                 "end": 221,
@@ -9004,11 +10144,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-combinator-gallery.html",
@@ -9058,7 +10198,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": {
               "source": {
                 "end": 593,
@@ -9073,11 +10213,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-combinator-gallery.html",
@@ -9127,14 +10267,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-combinator-gallery.html",
@@ -9184,7 +10324,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": {
               "source": {
                 "end": 937,
@@ -9199,11 +10339,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-combinator-gallery.html",
@@ -9253,7 +10393,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": {
               "source": {
                 "end": 945,
@@ -9268,11 +10408,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-combinator-gallery.html",
@@ -9322,7 +10462,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": {
               "source": {
                 "end": 1035,
@@ -9337,11 +10477,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-combinator-gallery.html",
@@ -9391,14 +10531,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-combinator-gallery.html",
@@ -9448,14 +10588,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-combinator-gallery.html",
@@ -9505,14 +10645,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-combinator-gallery.html",
@@ -9562,14 +10702,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-combinator-gallery.html",
@@ -9619,14 +10759,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-combinator-gallery.html",
@@ -9676,14 +10816,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-combinator-gallery.html",
@@ -9733,14 +10873,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-combinator-gallery.html",
@@ -9790,14 +10930,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-combinator-gallery.html",
@@ -9820,6 +10960,63 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "spanText": "missingBehavior",
           "status": "primary",
           "uri": "fixtures://pressure/template-expression-resource-combinators/src/resource-combinator-gallery.html"
+        },
+        {
+          "actionability": "guided",
+          "anomaly": null,
+          "category": "template-syntax",
+          "code": "AUR0103",
+          "data": {
+            "diagnosticAuthority": "framework-error-code",
+            "diagnosticDomain": "template",
+            "diagnosticKind": "runtime-value-converter-framework-error",
+            "frameworkErrorCode": "AUR0103",
+            "frameworkRawErrorAuthority": null,
+            "missingInput": "runtime-value-converter:AUR0103",
+            "missingInputs": [
+              "runtime-value-converter:AUR0103"
+            ],
+            "phase": "bind",
+            "relatedInformation": [],
+            "relatedQueryKind": "template-diagnostics",
+            "repairAffordance": {
+              "actionKind": "register-resource",
+              "actionability": "guided",
+              "changeDomain": "app-source",
+              "planKind": "resource-registration",
+              "readiness": "ready-to-plan",
+              "targetSourceCoverage": "all"
+            },
+            "sourceRole": "template",
+            "subject": null,
+            "taxonomy": {
+              "actionability": "guided",
+              "category": "template-syntax",
+              "confidence": null,
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
+            }
+          },
+          "file": "src/resource-combinator-gallery.html",
+          "impact": "blocking",
+          "issues": [
+            {
+              "code": "AUR0103",
+              "kind": "runtime-value-converter-framework-error",
+              "message": "Aurelia runtime value converter AUR0103 rejects this binding: Value converter 'missingInterpolationConverter' was not resolved through the current compiler resource scope.."
+            }
+          ],
+          "message": "Aurelia runtime value converter AUR0103 rejects this binding: Value converter 'missingInterpolationConverter' was not resolved through the current compiler resource scope..",
+          "related": [],
+          "severity": "error",
+          "source": "semantic-runtime:template",
+          "span": {
+            "end": 1974,
+            "start": 1945
+          },
+          "spanText": "missingInterpolationConverter",
+          "status": "primary",
+          "uri": "fixtures://pressure/template-expression-resource-combinators/src/resource-combinator-gallery.html"
         }
       ]
     }
@@ -9834,10 +11031,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 {
   "comparisonKey": "domain/kind/code/severity/text/message",
   "countsMatch": true,
-  "customLspSurfaceCount": 15,
+  "customLspSurfaceCount": 16,
   "customOnly": [],
   "lspOnly": [],
-  "lspPublishCount": 15,
+  "lspPublishCount": 16,
   "suppressedCount": 0
 }
 ```

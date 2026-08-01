@@ -458,7 +458,278 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "fingerprint": "semantic-runtime:hit",
+  "answer": {
+    "analysisDepth": "binding-observation",
+    "continuations": [
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "orient",
+          "inspect"
+        ],
+        "kind": "follow-query",
+        "rationale": "Cluster detailed diagnostics back into a summary view.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "app-diagnostic-summary",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/template-overlay-type-errors-app.html"
+          }
+        },
+        "targetQueryKind": "app-diagnostic-summary"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "diagnose"
+        ],
+        "kind": "follow-query",
+        "rationale": "Compare unified diagnostics with ordinary TypeScript diagnostics.",
+        "targetQuery": {
+          "kind": "typescript-diagnostics",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/template-overlay-type-errors-app.html"
+          }
+        },
+        "targetQueryKind": "typescript-diagnostics"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "diagnose"
+        ],
+        "kind": "follow-query",
+        "rationale": "Compare unified diagnostics with template diagnostics.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "template-diagnostics",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/template-overlay-type-errors-app.html"
+          }
+        },
+        "targetQueryKind": "template-diagnostics"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world"
+          ],
+          "sourceFacts": [
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 160,
+                "kind": "source-span-address",
+                "label": "src/template-overlay-type-errors-app.html@149..160",
+                "path": "src/template-overlay-type-errors-app.html",
+                "role": "typescript-overlay:semantic",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "template-overlay-type-errors",
+                "start": 149
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 166,
+                "kind": "source-span-address",
+                "label": "src/template-overlay-type-errors-app.html@161..166",
+                "path": "src/template-overlay-type-errors-app.html",
+                "role": "name",
+                "start": 161
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 254,
+                "kind": "source-span-address",
+                "label": "src/template-overlay-type-errors-app.html@241..254",
+                "path": "src/template-overlay-type-errors-app.html",
+                "role": "name",
+                "start": 241
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 254,
+                "kind": "source-span-address",
+                "label": "src/template-overlay-type-errors-app.html@241..254",
+                "path": "src/template-overlay-type-errors-app.html",
+                "role": "typescript-overlay:semantic",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "template-overlay-type-errors",
+                "start": 241
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 286,
+                "kind": "source-span-address",
+                "label": "src/template-overlay-type-errors-app.html@277..286",
+                "path": "src/template-overlay-type-errors-app.html",
+                "role": "typescript-overlay:semantic",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "template-overlay-type-errors",
+                "start": 277
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 444,
+                "kind": "source-span-address",
+                "label": "src/template-overlay-type-errors-app.html@431..444",
+                "path": "src/template-overlay-type-errors-app.html",
+                "role": "typescript-overlay:semantic",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "template-overlay-type-errors",
+                "start": 431
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 552,
+                "kind": "source-span-address",
+                "label": "src/template-overlay-type-errors-app.html@540..552",
+                "path": "src/template-overlay-type-errors-app.html",
+                "role": "typescript-overlay:semantic",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "template-overlay-type-errors",
+                "start": 540
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 79,
+                "kind": "source-span-address",
+                "label": "src/template-overlay-type-errors-app.html@67..79",
+                "path": "src/template-overlay-type-errors-app.html",
+                "role": "name",
+                "start": 67
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 79,
+                "kind": "source-span-address",
+                "label": "src/template-overlay-type-errors-app.html@67..79",
+                "path": "src/template-overlay-type-errors-app.html",
+                "role": "typescript-overlay:semantic",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "template-overlay-type-errors",
+                "start": 67
+              }
+            }
+          ],
+          "sourceRequirement": "exact-authored-span"
+        },
+        "intents": [
+          "diagnose",
+          "repair"
+        ],
+        "kind": "follow-query",
+        "rationale": "Inspect template-diagnostics rows referenced by returned diagnostics.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "template-diagnostics",
+          "page": {
+            "size": 200
+          }
+        },
+        "targetQueryKind": "template-diagnostics"
+      }
+    ],
+    "coverage": "complete",
+    "page": null,
+    "result": "answered",
+    "schemaVersion": "0.2",
+    "selection": "not-applicable",
+    "summary": "Returned 9 app diagnostic(s)."
+  },
   "outcome": "result",
   "presentation": {
     "complete": true,
@@ -494,7 +765,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": {
                 "source": {
                   "end": 79,
@@ -509,11 +780,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "degraded",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/template-overlay-type-errors-app.html",
@@ -571,7 +842,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                   "readiness": "inspection-required",
                   "targetSourceCoverage": "all"
                 },
-                "sourceRole": null,
+                "sourceRole": "template",
                 "subject": {
                   "source": {
                     "end": 79,
@@ -586,11 +857,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                   "uri": null
                 },
                 "taxonomy": {
-                  "actionability": null,
-                  "category": null,
+                  "actionability": "manual",
+                  "category": "template-syntax",
                   "confidence": null,
-                  "impact": null,
-                  "schema": null
+                  "impact": "blocking",
+                  "schema": "diagnostics-taxonomy/1"
                 }
               },
               "file": "src/template-overlay-type-errors-app.html",
@@ -659,7 +930,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": {
                 "source": {
                   "end": 166,
@@ -674,11 +945,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/template-overlay-type-errors-app.html",
@@ -736,7 +1007,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                   "readiness": "inspection-required",
                   "targetSourceCoverage": "all"
                 },
-                "sourceRole": null,
+                "sourceRole": "template",
                 "subject": {
                   "source": {
                     "end": 166,
@@ -751,11 +1022,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                   "uri": null
                 },
                 "taxonomy": {
-                  "actionability": null,
-                  "category": null,
+                  "actionability": "manual",
+                  "category": "template-syntax",
                   "confidence": null,
-                  "impact": null,
-                  "schema": null
+                  "impact": "informational",
+                  "schema": "diagnostics-taxonomy/1"
                 }
               },
               "file": "src/template-overlay-type-errors-app.html",
@@ -824,7 +1095,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": {
                 "source": {
                   "end": 254,
@@ -839,11 +1110,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "degraded",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/template-overlay-type-errors-app.html",
@@ -901,7 +1172,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                   "readiness": "inspection-required",
                   "targetSourceCoverage": "all"
                 },
-                "sourceRole": null,
+                "sourceRole": "template",
                 "subject": {
                   "source": {
                     "end": 254,
@@ -916,11 +1187,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                   "uri": null
                 },
                 "taxonomy": {
-                  "actionability": null,
-                  "category": null,
+                  "actionability": "manual",
+                  "category": "template-syntax",
                   "confidence": null,
-                  "impact": null,
-                  "schema": null
+                  "impact": "blocking",
+                  "schema": "diagnostics-taxonomy/1"
                 }
               },
               "file": "src/template-overlay-type-errors-app.html",
@@ -989,7 +1260,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": {
                 "source": {
                   "end": 292,
@@ -1004,11 +1275,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/template-overlay-type-errors-app.html",
@@ -1079,7 +1350,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": {
                 "source": {
                   "end": 444,
@@ -1094,11 +1365,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/template-overlay-type-errors-app.html",
@@ -1169,7 +1440,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "template",
               "subject": {
                 "source": {
                   "end": 552,
@@ -1184,11 +1455,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/template-overlay-type-errors-app.html",
@@ -1262,7 +1533,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": {
             "source": {
               "end": 166,
@@ -1277,11 +1548,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/template-overlay-type-errors-app.html",
@@ -1331,7 +1602,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": {
             "source": {
               "end": 166,
@@ -1346,11 +1617,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "informational",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/template-overlay-type-errors-app.html",
@@ -1400,7 +1671,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": {
             "source": {
               "end": 254,
@@ -1415,11 +1686,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "degraded",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/template-overlay-type-errors-app.html",
@@ -1469,7 +1740,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": {
             "source": {
               "end": 254,
@@ -1484,11 +1755,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/template-overlay-type-errors-app.html",
@@ -1538,7 +1809,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": {
             "source": {
               "end": 292,
@@ -1553,11 +1824,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/template-overlay-type-errors-app.html",
@@ -1607,7 +1878,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": {
             "source": {
               "end": 444,
@@ -1622,11 +1893,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/template-overlay-type-errors-app.html",
@@ -1676,7 +1947,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": {
             "source": {
               "end": 552,
@@ -1691,11 +1962,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/template-overlay-type-errors-app.html",
@@ -1745,7 +2016,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": {
             "source": {
               "end": 79,
@@ -1760,11 +2031,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "degraded",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/template-overlay-type-errors-app.html",
@@ -1814,7 +2085,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "template",
           "subject": {
             "source": {
               "end": 79,
@@ -1829,11 +2100,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/template-overlay-type-errors-app.html",
@@ -1858,10 +2129,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "uri": "fixtures://pressure/template-overlay-type-errors/src/template-overlay-type-errors-app.html"
       }
     ]
-  },
-  "suppressed": {
-    "diagnosticCount": 0,
-    "diagnostics": []
   },
   "surfaces": {
     "lsp": {
@@ -1893,7 +2160,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": {
               "source": {
                 "end": 79,
@@ -1908,11 +2175,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "degraded",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/template-overlay-type-errors-app.html",
@@ -1962,7 +2229,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": {
               "source": {
                 "end": 166,
@@ -1977,11 +2244,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/template-overlay-type-errors-app.html",
@@ -2031,7 +2298,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": {
               "source": {
                 "end": 254,
@@ -2046,11 +2313,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "degraded",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/template-overlay-type-errors-app.html",
@@ -2100,7 +2367,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": {
               "source": {
                 "end": 292,
@@ -2115,11 +2382,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/template-overlay-type-errors-app.html",
@@ -2169,7 +2436,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": {
               "source": {
                 "end": 444,
@@ -2184,11 +2451,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/template-overlay-type-errors-app.html",
@@ -2238,7 +2505,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "template",
             "subject": {
               "source": {
                 "end": 552,
@@ -2253,11 +2520,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/template-overlay-type-errors-app.html",

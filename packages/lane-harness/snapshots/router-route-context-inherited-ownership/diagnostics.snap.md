@@ -156,7 +156,157 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "fingerprint": "semantic-runtime:hit",
+  "answer": {
+    "analysisDepth": "binding-observation",
+    "continuations": [
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "orient",
+          "inspect"
+        ],
+        "kind": "follow-query",
+        "rationale": "Cluster detailed diagnostics back into a summary view.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "app-diagnostic-summary",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/route-parameters/shared-route-parameters.ts"
+          }
+        },
+        "targetQueryKind": "app-diagnostic-summary"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "diagnose"
+        ],
+        "kind": "follow-query",
+        "rationale": "Compare unified diagnostics with ordinary TypeScript diagnostics.",
+        "targetQuery": {
+          "kind": "typescript-diagnostics",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/route-parameters/shared-route-parameters.ts"
+          }
+        },
+        "targetQueryKind": "typescript-diagnostics"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "diagnose"
+        ],
+        "kind": "follow-query",
+        "rationale": "Compare unified diagnostics with template diagnostics.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "template-diagnostics",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/route-parameters/shared-route-parameters.ts"
+          }
+        },
+        "targetQueryKind": "template-diagnostics"
+      },
+      {
+        "blockers": [
+          "No framework, TypeScript, or semantic-runtime diagnostic authority was returned for this related diagnostic family."
+        ],
+        "cost": "app-world",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world"
+          ],
+          "sourceFacts": [
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/route-parameters/shared-route-parameters.ts",
+                  "path": "src/route-parameters/shared-route-parameters.ts",
+                  "sourceFileRole": "app-source",
+                  "sourceWorkspaceKey": "router-route-context-inherited-ownership"
+                },
+                "end": 243,
+                "kind": "source-span-address",
+                "label": "src/route-parameters/shared-route-parameters.ts@178..243",
+                "path": "src/route-parameters/shared-route-parameters.ts",
+                "role": "primary",
+                "sourceFileRole": "app-source",
+                "sourceWorkspaceKey": "router-route-context-inherited-ownership",
+                "start": 178
+              }
+            }
+          ],
+          "sourceRequirement": "exact-authored-span"
+        },
+        "intents": [
+          "diagnose",
+          "repair"
+        ],
+        "kind": "follow-query",
+        "rationale": "Inspect router-issues rows referenced by returned diagnostics.",
+        "targetQuery": {
+          "kind": "router-issues",
+          "page": {
+            "size": 200
+          }
+        },
+        "targetQueryKind": "router-issues"
+      }
+    ],
+    "coverage": "complete",
+    "page": null,
+    "result": "answered",
+    "schemaVersion": "0.2",
+    "selection": "not-applicable",
+    "summary": "Returned 1 app diagnostic(s)."
+  },
   "outcome": "result",
   "presentation": {
     "complete": true,
@@ -180,7 +330,48 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInput": null,
               "missingInputs": [],
               "phase": "route-context-parameter-read-ownership",
-              "relatedInformation": [],
+              "relatedInformation": [
+                {
+                  "message": "Routed component 'account-route' inherits this RouteContext parameter read.",
+                  "source": {
+                    "anchor": {
+                      "kind": "source-file-address",
+                      "label": "src/router-route-context-inherited-ownership-app.ts",
+                      "path": "src/router-route-context-inherited-ownership-app.ts",
+                      "sourceFileRole": "app-source",
+                      "sourceWorkspaceKey": "router-route-context-inherited-ownership"
+                    },
+                    "end": 508,
+                    "kind": "source-span-address",
+                    "label": "src/router-route-context-inherited-ownership-app.ts@496..508",
+                    "path": "src/router-route-context-inherited-ownership-app.ts",
+                    "role": "range",
+                    "sourceFileRole": "app-source",
+                    "sourceWorkspaceKey": "router-route-context-inherited-ownership",
+                    "start": 496
+                  }
+                },
+                {
+                  "message": "Routed component 'project-route' inherits this RouteContext parameter read.",
+                  "source": {
+                    "anchor": {
+                      "kind": "source-file-address",
+                      "label": "src/router-route-context-inherited-ownership-app.ts",
+                      "path": "src/router-route-context-inherited-ownership-app.ts",
+                      "sourceFileRole": "app-source",
+                      "sourceWorkspaceKey": "router-route-context-inherited-ownership"
+                    },
+                    "end": 608,
+                    "kind": "source-span-address",
+                    "label": "src/router-route-context-inherited-ownership-app.ts@596..608",
+                    "path": "src/router-route-context-inherited-ownership-app.ts",
+                    "role": "range",
+                    "sourceFileRole": "app-source",
+                    "sourceWorkspaceKey": "router-route-context-inherited-ownership",
+                    "start": 596
+                  }
+                }
+              ],
               "relatedQueryKind": "router-issues",
               "repairAffordance": {
                 "actionKind": "inspect-type-surface",
@@ -190,14 +381,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
-              "sourceRole": null,
+              "sourceRole": "app-source",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "project",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "degraded",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/route-parameters/shared-route-parameters.ts",
@@ -278,7 +469,48 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInput": null,
           "missingInputs": [],
           "phase": "route-context-parameter-read-ownership",
-          "relatedInformation": [],
+          "relatedInformation": [
+            {
+              "message": "Routed component 'account-route' inherits this RouteContext parameter read.",
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/router-route-context-inherited-ownership-app.ts",
+                  "path": "src/router-route-context-inherited-ownership-app.ts",
+                  "sourceFileRole": "app-source",
+                  "sourceWorkspaceKey": "router-route-context-inherited-ownership"
+                },
+                "end": 508,
+                "kind": "source-span-address",
+                "label": "src/router-route-context-inherited-ownership-app.ts@496..508",
+                "path": "src/router-route-context-inherited-ownership-app.ts",
+                "role": "range",
+                "sourceFileRole": "app-source",
+                "sourceWorkspaceKey": "router-route-context-inherited-ownership",
+                "start": 496
+              }
+            },
+            {
+              "message": "Routed component 'project-route' inherits this RouteContext parameter read.",
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/router-route-context-inherited-ownership-app.ts",
+                  "path": "src/router-route-context-inherited-ownership-app.ts",
+                  "sourceFileRole": "app-source",
+                  "sourceWorkspaceKey": "router-route-context-inherited-ownership"
+                },
+                "end": 608,
+                "kind": "source-span-address",
+                "label": "src/router-route-context-inherited-ownership-app.ts@596..608",
+                "path": "src/router-route-context-inherited-ownership-app.ts",
+                "role": "range",
+                "sourceFileRole": "app-source",
+                "sourceWorkspaceKey": "router-route-context-inherited-ownership",
+                "start": 596
+              }
+            }
+          ],
           "relatedQueryKind": "router-issues",
           "repairAffordance": {
             "actionKind": "inspect-type-surface",
@@ -288,14 +520,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
-          "sourceRole": null,
+          "sourceRole": "app-source",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "project",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "degraded",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/route-parameters/shared-route-parameters.ts",
@@ -348,10 +580,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       }
     ]
   },
-  "suppressed": {
-    "diagnosticCount": 0,
-    "diagnostics": []
-  },
   "surfaces": {
     "lsp": {
       "diagnosticCount": 1,
@@ -370,7 +598,48 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInput": null,
             "missingInputs": [],
             "phase": "route-context-parameter-read-ownership",
-            "relatedInformation": [],
+            "relatedInformation": [
+              {
+                "message": "Routed component 'account-route' inherits this RouteContext parameter read.",
+                "source": {
+                  "anchor": {
+                    "kind": "source-file-address",
+                    "label": "src/router-route-context-inherited-ownership-app.ts",
+                    "path": "src/router-route-context-inherited-ownership-app.ts",
+                    "sourceFileRole": "app-source",
+                    "sourceWorkspaceKey": "router-route-context-inherited-ownership"
+                  },
+                  "end": 508,
+                  "kind": "source-span-address",
+                  "label": "src/router-route-context-inherited-ownership-app.ts@496..508",
+                  "path": "src/router-route-context-inherited-ownership-app.ts",
+                  "role": "range",
+                  "sourceFileRole": "app-source",
+                  "sourceWorkspaceKey": "router-route-context-inherited-ownership",
+                  "start": 496
+                }
+              },
+              {
+                "message": "Routed component 'project-route' inherits this RouteContext parameter read.",
+                "source": {
+                  "anchor": {
+                    "kind": "source-file-address",
+                    "label": "src/router-route-context-inherited-ownership-app.ts",
+                    "path": "src/router-route-context-inherited-ownership-app.ts",
+                    "sourceFileRole": "app-source",
+                    "sourceWorkspaceKey": "router-route-context-inherited-ownership"
+                  },
+                  "end": 608,
+                  "kind": "source-span-address",
+                  "label": "src/router-route-context-inherited-ownership-app.ts@596..608",
+                  "path": "src/router-route-context-inherited-ownership-app.ts",
+                  "role": "range",
+                  "sourceFileRole": "app-source",
+                  "sourceWorkspaceKey": "router-route-context-inherited-ownership",
+                  "start": 596
+                }
+              }
+            ],
             "relatedQueryKind": "router-issues",
             "repairAffordance": {
               "actionKind": "inspect-type-surface",
@@ -380,14 +649,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
-            "sourceRole": null,
+            "sourceRole": "app-source",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "project",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "degraded",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/route-parameters/shared-route-parameters.ts",
@@ -484,7 +753,104 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "fingerprint": "semantic-runtime:hit",
+  "answer": {
+    "analysisDepth": "binding-observation",
+    "continuations": [
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "orient",
+          "inspect"
+        ],
+        "kind": "follow-query",
+        "rationale": "Cluster detailed diagnostics back into a summary view.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "app-diagnostic-summary",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/route-parameters/single-route-parameters.ts"
+          }
+        },
+        "targetQueryKind": "app-diagnostic-summary"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "diagnose"
+        ],
+        "kind": "follow-query",
+        "rationale": "Compare unified diagnostics with ordinary TypeScript diagnostics.",
+        "targetQuery": {
+          "kind": "typescript-diagnostics",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/route-parameters/single-route-parameters.ts"
+          }
+        },
+        "targetQueryKind": "typescript-diagnostics"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "diagnose"
+        ],
+        "kind": "follow-query",
+        "rationale": "Compare unified diagnostics with template diagnostics.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "template-diagnostics",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/route-parameters/single-route-parameters.ts"
+          }
+        },
+        "targetQueryKind": "template-diagnostics"
+      }
+    ],
+    "coverage": "complete",
+    "page": null,
+    "result": "answered",
+    "schemaVersion": "0.2",
+    "selection": "not-applicable",
+    "summary": "Returned 0 app diagnostic(s)."
+  },
   "outcome": "result",
   "presentation": {
     "complete": true,
@@ -494,10 +860,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     "rawRowCount": 0
   },
   "raw": {
-    "diagnosticCount": 0,
-    "diagnostics": []
-  },
-  "suppressed": {
     "diagnosticCount": 0,
     "diagnostics": []
   },

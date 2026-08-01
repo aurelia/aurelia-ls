@@ -6,8 +6,8 @@
         "id": "di-cyclic-main-source",
         "file": "src/main.ts",
         "verdict": "correct",
-        "reason": "Publishes AUR0003 on the `container.get(IFoo)` activation site that triggers the statically visible singleton cycle.",
-        "note": "NEW 2026-07-07. DI framework diagnostic for a statically visible singleton dependency cycle. VERDICT 2026-07-07: correct."
+        "reason": "Publishes one AUR0003 on the re-exported container's `get(IFoo)` activation site that triggers the statically visible singleton self-cycle; registration itself does not activate the resolver.",
+        "note": "UPDATED 2026-08-01. The current fixture proves canonical container identity through a barrel re-export, so the exact triggering call is `reexportedContainer.get(IFoo)` and the cycle path contains one IFoo-to-IFoo edge."
       }
     ]
   }

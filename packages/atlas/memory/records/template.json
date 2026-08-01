@@ -1999,13 +1999,14 @@
         "framework-errors"
       ],
       "summary": "RuntimeExpressionResourcePlanner owns pre-bind behavior/converter order, reachability, and state effects; the behavior materializer publishes phase applications, lifecycle effects, and issues from that plan.",
-      "rationale": "Aurelia executes one astBind chain before target access, and reached behaviors can rewrite that chain by inserting converters. Effective mode, target-observer overrides, projected converters, phase reachability, and downstream data flow must therefore spend one authority. Replaying authored behaviors or converters independently loses runtime order and creates mutually inconsistent products.",
+      "rationale": "Aurelia executes one astBind chain before target access, and structurally admitted behaviors can rewrite that chain by inserting converters even when controller activation is not yet provably reached. Effective mode, target-observer overrides, projected converters, phase reachability, and downstream data flow must therefore spend one authority. Replaying authored behaviors or converters independently loses runtime order and creates mutually inconsistent products.",
       "guidance": [
         "Start at RuntimeExpressionResourcePlanner when built-in behavior effects, behavior-projected converters, duplicate/rate-limit/target-subscriber diagnostics, effective binding mode, target observer selection, or expression-resource reachability changes.",
         "Keep expression parsing and structural occurrence extraction below expressionResourceOccurrences; do not reparse expression text in planner, materializers, API, or diagnostics code.",
-        "Walk each interpolation-hole chain once in astBind order, including resource-free parts and converters inserted by reached i18n behaviors. Retain authored and runtime chain depth separately. Parts bind in source order: one part's bind failure blocks every later part while preserving earlier reached parts.",
+        "Walk each interpolation-hole chain once in astBind order, including resource-free parts and converters inserted by structurally admitted i18n behaviors. Retain authored and runtime chain depth separately. Parts bind in source order: one part's bind failure blocks every later part while preserving earlier admitted parts.",
         "Cursor source projections derive the active interpolation chain from authored hole spans. Access-use selection may fall back to all uses for environment convergence, but that fallback must not assign a literal-only or otherwise access-free hole a sibling hole's lifecycle.",
         "A reached resource-resolution or behavior-bind failure blocks every inner resource plus conversion and teardown phases; preserve blocked structural rows and report phaseReachability instead of deleting them.",
+        "Keep structural expression-resource identity, order, effective mode, and conditional lifecycle effects when controller activation is open. Open reachability does not authorize reached-only issue publication, and it must not erase facts that are already determined by lowering and resource scope.",
         "Use RuntimeOperationReachability for bind and later phases. RuntimeExpressionResourcePlan owns both binding-wide aggregate source reachability and exact expression-product/interpolation-chain reachability; RuntimeBindingExpressionScopeProjectionReader owns scope handoff only.",
         "Resolve the runtime target and NodeObserverLocator configuration before ordinary target access so attr and updateTrigger can supply the target observer that PropertyBinding.bind uses.",
         "Scope assignment, controller target access, converter phases, bound-controller values, binding data flow, overlays, and inlay hints must consume RuntimeExpressionResourcePlan. Binding-owned source-value conversion spends the exact planned converter; ambient resource lookup is reserved for ownerless known-scope evaluation.",
@@ -2096,7 +2097,7 @@
         }
       ],
       "createdAt": "2026-05-14",
-      "updatedAt": "2026-07-14"
+      "updatedAt": "2026-08-01"
     },
     {
       "id": "frontier:runtime-composition-materializer",

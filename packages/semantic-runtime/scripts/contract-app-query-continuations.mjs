@@ -989,6 +989,7 @@ async function verifyFamilySpecificContinuationCanaries() {
       workspaceRoot: path.join(pressureRoot, 'router-dynamic-pattern'),
       queries: [
         { kind: SemanticAppQueryKind.OpenSeams, page: { size: 5 } },
+        { kind: SemanticAppQueryKind.OpenSeamSites, page: { size: 5 } },
         { kind: SemanticAppQueryKind.OpenSeamSummary, page: { size: 5 } },
       ],
       expectations: [
@@ -996,13 +997,19 @@ async function verifyFamilySpecificContinuationCanaries() {
           queryKind: SemanticAppQueryKind.OpenSeams,
           minRows: 1,
           targets: [SemanticAppQueryKind.OpenSeamSummary],
-          evidence: [{ target: SemanticAppQueryKind.OpenSeamSummary, sourceRequirement: 'not-required', sourceFactCount: 0 }],
+          evidence: [{ target: SemanticAppQueryKind.OpenSeamSummary, sourceRequirement: 'not-required', minSourceFactCount: 1, sourceFacets: ['exact-authored-span'] }],
+        },
+        {
+          queryKind: SemanticAppQueryKind.OpenSeamSites,
+          minRows: 1,
+          targets: [SemanticAppQueryKind.OpenSeams, SemanticAppQueryKind.OpenSeamSummary],
+          evidence: [{ target: SemanticAppQueryKind.OpenSeams, sourceRequirement: 'not-required', minSourceFactCount: 1, sourceFacets: ['exact-authored-span'] }],
         },
         {
           queryKind: SemanticAppQueryKind.OpenSeamSummary,
           minRows: 1,
           targets: [SemanticAppQueryKind.OpenSeams],
-          evidence: [{ target: SemanticAppQueryKind.OpenSeams, sourceRequirement: 'not-required', sourceFactCount: 0 }],
+          evidence: [{ target: SemanticAppQueryKind.OpenSeams, sourceRequirement: 'not-required', minSourceFactCount: 1, sourceFacets: ['exact-authored-span'] }],
         },
       ],
     },
@@ -1604,6 +1611,12 @@ function expectContinuationEvidence(answer, queryKind, expectation, label) {
     expect(
       (continuation.evidence?.sourceFacts ?? []).length === expectation.sourceFactCount,
       `${label}: ${queryKind} -> ${expectation.target} should carry ${expectation.sourceFactCount} distinct source fact(s), got ${(continuation.evidence?.sourceFacts ?? []).length}.`,
+    );
+  }
+  if (expectation.minSourceFactCount != null) {
+    expect(
+      (continuation.evidence?.sourceFacts ?? []).length >= expectation.minSourceFactCount,
+      `${label}: ${queryKind} -> ${expectation.target} should carry at least ${expectation.minSourceFactCount} distinct source fact(s), got ${(continuation.evidence?.sourceFacts ?? []).length}.`,
     );
   }
   if (expectation.sourceFacets != null) {

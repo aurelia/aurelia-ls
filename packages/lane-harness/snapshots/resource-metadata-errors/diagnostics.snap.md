@@ -1476,7 +1476,738 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "fingerprint": "semantic-runtime:hit",
+  "answer": {
+    "analysisDepth": "binding-observation",
+    "continuations": [
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "orient",
+          "inspect"
+        ],
+        "kind": "follow-query",
+        "rationale": "Cluster detailed diagnostics back into a summary view.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "app-diagnostic-summary",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/resource-metadata-errors-app.ts"
+          }
+        },
+        "targetQueryKind": "app-diagnostic-summary"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "diagnose"
+        ],
+        "kind": "follow-query",
+        "rationale": "Compare unified diagnostics with ordinary TypeScript diagnostics.",
+        "targetQuery": {
+          "kind": "typescript-diagnostics",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/resource-metadata-errors-app.ts"
+          }
+        },
+        "targetQueryKind": "typescript-diagnostics"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "diagnose"
+        ],
+        "kind": "follow-query",
+        "rationale": "Compare unified diagnostics with template diagnostics.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "template-diagnostics",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/resource-metadata-errors-app.ts"
+          }
+        },
+        "targetQueryKind": "template-diagnostics"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world"
+          ],
+          "sourceFacts": [
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 1051,
+                "kind": "typescript-diagnostic",
+                "label": "c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts@1038..1051",
+                "path": "c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts",
+                "role": "line:36:character:3",
+                "start": 1038
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 135,
+                "kind": "typescript-diagnostic",
+                "label": "c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts@122..135",
+                "path": "c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts",
+                "role": "line:9:character:1",
+                "start": 122
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 1594,
+                "kind": "typescript-diagnostic",
+                "label": "c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts@1559..1594",
+                "path": "c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts",
+                "role": "line:59:character:10",
+                "start": 1559
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 1901,
+                "kind": "typescript-diagnostic",
+                "label": "c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts@1893..1901",
+                "path": "c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts",
+                "role": "line:73:character:1",
+                "start": 1893
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 2286,
+                "kind": "typescript-diagnostic",
+                "label": "c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts@2232..2286",
+                "path": "c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts",
+                "role": "line:86:character:2",
+                "start": 2232
+              }
+            },
+            {
+              "count": 2,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 3055,
+                "kind": "typescript-diagnostic",
+                "label": "c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts@3046..3055",
+                "path": "c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts",
+                "role": "line:119:character:3",
+                "start": 3046
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "exact-authored-span"
+              ],
+              "source": {
+                "end": 420,
+                "kind": "typescript-diagnostic",
+                "label": "c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts@415..420",
+                "path": "c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts",
+                "role": "line:19:character:1",
+                "start": 415
+              }
+            }
+          ],
+          "sourceRequirement": "exact-authored-span"
+        },
+        "intents": [
+          "diagnose",
+          "repair"
+        ],
+        "kind": "follow-query",
+        "rationale": "Inspect typescript-diagnostics rows referenced by returned diagnostics.",
+        "targetQuery": {
+          "kind": "typescript-diagnostics",
+          "page": {
+            "size": 200
+          }
+        },
+        "targetQueryKind": "typescript-diagnostics"
+      },
+      {
+        "blockers": [],
+        "cost": "app-world",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world"
+          ],
+          "sourceFacts": [
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/resource-metadata-errors-app.ts",
+                  "path": "src/resource-metadata-errors-app.ts",
+                  "sourceFileRole": "app-source",
+                  "sourceWorkspaceKey": "resource-metadata-errors"
+                },
+                "end": 1066,
+                "kind": "source-span-address",
+                "label": "src/resource-metadata-errors-app.ts@1054..1066",
+                "path": "src/resource-metadata-errors-app.ts",
+                "role": "name",
+                "sourceFileRole": "app-source",
+                "sourceWorkspaceKey": "resource-metadata-errors",
+                "start": 1054
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/resource-metadata-errors-app.ts",
+                  "path": "src/resource-metadata-errors-app.ts",
+                  "sourceFileRole": "app-source",
+                  "sourceWorkspaceKey": "resource-metadata-errors"
+                },
+                "end": 1125,
+                "kind": "source-span-address",
+                "label": "src/resource-metadata-errors-app.ts@1112..1125",
+                "path": "src/resource-metadata-errors-app.ts",
+                "role": "name",
+                "sourceFileRole": "app-source",
+                "sourceWorkspaceKey": "resource-metadata-errors",
+                "start": 1112
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/resource-metadata-errors-app.ts",
+                  "path": "src/resource-metadata-errors-app.ts",
+                  "sourceFileRole": "app-source",
+                  "sourceWorkspaceKey": "resource-metadata-errors"
+                },
+                "end": 1288,
+                "kind": "source-span-address",
+                "label": "src/resource-metadata-errors-app.ts@1275..1288",
+                "path": "src/resource-metadata-errors-app.ts",
+                "role": "value",
+                "sourceFileRole": "app-source",
+                "sourceWorkspaceKey": "resource-metadata-errors",
+                "start": 1275
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/resource-metadata-errors-app.ts",
+                  "path": "src/resource-metadata-errors-app.ts",
+                  "sourceFileRole": "app-source",
+                  "sourceWorkspaceKey": "resource-metadata-errors"
+                },
+                "end": 1495,
+                "kind": "source-span-address",
+                "label": "src/resource-metadata-errors-app.ts@1487..1495",
+                "path": "src/resource-metadata-errors-app.ts",
+                "role": "value",
+                "sourceFileRole": "app-source",
+                "sourceWorkspaceKey": "resource-metadata-errors",
+                "start": 1487
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/resource-metadata-errors-app.ts",
+                  "path": "src/resource-metadata-errors-app.ts",
+                  "sourceFileRole": "app-source",
+                  "sourceWorkspaceKey": "resource-metadata-errors"
+                },
+                "end": 1594,
+                "kind": "source-span-address",
+                "label": "src/resource-metadata-errors-app.ts@1559..1594",
+                "path": "src/resource-metadata-errors-app.ts",
+                "role": "value",
+                "sourceFileRole": "app-source",
+                "sourceWorkspaceKey": "resource-metadata-errors",
+                "start": 1559
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/resource-metadata-errors-app.ts",
+                  "path": "src/resource-metadata-errors-app.ts",
+                  "sourceFileRole": "app-source",
+                  "sourceWorkspaceKey": "resource-metadata-errors"
+                },
+                "end": 1748,
+                "kind": "source-span-address",
+                "label": "src/resource-metadata-errors-app.ts@1746..1748",
+                "path": "src/resource-metadata-errors-app.ts",
+                "role": "value",
+                "sourceFileRole": "app-source",
+                "sourceWorkspaceKey": "resource-metadata-errors",
+                "start": 1746
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/resource-metadata-errors-app.ts",
+                  "path": "src/resource-metadata-errors-app.ts",
+                  "sourceFileRole": "app-source",
+                  "sourceWorkspaceKey": "resource-metadata-errors"
+                },
+                "end": 1908,
+                "kind": "source-span-address",
+                "label": "src/resource-metadata-errors-app.ts@1904..1908",
+                "path": "src/resource-metadata-errors-app.ts",
+                "role": "value",
+                "sourceFileRole": "app-source",
+                "sourceWorkspaceKey": "resource-metadata-errors",
+                "start": 1904
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/resource-metadata-errors-app.ts",
+                  "path": "src/resource-metadata-errors-app.ts",
+                  "sourceFileRole": "app-source",
+                  "sourceWorkspaceKey": "resource-metadata-errors"
+                },
+                "end": 2286,
+                "kind": "source-span-address",
+                "label": "src/resource-metadata-errors-app.ts@2232..2286",
+                "path": "src/resource-metadata-errors-app.ts",
+                "role": "name",
+                "sourceFileRole": "app-source",
+                "sourceWorkspaceKey": "resource-metadata-errors",
+                "start": 2232
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/resource-metadata-errors-app.ts",
+                  "path": "src/resource-metadata-errors-app.ts",
+                  "sourceFileRole": "app-source",
+                  "sourceWorkspaceKey": "resource-metadata-errors"
+                },
+                "end": 2334,
+                "kind": "source-span-address",
+                "label": "src/resource-metadata-errors-app.ts@2313..2334",
+                "path": "src/resource-metadata-errors-app.ts",
+                "role": "value",
+                "sourceFileRole": "app-source",
+                "sourceWorkspaceKey": "resource-metadata-errors",
+                "start": 2313
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/resource-metadata-errors-app.ts",
+                  "path": "src/resource-metadata-errors-app.ts",
+                  "sourceFileRole": "app-source",
+                  "sourceWorkspaceKey": "resource-metadata-errors"
+                },
+                "end": 2675,
+                "kind": "source-span-address",
+                "label": "src/resource-metadata-errors-app.ts@2661..2675",
+                "path": "src/resource-metadata-errors-app.ts",
+                "role": "name",
+                "sourceFileRole": "app-source",
+                "sourceWorkspaceKey": "resource-metadata-errors",
+                "start": 2661
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/resource-metadata-errors-app.ts",
+                  "path": "src/resource-metadata-errors-app.ts",
+                  "sourceFileRole": "app-source",
+                  "sourceWorkspaceKey": "resource-metadata-errors"
+                },
+                "end": 2836,
+                "kind": "source-span-address",
+                "label": "src/resource-metadata-errors-app.ts@2831..2836",
+                "path": "src/resource-metadata-errors-app.ts",
+                "role": "value",
+                "sourceFileRole": "app-source",
+                "sourceWorkspaceKey": "resource-metadata-errors",
+                "start": 2831
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/resource-metadata-errors-app.ts",
+                  "path": "src/resource-metadata-errors-app.ts",
+                  "sourceFileRole": "app-source",
+                  "sourceWorkspaceKey": "resource-metadata-errors"
+                },
+                "end": 3055,
+                "kind": "source-span-address",
+                "label": "src/resource-metadata-errors-app.ts@3045..3055",
+                "path": "src/resource-metadata-errors-app.ts",
+                "role": "name",
+                "sourceFileRole": "app-source",
+                "sourceWorkspaceKey": "resource-metadata-errors",
+                "start": 3045
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/resource-metadata-errors-app.ts",
+                  "path": "src/resource-metadata-errors-app.ts",
+                  "sourceFileRole": "app-source",
+                  "sourceWorkspaceKey": "resource-metadata-errors"
+                },
+                "end": 397,
+                "kind": "source-span-address",
+                "label": "src/resource-metadata-errors-app.ts@372..397",
+                "path": "src/resource-metadata-errors-app.ts",
+                "role": "value",
+                "sourceFileRole": "app-source",
+                "sourceWorkspaceKey": "resource-metadata-errors",
+                "start": 372
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/resource-metadata-errors-app.ts",
+                  "path": "src/resource-metadata-errors-app.ts",
+                  "sourceFileRole": "app-source",
+                  "sourceWorkspaceKey": "resource-metadata-errors"
+                },
+                "end": 453,
+                "kind": "source-span-address",
+                "label": "src/resource-metadata-errors-app.ts@430..453",
+                "path": "src/resource-metadata-errors-app.ts",
+                "role": "value",
+                "sourceFileRole": "app-source",
+                "sourceWorkspaceKey": "resource-metadata-errors",
+                "start": 430
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/resource-metadata-errors-app.ts",
+                  "path": "src/resource-metadata-errors-app.ts",
+                  "sourceFileRole": "app-source",
+                  "sourceWorkspaceKey": "resource-metadata-errors"
+                },
+                "end": 814,
+                "kind": "source-span-address",
+                "label": "src/resource-metadata-errors-app.ts@789..814",
+                "path": "src/resource-metadata-errors-app.ts",
+                "role": "value",
+                "sourceFileRole": "app-source",
+                "sourceWorkspaceKey": "resource-metadata-errors",
+                "start": 789
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/resource-metadata-errors-app.ts",
+                  "path": "src/resource-metadata-errors-app.ts",
+                  "sourceFileRole": "app-source",
+                  "sourceWorkspaceKey": "resource-metadata-errors"
+                },
+                "end": 909,
+                "kind": "source-span-address",
+                "label": "src/resource-metadata-errors-app.ts@880..909",
+                "path": "src/resource-metadata-errors-app.ts",
+                "role": "value",
+                "sourceFileRole": "app-source",
+                "sourceWorkspaceKey": "resource-metadata-errors",
+                "start": 880
+              }
+            }
+          ],
+          "sourceRequirement": "exact-authored-span"
+        },
+        "intents": [
+          "diagnose",
+          "repair"
+        ],
+        "kind": "follow-query",
+        "rationale": "Inspect resource-issues rows referenced by returned diagnostics.",
+        "targetQuery": {
+          "kind": "resource-issues",
+          "page": {
+            "size": 200
+          }
+        },
+        "targetQueryKind": "resource-issues"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world"
+          ],
+          "sourceFacts": [
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/resource-metadata-errors-app.ts",
+                  "path": "src/resource-metadata-errors-app.ts",
+                  "sourceFileRole": "app-source",
+                  "sourceWorkspaceKey": "resource-metadata-errors"
+                },
+                "end": 1448,
+                "kind": "source-span-address",
+                "label": "src/resource-metadata-errors-app.ts@1435..1448",
+                "path": "src/resource-metadata-errors-app.ts",
+                "role": "range",
+                "sourceFileRole": "app-source",
+                "sourceWorkspaceKey": "resource-metadata-errors",
+                "start": 1435
+              }
+            },
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/resource-metadata-errors-app.ts",
+                  "path": "src/resource-metadata-errors-app.ts",
+                  "sourceFileRole": "app-source",
+                  "sourceWorkspaceKey": "resource-metadata-errors"
+                },
+                "end": 263,
+                "kind": "source-span-address",
+                "label": "src/resource-metadata-errors-app.ts@231..263",
+                "path": "src/resource-metadata-errors-app.ts",
+                "role": "name",
+                "sourceFileRole": "app-source",
+                "sourceWorkspaceKey": "resource-metadata-errors",
+                "start": 231
+              }
+            }
+          ],
+          "sourceRequirement": "exact-authored-span"
+        },
+        "intents": [
+          "diagnose",
+          "repair"
+        ],
+        "kind": "follow-query",
+        "rationale": "Inspect template-diagnostics rows referenced by returned diagnostics.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "template-diagnostics",
+          "page": {
+            "size": 200
+          }
+        },
+        "targetQueryKind": "template-diagnostics"
+      }
+    ],
+    "coverage": "complete",
+    "page": null,
+    "result": "answered",
+    "schemaVersion": "0.2",
+    "selection": "not-applicable",
+    "summary": "Returned 26 app diagnostic(s)."
+  },
   "outcome": "result",
   "presentation": {
     "complete": true,
@@ -1510,14 +2241,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
-              "sourceRole": null,
+              "sourceRole": "app-source",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "expression",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-metadata-errors-app.ts",
@@ -1578,14 +2309,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
-              "sourceRole": null,
+              "sourceRole": "app-source",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "expression",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-metadata-errors-app.ts",
@@ -1646,14 +2377,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
-              "sourceRole": null,
+              "sourceRole": "app-source",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "expression",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-metadata-errors-app.ts",
@@ -1714,14 +2445,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
-              "sourceRole": null,
+              "sourceRole": "app-source",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "expression",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-metadata-errors-app.ts",
@@ -1782,14 +2513,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
-              "sourceRole": null,
+              "sourceRole": "app-source",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "expression",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-metadata-errors-app.ts",
@@ -1850,14 +2581,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
-              "sourceRole": null,
+              "sourceRole": "app-source",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "expression",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-metadata-errors-app.ts",
@@ -1918,14 +2649,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
-              "sourceRole": null,
+              "sourceRole": "app-source",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "expression",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-metadata-errors-app.ts",
@@ -1986,14 +2717,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
-              "sourceRole": null,
+              "sourceRole": "app-source",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "expression",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-metadata-errors-app.ts",
@@ -2056,14 +2787,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "app-source",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-metadata-errors-app.ts",
@@ -2124,7 +2855,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
-              "sourceRole": null,
+              "sourceRole": "app-source",
               "subject": {
                 "source": {
                   "end": 397,
@@ -2139,11 +2870,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "resource-resolution",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-metadata-errors-app.ts",
@@ -2212,7 +2943,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
-              "sourceRole": null,
+              "sourceRole": "app-source",
               "subject": {
                 "source": {
                   "end": 453,
@@ -2227,11 +2958,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "resource-resolution",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-metadata-errors-app.ts",
@@ -2300,7 +3031,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
-              "sourceRole": null,
+              "sourceRole": "app-source",
               "subject": {
                 "source": {
                   "end": 814,
@@ -2315,11 +3046,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "resource-resolution",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-metadata-errors-app.ts",
@@ -2388,7 +3119,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
-              "sourceRole": null,
+              "sourceRole": "app-source",
               "subject": {
                 "source": {
                   "end": 909,
@@ -2403,11 +3134,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "resource-resolution",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-metadata-errors-app.ts",
@@ -2476,7 +3207,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
-              "sourceRole": null,
+              "sourceRole": "app-source",
               "subject": {
                 "source": {
                   "end": 1066,
@@ -2491,11 +3222,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "resource-resolution",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-metadata-errors-app.ts",
@@ -2564,7 +3295,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
-              "sourceRole": null,
+              "sourceRole": "app-source",
               "subject": {
                 "source": {
                   "end": 1125,
@@ -2579,11 +3310,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "resource-resolution",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-metadata-errors-app.ts",
@@ -2652,7 +3383,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
-              "sourceRole": null,
+              "sourceRole": "app-source",
               "subject": {
                 "source": {
                   "end": 1288,
@@ -2667,11 +3398,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "resource-resolution",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-metadata-errors-app.ts",
@@ -2742,14 +3473,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
-              "sourceRole": null,
+              "sourceRole": "app-source",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "guided",
+                "category": "template-syntax",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-metadata-errors-app.ts",
@@ -2810,7 +3541,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
-              "sourceRole": null,
+              "sourceRole": "app-source",
               "subject": {
                 "source": {
                   "end": 1495,
@@ -2825,11 +3556,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "resource-resolution",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-metadata-errors-app.ts",
@@ -2898,7 +3629,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
-              "sourceRole": null,
+              "sourceRole": "app-source",
               "subject": {
                 "source": {
                   "end": 1594,
@@ -2913,11 +3644,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "resource-resolution",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-metadata-errors-app.ts",
@@ -2986,7 +3717,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
-              "sourceRole": null,
+              "sourceRole": "app-source",
               "subject": {
                 "source": {
                   "end": 1748,
@@ -3001,11 +3732,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "resource-resolution",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-metadata-errors-app.ts",
@@ -3074,7 +3805,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
-              "sourceRole": null,
+              "sourceRole": "app-source",
               "subject": {
                 "source": {
                   "end": 1908,
@@ -3089,11 +3820,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "resource-resolution",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-metadata-errors-app.ts",
@@ -3162,7 +3893,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
-              "sourceRole": null,
+              "sourceRole": "app-source",
               "subject": {
                 "source": {
                   "end": 2286,
@@ -3177,11 +3908,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "resource-resolution",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-metadata-errors-app.ts",
@@ -3250,7 +3981,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
-              "sourceRole": null,
+              "sourceRole": "app-source",
               "subject": {
                 "source": {
                   "end": 2334,
@@ -3265,11 +3996,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "resource-resolution",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-metadata-errors-app.ts",
@@ -3338,7 +4069,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
-              "sourceRole": null,
+              "sourceRole": "app-source",
               "subject": {
                 "source": {
                   "end": 2675,
@@ -3353,11 +4084,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "resource-resolution",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-metadata-errors-app.ts",
@@ -3426,7 +4157,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
-              "sourceRole": null,
+              "sourceRole": "app-source",
               "subject": {
                 "source": {
                   "end": 2836,
@@ -3441,11 +4172,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "resource-resolution",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-metadata-errors-app.ts",
@@ -3514,7 +4245,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
-              "sourceRole": null,
+              "sourceRole": "app-source",
               "subject": {
                 "source": {
                   "end": 3055,
@@ -3529,11 +4260,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "uri": null
               },
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "resource-resolution",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/resource-metadata-errors-app.ts",
@@ -3605,14 +4336,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
-          "sourceRole": null,
+          "sourceRole": "app-source",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "expression",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-metadata-errors-app.ts",
@@ -3660,14 +4391,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
-          "sourceRole": null,
+          "sourceRole": "app-source",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "expression",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-metadata-errors-app.ts",
@@ -3715,14 +4446,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
-          "sourceRole": null,
+          "sourceRole": "app-source",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "expression",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-metadata-errors-app.ts",
@@ -3770,14 +4501,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
-          "sourceRole": null,
+          "sourceRole": "app-source",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "expression",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-metadata-errors-app.ts",
@@ -3825,14 +4556,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
-          "sourceRole": null,
+          "sourceRole": "app-source",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "expression",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-metadata-errors-app.ts",
@@ -3880,14 +4611,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
-          "sourceRole": null,
+          "sourceRole": "app-source",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "expression",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-metadata-errors-app.ts",
@@ -3935,14 +4666,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
-          "sourceRole": null,
+          "sourceRole": "app-source",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "expression",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-metadata-errors-app.ts",
@@ -3990,14 +4721,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
-          "sourceRole": null,
+          "sourceRole": "app-source",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "expression",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-metadata-errors-app.ts",
@@ -4045,7 +4776,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
-          "sourceRole": null,
+          "sourceRole": "app-source",
           "subject": {
             "source": {
               "end": 1066,
@@ -4060,11 +4791,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "resource-resolution",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-metadata-errors-app.ts",
@@ -4112,7 +4843,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
-          "sourceRole": null,
+          "sourceRole": "app-source",
           "subject": {
             "source": {
               "end": 1125,
@@ -4127,11 +4858,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "resource-resolution",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-metadata-errors-app.ts",
@@ -4179,7 +4910,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
-          "sourceRole": null,
+          "sourceRole": "app-source",
           "subject": {
             "source": {
               "end": 1288,
@@ -4194,11 +4925,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "resource-resolution",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-metadata-errors-app.ts",
@@ -4248,14 +4979,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "app-source",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-metadata-errors-app.ts",
@@ -4303,7 +5034,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
-          "sourceRole": null,
+          "sourceRole": "app-source",
           "subject": {
             "source": {
               "end": 1495,
@@ -4318,11 +5049,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "resource-resolution",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-metadata-errors-app.ts",
@@ -4370,7 +5101,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
-          "sourceRole": null,
+          "sourceRole": "app-source",
           "subject": {
             "source": {
               "end": 1594,
@@ -4385,11 +5116,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "resource-resolution",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-metadata-errors-app.ts",
@@ -4437,7 +5168,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
-          "sourceRole": null,
+          "sourceRole": "app-source",
           "subject": {
             "source": {
               "end": 1748,
@@ -4452,11 +5183,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "resource-resolution",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-metadata-errors-app.ts",
@@ -4504,7 +5235,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
-          "sourceRole": null,
+          "sourceRole": "app-source",
           "subject": {
             "source": {
               "end": 1908,
@@ -4519,11 +5250,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "resource-resolution",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-metadata-errors-app.ts",
@@ -4571,7 +5302,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
-          "sourceRole": null,
+          "sourceRole": "app-source",
           "subject": {
             "source": {
               "end": 2286,
@@ -4586,11 +5317,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "resource-resolution",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-metadata-errors-app.ts",
@@ -4640,14 +5371,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "sourceRole": null,
+          "sourceRole": "app-source",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "guided",
+            "category": "template-syntax",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-metadata-errors-app.ts",
@@ -4695,7 +5426,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
-          "sourceRole": null,
+          "sourceRole": "app-source",
           "subject": {
             "source": {
               "end": 2334,
@@ -4710,11 +5441,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "resource-resolution",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-metadata-errors-app.ts",
@@ -4762,7 +5493,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
-          "sourceRole": null,
+          "sourceRole": "app-source",
           "subject": {
             "source": {
               "end": 2675,
@@ -4777,11 +5508,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "resource-resolution",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-metadata-errors-app.ts",
@@ -4829,7 +5560,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
-          "sourceRole": null,
+          "sourceRole": "app-source",
           "subject": {
             "source": {
               "end": 2836,
@@ -4844,11 +5575,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "resource-resolution",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-metadata-errors-app.ts",
@@ -4896,7 +5627,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
-          "sourceRole": null,
+          "sourceRole": "app-source",
           "subject": {
             "source": {
               "end": 3055,
@@ -4911,11 +5642,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "resource-resolution",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-metadata-errors-app.ts",
@@ -4963,7 +5694,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
-          "sourceRole": null,
+          "sourceRole": "app-source",
           "subject": {
             "source": {
               "end": 397,
@@ -4978,11 +5709,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "resource-resolution",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-metadata-errors-app.ts",
@@ -5030,7 +5761,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
-          "sourceRole": null,
+          "sourceRole": "app-source",
           "subject": {
             "source": {
               "end": 453,
@@ -5045,11 +5776,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "resource-resolution",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-metadata-errors-app.ts",
@@ -5097,7 +5828,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
-          "sourceRole": null,
+          "sourceRole": "app-source",
           "subject": {
             "source": {
               "end": 814,
@@ -5112,11 +5843,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "resource-resolution",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-metadata-errors-app.ts",
@@ -5164,7 +5895,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
-          "sourceRole": null,
+          "sourceRole": "app-source",
           "subject": {
             "source": {
               "end": 909,
@@ -5179,11 +5910,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "uri": null
           },
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "resource-resolution",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/resource-metadata-errors-app.ts",
@@ -5208,10 +5939,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "uri": "fixtures://pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts"
       }
     ]
-  },
-  "suppressed": {
-    "diagnosticCount": 0,
-    "diagnostics": []
   },
   "surfaces": {
     "lsp": {
@@ -5241,14 +5968,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
-            "sourceRole": null,
+            "sourceRole": "app-source",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "expression",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-metadata-errors-app.ts",
@@ -5296,14 +6023,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
-            "sourceRole": null,
+            "sourceRole": "app-source",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "expression",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-metadata-errors-app.ts",
@@ -5351,14 +6078,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
-            "sourceRole": null,
+            "sourceRole": "app-source",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "expression",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-metadata-errors-app.ts",
@@ -5406,14 +6133,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
-            "sourceRole": null,
+            "sourceRole": "app-source",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "expression",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-metadata-errors-app.ts",
@@ -5461,14 +6188,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
-            "sourceRole": null,
+            "sourceRole": "app-source",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "expression",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-metadata-errors-app.ts",
@@ -5516,14 +6243,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
-            "sourceRole": null,
+            "sourceRole": "app-source",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "expression",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-metadata-errors-app.ts",
@@ -5571,14 +6298,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
-            "sourceRole": null,
+            "sourceRole": "app-source",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "expression",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-metadata-errors-app.ts",
@@ -5626,14 +6353,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
-            "sourceRole": null,
+            "sourceRole": "app-source",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "expression",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-metadata-errors-app.ts",
@@ -5683,14 +6410,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "app-source",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-metadata-errors-app.ts",
@@ -5738,7 +6465,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
-            "sourceRole": null,
+            "sourceRole": "app-source",
             "subject": {
               "source": {
                 "end": 397,
@@ -5753,11 +6480,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "resource-resolution",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-metadata-errors-app.ts",
@@ -5805,7 +6532,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
-            "sourceRole": null,
+            "sourceRole": "app-source",
             "subject": {
               "source": {
                 "end": 453,
@@ -5820,11 +6547,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "resource-resolution",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-metadata-errors-app.ts",
@@ -5872,7 +6599,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
-            "sourceRole": null,
+            "sourceRole": "app-source",
             "subject": {
               "source": {
                 "end": 814,
@@ -5887,11 +6614,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "resource-resolution",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-metadata-errors-app.ts",
@@ -5939,7 +6666,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
-            "sourceRole": null,
+            "sourceRole": "app-source",
             "subject": {
               "source": {
                 "end": 909,
@@ -5954,11 +6681,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "resource-resolution",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-metadata-errors-app.ts",
@@ -6006,7 +6733,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
-            "sourceRole": null,
+            "sourceRole": "app-source",
             "subject": {
               "source": {
                 "end": 1066,
@@ -6021,11 +6748,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "resource-resolution",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-metadata-errors-app.ts",
@@ -6073,7 +6800,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
-            "sourceRole": null,
+            "sourceRole": "app-source",
             "subject": {
               "source": {
                 "end": 1125,
@@ -6088,11 +6815,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "resource-resolution",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-metadata-errors-app.ts",
@@ -6140,7 +6867,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
-            "sourceRole": null,
+            "sourceRole": "app-source",
             "subject": {
               "source": {
                 "end": 1288,
@@ -6155,11 +6882,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "resource-resolution",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-metadata-errors-app.ts",
@@ -6209,14 +6936,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
-            "sourceRole": null,
+            "sourceRole": "app-source",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "guided",
+              "category": "template-syntax",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-metadata-errors-app.ts",
@@ -6264,7 +6991,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
-            "sourceRole": null,
+            "sourceRole": "app-source",
             "subject": {
               "source": {
                 "end": 1495,
@@ -6279,11 +7006,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "resource-resolution",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-metadata-errors-app.ts",
@@ -6331,7 +7058,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
-            "sourceRole": null,
+            "sourceRole": "app-source",
             "subject": {
               "source": {
                 "end": 1594,
@@ -6346,11 +7073,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "resource-resolution",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-metadata-errors-app.ts",
@@ -6398,7 +7125,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
-            "sourceRole": null,
+            "sourceRole": "app-source",
             "subject": {
               "source": {
                 "end": 1748,
@@ -6413,11 +7140,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "resource-resolution",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-metadata-errors-app.ts",
@@ -6465,7 +7192,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
-            "sourceRole": null,
+            "sourceRole": "app-source",
             "subject": {
               "source": {
                 "end": 1908,
@@ -6480,11 +7207,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "resource-resolution",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-metadata-errors-app.ts",
@@ -6532,7 +7259,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
-            "sourceRole": null,
+            "sourceRole": "app-source",
             "subject": {
               "source": {
                 "end": 2286,
@@ -6547,11 +7274,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "resource-resolution",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-metadata-errors-app.ts",
@@ -6599,7 +7326,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
-            "sourceRole": null,
+            "sourceRole": "app-source",
             "subject": {
               "source": {
                 "end": 2334,
@@ -6614,11 +7341,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "resource-resolution",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-metadata-errors-app.ts",
@@ -6666,7 +7393,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
-            "sourceRole": null,
+            "sourceRole": "app-source",
             "subject": {
               "source": {
                 "end": 2675,
@@ -6681,11 +7408,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "resource-resolution",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-metadata-errors-app.ts",
@@ -6733,7 +7460,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
-            "sourceRole": null,
+            "sourceRole": "app-source",
             "subject": {
               "source": {
                 "end": 2836,
@@ -6748,11 +7475,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "resource-resolution",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-metadata-errors-app.ts",
@@ -6800,7 +7527,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
-            "sourceRole": null,
+            "sourceRole": "app-source",
             "subject": {
               "source": {
                 "end": 3055,
@@ -6815,11 +7542,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "uri": null
             },
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "resource-resolution",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/resource-metadata-errors-app.ts",

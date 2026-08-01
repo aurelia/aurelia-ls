@@ -25,6 +25,7 @@ import {
   type AureliaMcpOpenSeamOverviewInput,
   type AureliaMcpResponse,
   type AureliaMcpRouterOverviewInput,
+  type AureliaMcpTemplateCompletionsInput,
   type AureliaMcpTemplateCursorInput,
   type AureliaMcpTemplateDiagnosticsInput,
   type AureliaMcpWorkspaceOverviewInput,
@@ -121,7 +122,7 @@ export class AureliaMcpSemanticRuntimeAdapter {
       authoringTemplateSourceFiles: input.authoringTemplateSourceFiles ?? undefined,
       authoringTemplateLimit: input.authoringTemplateLimit ?? undefined,
       telemetry: input.telemetry ?? undefined,
-      appRetention: input.appRetention ?? 'dispose-app',
+      ...(input.appRetention == null ? {} : { appRetention: input.appRetention }),
       includeAppProfile: input.includeAppProfile ?? undefined,
       includeAppQueryClaimProfiles: input.includeAppQueryClaimProfiles ?? undefined,
       pagePolicy: MCP_PAGE_POLICY,
@@ -174,7 +175,6 @@ export class AureliaMcpSemanticRuntimeAdapter {
     return this.answerAppQuery(aureliaMcpToolNames.openSeamOverview, input, {
       kind: SemanticAppQueryKind.OpenSeamSites,
       page: input.page ?? { size: 20 },
-      detail: input.detail ?? undefined,
       sourceFile: normalizedSourceFileInput(input.sourceFile, 'sourceFile')
         ?? normalizedSourceFilePathInput(input.sourceFilePath),
       openSeamKindKey: input.openSeamKindKey ?? undefined,
@@ -194,7 +194,7 @@ export class AureliaMcpSemanticRuntimeAdapter {
     });
   }
 
-  async templateCompletions(input: AureliaMcpTemplateCursorInput): Promise<AureliaMcpResponse<SemanticRuntimeAnswer<unknown>>> {
+  async templateCompletions(input: AureliaMcpTemplateCompletionsInput): Promise<AureliaMcpResponse<SemanticRuntimeAnswer<unknown>>> {
     return this.answerAppQuery(aureliaMcpToolNames.templateCompletions, input, {
       kind: SemanticAppQueryKind.TemplateCompletions,
       cursor: input.cursor,
@@ -232,7 +232,7 @@ export class AureliaMcpSemanticRuntimeAdapter {
       authoringTemplateLimit: input.authoringTemplateLimit ?? undefined,
       continuationIntents: queryWithSelectors.continuationIntents ?? input.continuationIntents ?? undefined,
       inquiryProfile: 'mcp-orientation',
-      appRetention: input.appRetention ?? 'dispose-app',
+      ...(input.appRetention == null ? {} : { appRetention: input.appRetention }),
       pagePolicy: MCP_PAGE_POLICY,
     });
     return toolResponse(toolName, input, answer);

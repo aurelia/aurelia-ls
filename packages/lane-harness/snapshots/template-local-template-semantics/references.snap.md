@@ -100,6 +100,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 }
 ```
 
+### Notifications
+
+```json
+{
+  "notificationCount": 0,
+  "notifications": []
+}
+```
+
 ### Resolved locations
 
 ```json
@@ -284,6 +293,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 }
 ```
 
+### Notifications
+
+```json
+{
+  "notificationCount": 0,
+  "notifications": []
+}
+```
+
 ### Resolved locations
 
 ```json
@@ -442,6 +460,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 }
 ```
 
+### Notifications
+
+```json
+{
+  "notificationCount": 0,
+  "notifications": []
+}
+```
+
 ### Resolved locations
 
 ```json
@@ -565,6 +592,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "uri": "fixtures://pressure/template-local-template-semantics/src/template-local-template-semantics-app.html"
     }
   ]
+}
+```
+
+### Notifications
+
+```json
+{
+  "notificationCount": 0,
+  "notifications": []
 }
 ```
 

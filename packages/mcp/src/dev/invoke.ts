@@ -28,7 +28,8 @@ import {
   patternExampleInputSchema,
   patternMenuInputSchema,
   routerOverviewInputSchema,
-  templateCursorInputSchema,
+  templateCompletionsInputSchema,
+  templateCursorInfoInputSchema,
   templateDiagnosticsInputSchema,
   workspaceOverviewInputSchema,
 } from '../tool-schemas.js';
@@ -49,6 +50,7 @@ import type {
   AureliaMcpPatternMenuInput,
   AureliaMcpResponse,
   AureliaMcpRouterOverviewInput,
+  AureliaMcpTemplateCompletionsInput,
   AureliaMcpTemplateCursorInput,
   AureliaMcpTemplateDiagnosticsInput,
   AureliaMcpWorkspaceOverviewInput,
@@ -70,8 +72,8 @@ const commandInputSchemas = {
   'open-seam-overview': z.object(openSeamOverviewInputSchema).strict(),
   'diagnostic-overview': z.object(diagnosticOverviewInputSchema).strict(),
   'app-diagnostics': z.object(appDiagnosticsInputSchema).strict(),
-  'template-cursor-info': z.object(templateCursorInputSchema).strict(),
-  'template-completions': z.object(templateCursorInputSchema).strict(),
+  'template-cursor-info': z.object(templateCursorInfoInputSchema).strict(),
+  'template-completions': z.object(templateCompletionsInputSchema).strict(),
   'template-diagnostics': z.object(templateDiagnosticsInputSchema).strict(),
 } as const;
 
@@ -173,7 +175,7 @@ async function invoke(command: string, input: Record<string, unknown>): Promise<
     case 'template-cursor-info':
       return adapter.templateCursorInfo(input as unknown as AureliaMcpTemplateCursorInput);
     case 'template-completions':
-      return adapter.templateCompletions(input as unknown as AureliaMcpTemplateCursorInput);
+      return adapter.templateCompletions(input as unknown as AureliaMcpTemplateCompletionsInput);
     case 'template-diagnostics':
       return adapter.templateDiagnostics(input as unknown as AureliaMcpTemplateDiagnosticsInput);
     default:

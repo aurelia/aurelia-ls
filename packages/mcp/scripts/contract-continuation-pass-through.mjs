@@ -97,6 +97,52 @@ expect(
   'MCP compact continuation text should preserve mixed source facets on one fact.',
 );
 
+const ordinaryAnswerText = aureliaMcpResultText({
+  tool: 'aurelia_app_query',
+  value: {
+    summary: 'Ordinary answer state probe.',
+    result: 'answered',
+    selection: 'exact',
+    coverage: 'complete',
+  },
+});
+expect(
+  !ordinaryAnswerText.includes('Answer state:'),
+  'MCP compact text should omit the ordinary answered/exact/complete state.',
+);
+
+const unsupportedAnswerText = aureliaMcpResultText({
+  tool: 'aurelia_app_query',
+  value: {
+    summary: 'Unsupported answer state probe.',
+    result: 'unsupported',
+    selection: 'not-applicable',
+    coverage: 'not-applicable',
+  },
+});
+expect(
+  unsupportedAnswerText.includes('Answer state: result=unsupported; coverage=not-applicable.'),
+  'MCP compact text should expose exceptional result and coverage states.',
+);
+expect(
+  !unsupportedAnswerText.includes('selection=not-applicable'),
+  'MCP compact text should keep ordinary not-applicable selection compact.',
+);
+
+const openAmbiguousAnswerText = aureliaMcpResultText({
+  tool: 'aurelia_app_query',
+  value: {
+    summary: 'Open ambiguous answer state probe.',
+    result: 'answered',
+    selection: 'ambiguous',
+    coverage: 'open',
+  },
+});
+expect(
+  openAmbiguousAnswerText.includes('Answer state: selection=ambiguous; coverage=open.'),
+  'MCP compact text should expose exceptional selection and semantic coverage without repeating result=answered.',
+);
+
 const diagnosticFiltered = await adapter.appQuery({
   workspaceRoot: fixtureRoot,
   storeKey: 'mcp-contract-continuation-pass-through-filtered',

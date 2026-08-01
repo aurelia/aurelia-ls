@@ -26,3 +26,11 @@ export const enum RuntimeOperationReachability {
   /** The available lifecycle facts cannot close whether the operation runs. */
   Open = 'open',
 }
+
+/** Whether the modeled lifecycle still admits execution, including an unresolved open handoff. */
+export function runtimeOperationMayBeReached(
+  reachability: RuntimeOperationReachability,
+): boolean {
+  return reachability === RuntimeOperationReachability.Reached
+    || reachability === RuntimeOperationReachability.Open;
+}

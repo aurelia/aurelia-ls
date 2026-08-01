@@ -58,7 +58,10 @@ import {
   RuntimeExpressionResourceSignal,
   RuntimeExpressionResourceValueState,
 } from './runtime-expression-resource.js';
-import { RuntimeOperationReachability } from '../runtime-expression/runtime-operation.js';
+import {
+  RuntimeOperationReachability,
+  runtimeOperationMayBeReached,
+} from '../runtime-expression/runtime-operation.js';
 import { bindingModeForBindingBehaviorName } from './runtime-binding-mode-behavior.js';
 
 export class RuntimeBindingBehaviorMaterializationRequest {
@@ -213,6 +216,7 @@ export class RuntimeBindingBehaviorMaterializer {
     ));
     const bindApplication = applications[0]!;
     const issueProduct = entry.issue == null
+      || bindApplication.phaseReachability !== RuntimeOperationReachability.Reached
       ? null
       : this.issueProduct(
           `${local}:issue:${entry.issue.issueKind}`,
@@ -268,12 +272,12 @@ export class RuntimeBindingBehaviorMaterializer {
       entry.bindReachability,
       phaseReachability,
       entry.bindOrder,
-      phaseReachability === RuntimeOperationReachability.Reached
+      runtimeOperationMayBeReached(phaseReachability)
         ? phase === RuntimeBindingBehaviorApplicationPhase.Unbind
           ? plan.readCleanupPhaseOrder(entry)
           : entry.bindOrder
         : null,
-      phaseReachability === RuntimeOperationReachability.Reached && entry.issue == null
+      runtimeOperationMayBeReached(phaseReachability) && entry.issue == null
         ? lifecycleEffects
         : RuntimeExpressionResourceLifecycleEffects.none,
       behavior.args.map((argument) => argument.span),

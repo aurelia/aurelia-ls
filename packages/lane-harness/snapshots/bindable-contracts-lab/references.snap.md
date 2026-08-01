@@ -87,6 +87,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 }
 ```
 
+### Notifications
+
+```json
+{
+  "notificationCount": 0,
+  "notifications": []
+}
+```
+
 ### Resolved locations
 
 ```json
@@ -242,6 +251,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 }
 ```
 
+### Notifications
+
+```json
+{
+  "notificationCount": 0,
+  "notifications": []
+}
+```
+
 ### Resolved locations
 
 ```json
@@ -384,6 +402,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 }
 ```
 
+### Notifications
+
+```json
+{
+  "notificationCount": 0,
+  "notifications": []
+}
+```
+
 ### Resolved locations
 
 ```json
@@ -520,6 +547,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "uri": "fixtures://pressure/bindable-contracts-lab/src/binding-contract-surfaces.ts"
     }
   ]
+}
+```
+
+### Notifications
+
+```json
+{
+  "notificationCount": 0,
+  "notifications": []
 }
 ```
 
@@ -678,6 +714,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 }
 ```
 
+### Notifications
+
+```json
+{
+  "notificationCount": 0,
+  "notifications": []
+}
+```
+
 ### Resolved locations
 
 ```json
@@ -791,6 +836,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "uri": "fixtures://pressure/bindable-contracts-lab/src/bindable-lab-app.html"
     }
   ]
+}
+```
+
+### Notifications
+
+```json
+{
+  "notificationCount": 0,
+  "notifications": []
 }
 ```
 

@@ -55,6 +55,7 @@ import {
 import type { FullResourceDefinition } from '../resources/resource-definition.js';
 import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
 import {
+  NamedResourceDefinitionContributionKind,
   ResourceDefinitionKind,
   runtimeResourceKeyForKind,
 } from '../resources/resource-kind.js';
@@ -776,13 +777,18 @@ export class RuntimeControllerCreationMaterializer {
     }
 
     const targetShape = readCheckerTypeShape(this.publication, definition.target.targetType);
+    const compilerGeneratedLocalTemplate = definition instanceof CustomElementDefinition
+      && definition.contributions.some((contribution) =>
+        contribution.contributionKind === NamedResourceDefinitionContributionKind.LocalTemplate
+      );
     const typeAccess = new CheckerTypeShapeAccess(this.store, expressionWorld.projector);
     const runtimePresence = (
       propertyName: string,
       nonNullish: boolean,
     ): boolean | null => {
       if (targetShape == null) {
-        return null;
+        // The template compiler creates LocalDepType itself; no user-authored callback members can exist on it.
+        return compilerGeneratedLocalTemplate ? false : null;
       }
       const presence = nonNullish
         ? typeAccess.runtimeNonNullishMemberPresence(

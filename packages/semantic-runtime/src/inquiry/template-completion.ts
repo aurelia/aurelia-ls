@@ -504,6 +504,7 @@ interface TemplateCompletionAnswerFrame {
   readonly expressionResult: ExpressionParseResult | null;
   readonly expressionFrontier: TemplateExpressionCompletionFrontier | null;
   readonly bindingScope: BindingScope | null;
+  readonly selectedScopeSlot: TemplateCompletionScopeSlotSelection | null;
   readonly resourceScope: TemplateResourceScope | null;
   readonly frameworkHookBasisProductHandles: ProductHandle[];
   memberOwnerTypeProductHandle: ProductHandle | null;
@@ -1362,21 +1363,20 @@ function sameNullableCheckerTypeReference(
 /** Answer template and expression completion candidates from already-materialized product details. */
 export function answerTemplateCompletion(
   store: KernelStore,
-  query: TemplateCompletionQuery,
-  expressionWorld: CheckerExpressionTypeWorld,
+  context: TemplateCompletionCursorContext,
 ): InquiryAnswer<TemplateCompletionResult, TemplateCompletionQuery> {
-  const frame = createTemplateCompletionAnswerFrame(store, query, expressionWorld);
+  const frame = createTemplateCompletionAnswerFrame(store, context);
   collectTemplateCompletionCandidates(frame);
   const uniqueCandidates = uniqueCandidatesByKey(frame.candidates);
-  const page = pageCandidates(uniqueCandidates, query.page);
+  const page = pageCandidates(uniqueCandidates, frame.query.page);
   return templateCompletionAnswer(frame, uniqueCandidates, page);
 }
 
 function createTemplateCompletionAnswerFrame(
   store: KernelStore,
-  query: TemplateCompletionQuery,
-  expressionWorld: CheckerExpressionTypeWorld,
+  context: TemplateCompletionCursorContext,
 ): TemplateCompletionAnswerFrame {
+  const query = context.query;
   const missingInputs: string[] = [];
   const expressionParse = siteKindUsesExpressionParse(query.siteKind)
     ? readExpressionParse(store, query.expressionParseProductHandle, missingInputs)
@@ -1390,7 +1390,8 @@ function createTemplateCompletionAnswerFrame(
   const requiresBindingScope = shouldOfferBindingScopeCandidates(query.siteKind, expressionFrontier);
   const needsResourceScope = shouldReadResourceScope(query.siteKind, expressionFrontier);
   const bindingScope = requiresBindingScope
-    ? readBindingScope(store, query.bindingScopeProductHandle, missingInputs)
+    ? context.selectedScopeSlot?.scope
+      ?? readBindingScope(store, query.bindingScopeProductHandle, missingInputs)
     : query.siteKind === TemplateCompletionSiteKind.ExpressionMember
       && query.bindingScopeProductHandle != null
       ? store.productDetails.read(ConfigurationProductDetails.BindingScope, query.bindingScopeProductHandle)
@@ -1401,13 +1402,14 @@ function createTemplateCompletionAnswerFrame(
   return {
     store,
     query,
-    expressionWorld,
+    expressionWorld: context.expressionWorld,
     missingInputs,
     candidates: [],
     expressionParse,
     expressionResult,
     expressionFrontier,
     bindingScope,
+    selectedScopeSlot: context.selectedScopeSlot,
     resourceScope,
     frameworkHookBasisProductHandles: [],
     memberOwnerTypeProductHandle: query.memberOwnerTypeProductHandle,
@@ -1753,7 +1755,7 @@ function templateCompletionAnswer(
   return new InquiryAnswer({
     result: InquiryAnswerResult.Answered,
     selection: InquiryAnswerSelection.Exact,
-    coverage: coverageForCompletion(missingInputs, frame.expressionFrontier),
+    coverage: coverageForCompletion(missingInputs),
     locus: frame.query.locus,
     summary: summaryForCompletion(page.rows.length, uniqueCandidates.length, missingInputs, frame.expressionFrontier),
     basis: KernelExactBasis,
@@ -2932,6 +2934,10 @@ function scopeSlotCandidate(
   contextKind: BindingContextKind,
 ): TemplateCompletionCandidate {
   const member = typeMemberForSlot(frame, slot);
+  const selectedAuthority = frame.selectedScopeSlot?.scope === scope
+    && frame.selectedScopeSlot.slot === slot
+    ? frame.selectedScopeSlot
+    : null;
   const memberFacts = member == null
     ? null
     : typeMemberFacts(
@@ -2945,9 +2951,11 @@ function scopeSlotCandidate(
       : TemplateCompletionCandidateKind.BindingContextSlot,
     slot.name,
     TemplateCompletionCandidateSourceKind.BindingScope,
-    member?.ownerType.productHandle ?? scope.productHandle,
+    member?.ownerType.productHandle ?? selectedAuthority?.ownerProductHandle ?? scope.productHandle,
     slot.targetIdentityHandle ?? scope.identityHandle,
-    slot.sourceAddressHandle ?? scope.sourceAddressHandle,
+    selectedAuthority?.declarationSourceAddressHandle
+      ?? slot.sourceAddressHandle
+      ?? scope.sourceAddressHandle,
     depth === 0
       ? `Name visible in current ${contextKind}.`
       : `Name visible from ancestor ${depth} ${contextKind}.`,
@@ -3023,9 +3031,8 @@ function pageCandidates(
 
 function coverageForCompletion(
   missingInputs: readonly string[],
-  expressionFrontier: TemplateExpressionCompletionFrontier | null,
 ): InquiryAnswerCoverage {
-  return missingInputs.length === 0 && !frontierContributesPartialAnswer(expressionFrontier)
+  return missingInputs.length === 0
     ? InquiryAnswerCoverage.Complete
     : InquiryAnswerCoverage.Open;
 }
@@ -3046,14 +3053,6 @@ function summaryForCompletion(
   return notes.length === 0
     ? base
     : `${base} ${notes.join(' ')}`;
-}
-
-function frontierContributesPartialAnswer(
-  frontier: TemplateExpressionCompletionFrontier | null,
-): boolean {
-  return frontier != null
-    && frontier.expectedContinuationClasses.length > 0
-    && !frontierOnlyExpectsInterpolationHoleClose(frontier);
 }
 
 function expectedContinuationSummary(

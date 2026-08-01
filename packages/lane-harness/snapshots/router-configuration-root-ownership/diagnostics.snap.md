@@ -170,7 +170,206 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "fingerprint": "semantic-runtime:hit",
+  "answer": {
+    "analysisDepth": "binding-observation",
+    "continuations": [
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "orient",
+          "inspect"
+        ],
+        "kind": "follow-query",
+        "rationale": "Cluster detailed diagnostics back into a summary view.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "app-diagnostic-summary",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/main.ts"
+          }
+        },
+        "targetQueryKind": "app-diagnostic-summary"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "diagnose"
+        ],
+        "kind": "follow-query",
+        "rationale": "Compare unified diagnostics with ordinary TypeScript diagnostics.",
+        "targetQuery": {
+          "kind": "typescript-diagnostics",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/main.ts"
+          }
+        },
+        "targetQueryKind": "typescript-diagnostics"
+      },
+      {
+        "blockers": [],
+        "cost": "query-type-projection",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world",
+            "source-input"
+          ],
+          "sourceFacts": [],
+          "sourceRequirement": "authored-source"
+        },
+        "intents": [
+          "diagnose"
+        ],
+        "kind": "follow-query",
+        "rationale": "Compare unified diagnostics with template diagnostics.",
+        "targetQuery": {
+          "diagnosticProjection": "type-projection",
+          "kind": "template-diagnostics",
+          "page": {
+            "size": 200
+          },
+          "sourceFile": {
+            "filePath": "src/main.ts"
+          }
+        },
+        "targetQueryKind": "template-diagnostics"
+      },
+      {
+        "blockers": [],
+        "cost": "app-world",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world"
+          ],
+          "sourceFacts": [
+            {
+              "count": 3,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/main.ts",
+                  "path": "src/main.ts",
+                  "sourceFileRole": "app-source",
+                  "sourceWorkspaceKey": "router-configuration-root-ownership"
+                },
+                "end": 2924,
+                "kind": "source-span-address",
+                "label": "src/main.ts@2858..2924",
+                "path": "src/main.ts",
+                "role": "range",
+                "sourceFileRole": "app-source",
+                "sourceWorkspaceKey": "router-configuration-root-ownership",
+                "start": 2858
+              }
+            }
+          ],
+          "sourceRequirement": "exact-authored-span"
+        },
+        "intents": [
+          "diagnose",
+          "repair"
+        ],
+        "kind": "follow-query",
+        "rationale": "Inspect resource-issues rows referenced by returned diagnostics.",
+        "targetQuery": {
+          "kind": "resource-issues",
+          "page": {
+            "size": 200
+          }
+        },
+        "targetQueryKind": "resource-issues"
+      },
+      {
+        "blockers": [],
+        "cost": "app-world",
+        "evidence": {
+          "epochDependencies": [
+            "project-input",
+            "app-world"
+          ],
+          "sourceFacts": [
+            {
+              "count": 1,
+              "facets": [
+                "authored-source",
+                "carrier-span",
+                "exact-authored-span"
+              ],
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/main.ts",
+                  "path": "src/main.ts",
+                  "sourceFileRole": "app-source",
+                  "sourceWorkspaceKey": "router-configuration-root-ownership"
+                },
+                "end": 2924,
+                "kind": "source-span-address",
+                "label": "src/main.ts@2858..2924",
+                "path": "src/main.ts",
+                "role": "range",
+                "sourceFileRole": "app-source",
+                "sourceWorkspaceKey": "router-configuration-root-ownership",
+                "start": 2858
+              }
+            }
+          ],
+          "sourceRequirement": "exact-authored-span"
+        },
+        "intents": [
+          "diagnose",
+          "repair"
+        ],
+        "kind": "follow-query",
+        "rationale": "Inspect router-issues rows referenced by returned diagnostics.",
+        "targetQuery": {
+          "kind": "router-issues",
+          "page": {
+            "size": 200
+          }
+        },
+        "targetQueryKind": "router-issues"
+      }
+    ],
+    "coverage": "complete",
+    "page": null,
+    "result": "answered",
+    "schemaVersion": "0.2",
+    "selection": "not-applicable",
+    "summary": "Returned 4 app diagnostic(s)."
+  },
   "outcome": "result",
   "presentation": {
     "complete": true,
@@ -194,7 +393,28 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInput": null,
               "missingInputs": [],
               "phase": "router-configuration-registration",
-              "relatedInformation": [],
+              "relatedInformation": [
+                {
+                  "message": "The first RouterConfiguration registration in this application container tree is here.",
+                  "source": {
+                    "anchor": {
+                      "kind": "source-file-address",
+                      "label": "src/main.ts",
+                      "path": "src/main.ts",
+                      "sourceFileRole": "app-source",
+                      "sourceWorkspaceKey": "router-configuration-root-ownership"
+                    },
+                    "end": 2852,
+                    "kind": "source-span-address",
+                    "label": "src/main.ts@2787..2852",
+                    "path": "src/main.ts",
+                    "role": "range",
+                    "sourceFileRole": "app-source",
+                    "sourceWorkspaceKey": "router-configuration-root-ownership",
+                    "start": 2787
+                  }
+                }
+              ],
               "relatedQueryKind": "router-issues",
               "repairAffordance": {
                 "actionKind": "inspect-type-surface",
@@ -204,14 +424,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
-              "sourceRole": null,
+              "sourceRole": "app-source",
               "subject": null,
               "taxonomy": {
-                "actionability": null,
-                "category": null,
+                "actionability": "manual",
+                "category": "project",
                 "confidence": null,
-                "impact": null,
-                "schema": null
+                "impact": "blocking",
+                "schema": "diagnostics-taxonomy/1"
               }
             },
             "file": "src/main.ts",
@@ -271,7 +491,28 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "missingInput": null,
                 "missingInputs": [],
                 "phase": "resource-registration",
-                "relatedInformation": [],
+                "relatedInformation": [
+                  {
+                    "message": "Resource was first registered here.",
+                    "source": {
+                      "anchor": {
+                        "kind": "source-file-address",
+                        "label": "src/main.ts",
+                        "path": "src/main.ts",
+                        "sourceFileRole": "app-source",
+                        "sourceWorkspaceKey": "router-configuration-root-ownership"
+                      },
+                      "end": 2852,
+                      "kind": "source-span-address",
+                      "label": "src/main.ts@2787..2852",
+                      "path": "src/main.ts",
+                      "role": "range",
+                      "sourceFileRole": "app-source",
+                      "sourceWorkspaceKey": "router-configuration-root-ownership",
+                      "start": 2787
+                    }
+                  }
+                ],
                 "relatedQueryKind": "resource-issues",
                 "repairAffordance": {
                   "actionKind": "inspect-type-surface",
@@ -281,14 +522,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                   "readiness": "inspection-required",
                   "targetSourceCoverage": "not-applicable"
                 },
-                "sourceRole": null,
+                "sourceRole": "app-source",
                 "subject": null,
                 "taxonomy": {
-                  "actionability": null,
-                  "category": null,
+                  "actionability": "manual",
+                  "category": "resource-resolution",
                   "confidence": null,
-                  "impact": null,
-                  "schema": null
+                  "impact": "degraded",
+                  "schema": "diagnostics-taxonomy/1"
                 }
               },
               "file": "src/main.ts",
@@ -345,7 +586,28 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "missingInput": null,
                 "missingInputs": [],
                 "phase": "resource-registration",
-                "relatedInformation": [],
+                "relatedInformation": [
+                  {
+                    "message": "Resource was first registered here.",
+                    "source": {
+                      "anchor": {
+                        "kind": "source-file-address",
+                        "label": "src/main.ts",
+                        "path": "src/main.ts",
+                        "sourceFileRole": "app-source",
+                        "sourceWorkspaceKey": "router-configuration-root-ownership"
+                      },
+                      "end": 2852,
+                      "kind": "source-span-address",
+                      "label": "src/main.ts@2787..2852",
+                      "path": "src/main.ts",
+                      "role": "range",
+                      "sourceFileRole": "app-source",
+                      "sourceWorkspaceKey": "router-configuration-root-ownership",
+                      "start": 2787
+                    }
+                  }
+                ],
                 "relatedQueryKind": "resource-issues",
                 "repairAffordance": {
                   "actionKind": "inspect-type-surface",
@@ -355,14 +617,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                   "readiness": "inspection-required",
                   "targetSourceCoverage": "not-applicable"
                 },
-                "sourceRole": null,
+                "sourceRole": "app-source",
                 "subject": null,
                 "taxonomy": {
-                  "actionability": null,
-                  "category": null,
+                  "actionability": "manual",
+                  "category": "resource-resolution",
                   "confidence": null,
-                  "impact": null,
-                  "schema": null
+                  "impact": "degraded",
+                  "schema": "diagnostics-taxonomy/1"
                 }
               },
               "file": "src/main.ts",
@@ -419,7 +681,28 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "missingInput": null,
                 "missingInputs": [],
                 "phase": "resource-registration",
-                "relatedInformation": [],
+                "relatedInformation": [
+                  {
+                    "message": "Resource was first registered here.",
+                    "source": {
+                      "anchor": {
+                        "kind": "source-file-address",
+                        "label": "src/main.ts",
+                        "path": "src/main.ts",
+                        "sourceFileRole": "app-source",
+                        "sourceWorkspaceKey": "router-configuration-root-ownership"
+                      },
+                      "end": 2852,
+                      "kind": "source-span-address",
+                      "label": "src/main.ts@2787..2852",
+                      "path": "src/main.ts",
+                      "role": "range",
+                      "sourceFileRole": "app-source",
+                      "sourceWorkspaceKey": "router-configuration-root-ownership",
+                      "start": 2787
+                    }
+                  }
+                ],
                 "relatedQueryKind": "resource-issues",
                 "repairAffordance": {
                   "actionKind": "inspect-type-surface",
@@ -429,14 +712,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                   "readiness": "inspection-required",
                   "targetSourceCoverage": "not-applicable"
                 },
-                "sourceRole": null,
+                "sourceRole": "app-source",
                 "subject": null,
                 "taxonomy": {
-                  "actionability": null,
-                  "category": null,
+                  "actionability": "manual",
+                  "category": "resource-resolution",
                   "confidence": null,
-                  "impact": null,
-                  "schema": null
+                  "impact": "degraded",
+                  "schema": "diagnostics-taxonomy/1"
                 }
               },
               "file": "src/main.ts",
@@ -502,7 +785,28 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInput": null,
           "missingInputs": [],
           "phase": "resource-registration",
-          "relatedInformation": [],
+          "relatedInformation": [
+            {
+              "message": "Resource was first registered here.",
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/main.ts",
+                  "path": "src/main.ts",
+                  "sourceFileRole": "app-source",
+                  "sourceWorkspaceKey": "router-configuration-root-ownership"
+                },
+                "end": 2852,
+                "kind": "source-span-address",
+                "label": "src/main.ts@2787..2852",
+                "path": "src/main.ts",
+                "role": "range",
+                "sourceFileRole": "app-source",
+                "sourceWorkspaceKey": "router-configuration-root-ownership",
+                "start": 2787
+              }
+            }
+          ],
           "relatedQueryKind": "resource-issues",
           "repairAffordance": {
             "actionKind": "inspect-type-surface",
@@ -512,14 +816,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
-          "sourceRole": null,
+          "sourceRole": "app-source",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "resource-resolution",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "degraded",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/main.ts",
@@ -571,7 +875,28 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInput": null,
           "missingInputs": [],
           "phase": "resource-registration",
-          "relatedInformation": [],
+          "relatedInformation": [
+            {
+              "message": "Resource was first registered here.",
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/main.ts",
+                  "path": "src/main.ts",
+                  "sourceFileRole": "app-source",
+                  "sourceWorkspaceKey": "router-configuration-root-ownership"
+                },
+                "end": 2852,
+                "kind": "source-span-address",
+                "label": "src/main.ts@2787..2852",
+                "path": "src/main.ts",
+                "role": "range",
+                "sourceFileRole": "app-source",
+                "sourceWorkspaceKey": "router-configuration-root-ownership",
+                "start": 2787
+              }
+            }
+          ],
           "relatedQueryKind": "resource-issues",
           "repairAffordance": {
             "actionKind": "inspect-type-surface",
@@ -581,14 +906,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
-          "sourceRole": null,
+          "sourceRole": "app-source",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "resource-resolution",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "degraded",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/main.ts",
@@ -640,7 +965,28 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInput": null,
           "missingInputs": [],
           "phase": "resource-registration",
-          "relatedInformation": [],
+          "relatedInformation": [
+            {
+              "message": "Resource was first registered here.",
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/main.ts",
+                  "path": "src/main.ts",
+                  "sourceFileRole": "app-source",
+                  "sourceWorkspaceKey": "router-configuration-root-ownership"
+                },
+                "end": 2852,
+                "kind": "source-span-address",
+                "label": "src/main.ts@2787..2852",
+                "path": "src/main.ts",
+                "role": "range",
+                "sourceFileRole": "app-source",
+                "sourceWorkspaceKey": "router-configuration-root-ownership",
+                "start": 2787
+              }
+            }
+          ],
           "relatedQueryKind": "resource-issues",
           "repairAffordance": {
             "actionKind": "inspect-type-surface",
@@ -650,14 +996,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
-          "sourceRole": null,
+          "sourceRole": "app-source",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "resource-resolution",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "degraded",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/main.ts",
@@ -709,7 +1055,28 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInput": null,
           "missingInputs": [],
           "phase": "router-configuration-registration",
-          "relatedInformation": [],
+          "relatedInformation": [
+            {
+              "message": "The first RouterConfiguration registration in this application container tree is here.",
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/main.ts",
+                  "path": "src/main.ts",
+                  "sourceFileRole": "app-source",
+                  "sourceWorkspaceKey": "router-configuration-root-ownership"
+                },
+                "end": 2852,
+                "kind": "source-span-address",
+                "label": "src/main.ts@2787..2852",
+                "path": "src/main.ts",
+                "role": "range",
+                "sourceFileRole": "app-source",
+                "sourceWorkspaceKey": "router-configuration-root-ownership",
+                "start": 2787
+              }
+            }
+          ],
           "relatedQueryKind": "router-issues",
           "repairAffordance": {
             "actionKind": "inspect-type-surface",
@@ -719,14 +1086,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
-          "sourceRole": null,
+          "sourceRole": "app-source",
           "subject": null,
           "taxonomy": {
-            "actionability": null,
-            "category": null,
+            "actionability": "manual",
+            "category": "project",
             "confidence": null,
-            "impact": null,
-            "schema": null
+            "impact": "blocking",
+            "schema": "diagnostics-taxonomy/1"
           }
         },
         "file": "src/main.ts",
@@ -766,10 +1133,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       }
     ]
   },
-  "suppressed": {
-    "diagnosticCount": 0,
-    "diagnostics": []
-  },
   "surfaces": {
     "lsp": {
       "diagnosticCount": 1,
@@ -788,7 +1151,28 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInput": null,
             "missingInputs": [],
             "phase": "router-configuration-registration",
-            "relatedInformation": [],
+            "relatedInformation": [
+              {
+                "message": "The first RouterConfiguration registration in this application container tree is here.",
+                "source": {
+                  "anchor": {
+                    "kind": "source-file-address",
+                    "label": "src/main.ts",
+                    "path": "src/main.ts",
+                    "sourceFileRole": "app-source",
+                    "sourceWorkspaceKey": "router-configuration-root-ownership"
+                  },
+                  "end": 2852,
+                  "kind": "source-span-address",
+                  "label": "src/main.ts@2787..2852",
+                  "path": "src/main.ts",
+                  "role": "range",
+                  "sourceFileRole": "app-source",
+                  "sourceWorkspaceKey": "router-configuration-root-ownership",
+                  "start": 2787
+                }
+              }
+            ],
             "relatedQueryKind": "router-issues",
             "repairAffordance": {
               "actionKind": "inspect-type-surface",
@@ -798,14 +1182,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
-            "sourceRole": null,
+            "sourceRole": "app-source",
             "subject": null,
             "taxonomy": {
-              "actionability": null,
-              "category": null,
+              "actionability": "manual",
+              "category": "project",
               "confidence": null,
-              "impact": null,
-              "schema": null
+              "impact": "blocking",
+              "schema": "diagnostics-taxonomy/1"
             }
           },
           "file": "src/main.ts",

@@ -74,6 +74,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 }
 ```
 
+### Notifications
+
+```json
+{
+  "notificationCount": 0,
+  "notifications": []
+}
+```
+
 ### Resolved locations
 
 ```json
@@ -184,6 +193,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "uri": "fixtures://pressure/mixed-form-surfaces/src/models/ticket.ts"
     }
   ]
+}
+```
+
+### Notifications
+
+```json
+{
+  "notificationCount": 0,
+  "notifications": []
 }
 ```
 

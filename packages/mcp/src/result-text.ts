@@ -112,6 +112,10 @@ function semanticAnswerDisplayText(value: unknown): string | null {
     return null;
   }
   const lines: string[] = [];
+  const answerState = semanticAnswerStateText(value);
+  if (answerState != null) {
+    lines.push(answerState);
+  }
   if (isRecord(value.value) && typeof value.value.displayText === 'string') {
     lines.push(value.value.displayText);
   } else {
@@ -141,6 +145,20 @@ function semanticAnswerDisplayText(value: unknown): string | null {
     lines.push(nestedContinuations);
   }
   return lines.length === 0 ? null : lines.join('\n');
+}
+
+function semanticAnswerStateText(value: Record<string, unknown>): string | null {
+  const states: string[] = [];
+  if (typeof value.result === 'string' && value.result !== 'answered') {
+    states.push(`result=${value.result}`);
+  }
+  if (typeof value.selection === 'string' && value.selection !== 'exact' && value.selection !== 'not-applicable') {
+    states.push(`selection=${value.selection}`);
+  }
+  if (typeof value.coverage === 'string' && value.coverage !== 'complete') {
+    states.push(`coverage=${value.coverage}`);
+  }
+  return states.length === 0 ? null : `Answer state: ${states.join('; ')}.`;
 }
 
 function semanticAnswerAnalysisDepthText(value: unknown): string | null {

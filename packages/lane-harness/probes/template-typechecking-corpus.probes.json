@@ -43,6 +43,16 @@
         "reason": "Describes the right-branch `label` member as `string` under the existing short-circuit branch scope.",
         "note": "NEW 2026-07-12. Adapter witness that expression-owner projection spends the checker branch-scope product rather than re-deriving nullish narrowing in presentation code."
       }
+    ],
+    "references": [
+      {
+        "id": "unknown-member-concrete-candidate-honesty",
+        "file": "src/read-expressions.html",
+        "anchor": "class=\"unknown-invalid\">${unknownValue.label}",
+        "at": "label",
+        "verdict": "correct",
+        "reason": "References should return only the selected authored occurrence, retain the second same-owner unknown member as an unverified candidate, and report that concrete omission without inserting a false-positive location."
+      }
     ]
   }
 }

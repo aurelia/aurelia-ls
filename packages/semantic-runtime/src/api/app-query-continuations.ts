@@ -23,6 +23,7 @@ import {
 import { semanticAppQueryMaterializationPolicy } from './app-query-policy.js';
 import {
   semanticContinuationSourceFacts,
+  semanticSourceReferencesInAnswerRows,
   semanticSourceFacetsForReference,
   type SemanticSourceReference,
 } from './source-reference.js';
@@ -297,7 +298,7 @@ function semanticAppQueryContinuationRows(
   addRenderingContinuations(query, seeds, page);
   addStateAndI18nContinuations(query, seeds, page);
   addFrameworkContinuations(query, result, seeds, sourceFile, page);
-  addIssueContinuations(query, seeds, page);
+  addIssueContinuations(query, result, seeds, page);
 
   return mergeSemanticRuntimeContinuationRows(nextPage, seeds.map(seedToRow));
 }
@@ -1153,9 +1154,11 @@ function addFrameworkContinuations(
 
 function addIssueContinuations(
   query: SemanticAppQuery,
+  result: SemanticRuntimeAnswer<unknown>,
   seeds: ContinuationSeed[],
   page: SemanticRuntimePageInput,
 ): void {
+  const firstIssueSeed = seeds.length;
   if (ISSUE_SUMMARY_QUERY_KINDS.has(query.kind)) {
     seeds.push(
       diagnose(
@@ -1204,6 +1207,20 @@ function addIssueContinuations(
         rowQuery(SemanticAppQueryKind.OpenSeamSites, query, page),
       ),
     );
+  }
+
+  if (
+    query.kind === SemanticAppQueryKind.OpenSeams
+    || query.kind === SemanticAppQueryKind.OpenSeamSites
+    || query.kind === SemanticAppQueryKind.OpenSeamSummary
+  ) {
+    const sourceReferences = semanticSourceReferencesInAnswerRows(result.value);
+    for (let index = firstIssueSeed; index < seeds.length; index += 1) {
+      const seed = seeds[index];
+      if (seed != null) {
+        seeds[index] = withSourceReferences(seed, sourceReferences);
+      }
+    }
   }
 }
 

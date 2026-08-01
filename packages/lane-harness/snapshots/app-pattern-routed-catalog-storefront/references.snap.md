@@ -74,6 +74,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 }
 ```
 
+### Notifications
+
+```json
+{
+  "notificationCount": 0,
+  "notifications": []
+}
+```
+
 ### Resolved locations
 
 ```json
@@ -197,6 +206,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/state/catalog-state.ts"
     }
   ]
+}
+```
+
+### Notifications
+
+```json
+{
+  "notificationCount": 0,
+  "notifications": []
 }
 ```
 
@@ -326,6 +344,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 }
 ```
 
+### Notifications
+
+```json
+{
+  "notificationCount": 0,
+  "notifications": []
+}
+```
+
 ### Resolved locations
 
 ```json
@@ -436,6 +463,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-list-route.html"
     }
   ]
+}
+```
+
+### Notifications
+
+```json
+{
+  "notificationCount": 0,
+  "notifications": []
 }
 ```
 
@@ -650,6 +686,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-detail-route.html"
     }
   ]
+}
+```
+
+### Notifications
+
+```json
+{
+  "notificationCount": 0,
+  "notifications": []
 }
 ```
 
@@ -1008,6 +1053,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-detail-route.html"
     }
   ]
+}
+```
+
+### Notifications
+
+```json
+{
+  "notificationCount": 0,
+  "notifications": []
 }
 ```
 
@@ -1421,6 +1475,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 }
 ```
 
+### Notifications
+
+```json
+{
+  "notificationCount": 0,
+  "notifications": []
+}
+```
+
 ### Resolved locations
 
 ```json
@@ -1739,6 +1802,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 }
 ```
 
+### Notifications
+
+```json
+{
+  "notificationCount": 0,
+  "notifications": []
+}
+```
+
 ### Resolved locations
 
 ```json
@@ -1862,6 +1934,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-list-route.html"
     }
   ]
+}
+```
+
+### Notifications
+
+```json
+{
+  "notificationCount": 0,
+  "notifications": []
 }
 ```
 
@@ -2079,6 +2160,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-list-route.html"
     }
   ]
+}
+```
+
+### Notifications
+
+```json
+{
+  "notificationCount": 0,
+  "notifications": []
 }
 ```
 
