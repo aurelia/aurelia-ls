@@ -2,14 +2,16 @@ import { StatusService } from "../../status.js";
 import type { FeatureModule } from "../../core/feature-graph.js";
 import { StatusServiceToken } from "../../service-tokens.js";
 import { ContractKeys, hasContract } from "../../core/capabilities.js";
+import { DisposableStore } from "../../core/disposables.js";
 
 export const StatusFeature: FeatureModule = {
   id: "status.bar",
   isEnabled: (ctx) => ctx.config.current.features.statusBar,
   isAvailable: (ctx) => hasContract(ctx.capabilities.current, ContractKeys.query),
   activate: (ctx) => {
+    const store = new DisposableStore();
     const status = new StatusService(ctx.vscode);
-    const registration = ctx.services.register(StatusServiceToken, status, { dispose: () => status.dispose() });
+    store.add(ctx.services.register(StatusServiceToken, status, { dispose: () => status.dispose() }));
 
     // Transition to "discovering" once capabilities are known (server is ready)
     status.discovering();
@@ -25,7 +27,7 @@ export const StatusFeature: FeatureModule = {
     queryAndUpdateStatus();
 
     // Refresh counts when semantic-runtime observes workspace/resource changes.
-    ctx.lsp.onWorkspaceChanged((payload) => {
+    store.add(ctx.lsp.onWorkspaceChanged((payload) => {
       if (
         payload.domains.includes("resources") ||
         payload.domains.includes("scopes") ||
@@ -33,9 +35,9 @@ export const StatusFeature: FeatureModule = {
       ) {
         queryAndUpdateStatus();
       }
-    });
+    }));
 
-    ctx.lsp.onAnalysisReady((payload) => {
+    store.add(ctx.lsp.onAnalysisReady((payload) => {
       if (status.phase !== "ready") {
         status.analyzing();
       }
@@ -46,8 +48,8 @@ export const StatusFeature: FeatureModule = {
         },
       });
       queryAndUpdateStatus();
-    });
+    }));
 
-    return registration;
+    return store;
   },
 };

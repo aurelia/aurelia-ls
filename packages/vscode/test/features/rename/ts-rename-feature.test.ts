@@ -106,7 +106,10 @@ function createContext(options: { renameResponse?: RenameResponse; textDocuments
     providers.push(provider);
     return { dispose: vi.fn() };
   });
-  const convertWorkspaceEdit = vi.fn(async (workspaceEdit: Extract<RenameResponse, { status: "success" }>["workspaceEdit"]) => {
+  const convertWorkspaceEdit = vi.fn(async (
+    _uri: string,
+    workspaceEdit: Extract<RenameResponse, { status: "success" }>["workspaceEdit"],
+  ) => {
     const edit = new StubWorkspaceEdit();
     for (const change of workspaceEdit.documentChanges ?? []) {
       const uri = new StubUri(change.textDocument.uri);
@@ -150,11 +153,7 @@ function createContext(options: { renameResponse?: RenameResponse; textDocuments
     },
     lsp: {
       renameFromTs,
-    },
-    rawClient: {
-      protocol2CodeConverter: {
-        asWorkspaceEdit: convertWorkspaceEdit,
-      },
+      convertWorkspaceEdit,
     },
     logger: {
       debug: vi.fn(),

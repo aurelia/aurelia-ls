@@ -45,6 +45,7 @@ Templates are colored by semantic meaning: custom elements look different from H
 ### Resource Explorer
 
 Browse all Aurelia resources in your project from the sidebar — custom elements, attributes, template controllers, value converters, binding behaviors — organized by project, package, framework provenance, and scope.
+In multi-root workspaces, each active workspace folder has its own root so same-named resources retain their owner.
 
 ### Binding Mode Hints
 
@@ -81,11 +82,28 @@ The goal is that you can trust what the extension tells you.
 - Aurelia 2 project with `aurelia` or `@aurelia/*` in dependencies
 - TypeScript 5.0+
 
+## Workspace Activation
+
+By default, the extension uses dependency manifests or an already-open Aurelia entry source only as a cheap candidate
+signal. The language server then asks semantic-runtime for the workspace's project shape and keeps the session only when
+that workspace contains an Aurelia app, resource-library authoring project, or Aurelia package-inspection project.
+Unrelated HTML and TypeScript workspaces remain inactive.
+
+Set `aurelia.activationMode` per workspace folder when automatic admission is not appropriate:
+
+- `auto` uses candidate evidence followed by semantic project-shape confirmation;
+- `on` keeps tooling active for dynamic, incomplete, or unusual project layouts;
+- `off` prevents tooling from starting for that folder.
+
+Disjoint multi-root folders receive independent language-server sessions. Semantic-runtime owns nested projects inside
+each root, while untitled and out-of-workspace documents remain unclaimed. Remote folders are supported when the
+extension host can access their filesystem; virtual workspaces are not currently supported.
+
 ## Getting Started
 
 1. Install this extension
 2. Open an Aurelia 2 project
-3. The language server activates when it detects Aurelia dependencies
+3. The language server activates after semantic-runtime confirms the workspace project shape
 4. Check the "Aurelia Language Server" output channel for status
 
 ## Commands

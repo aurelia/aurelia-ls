@@ -7,9 +7,11 @@ import type { ExtensionContext, Disposable as VscodeDisposable, Uri as VscodeUri
 
 interface StubUri {
   scheme: string;
+  authority: string;
   fsPath: string;
   path: string;
   toString(): string;
+  with(change: { scheme?: string; authority?: string; path?: string }): StubUri;
 }
 
 interface StubDocument {
@@ -27,6 +29,11 @@ interface ContentProvider {
 interface CreateVscodeApiOptions {
   existingFiles?: boolean;
   activeTextEditor?: unknown;
+  files?: Record<string, string>;
+  workspaceFolders?: Array<{ name: string; uri: string }>;
+  configuration?: Record<string, unknown>;
+  workspaceConfiguration?: Record<string, Record<string, unknown>>;
+  openDocuments?: Array<{ uri: string; languageId: string; text: string }>;
 }
 
 interface StubStatusBarItem {
@@ -42,8 +49,14 @@ interface StubStatusBarItem {
 }
 
 interface StubFileWatcher {
-  globPattern: string;
+  globPattern: unknown;
   disposed: boolean;
+  onDidCreate(listener: (uri: StubUri) => void): VscodeDisposable;
+  onDidChange(listener: (uri: StubUri) => void): VscodeDisposable;
+  onDidDelete(listener: (uri: StubUri) => void): VscodeDisposable;
+  fireCreate(uri: StubUri): void;
+  fireChange(uri: StubUri): void;
+  fireDelete(uri: StubUri): void;
   dispose(): void;
 }
 
@@ -58,15 +71,40 @@ interface RecordedActions {
   statusItems: StubStatusBarItem[];
   fileWatchers: StubFileWatcher[];
   outputLogs: string[];
+  contextValues: Map<string, unknown>;
+  fireWorkspaceFoldersChanged(): void;
+  fireConfigurationChanged(section?: string): void;
+  fireDocumentOpened(document: StubDocument): void;
+  fireDocumentChanged(document: StubDocument): void;
+  fireDocumentSaved(document: StubDocument): void;
+  fireDocumentClosed(document: StubDocument): void;
+  setFile(uri: string, text: string): void;
+  deleteFile(uri: string): void;
 }
 
 export interface StubVscodeApi {
-  commands: { registerCommand: (command: string, handler: (...args: unknown[]) => unknown) => VscodeDisposable };
+  commands: {
+    registerCommand: (command: string, handler: (...args: unknown[]) => unknown) => VscodeDisposable;
+    executeCommand: (command: string, ...args: unknown[]) => Promise<unknown>;
+  };
   workspace: {
-    fs: { stat: (uri: StubUri) => Promise<{ type: string; uri: StubUri }> };
+    workspaceFolders: Array<{ name: string; index: number; uri: StubUri }> | undefined;
+    textDocuments: StubDocument[];
+    fs: {
+      stat: (uri: StubUri) => Promise<{ type: string; uri: StubUri }>;
+      readFile: (uri: StubUri) => Promise<Uint8Array>;
+    };
+    findFiles: (include: unknown, exclude?: unknown) => Promise<StubUri[]>;
+    getConfiguration: (section: string, uri?: StubUri) => { get<T>(key: string, defaultValue: T): T };
+    onDidChangeWorkspaceFolders: (listener: () => void) => VscodeDisposable;
+    onDidChangeConfiguration: (listener: (event: { affectsConfiguration: (section: string) => boolean }) => void) => VscodeDisposable;
+    onDidOpenTextDocument: (listener: (document: StubDocument) => void) => VscodeDisposable;
+    onDidChangeTextDocument: (listener: (event: { document: StubDocument }) => void) => VscodeDisposable;
+    onDidSaveTextDocument: (listener: (document: StubDocument) => void) => VscodeDisposable;
+    onDidCloseTextDocument: (listener: (document: StubDocument) => void) => VscodeDisposable;
     registerTextDocumentContentProvider: (scheme: string, provider: TextDocumentContentProvider) => VscodeDisposable;
     openTextDocument: (target: unknown) => Promise<StubDocument>;
-    createFileSystemWatcher: (globPattern: string) => StubFileWatcher;
+    createFileSystemWatcher: (globPattern: unknown) => StubFileWatcher;
   };
   window: {
     activeTextEditor: unknown;
@@ -82,6 +120,7 @@ export interface StubVscodeApi {
     parse: (value: string) => StubUri;
     joinPath: (base: StubUri, ...segments: string[]) => StubUri;
   };
+  RelativePattern: new (base: unknown, pattern: string) => { base: unknown; baseUri: StubUri; pattern: string };
   EventEmitter: typeof EventEmitter;
   StatusBarAlignment: { Left: number; Right: number };
   ViewColumn: { Beside: number; One: number };
@@ -159,6 +198,55 @@ class EventEmitter<T> {
   }
 }
 
+class RelativePattern {
+  readonly baseUri: StubUri;
+
+  constructor(readonly base: unknown, readonly pattern: string) {
+    const candidate = base as { uri?: StubUri; fsPath?: string };
+    this.baseUri = candidate.uri ?? createUri(`file://${candidate.fsPath ?? ""}`);
+  }
+}
+
+class FileWatcher implements StubFileWatcher {
+  disposed = false;
+  #create = new EventEmitter<StubUri>();
+  #change = new EventEmitter<StubUri>();
+  #delete = new EventEmitter<StubUri>();
+
+  constructor(readonly globPattern: unknown) {}
+
+  onDidCreate(listener: (uri: StubUri) => void): VscodeDisposable {
+    return this.#create.event(listener);
+  }
+
+  onDidChange(listener: (uri: StubUri) => void): VscodeDisposable {
+    return this.#change.event(listener);
+  }
+
+  onDidDelete(listener: (uri: StubUri) => void): VscodeDisposable {
+    return this.#delete.event(listener);
+  }
+
+  fireCreate(uri: StubUri): void {
+    this.#create.fire(uri);
+  }
+
+  fireChange(uri: StubUri): void {
+    this.#change.fire(uri);
+  }
+
+  fireDelete(uri: StubUri): void {
+    this.#delete.fire(uri);
+  }
+
+  dispose(): void {
+    this.disposed = true;
+    this.#create.dispose();
+    this.#change.dispose();
+    this.#delete.dispose();
+  }
+}
+
 // =============================================================================
 // URI Helpers
 // =============================================================================
@@ -171,13 +259,22 @@ function createUri(raw: string | StubUri): StubUri {
   if (typeof raw !== "string") return raw;
   const scheme = hasScheme(raw) ? raw.slice(0, raw.indexOf(":")) : "file";
   const remainder = raw.includes(":") ? raw.slice(raw.indexOf(":") + 1) : raw;
-  const fsPath = scheme === "file" ? path.normalize(remainder.replace(/^\/\//, "")) : remainder;
+  const withoutPrefix = remainder.replace(/^\/\//, "");
+  const fsPath = scheme === "file" ? path.normalize(withoutPrefix) : withoutPrefix;
+  const uriPath = `/${fsPath.replaceAll("\\", "/").replace(/^\/+/, "")}`;
   return {
     scheme,
+    authority: "",
     fsPath,
-    path: fsPath,
+    path: uriPath,
     toString() {
       return raw;
+    },
+    with(change) {
+      const nextScheme = change.scheme ?? scheme;
+      const nextAuthority = change.authority ?? "";
+      const nextPath = change.path ?? uriPath;
+      return createUri(`${nextScheme}://${nextAuthority}${nextPath}`);
     },
   };
 }
@@ -201,11 +298,44 @@ export function createVscodeApi(options: CreateVscodeApiOptions = {}): { vscode:
   const statusItems: StubStatusBarItem[] = [];
   const fileWatchers: StubFileWatcher[] = [];
   const outputLogs: string[] = [];
+  const contextValues = new Map<string, unknown>();
+  const workspaceFoldersChanged = new EventEmitter<void>();
+  const configurationChanged = new EventEmitter<{ affectsConfiguration: (section: string) => boolean }>();
+  const documentOpened = new EventEmitter<StubDocument>();
+  const documentChanged = new EventEmitter<{ document: StubDocument }>();
+  const documentSaved = new EventEmitter<StubDocument>();
+  const documentClosed = new EventEmitter<StubDocument>();
+  const workspaceFolders = options.workspaceFolders?.map((folder, index) => ({
+    name: folder.name,
+    index,
+    uri: createUri(folder.uri),
+  }));
+  const textDocuments = (options.openDocuments ?? []).map((document) => {
+    const result: StubDocument = {
+      uri: createUri(document.uri),
+      languageId: document.languageId,
+      text: document.text,
+      getText: () => result.text,
+    };
+    return result;
+  });
+  const files = new Map(Object.entries(options.files ?? {}).map(([file, text]) => [
+    path.normalize(createUri(file).fsPath),
+    text,
+  ]));
 
   function registerCommand(command: string, handler: (...args: unknown[]) => unknown): Disposable {
     commandHandlers.set(command, handler);
     registeredCommands.push(command);
     return new Disposable(() => commandHandlers.delete(command));
+  }
+
+  async function executeCommand(command: string, ...args: unknown[]): Promise<unknown> {
+    if (command === "setContext") {
+      contextValues.set(String(args[0]), args[1]);
+      return undefined;
+    }
+    return commandHandlers.get(command)?.(...args);
   }
 
   function createOutputChannel(name: string) {
@@ -221,10 +351,13 @@ export function createVscodeApi(options: CreateVscodeApiOptions = {}): { vscode:
   function openTextDocument(target: unknown): Promise<StubDocument> {
     const doc = makeDocument(target, contentProviders, openedDocuments.length);
     openedDocuments.push(doc);
+    textDocuments.push(doc);
     return Promise.resolve(doc);
   }
 
   const workspace = {
+    workspaceFolders,
+    textDocuments,
     fs: {
       stat: async (uri: StubUri) => {
         if (options.existingFiles === false) {
@@ -234,7 +367,45 @@ export function createVscodeApi(options: CreateVscodeApiOptions = {}): { vscode:
         }
         return { type: "file", uri };
       },
+      readFile: async (uri: StubUri) => {
+        const text = files.get(path.normalize(uri.fsPath));
+        if (text == null) {
+          throw new Error(`ENOENT: ${uri.fsPath}`);
+        }
+        return new TextEncoder().encode(text);
+      },
     },
+    findFiles: async (include: unknown) => {
+      const pattern = include as { baseUri?: StubUri; base?: { uri?: StubUri }; pattern?: string };
+      const base = pattern.baseUri ?? pattern.base?.uri ?? null;
+      return [...files.keys()]
+        .filter((file) => base == null || pathIsWithin(file, base.fsPath))
+        .filter((file) => pattern.pattern !== "**/package.json" || path.basename(file) === "package.json")
+        .map((file) => createUri(`file://${file}`));
+    },
+    getConfiguration: (section: string, uri?: StubUri) => ({
+      get<T>(key: string, defaultValue: T): T {
+        const workspaceEntry = uri == null
+          ? undefined
+          : Object.entries(options.workspaceConfiguration ?? {})
+            .filter(([root]) => pathIsWithin(uri.fsPath, createUri(root).fsPath))
+            .sort((left, right) => right[0].length - left[0].length)[0]?.[1];
+        const fullKey = `${section}.${key}`;
+        const value = workspaceEntry?.[fullKey]
+          ?? workspaceEntry?.[key]
+          ?? options.configuration?.[fullKey]
+          ?? options.configuration?.[key];
+        return (value === undefined ? defaultValue : value) as T;
+      },
+    }),
+    onDidChangeWorkspaceFolders: (listener: () => void) => workspaceFoldersChanged.event(listener),
+    onDidChangeConfiguration: (
+      listener: (event: { affectsConfiguration: (section: string) => boolean }) => void,
+    ) => configurationChanged.event(listener),
+    onDidOpenTextDocument: (listener: (document: StubDocument) => void) => documentOpened.event(listener),
+    onDidChangeTextDocument: (listener: (event: { document: StubDocument }) => void) => documentChanged.event(listener),
+    onDidSaveTextDocument: (listener: (document: StubDocument) => void) => documentSaved.event(listener),
+    onDidCloseTextDocument: (listener: (document: StubDocument) => void) => documentClosed.event(listener),
     registerTextDocumentContentProvider: (scheme: string, provider: TextDocumentContentProvider): Disposable => {
       contentProviders.push({ scheme, provider });
       return new Disposable(() => {
@@ -243,8 +414,8 @@ export function createVscodeApi(options: CreateVscodeApiOptions = {}): { vscode:
       });
     },
     openTextDocument,
-    createFileSystemWatcher: (globPattern: string): StubFileWatcher => {
-      const watcher: StubFileWatcher = { globPattern, disposed: false, dispose() { this.disposed = true; } };
+    createFileSystemWatcher: (globPattern: unknown): StubFileWatcher => {
+      const watcher = new FileWatcher(globPattern);
       fileWatchers.push(watcher);
       return watcher;
     },
@@ -294,10 +465,11 @@ export function createVscodeApi(options: CreateVscodeApiOptions = {}): { vscode:
   };
 
   const vscode: StubVscodeApi = {
-    commands: { registerCommand },
+    commands: { registerCommand, executeCommand },
     workspace,
     window,
     Uri,
+    RelativePattern,
     EventEmitter,
     StatusBarAlignment: { Left: 1, Right: 2 },
     ViewColumn: { Beside: 2, One: 1 },
@@ -316,8 +488,34 @@ export function createVscodeApi(options: CreateVscodeApiOptions = {}): { vscode:
       statusItems,
       fileWatchers,
       outputLogs,
+      contextValues,
+      fireWorkspaceFoldersChanged: () => workspaceFoldersChanged.fire(),
+      fireConfigurationChanged: (section = "aurelia") => configurationChanged.fire({
+        affectsConfiguration: (candidate) => candidate === section || candidate.startsWith(`${section}.`),
+      }),
+      fireDocumentOpened: (document) => {
+        if (!textDocuments.includes(document)) textDocuments.push(document);
+        documentOpened.fire(document);
+      },
+      fireDocumentChanged: (document) => documentChanged.fire({ document }),
+      fireDocumentSaved: (document) => documentSaved.fire(document),
+      fireDocumentClosed: (document) => {
+        const index = textDocuments.indexOf(document);
+        if (index >= 0) textDocuments.splice(index, 1);
+        documentClosed.fire(document);
+      },
+      setFile: (uri, value) => files.set(path.normalize(createUri(uri).fsPath), value),
+      deleteFile: (uri) => {
+        files.delete(path.normalize(createUri(uri).fsPath));
+      },
     },
   };
+}
+
+function pathIsWithin(candidate: string, root: string): boolean {
+  const relative = path.relative(path.normalize(root), path.normalize(candidate));
+  return relative === ""
+    || (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
 }
 
 // =============================================================================

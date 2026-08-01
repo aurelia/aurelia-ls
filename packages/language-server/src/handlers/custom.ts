@@ -37,6 +37,7 @@ import type {
   DiagnosticsSnapshotRelated,
   DiagnosticsSnapshotResponse,
   SourceSpan,
+  WorkspaceStatusResponse,
 } from "../protocol.js";
 import { canonicalDocumentUri } from "../utils/document-uri.js";
 import { buildCapabilities, buildCapabilitiesFallback, type CapabilitiesResponse } from "../capabilities.js";
@@ -799,6 +800,21 @@ export function handleCapabilities(ctx: ServerContext): CapabilitiesResponse {
   }
 }
 
+export async function handleWorkspaceStatus(
+  ctx: ServerContext,
+  guard: SemanticRuntimeLspRequestGuard,
+): Promise<WorkspaceStatusResponse | null> {
+  try {
+    return await ctx.semanticRuntime.workspaceSummary(guard);
+  } catch (e) {
+    if (logIfSemanticRuntimeRequestAborted(ctx, "workspaceStatus", e)) {
+      return null;
+    }
+    ctx.logger.error(`[workspaceStatus] failed: ${formatError(e)}`);
+    return null;
+  }
+}
+
 // ============================================================================
 // TS-side rename → template propagation
 // ============================================================================
@@ -1016,6 +1032,8 @@ export function registerCustomHandlers(ctx: ServerContext): void {
     handleGetScopeResources(ctx, params, requestGuard(ctx, token)));
   ctx.connection.onRequest("aurelia/getRelatedFile", (params: { uri: string }, token: CancellationToken) =>
     handleGetRelatedFile(ctx, params, requestGuard(ctx, token)));
+  ctx.connection.onRequest("aurelia/workspaceStatus", (_params: unknown, token: CancellationToken) =>
+    handleWorkspaceStatus(ctx, requestGuard(ctx, token)));
   ctx.connection.onRequest("aurelia/capabilities", () => handleCapabilities(ctx));
   ctx.connection.onRequest("aurelia/renameFromTs", (params: RenameFromTsParams, token: CancellationToken) =>
     handleRenameFromTs(ctx, params, requestGuard(ctx, token)));

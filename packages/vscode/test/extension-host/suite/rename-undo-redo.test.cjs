@@ -5,6 +5,10 @@ const vscode = require("vscode");
 
 const workspaceRoot = process.env.AURELIA_LS_EXTENSION_HOST_WORKSPACE;
 const extensionId = "AureliaEffect.aurelia-2";
+// This journey proves four distinct semantic states (prepare, apply, undo, redo).
+// Latency acceptance is measured separately; the reliability witness must not
+// become flaky merely because its cumulative cold semantic work nears 120s.
+const CODE_ACTION_RELIABILITY_TIMEOUT_MS = 180_000;
 const trackedFiles = [
   "src/my-app.html",
   "src/my-app.ts",
@@ -23,9 +27,11 @@ const baseline = new Map(
   trackedFiles.map((rel) => [rel, fs.readFileSync(filePath(rel), "utf8")]),
 );
 let changeLog = [];
+let analysisReadyLog = [];
 
 suite("extension-host IDE reliability", () => {
   let subscription;
+  let analysisReadySubscription;
 
   suiteSetup(async () => {
     await configureAureliaForReliabilityTests();
@@ -41,17 +47,29 @@ suite("extension-host IDE reliability", () => {
       }
     });
 
-    await activateAureliaExtension();
+    const app = await activateAureliaExtension();
+    assert(app?.ctx?.lsp, "Expected extension activation to expose its live LSP facade.");
+    analysisReadySubscription = app.ctx.lsp.onAnalysisReady((payload) => {
+      analysisReadyLog.push({
+        uri: payload.uri,
+        version: payload.version,
+        diags: payload.diags,
+        fingerprint: payload.fingerprint,
+      });
+    });
   });
 
   suiteTeardown(() => {
     subscription?.dispose();
+    analysisReadySubscription?.dispose();
   });
 
   setup(async () => {
     changeLog = [];
+    analysisReadyLog = [];
     await resetWorkspaceToBaseline();
     changeLog = [];
+    analysisReadyLog = [];
   });
 
   test("HTML-origin bindable rename survives one-step undo, redo, and a subsequent rename", async () => {
@@ -342,13 +360,11 @@ suite("extension-host IDE reliability", () => {
     assert.strictEqual(unresolvedActions[0].edit, undefined,
       "missing-member quick fix should defer its edit until resolution");
     const resolvedActions = await executeCodeActionProvider(template.uri, actionRange, 1);
-    assert(resolvedActions?.[0]?.edit instanceof vscode.WorkspaceEdit,
+    const resolvedEdit = resolvedActions?.[0]?.edit;
+    assert(resolvedEdit instanceof vscode.WorkspaceEdit,
       "expected the registered provider to resolve the missing-member WorkspaceEdit");
-    await vscode.commands.executeCommand("editor.action.codeAction", {
-      kind: "quickfix",
-      apply: "first",
-      preferred: true,
-    });
+    const applied = await vscode.workspace.applyEdit(resolvedEdit, { label: "Add missing Aurelia member" });
+    assert.strictEqual(applied, true, "resolved missing-member WorkspaceEdit should apply");
     await waitFor(async () => (await documentFor("src/my-app.ts")).getText().includes("titel!: unknown;"),
       "missing-member code action should update my-app.ts");
     await assertDocumentsContain("after missing-member code action", {
@@ -372,11 +388,19 @@ suite("extension-host IDE reliability", () => {
     await waitFor(async () => (await executeCodeActionProvider(template.uri, actionRange, 0)).length === 0,
       "missing-member action should clear after code-action redo");
     assertUndoRedoReasons(["src/my-app.ts"], vscode.TextDocumentChangeReason.Redo, "code-action redo");
-  });
+  }).timeout(CODE_ACTION_RELIABILITY_TIMEOUT_MS);
 
   test("unsaved template type errors publish at the authored token and clear on undo", async () => {
     const rel = "src/my-app.html";
     const document = await showDocument(rel);
+    await waitFor(async () => {
+      const hovers = await vscode.commands.executeCommand(
+        "vscode.executeHoverProvider",
+        document.uri,
+        positionForNeedle(document, "state.searchText", "searchText"),
+      );
+      return Array.isArray(hovers) && hovers.length > 0;
+    }, "Aurelia language features should settle after the baseline document opens");
     const original = "${preview.name}";
     const replacement = "${heading()}";
     const start = document.getText().indexOf(original);
@@ -390,17 +414,47 @@ suite("extension-host IDE reliability", () => {
     );
     const applied = await vscode.workspace.applyEdit(edit, { label: "Introduce template type error" });
     assert.strictEqual(applied, true, "template type-error edit should apply");
+    assert.strictEqual(
+      document.getText().includes(replacement),
+      true,
+      "template type-error edit should update the live document before diagnostics",
+    );
+    assert.ok(
+      changeLog.some((event) => event.rel === rel && event.changeCount > 0),
+      `template type-error edit should emit a non-empty document change; saw ${JSON.stringify(changeLog)}`,
+    );
+    await waitFor(
+      () => analysisReadyLog.some((event) =>
+        event.uri === document.uri.toString() && event.version === document.version
+      ),
+      `semantic-runtime should acknowledge diagnostics for ${rel}@${document.version}`,
+      60000,
+    );
 
     let nonCallableDiagnostic;
-    await waitFor(() => {
-      nonCallableDiagnostic = vscode.languages.getDiagnostics(document.uri).find((diagnostic) => {
-        const code = typeof diagnostic.code === "object" ? diagnostic.code.value : diagnostic.code;
-        return diagnostic.source === "aurelia"
-          && code === "TS2349"
-          && document.getText(diagnostic.range) === "heading";
-      });
-      return nonCallableDiagnostic != null;
-    }, "unsaved non-callable template expression should publish TS2349 on the authored member token");
+    try {
+      await waitFor(() => {
+        nonCallableDiagnostic = vscode.languages.getDiagnostics(document.uri).find((diagnostic) => {
+          const code = typeof diagnostic.code === "object" ? diagnostic.code.value : diagnostic.code;
+          return diagnostic.source === "aurelia"
+            && code === "TS2349"
+            && document.getText(diagnostic.range) === "heading";
+        });
+        return nonCallableDiagnostic != null;
+      }, "unsaved non-callable template expression should publish TS2349 on the authored member token");
+    } catch (error) {
+      const diagnostics = vscode.languages.getDiagnostics(document.uri).map((diagnostic) => ({
+        source: diagnostic.source,
+        code: typeof diagnostic.code === "object" ? diagnostic.code.value : diagnostic.code,
+        text: document.getText(diagnostic.range),
+        message: diagnostic.message,
+      }));
+      throw new Error(
+        `${error.message}; document=${document.languageId}@${document.version}; `
+        + `changes=${JSON.stringify(changeLog)}; analysisReady=${JSON.stringify(analysisReadyLog)}; `
+        + `diagnostics=${JSON.stringify(diagnostics)}`,
+      );
+    }
     assert.strictEqual(nonCallableDiagnostic.severity, vscode.DiagnosticSeverity.Error);
     assert.match(nonCallableDiagnostic.message, /not callable/i);
     assertDirty([rel], true, "after introducing template type error");
@@ -431,7 +485,7 @@ function relativeWorkspacePath(uri) {
 async function activateAureliaExtension() {
   const extension = vscode.extensions.getExtension(extensionId);
   assert(extension, `Expected extension ${extensionId} to be installed in the Extension Development Host.`);
-  await extension.activate();
+  const api = await extension.activate();
   await showDocument("src/my-app.html");
   await waitFor(async () => {
     const hovers = await vscode.commands.executeCommand(
@@ -441,6 +495,7 @@ async function activateAureliaExtension() {
     );
     return Array.isArray(hovers) && hovers.length > 0;
   }, "Aurelia extension should answer language-feature requests");
+  return api;
 }
 
 async function configureAureliaForReliabilityTests() {

@@ -101,6 +101,14 @@ describe("refreshDocument", () => {
     expect(ctx.connection.sendDiagnostics).toHaveBeenCalledWith(
       expect.objectContaining({ uri: doc.uri, version: doc.version }),
     );
+    expect(ctx.connection.sendNotification).toHaveBeenCalledWith(
+      "aurelia/analysisReady",
+      expect.objectContaining({
+        uri: doc.uri,
+        version: doc.version,
+        fingerprint: "semantic-runtime:test:source-1",
+      }),
+    );
   });
 
   test("records one source generation for a direct document refresh", async () => {
@@ -208,11 +216,41 @@ describe("registerLifecycleHandlers — onDidClose", () => {
 });
 
 describe("registerLifecycleHandlers — onDidChangeWatchedFiles", () => {
+  test("does not replay filesystem content invalidation for an open document", async () => {
+    let watchedHandler: ((e: { changes: Array<{ uri: string; type: number }> }) => void) | undefined;
+    const openDoc = createMockDoc("file:///app/src/my-app.ts");
+    const documents = {
+      get: vi.fn((uri: string) => uri === openDoc.uri ? openDoc : null),
+      all: vi.fn(() => [openDoc]),
+      onDidOpen: vi.fn(),
+      onDidChangeContent: vi.fn(),
+      onDidClose: vi.fn(),
+    };
+    const connection = {
+      onInitialize: vi.fn(),
+      onDidChangeConfiguration: vi.fn(),
+      onDidChangeWatchedFiles: vi.fn((fn: (e: { changes: Array<{ uri: string; type: number }> }) => void) => {
+        watchedHandler = fn;
+      }),
+      sendDiagnostics: vi.fn(),
+      sendNotification: vi.fn(),
+      sendRequest: vi.fn(async () => undefined),
+    };
+    const ctx = createMockContext({ documents, connection });
+
+    registerLifecycleHandlers(ctx as never);
+    watchedHandler!({ changes: [{ uri: openDoc.uri, type: 2 }] });
+    await settleAsyncWork();
+
+    expect(ctx.semanticRuntime.recordSourceTextChanged).not.toHaveBeenCalled();
+    expect(ctx.semanticRuntime.appDiagnostics).not.toHaveBeenCalled();
+  });
+
   test("records source changes and refreshes open documents for closed analyzed source edits", async () => {
     let watchedHandler: ((e: { changes: Array<{ uri: string; type: number }> }) => void) | undefined;
     const openDoc = createMockDoc("file:///app/src/my-app.html");
     const documents = {
-      get: vi.fn(() => openDoc),
+      get: vi.fn((uri: string) => uri === openDoc.uri ? openDoc : null),
       all: vi.fn(() => [openDoc]),
       onDidOpen: vi.fn(),
       onDidChangeContent: vi.fn(),
@@ -245,6 +283,38 @@ describe("registerLifecycleHandlers — onDidChangeWatchedFiles", () => {
         domains: ["resources", "types", "diagnostics", "templates"],
         reason: "watched files",
       }),
+    );
+  });
+
+  test("treats package manifests as project topology because project shape reads dependency scope", async () => {
+    let watchedHandler: ((e: { changes: Array<{ uri: string; type: number }> }) => void) | undefined;
+    const documents = {
+      get: vi.fn(() => null),
+      all: vi.fn(() => []),
+      onDidOpen: vi.fn(),
+      onDidChangeContent: vi.fn(),
+      onDidClose: vi.fn(),
+    };
+    const connection = {
+      onInitialize: vi.fn(),
+      onDidChangeConfiguration: vi.fn(),
+      onDidChangeWatchedFiles: vi.fn((fn: (e: { changes: Array<{ uri: string; type: number }> }) => void) => {
+        watchedHandler = fn;
+      }),
+      sendDiagnostics: vi.fn(),
+      sendNotification: vi.fn(),
+      sendRequest: vi.fn(async () => undefined),
+    };
+    const ctx = createMockContext({ documents, connection });
+    registerLifecycleHandlers(ctx as never);
+
+    watchedHandler!({ changes: [{ uri: "file:///app/package.json", type: 2 }] });
+    await settleAsyncWork();
+
+    expect(ctx.semanticRuntime.recordProjectTopologyChanged).toHaveBeenCalledTimes(1);
+    expect(connection.sendNotification).toHaveBeenCalledWith(
+      "aurelia/workspaceChanged",
+      expect.objectContaining({ reason: "watched files" }),
     );
   });
 });

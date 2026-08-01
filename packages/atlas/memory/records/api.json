@@ -529,17 +529,22 @@
         "api",
         "boot",
         "project-shape",
-        "monorepo"
+        "monorepo",
+        "language-server",
+        "vscode",
+        "ide"
       ],
-      "summary": "Project-shape triage is the formal app/resource-library/package policy for openApp, LSP-style project selection, and workspace-child package context.",
-      "rationale": "External monorepos can contain real Aurelia apps, resource libraries, Aurelia-adjacent packages, and non-Aurelia packages. Boot must cheaply classify those frames from local manifest dependencies, ancestor workspace manifests that explicitly include child packages, source roles, and Aurelia facade activation/source signals, while app-world construction must fail closed when no app-shaped default exists instead of opening an arbitrary app-source package as a fake app.",
+      "summary": "Project-shape triage is the formal app/resource-library/package policy for openApp, LSP project selection, and IDE workspace activation.",
+      "rationale": "External monorepos can contain real Aurelia apps, resource libraries, Aurelia-adjacent packages, and non-Aurelia packages. Boot must cheaply classify those frames from local manifest dependencies, ancestor workspace manifests that explicitly include child packages, source roles, and Aurelia facade activation/source signals, while app-world construction must fail closed when no app-shaped default exists instead of opening an arbitrary app-source package as a fake app. IDE candidate evidence may nominate a workspace process but must not become a second project classifier; the language server projects the exact semantic-runtime summary before retaining an automatic session.",
       "guidance": [
         "Use SemanticProjectShapeKind and SemanticProjectAnalysisKind before adding another app-like heuristic.",
         "Carry SemanticProjectAureliaDependencyOrigin and SemanticProjectShapeReasonCount through summaries when monorepo selection feels surprising; do not flatten workspace-context evidence into an unlabeled dependency count.",
         "Keep Atlas workspace.architecture aligned with this policy: it should surface workspace-manifest dependency mechanisms and bounded file-inventory source signals for package frames whose tsconfig omits app source.",
         "Default openApp() should choose only an aurelia-app project; resource-library authoring must be selected explicitly by projectKey or sourceFilePath.",
         "Keep project-shape detection in boot/admission: source roles and manifest/workspace membership are allowed there, but do not recognize resources, routes, DI, templates, or configuration products there.",
-        "Pressure scripts may select aurelia-resource-library frames for authoring/LSP pressure, but missing app roots in those frames are not app-startup failures."
+        "Pressure scripts may select aurelia-resource-library frames for authoring/LSP pressure, but missing app roots in those frames are not app-startup failures.",
+        "VS Code manifest/import preflight is candidate admission only. In auto mode, retain a workspace session only after aurelia/workspaceStatus reports a non-outside-aurelia SemanticProjectAnalysisKind; explicit on/off remain user-owned overrides.",
+        "One language-server process owns one disjoint VS Code workspace root. Let semantic-runtime discover nested package and tsconfig frames inside that root instead of duplicating its project graph in the extension."
       ],
       "anchors": [
         {
@@ -555,6 +560,24 @@
           "summary": "Default app-opening policy: pick aurelia-app or fail closed."
         },
         {
+          "kind": "source",
+          "filePath": "packages/language-server/src/handlers/custom.ts",
+          "symbolName": "handleWorkspaceStatus",
+          "summary": "Exact semantic-runtime summary projection used for automatic IDE workspace confirmation."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/vscode/src/workspace-activation.ts",
+          "symbolName": "readWorkspaceActivationAdmission",
+          "summary": "Cheap candidate admission and explicit per-workspace override boundary; not semantic classification."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/vscode/src/client-core.ts",
+          "symbolName": "AureliaLanguageClient",
+          "summary": "Disjoint workspace ownership and project-shape-confirmed session lifecycle."
+        },
+        {
           "kind": "doc",
           "path": "packages/semantic-runtime/src/boot/README.md",
           "summary": "Boot boundary and project-shape triage notes."
@@ -563,6 +586,11 @@
           "kind": "doc",
           "path": "packages/semantic-runtime/src/api/README.md",
           "summary": "API project selection and monorepo pressure policy."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/vscode/README.md",
+          "summary": "User-facing automatic activation, multi-root ownership, and override policy."
         }
       ],
       "liveChecks": [
@@ -575,10 +603,25 @@
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/api/runtime.ts",
           "symbolName": "SemanticRuntime"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/language-server/src/handlers/custom.ts",
+          "symbolName": "handleWorkspaceStatus"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/vscode/src/workspace-activation.ts",
+          "symbolName": "readWorkspaceActivationAdmission"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/vscode/src/client-core.ts",
+          "symbolName": "AureliaLanguageClient"
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-05-17"
+      "updatedAt": "2026-08-01"
     },
     {
       "id": "frontier:mcp-app-world-heap-budget",

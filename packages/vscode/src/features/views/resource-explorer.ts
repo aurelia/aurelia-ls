@@ -62,7 +62,7 @@ const KIND_ORDER = [
   "binding-behavior",
 ];
 
-type TreeNodeKind = "origin-group" | "kind-group" | "resource" | "bindable" | "info";
+type TreeNodeKind = "workspace-group" | "origin-group" | "kind-group" | "resource" | "bindable" | "info";
 
 interface TreeNode {
   readonly nodeKind: TreeNodeKind;
@@ -78,6 +78,33 @@ interface TreeNode {
 }
 
 function buildTree(response: ResourceExplorerResponse): TreeNode[] {
+  const workspaces = response.workspaces ?? [];
+  if (workspaces.length > 1) {
+    return workspaces.map((workspace) => {
+      const resources = response.resources.filter((resource) => resource.workspace?.key === workspace.key);
+      return {
+        nodeKind: "workspace-group",
+        id: `workspace:${workspace.key}`,
+        label: workspace.name,
+        description: `${resources.length} resource${resources.length === 1 ? "" : "s"}`,
+        tooltip: workspace.uri,
+        iconId: "root-folder",
+        collapsible: true,
+        children: buildWorkspaceTree({
+          ...response,
+          resources,
+          templateCount: workspace.templateCount,
+          inlineTemplateCount: workspace.inlineTemplateCount,
+          workspaces: [workspace],
+        }, `workspace:${workspace.key}`),
+        contextValue: "workspaceGroup",
+      };
+    });
+  }
+  return buildWorkspaceTree(response, workspaces[0] == null ? "" : `workspace:${workspaces[0].key}`);
+}
+
+function buildWorkspaceTree(response: ResourceExplorerResponse, idPrefix: string): TreeNode[] {
   const byGroup = new Map<ExplorerGroup, Map<string, ResourceExplorerItem[]>>();
 
   for (const resource of response.resources) {
@@ -108,10 +135,10 @@ function buildTree(response: ResourceExplorerResponse): TreeNode[] {
       const items = originMap.get(kind);
       if (!items || items.length === 0) continue;
 
-      const resourceNodes = items.map((item) => buildResourceNode(item));
+      const resourceNodes = items.map((item) => buildResourceNode(item, idPrefix));
       kindGroups.push({
         nodeKind: "kind-group",
-        id: `${origin}:kind:${kind}`,
+        id: prefixedId(idPrefix, `${origin}:kind:${kind}`),
         label: `${KIND_LABELS[kind] ?? kind} (${items.length})`,
         iconId: KIND_ICONS[kind] ?? "symbol-misc",
         collapsible: true,
@@ -124,7 +151,7 @@ function buildTree(response: ResourceExplorerResponse): TreeNode[] {
     if (kindGroups.length === 1 && kindGroups[0]) {
       tree.push({
         nodeKind: "origin-group",
-        id: `origin:${origin}`,
+        id: prefixedId(idPrefix, `origin:${origin}`),
         label: `${GROUP_LABELS[origin]} — ${kindGroups[0].label}`,
         iconId: GROUP_ICONS[origin],
         collapsible: true,
@@ -134,7 +161,7 @@ function buildTree(response: ResourceExplorerResponse): TreeNode[] {
     } else {
       tree.push({
         nodeKind: "origin-group",
-        id: `origin:${origin}`,
+        id: prefixedId(idPrefix, `origin:${origin}`),
         label: `${GROUP_LABELS[origin]} (${originCount})`,
         iconId: GROUP_ICONS[origin],
         collapsible: true,
@@ -160,7 +187,7 @@ function buildTree(response: ResourceExplorerResponse): TreeNode[] {
 
   tree.push({
     nodeKind: "info",
-    id: "summary",
+    id: prefixedId(idPrefix, "summary"),
     label: summaryParts.join(" | "),
     iconId: "info",
     collapsible: false,
@@ -170,7 +197,7 @@ function buildTree(response: ResourceExplorerResponse): TreeNode[] {
   return tree;
 }
 
-function buildResourceNode(item: ResourceExplorerItem): TreeNode {
+function buildResourceNode(item: ResourceExplorerItem, idPrefix: string): TreeNode {
   const children: TreeNode[] = [];
 
   // Bindables as children
@@ -184,7 +211,7 @@ function buildResourceNode(item: ResourceExplorerItem): TreeNode {
 
     children.push({
       nodeKind: "bindable",
-      id: `${item.kind}:${item.name}:bindable:${b.name}`,
+      id: prefixedId(idPrefix, `${item.kind}:${item.name}:bindable:${b.name}`),
       label: b.name,
       description: parts.join(" "),
       iconId: "symbol-field",
@@ -199,7 +226,7 @@ function buildResourceNode(item: ResourceExplorerItem): TreeNode {
     const shortFile = item.file.replace(/^.*[\\/]packages[\\/]/, "").replace(/^.*[\\/]src[\\/]/, "src/");
     children.push({
       nodeKind: "info",
-      id: `${item.kind}:${item.name}:file`,
+      id: prefixedId(idPrefix, `${item.kind}:${item.name}:file`),
       label: shortFile,
       iconId: "file-code",
       collapsible: false,
@@ -222,7 +249,7 @@ function buildResourceNode(item: ResourceExplorerItem): TreeNode {
 
   return {
     nodeKind: "resource",
-    id: `${item.kind}:${item.name}`,
+    id: prefixedId(idPrefix, `${item.kind}:${item.name}`),
     label: item.name,
     description: descParts.join(" | "),
     tooltip: buildResourceTooltip(item),
@@ -236,6 +263,7 @@ function buildResourceNode(item: ResourceExplorerItem): TreeNode {
 
 function buildResourceTooltip(item: ResourceExplorerItem): string {
   const lines = [`${item.kind}: ${item.name}`];
+  if (item.workspace) lines.push(`Workspace: ${item.workspace.name}`);
   if (item.className) lines.push(`Class: ${item.className}`);
   lines.push(`Origin: ${item.origin}`);
   if (item.declarationForm) lines.push(`Declaration: ${item.declarationForm}`);
@@ -244,6 +272,10 @@ function buildResourceTooltip(item: ResourceExplorerItem): string {
   if (item.package) lines.push(`Package: ${item.package}`);
   if (item.bindableCount > 0) lines.push(`Bindables: ${item.bindableCount}`);
   return lines.join("\n");
+}
+
+function prefixedId(prefix: string, id: string): string {
+  return prefix === "" ? id : `${prefix}:${id}`;
 }
 
 export class ResourceExplorerProvider implements TreeDataProvider<TreeNode> {
@@ -274,7 +306,7 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode> {
     if (element.iconId) item.iconPath = new this.#vscode.ThemeIcon(element.iconId);
 
     item.collapsibleState = element.collapsible
-      ? (element.nodeKind === "origin-group"
+      ? (element.nodeKind === "workspace-group" || element.nodeKind === "origin-group"
         ? this.#vscode.TreeItemCollapsibleState.Expanded
         : this.#vscode.TreeItemCollapsibleState.Collapsed)
       : this.#vscode.TreeItemCollapsibleState.None;

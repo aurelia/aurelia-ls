@@ -16,6 +16,7 @@ import {
   type SemanticRuntimeControllerResult,
   type SemanticRuntimeAnswer,
   type SemanticRuntimeContinuationRow,
+  type SemanticRuntimeSummary,
   type SemanticBindingBehaviorApplicationResult,
   type SemanticTemplateCompilationResult,
   type SemanticTemplateInlayHintsResult,
@@ -254,6 +255,15 @@ export class SemanticRuntimeLspSession {
       sourceGeneration: this.projectInputAuthority.currentEventSequence,
       fingerprint: `semantic-runtime:${this.workspaceRoot ?? "no-root"}:workspace-${this.workspaceGeneration}:source-${this.projectInputAuthority.currentEventSequence}`,
     };
+  }
+
+  async workspaceSummary(
+    guard: SemanticRuntimeLspRequestGuard,
+  ): Promise<SemanticRuntimeAnswer<SemanticRuntimeSummary>> {
+    const runtime = await this.openRuntime(guard);
+    const answer = runtime.summary({ projectPage: { size: 0 } });
+    this.assertRequestActive(guard);
+    return answer;
   }
 
   isCurrentGeneration(generation: SemanticRuntimeLspGeneration): boolean {

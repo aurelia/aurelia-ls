@@ -272,6 +272,10 @@ sources. It uses boot-admitted source roles for authored project/config files, t
 source buckets: generated overlays, TypeScript/default-library declarations, external declarations, and non-declaration
 external source. Public TypeScript diagnostic rows should call this boundary instead of reimplementing file-name role
 heuristics in API code.
+Diagnostic roots do not define edit ownership. Related-symbol rename admits every boot-owned `AppSource` present in the
+Program, including authored files reached through imports but omitted from the tsconfig root set; generated overlays,
+dependencies, declarations, and external source remain non-editable. Keep that distinction at `TypeSystemProject`
+rather than reconstructing authorship from diagnostic inclusion in API or LSP code.
 `overlay.ts` owns Program-owned virtual TypeScript sources for semantic-runtime framework/app representations. The
 first overlay is the `*.html` module declaration; richer overlays should use the same lane for template/controller,
 route, i18n, or bindable surfaces when checker participation is valuable. Overlay sources are hidden from ordinary

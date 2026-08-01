@@ -17,11 +17,11 @@ export const ViewsFeature: FeatureModule = {
     store.add(treeView);
 
     // Refresh when semantic-runtime resource visibility changes.
-    ctx.lsp.onWorkspaceChanged((payload) => {
+    store.add(ctx.lsp.onWorkspaceChanged((payload) => {
       if (payload.domains.includes("resources") || payload.domains.includes("scopes")) {
         void explorer.refresh();
       }
-    });
+    }));
 
     // Refresh command
     store.add(

@@ -78,11 +78,11 @@ export const TsRenameFeature: FeatureModule = {
           return tsEdit;
         }
 
-        const convertWorkspaceEdit = ctx.rawClient.protocol2CodeConverter.asWorkspaceEdit as (
-          workspaceEdit: ProtocolWorkspaceEdit,
-          token: import("vscode").CancellationToken,
-        ) => Promise<import("vscode").WorkspaceEdit | undefined>;
-        const templateEdit = await convertWorkspaceEdit(aureliaRename.workspaceEdit, token);
+        const templateEdit = await ctx.lsp.convertWorkspaceEdit(
+          document.uri.toString(),
+          aureliaRename.workspaceEdit as ProtocolWorkspaceEdit,
+          token,
+        );
         if (templateEdit == null) {
           throw new Error("Aurelia template rename propagation returned no convertible workspace edit.");
         }

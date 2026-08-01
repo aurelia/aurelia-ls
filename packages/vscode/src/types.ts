@@ -14,7 +14,9 @@ import type {
   DiagnosticsSnapshotItem,
   DiagnosticsSnapshotRelated,
   DiagnosticsSnapshotResponse,
+  AnalysisReadyPayload,
   SourceSpan,
+  WorkspaceChangedPayload,
 } from "@aurelia-ls/language-server/protocol";
 
 export type {
@@ -33,12 +35,19 @@ export type {
   DiagnosticsSnapshotItem,
   DiagnosticsSnapshotRelated,
   DiagnosticsSnapshotResponse,
+  AnalysisReadyPayload,
   SourceSpan,
+  WorkspaceChangedPayload,
 };
 
-export type AnalysisReadyPayload = {
-  uri?: string;
-  diags?: number;
+export interface AureliaWorkspaceIdentity {
+  readonly key: string;
+  readonly name: string;
+  readonly uri: string;
+}
+
+export type WorkspaceNotificationPayload<T> = T & {
+  readonly workspace: AureliaWorkspaceIdentity;
 };
 
 export type DiagnosticsSpan = SourceSpan;
@@ -93,6 +102,7 @@ export interface ResourceExplorerItem {
   scope: ResourceScope;
   scopeOwner?: string;
   declarationForm?: string;
+  workspace?: AureliaWorkspaceIdentity;
 }
 
 export interface InspectEntityResponse {
@@ -116,6 +126,11 @@ export interface ResourceExplorerResponse {
   resources: ResourceExplorerItem[];
   templateCount: number;
   inlineTemplateCount: number;
+  workspaces?: readonly (AureliaWorkspaceIdentity & {
+    readonly resourceCount: number;
+    readonly templateCount: number;
+    readonly inlineTemplateCount: number;
+  })[];
 }
 
 export interface CapabilitiesResponse {

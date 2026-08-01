@@ -3,9 +3,28 @@ import type {
   SemanticDiagnosticPresentationRelation,
   SemanticDiagnosticRelatedInformation,
   SemanticRuntimeAnswer,
+  SemanticRuntimeSummary,
 } from "@aurelia-ls/semantic-runtime";
 
 export const AURELIA_TEMPLATE_CODE_ACTION_RESOLVE_SCHEMA = "aurelia.template-code-action-resolve/1" as const;
+
+/** Exact semantic-runtime project-shape answer used to confirm one LSP workspace ownership root. */
+export type WorkspaceStatusResponse = SemanticRuntimeAnswer<SemanticRuntimeSummary>;
+
+/** Current-document diagnostics publication acknowledged by the semantic-runtime generation that produced it. */
+export interface AnalysisReadyPayload {
+  readonly uri: string;
+  readonly version: number;
+  readonly diags: number;
+  readonly fingerprint: string;
+}
+
+/** Workspace semantic products invalidated by one observed source/topology event. */
+export interface WorkspaceChangedPayload {
+  readonly fingerprint: string;
+  readonly domains: readonly string[];
+  readonly reason?: string;
+}
 
 export type TemplateCodeActionResolveData = {
   readonly schema: typeof AURELIA_TEMPLATE_CODE_ACTION_RESOLVE_SCHEMA;

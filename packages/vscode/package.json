@@ -7,6 +7,15 @@
   "icon": "images/logo.png",
   "type": "module",
   "main": "./dist/extension.cjs",
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "virtualWorkspaces": {
+      "supported": false,
+      "description": "Aurelia project analysis requires a Node-accessible workspace filesystem."
+    }
+  },
   "engines": {
     "vscode": "^1.91.0"
   },
@@ -27,6 +36,10 @@
   "license": "MIT",
   "activationEvents": [
     "onLanguage:html",
+    "onLanguage:typescript",
+    "onLanguage:typescriptreact",
+    "onLanguage:javascript",
+    "onLanguage:javascriptreact",
     "workspaceContains:node_modules/@aurelia/runtime-html/package.json",
     "workspaceContains:node_modules/aurelia/package.json"
   ],
@@ -219,6 +232,22 @@
       "type": "object",
       "title": "Aurelia",
       "properties": {
+        "aurelia.activationMode": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "on",
+            "off"
+          ],
+          "enumDescriptions": [
+            "Start a candidate server from cheap Aurelia evidence, then require semantic-runtime project-shape confirmation.",
+            "Always run Aurelia tooling for this workspace folder.",
+            "Never run Aurelia tooling for this workspace folder."
+          ],
+          "default": "auto",
+          "scope": "resource",
+          "description": "Control Aurelia project activation for each workspace folder."
+        },
         "aurelia.features.commands": {
           "type": "boolean",
           "default": true,

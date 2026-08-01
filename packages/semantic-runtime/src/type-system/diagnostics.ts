@@ -84,7 +84,7 @@ export function readTypeSystemProjectDiagnostics(
     ...typeSystem.program.getOptionsDiagnostics().map((diagnostic) => typeSystemDiagnostic('options', diagnostic)),
   ];
 
-  for (const sourceFile of typeSystem.readProjectProgramSourceFiles()) {
+  for (const sourceFile of typeSystem.readProjectDiagnosticProgramSourceFiles()) {
     diagnostics.push(
       ...typeSystem.program.getSyntacticDiagnostics(sourceFile).map((diagnostic) =>
         typeSystemDiagnostic('syntactic', diagnostic)

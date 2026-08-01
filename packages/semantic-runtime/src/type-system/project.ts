@@ -358,8 +358,8 @@ export class TypeSystemProject {
     );
   }
 
-  /** Read Program-owned TS/JS source files admitted as app source by this project frame. */
-  readProjectProgramSourceFiles(): readonly ts.SourceFile[] {
+  /** Read project-root TS/JS sources selected by the tsconfig diagnostic policy. */
+  readProjectDiagnosticProgramSourceFiles(): readonly ts.SourceFile[] {
     const projectRootPath = canonicalTypeSystemPath(this.project.rootDir);
     return [...this.programSourceFilesByPath.values()]
       .filter((sourceFile) => typeSystemProjectProgramDiagnosticSourceFile(
@@ -368,6 +368,16 @@ export class TypeSystemProject {
         this.overlaySourcePaths,
         this.diagnosticSourcePaths,
       ))
+      .sort((left, right) => left.fileName.localeCompare(right.fileName));
+  }
+
+  /** Read authored app source that this project owns and may safely edit. */
+  readProjectEditableProgramSourceFiles(): readonly ts.SourceFile[] {
+    return [...this.programSourceFilesByPath.values()]
+      .filter((sourceFile) =>
+        !this.overlaySourcePaths.has(canonicalTypeSystemPath(sourceFile.fileName))
+        && this.sourceAdmissionsByPath.get(canonicalTypeSystemPath(sourceFile.fileName))?.role === SourceFileRole.AppSource
+      )
       .sort((left, right) => left.fileName.localeCompare(right.fileName));
   }
 
@@ -463,7 +473,7 @@ export class TypeSystemProject {
       sourceFile,
       start,
       end,
-      editableSourceFiles: this.readProjectProgramSourceFiles(),
+      editableSourceFiles: this.readProjectEditableProgramSourceFiles(),
       sourceFileRole: (path) => this.readProgramSourceFileRole(path),
     });
   }

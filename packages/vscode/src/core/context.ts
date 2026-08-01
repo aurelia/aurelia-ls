@@ -1,5 +1,4 @@
 import type { ExtensionContext } from "vscode";
-import type { LanguageClient } from "vscode-languageclient/node";
 import type { VscodeApi } from "../vscode-api.js";
 import type { ClientLogger } from "../log.js";
 import type { AureliaLanguageClient } from "../client-core.js";
@@ -23,7 +22,6 @@ export interface ClientContext {
   errors: ErrorReporter;
   languageClient: AureliaLanguageClient;
   lsp: LspFacade;
-  rawClient: LanguageClient;
   config: ConfigService;
   capabilities: CapabilityStore;
   presentation: PresentationStore;

@@ -7,6 +7,7 @@ import {
   handleCapabilities,
   handleInspectEntity,
   handleRenameFromTs,
+  handleWorkspaceStatus,
 } from "@aurelia-ls/language-server/api";
 import { testRequestGuard } from "./test-request-guard.js";
 
@@ -122,10 +123,41 @@ function createMockContext(overrides: Record<string, unknown> = {}) {
           page: null,
         }),
       ),
+      workspaceSummary: vi.fn(() => Promise.resolve({
+        schemaVersion: "0.2",
+        result: "answered",
+        selection: "not-applicable",
+        coverage: "complete",
+        summary: "workspace summary",
+        value: {
+          workspaceRoot: "/test/workspace",
+          workspaceKey: "workspace",
+          displayText: "one app",
+          projectShapeCounts: [{ shapeKind: "aurelia-app", count: 1 }],
+          projectAnalysisCounts: [{ analysisKind: "app-world", count: 1 }],
+          defaultAppProjectKey: "app",
+          appCandidates: [],
+          projects: [],
+        },
+        page: null,
+      })),
     },
     ...overrides,
   };
 }
+
+describe("handleWorkspaceStatus", () => {
+  test("returns the semantic-runtime summary envelope without reclassifying project shape", async () => {
+    const ctx = createMockContext();
+    const guard = testRequestGuard;
+
+    const response = await handleWorkspaceStatus(ctx as never, guard);
+
+    expect(ctx.semanticRuntime.workspaceSummary).toHaveBeenCalledWith(guard);
+    expect(response?.value.projectAnalysisCounts).toEqual([{ analysisKind: "app-world", count: 1 }]);
+    expect(response?.coverage).toBe("complete");
+  });
+});
 
 describe("handleGetDiagnostics", () => {
   test("returns semantic-runtime diagnostics in the report snapshot envelope", async () => {

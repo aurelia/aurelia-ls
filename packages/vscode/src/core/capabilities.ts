@@ -63,6 +63,10 @@ export class CapabilityStore {
     this.#emitter.emit(this.#current);
   }
 
+  clear(): void {
+    this.set({});
+  }
+
   onDidChange(listener: Listener<AureliaCapabilities>): DisposableLike {
     return this.#emitter.on(listener);
   }

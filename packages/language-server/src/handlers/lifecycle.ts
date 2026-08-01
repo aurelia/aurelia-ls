@@ -13,6 +13,7 @@ import type { TextDocument } from "vscode-languageserver-textdocument";
 import { URI } from "vscode-uri";
 import path from "node:path";
 import type { ServerContext } from "../context.js";
+import type { AnalysisReadyPayload, WorkspaceChangedPayload } from "../protocol.js";
 import { mapSemanticRuntimeAppDiagnostics } from "../mapping/lsp-types.js";
 import {
   isSemanticRuntimeLspRequestAborted,
@@ -60,10 +61,18 @@ function hasSourceFileStructuralChange(changes: readonly FileEvent[]): boolean {
   return false;
 }
 
-function hasAnalyzedSourceContentChange(changes: readonly FileEvent[]): boolean {
+function hasClosedAnalyzedSourceContentChange(
+  ctx: ServerContext,
+  changes: readonly FileEvent[],
+): boolean {
   for (const change of changes) {
     if (change.type !== FileChangeType.Changed) continue;
-    if (isAnalyzedSourceDocumentUri(URI.parse(change.uri).fsPath)) return true;
+    if (!isAnalyzedSourceDocumentUri(URI.parse(change.uri).fsPath)) continue;
+    // Open-document text is already authoritative through didChange. Replaying
+    // the ensuing filesystem save would invalidate the same source generation
+    // twice and enqueue a second all-document diagnostics wave.
+    if (ctx.documents.get(change.uri) != null) continue;
+    return true;
   }
   return false;
 }
@@ -72,6 +81,9 @@ function shouldReloadForFileChange(changes: readonly FileEvent[]): boolean {
   for (const change of changes) {
     const fsPath = URI.parse(change.uri).fsPath;
     const base = path.basename(fsPath).toLowerCase();
+    // Project-shape authority reads dependency scope and workspace membership
+    // from package manifests, so manifest edits are topology changes too.
+    if (base === "package.json") return true;
     if (base === "tsconfig.json") return true;
     if (base === "jsconfig.json") return true;
     if (base.startsWith("tsconfig.") && base.endsWith(".json")) return true;
@@ -265,11 +277,13 @@ async function publishDocumentDiagnostics(
     }
     // Diagnostic.data is detached from the semantic answer; version the batch so the client can reject stale evidence.
     await ctx.connection.sendDiagnostics({ uri: doc.uri, version: doc.version, diagnostics: lspDiagnostics });
-    await ctx.connection.sendNotification("aurelia/analysisReady", {
+    const analysisReady: AnalysisReadyPayload = {
       uri: doc.uri,
+      version: doc.version,
       diags: lspDiagnostics.length,
       fingerprint: guard.generation.fingerprint,
-    });
+    };
+    await ctx.connection.sendNotification("aurelia/analysisReady", analysisReady);
     return "published";
   } catch (e: unknown) {
     if (isSemanticRuntimeLspRequestAborted(e) && e.reason === "stale") {
@@ -357,7 +371,7 @@ export function registerLifecycleHandlers(ctx: ServerContext): void {
       return;
     }
 
-    if (hasAnalyzedSourceContentChange(e.changes)) {
+    if (hasClosedAnalyzedSourceContentChange(ctx, e.changes)) {
       ctx.logger.log("didChangeWatchedFiles: analyzed source content changed");
       void refreshWorkspaceSourceTextChanged(ctx, "watched files");
     }
@@ -432,11 +446,12 @@ async function notifyWorkspaceChanged(
   reason?: string,
   generation: SemanticRuntimeLspGeneration = ctx.semanticRuntime.currentGeneration(),
 ): Promise<void> {
-  await ctx.connection.sendNotification("aurelia/workspaceChanged", {
+  const workspaceChanged: WorkspaceChangedPayload = {
     fingerprint: generation.fingerprint,
     domains,
     ...(reason == null ? {} : { reason }),
-  });
+  };
+  await ctx.connection.sendNotification("aurelia/workspaceChanged", workspaceChanged);
   if (domains.includes("diagnostics") || domains.includes("types")) {
     void ctx.connection.sendRequest("workspace/diagnostics/refresh").catch(() => {});
   }
