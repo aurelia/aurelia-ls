@@ -1241,6 +1241,10 @@ sites, weak owner shapes such as `any`, index-signature-only records, or owner t
 reported there so callers can explain the absence of candidates. They are not, by themselves, proof of a missing
 semantic-runtime rule; pressure scripts classify them as weak-type pressure unless a concrete typed member was lost
 between scope construction and the answer.
+Cursor inquiry also spends framework capability-demand products at the exact authored site. A recovered resource or
+scope can still provide useful candidates, locals, and types when its capability is not admitted, but the required
+capability remains in `missingInputs` and answer coverage stays open. The diagnostic projection may present the same
+fact as an actionable error; it is not the source of the cursor answer's epistemic state.
 
 `AppTopology` is the first app-building projection. It composes already-materialized configuration, resource, compiler,
 template, authored router facts, and source CSS imports into app roots, components, route configs, bindables,

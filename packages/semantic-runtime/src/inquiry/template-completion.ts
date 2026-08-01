@@ -81,6 +81,7 @@ import { checkerTypeMemberSourceAddressHandle } from '../type-system/checker-typ
 import { readOrProjectCheckerTypeMembersInProjection } from '../type-system/checker-type-member-surface.js';
 import type { CheckerTypeProjector } from '../type-system/checker-projector.js';
 import type { TypeSystemProject } from '../type-system/project.js';
+import type { FrameworkCapabilityDemand } from '../framework/capability-demand.js';
 import { projectCheckerDomEventMapTypes } from '../type-system/dom-node-type.js';
 import {
   RouteConfigKind,
@@ -431,6 +432,8 @@ export interface TemplateCompletionCursorContextRequest {
   readonly resource: TemplateResourceRuntimeAnalysisEmission;
   /** Current checker epoch used to project framework-owned completion domains such as DOM event maps. */
   readonly typeSystem: TypeSystemProject;
+  /** App-world capability demands whose admission state can make recovered cursor semantics provisional. */
+  readonly frameworkCapabilityDemands: readonly FrameworkCapabilityDemand[];
   /** Page request copied into the resulting completion query. */
   readonly page?: InquiryPageRequest;
   /** Projection copied into the resulting completion query. */
@@ -660,7 +663,7 @@ class TemplateCompletionCursorContextBuilder {
           this.expressionWorld.projector,
           semanticValueSite,
         )?.valueType ?? null;
-    const missingInputs: string[] = [];
+    const missingInputs = this.frameworkCapabilityMissingInputs(offset);
     if (bindingEnvironment?.openReason != null) {
       missingInputs.push('runtime-binding-source-context');
     }
@@ -789,6 +792,22 @@ class TemplateCompletionCursorContextBuilder {
       bindingEnvironment?.openReason ?? null,
       uniqueValues(missingInputs),
     );
+  }
+
+  private frameworkCapabilityMissingInputs(offset: number): string[] {
+    const definitionProductHandle = this.input.resource.compilation.definition.productHandle;
+    const analysisContextProductHandle = this.input.resource.compilation.analysisContextProductHandle;
+    return this.input.frameworkCapabilityDemands.flatMap((demand) => {
+      if (
+        demand.isAdmitted
+        || demand.resourceDefinitionProductHandle !== definitionProductHandle
+        || demand.analysisContextProductHandle !== analysisContextProductHandle
+        || !cursorTouchesSpan(sourceSpanFor(this.store, demand.sourceAddressHandle), offset)
+      ) {
+        return [];
+      }
+      return [demand.requiredCapability];
+    });
   }
 
   private completionDomainForCursor(

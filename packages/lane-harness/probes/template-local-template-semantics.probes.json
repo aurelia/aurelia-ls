@@ -235,9 +235,8 @@
         "watch": {
           "present": ["oneTime", "toView", "fromView", "twoWay", "default"]
         },
-        "verdict": "wrong",
-        "reason": "The mode token has exact local-definition provenance, so completion should offer Aurelia's five supported authored mode values instead of returning no candidates.",
-        "note": "Known substrate vocabulary gap: local-template-bindable-mode-completion-vocabulary."
+        "verdict": "correct",
+        "reason": "The exact local bindable mode token dispatches Aurelia's five supported authored binding modes."
       }
     ],
     "diagnostics": [

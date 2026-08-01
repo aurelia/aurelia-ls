@@ -351,6 +351,7 @@ async function readCursorPressureForRoot(root) {
           locus,
           resource,
           typeSystem: app.emission.typeSystem,
+          frameworkCapabilityDemands: app.emission.capabilityDemands.readDemands(),
           page: new InquiryPageRequest(pageSize, null),
           routeConfigProductHandles: app.emission.routes.readRouteConfigs().map((routeConfig) => routeConfig.productHandle),
           i18nTranslationKeyProductHandles: app.emission.i18n.readTranslationKeys().map((translationKey) => translationKey.productHandle),

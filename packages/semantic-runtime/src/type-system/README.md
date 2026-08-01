@@ -20,7 +20,8 @@ source, value, expression, or template-local slot.
   source-file inquiry should read only that Program source or owning config file instead of paying for every app file.
 - Remap evaluator/source-discovery AST nodes to their Program-owned counterparts before calling TypeScript checker APIs.
 - Use `TypeSystemProject.readProgramTypeAtLocation(...)`, `readProgramTypeFromTypeNode(...)`,
-  `readProgramSymbolAtLocation(...)`, `readProgramAliasedSymbolAtLocation(...)`, or
+  `readProgramSymbolAtLocation(...)`, `readProgramAliasedSymbolAtLocation(...)`,
+  `readProgramReferenceSymbolsAtLocation(...)`, or
   `readProgramTypeOfSymbolAtLocation(...)` when a caller needs TypeChecker facts for a node that may have come from
   evaluation, source discovery, or semantic materialization rather than the Program AST.
 - Keep the checker epoch project-local: use the booted project root's `tsconfig.json` when present, otherwise fall back
@@ -437,8 +438,13 @@ different AST identity from the Program epoch. Prefer `TypeSystemProject.readPro
 `readProgramSourceFileByModuleKey(...)` when scanning source for checker-backed materialization. Use
 `TypeSystemProject.readProgramNode(...)`, `readProgramTypeAtLocation(...)`, `readProgramSymbolAtLocation(...)`,
 `readProgramTypeFromTypeNode(...)`, `readProgramAliasedSymbolAtLocation(...)`,
+`readProgramReferenceSymbolsAtLocation(...)`,
 `readProgramTypeOfSymbolAtLocation(...)`, or higher-level helpers such as `readRuntimeTargetType(...)` before asking the
 checker about a node that originated outside the Program SourceFile.
+Reference consumers should use `readProgramReferenceSymbolsAtLocation(...)` rather than raw symbol equality. TypeScript
+publishes a transient symbol for a contextually typed object-literal or destructuring key while its references/rename
+semantics also associate that authored key with the declared contextual property. The type-system boundary preserves
+both proven identities so template-origin references and rename do not reconstruct contextual typing in the API layer.
 Returning unknown/open is better than asking the checker about an alien node and crashing the public API. Do not
 manufacture empty SourceFiles as fallback checker locations; a checker location must be a Program-owned source, a
 checker-owned declaration, or a missing overlay/source admission signal.

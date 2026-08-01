@@ -253,6 +253,12 @@ assert.equal(openMemberReferences.value.selectedMemberName, 'label');
 const unknownLabelMarkerStart = typecheckingCorpusTemplateText.indexOf('${unknownValue.label}');
 assert.notEqual(unknownLabelMarkerStart, -1, 'Expected unknownValue.label marker in typechecking corpus template.');
 const unknownLabelStart = unknownLabelMarkerStart + '${unknownValue.'.length;
+const repeatedUnknownLabelMarkerStart = typecheckingCorpusTemplateText.indexOf(
+  '${unknownValue.label}',
+  unknownLabelMarkerStart + '${unknownValue.label}'.length,
+);
+assert.notEqual(repeatedUnknownLabelMarkerStart, -1, 'Expected repeated unknownValue.label marker in typechecking corpus template.');
+const repeatedUnknownLabelStart = repeatedUnknownLabelMarkerStart + '${unknownValue.'.length;
 assert.equal(openMemberReferences.value.rows.length, 1, 'Unproven member references should return only the cursor occurrence.');
 const openMemberRow = openMemberReferences.value.rows[0];
 assert.equal(openMemberRow.referenceKind, 'template-usage');
@@ -264,8 +270,19 @@ assert.equal(openMemberRow.targetSource?.end, unknownLabelStart + 'label'.length
 assert.equal(openMemberRow.handles?.targetSourceAddressHandle ?? null, null, 'Open self-row must not expose an unproven owner source as the target handle.');
 assert.equal(
   openMemberReferences.value.candidateRows.length,
-  0,
-  'Closed same-name misses such as string-literal member access must not masquerade as open candidates.',
+  1,
+  'Repeated unproven accesses should remain explicit candidates without entering the flat reference list.',
+);
+const repeatedUnknownCandidate = openMemberReferences.value.candidateRows[0];
+assert.equal(repeatedUnknownCandidate.source?.path?.replace(/\\/g, '/'), 'src/read-expressions.html');
+assert.equal(repeatedUnknownCandidate.source?.start, repeatedUnknownLabelStart);
+assert.equal(repeatedUnknownCandidate.source?.end, repeatedUnknownLabelStart + 'label'.length);
+assert.equal(repeatedUnknownCandidate.targetSource?.start, unknownLabelStart);
+assert.equal(repeatedUnknownCandidate.targetSource?.end, unknownLabelStart + 'label'.length);
+assert.equal(
+  repeatedUnknownCandidate.handles?.targetSourceAddressHandle ?? null,
+  null,
+  'Open candidates must not invent a declaration target handle.',
 );
 
 const labelTextPropertyReferences = await aliasedBindableRuntime.answerAppQuery({

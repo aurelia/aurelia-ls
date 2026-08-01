@@ -213,9 +213,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 {
   "gapMarker": false,
   "isIncomplete": false,
-  "kindCounts": {},
-  "outcome": "empty",
-  "totalItems": 0
+  "kindCounts": {
+    "enum-member": 5
+  },
+  "outcome": "result",
+  "totalItems": 5
 }
 ```
 
@@ -223,41 +225,61 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "mismatches": 5,
+  "mismatches": 0,
   "watched": [
     {
-      "details": [],
+      "details": [
+        "bindable-mode"
+      ],
       "expectation": "present",
-      "found": false,
-      "kinds": [],
+      "found": true,
+      "kinds": [
+        "enum-member"
+      ],
       "label": "default"
     },
     {
-      "details": [],
+      "details": [
+        "bindable-mode"
+      ],
       "expectation": "present",
-      "found": false,
-      "kinds": [],
+      "found": true,
+      "kinds": [
+        "enum-member"
+      ],
       "label": "fromView"
     },
     {
-      "details": [],
+      "details": [
+        "bindable-mode"
+      ],
       "expectation": "present",
-      "found": false,
-      "kinds": [],
+      "found": true,
+      "kinds": [
+        "enum-member"
+      ],
       "label": "oneTime"
     },
     {
-      "details": [],
+      "details": [
+        "bindable-mode"
+      ],
       "expectation": "present",
-      "found": false,
-      "kinds": [],
+      "found": true,
+      "kinds": [
+        "enum-member"
+      ],
       "label": "toView"
     },
     {
-      "details": [],
+      "details": [
+        "bindable-mode"
+      ],
       "expectation": "present",
-      "found": false,
-      "kinds": [],
+      "found": true,
+      "kinds": [
+        "enum-member"
+      ],
       "label": "twoWay"
     }
   ]

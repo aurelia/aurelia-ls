@@ -41,6 +41,7 @@ import {
   type TypeSystemOverlaySourceSegment,
 } from './overlay.js';
 import { checkerConstructReturnTypeUnion } from './checker-signature-parameters.js';
+import { checkerPropertySymbol } from './checker-node-helpers.js';
 import {
   readTypeSystemTypeScriptEnvironment,
   type TypeSystemTypeScriptEnvironment,
@@ -439,6 +440,33 @@ export class TypeSystemProject {
     return symbol == null ? null : this.resolveAliasedSymbol(symbol);
   }
 
+  /**
+   * Read every alias-resolved symbol identity that TypeScript assigns to a reference site.
+   * Contextually typed object and binding keys have a transient local symbol as well as the
+   * declared property they satisfy; reference and rename consumers need both identities.
+   */
+  readProgramReferenceSymbolsAtLocation(node: ts.Node): readonly ts.Symbol[] {
+    const checkerNode = this.readProgramNode(node);
+    if (checkerNode == null) {
+      return [];
+    }
+    const candidates = [
+      this.checker.getSymbolAtLocation(checkerNode) ?? null,
+      contextualPropertySymbolAtLocation(this.checker, checkerNode),
+    ];
+    const symbols: ts.Symbol[] = [];
+    for (const candidate of candidates) {
+      if (candidate == null) {
+        continue;
+      }
+      const symbol = this.resolveAliasedSymbol(candidate);
+      if (!symbols.includes(symbol)) {
+        symbols.push(symbol);
+      }
+    }
+    return symbols;
+  }
+
   /** Read a symbol's value type at a Program-remapped location. */
   readProgramTypeOfSymbolAtLocation(
     symbol: ts.Symbol,
@@ -621,6 +649,47 @@ export class TypeSystemProject {
     }
     return null;
   }
+}
+
+function contextualPropertySymbolAtLocation(
+  checker: ts.TypeChecker,
+  node: ts.Node,
+): ts.Symbol | null {
+  const parent = node.parent;
+  if (
+    ts.isIdentifier(node)
+    && isNamedObjectLiteralElement(parent)
+    && parent.name === node
+    && ts.isObjectLiteralExpression(parent.parent)
+  ) {
+    const contextualType = checker.getContextualType(parent.parent);
+    return contextualType == null
+      ? null
+      : checkerPropertySymbol(checker, checker.getNonNullableType(contextualType), node.text);
+  }
+  if (
+    ts.isIdentifier(node)
+    && ts.isBindingElement(parent)
+    && ts.isObjectBindingPattern(parent.parent)
+    && (parent.propertyName === node || (parent.propertyName == null && parent.name === node))
+  ) {
+    return checkerPropertySymbol(
+      checker,
+      checker.getNonNullableType(checker.getTypeAtLocation(parent.parent)),
+      node.text,
+    );
+  }
+  return null;
+}
+
+function isNamedObjectLiteralElement(
+  node: ts.Node,
+): node is ts.PropertyAssignment | ts.ShorthandPropertyAssignment | ts.MethodDeclaration | ts.AccessorDeclaration {
+  return ts.isPropertyAssignment(node)
+    || ts.isShorthandPropertyAssignment(node)
+    || ts.isMethodDeclaration(node)
+    || ts.isGetAccessorDeclaration(node)
+    || ts.isSetAccessorDeclaration(node);
 }
 
 /** Builds the TypeChecker epoch shared by resource, template, and inquiry passes. */

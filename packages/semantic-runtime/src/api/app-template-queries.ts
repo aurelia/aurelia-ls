@@ -2289,6 +2289,7 @@ const TYPESCRIPT_RESERVED_IDENTIFIER_WORDS = new Set([
 interface TypeScriptReferenceSite {
   readonly source: SemanticSourceReference;
   readonly text: string;
+  readonly renameSuffixText: string | null;
 }
 
 /**
@@ -2311,8 +2312,8 @@ function typeScriptReferenceSites(
   if (targetIdentifier == null) {
     return null;
   }
-  const targetSymbol = emission.typeSystem.readProgramAliasedSymbolAtLocation(targetIdentifier);
-  if (targetSymbol == null) {
+  const targetSymbols = emission.typeSystem.readProgramReferenceSymbolsAtLocation(targetIdentifier);
+  if (targetSymbols.length === 0) {
     return null;
   }
 
@@ -2322,13 +2323,20 @@ function typeScriptReferenceSites(
       if (!ts.isIdentifier(node)) {
         return;
       }
-      const symbol = emission.typeSystem.readProgramAliasedSymbolAtLocation(node);
-      if (!sameTsSymbol(symbol, targetSymbol)) {
+      const referenceSymbols = emission.typeSystem.readProgramReferenceSymbolsAtLocation(node);
+      if (!referenceSymbols.some((symbol) => targetSymbols.some((targetSymbol) =>
+        sameTsSymbol(symbol, targetSymbol)
+      ))) {
         return;
       }
+      const directSymbol = emission.typeSystem.readProgramAliasedSymbolAtLocation(node);
+      const matchesDirectSymbol = targetSymbols.some((targetSymbol) =>
+        sameTsSymbol(directSymbol, targetSymbol)
+      );
       sites.push({
         source: sourceReferenceForTsNode(node),
         text: node.getText(projectSourceFile),
+        renameSuffixText: matchesDirectSymbol ? null : contextualPropertyRenameSuffix(node),
       });
     });
   }
@@ -2348,8 +2356,24 @@ function typeScriptReferenceRenameEdits(
     SemanticTemplateRenameEditKind.TypeScriptReference,
     site.source,
     site.text,
-    newName,
+    `${newName}${site.renameSuffixText ?? ''}`,
   )));
+}
+
+function contextualPropertyRenameSuffix(node: ts.Identifier): string | null {
+  const parent = node.parent;
+  if (ts.isShorthandPropertyAssignment(parent) && parent.name === node) {
+    return `: ${node.text}`;
+  }
+  if (
+    ts.isBindingElement(parent)
+    && ts.isObjectBindingPattern(parent.parent)
+    && parent.propertyName == null
+    && parent.name === node
+  ) {
+    return `: ${node.text}`;
+  }
+  return null;
 }
 
 function bindableConventionCallbackRenameEdits(
