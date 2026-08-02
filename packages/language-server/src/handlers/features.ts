@@ -35,7 +35,6 @@ import { handleSelectionRanges } from "./selection-ranges.js";
 import { handleLinkedEditingRange } from "./linked-editing-ranges.js";
 import { handleFoldingRanges } from "./folding-ranges.js";
 import { handleInlayHints } from "./inlay-hints.js";
-import { handleCodeLens } from "./code-lens.js";
 import {
   mapSemanticRuntimeTemplateCodeActions,
   mapSemanticRuntimeUnresolvedTemplateCodeActions,
@@ -412,8 +411,6 @@ export function registerFeatureHandlers(ctx: ServerContext): void {
     (guard) => handleDocumentSymbols(ctx, params, guard)));
   ctx.connection.onWorkspaceSymbol((params, token) => request(ctx, "workspaceSymbol", token, undefined,
     (guard) => handleWorkspaceSymbols(ctx, params, guard)));
-  ctx.connection.onCodeLens((params, token) => request(ctx, "codeLens", token, params.textDocument.uri,
-    (guard) => handleCodeLens(ctx, params, guard)));
   ctx.connection.onSelectionRanges((params, token) => request(ctx, "selectionRange", token, params.textDocument.uri,
     (guard) => handleSelectionRanges(ctx, params, guard)));
   ctx.connection.languages.onLinkedEditingRange((params, token) => request(ctx, "linkedEditingRange", token, params.textDocument.uri,

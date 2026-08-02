@@ -7,6 +7,7 @@ interface ExtensionManifest {
   readonly contributes?: {
     readonly commands?: readonly { readonly command: string }[];
     readonly keybindings?: readonly unknown[];
+    readonly snippets?: readonly unknown[];
     readonly menus?: Readonly<Record<string, readonly { readonly command: string }[]>>;
     readonly views?: Readonly<Record<string, readonly { readonly id: string }[]>>;
     readonly configuration?: {
@@ -47,6 +48,10 @@ describe("VS Code product contract", () => {
     expect(views["explorer"]?.map((view) => view.id)).toEqual([
       AureliaView.ResourceExplorer,
     ]);
+  });
+
+  test("does not contribute passive source generators outside semantic completion", () => {
+    expect(manifest.contributes?.snippets).toBeUndefined();
   });
 
   test("keeps product settings resource-scoped with quiet defaults", () => {

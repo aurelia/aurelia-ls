@@ -134,7 +134,6 @@ export function handleInitialize(ctx: ServerContext, params: InitializeParams): 
       codeActionProvider: { resolveProvider: true },
       documentSymbolProvider: true,
       workspaceSymbolProvider: true,
-      codeLensProvider: { resolveProvider: false },
       selectionRangeProvider: true,
       linkedEditingRangeProvider: true,
       foldingRangeProvider: true,

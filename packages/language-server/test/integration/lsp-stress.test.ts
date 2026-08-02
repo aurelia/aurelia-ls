@@ -42,14 +42,6 @@ interface LspDocumentSymbol {
   readonly children?: readonly LspDocumentSymbol[];
 }
 
-interface LspCodeLens {
-  readonly range: LspRange;
-  readonly command?: {
-    readonly command: string;
-    readonly arguments?: readonly unknown[];
-  };
-}
-
 interface LspSelectionRange {
   readonly range: LspRange;
   readonly parent?: LspSelectionRange;
@@ -154,18 +146,6 @@ test("synced TypeScript documents feed source intelligence without claiming temp
     );
     expect(offsetAt(productCardTs.text, productCardSymbol!.range.end)).toBeGreaterThanOrEqual(
       offsetAt(productCardTs.text, itemSymbol!.range.end),
-    );
-
-    const codeLens = await connection.sendRequest("textDocument/codeLens", {
-      textDocument: { uri: productCardTs.uri },
-    }) as LspCodeLens[];
-    const lensJson = JSON.stringify(codeLens);
-    expect(lensJson).toContain("element");
-    expect(lensJson).toContain("bindable");
-    const referenceLens = codeLens.find((lens) => lens.command?.command === "editor.action.findReferences");
-    expect(referenceLens).toBeDefined();
-    expect(referenceLens!.command!.arguments?.[1]).toEqual(
-      positionAt(productCardTs.text, productCardTs.text.indexOf("ProductCard")),
     );
   } finally {
     diagnostics.dispose();

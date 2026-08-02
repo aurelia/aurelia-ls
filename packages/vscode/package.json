@@ -54,12 +54,6 @@
         }
       ]
     },
-    "snippets": [
-      {
-        "language": "html",
-        "path": "./snippets/aurelia.json"
-      }
-    ],
     "commands": [
       {
         "command": "aurelia.refreshResourceExplorer",

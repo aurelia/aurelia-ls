@@ -13,11 +13,9 @@ import {
   type SemanticAppDiagnosticsResult,
   type SemanticResourceDefinitionsResult,
   type SemanticResourceVisibilityResult,
-  type SemanticRuntimeControllerResult,
   type SemanticRuntimeAnswer,
   type SemanticRuntimeContinuationRow,
   type SemanticRuntimeSummary,
-  type SemanticBindingBehaviorApplicationResult,
   type SemanticTemplateCompilationResult,
   type SemanticTemplateInlayHintsResult,
   type SemanticTemplateCompletionResult,
@@ -27,7 +25,6 @@ import {
   type SemanticTemplateReferencesResult,
   type SemanticTemplateRenameResult,
   type SemanticTemplateSemanticTokensResult,
-  type SemanticValueConverterApplicationResult,
 } from "@aurelia-ls/semantic-runtime";
 import {
   OpenDocumentSourceTextOverlay,
@@ -528,27 +525,6 @@ export class SemanticRuntimeLspSession {
   ): Promise<SemanticRuntimeAnswer<SemanticResourceVisibilityResult>> {
     const runtime = await this.openRuntime(guard);
     return this.collectRows(runtime, SemanticAppQueryKind.ResourceVisibility, 500, { detail: "handles" }, guard);
-  }
-
-  async runtimeControllers(
-    guard: SemanticRuntimeLspRequestGuard,
-  ): Promise<SemanticRuntimeAnswer<SemanticRuntimeControllerResult>> {
-    const runtime = await this.openRuntime(guard);
-    return this.collectRows(runtime, SemanticAppQueryKind.RuntimeControllers, 500, {}, guard);
-  }
-
-  async bindingBehaviorApplications(
-    guard: SemanticRuntimeLspRequestGuard,
-  ): Promise<SemanticRuntimeAnswer<SemanticBindingBehaviorApplicationResult>> {
-    const runtime = await this.openRuntime(guard);
-    return this.collectRows(runtime, SemanticAppQueryKind.BindingBehaviorApplications, 500, {}, guard);
-  }
-
-  async valueConverterApplications(
-    guard: SemanticRuntimeLspRequestGuard,
-  ): Promise<SemanticRuntimeAnswer<SemanticValueConverterApplicationResult>> {
-    const runtime = await this.openRuntime(guard);
-    return this.collectRows(runtime, SemanticAppQueryKind.ValueConverterApplications, 500, {}, guard);
   }
 
   async templateCompilations(

@@ -74,7 +74,7 @@ describe("Server initialization", () => {
       expect(capabilities.codeActionProvider).toEqual({ resolveProvider: true });
       expect(capabilities.documentSymbolProvider).toBe(true);
       expect(capabilities.workspaceSymbolProvider).toBe(true);
-      expect(capabilities.codeLensProvider).toEqual({ resolveProvider: false });
+      expect(capabilities.codeLensProvider).toBeUndefined();
       expect(capabilities.selectionRangeProvider).toBe(true);
       expect(capabilities.linkedEditingRangeProvider).toBe(true);
       expect(capabilities.foldingRangeProvider).toBe(true);
