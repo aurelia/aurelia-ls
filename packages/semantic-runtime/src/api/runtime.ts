@@ -247,6 +247,10 @@ import {
   readResourceIssueRows,
 } from './resource-projections.js';
 import {
+  readSemanticResourceInventory,
+  readSemanticTemplateResourceAvailability,
+} from './resource-discovery.js';
+import {
   readStateGetterBindingRows,
   readStateIssueRows,
   readStateStoreRows,
@@ -355,6 +359,7 @@ import {
   type SemanticRuntimeEffectResult,
   type SemanticRuntimeExpressionAccessUseResult,
   type SemanticResourceDefinitionsResult,
+  type SemanticResourceInventoryResult,
   type SemanticResourceIssuesResult,
   type SemanticResourceVisibilityResult,
   type SemanticResourceVisibilityRow,
@@ -386,6 +391,7 @@ import {
   type SemanticTemplateCursorInfoResult,
   type SemanticTemplateDiagnosticsQuery,
   type SemanticTemplateDiagnosticsResult,
+  type SemanticTemplateResourceAvailabilityResult,
   type SemanticTypeScriptDiagnosticsResult,
   type SemanticTypeScriptDiagnosticSummaryResult,
 } from './contracts.js';
@@ -3042,12 +3048,16 @@ export class SemanticApp {
     answerCurrentQuery: SemanticAppCurrentQueryAnswerer,
   ): SemanticRuntimeAnswer<unknown> {
     switch (query.kind) {
+      case SemanticAppQueryKind.ResourceInventory:
+        return answerCurrentQuery(() => this.resourceInventory(query.page));
       case SemanticAppQueryKind.ResourceDefinitions:
         return answerCurrentQuery(() => this.resourceDefinitions(query.page, query.detail));
       case SemanticAppQueryKind.ResourceIssues:
         return answerCurrentQuery(() => this.resourceIssues(query.page, query.detail));
       case SemanticAppQueryKind.ResourceVisibility:
         return answerCurrentQuery(() => this.resourceVisibility(query.page, query.detail));
+      case SemanticAppQueryKind.TemplateResourceAvailability:
+        return answerCurrentQuery(() => this.templateResourceAvailability(query));
       case SemanticAppQueryKind.TemplateCompilations:
         return answerCurrentQuery(() => this.templateQueries.templateCompilations(query.page, query.detail));
       case SemanticAppQueryKind.TemplateCompletions:
@@ -4241,6 +4251,34 @@ export class SemanticApp {
     );
   }
 
+  resourceInventory(
+    page?: SemanticRuntimePageInput,
+  ): SemanticRuntimeAnswer<SemanticResourceInventoryResult> {
+    const claimed = this.answerPublicQueryIfNeeded<SemanticResourceInventoryResult>({
+      kind: SemanticAppQueryKind.ResourceInventory,
+      page,
+    });
+    if (claimed != null) {
+      return claimed;
+    }
+    return readSemanticResourceInventory(this.emission, this.runtime.workspace.store, page);
+  }
+
+  templateResourceAvailability(
+    query: SemanticAppQuery,
+  ): SemanticRuntimeAnswer<SemanticTemplateResourceAvailabilityResult> {
+    const claimed = this.answerPublicQueryIfNeeded<SemanticTemplateResourceAvailabilityResult>(query);
+    if (claimed != null) {
+      return claimed;
+    }
+    return readSemanticTemplateResourceAvailability(
+      this.runtime.workspace.rootDir,
+      this.emission,
+      this.runtime.workspace.store,
+      query.cursor,
+    );
+  }
+
   resourceIssues(
     page?: SemanticRuntimePageInput,
     detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
@@ -4292,6 +4330,7 @@ export class SemanticApp {
             handles: {
               compilerWorldProductHandle: compilerWorld.world.productHandle,
               resourceProductHandle: resource.resourceProductHandle,
+              resourceIdentityHandle: resource.resourceIdentityHandle,
               definitionProductHandle: resource.definitionProductHandle,
               sourceAddressHandle: resource.sourceAddressHandle,
             },

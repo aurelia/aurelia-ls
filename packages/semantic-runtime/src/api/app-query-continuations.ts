@@ -747,6 +747,18 @@ function addResourceContinuations(
   page: SemanticRuntimePageInput,
 ): void {
   switch (query.kind) {
+    case SemanticAppQueryKind.ResourceInventory:
+      seeds.push(
+        inspect(
+          'Inspect lower-level resource definitions behind the project inventory.',
+          rowQuery(SemanticAppQueryKind.ResourceDefinitions, query, page),
+        ),
+        inspect(
+          'Inspect resource diagnostics related to the project inventory.',
+          rowQuery(SemanticAppQueryKind.ResourceIssues, query, page),
+        ),
+      );
+      break;
     case SemanticAppQueryKind.ResourceDefinitions:
       seeds.push(
         inspect(
@@ -802,6 +814,18 @@ function addResourceContinuations(
         inspect(
           'Inspect template compilations using this resource visibility.',
           rowQuery(SemanticAppQueryKind.TemplateCompilations, query, page),
+        ),
+      );
+      break;
+    case SemanticAppQueryKind.TemplateResourceAvailability:
+      seeds.push(
+        inspect(
+          'Inspect the complete project resource inventory behind this template scope.',
+          rowQuery(SemanticAppQueryKind.ResourceInventory, query, page),
+        ),
+        inspect(
+          'Inspect semantic cursor context for the selected template.',
+          cursorQuery(SemanticAppQueryKind.TemplateCursorInfo, query),
         ),
       );
       break;

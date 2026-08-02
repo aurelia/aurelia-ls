@@ -3,7 +3,8 @@ import type { BuiltInResource } from '../resources/built-in-resources.js';
 import { ResourceProductDetails } from '../resources/product-details.js';
 import { ResourceDefinitionHeaderEmission } from '../resources/resource-definition-header-emission.js';
 import type { FullResourceDefinition } from '../resources/resource-definition.js';
-import { ResourceDefinitionKind } from '../resources/resource-kind.js';
+import type { ResourceDefinitionHeaderDetail } from '../resources/product-details.js';
+import type { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import type { TemplateResourceScope } from './compiler-world.js';
 import type {
   TemplateVisibleResource,
@@ -33,12 +34,19 @@ export function readBuiltInVisibleTemplateResource(
   store: ProductDetailReadView,
   resource: ReadableTemplateVisibleResource | null,
 ): BuiltInResource | null {
-  const productHandle = resource?.resourceProductHandle ?? null;
-  if (productHandle == null) {
-    return null;
-  }
-  const header = store.readProductDetail(ResourceProductDetails.DefinitionHeader, productHandle);
+  const header = readVisibleTemplateResourceHeader(store, resource);
   return header == null || header instanceof ResourceDefinitionHeaderEmission ? null : header;
+}
+
+/** Hydrate the current header behind a compiler-visible catalog entry without assuming its ownership lane. */
+export function readVisibleTemplateResourceHeader(
+  store: ProductDetailReadView,
+  resource: ReadableTemplateVisibleResource | null,
+): ResourceDefinitionHeaderDetail | null {
+  const productHandle = resource?.resourceProductHandle ?? null;
+  return productHandle == null
+    ? null
+    : store.readProductDetail(ResourceProductDetails.DefinitionHeader, productHandle);
 }
 
 /** Hydrate the current full definition behind a compiler-visible catalog entry. */

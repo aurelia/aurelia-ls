@@ -53,10 +53,10 @@ import {
 } from './resource-definition.js';
 import type { ResourceRecognitionContext } from './resource-recognition-context.js';
 import type { ResourceRecognitionEmissionPhaseName } from './resource-recognition-kernel-emitter.js';
-import {
-  type AttributePatternObservation,
-  type ResourceAliasObservation,
-  type ResourceTargetObservation,
+import type {
+  AttributePatternObservation,
+  ResourceAliasObservation,
+  ResourceTargetObservation,
   ResourceRecognitionObservation,
   ResourceRecognitionOpen,
 } from './resource-observation.js';
@@ -84,7 +84,7 @@ export class ResourceIdentityPublicationSet {
     readonly records: readonly KernelStoreRecord[],
     readonly primaryIdentityHandle: IdentityHandle | null,
     readonly claimHandles: readonly ClaimHandle[],
-    readonly sourceAddressHandles: readonly (AddressHandle | null)[],
+    readonly lookupNameSourceAddressHandles: readonly (AddressHandle | null)[],
   ) {}
 }
 
@@ -362,7 +362,6 @@ export class ResourceRecognitionPublicationSupport {
       );
       primaryIdentityHandle = publication.identityHandle;
       claimHandles.push(publication.claimHandle);
-      sourceAddressHandles.push(publication.sourceAddressHandle);
       records.push(...publication.records);
     }
 

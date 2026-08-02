@@ -72,9 +72,11 @@ const semanticAppQueryCatalogRows = [
       { pagingKind: 'offset-cursor', supportsDetail: true, routeProductKind: descriptor.routeProductKind },
     )
   ),
+  queryRow(SemanticAppQueryKind.ResourceInventory, 'resources', 'Project-selected runtime resource inventory with stable semantic identity, provenance, and exact declaration roles.', 'row-table', { pagingKind: 'offset-cursor' }),
   queryRow(SemanticAppQueryKind.ResourceDefinitions, 'resources', 'Resolved Aurelia resource definitions visible to the app world.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true }),
   queryRow(SemanticAppQueryKind.ResourceIssues, 'resources', 'Resource recognition, visibility, or materialization diagnostics.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true }),
   queryRow(SemanticAppQueryKind.ResourceVisibility, 'resources', 'Resource visibility and scope rows for app and template compilation.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true }),
+  queryRow(SemanticAppQueryKind.TemplateResourceAvailability, 'resources', 'Effective runtime resources for one exact source/cursor-selected template compiler scope.', 'cursor-locus', { requiresCursor: true }),
   queryRow(SemanticAppQueryKind.TemplateCompilations, 'template', 'Compiled app-runtime and source-selected authoring template rows.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true }),
   queryRow(SemanticAppQueryKind.TemplateCompletions, 'template', 'Template completion candidates at a source cursor.', 'cursor-locus', { pagingKind: 'continuation-cursor', supportsDetail: true, requiresCursor: true, materializationPolicy: 'query-type-projection', minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingObservation }),
   queryRow(SemanticAppQueryKind.TemplateCursorInfo, 'template', 'Semantic template site, resource, bindable, member, and diagnostic context at a source cursor.', 'cursor-locus', { supportsDetail: true, requiresCursor: true, supportsDiagnosticProjection: true, materializationPolicy: 'query-type-projection', minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingObservation }),

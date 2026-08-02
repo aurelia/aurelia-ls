@@ -155,7 +155,7 @@ import type {
   MaterializationRecord,
   MaterializedProduct,
 } from '../kernel/materialization.js';
-import type { ResourceDefinitionKind } from '../resources/resource-kind.js';
+import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import type { ResourceDependencyReferenceKind } from '../resources/resource-reference.js';
 import type {
   BindableBindingMode,
@@ -463,9 +463,11 @@ export const enum SemanticAppQueryKind {
   RouterViewports = 'router-viewports',
   ViewportAgents = 'viewport-agents',
   ComponentAgents = 'component-agents',
+  ResourceInventory = 'resource-inventory',
   ResourceDefinitions = 'resource-definitions',
   ResourceIssues = 'resource-issues',
   ResourceVisibility = 'resource-visibility',
+  TemplateResourceAvailability = 'template-resource-availability',
   TemplateCompilations = 'template-compilations',
   TemplateCompletions = 'template-completions',
   TemplateCursorInfo = 'template-cursor-info',
@@ -549,9 +551,11 @@ export const SEMANTIC_APP_QUERY_KINDS = [
   SemanticAppQueryKind.RouterViewports,
   SemanticAppQueryKind.ViewportAgents,
   SemanticAppQueryKind.ComponentAgents,
+  SemanticAppQueryKind.ResourceInventory,
   SemanticAppQueryKind.ResourceDefinitions,
   SemanticAppQueryKind.ResourceIssues,
   SemanticAppQueryKind.ResourceVisibility,
+  SemanticAppQueryKind.TemplateResourceAvailability,
   SemanticAppQueryKind.TemplateCompilations,
   SemanticAppQueryKind.TemplateCompletions,
   SemanticAppQueryKind.TemplateCursorInfo,
@@ -2042,6 +2046,159 @@ export interface SemanticResourceDefinitionRow {
 
 export interface SemanticResourceDefinitionsResult {
   readonly rows: readonly SemanticResourceDefinitionRow[];
+}
+
+/** Runtime/template resource kinds presented through resource discovery. Compiler syntax has a separate ownership lane. */
+export const SEMANTIC_RESOURCE_INVENTORY_KINDS = [
+  ResourceDefinitionKind.CustomElement,
+  ResourceDefinitionKind.CustomAttribute,
+  ResourceDefinitionKind.TemplateController,
+  ResourceDefinitionKind.ValueConverter,
+  ResourceDefinitionKind.BindingBehavior,
+] as const;
+
+export type SemanticResourceInventoryKind = typeof SEMANTIC_RESOURCE_INVENTORY_KINDS[number];
+
+export const enum SemanticResourceInventoryMetadataState {
+  /** A converged definition with authored/runtime metadata is available. */
+  FullDefinition = 'full-definition',
+  /** A named resource header is known, but no full definition was materialized. */
+  HeaderOnly = 'header-only',
+  /** Only an effective compiler/DI visibility row is known. */
+  VisibilityOnly = 'visibility-only',
+}
+
+export const enum SemanticResourceInventoryOriginKind {
+  /** Resource declaration belongs to the selected authored project boundary. */
+  Project = 'project',
+  /** Resource declaration belongs to another package with authoritative package ownership. */
+  Package = 'package',
+  /** Resource is supplied by a modeled Aurelia framework/plugin catalog. */
+  Framework = 'framework',
+  /** Resource declaration is outside the authored project without authoritative package ownership. */
+  External = 'external',
+  /** No declaration ownership could be proved. */
+  Unknown = 'unknown',
+}
+
+export const enum SemanticResourceInventoryLocalityKind {
+  /** Ordinary project/package/framework resource definition. */
+  Project = 'project',
+  /** Compiler-local `<template as-custom-element>` definition. */
+  LocalTemplate = 'local-template',
+}
+
+export const enum SemanticResourceNavigationUnavailableReason {
+  /** No exact authored public-name or implementation token is retained. */
+  NoAuthoredSource = 'no-authored-source',
+  /** The retained source is external/catalog metadata without a host-navigable path. */
+  ExternalCatalog = 'external-catalog',
+}
+
+export interface SemanticResourceInventoryOrigin {
+  readonly kind: SemanticResourceInventoryOriginKind | `${SemanticResourceInventoryOriginKind}`;
+  readonly projectKey: string | null;
+  readonly packageName: string | null;
+  readonly moduleKey: string | null;
+  readonly catalogGroup: string | null;
+}
+
+export interface SemanticResourceInventorySources {
+  /** Exact authored public resource-name token, when one exists. */
+  readonly publicName: SemanticSourceReference | null;
+  /** Full declaration/carrier source for outline and explanation. */
+  readonly declaration: SemanticSourceReference | null;
+  /** Exact implementation/target token when distinct from the public name. */
+  readonly implementation: SemanticSourceReference | null;
+  readonly navigationUnavailableReason:
+    | SemanticResourceNavigationUnavailableReason
+    | `${SemanticResourceNavigationUnavailableReason}`
+    | null;
+}
+
+export interface SemanticResourceInventoryAliasRow extends SemanticResourceDefinitionAliasRow {
+  readonly identityKey: string;
+  readonly registrationKey: string | null;
+}
+
+export interface SemanticResourceInventoryBindableRow extends SemanticResourceDefinitionBindableRow {
+  readonly identityKey: string;
+  readonly primary: boolean;
+}
+
+export interface SemanticResourceInventoryLocality {
+  readonly kind: SemanticResourceInventoryLocalityKind | `${SemanticResourceInventoryLocalityKind}`;
+  readonly ownerIdentityKey: string | null;
+  readonly ownerName: string | null;
+  readonly ownerSource: SemanticSourceReference | null;
+}
+
+export interface SemanticResourceInventoryRow {
+  /** Opaque deterministic projection of semantic owner identity; never a store-local kernel handle. */
+  readonly identityKey: string;
+  readonly projectKey: string;
+  readonly resourceKind: SemanticResourceInventoryKind;
+  readonly name: string;
+  readonly registrationKey: string | null;
+  readonly aliases: readonly SemanticResourceInventoryAliasRow[];
+  readonly bindables: readonly SemanticResourceInventoryBindableRow[];
+  readonly declarationModes: readonly SemanticResourceDeclarationMode[];
+  readonly metadataState: SemanticResourceInventoryMetadataState | `${SemanticResourceInventoryMetadataState}`;
+  readonly origin: SemanticResourceInventoryOrigin;
+  readonly locality: SemanticResourceInventoryLocality;
+  readonly sources: SemanticResourceInventorySources;
+}
+
+export interface SemanticResourceInventoryCompleteness {
+  readonly fullDefinitions: number;
+  readonly headerOnly: number;
+  readonly visibilityOnly: number;
+  readonly localTemplates: number;
+  readonly excludedCompilerSyntax: number;
+  readonly unnamedDefinitions: number;
+  readonly unresolvedModules: number;
+  readonly openVisibility: number;
+}
+
+export interface SemanticResourceInventoryResult {
+  readonly displayText: string;
+  readonly projectKey: string;
+  readonly projectRoot: string;
+  readonly rows: readonly SemanticResourceInventoryRow[];
+  readonly completeness: SemanticResourceInventoryCompleteness;
+}
+
+export const enum SemanticTemplateResourceAvailabilityState {
+  /** The selected compiler scope proves this resource is effective. */
+  Available = 'available',
+  /** Visibility was requested but its container/admission path remains open. */
+  Open = 'open',
+}
+
+export interface SemanticTemplateResourceScopeCandidate {
+  readonly templateIdentityKey: string;
+  readonly scopeIdentityKey: string;
+  readonly definitionName: string;
+  readonly compilationLane: 'app-runtime' | 'authoring';
+  readonly source: SemanticSourceReference | null;
+}
+
+export interface SemanticTemplateResourceAvailabilityRow {
+  readonly resource: SemanticResourceInventoryRow;
+  readonly state: SemanticTemplateResourceAvailabilityState | `${SemanticTemplateResourceAvailabilityState}`;
+  readonly visibilityKind: TemplateResourceVisibilityKind | `${TemplateResourceVisibilityKind}`;
+  /** Registration/configuration/dependency source that made this resource visible in the selected scope. */
+  readonly availabilitySource: SemanticSourceReference | null;
+}
+
+export interface SemanticTemplateResourceAvailabilityResult {
+  readonly displayText: string;
+  readonly projectKey: string;
+  readonly projectRoot: string;
+  readonly selectedTemplate: SemanticTemplateResourceScopeCandidate | null;
+  readonly candidates: readonly SemanticTemplateResourceScopeCandidate[];
+  readonly rows: readonly SemanticTemplateResourceAvailabilityRow[];
+  readonly completeness: SemanticResourceInventoryCompleteness;
 }
 
 export interface SemanticResourceIssuesResult {
@@ -3706,6 +3863,7 @@ export interface SemanticResourceVisibilityRow {
   readonly handles?: {
     readonly compilerWorldProductHandle: ProductHandle;
     readonly resourceProductHandle: ProductHandle | null;
+    readonly resourceIdentityHandle: IdentityHandle | null;
     readonly definitionProductHandle: ProductHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;
   };

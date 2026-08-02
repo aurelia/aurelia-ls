@@ -10,7 +10,6 @@ import {
 import type {
   AddressHandle,
   EvidenceHandle,
-  IdentityHandle,
   ProductHandle,
   ProvenanceHandle,
 } from '../kernel/handles.js';
@@ -43,15 +42,15 @@ import {
   type ResourceDefinitionHeader,
 } from './resource-definition.js';
 import { ResourceDefinitionHeaderEmission } from './resource-definition-header-emission.js';
-import {
-  ResourceRecognitionObservation,
-} from './resource-observation.js';
-import { ResourceTargetReference } from './resource-reference.js';
+import type { ResourceRecognitionObservation } from './resource-observation.js';
+import type { ResourceTargetReference } from './resource-reference.js';
 import { ResourceProductDetails } from './product-details.js';
 import {
+  ResourceRecognitionPublicationSupport,
+} from './resource-recognition-publication.js';
+import type {
   ResourceIdentityPublicationSet,
   ResourceOpenSeamPublicationSet,
-  ResourceRecognitionPublicationSupport,
   ResourceTargetPublication,
 } from './resource-recognition-publication.js';
 import { ResourceCarrierKind } from './resource-kind.js';
@@ -323,8 +322,10 @@ export class ResourceRecognitionKernelEmitter {
         index,
         targetReference,
         observation.definition.type,
+        primaryNameForDefinition(observation.definition),
+        aliasNamesForDefinition(observation.definition),
         lookupNamesForDefinition(observation.definition),
-        resourceIdentities.sourceAddressHandles,
+        resourceIdentities.lookupNameSourceAddressHandles,
         resourceIdentities.claimHandles,
       ), new MaterializedProduct(
         productHandle,
@@ -357,8 +358,17 @@ function lookupNamesForDefinition(
   if (definition instanceof AttributePatternDefinitionHeader) {
     return definition.patterns.map((pattern) => pattern.pattern);
   }
-  return [
-    definition.name,
-    ...definition.aliases.map((alias) => alias.name),
-  ].filter((name): name is string => name != null);
+  return definition.name == null
+    ? []
+    : [definition.name, ...definition.aliases.map((alias) => alias.name)];
+}
+
+function primaryNameForDefinition(definition: ResourceDefinitionHeader): string | null {
+  return definition instanceof AttributePatternDefinitionHeader ? null : definition.name;
+}
+
+function aliasNamesForDefinition(definition: ResourceDefinitionHeader): readonly string[] {
+  return definition instanceof AttributePatternDefinitionHeader
+    ? []
+    : definition.aliases.map((alias) => alias.name);
 }

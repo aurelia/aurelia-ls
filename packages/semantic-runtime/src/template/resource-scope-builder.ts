@@ -16,9 +16,9 @@ import {
 } from '../resources/resource-kind.js';
 import {
   sameTemplateVisibleResource,
-  TemplateResourceVisibilityKind,
   TemplateVisibleResource,
 } from './compiler-world-reference.js';
+import type { TemplateResourceVisibilityKind } from './compiler-world-reference.js';
 
 export function visibleResourceForDefinition(
   definition: FullResourceDefinition,
@@ -37,7 +37,7 @@ export function visibleResourceForDefinition(
     definition.identityHandle,
     definition.productHandle,
     visibilityKind,
-    definition.sourceAddressHandle ?? fallbackSourceAddressHandle,
+    fallbackSourceAddressHandle ?? definition.sourceAddressHandle,
   );
 }
 

@@ -123,7 +123,7 @@ class AppWorldResourceVisibilityFrame {
       configuredResource.resource.identityHandle,
       configuredResource.definition?.productHandle ?? null,
       visibleSlot.visibilityKind,
-      configuredResource.resource.sourceAddressHandle ?? visibleSlot.sourceAddressHandle,
+      visibleSlot.sourceAddressHandle ?? configuredResource.resource.sourceAddressHandle,
     ));
     return true;
   }

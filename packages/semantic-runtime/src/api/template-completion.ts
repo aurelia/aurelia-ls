@@ -194,11 +194,13 @@ interface TemplateDiagnosticExpectedValueType {
   readonly source: SemanticTemplateCursorSuggestionValueTypeSource;
 }
 
-type TemplateCompletionResourceSelection = {
+export type TemplateResourceCursorSelection = {
   readonly resource: TemplateResourceRuntimeAnalysisEmission;
   readonly lane: TemplateCompilationLane;
   readonly sourceAddressHandle: SourceSpanAddress['handle'] | null;
 };
+
+type TemplateCompletionResourceSelection = TemplateResourceCursorSelection;
 
 interface TemplateOverlayDiagnosticSelection {
   readonly selection: TemplateCompletionResourceSelection;
@@ -2784,33 +2786,48 @@ function selectTemplateResourceForCursor(
   filePath: string,
   offset: number,
 ): TemplateCompletionResourceSelection | null {
+  return templateResourceCursorSelections(store, emission, filePath, offset)[0] ?? null;
+}
+
+/** Return every equally specific template/compiler-scope candidate at one authored cursor. */
+export function templateResourceCursorSelections(
+  store: KernelStore,
+  emission: AureliaAppWorldProjectEmission,
+  filePath: string,
+  offset: number,
+): readonly TemplateResourceCursorSelection[] {
   const candidates = [
     ...emission.templates.resources.map((resource) => ({ resource, lane: 'app-runtime' as const })),
     ...emission.templates.authoringResources.map((resource) => ({ resource, lane: 'authoring' as const })),
   ];
-  let selected: (TemplateCompletionResourceSelection & { readonly spanWidth: number }) | null = null;
+  let bestWidth = Number.POSITIVE_INFINITY;
+  const selected: TemplateResourceCursorSelection[] = [];
   for (const candidate of candidates) {
+    let candidateSpan: SourceSpanAddress | null = null;
     for (const span of cursorCandidateSpans(store, candidate.resource)) {
       if (!sourceSpanContainsOffset(span, offset) || !sourceSpanFileMatches(store, span, filePath)) {
         continue;
       }
-      const spanWidth = span.end - span.start;
-      if (selected == null || spanWidth < selected.spanWidth) {
-        selected = {
-          ...candidate,
-          sourceAddressHandle: span.handle,
-          spanWidth,
-        };
+      if (candidateSpan == null || span.end - span.start < candidateSpan.end - candidateSpan.start) {
+        candidateSpan = span;
       }
     }
+    if (candidateSpan == null) {
+      continue;
+    }
+    const width = candidateSpan.end - candidateSpan.start;
+    if (width < bestWidth) {
+      bestWidth = width;
+      selected.length = 0;
+    }
+    if (width === bestWidth) {
+      selected.push({
+        ...candidate,
+        sourceAddressHandle: candidateSpan.handle,
+      });
+    }
   }
-  return selected == null
-    ? null
-    : {
-        resource: selected.resource,
-        lane: selected.lane,
-        sourceAddressHandle: selected.sourceAddressHandle,
-      };
+  return selected;
 }
 
 function cursorCandidateSpans(
@@ -2843,7 +2860,7 @@ function sourceSpanForHandle(
   handle: SourceSpanAddress['handle'] | null,
 ): SourceSpanAddress | null {
   const address = handle == null ? null : store.readAddress(handle);
-  return address?.kind === 'source-span-address' ? address as SourceSpanAddress : null;
+  return address?.kind === 'source-span-address' ? address : null;
 }
 
 function templateSourceSpan(
@@ -2853,11 +2870,11 @@ function templateSourceSpan(
   const handle = resource.compilation.unit.templateSource.sourceAddressHandle;
   const address = handle == null ? null : store.readAddress(handle);
   if (address?.kind === 'source-span-address') {
-    return address as SourceSpanAddress;
+    return address;
   }
   if (address?.kind === 'template-address' && address.authoredSourceHandle != null) {
     const authored = store.readAddress(address.authoredSourceHandle);
-    return authored?.kind === 'source-span-address' ? authored as SourceSpanAddress : null;
+    return authored?.kind === 'source-span-address' ? authored : null;
   }
   return null;
 }

@@ -27,7 +27,11 @@ export class ResourceDefinitionHeaderEmission {
     readonly targetReference: ResourceTargetReference | null,
     /** Recognized Aurelia resource kind for this header. */
     readonly resourceKind: ResourceDefinitionHeader['type'],
-    /** Runtime lookup names or pattern strings observed for this header. */
+    /** Canonical resource name after recognition, separate from aliases and pattern entries. */
+    readonly primaryName: string | null,
+    /** Statically recognized aliases, even when no canonical resource name closed. */
+    readonly aliasNames: readonly string[],
+    /** Runtime lookup names or pattern strings for which identity records were published. */
     readonly lookupNames: readonly string[],
     /** Exact authored token for each lookup name, aligned with `lookupNames` when recognition retained one. */
     readonly lookupNameSourceAddressHandles: readonly (AddressHandle | null)[],

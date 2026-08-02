@@ -426,6 +426,10 @@ const dialogIssues = app.ask({ kind: SemanticAppQueryKind.DialogIssues });
 const configurationIssues = app.ask({ kind: SemanticAppQueryKind.ConfigurationIssues });
 const evaluationIssues = app.ask({ kind: SemanticAppQueryKind.EvaluationIssues });
 const observationIssues = app.ask({ kind: SemanticAppQueryKind.ObservationIssues });
+const resourceInventory = app.ask({
+  kind: SemanticAppQueryKind.ResourceInventory,
+  page: { size: 200 },
+});
 const definitions = app.ask({ kind: SemanticAppQueryKind.ResourceDefinitions });
 const resourceIssues = app.ask({ kind: SemanticAppQueryKind.ResourceIssues });
 const routerOptions = app.ask({ kind: SemanticAppQueryKind.RouterOptions });
@@ -449,6 +453,15 @@ const componentAgents = app.ask({ kind: SemanticAppQueryKind.ComponentAgents });
 const templates = app.ask({
   kind: SemanticAppQueryKind.TemplateCompilations,
   page: { size: 20 },
+});
+const availableResources = app.ask({
+  kind: SemanticAppQueryKind.TemplateResourceAvailability,
+  cursor: {
+    filePath: 'src/my-element.html',
+    line: 12,
+    character: 18,
+    offset: 340,
+  },
 });
 const exactTemplateRows = app.ask({
   kind: SemanticAppQueryKind.TemplateCompilations,
@@ -1426,6 +1439,31 @@ channel/type inputs, `firstDefined(...)` with no defined argument, and `Metadata
 framework utility guards use `frameworkRawErrorAuthority` instead of synthetic AUR codes. `AppDiagnostics` reports these
 rows under the `evaluation` domain and links back to `evaluation-issues`.
 
+`ResourceInventory` is the product-facing resource-discovery answer for one explicitly selected app project. It folds
+project definitions, configured framework catalogs, compiler-visible resources, and compiler-local
+`<template as-custom-element>` definitions into one deterministic five-kind inventory: custom elements, custom
+attributes, template controllers, value converters, and binding behaviors. Binding commands and attribute patterns
+remain compiler-syntax products and are counted as excluded syntax rather than masquerading as runtime resources.
+
+Inventory `identityKey` values are opaque semantic projections, never kernel handles. Framework resources derive
+identity and package origin from their modeled catalog; authored resources derive identity from retained declaration
+identity and exact source loci; local templates derive identity from their template-family owner and local name source.
+The promise is stability across app generations while the semantic owner is unchanged, not persistence across arbitrary
+source moves. Aliases and bindables receive child identities under the owning resource. `origin` reports project,
+framework/package, external, or unknown ownership without guessing package names from paths.
+
+Inventory source roles remain distinct: `sources.publicName` is the exact authored public-name token,
+`sources.declaration` is the full declaration/carrier, and `sources.implementation` is the exact implementation target.
+Navigation should prefer the public-name source, then the implementation source when conventions leave no authored
+public-name token. Pathless framework/catalog rows remain visible and explicitly non-navigable. Declaration provenance
+does not absorb admission provenance: a framework row can retain an external catalog declaration while a template
+availability row points at the authored registration that admitted it.
+
+`TemplateResourceAvailability` is the cursor-scoped companion. It selects the narrowest compiled template occurrence
+and returns exactly that compiler world's effective runtime-resource scope. Equally specific occurrences from different
+app roots return `selection: ambiguous` with candidate template/scope identities and no unioned rows. A caller must
+choose a project before opening the app and must choose a candidate scope before treating availability as exact.
+
 `ResourceDefinitions` exposes converged Aurelia resource definitions recognized from explicit decorators, runtime
 definition objects, static fields, metadata, and project conventions before app-world/compiler visibility is known.
 This is the right query for plugin-library and monorepo package pressure where a package can define resources without
@@ -1451,8 +1489,10 @@ seam instead. It also owns runtime-html duplicate resource-definition registrati
 DI registration spending can prove the duplicate named resource slot, plus direct runtime-html resource API failures
 (`AUR0151`, `AUR0152`, `AUR0759`, `AUR0760`, `AUR0761`) when TypeChecker-resolved call sites and recognized resource
 definitions prove the same framework path.
-`ResourceVisibility` stays narrower: it answers which definitions are visible to a particular compiler world after
-configuration, DI, and resource-scope composition have materialized.
+`ResourceVisibility` stays lower-level: it enumerates every compiler world's raw visibility rows after configuration,
+DI, and resource-scope composition have materialized. Handle detail includes the retained resource identity for exact
+in-process joins, but handles are store-local and must never become presentation identity. Product consumers that need
+one template's effective resources should use `TemplateResourceAvailability` rather than joining or unioning these rows.
 
 `ConfigurationIssues` exposes known framework failures discovered while reading source-backed configuration products.
 It currently includes direct runtime `Scope` API nullish-argument failures (`null_scope` / `AUR0203` and

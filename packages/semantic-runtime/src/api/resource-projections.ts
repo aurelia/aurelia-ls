@@ -5,7 +5,7 @@ import {
   taxonomyResourceKindForDefinition,
   type FullResourceDefinition,
 } from '../resources/resource-definition.js';
-import { ResourceDefinitionKind } from '../resources/resource-kind.js';
+import type { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import { ResourceProductDetails } from '../resources/product-details.js';
 import type { ResourceIssue } from '../resources/resource-issue.js';
 import type { ResourceDependencyReference } from '../resources/resource-reference.js';
@@ -14,7 +14,6 @@ import type {
   WatchCallbackDefinition,
   WatchDefinition,
   WatchExpressionDefinition,
-  WatchPropertyKeyDefinition,
 } from '../resources/watch-definition.js';
 import {
   describeAddress,
@@ -125,6 +124,16 @@ function resourceDefinitionRow(
       },
     } : {}),
   };
+}
+
+/** Project one already-selected full definition without forcing callers to duplicate source-role policy. */
+export function readResourceDefinitionRow(
+  emission: AureliaAppWorldProjectEmission,
+  store: KernelStore,
+  definition: FullResourceDefinition,
+  handles: boolean,
+): SemanticResourceDefinitionRow {
+  return resourceDefinitionRow(emission, store, definition, readProjectResourceIssues(emission, store), handles);
 }
 
 function readProjectResourceIssues(
