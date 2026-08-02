@@ -1,23 +1,23 @@
 import type {
+  AnalysisChangedPayload,
   ProtocolRange,
   ProtocolWorkspaceEdit,
   RelatedFileCandidate,
   RelatedFilesResponse,
   RenameFromTsResponse,
-  ResourceExplorerItem as ProtocolResourceExplorerItem,
-  ResourceExplorerResponse as ProtocolResourceExplorerResponse,
-  ScopeResourcesResponse,
-  AnalysisChangedPayload,
+  ResourceInventoryItem,
+  ResourceInventoryResponse as ProtocolResourceInventoryResponse,
+  TemplateResourceAvailabilityResponse as ProtocolTemplateResourceAvailabilityResponse,
 } from "@aurelia-ls/language-server/protocol";
 
 export type {
+  AnalysisChangedPayload,
   ProtocolRange,
   ProtocolWorkspaceEdit,
   RelatedFileCandidate,
   RelatedFilesResponse,
   RenameFromTsResponse,
-  ScopeResourcesResponse,
-  AnalysisChangedPayload,
+  ResourceInventoryItem,
 };
 
 export interface AureliaWorkspaceIdentity {
@@ -31,23 +31,34 @@ export type WorkspaceNotificationPayload<T> = T & {
   readonly workspace: AureliaWorkspaceIdentity;
 };
 
-/** Client-local workspace ownership added while aggregating per-session resource answers. */
-export type ResourceExplorerItem = ProtocolResourceExplorerItem & {
+export type ResourceInventoryWorkspaceSnapshot = AureliaWorkspaceIdentity & (
+  | {
+      readonly status: "ready";
+      readonly response: ProtocolResourceInventoryResponse;
+    }
+  | {
+      readonly status: "error";
+      readonly error: string;
+    }
+);
+
+/** Session snapshots remain separate because their fingerprints are not globally comparable. */
+export interface ResourceInventorySnapshot {
+  readonly workspaces: readonly ResourceInventoryWorkspaceSnapshot[];
+}
+
+export type TemplateResourceAvailabilityResponse = ProtocolTemplateResourceAvailabilityResponse & {
   readonly workspace: AureliaWorkspaceIdentity;
 };
 
-export type ResourceExplorerWorkspace = AureliaWorkspaceIdentity & ({
-  readonly status: "ready";
-  readonly resourceCount: number;
-  readonly templateCount: number;
-  readonly inlineTemplateCount: number;
-  readonly evidence: ProtocolResourceExplorerResponse["evidence"];
-} | {
-  readonly status: "error";
-  readonly error: string;
-});
+export type ResourceNavigationRole = "resource" | "alias" | "bindable";
 
-export type ResourceExplorerResponse = Omit<ProtocolResourceExplorerResponse, "resources" | "evidence"> & {
-  readonly resources: readonly ResourceExplorerItem[];
-  readonly workspaces: readonly ResourceExplorerWorkspace[];
-};
+/** Stable identity used to re-resolve a current location before every navigation. */
+export interface ResourceNavigationRequest {
+  readonly workspaceKey: string;
+  readonly fingerprint: string;
+  readonly projectKey: string;
+  readonly resourceIdentityKey: string;
+  readonly role: ResourceNavigationRole;
+  readonly childIdentityKey?: string;
+}

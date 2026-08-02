@@ -568,7 +568,7 @@ describe("AureliaLanguageClient workspace ownership", () => {
 });
 
 describe("LspFacade workspace routing", () => {
-  test("routes URI requests and conversions while preserving workspace identity in aggregate resources", async () => {
+  test("routes URI requests and conversions while preserving workspace-owned inventory snapshots", async () => {
     const { vscode } = twoWorkspaceApi();
     const harness = createClientHarness(new Map([
       ["file:///work/a", workspaceStatus("app-world")],
@@ -592,15 +592,13 @@ describe("LspFacade workspace routing", () => {
       undefined,
     );
 
-    const resources = await facade.getResources();
-    expect(resources?.resources).toHaveLength(2);
-    expect(resources?.resources.map((resource) => [resource.name, resource.workspace?.name])).toEqual([
-      ["shared-name", "a"],
-      ["shared-name", "b"],
-    ]);
-    expect(resources?.workspaces.map((workspace) =>
-      workspace.status === "ready" ? workspace.resourceCount : -1
-    )).toEqual([1, 1]);
+    const inventory = await facade.getResourceInventory();
+    expect(inventory?.workspaces.map((workspace) => workspace.name)).toEqual(["a", "b"]);
+    expect(inventory?.workspaces.map((workspace) =>
+      workspace.status === "ready"
+        ? workspace.response.projects.flatMap((project) => project.status === "ready" ? project.resources : []).map((resource) => resource.name)
+        : []
+    )).toEqual([["shared-name"], ["shared-name"]]);
 
     const converted = await facade.convertWorkspaceEdit(
       "file:///work/b/src/card.ts",
@@ -630,11 +628,14 @@ describe("LspFacade workspace routing", () => {
     const { logger } = createTestServices(vscode as unknown as VscodeApi);
     const facade = new LspFacade(manager, logger);
 
-    const resources = await facade.getResources();
+    const inventory = await facade.getResourceInventory();
 
-    expect(resources?.resources.map((resource) => resource.workspace.name)).toEqual(["a"]);
-    expect(resources?.workspaces.map((workspace) => workspace.status)).toEqual(["ready", "error"]);
-    expect(resources?.workspaces[1]).toEqual(expect.objectContaining({
+    expect(inventory?.workspaces.map((workspace) => workspace.status)).toEqual(["ready", "error"]);
+    expect(inventory?.workspaces[0]).toEqual(expect.objectContaining({
+      name: "a",
+      status: "ready",
+    }));
+    expect(inventory?.workspaces[1]).toEqual(expect.objectContaining({
       status: "error",
       error: "resource inventory failed",
     }));
@@ -735,7 +736,7 @@ function createClientHarness(
           }
           return statusByWorkspace.get(workspaceUri) ?? null;
         }
-        case "aurelia/getResources":
+        case "aurelia/resourceInventory":
           return harnessOptions.resourceResponse?.(workspaceUri) ?? resourceResponse(workspaceUri);
         case "aurelia/getRelatedFiles":
           return [{
@@ -785,33 +786,66 @@ function createClientHarness(
 
 function resourceResponse(workspaceUri: string) {
   const answer = {
+    schemaVersion: "0.2",
     result: "answered",
     selection: "not-applicable",
     coverage: "complete",
     summary: "complete",
+    page: null,
   };
   return {
     fingerprint: workspaceUri,
-    resources: [{
-      id: `definition:${workspaceUri}:shared-name`,
-      name: "shared-name",
-      kind: "custom-element",
-      aliases: [],
-      bindables: [],
-      definition: null,
-      visibility: [],
-      source: null,
-      file: null,
-      package: null,
-      origin: "project",
+    projects: [{
+      status: "ready",
+      project: {
+        projectKey: `${workspaceUri}:app`,
+        rootUri: workspaceUri,
+        sourceFiles: 1,
+        shapeKind: "app",
+        analysisKind: "app-world",
+      },
+      answer,
+      resources: [{
+        identityKey: `resource:${workspaceUri}:shared-name:v1`,
+        projectKey: `${workspaceUri}:app`,
+        kind: "custom-element",
+        name: "shared-name",
+        registrationKey: "au:resource:custom-element:shared-name",
+        aliases: [],
+        bindables: [],
+        declarationModes: ["decorator"],
+        metadataState: "full-definition",
+        origin: {
+          kind: "project",
+          projectKey: `${workspaceUri}:app`,
+          packageName: null,
+          moduleKey: "src/shared-name.ts",
+          catalogGroup: null,
+        },
+        locality: {
+          kind: "project",
+          ownerIdentityKey: null,
+          ownerName: null,
+          ownerSource: { state: "absent" },
+        },
+        sources: {
+          publicName: { state: "absent" },
+          declaration: { state: "absent" },
+          implementation: { state: "absent" },
+        },
+        navigation: { state: "unavailable", reason: "no-authored-source" },
+      }],
+      completeness: {
+        fullDefinitions: 1,
+        headerOnly: 0,
+        visibilityOnly: 0,
+        localTemplates: 0,
+        excludedCompilerSyntax: 0,
+        unnamedDefinitions: 0,
+        unresolvedModules: 0,
+        openVisibility: 0,
+      },
     }],
-    templateCount: 1,
-    inlineTemplateCount: 0,
-    evidence: {
-      definitions: answer,
-      visibility: answer,
-      compilations: answer,
-    },
   };
 }
 

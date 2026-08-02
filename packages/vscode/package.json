@@ -49,7 +49,7 @@
       "explorer": [
         {
           "id": "aureliaResourceExplorer",
-          "name": "Resource Explorer",
+          "name": "Aurelia Resources",
           "when": "aurelia.active"
         }
       ]
@@ -62,14 +62,14 @@
         "category": "Aurelia"
       },
       {
-        "command": "aurelia.findResource",
-        "title": "Find Resource",
+        "command": "aurelia.goToResource",
+        "title": "Go to Resource...",
         "icon": "$(search)",
         "category": "Aurelia"
       },
       {
-        "command": "aurelia.showAvailableResources",
-        "title": "Show Available Resources",
+        "command": "aurelia.goToAvailableResource",
+        "title": "Go to Resource Available to Active Template...",
         "category": "Aurelia"
       },
       {
@@ -81,7 +81,7 @@
     "menus": {
       "view/title": [
         {
-          "command": "aurelia.findResource",
+          "command": "aurelia.goToResource",
           "when": "view == aureliaResourceExplorer",
           "group": "navigation"
         },
@@ -93,7 +93,7 @@
       ],
       "editor/context": [
         {
-          "command": "aurelia.showAvailableResources",
+          "command": "aurelia.goToAvailableResource",
           "when": "aurelia.active && aurelia.documentOwned && editorLangId == html",
           "group": "aurelia@1"
         },
@@ -109,11 +109,11 @@
           "when": "aurelia.active"
         },
         {
-          "command": "aurelia.findResource",
+          "command": "aurelia.goToResource",
           "when": "aurelia.active"
         },
         {
-          "command": "aurelia.showAvailableResources",
+          "command": "aurelia.goToAvailableResource",
           "when": "aurelia.active && aurelia.documentOwned"
         },
         {

@@ -32,7 +32,9 @@ describe("VS Code product contract", () => {
   });
 
   test("keeps contributed commands and menus on the client-owned command vocabulary", () => {
-    const expectedCommands = Object.values(AureliaCommand).sort();
+    const expectedCommands = Object.values(AureliaCommand)
+      .filter((command) => command !== AureliaCommand.OpenResource)
+      .sort();
     const contributedCommands = (manifest.contributes?.commands ?? [])
       .map((entry) => entry.command)
       .sort();

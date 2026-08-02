@@ -34,6 +34,7 @@ import {
   SEMANTIC_RESOURCE_INVENTORY_KINDS,
   SemanticResourceInventoryLocalityKind,
   SemanticResourceInventoryMetadataState,
+  SemanticResourceInventoryNavigationRole,
   SemanticResourceInventoryOriginKind,
   SemanticResourceNavigationUnavailableReason,
   SemanticRuntimeAnswerCoverage,
@@ -530,16 +531,35 @@ class ResourceInventoryBuilder {
       resourceKind: candidate.resourceKind,
       name: candidate.name,
       registrationKey: runtimeResourceKeyForKind(candidate.resourceKind, candidate.name),
-      aliases: metadata.aliases.map((alias) => ({
+      aliases: metadata.aliases.map((alias, index) => ({
         ...alias,
-        identityKey: semanticKey('resource-alias', [identityKey, alias.name, semanticSourceReferenceKey(alias.source)]),
+        identityKey: semanticKey('resource-alias', [
+          identityKey,
+          alias.name,
+          sameNameOrdinal(metadata.aliases, index, (row) => row.name),
+        ]),
         registrationKey: runtimeResourceKeyForKind(candidate.resourceKind, alias.name),
       })),
-      bindables: metadata.bindables.map((bindable) => ({
-        ...bindable,
-        identityKey: semanticKey('resource-bindable', [identityKey, bindable.name, bindable.attribute]),
-        primary: candidate.definitionRow?.defaultProperty === bindable.name,
-      })),
+      bindables: metadata.bindables.map((bindable, index) => {
+        const navigation = inventoryNavigationSource([
+          [bindable.nameSource, SemanticResourceInventoryNavigationRole.BindableName],
+          [bindable.attributeSource, SemanticResourceInventoryNavigationRole.BindableAttribute],
+          [bindable.propertySource, SemanticResourceInventoryNavigationRole.BindableProperty],
+          [bindable.source, SemanticResourceInventoryNavigationRole.BindableDeclaration],
+        ]);
+        return {
+          ...bindable,
+          identityKey: semanticKey('resource-bindable', [
+            identityKey,
+            bindable.name,
+            bindable.attribute,
+            sameNameOrdinal(metadata.bindables, index, (row) => `${row.name}\u0000${row.attribute}`),
+          ]),
+          primary: candidate.definitionRow?.defaultProperty === bindable.name,
+          navigationSource: navigation?.source ?? null,
+          navigationRole: navigation?.role ?? null,
+        };
+      }),
       declarationModes: metadata.declarationModes,
       metadataState: candidate.definitionRow != null
         ? SemanticResourceInventoryMetadataState.FullDefinition
@@ -635,19 +655,21 @@ class ResourceInventoryBuilder {
       candidate.identityKey = semanticKey('local-template-resource', [
         ownerKey,
         candidate.resourceKind,
-        semanticSourceReferenceKey(sources.publicName ?? sources.declaration),
+        candidate.name,
+        this.sameOwnerResourceOrdinal(candidate),
       ]);
       return candidate.identityKey;
     }
     const declarationIdentity = this.declarationIdentityFor(candidate, targetIdentityHandle);
-    if (declarationIdentity != null) {
+    if (
+      declarationIdentity?.moduleKey != null
+      && (declarationIdentity.exportedName != null || declarationIdentity.localName != null)
+    ) {
       candidate.identityKey = semanticKey('typescript-resource', [
         declarationIdentity.moduleKey,
         declarationIdentity.exportedName,
         declarationIdentity.localName,
         registrationResourceKindFor(candidate.resourceKind),
-        semanticSourceReferenceKey(describeAddress(this.store, declarationIdentity.declarationAddressHandle)),
-        semanticSourceIdentityLocus(sources.declaration),
       ]);
       return candidate.identityKey;
     }
@@ -658,6 +680,21 @@ class ResourceInventoryBuilder {
       semanticSourceReferenceKey(sources.publicName ?? sources.implementation ?? sources.declaration),
     ]);
     return candidate.identityKey;
+  }
+
+  private sameOwnerResourceOrdinal(candidate: ResourceInventoryCandidate): number {
+    let ordinal = 0;
+    for (const current of this.candidates) {
+      if (current === candidate) return ordinal;
+      if (
+        current.localOwnerHandle === candidate.localOwnerHandle
+        && current.resourceKind === candidate.resourceKind
+        && current.name === candidate.name
+      ) {
+        ordinal += 1;
+      }
+    }
+    throw new Error(`Local resource candidate '${candidate.internalKey}' is not registered in its inventory.`);
   }
 
   private originFor(
@@ -863,20 +900,39 @@ function inventorySources(
   implementation: SemanticSourceReference | null,
   frameworkCatalog: boolean,
 ): SemanticResourceInventorySources {
-  const navigable = [publicName, implementation].some((source) => {
-    const exact = semanticExactSourceReference(source);
-    return exact?.path != null;
-  });
+  const navigation = inventoryNavigationSource([
+    [publicName, SemanticResourceInventoryNavigationRole.PublicName],
+    [implementation, SemanticResourceInventoryNavigationRole.Implementation],
+  ]);
   return {
     publicName,
     declaration,
     implementation,
-    navigationUnavailableReason: navigable
+    navigation: navigation?.source ?? null,
+    navigationRole: navigation?.role ?? null,
+    navigationUnavailableReason: navigation != null
       ? null
       : frameworkCatalog
         ? SemanticResourceNavigationUnavailableReason.ExternalCatalog
         : SemanticResourceNavigationUnavailableReason.NoAuthoredSource,
   };
+}
+
+function inventoryNavigationSource(
+  candidates: readonly (readonly [
+    SemanticSourceReference | null,
+    SemanticResourceInventoryNavigationRole,
+  ])[],
+): {
+  readonly source: SemanticSourceReference;
+  readonly role: SemanticResourceInventoryNavigationRole;
+} | null {
+  for (const [source, role] of candidates) {
+    if (source != null && semanticExactSourceReference(source)?.path != null) {
+      return { source, role };
+    }
+  }
+  return null;
 }
 
 function candidateHandleKeys(input: {
@@ -926,20 +982,17 @@ function semanticKey(namespace: string, values: readonly unknown[]): string {
   return `${namespace}:v1:${digest}`;
 }
 
-function semanticSourceIdentityLocus(source: SemanticSourceReference | null): readonly unknown[] | null {
-  if (source == null) {
-    return null;
+function sameNameOrdinal<T>(
+  rows: readonly T[],
+  index: number,
+  identity: (row: T) => string,
+): number {
+  const key = identity(rows[index]!);
+  let ordinal = 0;
+  for (let current = 0; current < index; current++) {
+    if (identity(rows[current]!) === key) ordinal += 1;
   }
-  return [
-    source.kind,
-    source.path ?? null,
-    source.start ?? null,
-    source.scheme ?? null,
-    source.value ?? null,
-    source.role ?? null,
-    source.sourceWorkspaceKey ?? null,
-    semanticSourceIdentityLocus(source.anchor ?? null),
-  ];
+  return ordinal;
 }
 
 function compareInventoryRows(left: SemanticResourceInventoryRow, right: SemanticResourceInventoryRow): number {

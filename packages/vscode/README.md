@@ -42,13 +42,19 @@ Rename source-backed template expression members across TypeScript and HTML. The
 
 Templates are colored by semantic meaning: custom elements look different from HTML elements, bindable attributes look different from plain attributes, resolved expressions look different from unresolved ones.
 
-### Resource Explorer
+### Resource Discovery
 
-Browse exact Aurelia resource definitions and compiler-world visibility from VS Code's built-in Explorer. Custom elements,
-attributes, template controllers, value converters, binding behaviors, binding commands, and attribute patterns are grouped
-by project, package, framework provenance, and kind. Aliases, bindables, declaration forms, and source navigation remain
-attached to their owning definition. In multi-root workspaces, each active workspace folder has its own root so same-named
-resources retain their owner and failed workspace analysis remains visible.
+Browse exact runtime resources in the **Aurelia Resources** view in VS Code's built-in Explorer, grouped by kind. The view
+covers custom elements, custom attributes, template controllers, value converters, and binding behaviors; compiler-syntax
+features such as binding commands and attribute patterns remain outside the runtime-resource inventory. Aliases, bindables,
+declaration forms, origin, and exact source navigation stay attached to their owning definition. Multi-root workspaces show
+workspace and project ownership only when it is needed to disambiguate identical names, and failed or partial analysis remains
+visible without replacing the last coherent tree.
+
+Use **Aurelia: Go to Resource...** to search the complete inventory across active Aurelia workspaces. Use
+**Aurelia: Go to Resource Available to Active Template...** for the exact compiler scope at the current template cursor. The
+contextual command asks you to choose when project or template ownership is genuinely ambiguous; it never derives scope from
+which Explorer item happens to have focus.
 
 ### Binding Mode Hints
 
@@ -73,7 +79,7 @@ Most framework tooling either achieves complete knowledge by restricting what yo
 
 This extension takes a different approach: it analyzes what it can analyze, and when it reaches a limit (a dynamic
 registration pattern or a complex third-party package), it keeps the uncertainty visible. Diagnostics, hover, and the
-Resource Explorer all prefer source-linked facts and provenance over guessed results.
+Aurelia Resources view all prefer source-linked facts and provenance over guessed results.
 
 The goal is that you can trust what the extension tells you.
 
@@ -116,10 +122,10 @@ these commands are part of your workflow.
 
 | Command | Description |
 |---------|-------------|
-| Aurelia: Find Resource | Search exact resources across active Aurelia workspace folders |
+| Aurelia: Go to Resource... | Search exact runtime resources across active Aurelia workspace folders |
 | Aurelia: Open Related File | Open a component class or file-backed template, prompting when topology proves multiple counterparts |
-| Aurelia: Show Available Resources | List exact resources visible in the current template's compiler world |
-| Aurelia: Refresh | Refresh the Resource Explorer |
+| Aurelia: Go to Resource Available to Active Template... | Search exact runtime resources in the active template cursor's compiler scope |
+| Aurelia: Refresh | Refresh the Aurelia Resources view |
 
 ## Troubleshooting
 

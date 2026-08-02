@@ -9,6 +9,7 @@ import {
   SEMANTIC_RESOURCE_INVENTORY_KINDS,
   SemanticAppQueryKind,
   SemanticResourceInventoryLocalityKind,
+  SemanticResourceInventoryNavigationRole,
   SemanticResourceInventoryOriginKind,
   SemanticResourceNavigationUnavailableReason,
   SemanticRuntimeAnswerResult,
@@ -52,6 +53,8 @@ describe('resource discovery', () => {
       path: 'src/local-templates-app.ts',
       role: 'name',
     });
+    expect(app.sources.navigation).toEqual(app.sources.publicName);
+    expect(app.sources.navigationRole).toBe(SemanticResourceInventoryNavigationRole.PublicName);
 
     const repeat = requireInventoryRow(first.value, 'template-controller', 'repeat');
     expect(repeat.origin).toMatchObject({
@@ -60,6 +63,7 @@ describe('resource discovery', () => {
       catalogGroup: 'default-resources',
     });
     expect(repeat.sources.publicName).toBeNull();
+    expect(repeat.sources.navigationRole).toBeNull();
     expect(repeat.sources.navigationUnavailableReason).toBe(
       SemanticResourceNavigationUnavailableReason.ExternalCatalog,
     );
@@ -85,6 +89,8 @@ describe('resource discovery', () => {
         attribute: 'public-label',
         nameSource: expect.objectContaining({ start: 75, end: 80 }),
         attributeSource: expect.objectContaining({ start: 93, end: 105 }),
+        navigationSource: expect.objectContaining({ start: 75, end: 80 }),
+        navigationRole: SemanticResourceInventoryNavigationRole.BindableName,
       }),
     ]));
 

@@ -79,6 +79,24 @@ interface StubOutputChannel {
   dispose(): void;
 }
 
+export interface StubQuickPick {
+  title: string;
+  placeholder: string;
+  busy: boolean;
+  visible: boolean;
+  items: readonly unknown[];
+  selectedItems: readonly unknown[];
+  buttons: readonly unknown[];
+  matchOnDescription: boolean;
+  matchOnDetail: boolean;
+  step: number | undefined;
+  totalSteps: number | undefined;
+  accept(index: number): void;
+  back(): void;
+  hide(): void;
+  dispose(): void;
+}
+
 interface RecordedActions {
   commandHandlers: Map<string, (...args: unknown[]) => unknown>;
   registeredCommands: string[];
@@ -90,6 +108,7 @@ interface RecordedActions {
   statusItems: StubStatusBarItem[];
   fileWatchers: StubFileWatcher[];
   outputLogs: string[];
+  quickPicks: StubQuickPick[];
   contextValues: Map<string, unknown>;
   fireWorkspaceFoldersChanged(): void;
   fireConfigurationChanged(section?: string): void;
@@ -134,6 +153,7 @@ export interface StubVscodeApi {
     openTextDocument: (target: unknown) => Promise<StubDocument>;
     createOutputChannel: (name: string, options?: { log: true }) => StubOutputChannel;
     createStatusBarItem: (alignment: number, priority: number) => StubStatusBarItem;
+    createQuickPick: () => StubQuickPick;
     onDidChangeActiveTextEditor: (listener: (editor: unknown) => void) => VscodeDisposable;
   };
   Uri: {
@@ -144,6 +164,12 @@ export interface StubVscodeApi {
   RelativePattern: new (base: unknown, pattern: string) => { base: unknown; baseUri: StubUri; pattern: string };
   EventEmitter: typeof EventEmitter;
   Disposable: typeof Disposable;
+  CancellationTokenSource: typeof CancellationTokenSource;
+  Position: typeof Position;
+  Range: typeof Range;
+  ThemeIcon: typeof ThemeIcon;
+  QuickInputButtons: { Back: object };
+  TreeItemCollapsibleState: { None: number; Collapsed: number; Expanded: number };
   StatusBarAlignment: { Left: number; Right: number };
   ViewColumn: { Beside: number; One: number };
 }
@@ -225,6 +251,105 @@ class EventEmitter<T> {
     this.#listeners.clear();
   }
 }
+
+class CancellationTokenSource {
+  readonly #cancelled = new EventEmitter<void>();
+  #isCancellationRequested = false;
+  readonly token: {
+    readonly isCancellationRequested: boolean;
+    readonly onCancellationRequested: (listener: () => void) => VscodeDisposable;
+  };
+
+  constructor() {
+    const source = this;
+    this.token = {
+      get isCancellationRequested() {
+        return source.#isCancellationRequested;
+      },
+      onCancellationRequested: (listener) => this.#cancelled.event(listener),
+    };
+  }
+
+  cancel(): void {
+    if (this.#isCancellationRequested) return;
+    this.#isCancellationRequested = true;
+    this.#cancelled.fire();
+  }
+
+  dispose(): void {
+    this.#cancelled.dispose();
+  }
+}
+
+class Position {
+  constructor(readonly line: number, readonly character: number) {}
+}
+
+class Range {
+  constructor(readonly start: Position, readonly end: Position) {}
+}
+
+class ThemeIcon {
+  constructor(readonly id: string) {}
+}
+
+class QuickPick implements StubQuickPick {
+  title = "";
+  placeholder = "";
+  busy = false;
+  visible = false;
+  items: readonly unknown[] = [];
+  selectedItems: readonly unknown[] = [];
+  buttons: readonly unknown[] = [];
+  matchOnDescription = false;
+  matchOnDetail = false;
+  step: number | undefined;
+  totalSteps: number | undefined;
+  #accept = new EventEmitter<void>();
+  #hide = new EventEmitter<void>();
+  #button = new EventEmitter<unknown>();
+
+  onDidAccept(listener: () => void): VscodeDisposable {
+    return this.#accept.event(listener);
+  }
+
+  onDidHide(listener: () => void): VscodeDisposable {
+    return this.#hide.event(listener);
+  }
+
+  onDidTriggerButton(listener: (button: unknown) => void): VscodeDisposable {
+    return this.#button.event(listener);
+  }
+
+  show(): void {
+    this.visible = true;
+  }
+
+  accept(index: number): void {
+    const selected = this.items[index];
+    this.selectedItems = selected == null ? [] : [selected];
+    this.#accept.fire();
+  }
+
+  back(): void {
+    this.#button.fire(QuickInputButtons.Back);
+  }
+
+  hide(): void {
+    if (!this.visible) return;
+    this.visible = false;
+    this.#hide.fire();
+  }
+
+  dispose(): void {
+    this.visible = false;
+    this.#accept.dispose();
+    this.#hide.dispose();
+    this.#button.dispose();
+  }
+}
+
+const QuickInputButtons = { Back: {} } as const;
 
 class RelativePattern {
   readonly baseUri: StubUri;
@@ -327,6 +452,7 @@ export function createVscodeApi(options: CreateVscodeApiOptions = {}): { vscode:
   const statusItems: StubStatusBarItem[] = [];
   const fileWatchers: StubFileWatcher[] = [];
   const outputLogs: string[] = [];
+  const quickPicks: StubQuickPick[] = [];
   const contextValues = new Map<string, unknown>();
   const workspaceFoldersChanged = new EventEmitter<void>();
   const configurationChanged = new EventEmitter<{ affectsConfiguration: (section: string) => boolean }>();
@@ -503,6 +629,11 @@ export function createVscodeApi(options: CreateVscodeApiOptions = {}): { vscode:
       statusItems.push(item);
       return item;
     },
+    createQuickPick: () => {
+      const picker = new QuickPick();
+      quickPicks.push(picker);
+      return picker;
+    },
     onDidChangeActiveTextEditor: (listener: (editor: unknown) => void) => activeTextEditorChanged.event(listener),
   };
 
@@ -520,6 +651,12 @@ export function createVscodeApi(options: CreateVscodeApiOptions = {}): { vscode:
     RelativePattern,
     EventEmitter,
     Disposable,
+    CancellationTokenSource,
+    Position,
+    Range,
+    ThemeIcon,
+    QuickInputButtons,
+    TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
     StatusBarAlignment: { Left: 1, Right: 2 },
     ViewColumn: { Beside: 2, One: 1 },
   };
@@ -537,6 +674,7 @@ export function createVscodeApi(options: CreateVscodeApiOptions = {}): { vscode:
       statusItems,
       fileWatchers,
       outputLogs,
+      quickPicks,
       contextValues,
       fireWorkspaceFoldersChanged: () => workspaceFoldersChanged.fire(),
       fireConfigurationChanged: (section = "aurelia") => configurationChanged.fire({

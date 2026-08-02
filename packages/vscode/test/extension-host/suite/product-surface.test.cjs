@@ -27,8 +27,8 @@ suite("extension-host product surface", () => {
   test("ships only the retained command and Explorer surface", async () => {
     const commands = new Set(await vscode.commands.getCommands(true));
     for (const command of [
-      "aurelia.findResource",
-      "aurelia.showAvailableResources",
+      "aurelia.goToResource",
+      "aurelia.goToAvailableResource",
       "aurelia.openRelatedFile",
       "aurelia.refreshResourceExplorer",
     ]) {
@@ -40,6 +40,16 @@ suite("extension-host product surface", () => {
     await vscode.commands.executeCommand("workbench.view.explorer");
     await vscode.commands.executeCommand("aureliaResourceExplorer.focus");
     await vscode.commands.executeCommand("aurelia.refreshResourceExplorer");
+  });
+
+  test("navigates through both native resource discovery journeys", async () => {
+    const origin = await showAureliaDocument("src/my-app.html");
+    await executeAndAcceptQuickPick("aurelia.goToResource");
+    assertAuthoredResourceDocument(vscode.window.activeTextEditor?.document, origin.uri);
+
+    await showAureliaDocument("src/my-app.html");
+    await executeAndAcceptQuickPick("aurelia.goToAvailableResource");
+    assertAuthoredResourceDocument(vscode.window.activeTextEditor?.document, origin.uri);
   });
 
   test("projects resource and bindable facts through live editor providers", async () => {
@@ -193,6 +203,32 @@ async function definitionsAt(document, anchor, token = anchor) {
     const uri = definition?.targetUri ?? definition?.uri;
     return uri == null ? [] : [uri];
   });
+}
+
+async function executeAndAcceptQuickPick(command) {
+  let settled = false;
+  const execution = Promise.resolve(vscode.commands.executeCommand(command)).finally(() => {
+    settled = true;
+  });
+  const started = Date.now();
+  await new Promise((resolve) => setTimeout(resolve, 2_000));
+  while (!settled && Date.now() - started < 60_000) {
+    // VS Code may keep this internal command pending until the contributed command returns.
+    // Awaiting it here would deadlock the test driver against the Quick Pick it is accepting.
+    void vscode.commands.executeCommand("workbench.action.acceptSelectedQuickOpenItem").then(undefined, () => {});
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  assert(settled, `${command} did not publish an accept-ready Quick Pick.`);
+  await execution;
+}
+
+function assertAuthoredResourceDocument(document, originUri) {
+  assert(document, "Expected resource navigation to leave an active editor.");
+  assert.notStrictEqual(document.uri.toString(), originUri.toString(), "Expected navigation away from the template.");
+  assert(
+    normalize(document.uri.fsPath).startsWith(normalize(path.join(aureliaWorkspace, "src"))),
+    `Expected an authored workspace resource, received ${document.uri.toString()}.`,
+  );
 }
 
 function positionIn(document, anchor, token = anchor) {

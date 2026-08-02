@@ -1,19 +1,23 @@
 import type {
   ApplicationFileRole,
   SemanticResourceDeclarationMode,
-  SemanticResourceDefinitionAliasRow,
-  SemanticResourceDefinitionBindableRow,
-  SemanticResourceDefinitionRow,
-  SemanticResourceVisibilityRow,
+  SemanticProjectCandidateSummary,
+  SemanticResourceInventoryCompleteness,
+  SemanticResourceInventoryKind,
+  SemanticResourceInventoryLocalityKind,
+  SemanticResourceInventoryMetadataState,
+  SemanticResourceInventoryOrigin,
+  SemanticResourceNavigationUnavailableReason,
   SemanticRuntimeAnswer,
   SemanticRuntimeSummary,
-  SemanticSourceReference,
+  SemanticTemplateResourceAvailabilityState,
+  SemanticTemplateResourceAvailabilityRow,
 } from "@aurelia-ls/semantic-runtime";
 import type { Position, Range, WorkspaceEdit } from "vscode-languageserver/node";
 
 export const AureliaProtocolRequest = {
-  Resources: "aurelia/getResources",
-  ScopeResources: "aurelia/getScopeResources",
+  ResourceInventory: "aurelia/resourceInventory",
+  TemplateResourceAvailability: "aurelia/templateResourceAvailability",
   RelatedFiles: "aurelia/getRelatedFiles",
   WorkspaceStatus: "aurelia/workspaceStatus",
   RenameFromTypeScript: "aurelia/renameFromTs",
@@ -52,7 +56,7 @@ type RuntimeAnswerTransportFields = Pick<
 >;
 
 /** JSON transport form of semantic-runtime's const-enum answer vocabulary. */
-type RuntimeAnswerTransport = Omit<
+export type RuntimeAnswerTransport = Omit<
   RuntimeAnswerTransportFields,
   "result" | "selection" | "coverage"
 > & {
@@ -66,77 +70,174 @@ export type ProtocolRange = Range;
 
 export type DocumentUriParams = { uri: string };
 
-export type ResourceExplorerAnswer = RuntimeAnswerTransport;
-
 /** JSON transport form of semantic-runtime's author-facing resource taxonomy. */
-export type ResourceExplorerResourceKind = `${SemanticResourceDefinitionRow["resourceKind"]}`;
+export type ResourceInventoryKind = `${SemanticResourceInventoryKind}`;
 
-/** JSON transport form of compiler-world visibility. */
-export type ResourceExplorerVisibilityKind = `${SemanticResourceVisibilityRow["visibilityKind"]}`;
+/** Source roles are wire vocabulary, not labels inferred by the client. */
+export const ResourceLocationRole = {
+  PublicName: "public-name",
+  Declaration: "declaration",
+  Implementation: "implementation",
+  Alias: "alias",
+  BindableName: "bindable-name",
+  BindableAttribute: "bindable-attribute",
+  BindableProperty: "bindable-property",
+  BindableDeclaration: "bindable-declaration",
+  LocalOwner: "local-owner",
+  Availability: "availability",
+  Template: "template",
+} as const;
 
-export type ResourceExplorerBindable = SemanticResourceDefinitionBindableRow & {
-  readonly primary: boolean;
-};
+export type ResourceLocationRole = typeof ResourceLocationRole[keyof typeof ResourceLocationRole];
 
-export type ResourceExplorerDefinition = Pick<
-  SemanticResourceDefinitionRow,
-  | "projectKey"
-  | "key"
-  | "targetName"
-  | "defaultProperty"
-  | "source"
-  | "nameSource"
-  | "targetSource"
-  | "targetDeclarationSource"
-  | "handles"
-> & {
-  readonly declarationModes: readonly SemanticResourceDeclarationMode[];
-};
+export interface ResourceSourceLocation {
+  readonly uri: string;
+  readonly range: Range;
+  readonly role: ResourceLocationRole;
+  readonly label: string;
+}
 
-export type ResourceExplorerOrigin = "project" | "package" | "framework" | "external" | "unknown";
+export type ResourceSourceUnavailableReason =
+  | `${SemanticResourceNavigationUnavailableReason}`
+  | "source-uri-unavailable"
+  | "source-text-unavailable"
+  | "source-range-unavailable";
 
-export type ResourceExplorerVisibility = Omit<
-  SemanticResourceVisibilityRow,
-  "resourceKind" | "visibilityKind"
-> & {
-  readonly resourceKind: ResourceExplorerResourceKind;
-  readonly visibilityKind: ResourceExplorerVisibilityKind;
-  readonly uri: string | null;
-};
+/** Lossless source mapping: semantic absence and transport failure are observably different. */
+export type ResourceSourceTarget =
+  | { readonly state: "available"; readonly location: ResourceSourceLocation }
+  | { readonly state: "absent" }
+  | { readonly state: "unavailable"; readonly reason: ResourceSourceUnavailableReason };
 
-export type ResourceExplorerItem = {
-  /** Exact within the response generation and stable when the owning semantic source remains stable. */
-  readonly id: string;
+export type ResourceNavigationTarget =
+  | { readonly state: "available"; readonly location: ResourceSourceLocation }
+  | { readonly state: "unavailable"; readonly reason: ResourceSourceUnavailableReason };
+
+export interface ResourceInventoryAlias {
+  readonly identityKey: string;
+  readonly registrationKey: string | null;
   readonly name: string;
-  readonly kind: ResourceExplorerResourceKind;
-  readonly aliases: readonly SemanticResourceDefinitionAliasRow[];
-  readonly bindables: readonly ResourceExplorerBindable[];
-  readonly definition: ResourceExplorerDefinition | null;
-  readonly visibility: readonly ResourceExplorerVisibility[];
-  readonly source: SemanticSourceReference | null;
-  readonly uri: string | null;
-  readonly package: string | null;
-  readonly origin: ResourceExplorerOrigin;
-};
+  readonly source: ResourceSourceTarget;
+  readonly navigation: ResourceNavigationTarget;
+}
 
-export type ResourceExplorerResponse = {
-  readonly fingerprint: string;
-  readonly resources: readonly ResourceExplorerItem[];
-  readonly templateCount: number;
-  readonly inlineTemplateCount: number;
-  readonly evidence: {
-    readonly definitions: ResourceExplorerAnswer;
-    readonly visibility: ResourceExplorerAnswer;
-    readonly compilations: ResourceExplorerAnswer;
+export interface ResourceInventoryBindable {
+  readonly identityKey: string;
+  readonly name: string;
+  readonly attribute: string;
+  readonly mode: string;
+  readonly nullable: boolean | null;
+  readonly valueType: string | null;
+  readonly primary: boolean;
+  readonly sources: {
+    readonly name: ResourceSourceTarget;
+    readonly attribute: ResourceSourceTarget;
+    readonly property: ResourceSourceTarget;
+    readonly declaration: ResourceSourceTarget;
   };
-};
+  readonly navigation: ResourceNavigationTarget;
+}
 
-export type ScopeResourcesResponse = {
-  readonly compilerWorlds: readonly string[];
-  readonly scopeLabel: string;
-  readonly resources: readonly ResourceExplorerItem[];
-  readonly evidence: ResourceExplorerResponse["evidence"];
-} | null;
+export interface ResourceInventoryItem {
+  /** Stable semantic identity. Kernel/product handles never cross this boundary. */
+  readonly identityKey: string;
+  readonly projectKey: string;
+  readonly kind: ResourceInventoryKind;
+  readonly name: string;
+  readonly registrationKey: string | null;
+  readonly aliases: readonly ResourceInventoryAlias[];
+  readonly bindables: readonly ResourceInventoryBindable[];
+  readonly declarationModes: readonly SemanticResourceDeclarationMode[];
+  readonly metadataState: `${SemanticResourceInventoryMetadataState}`;
+  readonly origin: Omit<SemanticResourceInventoryOrigin, "kind"> & {
+    readonly kind: `${SemanticResourceInventoryOrigin["kind"]}`;
+  };
+  readonly locality: {
+    readonly kind: `${SemanticResourceInventoryLocalityKind}`;
+    readonly ownerIdentityKey: string | null;
+    readonly ownerName: string | null;
+    readonly ownerSource: ResourceSourceTarget;
+  };
+  readonly sources: {
+    readonly publicName: ResourceSourceTarget;
+    readonly declaration: ResourceSourceTarget;
+    readonly implementation: ResourceSourceTarget;
+  };
+  readonly navigation: ResourceNavigationTarget;
+}
+
+export interface ResourceProject {
+  readonly projectKey: string;
+  readonly rootUri: string;
+  readonly sourceFiles: number;
+  readonly shapeKind: `${SemanticProjectCandidateSummary["shapeKind"]}`;
+  readonly analysisKind: `${SemanticProjectCandidateSummary["analysisKind"]}`;
+}
+
+export type ResourceInventoryProjectResult =
+  | {
+      readonly status: "ready";
+      readonly project: ResourceProject;
+      readonly answer: RuntimeAnswerTransport;
+      readonly resources: readonly ResourceInventoryItem[];
+      readonly completeness: SemanticResourceInventoryCompleteness;
+    }
+  | {
+      readonly status: "error";
+      readonly project: ResourceProject;
+      readonly message: string;
+    };
+
+export interface ResourceInventoryResponse {
+  readonly fingerprint: string;
+  readonly projects: readonly ResourceInventoryProjectResult[];
+}
+
+export interface TemplateResourceAvailabilityParams {
+  readonly uri: string;
+  readonly position: Position;
+  readonly projectKey?: string;
+  readonly templateResourceScopeIdentityKey?: string;
+}
+
+export interface TemplateResourceScopeCandidate {
+  readonly templateIdentityKey: string;
+  readonly scopeIdentityKey: string;
+  readonly definitionName: string;
+  readonly compilationLane: "app-runtime" | "authoring";
+  readonly source: ResourceSourceTarget;
+}
+
+export interface TemplateResourceAvailabilityItem {
+  readonly resource: ResourceInventoryItem;
+  readonly state: `${SemanticTemplateResourceAvailabilityState}`;
+  readonly visibilityKind: `${SemanticTemplateResourceAvailabilityRow["visibilityKind"]}`;
+  readonly availabilitySource: ResourceSourceTarget;
+}
+
+export type TemplateResourceProjectSelection =
+  | {
+      readonly status: "absent";
+      readonly candidates: readonly ResourceProject[];
+    }
+  | {
+      readonly status: "ambiguous";
+      readonly candidates: readonly ResourceProject[];
+    }
+  | {
+      readonly status: "exact";
+      readonly project: ResourceProject;
+      readonly answer: RuntimeAnswerTransport;
+      readonly selectedTemplate: TemplateResourceScopeCandidate | null;
+      readonly templateCandidates: readonly TemplateResourceScopeCandidate[];
+      readonly resources: readonly TemplateResourceAvailabilityItem[];
+      readonly completeness: SemanticResourceInventoryCompleteness;
+    };
+
+export interface TemplateResourceAvailabilityResponse {
+  readonly fingerprint: string;
+  readonly projectSelection: TemplateResourceProjectSelection;
+}
 
 export type RelatedFileRole = Extract<ApplicationFileRole, "component-source" | "component-template">;
 

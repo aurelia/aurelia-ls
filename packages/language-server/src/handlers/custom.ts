@@ -6,31 +6,17 @@
  * distinct from normal semantic absence and refusal.
  */
 import type { CancellationToken } from "vscode-languageserver/node";
-import type {
-  SemanticResourceDefinitionRow,
-  SemanticResourceVisibilityRow,
-  SemanticRuntimeAnswer,
-  SemanticSourceReference,
-  SemanticTemplateCompilationRow,
-} from "@aurelia-ls/semantic-runtime";
 import { canonicalTypeSystemPath } from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
-import type { WorkspaceDocumentUris } from "../utils/document-uri.js";
 import type {
   DocumentUriParams,
   RelatedFileCandidate,
   RelatedFilesResponse,
   RenameFromTsParams,
   RenameFromTsResponse,
-  ResourceExplorerBindable,
-  ResourceExplorerDefinition,
-  ResourceExplorerItem,
-  ResourceExplorerOrigin,
-  ResourceExplorerResourceKind,
-  ResourceExplorerResponse,
-  ResourceExplorerVisibility,
-  ResourceExplorerVisibilityKind,
-  ScopeResourcesResponse,
+  ResourceInventoryResponse,
+  TemplateResourceAvailabilityParams,
+  TemplateResourceAvailabilityResponse,
   WorkspaceStatusResponse,
 } from "../protocol.js";
 import { AureliaProtocolRequest } from "../protocol.js";
@@ -39,408 +25,115 @@ import {
   mapSemanticRuntimeTemplateRenameEdit,
 } from "../mapping/lsp-types.js";
 import {
+  mapResourceInventoryItem,
+  mapResourceProject,
+  mapRuntimeAnswer,
+  mapTemplateResourceAvailabilityItem,
+  mapTemplateResourceScopeCandidate,
+} from "../mapping/resource-discovery.js";
+import {
   semanticSourceReferenceFilePath,
-  semanticSourceReferenceMatchesDocument,
-  semanticSourceReferencePath,
-  semanticSourceReferenceUri,
 } from "../mapping/source-locations.js";
 import {
   runSemanticRuntimeRequest,
 } from "./request-guard.js";
-import type { SemanticRuntimeLspRequestGuard } from "../runtime/semantic-runtime-session.js";
+import {
+  isSemanticRuntimeLspRequestAborted,
+  type SemanticRuntimeLspRequestGuard,
+} from "../runtime/semantic-runtime-session.js";
 
 export type {
   RenameFromTsParams,
   RenameFromTsResponse,
-  ResourceExplorerBindable,
-  ResourceExplorerItem,
-  ResourceExplorerResourceKind,
-  ResourceExplorerResponse,
-  ScopeResourcesResponse,
+  ResourceInventoryResponse,
+  TemplateResourceAvailabilityParams,
+  TemplateResourceAvailabilityResponse,
 } from "../protocol.js";
 
-export async function handleGetResources(
+export async function handleResourceInventory(
   ctx: ServerContext,
   guard: SemanticRuntimeLspRequestGuard,
-): Promise<ResourceExplorerResponse> {
-  const [definitions, visibility, compilations] = await Promise.all([
-    ctx.semanticRuntime.resourceDefinitions(guard),
-    ctx.semanticRuntime.resourceVisibility(guard),
-    ctx.semanticRuntime.templateCompilations(guard),
-  ]);
-  return buildRuntimeResourceExplorerResponse(
-    ctx.documentUris,
-    guard.generation.fingerprint,
-    definitions,
-    visibility,
-    compilations,
-  );
-}
-
-const RESOURCE_EXPLORER_KIND_ORDER: readonly ResourceExplorerResourceKind[] = [
-  "custom-element",
-  "template-controller",
-  "custom-attribute",
-  "value-converter",
-  "binding-behavior",
-  "binding-command",
-  "attribute-pattern",
-] as const;
-
-const RESOURCE_EXPLORER_KINDS = new Set(RESOURCE_EXPLORER_KIND_ORDER);
-const RESOURCE_EXPLORER_KIND_RANK = new Map<string, number>(
-  RESOURCE_EXPLORER_KIND_ORDER.map((kind, index) => [kind, index]),
-);
-
-interface ResourceExplorerAccumulator {
-  readonly id: string;
-  readonly name: string;
-  readonly kind: ResourceExplorerItem["kind"];
-  readonly aliases: ResourceExplorerItem["aliases"][number][];
-  readonly bindables: ResourceExplorerBindable[];
-  readonly definition: ResourceExplorerDefinition | null;
-  readonly visibility: ResourceExplorerVisibility[];
-  source: SemanticSourceReference | null;
-}
-
-function buildRuntimeResourceExplorerResponse(
-  documentUris: WorkspaceDocumentUris,
-  fingerprint: string,
-  definitions: SemanticRuntimeAnswer<{ readonly rows: readonly SemanticResourceDefinitionRow[] }>,
-  visibility: SemanticRuntimeAnswer<{ readonly rows: readonly SemanticResourceVisibilityRow[] }>,
-  compilations: SemanticRuntimeAnswer<{ readonly rows: readonly SemanticTemplateCompilationRow[] }>,
-): ResourceExplorerResponse {
-  const resources: ResourceExplorerAccumulator[] = [];
-  const definitionsByProduct = new Map<string, ResourceExplorerAccumulator>();
-  const visibilityOnlyByProduct = new Map<string, ResourceExplorerAccumulator>();
-
-  for (const definition of definitions.value.rows) {
-    const kind = protocolResourceKind(definition.resourceKind);
-    if (definition.name == null || !RESOURCE_EXPLORER_KINDS.has(kind)) {
-      continue;
+): Promise<ResourceInventoryResponse> {
+  const summary = await ctx.semanticRuntime.workspaceSummary(guard);
+  const mappingContext = {
+    documentUris: ctx.documentUris,
+    lookupText: (uri: string) => ctx.lookupText(uri),
+  };
+  const projects: ResourceInventoryResponse["projects"][number][] = [];
+  for (const candidate of summary.value.appCandidates) {
+    const project = mapResourceProject(candidate, ctx.documentUris);
+    try {
+      const answer = await ctx.semanticRuntime.resourceInventory(candidate.projectKey, guard);
+      projects.push({
+        status: "ready",
+        project,
+        answer: mapRuntimeAnswer(answer),
+        resources: answer.value.rows.map((row) => mapResourceInventoryItem(row, mappingContext)),
+        completeness: answer.value.completeness,
+      });
+    } catch (error) {
+      if (isSemanticRuntimeLspRequestAborted(error)) throw error;
+      projects.push({ status: "error", project, message: requestErrorMessage(error) });
     }
-    const source = definition.targetSource ?? definition.nameSource ?? definition.source;
-    const definitionProductHandle = definition.handles?.definitionProductHandle ?? null;
-    const resource: ResourceExplorerAccumulator = {
-      id: resourceExplorerDefinitionId(definition, kind),
-      name: definition.name,
-      kind,
-      aliases: [...definition.aliases],
-      bindables: definition.bindables.map((bindable): ResourceExplorerBindable => ({
-        ...bindable,
-        primary: definition.defaultProperty === bindable.name,
-      })),
-      definition: resourceExplorerDefinition(definition),
-      visibility: [],
-      source,
+  }
+  return { fingerprint: guard.generation.fingerprint, projects };
+}
+
+export async function handleTemplateResourceAvailability(
+  ctx: ServerContext,
+  params: TemplateResourceAvailabilityParams,
+  guard: SemanticRuntimeLspRequestGuard,
+): Promise<TemplateResourceAvailabilityResponse> {
+  if (!params?.uri || params.position == null) {
+    throw new Error("Template resource availability requires a document URI and cursor position.");
+  }
+  const document = ctx.ensureProgramDocument(params.uri);
+  const fingerprint = guard.generation.fingerprint;
+  if (document == null) {
+    return { fingerprint, projectSelection: { status: "absent", candidates: [] } };
+  }
+  const summary = await ctx.semanticRuntime.workspaceSummary(guard);
+  const owners = await ctx.semanticRuntime.projectsOwningDocument(document, summary.value.appCandidates, guard);
+  const candidates = owners.map((owner) => mapResourceProject(owner, ctx.documentUris));
+  const selectedOwner = params.projectKey == null
+    ? owners.length === 1 ? owners[0]! : null
+    : owners.find((owner) => owner.projectKey === params.projectKey) ?? null;
+  if (selectedOwner == null) {
+    return {
+      fingerprint,
+      projectSelection: {
+        status: params.projectKey == null && owners.length > 1 ? "ambiguous" : "absent",
+        candidates,
+      },
     };
-    resources.push(resource);
-    if (definitionProductHandle != null) {
-      if (definitionsByProduct.has(definitionProductHandle)) {
-        throw new Error(`Duplicate resource definition product handle: ${definitionProductHandle}`);
-      }
-      definitionsByProduct.set(definitionProductHandle, resource);
-    }
   }
 
-  for (const row of visibility.value.rows) {
-    const kind = protocolResourceKind(row.resourceKind);
-    if (!RESOURCE_EXPLORER_KINDS.has(kind)) {
-      continue;
-    }
-    const definitionProductHandle = row.handles?.definitionProductHandle ?? null;
-    const resourceProductHandle = row.handles?.resourceProductHandle ?? null;
-    let resource = definitionProductHandle == null
-      ? undefined
-      : definitionsByProduct.get(definitionProductHandle);
-    if (resource == null && resourceProductHandle != null) {
-      resource = visibilityOnlyByProduct.get(resourceProductHandle);
-    }
-    if (resource == null) {
-      resource = {
-        id: resourceExplorerVisibilityId(row, kind),
-        name: row.name,
-        kind,
-        aliases: [],
-        bindables: [],
-        definition: null,
-        visibility: [],
-        source: row.source,
-      };
-      resources.push(resource);
-      if (resourceProductHandle != null) {
-        visibilityOnlyByProduct.set(resourceProductHandle, resource);
-      }
-    } else {
-      assertVisibilityMatchesResource(resource, row, kind);
-    }
-    resource.visibility.push({
-      ...row,
-      resourceKind: kind,
-      visibilityKind: protocolVisibilityKind(row.visibilityKind),
-      uri: row.source == null ? null : semanticSourceReferenceUri(row.source, documentUris),
-    });
-    resource.source ??= row.source;
-    for (const alias of row.aliases) {
-      if (!resource.aliases.some((candidate) => candidate.name === alias)) {
-        resource.aliases.push({ name: alias, source: null });
-      }
-    }
-  }
-
-  const rows = resources
-    .map((resource): ResourceExplorerItem => {
-      const packageName = packageNameForSource(resource.source) ?? null;
-      return {
-        ...resource,
-        visibility: [...resource.visibility].sort(compareResourceExplorerVisibility),
-        uri: resource.source == null ? null : semanticSourceReferenceUri(resource.source, documentUris),
-        package: packageName,
-        origin: explorerOriginForSource(resource.source, packageName),
-      };
-    })
-    .sort(compareResourceExplorerItems);
-  assertUniqueResourceExplorerIds(rows);
-  const appTemplateRows = compilations.value.rows.filter((row) => row.compilationLane === "app-runtime");
-
+  const answer = await ctx.semanticRuntime.templateResourceAvailability(
+    selectedOwner.projectKey,
+    document,
+    params.position,
+    params.templateResourceScopeIdentityKey ?? null,
+    guard,
+  );
+  const mappingContext = {
+    documentUris: ctx.documentUris,
+    lookupText: (uri: string) => ctx.lookupText(uri),
+  };
   return {
     fingerprint,
-    resources: rows,
-    templateCount: countDistinct(
-      appTemplateRows.map((row) => semanticSourceReferencePath(row.source) ?? row.definitionName),
-    ),
-    inlineTemplateCount: appTemplateRows.filter((row) => row.templateSourceKind.toLowerCase().includes("inline")).length,
-    evidence: {
-      definitions: resourceExplorerAnswer(definitions),
-      visibility: resourceExplorerAnswer(visibility),
-      compilations: resourceExplorerAnswer(compilations),
+    projectSelection: {
+      status: "exact",
+      project: mapResourceProject(selectedOwner, ctx.documentUris),
+      answer: mapRuntimeAnswer(answer),
+      selectedTemplate: answer.value.selectedTemplate == null
+        ? null
+        : mapTemplateResourceScopeCandidate(answer.value.selectedTemplate, mappingContext),
+      templateCandidates: answer.value.candidates.map((candidate) =>
+        mapTemplateResourceScopeCandidate(candidate, mappingContext)
+      ),
+      resources: answer.value.rows.map((row) => mapTemplateResourceAvailabilityItem(row, mappingContext)),
+      completeness: answer.value.completeness,
     },
-  };
-}
-
-function resourceExplorerDefinition(definition: SemanticResourceDefinitionRow): ResourceExplorerDefinition {
-  return {
-    projectKey: definition.projectKey,
-    key: definition.key,
-    targetName: definition.targetName,
-    defaultProperty: definition.defaultProperty,
-    declarationModes: definition.declarationModes,
-    source: definition.source,
-    nameSource: definition.nameSource,
-    targetSource: definition.targetSource,
-    targetDeclarationSource: definition.targetDeclarationSource,
-    handles: definition.handles,
-  };
-}
-
-function resourceExplorerDefinitionId(
-  definition: SemanticResourceDefinitionRow,
-  kind: ResourceExplorerResourceKind,
-): string {
-  const handle = definition.handles?.definitionProductHandle ?? null;
-  return handle == null
-    ? resourceExplorerSourceId(
-        "definition",
-        kind,
-        definition.name ?? "<unnamed>",
-        definition.source,
-        [definition.projectKey, definition.key, definition.targetName, ...definition.declarationModes],
-      )
-    : `definition:${handle}`;
-}
-
-function resourceExplorerVisibilityId(
-  row: SemanticResourceVisibilityRow,
-  kind: ResourceExplorerResourceKind,
-): string {
-  const handle = row.handles?.resourceProductHandle ?? null;
-  return handle == null
-    ? resourceExplorerSourceId(
-        "visibility",
-        kind,
-        row.name,
-        row.source,
-        [row.compilerWorld, `${row.visibilityKind}`],
-      )
-    : `resource:${handle}`;
-}
-
-function resourceExplorerSourceId(
-  prefix: string,
-  kind: string,
-  name: string,
-  source: SemanticSourceReference | null,
-  identityFacts: readonly (string | null)[],
-): string {
-  return `${prefix}:${JSON.stringify([
-    kind,
-    name,
-    source?.sourceWorkspaceKey ?? null,
-    source?.path ?? null,
-    source?.start ?? null,
-    source?.end ?? null,
-    source?.scheme ?? null,
-    source?.value ?? null,
-    source?.label ?? null,
-    ...identityFacts,
-  ])}`;
-}
-
-function compareResourceExplorerVisibility(
-  left: ResourceExplorerVisibility,
-  right: ResourceExplorerVisibility,
-): number {
-  return `${left.compilerWorld}:${left.visibilityKind}:${left.name}`
-    .localeCompare(`${right.compilerWorld}:${right.visibilityKind}:${right.name}`);
-}
-
-function resourceExplorerAnswer(
-  answer: SemanticRuntimeAnswer<unknown>,
-): ResourceExplorerResponse["evidence"]["definitions"] {
-  return {
-    schemaVersion: answer.schemaVersion,
-    result: `${answer.result}`,
-    selection: `${answer.selection}`,
-    coverage: `${answer.coverage}`,
-    summary: answer.summary,
-    page: answer.page,
-    ...(answer.analysisDepth == null ? {} : { analysisDepth: answer.analysisDepth }),
-    ...(answer.continuations == null ? {} : { continuations: answer.continuations }),
-  };
-}
-
-function compareResourceExplorerItems(
-  left: { readonly kind: string; readonly name: string },
-  right: { readonly kind: string; readonly name: string },
-): number {
-  const leftKind = RESOURCE_EXPLORER_KIND_RANK.get(left.kind) ?? Number.MAX_SAFE_INTEGER;
-  const rightKind = RESOURCE_EXPLORER_KIND_RANK.get(right.kind) ?? Number.MAX_SAFE_INTEGER;
-  if (leftKind !== rightKind) {
-    return leftKind - rightKind;
-  }
-  return left.name.localeCompare(right.name);
-}
-
-function protocolResourceKind(
-  kind: SemanticResourceDefinitionRow["resourceKind"],
-): ResourceExplorerResourceKind {
-  return `${kind}`;
-}
-
-function protocolVisibilityKind(
-  kind: SemanticResourceVisibilityRow["visibilityKind"],
-): ResourceExplorerVisibilityKind {
-  return `${kind}`;
-}
-
-function assertUniqueResourceExplorerIds(resources: readonly ResourceExplorerItem[]): void {
-  const seen = new Set<string>();
-  for (const resource of resources) {
-    if (seen.has(resource.id)) {
-      throw new Error(`Duplicate resource explorer identity: ${resource.id}`);
-    }
-    seen.add(resource.id);
-  }
-}
-
-function assertVisibilityMatchesResource(
-  resource: ResourceExplorerAccumulator,
-  row: SemanticResourceVisibilityRow,
-  kind: ResourceExplorerResourceKind,
-): void {
-  if (resource.kind !== kind || resource.name !== row.name) {
-    throw new Error(
-      `Resource visibility identity mismatch: ${resource.kind}:${resource.name} versus ${kind}:${row.name}`,
-    );
-  }
-}
-
-function countDistinct(values: readonly string[]): number {
-  return new Set(values).size;
-}
-
-function explorerOriginForSource(
-  source: SemanticSourceReference | null,
-  packageName: string | null,
-): ResourceExplorerOrigin {
-  if (isFrameworkCatalogSource(source)) return "framework";
-  if (packageName != null) return "package";
-  if (semanticSourceReferencePath(source) != null) return "project";
-  if (source?.kind === "external-address") return "external";
-  return "unknown";
-}
-
-function packageNameForSource(source: SemanticSourceReference | null): string | undefined {
-  if (isFrameworkCatalogSource(source)) {
-    return undefined;
-  }
-  const sourcePath = semanticSourceReferencePath(source);
-  if (sourcePath == null) {
-    return undefined;
-  }
-  return packageNameFromNodeModulesPath(sourcePath);
-}
-
-function isFrameworkCatalogSource(source: SemanticSourceReference | null): boolean {
-  return source?.kind === "external-address" && source.scheme === "aurelia-package-catalog";
-}
-
-function packageNameFromNodeModulesPath(sourcePath: string): string | undefined {
-  const parts = sourcePath.replace(/\\/g, "/").split("/");
-  const nodeModulesIndex = parts.lastIndexOf("node_modules");
-  if (nodeModulesIndex < 0 || nodeModulesIndex >= parts.length - 1) {
-    return undefined;
-  }
-  const first = parts[nodeModulesIndex + 1];
-  if (first == null) {
-    return undefined;
-  }
-  if (first.startsWith("@")) {
-    const second = parts[nodeModulesIndex + 2];
-    return second == null ? undefined : `${first}/${second}`;
-  }
-  return first;
-}
-
-export async function handleGetScopeResources(
-  ctx: ServerContext,
-  params: DocumentUriParams,
-  guard: SemanticRuntimeLspRequestGuard,
-): Promise<ScopeResourcesResponse> {
-  const uri = params?.uri;
-  if (!uri) return null;
-  const doc = ctx.ensureProgramDocument(uri);
-  if (!doc) return null;
-  const filePath = ctx.documentUris.authoredHostPath(uri);
-  if (filePath == null) return null;
-  const [definitions, visibility, compilations] = await Promise.all([
-    ctx.semanticRuntime.resourceDefinitions(guard),
-    ctx.semanticRuntime.resourceVisibility(guard),
-    ctx.semanticRuntime.templateCompilations(guard, filePath),
-  ]);
-  const compilerWorlds = [...new Set(
-    compilations.value.rows
-      .filter((row) => semanticSourceReferenceMatchesDocument(row.source, ctx.documentUris, uri))
-      .map((row) => row.compilerWorld),
-  )].sort();
-  if (compilerWorlds.length === 0) return null;
-  const compilerWorldSet = new Set(compilerWorlds);
-  const inventory = buildRuntimeResourceExplorerResponse(
-    ctx.documentUris,
-    guard.generation.fingerprint,
-    definitions,
-    visibility,
-    compilations,
-  );
-  const resources = inventory.resources.flatMap((resource): readonly ResourceExplorerItem[] => {
-    const scopedVisibility = resource.visibility.filter((row) => compilerWorldSet.has(row.compilerWorld));
-    return scopedVisibility.length === 0 ? [] : [{ ...resource, visibility: scopedVisibility }];
-  });
-  return {
-    compilerWorlds,
-    scopeLabel: compilerWorlds.length === 1 ? compilerWorlds[0]! : `${compilerWorlds.length} compiler worlds`,
-    resources,
-    evidence: inventory.evidence,
   };
 }
 
@@ -660,12 +353,15 @@ function normalizedFilePath(filePath: string): string {
  * Registers all custom Aurelia request handlers on the connection.
  */
 export function registerCustomHandlers(ctx: ServerContext): void {
-  ctx.connection.onRequest(AureliaProtocolRequest.Resources, (_params: unknown, token: CancellationToken) =>
-    request(ctx, "getResources", token, undefined,
-      (guard) => handleGetResources(ctx, guard)));
-  ctx.connection.onRequest(AureliaProtocolRequest.ScopeResources, (params: DocumentUriParams, token: CancellationToken) =>
-    request(ctx, "getScopeResources", token, params.uri,
-      (guard) => handleGetScopeResources(ctx, params, guard)));
+  ctx.connection.onRequest(AureliaProtocolRequest.ResourceInventory, (_params: unknown, token: CancellationToken) =>
+    request(ctx, "resourceInventory", token, undefined,
+      (guard) => handleResourceInventory(ctx, guard)));
+  ctx.connection.onRequest(
+    AureliaProtocolRequest.TemplateResourceAvailability,
+    (params: TemplateResourceAvailabilityParams, token: CancellationToken) =>
+      request(ctx, "templateResourceAvailability", token, params.uri,
+        (guard) => handleTemplateResourceAvailability(ctx, params, guard)),
+  );
   ctx.connection.onRequest(AureliaProtocolRequest.RelatedFiles, (params: DocumentUriParams, token: CancellationToken) =>
     request(ctx, "getRelatedFiles", token, params.uri,
       (guard) => handleGetRelatedFiles(ctx, params, guard)));
@@ -685,4 +381,8 @@ function request<T>(
   handler: (guard: SemanticRuntimeLspRequestGuard) => T | Promise<T>,
 ): Promise<T> {
   return runSemanticRuntimeRequest(ctx, feature, token, handler, uri);
+}
+
+function requestErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

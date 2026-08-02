@@ -2,7 +2,8 @@ import type { CancellationToken, Disposable, WorkspaceEdit } from "vscode";
 import {
   AureliaProtocolNotification,
   AureliaProtocolRequest,
-  type ResourceExplorerResponse as ProtocolResourceExplorerResponse,
+  type ResourceInventoryResponse as ProtocolResourceInventoryResponse,
+  type TemplateResourceAvailabilityResponse as ProtocolTemplateResourceAvailabilityResponse,
 } from "@aurelia-ls/language-server/protocol";
 import type { AureliaLanguageClient, AureliaLanguageClientSession } from "../client-core.js";
 import type { ClientLogger } from "../log.js";
@@ -10,8 +11,8 @@ import type {
   ProtocolWorkspaceEdit,
   RelatedFilesResponse,
   RenameFromTsResponse,
-  ResourceExplorerResponse,
-  ScopeResourcesResponse,
+  ResourceInventorySnapshot,
+  TemplateResourceAvailabilityResponse,
   AnalysisChangedPayload,
   WorkspaceNotificationPayload,
 } from "../types.js";
@@ -68,55 +69,51 @@ export class LspFacade implements Disposable {
     };
   }
 
-  async getResources(): Promise<ResourceExplorerResponse | null> {
-    const sessions = this.#clients.sessions;
+  async getResourceInventory(
+    workspaceKey?: string,
+    token?: CancellationToken,
+  ): Promise<ResourceInventorySnapshot | null> {
+    const sessions = workspaceKey == null
+      ? this.#clients.sessions
+      : this.#clients.sessions.filter((session) => session.workspace.key === workspaceKey);
     if (sessions.length === 0) return null;
     const rows = await Promise.all(sessions.map(async (session) => {
       try {
-        const response = await this.#sendRequest<ProtocolResourceExplorerResponse>(session, AureliaProtocolRequest.Resources);
-        return { status: "ready" as const, session, response };
+        const response = await this.#sendRequest<ProtocolResourceInventoryResponse>(
+          session,
+          AureliaProtocolRequest.ResourceInventory,
+          undefined,
+          token,
+        );
+        return { ...session.workspace, status: "ready" as const, response };
       } catch (err) {
-        return { status: "error" as const, session, error: errorMessage(err) };
+        return { ...session.workspace, status: "error" as const, error: errorMessage(err) };
       }
     }));
-    const available = rows.filter((row): row is Extract<typeof rows[number], { status: "ready" }> =>
-      row.status === "ready"
-    );
-    return {
-      fingerprint: rows
-        .map((row) => row.status === "ready"
-          ? `${row.session.workspace.key}:${row.response.fingerprint}`
-          : `${row.session.workspace.key}:error`
-        )
-        .sort()
-        .join("|"),
-      resources: available.flatMap(({ session, response }) =>
-        response.resources.map((resource) => ({ ...resource, workspace: session.workspace }))
-      ),
-      templateCount: available.reduce((sum, row) => sum + row.response.templateCount, 0),
-      inlineTemplateCount: available.reduce((sum, row) => sum + row.response.inlineTemplateCount, 0),
-      workspaces: rows.map((row) => row.status === "ready"
-        ? {
-            ...row.session.workspace,
-            status: row.status,
-            resourceCount: row.response.resources.length,
-            templateCount: row.response.templateCount,
-            inlineTemplateCount: row.response.inlineTemplateCount,
-            evidence: row.response.evidence,
-          }
-        : {
-            ...row.session.workspace,
-            status: row.status,
-            error: row.error,
-          }
-      ),
-    };
+    return { workspaces: rows };
   }
 
-  async getScopeResources(uri: string): Promise<ScopeResourcesResponse | null> {
+  async getTemplateResourceAvailability(
+    uri: string,
+    position: { readonly line: number; readonly character: number },
+    projectKey?: string,
+    templateResourceScopeIdentityKey?: string,
+    token?: CancellationToken,
+  ): Promise<TemplateResourceAvailabilityResponse | null> {
     const session = this.#sessionForUri(uri);
     if (session == null) return null;
-    return this.#sendRequest<ScopeResourcesResponse>(session, AureliaProtocolRequest.ScopeResources, { uri });
+    const response = await this.#sendRequest<ProtocolTemplateResourceAvailabilityResponse>(
+      session,
+      AureliaProtocolRequest.TemplateResourceAvailability,
+      {
+        uri,
+        position,
+        ...(projectKey == null ? {} : { projectKey }),
+        ...(templateResourceScopeIdentityKey == null ? {} : { templateResourceScopeIdentityKey }),
+      },
+      token,
+    );
+    return { ...response, workspace: session.workspace };
   }
 
   async getRelatedFiles(uri: string): Promise<RelatedFilesResponse> {

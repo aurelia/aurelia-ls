@@ -2097,6 +2097,21 @@ export const enum SemanticResourceNavigationUnavailableReason {
   ExternalCatalog = 'external-catalog',
 }
 
+export const enum SemanticResourceInventoryNavigationRole {
+  /** Exact authored public resource-name token. */
+  PublicName = 'public-name',
+  /** Exact implementation token used when no authored public name exists. */
+  Implementation = 'implementation',
+  /** Exact authored bindable property name. */
+  BindableName = 'bindable-name',
+  /** Exact authored bindable attribute name used when the property name is unavailable. */
+  BindableAttribute = 'bindable-attribute',
+  /** Exact implementation property token used when authored bindable metadata is unavailable. */
+  BindableProperty = 'bindable-property',
+  /** Broader bindable declaration source used only as the final authored fallback. */
+  BindableDeclaration = 'bindable-declaration',
+}
+
 export interface SemanticResourceInventoryOrigin {
   readonly kind: SemanticResourceInventoryOriginKind | `${SemanticResourceInventoryOriginKind}`;
   readonly projectKey: string | null;
@@ -2112,6 +2127,13 @@ export interface SemanticResourceInventorySources {
   readonly declaration: SemanticSourceReference | null;
   /** Exact implementation/target token when distinct from the public name. */
   readonly implementation: SemanticSourceReference | null;
+  /** Authoritative default navigation target: public name first, otherwise the exact implementation token. */
+  readonly navigation: SemanticSourceReference | null;
+  /** Semantic role of the selected navigation source; null exactly when navigation is unavailable. */
+  readonly navigationRole:
+    | SemanticResourceInventoryNavigationRole
+    | `${SemanticResourceInventoryNavigationRole}`
+    | null;
   readonly navigationUnavailableReason:
     | SemanticResourceNavigationUnavailableReason
     | `${SemanticResourceNavigationUnavailableReason}`
@@ -2126,6 +2148,13 @@ export interface SemanticResourceInventoryAliasRow extends SemanticResourceDefin
 export interface SemanticResourceInventoryBindableRow extends SemanticResourceDefinitionBindableRow {
   readonly identityKey: string;
   readonly primary: boolean;
+  /** Authoritative authored token for the bindable child in discovery presentations. */
+  readonly navigationSource: SemanticSourceReference | null;
+  /** Semantic role of the selected bindable navigation source. */
+  readonly navigationRole:
+    | SemanticResourceInventoryNavigationRole
+    | `${SemanticResourceInventoryNavigationRole}`
+    | null;
 }
 
 export interface SemanticResourceInventoryLocality {

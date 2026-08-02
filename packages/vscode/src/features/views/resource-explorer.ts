@@ -1,71 +1,34 @@
-/** Resource inventory projected from exact semantic-runtime definition and compiler-world identities. */
-import type { Disposable, Event, ProviderResult, TreeDataProvider, TreeItem } from "vscode";
+import type {
+  ResourceInventoryProjectResult,
+  ResourceProject,
+} from "@aurelia-ls/language-server/protocol";
+import type {
+  Disposable,
+  Event,
+  ProviderResult,
+  TreeDataProvider,
+  TreeItem,
+  TreeView,
+} from "vscode";
 import type { LspFacade } from "../../core/lsp-facade.js";
 import type { ClientLogger } from "../../log.js";
+import { AureliaCommand } from "../../product-contract.js";
 import type {
-  ResourceExplorerItem,
-  ResourceExplorerResponse,
-  ResourceExplorerWorkspace,
+  AureliaWorkspaceIdentity,
+  ResourceInventorySnapshot,
+  ResourceInventoryWorkspaceSnapshot,
+  ResourceInventoryItem,
+  ResourceNavigationRequest,
 } from "../../types.js";
 import type { VscodeApi } from "../../vscode-api.js";
+import {
+  RESOURCE_KIND_ORDER,
+  resourceDescription,
+  resourceKindPresentation,
+  resourceTooltip,
+} from "../resource-discovery/presentation.js";
 
-type ExplorerGroup = "project" | "package" | "framework" | "external";
-
-const GROUP_LABELS: Record<ExplorerGroup, string> = {
-  project: "Project",
-  package: "Packages",
-  framework: "Framework",
-  external: "External / unresolved",
-};
-
-const GROUP_ICONS: Record<ExplorerGroup, string> = {
-  project: "home",
-  package: "package",
-  framework: "library",
-  external: "question",
-};
-
-const GROUP_ORDER: readonly ExplorerGroup[] = ["project", "package", "framework", "external"];
-
-const KIND_LABELS: Readonly<Record<string, string>> = {
-  "custom-element": "Elements",
-  "custom-attribute": "Attributes",
-  "template-controller": "Template Controllers",
-  "value-converter": "Value Converters",
-  "binding-behavior": "Binding Behaviors",
-  "binding-command": "Binding Commands",
-  "attribute-pattern": "Attribute Patterns",
-};
-
-const KIND_ICONS: Readonly<Record<string, string>> = {
-  "custom-element": "symbol-class",
-  "custom-attribute": "symbol-property",
-  "template-controller": "symbol-struct",
-  "value-converter": "symbol-function",
-  "binding-behavior": "symbol-event",
-  "binding-command": "symbol-method",
-  "attribute-pattern": "symbol-key",
-};
-
-const KIND_ORDER = [
-  "custom-element",
-  "template-controller",
-  "custom-attribute",
-  "value-converter",
-  "binding-behavior",
-  "binding-command",
-  "attribute-pattern",
-] as const;
-
-type TreeNodeKind =
-  | "workspace-group"
-  | "origin-group"
-  | "kind-group"
-  | "resource"
-  | "alias"
-  | "bindable"
-  | "visibility"
-  | "info";
+type TreeNodeKind = "project" | "kind" | "resource" | "alias" | "bindable" | "info";
 
 interface TreeNode {
   readonly nodeKind: TreeNodeKind;
@@ -77,299 +40,222 @@ interface TreeNode {
   readonly collapsible: boolean;
   readonly defaultExpanded?: boolean;
   readonly children?: readonly TreeNode[];
-  readonly resourceUri?: string;
+  readonly navigation?: ResourceNavigationRequest;
   readonly contextValue?: string;
 }
 
-interface WorkspaceTreeInput {
-  readonly resources: readonly ResourceExplorerItem[];
-  readonly templateCount: number;
-  readonly evidence?: Extract<ResourceExplorerWorkspace, { status: "ready" }>["evidence"];
+interface ReadyProjectInput {
+  readonly workspace: AureliaWorkspaceIdentity;
+  readonly fingerprint: string;
+  readonly result: Extract<ResourceInventoryProjectResult, { status: "ready" }>;
 }
 
-function buildTree(response: ResourceExplorerResponse): readonly TreeNode[] {
-  if (response.workspaces.length === 0) {
-    return [infoNode("no-workspaces", "No active Aurelia workspace", "info")];
-  }
-  if (response.workspaces.length === 1) {
-    const workspace = response.workspaces[0]!;
-    return workspace.status === "error"
-      ? [workspaceErrorNode(workspace, "")]
-      : buildWorkspaceTree({
-          resources: response.resources,
-          templateCount: workspace.templateCount,
-          evidence: workspace.evidence,
-        }, `workspace:${workspace.key}`);
-  }
-  return response.workspaces.map((workspace): TreeNode => {
-    const prefix = `workspace:${workspace.key}`;
-    const resources = response.resources.filter((resource) => resource.workspace.key === workspace.key);
-    return {
-      nodeKind: "workspace-group",
-      id: prefix,
-      label: workspace.name,
-      description: workspace.status === "ready"
-        ? `${resources.length} resource${resources.length === 1 ? "" : "s"}`
-        : "analysis failed",
-      tooltip: workspace.status === "ready" ? workspace.uri : workspace.error,
-      iconId: workspace.status === "ready" ? "root-folder" : "error",
-      collapsible: true,
-      defaultExpanded: true,
-      children: workspace.status === "ready"
-        ? buildWorkspaceTree({
-            resources,
-            templateCount: workspace.templateCount,
-            evidence: workspace.evidence,
-          }, prefix)
-        : [workspaceErrorNode(workspace, prefix)],
-      contextValue: "workspaceGroup",
-    };
-  });
+interface ProjectUnit {
+  readonly workspace: ResourceInventoryWorkspaceSnapshot;
+  readonly fingerprint: string | null;
+  readonly result: ResourceInventoryProjectResult | null;
 }
 
-function buildWorkspaceTree(input: WorkspaceTreeInput, idPrefix: string): readonly TreeNode[] {
-  const byGroup = new Map<ExplorerGroup, Map<string, ResourceExplorerItem[]>>();
-  for (const resource of input.resources) {
-    const group = explorerGroup(resource);
-    const groupMap = byGroup.get(group) ?? new Map<string, ResourceExplorerItem[]>();
-    const kindRows = groupMap.get(resource.kind) ?? [];
-    kindRows.push(resource);
-    groupMap.set(resource.kind, kindRows);
-    byGroup.set(group, groupMap);
+function buildTree(response: ResourceInventorySnapshot): readonly TreeNode[] {
+  const units = projectUnits(response);
+  if (units.length === 0) {
+    return [infoNode("no-projects", "No Aurelia projects discovered", "info")];
   }
+  if (units.length === 1) {
+    return buildProjectUnit(units[0]!, false);
+  }
+  return units.map((unit) => projectRootNode(unit));
+}
 
-  const tree: TreeNode[] = [];
-  for (const origin of GROUP_ORDER) {
-    const originMap = byGroup.get(origin);
-    if (originMap == null || originMap.size === 0) continue;
-    const kindGroups: TreeNode[] = [];
-    let originCount = 0;
-    for (const kind of KIND_ORDER) {
-      const resources = originMap.get(kind);
-      if (resources == null || resources.length === 0) continue;
-      originCount += resources.length;
-      const kindLabel = KIND_LABELS[kind] ?? kind;
-      kindGroups.push({
-        nodeKind: "kind-group",
-        id: prefixedId(idPrefix, `${origin}:kind:${kind}`),
-        label: `${kindLabel} (${resources.length})`,
-        iconId: KIND_ICONS[kind],
-        collapsible: true,
-        children: resources.map((resource) => buildResourceNode(resource, idPrefix)),
-        contextValue: "kindGroup",
-      });
+function projectUnits(response: ResourceInventorySnapshot): readonly ProjectUnit[] {
+  const units: ProjectUnit[] = [];
+  for (const workspace of response.workspaces) {
+    if (workspace.status === "error") {
+      units.push({ workspace, fingerprint: null, result: null });
+      continue;
     }
-    const singleKindGroup = kindGroups.length === 1 ? kindGroups[0] : undefined;
-    tree.push({
-      nodeKind: "origin-group",
-      id: prefixedId(idPrefix, `origin:${origin}`),
-      label: singleKindGroup == null
-        ? `${GROUP_LABELS[origin]} (${originCount})`
-        : `${GROUP_LABELS[origin]} - ${singleKindGroup.label}`,
-      iconId: GROUP_ICONS[origin],
-      collapsible: true,
-      defaultExpanded: origin === "project" || origin === "package",
-      children: singleKindGroup?.children ?? kindGroups,
-      contextValue: "originGroup",
-    });
+    if (workspace.response.projects.length === 0) {
+      units.push({ workspace, fingerprint: workspace.response.fingerprint, result: null });
+      continue;
+    }
+    for (const result of workspace.response.projects) {
+      units.push({ workspace, fingerprint: workspace.response.fingerprint, result });
+    }
   }
-
-  if (input.resources.length === 0) {
-    tree.push(infoNode(
-      prefixedId(idPrefix, "empty"),
-      "No resources discovered",
-      "info",
-      "The current semantic app contains no recognized resource definitions or compiler-visible resources.",
-    ));
-  }
-  const evidenceConcern = resourceEvidenceConcern(input.evidence);
-  if (evidenceConcern != null) {
-    tree.push(infoNode(
-      prefixedId(idPrefix, "coverage"),
-      "Resource inventory may be incomplete",
-      "warning",
-      evidenceConcern,
-    ));
-  }
-  tree.push(infoNode(
-    prefixedId(idPrefix, "summary"),
-    resourceSummary(input.resources, input.templateCount),
-    "info",
-  ));
-  return tree;
+  return units;
 }
 
-function buildResourceNode(item: ResourceExplorerItem, idPrefix: string): TreeNode {
-  const children: TreeNode[] = [];
-  item.aliases.forEach((alias, index) => {
-    children.push({
-      nodeKind: "alias",
-      id: prefixedId(idPrefix, `${item.id}:alias:${index}:${alias.name}`),
-      label: alias.name,
-      description: "alias",
-      tooltip: alias.source?.label,
-      iconId: "symbol-string",
-      collapsible: false,
-      resourceUri: item.uri ?? undefined,
-      contextValue: "resourceAlias",
-    });
-  });
-  item.bindables.forEach((bindable, index) => {
-    const description: string[] = [];
-    if (bindable.valueType != null) description.push(`: ${bindable.valueType}`);
-    if (bindable.primary) description.push("primary");
-    if (bindable.mode !== "default") description.push(bindable.mode);
-    children.push({
-      nodeKind: "bindable",
-      id: prefixedId(idPrefix, `${item.id}:bindable:${index}:${bindable.name}`),
-      label: bindable.attribute === bindable.name
-        ? bindable.name
-        : `${bindable.name} (${bindable.attribute})`,
-      description: description.join(" | "),
-      tooltip: bindable.source?.label,
-      iconId: "symbol-field",
-      collapsible: false,
-      resourceUri: item.uri ?? undefined,
-      contextValue: "bindable",
-    });
-  });
-  item.visibility.forEach((visibility, index) => {
-    children.push({
-      nodeKind: "visibility",
-      id: prefixedId(idPrefix, `${item.id}:visibility:${index}`),
-      label: visibility.visibilityKind,
-      description: visibility.compilerWorld,
-      tooltip: visibility.source?.label,
-      iconId: visibility.visibilityKind === "open" ? "warning" : "eye",
-      collapsible: false,
-      resourceUri: visibility.uri ?? undefined,
-      contextValue: "resourceVisibility",
-    });
-  });
-  if (item.uri != null && item.origin === "project") {
-    children.push({
-      nodeKind: "info",
-      id: prefixedId(idPrefix, `${item.id}:file`),
-      label: shortSourcePath(item.source?.path ?? item.uri),
-      iconId: "file-code",
-      collapsible: false,
-      resourceUri: item.uri,
-      contextValue: "fileLink",
-    });
-  }
-
-  const description: string[] = [];
-  const definition = item.definition;
-  const targetName = definition?.targetName;
-  if (targetName != null && targetName !== item.name) description.push(targetName);
-  if (definition != null && definition.declarationModes.length > 0) {
-    description.push(definition.declarationModes.join(", "));
-  }
-  description.push(resourceVisibilitySummary(item));
-  if (item.bindables.length > 0) {
-    description.push(`${item.bindables.length} bindable${item.bindables.length === 1 ? "" : "s"}`);
-  }
-  if (item.package != null) description.push(item.package);
-
+function projectRootNode(unit: ProjectUnit): TreeNode {
+  const result = unit.result;
+  const project = result?.project;
+  const label = project == null
+    ? unit.workspace.name
+    : unit.workspace.name === project.projectKey
+      ? project.projectKey
+      : `${unit.workspace.name} · ${project.projectKey}`;
+  const children = buildProjectUnit(unit, true);
+  const resourceCount = result?.status === "ready" ? result.resources.length : 0;
+  const description = unit.workspace.status === "error" || result?.status === "error"
+    ? "analysis failed"
+    : result == null
+      ? "no Aurelia project"
+      : `${resourceCount} resource${resourceCount === 1 ? "" : "s"}${projectResultIncomplete(result) ? " · incomplete" : ""}`;
   return {
-    nodeKind: "resource",
-    id: prefixedId(idPrefix, item.id),
-    label: item.name,
-    description: description.join(" | "),
-    tooltip: buildResourceTooltip(item),
-    iconId: resourceIcon(item),
-    collapsible: children.length > 0,
+    nodeKind: "project",
+    id: projectPrefix(unit),
+    label,
+    description,
+    tooltip: project?.rootUri ?? (unit.workspace.status === "error" ? unit.workspace.error : unit.workspace.uri),
+    iconId: unit.workspace.status === "error" || result?.status === "error" ? "error" : "root-folder",
+    collapsible: true,
+    defaultExpanded: true,
     children,
-    resourceUri: item.uri ?? undefined,
-    contextValue: "resource",
+    contextValue: result?.status === "error" ? "resourceProjectError" : "resourceProject",
   };
 }
 
-function explorerGroup(item: ResourceExplorerItem): ExplorerGroup {
-  return item.origin === "unknown" ? "external" : item.origin;
-}
-
-function resourceVisibilitySummary(item: ResourceExplorerItem): string {
-  if (item.visibility.length === 0) return "not visible in current app";
-  const worlds = new Set(item.visibility.map((row) => row.compilerWorld)).size;
-  const unresolved = item.visibility.some((row) => row.visibilityKind === "open");
-  const onlyLocal = item.visibility.every((row) =>
-    row.visibilityKind === "local" || row.visibilityKind === "routeable"
-  );
-  const base = onlyLocal
-    ? `local in ${worlds} compiler world${worlds === 1 ? "" : "s"}`
-    : `visible in ${worlds} compiler world${worlds === 1 ? "" : "s"}`;
-  return unresolved ? `${base}; some visibility unresolved` : base;
-}
-
-function resourceIcon(item: ResourceExplorerItem): string {
-  if (item.visibility.some((row) => row.visibilityKind === "open")) return "warning";
-  if (item.visibility.length === 0) return "circle-slash";
-  if (item.visibility.every((row) => row.visibilityKind === "local" || row.visibilityKind === "routeable")) {
-    return "lock";
+function buildProjectUnit(unit: ProjectUnit, nested: boolean): readonly TreeNode[] {
+  if (unit.workspace.status === "error") {
+    return [infoNode(
+      `${projectPrefix(unit)}:error`,
+      "Couldn't load Aurelia resources",
+      "error",
+      unit.workspace.error,
+    )];
   }
-  return KIND_ICONS[item.kind] ?? "symbol-misc";
-}
-
-function buildResourceTooltip(item: ResourceExplorerItem): string {
-  const lines = [`${item.kind}: ${item.name}`, `Origin: ${item.origin}`];
-  const definition = item.definition;
-  if (definition?.targetName != null) lines.push(`Class: ${definition.targetName}`);
-  if (item.aliases.length > 0) lines.push(`Aliases: ${item.aliases.map((alias) => alias.name).join(", ")}`);
-  if (definition?.key != null) lines.push(`Registration key: ${definition.key}`);
-  if (definition != null && definition.declarationModes.length > 0) {
-    lines.push(`Declaration: ${definition.declarationModes.join(", ")}`);
+  if (unit.result == null) {
+    return [infoNode(
+      `${projectPrefix(unit)}:empty-project`,
+      "No Aurelia project discovered",
+      "info",
+      unit.workspace.uri,
+    )];
   }
-  lines.push(`Visibility: ${resourceVisibilitySummary(item)}`);
-  for (const visibility of item.visibility) {
-    lines.push(`  ${visibility.visibilityKind}: ${visibility.compilerWorld}`);
+  if (unit.result.status === "error") {
+    return [infoNode(
+      `${projectPrefix(unit)}:error`,
+      "Couldn't load Aurelia resources for this project",
+      "error",
+      unit.result.message,
+    )];
   }
-  if (item.source != null) lines.push(`Source: ${item.source.label}`);
-  if (item.uri != null) lines.push(`URI: ${item.uri}`);
-  if (item.package != null) lines.push(`Package: ${item.package}`);
-  return lines.join("\n");
+  const input: ReadyProjectInput = {
+    workspace: unit.workspace,
+    fingerprint: unit.fingerprint!,
+    result: unit.result,
+  };
+  const children = buildKindGroups(input);
+  if (children.length > 0) return children;
+  return [infoNode(
+    `${projectPrefix(unit)}:empty`,
+    projectResultIncomplete(unit.result) ? "No reliable resource rows discovered" : "No supported resources discovered",
+    projectResultIncomplete(unit.result) ? "warning" : "info",
+    nested ? undefined : unit.result.answer.summary,
+  )];
 }
 
-function resourceSummary(resources: readonly ResourceExplorerItem[], templateCount: number): string {
-  const parts = [`${resources.length} resources`];
-  for (const group of GROUP_ORDER) {
-    const count = resources.filter((resource) => explorerGroup(resource) === group).length;
-    if (count > 0) parts.push(`${count} ${group}`);
+function buildKindGroups(input: ReadyProjectInput): readonly TreeNode[] {
+  const nodes: TreeNode[] = [];
+  for (const kind of RESOURCE_KIND_ORDER) {
+    const rows = input.result.resources
+      .filter((resource) => resource.kind === kind)
+      .sort((left, right) => left.name.localeCompare(right.name) || left.identityKey.localeCompare(right.identityKey));
+    if (rows.length === 0) continue;
+    const presentation = resourceKindPresentation(kind);
+    nodes.push({
+      nodeKind: "kind",
+      id: `${projectPrefix(input)}:kind:${kind}`,
+      label: `${presentation.plural} (${rows.length})`,
+      iconId: presentation.icon,
+      collapsible: true,
+      defaultExpanded: kind === "custom-element",
+      children: rows.map((resource) => resourceNode(input, resource)),
+      contextValue: "resourceKind",
+    });
   }
-  if (templateCount > 0) parts.push(`${templateCount} templates`);
-  return parts.join(" | ");
+  return nodes;
 }
 
-function resourceEvidenceConcern(input: WorkspaceTreeInput["evidence"]): string | null {
-  if (input == null) return null;
-  const concerns = Object.entries(input)
-    .filter(([, answer]) => answer.result !== "answered" || answer.coverage !== "complete")
-    .map(([name, answer]) => `${name}: ${answer.summary}`);
-  return concerns.length === 0 ? null : concerns.join("\n");
+function resourceNode(input: ReadyProjectInput, resource: ResourceInventoryItem): TreeNode {
+  const navigation = navigationRequest(input, resource, "resource");
+  const children: TreeNode[] = [];
+  for (const alias of resource.aliases) {
+    children.push({
+      nodeKind: "alias",
+      id: `${projectPrefix(input)}:${alias.identityKey}`,
+      label: alias.name,
+      description: alias.navigation.state === "available" ? "alias" : "alias · source unavailable",
+      tooltip: alias.source.state === "available" ? alias.source.location.label : "Alias source location unavailable",
+      iconId: "symbol-string",
+      collapsible: false,
+      navigation: alias.navigation.state === "available"
+        ? navigationRequest(input, resource, "alias", alias.identityKey)
+        : undefined,
+      contextValue: alias.navigation.state === "available" ? "resourceAlias" : "resourceAliasUnavailable",
+    });
+  }
+  for (const bindable of resource.bindables) {
+    const details = [bindable.valueType == null ? null : `: ${bindable.valueType}`, bindable.primary ? "primary" : null]
+      .filter((value): value is string => value != null);
+    children.push({
+      nodeKind: "bindable",
+      id: `${projectPrefix(input)}:${bindable.identityKey}`,
+      label: bindable.attribute === bindable.name ? bindable.name : `${bindable.name} (${bindable.attribute})`,
+      description: `${details.join(" · ")}${bindable.navigation.state === "unavailable" ? `${details.length ? " · " : ""}source unavailable` : ""}`,
+      tooltip: bindable.sources.name.state === "available"
+        ? bindable.sources.name.location.label
+        : "Bindable source location unavailable",
+      iconId: "symbol-field",
+      collapsible: false,
+      navigation: bindable.navigation.state === "available"
+        ? navigationRequest(input, resource, "bindable", bindable.identityKey)
+        : undefined,
+      contextValue: bindable.navigation.state === "available" ? "resourceBindable" : "resourceBindableUnavailable",
+    });
+  }
+  return {
+    nodeKind: "resource",
+    id: `${projectPrefix(input)}:${resource.identityKey}`,
+    label: resource.name,
+    description: resourceDescription(resource),
+    tooltip: resourceTooltip(resource, input.result.project, input.workspace),
+    iconId: resourceKindPresentation(resource.kind).icon,
+    collapsible: children.length > 0,
+    children,
+    navigation: resource.navigation.state === "available" ? navigation : undefined,
+    contextValue: resource.navigation.state === "available" ? "resource" : "resourceUnavailable",
+  };
 }
 
-function workspaceErrorNode(
-  workspace: Extract<ResourceExplorerWorkspace, { status: "error" }>,
-  idPrefix: string,
-): TreeNode {
-  return infoNode(
-    prefixedId(idPrefix, "error"),
-    "Resource analysis failed",
-    "error",
-    `${workspace.name}: ${workspace.error}`,
-  );
+function navigationRequest(
+  input: ReadyProjectInput,
+  resource: ResourceInventoryItem,
+  role: ResourceNavigationRequest["role"],
+  childIdentityKey?: string,
+): ResourceNavigationRequest {
+  return {
+    workspaceKey: input.workspace.key,
+    fingerprint: input.fingerprint,
+    projectKey: input.result.project.projectKey,
+    resourceIdentityKey: resource.identityKey,
+    role,
+    ...(childIdentityKey == null ? {} : { childIdentityKey }),
+  };
+}
+
+function projectPrefix(input: ProjectUnit | ReadyProjectInput): string {
+  if ("result" in input && input.result != null) {
+    return `workspace:${input.workspace.key}:project:${input.result.project.projectKey}`;
+  }
+  return `workspace:${input.workspace.key}`;
+}
+
+function projectResultIncomplete(result: Extract<ResourceInventoryProjectResult, { status: "ready" }>): boolean {
+  return result.answer.result !== "answered" || result.answer.coverage !== "complete";
 }
 
 function infoNode(id: string, label: string, iconId: string, tooltip?: string): TreeNode {
-  return { nodeKind: "info", id, label, iconId, tooltip, collapsible: false, contextValue: "summary" };
-}
-
-function shortSourcePath(file: string): string {
-  return file.replace(/^.*[\\/]packages[\\/]/, "").replace(/^.*[\\/]src[\\/]/, "src/");
-}
-
-function prefixedId(prefix: string, id: string): string {
-  return prefix === "" ? id : `${prefix}:${id}`;
+  return { nodeKind: "info", id, label, iconId, tooltip, collapsible: false, contextValue: "resourceInfo" };
 }
 
 export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Disposable {
@@ -378,6 +264,8 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Dis
   readonly #logger: ClientLogger;
   readonly #changeEmitter: { readonly event: Event<void>; fire(): void; dispose(): void };
   #tree: readonly TreeNode[] = [];
+  #response: ResourceInventorySnapshot | null = null;
+  #view: Pick<TreeView<TreeNode>, "message" | "description"> | null = null;
   #refreshGeneration = 0;
 
   constructor(vscode: VscodeApi, lsp: LspFacade, logger: ClientLogger) {
@@ -391,9 +279,16 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Dis
     return this.#changeEmitter.event;
   }
 
+  attachView(view: Pick<TreeView<TreeNode>, "message" | "description">): void {
+    this.#view = view;
+    this.#publishViewState();
+  }
+
   dispose(): void {
     this.#refreshGeneration += 1;
     this.#tree = [];
+    this.#response = null;
+    this.#view = null;
     this.#changeEmitter.dispose();
   }
 
@@ -407,11 +302,11 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Dis
         ? this.#vscode.TreeItemCollapsibleState.Expanded
         : this.#vscode.TreeItemCollapsibleState.Collapsed)
       : this.#vscode.TreeItemCollapsibleState.None;
-    if (element.resourceUri != null) {
+    if (element.navigation != null) {
       item.command = {
-        title: "Open",
-        command: "vscode.open",
-        arguments: [this.#vscode.Uri.parse(element.resourceUri)],
+        title: "Open Declaration",
+        command: AureliaCommand.OpenResource,
+        arguments: [element.navigation],
       };
     }
     item.contextValue = element.contextValue;
@@ -424,25 +319,79 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Dis
 
   async refresh(): Promise<void> {
     const generation = ++this.#refreshGeneration;
+    const hasPrevious = this.#response != null;
+    this.#setMessage(hasPrevious
+      ? "Updating — showing previous results"
+      : "Discovering Aurelia resources...");
     try {
       this.#logger.debug("resourceExplorer.refresh.start");
-      const response = await this.#lsp.getResources();
+      const response = await this.#lsp.getResourceInventory();
       if (generation !== this.#refreshGeneration) return;
+      this.#response = response;
       this.#tree = response == null
-        ? [infoNode("no-data", "No active Aurelia workspace", "info")]
+        ? [infoNode("no-session", "No active Aurelia workspace", "info")]
         : buildTree(response);
       this.#changeEmitter.fire();
-      this.#logger.debug("resourceExplorer.refresh.complete", {
-        resources: response?.resources.length ?? 0,
-        failedWorkspaces: response?.workspaces.filter((workspace) => workspace.status === "error").length ?? 0,
-      });
+      this.#publishViewState();
+      this.#logger.debug("resourceExplorer.refresh.complete", resourceResponseCounts(response));
     } catch (error) {
       if (generation !== this.#refreshGeneration) return;
       this.#logger.warn("resourceExplorer.refresh.failed", {
         message: error instanceof Error ? error.message : String(error),
       });
-      this.#tree = [infoNode("error", "Failed to load resource inventory", "error", String(error))];
-      this.#changeEmitter.fire();
+      if (hasPrevious) {
+        this.#setMessage("Out of date — refresh failed. Retry when analysis has settled.");
+      } else {
+        this.#tree = [infoNode("error", "Couldn't load Aurelia resources", "error", String(error))];
+        this.#changeEmitter.fire();
+        this.#setMessage("Resource discovery failed. Refresh to retry.");
+      }
     }
   }
+
+  #publishViewState(): void {
+    const counts = resourceResponseCounts(this.#response);
+    if (this.#view != null) {
+      this.#view.description = counts.projects === 0 ? undefined : `${counts.resources} resources`;
+    }
+    if (this.#response == null) {
+      this.#setMessage(undefined);
+    } else if (counts.failures > 0 || counts.incomplete > 0) {
+      this.#setMessage(`Showing ${counts.resources} known resources — incomplete`);
+    } else {
+      this.#setMessage(undefined);
+    }
+  }
+
+  #setMessage(message: string | undefined): void {
+    if (this.#view != null) this.#view.message = message;
+  }
+}
+
+function resourceResponseCounts(response: ResourceInventorySnapshot | null): {
+  readonly projects: number;
+  readonly resources: number;
+  readonly failures: number;
+  readonly incomplete: number;
+} {
+  let projects = 0;
+  let resources = 0;
+  let failures = 0;
+  let incomplete = 0;
+  for (const workspace of response?.workspaces ?? []) {
+    if (workspace.status === "error") {
+      failures += 1;
+      continue;
+    }
+    for (const project of workspace.response.projects) {
+      projects += 1;
+      if (project.status === "error") {
+        failures += 1;
+      } else {
+        resources += project.resources.length;
+        if (projectResultIncomplete(project)) incomplete += 1;
+      }
+    }
+  }
+  return { projects, resources, failures, incomplete };
 }

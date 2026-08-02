@@ -1,9 +1,11 @@
 import type { Position } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import { randomUUID } from "node:crypto";
+import path from "node:path";
 import {
   createSemanticRuntime,
   appDiagnosticPresentation,
+  canonicalTypeSystemPath,
   InquiryContinuationKind,
   NodeSemanticRuntimeProjectInputHost,
   SemanticRuntimeProjectInputAuthority,
@@ -13,11 +15,13 @@ import {
   type SemanticRuntime,
   type SemanticAppDiagnosticsResult,
   type SemanticResourceDefinitionsResult,
-  type SemanticResourceVisibilityResult,
+  type SemanticResourceInventoryResult,
   type SemanticRuntimeAnswer,
   type SemanticRuntimeContinuationRow,
   type SemanticRuntimeSummary,
-  type SemanticTemplateCompilationResult,
+  type SemanticProjectCandidateSummary,
+  type SemanticSourceFilesResult,
+  type SemanticTemplateResourceAvailabilityResult,
   type SemanticTemplateInlayHintsResult,
   type SemanticTemplateCompletionResult,
   type SemanticTemplateCodeActionsResult,
@@ -521,11 +525,81 @@ export class SemanticRuntimeLspSession {
     return this.collectRows(runtime, SemanticAppQueryKind.ResourceDefinitions, 500, { detail: "handles" }, guard);
   }
 
-  async resourceVisibility(
+  async resourceInventory(
+    projectKey: string,
     guard: SemanticRuntimeLspRequestGuard,
-  ): Promise<SemanticRuntimeAnswer<SemanticResourceVisibilityResult>> {
+  ): Promise<SemanticRuntimeAnswer<SemanticResourceInventoryResult>> {
     const runtime = await this.openRuntime(guard);
-    return this.collectRows(runtime, SemanticAppQueryKind.ResourceVisibility, 500, { detail: "handles" }, guard);
+    return drainSemanticRuntimePages({
+      label: "resource inventory",
+      assertActive: () => this.assertRequestActive(guard),
+      readPage: (cursor) => runtime.answerAppQuery({
+        kind: SemanticAppQueryKind.ResourceInventory,
+        projectKey,
+        page: { size: 500, cursor },
+        inquiryProfile: "lsp-cursor",
+        appRetention: "retain-app",
+      }) as Promise<SemanticRuntimeAnswer<SemanticResourceInventoryResult>>,
+      rowsForValue: (value) => value.rows,
+      mergeValue: (terminalValue, rows) => ({
+        ...terminalValue,
+        rows,
+      }),
+    });
+  }
+
+  async projectsOwningDocument(
+    document: TextDocument,
+    projects: readonly SemanticProjectCandidateSummary[],
+    guard: SemanticRuntimeLspRequestGuard,
+  ): Promise<readonly SemanticProjectCandidateSummary[]> {
+    const runtime = await this.openRuntime(guard);
+    const requested = canonicalTypeSystemPath(this.documentHostPath(document));
+    const owners: SemanticProjectCandidateSummary[] = [];
+    for (const project of projects) {
+      const sourceFiles = await this.collectRows<SemanticSourceFilesResult>(
+        runtime,
+        SemanticAppQueryKind.SourceFiles,
+        500,
+        { projectKey: project.projectKey },
+        guard,
+      );
+      if (sourceFiles.value.rows.some((row) => {
+        const sourcePath = path.isAbsolute(row.path) ? row.path : path.join(project.rootDir, row.path);
+        return canonicalTypeSystemPath(sourcePath) === requested;
+      })) {
+        owners.push(project);
+      }
+    }
+    return owners;
+  }
+
+  async templateResourceAvailability(
+    projectKey: string,
+    document: TextDocument,
+    position: Position,
+    templateResourceScopeIdentityKey: string | null,
+    guard: SemanticRuntimeLspRequestGuard,
+  ): Promise<SemanticRuntimeAnswer<SemanticTemplateResourceAvailabilityResult>> {
+    const runtime = await this.openRuntime(guard);
+    const filePath = this.documentHostPath(document);
+    const answer = await runtime.answerAppQuery({
+      kind: SemanticAppQueryKind.TemplateResourceAvailability,
+      projectKey,
+      sourceFilePath: filePath,
+      cursor: {
+        filePath,
+        line: position.line,
+        character: position.character,
+        offset: document.offsetAt(position),
+      },
+      ...(templateResourceScopeIdentityKey == null ? {} : { templateResourceScopeIdentityKey }),
+      inquiryProfile: "lsp-cursor",
+      includeAuthoringTemplates: true,
+      appRetention: "retain-app",
+    }) as SemanticRuntimeAnswer<SemanticTemplateResourceAvailabilityResult>;
+    this.assertRequestActive(guard);
+    return answer;
   }
 
   async appTopology(
@@ -543,27 +617,6 @@ export class SemanticRuntimeLspSession {
     }) as SemanticRuntimeAnswer<SemanticApplicationTopologyResult>;
     this.assertRequestActive(guard);
     return answer;
-  }
-
-  async templateCompilations(
-    guard: SemanticRuntimeLspRequestGuard,
-    sourceFilePath?: string | null,
-  ): Promise<SemanticRuntimeAnswer<SemanticTemplateCompilationResult>> {
-    const runtime = await this.openRuntime(guard);
-    return this.collectRows(
-      runtime,
-      SemanticAppQueryKind.TemplateCompilations,
-      500,
-      sourceFilePath == null
-        ? { detail: "handles" }
-        : {
-            detail: "handles",
-            // This selects the app/authoring-template epoch; TemplateCompilations
-            // intentionally has no sourceFile filtering axis in the query catalog.
-            sourceFilePath,
-          },
-      guard,
-    );
   }
 
   async routeNodes(

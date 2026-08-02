@@ -1446,10 +1446,12 @@ attributes, template controllers, value converters, and binding behaviors. Bindi
 remain compiler-syntax products and are counted as excluded syntax rather than masquerading as runtime resources.
 
 Inventory `identityKey` values are opaque semantic projections, never kernel handles. Framework resources derive
-identity and package origin from their modeled catalog; authored resources derive identity from retained declaration
-identity and exact source loci; local templates derive identity from their template-family owner and local name source.
-The promise is stability across app generations while the semantic owner is unchanged, not persistence across arbitrary
-source moves. Aliases and bindables receive child identities under the owning resource. `origin` reports project,
+identity and package origin from their modeled catalog. TypeScript-authored resources use retained module/export/local
+declaration identity plus registration kind, so ordinary edits that move a declaration do not replace its product identity.
+Compiler-local templates use their template-family owner, taxonomy kind, public name, and same-owner duplicate ordinal.
+Only a row with no semantic declaration owner falls back to an exact source locus. Aliases and bindables receive child
+identities under the owning resource. The promise is stability across app generations while the semantic owner is unchanged,
+not persistence across arbitrary declaration moves or ambiguous duplicate reordering. `origin` reports project,
 framework/package, external, or unknown ownership without guessing package names from paths.
 
 Inventory source roles remain distinct: `sources.publicName` is the exact authored public-name token,

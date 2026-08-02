@@ -1,5 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 import { ResourceExplorerProvider } from "../../../out/features/views/resource-explorer.js";
+import { AureliaCommand } from "../../../out/product-contract.js";
 import type { VscodeApi } from "../../../out/vscode-api.js";
 import { createVscodeApi } from "../../helpers/vscode-stub.js";
 
@@ -11,136 +12,142 @@ interface Node {
 }
 
 const completeAnswer = {
+  schemaVersion: "0.2",
   result: "answered",
   selection: "not-applicable",
   coverage: "complete",
   summary: "complete",
-};
-
-const completeEvidence = {
-  definitions: completeAnswer,
-  visibility: completeAnswer,
-  compilations: completeAnswer,
+  page: null,
 };
 
 function workspace(key = "file:///repo") {
+  return { key, name: key.split("/").at(-1) ?? "repo", uri: key };
+}
+
+function project(projectKey = "app") {
   return {
-    key,
-    name: key.split("/").at(-1) ?? "repo",
-    uri: key,
-    status: "ready",
-    resourceCount: 0,
-    templateCount: 1,
-    inlineTemplateCount: 0,
-    evidence: completeEvidence,
+    projectKey,
+    rootUri: `file:///repo/${projectKey}`,
+    sourceFiles: 5,
+    shapeKind: "aurelia-app",
+    analysisKind: "full",
   };
+}
+
+function available(uri: string, label = "src/product-card.ts@6..18", role = "public-name") {
+  return {
+    state: "available",
+    location: {
+      uri,
+      range: { start: { line: 0, character: 6 }, end: { line: 0, character: 18 } },
+      role,
+      label,
+    },
+  };
+}
+
+function absent() {
+  return { state: "absent" } as const;
 }
 
 function resource(input: {
-  id: string;
+  identityKey: string;
   name: string;
-  workspace?: ReturnType<typeof workspace>;
-  origin?: string;
-  uri?: string | null;
-  package?: string | null;
-  targetName?: string | null;
-  aliases?: string[];
-  bindables?: Array<{ name: string; attribute?: string; valueType?: string | null; primary?: boolean }>;
-  visibility?: Array<{ visibilityKind: string; compilerWorld: string; uri?: string | null }>;
   kind?: string;
+  uri?: string | null;
+  origin?: string;
+  packageName?: string | null;
+  aliases?: string[];
+  bindables?: Array<{ name: string; attribute?: string; valueType?: string | null }>;
 }) {
-  const owner = input.workspace ?? workspace();
+  const navigation = input.uri == null
+    ? { state: "unavailable" as const, reason: "external-catalog" as const }
+    : available(input.uri);
   return {
-    id: input.id,
-    name: input.name,
+    identityKey: input.identityKey,
+    projectKey: "app",
     kind: input.kind ?? "custom-element",
-    aliases: (input.aliases ?? []).map((name) => ({ name, source: null })),
+    name: input.name,
+    registrationKey: `au:resource:${input.kind ?? "custom-element"}:${input.name}`,
+    aliases: (input.aliases ?? []).map((name) => ({
+      identityKey: `${input.identityKey}:alias:${name}`,
+      registrationKey: null,
+      name,
+      source: input.uri == null ? absent() : available(input.uri, `alias ${name}`, "alias"),
+      navigation: input.uri == null ? navigation : available(input.uri, `alias ${name}`, "alias"),
+    })),
     bindables: (input.bindables ?? []).map((bindable) => ({
+      identityKey: `${input.identityKey}:bindable:${bindable.name}`,
       name: bindable.name,
       attribute: bindable.attribute ?? bindable.name,
-      callback: `${bindable.name}Changed`,
       mode: "default",
-      setterKind: "property",
-      setterTargetName: null,
       nullable: null,
       valueType: bindable.valueType ?? null,
-      valueTypeShapeKind: null,
-      effectiveValueTypeShapeKind: null,
-      valueTypeHasCallSignature: null,
-      valueTypeHasMembers: null,
-      valueTypeIsWeak: null,
-      source: null,
-      nameSource: null,
-      attributeSource: null,
-      propertySource: null,
-      callbackSource: null,
-      callbackTargetSource: null,
-      modeSource: null,
-      setSource: null,
-      setterTargetSource: null,
-      typeSource: null,
-      nullableSource: null,
-      primary: bindable.primary ?? false,
+      primary: false,
+      sources: {
+        name: input.uri == null ? absent() : available(input.uri, `bindable ${bindable.name}`, "bindable-name"),
+        attribute: absent(),
+        property: absent(),
+        declaration: absent(),
+      },
+      navigation: input.uri == null
+        ? { state: "unavailable" as const, reason: "no-authored-source" as const }
+        : available(input.uri, `bindable ${bindable.name}`, "bindable-name"),
     })),
-    definition: input.targetName === undefined ? null : {
-      projectKey: "app",
-      key: `au:resource:custom-element:${input.name}`,
-      targetName: input.targetName,
-      defaultProperty: null,
-      declarationModes: ["decorator"],
-      source: null,
-      nameSource: null,
-      targetSource: null,
-      targetDeclarationSource: null,
+    declarationModes: ["decorator"],
+    metadataState: "full-definition",
+    origin: {
+      kind: input.origin ?? "project",
+      projectKey: input.origin === "project" || input.origin == null ? "app" : null,
+      packageName: input.packageName ?? null,
+      moduleKey: input.uri == null ? null : "src/product-card.ts",
+      catalogGroup: input.origin === "framework" ? "default-resources" : null,
     },
-    visibility: (input.visibility ?? []).map((row) => ({
-      compilerWorld: row.compilerWorld,
-      resourceKind: input.kind ?? "custom-element",
-      name: input.name,
-      aliases: input.aliases ?? [],
-      visibilityKind: row.visibilityKind,
-      source: null,
-      uri: row.uri ?? null,
-    })),
-    source: null,
-    uri: input.uri ?? null,
-    package: input.package ?? null,
-    origin: input.origin ?? "project",
-    workspace: owner,
+    locality: { kind: "project", ownerIdentityKey: null, ownerName: null, ownerSource: absent() },
+    sources: {
+      publicName: input.uri == null ? absent() : available(input.uri),
+      declaration: input.uri == null ? absent() : available(input.uri, "declaration", "declaration"),
+      implementation: input.uri == null ? absent() : available(input.uri, "implementation", "implementation"),
+    },
+    navigation,
   };
 }
 
-function response(
-  resources: readonly ReturnType<typeof resource>[],
-  workspaces = [workspace()],
-  fingerprint = "semantic-runtime:test",
-) {
+function readyProject(resources: readonly ReturnType<typeof resource>[], projectKey = "app", coverage = "complete") {
   return {
-    fingerprint,
+    status: "ready",
+    project: project(projectKey),
+    answer: { ...completeAnswer, coverage },
     resources,
-    workspaces,
-    templateCount: workspaces.reduce((sum, row) => sum + (row.status === "ready" ? row.templateCount : 0), 0),
-    inlineTemplateCount: 0,
+    completeness: {
+      fullDefinitions: resources.length,
+      headerOnly: 0,
+      visibilityOnly: 0,
+      localTemplates: 0,
+      excludedCompilerSyntax: 0,
+      unnamedDefinitions: 0,
+      unresolvedModules: 0,
+      openVisibility: coverage === "complete" ? 0 : 1,
+    },
   };
 }
 
-function createHarness(getResources: () => Promise<unknown>) {
-  const { vscode: baseVscode } = createVscodeApi();
-  class ThemeIcon {
-    constructor(public readonly id: string) {}
-  }
-  const vscode = {
-    ...baseVscode,
-    ThemeIcon,
-    TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
-  } as unknown as VscodeApi;
+function response(projects: readonly unknown[], owner = workspace(), fingerprint = "semantic-runtime:test") {
+  return { workspaces: [{ ...owner, status: "ready", response: { fingerprint, projects } }] };
+}
+
+function createHarness(getResourceInventory: () => Promise<unknown>) {
+  const { vscode: stubVscode } = createVscodeApi();
+  const vscode = stubVscode as unknown as VscodeApi;
   const logger = { debug: vi.fn(), warn: vi.fn() };
   const provider = new ResourceExplorerProvider(
     vscode,
-    { getResources: vi.fn(getResources) } as never,
+    { getResourceInventory: vi.fn(getResourceInventory) } as never,
     logger as never,
   );
-  return { logger, provider, vscode };
+  const view: { message?: string; description?: string } = {};
+  provider.attachView(view as never);
+  return { logger, provider, view, vscode };
 }
 
 async function roots(provider: ResourceExplorerProvider): Promise<Node[]> {
@@ -148,179 +155,131 @@ async function roots(provider: ResourceExplorerProvider): Promise<Node[]> {
 }
 
 describe("ResourceExplorerProvider", () => {
-  test("shows exact project/package provenance, aliases, bindables, visibility, and navigation", async () => {
-    const owner = workspace();
-    const project = resource({
-      id: "definition:app-root",
-      name: "app-root",
-      workspace: owner,
-      uri: "file:///C:/repo/src/app-root.ts",
-      targetName: "AppRoot",
-      aliases: ["shell-root"],
-      bindables: [{ name: "value", valueType: "string", primary: true }],
-      visibility: [{ visibilityKind: "app-root", compilerWorld: "app-root src/main.ts", uri: "file:///C:/repo/src/main.ts" }],
+  test("builds the settled kind-first tree with exact alias and bindable actions", async () => {
+    const card = resource({
+      identityKey: "resource:product-card:v1",
+      name: "product-card",
+      uri: "file:///repo/src/product-card.ts",
+      aliases: ["store-card"],
+      bindables: [{ name: "labelText", attribute: "display-label", valueType: "string" }],
     });
-    const packageResource = resource({
-      id: "definition:plugin-card",
-      name: "plugin-card",
-      workspace: owner,
-      origin: "package",
-      uri: "file:///C:/repo/node_modules/@scope/plugin/plugin-card.js",
-      package: "@scope/plugin",
-      targetName: "PluginCard",
+    const attribute = resource({
+      identityKey: "resource:focus:v1",
+      name: "focus",
+      kind: "custom-attribute",
+      uri: "file:///repo/src/focus.ts",
     });
-    const harness = createHarness(async () => response([project, packageResource], [{ ...owner, resourceCount: 2 }]));
+    const harness = createHarness(async () => response([readyProject([card, attribute]) ]));
 
     await harness.provider.refresh();
 
     const tree = await roots(harness.provider);
-    expect(tree.map((node) => node.label)).toEqual([
-      "Project - Elements (1)",
-      "Packages - Elements (1)",
-      "2 resources | 1 project | 1 package | 1 templates",
-    ]);
-    const projectNode = tree[0]!.children![0]!;
-    expect(projectNode.id).toContain("definition:app-root");
-    expect(projectNode.children?.map((node) => [node.label, node.description])).toEqual(expect.arrayContaining([
-      ["shell-root", "alias"],
-      ["value", ": string | primary"],
-      ["app-root", "app-root src/main.ts"],
-    ]));
-    expect(harness.provider.getTreeItem(projectNode as never).command).toEqual(expect.objectContaining({
-      command: "vscode.open",
+    expect(tree.map((node) => node.label)).toEqual(["Elements (1)", "Attributes (1)"]);
+    const cardNode = tree[0]!.children![0]!;
+    expect(cardNode.description).toContain("project");
+    expect(cardNode.children?.map((node) => node.label)).toEqual(["store-card", "labelText (display-label)"]);
+    expect(harness.provider.getTreeItem(cardNode as never).command).toEqual(expect.objectContaining({
+      command: AureliaCommand.OpenResource,
     }));
+    expect(harness.provider.getTreeItem(cardNode.children![0] as never).command?.arguments?.[0]).toMatchObject({
+      role: "alias",
+      childIdentityKey: "resource:product-card:v1:alias:store-card",
+    });
+    expect(harness.view.description).toBe("2 resources");
+    expect(harness.view.message).toBeUndefined();
   });
 
-  test("keeps same-named definitions distinct inside one compiler inventory", async () => {
-    const owner = workspace();
-    const harness = createHarness(async () => response([
-      resource({ id: "definition:first", name: "shared-card", workspace: owner, targetName: "FirstCard" }),
-      resource({ id: "definition:second", name: "shared-card", workspace: owner, targetName: "SecondCard" }),
-    ], [{ ...owner, resourceCount: 2 }]));
+  test("keeps pathless framework catalog resources visible and non-navigable", async () => {
+    const repeat = resource({
+      identityKey: "framework:repeat:v1",
+      name: "repeat",
+      kind: "template-controller",
+      uri: null,
+      origin: "framework",
+      packageName: "@aurelia/runtime-html",
+    });
+    const harness = createHarness(async () => response([readyProject([repeat])]));
 
     await harness.provider.refresh();
 
-    const tree = await roots(harness.provider);
-    const resources = tree[0]!.children!;
-    expect(resources).toHaveLength(2);
-    expect(resources.map((node) => node.id)).toEqual([
-      expect.stringContaining("definition:first"),
-      expect.stringContaining("definition:second"),
-    ]);
-    expect(resources.map((node) => node.description)).toEqual([
-      expect.stringContaining("FirstCard"),
-      expect.stringContaining("SecondCard"),
-    ]);
+    const node = (await roots(harness.provider))[0]!.children![0]!;
+    expect(node.description).toContain("source location unavailable");
+    expect(harness.provider.getTreeItem(node as never).command).toBeUndefined();
   });
 
-  test("expands app-owned resources and keeps the framework catalog collapsed", async () => {
-    const owner = workspace();
-    const harness = createHarness(async () => response([
-      resource({ id: "definition:app-card", name: "app-card", workspace: owner }),
-      resource({
-        id: "resource:framework-if",
-        name: "if",
-        workspace: owner,
-        kind: "template-controller",
-        origin: "framework",
-      }),
-    ], [{ ...owner, resourceCount: 2 }]));
-
-    await harness.provider.refresh();
-
-    const tree = await roots(harness.provider);
-    expect(tree.slice(0, 2).map((node) => node.label)).toEqual([
-      "Project - Elements (1)",
-      "Framework - Template Controllers (1)",
-    ]);
-    expect(harness.provider.getTreeItem(tree[0] as never).collapsibleState).toBe(
-      harness.vscode.TreeItemCollapsibleState.Expanded,
-    );
-    expect(harness.provider.getTreeItem(tree[1] as never).collapsibleState).toBe(
-      harness.vscode.TreeItemCollapsibleState.Collapsed,
-    );
-  });
-
-  test("keeps same-named resources beneath exact workspace roots", async () => {
-    const first = { ...workspace("file:///repo/a"), resourceCount: 1, templateCount: 2 };
-    const second = { ...workspace("file:///repo/b"), resourceCount: 1, templateCount: 3 };
-    const harness = createHarness(async () => response([
-      resource({ id: "definition:a", name: "shared-card", workspace: first }),
-      resource({ id: "definition:b", name: "shared-card", workspace: second }),
-    ], [first, second], "multi-root"));
-
-    await harness.provider.refresh();
-
-    const tree = await roots(harness.provider);
-    expect(tree.map((node) => node.label)).toEqual(["a", "b"]);
-    expect(new Set(tree.map((node) => node.id)).size).toBe(2);
-    expect(tree[0]!.children![0]!.id).not.toBe(tree[1]!.children![0]!.id);
-  });
-
-  test("shows one failed root without hiding healthy workspace resources", async () => {
-    const healthy = { ...workspace("file:///repo/healthy"), resourceCount: 1 };
-    const failed = {
-      key: "file:///repo/failed",
-      name: "failed",
-      uri: "file:///repo/failed",
-      status: "error",
-      error: "semantic runtime unavailable",
-    };
-    const harness = createHarness(async () => response([
-      resource({ id: "definition:healthy", name: "healthy-card", workspace: healthy }),
-    ], [healthy, failed] as never));
+  test("keeps semantic projects distinct and exposes partial project failure", async () => {
+    const owner = workspace("file:///repo/shop");
+    const healthy = readyProject([resource({
+      identityKey: "resource:shared:a",
+      name: "shared-card",
+      uri: "file:///repo/shop/a.ts",
+    })], "shop-app");
+    const failed = { status: "error", project: project("admin-app"), message: "analysis failed" };
+    const harness = createHarness(async () => response([healthy, failed], owner));
 
     await harness.provider.refresh();
 
     const tree = await roots(harness.provider);
     expect(tree.map((node) => [node.label, node.description])).toEqual([
-      ["healthy", "1 resource"],
-      ["failed", "analysis failed"],
+      ["shop · shop-app", "1 resource"],
+      ["shop · admin-app", "analysis failed"],
     ]);
-    expect(tree[1]!.children?.[0]?.label).toBe("Resource analysis failed");
+    expect(harness.view.message).toBe("Showing 1 known resources — incomplete");
   });
 
-  test("surfaces incomplete semantic coverage instead of presenting an authoritative empty inventory", async () => {
-    const owner = {
-      ...workspace(),
-      resourceCount: 0,
-      evidence: {
-        ...completeEvidence,
-        visibility: { ...completeAnswer, coverage: "open", summary: "Container registration is open." },
-      },
-    };
-    const harness = createHarness(async () => response([], [owner]));
-
-    await harness.provider.refresh();
-
-    const tree = await roots(harness.provider);
-    expect(tree.map((node) => node.label)).toEqual([
-      "No resources discovered",
-      "Resource inventory may be incomplete",
-      "0 resources | 1 templates",
-    ]);
-  });
-
-  test("publishes only the latest refresh and removes retired workspace roots", async () => {
+  test("publishes only the latest refresh and retains the current snapshot while updating", async () => {
     let resolveFirst!: (value: unknown) => void;
     const firstResult = new Promise((resolve) => { resolveFirst = resolve; });
-    const secondOwner = { ...workspace("file:///repo/current"), resourceCount: 1 };
-    const getResources = vi.fn()
+    const current = resource({
+      identityKey: "resource:current",
+      name: "current-card",
+      uri: "file:///repo/current.ts",
+    });
+    const getResourceInventory = vi.fn()
       .mockImplementationOnce(() => firstResult)
-      .mockResolvedValueOnce(response([
-        resource({ id: "definition:current", name: "current-card", workspace: secondOwner }),
-      ], [secondOwner], "current"));
-    const harness = createHarness(getResources);
+      .mockResolvedValueOnce(response([readyProject([current])], workspace(), "current"));
+    const harness = createHarness(getResourceInventory);
 
     const firstRefresh = harness.provider.refresh();
     await harness.provider.refresh();
-    resolveFirst(response([
-      resource({ id: "definition:retired", name: "retired-card" }),
-    ], [workspace("file:///repo/retired")], "retired"));
+    resolveFirst(response([readyProject([resource({
+      identityKey: "resource:retired",
+      name: "retired-card",
+      uri: "file:///repo/retired.ts",
+    })])], workspace(), "retired"));
     await firstRefresh;
 
     const tree = await roots(harness.provider);
     expect(JSON.stringify(tree)).toContain("current-card");
     expect(JSON.stringify(tree)).not.toContain("retired-card");
+  });
+
+  test("labels coverage-open inventory as incomplete", async () => {
+    const harness = createHarness(async () => response([readyProject([], "app", "open")]));
+    await harness.provider.refresh();
+    expect(harness.view.message).toBe("Showing 0 known resources — incomplete");
+    expect((await roots(harness.provider))[0]?.label).toBe("No reliable resource rows discovered");
+  });
+
+  test("retains the last coherent tree when a refresh fails", async () => {
+    const current = resource({
+      identityKey: "resource:current",
+      name: "current-card",
+      uri: "file:///repo/current.ts",
+    });
+    const getResourceInventory = vi.fn()
+      .mockResolvedValueOnce(response([readyProject([current])]))
+      .mockRejectedValueOnce(new Error("server unavailable"));
+    const harness = createHarness(getResourceInventory);
+
+    await harness.provider.refresh();
+    await harness.provider.refresh();
+
+    expect(JSON.stringify(await roots(harness.provider))).toContain("current-card");
+    expect(harness.view.message).toBe("Out of date — refresh failed. Retry when analysis has settled.");
+    expect(harness.logger.warn).toHaveBeenCalledWith(
+      "resourceExplorer.refresh.failed",
+      { message: "server unavailable" },
+    );
   });
 });
