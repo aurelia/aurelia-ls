@@ -16,7 +16,6 @@ import type { Position, Range, WorkspaceEdit } from "vscode-languageserver/node"
 export const AureliaProtocolRequest = {
   Diagnostics: "aurelia/getDiagnostics",
   Resources: "aurelia/getResources",
-  InspectEntity: "aurelia/inspectEntity",
   ScopeResources: "aurelia/getScopeResources",
   RelatedFile: "aurelia/getRelatedFile",
   WorkspaceStatus: "aurelia/workspaceStatus",
@@ -145,10 +144,22 @@ export type DiagnosticsSnapshotBundle = {
   presentation?: DiagnosticsSnapshotPresentation;
 };
 
-export type DiagnosticsSnapshotAnswer = Pick<
+type RuntimeAnswerTransportFields = Pick<
   SemanticRuntimeAnswer<unknown>,
   "schemaVersion" | "result" | "selection" | "coverage" | "summary" | "page" | "analysisDepth" | "continuations"
 >;
+
+/** JSON transport form of semantic-runtime's const-enum answer vocabulary. */
+type RuntimeAnswerTransport = Omit<
+  RuntimeAnswerTransportFields,
+  "result" | "selection" | "coverage"
+> & {
+  readonly result: `${RuntimeAnswerTransportFields["result"]}`;
+  readonly selection: `${RuntimeAnswerTransportFields["selection"]}`;
+  readonly coverage: `${RuntimeAnswerTransportFields["coverage"]}`;
+};
+
+export type DiagnosticsSnapshotAnswer = RuntimeAnswerTransport;
 
 export type DiagnosticsSnapshotResponse = {
   uri: string;
@@ -161,20 +172,7 @@ export type ProtocolRange = Range;
 
 export type DocumentUriParams = { uri: string };
 
-type ResourceExplorerAnswerFields = Pick<
-  SemanticRuntimeAnswer<unknown>,
-  "schemaVersion" | "result" | "selection" | "coverage" | "summary" | "page" | "analysisDepth" | "continuations"
->;
-
-/** JSON transport form of semantic-runtime's const-enum answer vocabulary. */
-export type ResourceExplorerAnswer = Omit<
-  ResourceExplorerAnswerFields,
-  "result" | "selection" | "coverage"
-> & {
-  readonly result: `${ResourceExplorerAnswerFields["result"]}`;
-  readonly selection: `${ResourceExplorerAnswerFields["selection"]}`;
-  readonly coverage: `${ResourceExplorerAnswerFields["coverage"]}`;
-};
+export type ResourceExplorerAnswer = RuntimeAnswerTransport;
 
 /** JSON transport form of semantic-runtime's author-facing resource taxonomy. */
 export type ResourceExplorerResourceKind = `${SemanticResourceDefinitionRow["resourceKind"]}`;
@@ -212,8 +210,6 @@ export type ResourceExplorerVisibility = Omit<
   readonly file: string | null;
 };
 
-export type ResourceScope = "global" | "local" | "orphan";
-
 export type ResourceExplorerItem = {
   /** Exact within the response generation and stable when the owning semantic source remains stable. */
   readonly id: string;
@@ -241,42 +237,11 @@ export type ResourceExplorerResponse = {
   };
 };
 
-export type InspectEntityParams = {
-  uri: string;
-  position: Position;
-};
-
-export type InspectEntityResponse = {
-  uri: string;
-  entityKind: string;
-  confidence: {
-    resource: string;
-    type: string;
-    scope: string;
-    expression: string;
-    composite: string;
-  };
-  expressionLabel?: string;
-  exprId?: string | number;
-  nodeId?: string | number;
-  detail: Record<string, unknown>;
-} | null;
-
-export type ScopeResourceItem = {
-  name: string;
-  kind: string;
-  origin?: string;
-  className?: string;
-  file?: string;
-  package?: string;
-  bindableCount: number;
-  scope: "global" | "local";
-};
-
 export type ScopeResourcesResponse = {
-  scopeId: string;
-  scopeLabel?: string;
-  resources: ScopeResourceItem[];
+  readonly compilerWorlds: readonly string[];
+  readonly scopeLabel: string;
+  readonly resources: readonly ResourceExplorerItem[];
+  readonly evidence: ResourceExplorerResponse["evidence"];
 } | null;
 
 export type RelatedFileResponse = {

@@ -12,6 +12,7 @@ function run() {
   }
 
   mocha.addFile(path.join(__dirname, "rename-undo-redo.test.cjs"));
+  mocha.addFile(path.join(__dirname, "product-surface.test.cjs"));
 
   return new Promise((resolve, reject) => {
     try {

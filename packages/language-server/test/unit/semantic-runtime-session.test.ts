@@ -366,6 +366,26 @@ describe("drainSemanticRuntimePages", () => {
     })).rejects.toThrow("ended test row paging before reporting exhaustion");
   });
 
+  test("preserves semantic answer context when a row query returns a non-row value", async () => {
+    const malformed = {
+      ...rowPageAnswer([], null, null, true, [], standardOpenAxes),
+      result: SemanticRuntimeAnswerResult.Failed,
+      summary: "The query supplied an unsupported sourceFile axis.",
+      value: { displayText: "No row result." },
+    } as unknown as SemanticRuntimeAnswer<TestRowPageValue>;
+
+    await expect(drainSemanticRuntimePages({
+      label: "test row",
+      assertActive: () => {},
+      readPage: () => Promise.resolve(malformed),
+      rowsForValue: (value) => value.rows,
+      mergeValue: (_terminalValue, rows) => ({ rows }),
+    })).rejects.toThrow(
+      "returned test row without a row collection (result=failed; selection=exact; coverage=open): "
+      + "The query supplied an unsupported sourceFile axis.",
+    );
+  });
+
   test("rejects an exhausted page that advertises another cursor", async () => {
     await expect(drainSemanticRuntimePages({
       label: "test row",

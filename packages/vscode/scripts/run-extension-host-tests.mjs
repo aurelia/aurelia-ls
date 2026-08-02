@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdirSync, rmSync } from "fs";
+import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from "fs";
 import { dirname, join, resolve } from "path";
 import { fileURLToPath } from "url";
 import { runTests } from "@vscode/test-electron";
@@ -9,7 +9,9 @@ const extensionDevelopmentPath = resolve(__dirname, "..");
 const extensionTestsPath = join(extensionDevelopmentPath, "test", "extension-host", "suite", "index.cjs");
 const sourceWorkspace = join(repoRoot, "fixtures", "hello-world");
 const tempRoot = join(repoRoot, ".temp", "vscode-extension-host");
-const testWorkspace = join(tempRoot, "hello-world");
+const aureliaWorkspace = join(tempRoot, "hello-world");
+const plainTypeScriptWorkspace = join(tempRoot, "plain-typescript");
+const testWorkspace = join(tempRoot, "extension-host.code-workspace");
 
 function assertInside(parent, child) {
   const parentPath = resolve(parent);
@@ -20,13 +22,38 @@ function assertInside(parent, child) {
 }
 
 assertInside(join(repoRoot, ".temp"), tempRoot);
+assertInside(tempRoot, aureliaWorkspace);
+assertInside(tempRoot, plainTypeScriptWorkspace);
 assertInside(tempRoot, testWorkspace);
 
-if (existsSync(testWorkspace)) {
-  rmSync(testWorkspace, { recursive: true, force: true });
+if (existsSync(tempRoot)) {
+  rmSync(tempRoot, { recursive: true, force: true });
 }
-mkdirSync(tempRoot, { recursive: true });
-cpSync(sourceWorkspace, testWorkspace, { recursive: true });
+mkdirSync(join(plainTypeScriptWorkspace, "src"), { recursive: true });
+cpSync(sourceWorkspace, aureliaWorkspace, { recursive: true });
+writeFileSync(join(plainTypeScriptWorkspace, "package.json"), JSON.stringify({
+  name: "plain-typescript-extension-host-fixture",
+  private: true,
+}, null, 2));
+writeFileSync(join(plainTypeScriptWorkspace, "tsconfig.json"), JSON.stringify({
+  compilerOptions: {
+    strict: true,
+    target: "ES2022",
+    module: "NodeNext",
+    moduleResolution: "NodeNext",
+  },
+  include: ["src/**/*.ts"],
+}, null, 2));
+writeFileSync(
+  join(plainTypeScriptWorkspace, "src", "plain.ts"),
+  "export const standaloneName = 1;\nconsole.log(standaloneName);\n",
+);
+writeFileSync(testWorkspace, JSON.stringify({
+  folders: [
+    { name: "hello-world", path: "hello-world" },
+    { name: "plain-typescript", path: "plain-typescript" },
+  ],
+}, null, 2));
 
 const version = process.env.AURELIA_VSCODE_TEST_VERSION || undefined;
 
@@ -42,7 +69,8 @@ await runTests({
     "--skip-release-notes",
   ],
   extensionTestsEnv: {
-    AURELIA_LS_EXTENSION_HOST_WORKSPACE: testWorkspace,
+    AURELIA_LS_EXTENSION_HOST_WORKSPACE: aureliaWorkspace,
+    AURELIA_LS_EXTENSION_HOST_PLAIN_WORKSPACE: plainTypeScriptWorkspace,
     ...(process.env.AURELIA_LS_EXTENSION_HOST_GREP
       ? { AURELIA_LS_EXTENSION_HOST_GREP: process.env.AURELIA_LS_EXTENSION_HOST_GREP }
       : {}),

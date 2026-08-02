@@ -4,7 +4,7 @@ Language intelligence for Aurelia 2 templates, powered by the shared Aurelia sem
 
 The extension analyzes your Aurelia project to understand what your components are, what they accept, where they came from, and how templates connect to TypeScript. It handles decorators, conventions, `static $au`, `.define()` calls, third-party packages, and the full binding syntax.
 
-When it cannot prove a fact, it keeps that uncertainty visible through diagnostics, inline markers, and inspection details instead of fabricating a confident answer.
+When it cannot prove a fact, it preserves that uncertainty in diagnostics, hover details, resource evidence, and diagnostic reports instead of fabricating a confident answer.
 
 ## Features
 
@@ -44,19 +44,23 @@ Templates are colored by semantic meaning: custom elements look different from H
 
 ### Resource Explorer
 
-Browse all Aurelia resources in your project from the sidebar — custom elements, attributes, template controllers, value converters, binding behaviors — organized by project, package, framework provenance, and scope.
-In multi-root workspaces, each active workspace folder has its own root so same-named resources retain their owner.
+Browse exact Aurelia resource definitions and compiler-world visibility from VS Code's built-in Explorer. Custom elements,
+attributes, template controllers, value converters, binding behaviors, binding commands, and attribute patterns are grouped
+by project, package, framework provenance, and kind. Aliases, bindables, declaration forms, and source navigation remain
+attached to their owning definition. In multi-root workspaces, each active workspace folder has its own root so same-named
+resources retain their owner and failed workspace analysis remains visible.
 
 ### Binding Mode Hints
 
-Inline hints show the resolved binding mode so you can see whether `.bind` resolves to two-way or to-view for a given target.
+Optional inline hints show the resolved binding mode so you can see whether `.bind` resolves to two-way or to-view for a
+given target. They are disabled by default and can be enabled per workspace folder with
+`aurelia.inlayHints.bindingMode`.
 
-### Inspect and Reports
+### Diagnostics Report
 
-Inspect at Cursor opens the semantic-runtime fact at the current template position in a markdown editor. Diagnostics
-Report opens a source-linked summary of current diagnostics without forcing focus to an output panel. The report retains
-the semantic answer state, presentation groups, raw rows, continuations, and source evidence rather than reconstructing
-confidence from the diagnostics that happen to fit the standard LSP surface.
+The command-palette-only Diagnostics Report opens a source-linked account of the current document's diagnostics. It
+retains semantic answer state, presentation groups, raw rows, related evidence, continuations, and blockers rather than
+reconstructing confidence from only the diagnostics that fit the standard LSP surface.
 
 ## What Aurelia constructs are supported
 
@@ -73,14 +77,16 @@ confidence from the diagnostics that happen to fit the standard LSP surface.
 
 Most framework tooling either achieves complete knowledge by restricting what you can write, or provides incomplete knowledge without telling you.
 
-This extension takes a different approach: it analyzes what it can analyze, and when it reaches a limit (a dynamic registration pattern, a complex third-party package), it keeps the uncertainty visible. Diagnostics, inline markers, hover, Inspect at Cursor, and the Resource Explorer all prefer source-linked facts and provenance over guessed results.
+This extension takes a different approach: it analyzes what it can analyze, and when it reaches a limit (a dynamic
+registration pattern or a complex third-party package), it keeps the uncertainty visible. Diagnostics, hover, the
+Diagnostics Report, and the Resource Explorer all prefer source-linked facts and provenance over guessed results.
 
 The goal is that you can trust what the extension tells you.
 
 ## Requirements
 
 - Aurelia 2 project with `aurelia` or `@aurelia/*` in dependencies
-- TypeScript 5.0+
+- A workspace filesystem accessible to the VS Code extension host
 
 ## Workspace Activation
 
@@ -108,14 +114,16 @@ extension host can access their filesystem; virtual workspaces are not currently
 
 ## Commands
 
-| Command | Keybinding | Description |
-|---------|------------|-------------|
-| Aurelia: Find Resource | `Ctrl+Alt+A` (`Cmd+Alt+A`) | Search project resources by name |
-| Aurelia: Inspect at Cursor | `Ctrl+Alt+I` (`Cmd+Alt+I`) | Show full semantic analysis at cursor |
-| Aurelia: Open Related File | `Alt+O` | Toggle between component class and template |
-| Aurelia: Show Available Resources | | List all resources visible in current scope |
-| Aurelia: Diagnostics Report | | Open a semantic-runtime diagnostics summary for the current template |
-| Aurelia: Refresh | | Refresh the Resource Explorer |
+The extension does not claim global keyboard shortcuts. Assign shortcuts through VS Code's Keyboard Shortcuts editor if
+these commands are part of your workflow.
+
+| Command | Description |
+|---------|-------------|
+| Aurelia: Find Resource | Search exact resources across active Aurelia workspace folders |
+| Aurelia: Open Related File | Toggle between a component class and its file-backed template |
+| Aurelia: Show Available Resources | List exact resources visible in the current template's compiler world |
+| Aurelia: Diagnostics Report | Open the semantic answer, presentation, raw evidence, and follow-up analysis for the current document |
+| Aurelia: Refresh | Refresh the Resource Explorer |
 
 ## Troubleshooting
 

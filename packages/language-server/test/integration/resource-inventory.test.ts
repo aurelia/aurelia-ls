@@ -2,9 +2,13 @@ import { expect, test } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { ResourceExplorerResponse } from "@aurelia-ls/language-server/api";
+import type {
+  ResourceExplorerResponse,
+  ScopeResourcesResponse,
+} from "@aurelia-ls/language-server/api";
 import {
   copyFixtureDirectory,
+  fileUri,
   initialize,
   startServer,
   waitForExit,
@@ -46,6 +50,27 @@ test("resource inventory preserves live definition and visibility identity", asy
       expect.objectContaining({ name: "labelText", attribute: "display-label" }),
       expect.objectContaining({ name: "selected", attribute: "selected" }),
     ]));
+
+    const scope = await connection.sendRequest<ScopeResourcesResponse>(
+      "aurelia/getScopeResources",
+      { uri: fileUri(fixture, "src/my-app.html") },
+    );
+    expect(scope).not.toBeNull();
+    expect(scope?.compilerWorlds).toHaveLength(1);
+    expect(scope?.evidence.visibility.result).toBe("answered");
+    const scopedProductCards = scope?.resources.filter((resource) =>
+      resource.kind === "custom-element" && resource.name === "product-card"
+    ) ?? [];
+    expect(scopedProductCards).toHaveLength(1);
+    expect(scopedProductCards[0]).toEqual(expect.objectContaining({
+      id: productCard.id,
+      aliases: productCard.aliases,
+      bindables: productCard.bindables,
+      definition: productCard.definition,
+    }));
+    expect(scopedProductCards[0]?.visibility.every((row) =>
+      scope?.compilerWorlds.includes(row.compilerWorld)
+    )).toBe(true);
   } finally {
     dispose();
     child.kill("SIGKILL");

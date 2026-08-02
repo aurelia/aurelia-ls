@@ -1,5 +1,6 @@
 import type { ClientFeature } from "../../core/feature.js";
 import { DisposableStore } from "../../core/disposables.js";
+import { AureliaCommand, AureliaView } from "../../product-contract.js";
 import { ResourceExplorerProvider } from "./resource-explorer.js";
 
 export const ViewsFeature: ClientFeature = {
@@ -10,7 +11,7 @@ export const ViewsFeature: ClientFeature = {
     const explorer = new ResourceExplorerProvider(ctx.vscode, ctx.lsp, ctx.logger);
     store.add(explorer);
 
-    const treeView = ctx.vscode.window.createTreeView("aureliaResourceExplorer", {
+    const treeView = ctx.vscode.window.createTreeView(AureliaView.ResourceExplorer, {
       treeDataProvider: explorer,
       showCollapseAll: true,
     });
@@ -25,9 +26,7 @@ export const ViewsFeature: ClientFeature = {
 
     // Refresh command
     store.add(
-      ctx.vscode.commands.registerCommand("aurelia.refreshResourceExplorer", () => {
-        void explorer.refresh();
-      }),
+      ctx.vscode.commands.registerCommand(AureliaCommand.RefreshResourceExplorer, () => explorer.refresh()),
     );
 
     // Initial refresh

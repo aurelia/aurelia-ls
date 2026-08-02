@@ -9,7 +9,6 @@ import type { ClientLogger } from "../log.js";
 import type {
   AnalysisReadyPayload,
   DiagnosticsSnapshotResponse,
-  InspectEntityResponse,
   ProtocolWorkspaceEdit,
   RelatedFileResponse,
   RenameFromTsResponse,
@@ -73,20 +72,6 @@ export class LspFacade implements DisposableLike {
       : this.#sendRequest(session, AureliaProtocolRequest.Diagnostics, { uri });
   }
 
-  async inspectEntity(
-    uri: string,
-    position: { line: number; character: number },
-  ): Promise<InspectEntityResponse | null> {
-    const session = this.#sessionForUri(uri);
-    if (session == null) return null;
-    try {
-      return await this.#sendRequest<InspectEntityResponse>(session, AureliaProtocolRequest.InspectEntity, { uri, position });
-    } catch (err) {
-      this.#logger.warn("inspectEntity.request.failed", { message: errorMessage(err) });
-      return null;
-    }
-  }
-
   async getResources(): Promise<ResourceExplorerResponse | null> {
     const sessions = this.#clients.sessions;
     if (sessions.length === 0) return null;
@@ -141,22 +126,13 @@ export class LspFacade implements DisposableLike {
   async getScopeResources(uri: string): Promise<ScopeResourcesResponse | null> {
     const session = this.#sessionForUri(uri);
     if (session == null) return null;
-    try {
-      return await this.#sendRequest<ScopeResourcesResponse>(session, AureliaProtocolRequest.ScopeResources, { uri });
-    } catch (err) {
-      this.#logger.warn("scopeResources.request.failed", { message: errorMessage(err) });
-      return null;
-    }
+    return this.#sendRequest<ScopeResourcesResponse>(session, AureliaProtocolRequest.ScopeResources, { uri });
   }
 
   async getRelatedFile(uri: string): Promise<RelatedFileResponse> {
     const session = this.#sessionForUri(uri);
     if (session == null) return null;
-    try {
-      return await this.#sendRequest<RelatedFileResponse>(session, AureliaProtocolRequest.RelatedFile, { uri });
-    } catch {
-      return null;
-    }
+    return this.#sendRequest<RelatedFileResponse>(session, AureliaProtocolRequest.RelatedFile, { uri });
   }
 
   async renameFromTs(

@@ -513,13 +513,41 @@ describe("runtime-backed resource explorer", () => {
 });
 
 describe("runtime-backed scope resources", () => {
-  test("filters visibility rows to the selected template compiler world", async () => {
+  test("preserves exact resource facts while filtering to the template compiler world", async () => {
+    const bindables = [{
+      name: "value",
+      attribute: "value",
+      callback: "valueChanged",
+      mode: "toView",
+      setterKind: "property",
+      valueType: "string",
+      valueTypeShapeKind: "primitive",
+      effectiveValueTypeShapeKind: "primitive",
+      valueTypeHasCallSignature: false,
+      valueTypeHasMembers: false,
+      valueTypeIsWeak: false,
+      source: source("src/in-scope.ts", 20, 25),
+    }];
     const ctx = createMockContext({
+      definitions: [
+        definition({
+          resourceKind: "custom-element",
+          name: "in-scope",
+          targetName: "InScope",
+          source: source("src/in-scope.ts"),
+          aliases: [{ name: "also-in-scope", source: source("src/in-scope.ts", 30, 43) }],
+          bindables,
+          defaultProperty: "value",
+        }),
+        definition({ resourceKind: "custom-element", name: "out-of-scope" }),
+      ],
       visibility: [
         visibility({
           resourceKind: "custom-element",
           name: "in-scope",
           compilerWorld: "app-root selected",
+          source: source("src/in-scope.ts"),
+          aliases: ["also-in-scope"],
         }),
         visibility({
           resourceKind: "custom-element",
@@ -531,6 +559,10 @@ describe("runtime-backed scope resources", () => {
         compilation({
           compilerWorld: "app-root selected",
           source: source("src/my-app.html"),
+        }),
+        compilation({
+          compilerWorld: "app-root other",
+          source: source("src/other-app.html"),
         }),
       ],
     });
@@ -547,8 +579,79 @@ describe("runtime-backed scope resources", () => {
     expect(path.normalize(calledPath).toLowerCase()).toBe(
       path.normalize(componentPath).toLowerCase(),
     );
-    expect(result?.scopeId).toBe("app-root selected");
-    expect(result?.resources.map((item) => item.name)).toEqual(["in-scope"]);
+    expect(result?.compilerWorlds).toEqual(["app-root selected"]);
+    expect(result?.scopeLabel).toBe("app-root selected");
+    expect(result?.resources).toEqual([
+      expect.objectContaining({
+        id: "definition:product:definition:custom-element:in-scope",
+        name: "in-scope",
+        kind: "custom-element",
+        file: path.join(workspaceRoot, "src", "in-scope.ts"),
+        aliases: [expect.objectContaining({ name: "also-in-scope" })],
+        bindables: [expect.objectContaining({ name: "value", primary: true })],
+        definition: expect.objectContaining({ targetName: "InScope" }),
+        visibility: [expect.objectContaining({ compilerWorld: "app-root selected" })],
+      }),
+    ]);
+    expect(result?.evidence.visibility.coverage).toBe("complete");
+  });
+
+  test("keeps same-named resources distinct across all compiler worlds selected for one template", async () => {
+    const firstHandle = "product:definition:custom-element:shared:first";
+    const secondHandle = "product:definition:custom-element:shared:second";
+    const ctx = createMockContext({
+      definitions: [
+        definition({
+          resourceKind: "custom-element",
+          name: "shared-card",
+          targetName: "FirstCard",
+          definitionProductHandle: firstHandle,
+          source: source("src/first-card.ts"),
+        }),
+        definition({
+          resourceKind: "custom-element",
+          name: "shared-card",
+          targetName: "SecondCard",
+          definitionProductHandle: secondHandle,
+          source: source("src/second-card.ts"),
+        }),
+      ],
+      visibility: [
+        visibility({
+          resourceKind: "custom-element",
+          name: "shared-card",
+          compilerWorld: "app-root first",
+          definitionProductHandle: firstHandle,
+          resourceProductHandle: firstHandle,
+          source: source("src/first-card.ts"),
+        }),
+        visibility({
+          resourceKind: "custom-element",
+          name: "shared-card",
+          compilerWorld: "app-root second",
+          definitionProductHandle: secondHandle,
+          resourceProductHandle: secondHandle,
+          source: source("src/second-card.ts"),
+        }),
+      ],
+      compilations: [
+        compilation({ compilerWorld: "app-root first" }),
+        compilation({ compilerWorld: "app-root second" }),
+      ],
+    });
+
+    const result = await handleGetScopeResources(
+      ctx as never,
+      { uri: componentUri },
+      testRequestGuard,
+    );
+
+    expect(result?.compilerWorlds).toEqual(["app-root first", "app-root second"]);
+    expect(result?.scopeLabel).toBe("2 compiler worlds");
+    expect(result?.resources.map((item) => item.id)).toEqual([
+      `definition:${firstHandle}`,
+      `definition:${secondHandle}`,
+    ]);
   });
 
   test("refuses when the requested template has no compiler world", async () => {
@@ -566,6 +669,18 @@ describe("runtime-backed scope resources", () => {
     );
 
     expect(result).toBeNull();
+  });
+
+  test("propagates query failure instead of presenting an empty scope", async () => {
+    const ctx = createMockContext({ compilations: [compilation()] });
+    ctx.semanticRuntime.resourceVisibility.mockRejectedValueOnce(new Error("visibility query failed"));
+
+    await expect(handleGetScopeResources(
+      ctx as never,
+      { uri: componentUri },
+      testRequestGuard,
+    )).rejects.toThrow("visibility query failed");
+    expect(ctx.logger.error).toHaveBeenCalledWith(expect.stringContaining("[getScopeResources] failed"));
   });
 });
 

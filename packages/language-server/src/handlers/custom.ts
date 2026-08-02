@@ -18,7 +18,6 @@ import type {
   SemanticDiagnosticPresentationResult,
   SemanticSourceReference,
   SemanticTemplateCompilationRow,
-  SemanticTemplateCursorInfoResult,
 } from "@aurelia-ls/semantic-runtime";
 import {
   diagnosticRepairAffordanceForSuggestion,
@@ -38,8 +37,6 @@ import type {
   DiagnosticsSnapshotRelated,
   DiagnosticsSnapshotResponse,
   DocumentUriParams,
-  InspectEntityParams,
-  InspectEntityResponse,
   RelatedFileResponse,
   RenameFromTsParams,
   RenameFromTsResponse,
@@ -51,8 +48,6 @@ import type {
   ResourceExplorerResponse,
   ResourceExplorerVisibility,
   ResourceExplorerVisibilityKind,
-  ResourceScope,
-  ScopeResourceItem,
   ScopeResourcesResponse,
   SourceSpan,
   WorkspaceStatusResponse,
@@ -67,6 +62,7 @@ import {
 } from "../mapping/lsp-types.js";
 import {
   semanticSourceReferenceFilePath,
+  semanticSourceReferenceMatchesDocument,
   semanticSourceReferencePath,
 } from "../mapping/source-locations.js";
 import {
@@ -75,18 +71,13 @@ import {
 } from "./request-guard.js";
 import type { SemanticRuntimeLspRequestGuard } from "../runtime/semantic-runtime-session.js";
 
-type ResourceOrigin = string;
-
 export type {
-  InspectEntityResponse,
   RenameFromTsParams,
   RenameFromTsResponse,
   ResourceExplorerBindable,
   ResourceExplorerItem,
   ResourceExplorerResourceKind,
   ResourceExplorerResponse,
-  ResourceScope,
-  ScopeResourceItem,
   ScopeResourcesResponse,
 } from "../protocol.js";
 
@@ -303,9 +294,9 @@ export async function handleGetDiagnostics(
       uri: canonical.uri,
       answer: {
         schemaVersion: answer.schemaVersion,
-        result: answer.result,
-        selection: answer.selection,
-        coverage: answer.coverage,
+        result: `${answer.result}`,
+        selection: `${answer.selection}`,
+        coverage: `${answer.coverage}`,
         summary: answer.summary,
         page: answer.page,
         ...(answer.analysisDepth == null ? {} : { analysisDepth: answer.analysisDepth }),
@@ -314,11 +305,10 @@ export async function handleGetDiagnostics(
       diagnostics,
     };
   } catch (e) {
-    if (logIfSemanticRuntimeRequestAborted(ctx, "getDiagnostics", e, uriFromParam(params))) {
-      return null;
+    if (!logIfSemanticRuntimeRequestAborted(ctx, "getDiagnostics", e, uriFromParam(params))) {
+      ctx.logger.error(`[getDiagnostics] failed: ${formatError(e)}`);
     }
-    ctx.logger.error(`[getDiagnostics] failed: ${formatError(e)}`);
-    return null;
+    throw e;
   }
 }
 
@@ -346,8 +336,6 @@ export async function handleGetResources(
     throw e;
   }
 }
-
-type ScopeEntry = { scope: ResourceScope; scopeOwner?: string };
 
 const RESOURCE_EXPLORER_KIND_ORDER: readonly ResourceExplorerResourceKind[] = [
   "custom-element",
@@ -581,21 +569,6 @@ function resourceExplorerAnswer(
   };
 }
 
-function scopeEntryForVisibility(row: SemanticResourceVisibilityRow): ScopeEntry {
-  switch (`${row.visibilityKind}`) {
-    case "app-root":
-    case "configured":
-    case "inherited":
-      return { scope: "global" };
-    case "local":
-    case "routeable":
-      return { scope: "local", scopeOwner: row.compilerWorld };
-    case "open":
-    default:
-      return { scope: "orphan" };
-  }
-}
-
 function compareResourceExplorerItems(
   left: { readonly kind: string; readonly name: string },
   right: { readonly kind: string; readonly name: string },
@@ -642,21 +615,8 @@ function assertVisibilityMatchesResource(
   }
 }
 
-function resourceExplorerKey(kind: string, name: string): string {
-  return `${kind}:${name}`;
-}
-
 function countDistinct(values: readonly string[]): number {
   return new Set(values).size;
-}
-
-function originForSource(source: SemanticSourceReference | null): ResourceOrigin | undefined {
-  if (isFrameworkCatalogSource(source)) {
-    return "builtin";
-  }
-  return semanticSourceReferencePath(source) == null && source?.kind !== "external-address"
-    ? undefined
-    : "source";
 }
 
 function explorerOriginForSource(
@@ -702,151 +662,6 @@ function packageNameFromNodeModulesPath(sourcePath: string): string | undefined 
   return first;
 }
 
-export async function handleInspectEntity(
-  ctx: ServerContext,
-  params: InspectEntityParams,
-  guard: SemanticRuntimeLspRequestGuard,
-): Promise<InspectEntityResponse> {
-  try {
-    const uri = params?.uri;
-    if (!uri || !params.position) return null;
-    const doc = ctx.ensureProgramDocument(uri);
-    if (!doc) return null;
-    const answer = await ctx.semanticRuntime.templateCursorInfo(
-      doc,
-      params.position,
-      guard,
-    );
-    return inspectEntityFromCursorInfo(
-      uri,
-      `${answer.result}:${answer.selection}:${answer.coverage}`,
-      answer.value,
-    );
-  } catch (e) {
-    if (logIfSemanticRuntimeRequestAborted(ctx, "inspectEntity", e, params?.uri)) {
-      return null;
-    }
-    ctx.logger.error(`[inspectEntity] failed for ${params?.uri}: ${formatError(e)}`);
-    return null;
-  }
-}
-
-function inspectEntityFromCursorInfo(
-  uri: string,
-  answerState: string,
-  value: SemanticTemplateCursorInfoResult,
-): InspectEntityResponse {
-  const entityKind = inspectEntityKind(value);
-  if (entityKind == null) {
-    return null;
-  }
-  const detail = inspectEntityDetail(entityKind, value);
-  const expressionLabel = value.selectedMemberName
-    ?? value.valueSite?.rawValue
-    ?? value.html.attributeValue
-    ?? value.html.attributeName
-    ?? value.html.tagName
-    ?? undefined;
-  return {
-    uri,
-    entityKind,
-    confidence: {
-      resource: value.selectedDefinition == null ? "not-selected" : "source-backed",
-      type: value.selectedMember?.typeDisplay != null || value.memberOwnerType?.display != null ? "projected" : "not-projected",
-      scope: value.selectedMember == null ? "not-selected" : "source-backed",
-      expression: value.valueSite == null && value.expressionFrontier == null ? "not-selected" : "parsed",
-      composite: answerState,
-    },
-    expressionLabel,
-    detail,
-  };
-}
-
-function inspectEntityKind(value: SemanticTemplateCursorInfoResult): string | null {
-  if (value.selectedMember != null || value.selectedMemberName != null) {
-    return "member";
-  }
-  if (value.selectedBindable != null) {
-    return "bindable";
-  }
-  if (value.selectedDefinition != null) {
-    return "resource";
-  }
-  if (value.valueSite != null) {
-    return "value-site";
-  }
-  if (value.html.attributeName != null || value.html.tagName != null) {
-    return "html";
-  }
-  if (value.diagnostics.length > 0) {
-    return "diagnostic";
-  }
-  return value.siteKind == null || value.siteKind === "unknown" ? null : "template-site";
-}
-
-function inspectEntityDetail(
-  entityKind: string,
-  value: SemanticTemplateCursorInfoResult,
-): Record<string, unknown> {
-  const detail: Record<string, unknown> = {
-    kind: entityKind,
-    siteKind: value.siteKind,
-    templateLane: value.template.compilationLane,
-  };
-  if (value.selectedDefinition != null) {
-    detail.name = value.selectedDefinition.name;
-    detail.resourceName = value.selectedDefinition.name;
-    detail.resourceKind = value.selectedDefinition.resourceKind;
-    detail.className = value.selectedDefinition.targetName;
-    detail.resourceSource = value.selectedDefinition.source?.label ?? null;
-  }
-  if (value.selectedBindable != null) {
-    detail.name = value.selectedBindable.name;
-    detail.bindableProperty = value.selectedBindable.name;
-    detail.bindableAttribute = value.selectedBindable.attribute;
-    detail.bindableMode = value.selectedBindable.mode;
-    detail.bindableSource = value.selectedBindable.source?.label ?? null;
-  }
-  if (value.selectedMember != null || value.selectedMemberName != null) {
-    detail.name = value.selectedMemberName ?? value.selectedMember?.name ?? null;
-    detail.symbolName = value.selectedMemberName ?? value.selectedMember?.name ?? null;
-    detail.symbolKind = value.selectedMember?.memberKind ?? null;
-    detail.symbolType = value.selectedMember?.typeDisplay ?? null;
-    detail.memberReadonly = value.selectedMember?.isReadonly ?? null;
-    detail.memberOptional = value.selectedMember?.isOptional ?? null;
-    detail.memberSource = value.selectedMember?.source?.label ?? null;
-  }
-  if (value.memberOwnerType != null) {
-    detail.ownerType = value.memberOwnerType.display;
-    detail.ownerTypeShape = value.memberOwnerType.shapeKind;
-    detail.ownerTypeOrigin = value.memberOwnerType.origin;
-    detail.ownerTypeSource = value.memberOwnerType.declarationSource?.label ?? null;
-  }
-  if (value.valueSite != null) {
-    detail.valueSiteKind = value.valueSite.siteKind;
-    detail.rawValue = value.valueSite.rawValue;
-    detail.bindingCommand = value.valueSite.bindingCommandName;
-    detail.valueBindable = value.valueSite.bindableAttribute ?? value.valueSite.bindableName;
-  }
-  detail.htmlNodeKind = value.html.nodeKind;
-  detail.htmlTag = value.html.tagName;
-  detail.htmlAttribute = value.html.attributeName;
-  if (value.html.attributeValue != null) {
-    detail.htmlAttributeValue = value.html.attributeValue;
-  }
-  detail.diagnosticCount = value.diagnostics.length;
-  const firstDiagnostic = value.diagnostics[0] ?? null;
-  if (firstDiagnostic != null) {
-    detail.firstDiagnosticKind = firstDiagnostic.diagnosticKind;
-    detail.firstDiagnosticSeverity = firstDiagnostic.severity;
-    detail.firstDiagnosticSummary = firstDiagnostic.summary;
-  }
-  if (value.missingInputs.length > 0) {
-    detail.missingInputs = value.missingInputs;
-  }
-  return detail;
-}
-
 export async function handleGetScopeResources(
   ctx: ServerContext,
   params: DocumentUriParams,
@@ -858,53 +673,41 @@ export async function handleGetScopeResources(
     const doc = ctx.ensureProgramDocument(uri);
     if (!doc) return null;
     const filePath = URI.parse(uri).fsPath;
-    const [compilations, visibility] = await Promise.all([
-      ctx.semanticRuntime.templateCompilations(guard, filePath),
+    const [definitions, visibility, compilations] = await Promise.all([
+      ctx.semanticRuntime.resourceDefinitions(guard),
       ctx.semanticRuntime.resourceVisibility(guard),
+      ctx.semanticRuntime.templateCompilations(guard, filePath),
     ]);
-    const compilerWorlds = new Set(compilations.value.rows.map((row) => row.compilerWorld));
-    if (compilerWorlds.size === 0) return null;
-    const rows = visibility.value.rows.filter((row) => compilerWorlds.has(row.compilerWorld));
-    const resources = scopeResourcesForVisibility(ctx.workspaceRoot, rows);
-    const [scopeLabel] = compilerWorlds;
+    const compilerWorlds = [...new Set(
+      compilations.value.rows
+        .filter((row) => semanticSourceReferenceMatchesDocument(row.source, ctx.workspaceRoot, uri))
+        .map((row) => row.compilerWorld),
+    )].sort();
+    if (compilerWorlds.length === 0) return null;
+    const compilerWorldSet = new Set(compilerWorlds);
+    const inventory = buildRuntimeResourceExplorerResponse(
+      ctx.workspaceRoot,
+      guard.generation.fingerprint,
+      definitions,
+      visibility,
+      compilations,
+    );
+    const resources = inventory.resources.flatMap((resource): readonly ResourceExplorerItem[] => {
+      const scopedVisibility = resource.visibility.filter((row) => compilerWorldSet.has(row.compilerWorld));
+      return scopedVisibility.length === 0 ? [] : [{ ...resource, visibility: scopedVisibility }];
+    });
     return {
-      scopeId: scopeLabel ?? "semantic-runtime",
-      scopeLabel,
+      compilerWorlds,
+      scopeLabel: compilerWorlds.length === 1 ? compilerWorlds[0]! : `${compilerWorlds.length} compiler worlds`,
       resources,
+      evidence: inventory.evidence,
     };
   } catch (e) {
-    if (logIfSemanticRuntimeRequestAborted(ctx, "getScopeResources", e, params?.uri)) {
-      return null;
+    if (!logIfSemanticRuntimeRequestAborted(ctx, "getScopeResources", e, params?.uri)) {
+      ctx.logger.error(`[getScopeResources] failed: ${formatError(e)}`);
     }
-    ctx.logger.error(`[getScopeResources] failed: ${formatError(e)}`);
-    return null;
+    throw e;
   }
-}
-
-function scopeResourcesForVisibility(
-  workspaceRoot: string | null,
-  rows: readonly SemanticResourceVisibilityRow[],
-): ScopeResourceItem[] {
-  const resources = new Map<string, ScopeResourceItem>();
-  for (const row of rows) {
-    if (!RESOURCE_EXPLORER_KINDS.has(row.resourceKind)) {
-      continue;
-    }
-    const key = resourceExplorerKey(row.resourceKind, row.name);
-    if (resources.has(key)) {
-      continue;
-    }
-    resources.set(key, {
-      name: row.name,
-      kind: row.resourceKind,
-      origin: originForSource(row.source),
-      file: semanticSourceReferenceFilePath(row.source, workspaceRoot) ?? undefined,
-      package: packageNameForSource(row.source),
-      bindableCount: 0,
-      scope: scopeEntryForVisibility(row).scope === "global" ? "global" : "local",
-    });
-  }
-  return [...resources.values()].sort(compareResourceExplorerItems);
 }
 
 export async function handleWorkspaceStatus(
@@ -914,11 +717,10 @@ export async function handleWorkspaceStatus(
   try {
     return await ctx.semanticRuntime.workspaceSummary(guard);
   } catch (e) {
-    if (logIfSemanticRuntimeRequestAborted(ctx, "workspaceStatus", e)) {
-      return null;
+    if (!logIfSemanticRuntimeRequestAborted(ctx, "workspaceStatus", e)) {
+      ctx.logger.error(`[workspaceStatus] failed: ${formatError(e)}`);
     }
-    ctx.logger.error(`[workspaceStatus] failed: ${formatError(e)}`);
-    return null;
+    throw e;
   }
 }
 
@@ -1130,11 +932,10 @@ export async function handleGetRelatedFile(
     }
     return null;
   } catch (e) {
-    if (logIfSemanticRuntimeRequestAborted(ctx, "getRelatedFile", e, params?.uri)) {
-      return null;
+    if (!logIfSemanticRuntimeRequestAborted(ctx, "getRelatedFile", e, params?.uri)) {
+      ctx.logger.error(`[getRelatedFile] failed: ${formatError(e)}`);
     }
-    ctx.logger.error(`[getRelatedFile] failed: ${formatError(e)}`);
-    return null;
+    throw e;
   }
 }
 
@@ -1150,8 +951,6 @@ export function registerCustomHandlers(ctx: ServerContext): void {
     handleGetDiagnostics(ctx, params, requestGuard(ctx, token)));
   ctx.connection.onRequest(AureliaProtocolRequest.Resources, (_params: unknown, token: CancellationToken) =>
     handleGetResources(ctx, requestGuard(ctx, token)));
-  ctx.connection.onRequest(AureliaProtocolRequest.InspectEntity, (params: InspectEntityParams, token: CancellationToken) =>
-    handleInspectEntity(ctx, params, requestGuard(ctx, token)));
   ctx.connection.onRequest(AureliaProtocolRequest.ScopeResources, (params: DocumentUriParams, token: CancellationToken) =>
     handleGetScopeResources(ctx, params, requestGuard(ctx, token)));
   ctx.connection.onRequest(AureliaProtocolRequest.RelatedFile, (params: DocumentUriParams, token: CancellationToken) =>

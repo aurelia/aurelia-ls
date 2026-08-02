@@ -5,7 +5,6 @@ import { TextDocument } from "vscode-languageserver-textdocument";
 import {
   canonicalDocumentUri,
   handleGetDiagnostics,
-  handleInspectEntity,
   handleRenameFromTs,
   handleWorkspaceStatus,
 } from "@aurelia-ls/language-server/api";
@@ -64,38 +63,6 @@ function createMockContext(overrides: Record<string, unknown> = {}) {
               complete: true,
               groups: [],
             },
-          },
-          page: null,
-        }),
-      ),
-      templateCursorInfo: vi.fn(() =>
-        Promise.resolve({
-          schemaVersion: "0.2",
-          result: "answered",
-          selection: "not-applicable",
-          coverage: "complete",
-          summary: "mock",
-          value: {
-            displayText: "mock",
-            siteKind: "unknown",
-            expressionFrontier: null,
-            missingInputs: [],
-            template: { compilationLane: "app-runtime", source: null },
-            html: {
-              nodeKind: null,
-              tagName: null,
-              attributeName: null,
-              attributeValue: null,
-              source: null,
-              attributeSource: null,
-            },
-            valueSite: null,
-            selectedDefinition: null,
-            selectedBindable: null,
-            selectedMemberName: null,
-            selectedMember: null,
-            memberOwnerType: null,
-            diagnostics: [],
           },
           page: null,
         }),
@@ -513,129 +480,6 @@ describe("handleGetDiagnostics", () => {
         }),
       }),
     );
-  });
-});
-
-describe("handleInspectEntity", () => {
-  test("returns runtime cursor member details", async () => {
-    const ctx = createMockContext();
-    ctx.semanticRuntime.templateCursorInfo.mockResolvedValue({
-      schemaVersion: "0.2",
-      result: "answered",
-      selection: "not-applicable",
-      coverage: "complete",
-      summary: "mock",
-      value: {
-        displayText: "title member",
-        siteKind: "expression-member",
-        expressionFrontier: {
-          frontierKind: "member",
-          expectedContinuationClasses: [],
-        },
-        missingInputs: [],
-        template: { compilationLane: "app-runtime", source: null },
-        html: {
-          nodeKind: "element",
-          tagName: "h1",
-          attributeName: null,
-          attributeValue: null,
-          source: null,
-          attributeSource: null,
-        },
-        valueSite: {
-          siteKind: "interpolation",
-          rawValue: "title",
-          entryFamily: "text",
-          bindingCommandName: null,
-          bindableName: null,
-          bindableAttribute: null,
-          source: null,
-        },
-        selectedDefinition: null,
-        selectedBindable: null,
-        selectedMemberName: "title",
-        selectedMember: {
-          name: "title",
-          memberKind: "property",
-          typeDisplay: "string",
-          isOptional: false,
-          isReadonly: true,
-          source: {
-            kind: "source-span-address",
-            label: "src/app.ts@10..15",
-            path: "src/app.ts",
-            start: 10,
-            end: 15,
-          },
-        },
-        memberOwnerType: {
-          display: "App",
-          shapeKind: "object",
-          origin: "source",
-          source: null,
-          declarationSource: {
-            kind: "source-span-address",
-            label: "src/app.ts@0..3",
-            path: "src/app.ts",
-            start: 0,
-            end: 3,
-          },
-        },
-        diagnostics: [],
-      },
-      page: null,
-    });
-
-    const result = await handleInspectEntity(
-      ctx as never,
-      {
-        uri: "file:///test.html",
-        position: { line: 0, character: 3 },
-      },
-      testRequestGuard,
-    );
-
-    expect(ctx.semanticRuntime.templateCursorInfo).toHaveBeenCalledWith(
-      expect.objectContaining({}),
-      { line: 0, character: 3 },
-      testRequestGuard,
-    );
-    expect(result).toEqual(
-      expect.objectContaining({
-        uri: "file:///test.html",
-        entityKind: "member",
-        expressionLabel: "title",
-        confidence: expect.objectContaining({
-          type: "projected",
-          scope: "source-backed",
-          composite: "answered:not-applicable:complete",
-        }),
-        detail: expect.objectContaining({
-          kind: "member",
-          name: "title",
-          symbolKind: "property",
-          symbolType: "string",
-          ownerType: "App",
-          rawValue: "title",
-          htmlTag: "h1",
-        }),
-      }),
-    );
-  });
-
-  test("returns null when runtime cursor info has no inspectable fact", async () => {
-    const ctx = createMockContext();
-
-    const result = await handleInspectEntity(
-      ctx as never,
-      {
-        uri: "file:///test.html",
-        position: { line: 0, character: 3 },
-      },
-      testRequestGuard,
-    );
-
-    expect(result).toBeNull();
   });
 });
 

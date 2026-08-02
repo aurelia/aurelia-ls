@@ -99,6 +99,13 @@ export async function drainSemanticRuntimePages<
     }
 
     const pageRows = options.rowsForValue(answer.value);
+    const rowCollection: unknown = pageRows;
+    if (!Array.isArray(rowCollection)) {
+      throw new Error(
+        `Semantic runtime returned ${options.label} without a row collection `
+        + `(result=${answer.result}; selection=${answer.selection}; coverage=${answer.coverage}): ${answer.summary}`,
+      );
+    }
     const page = answer.page;
     if (page == null) {
       if (cursor != null) {
@@ -532,7 +539,8 @@ export class SemanticRuntimeLspSession {
         ? { detail: "handles" }
         : {
             detail: "handles",
-            sourceFile: { filePath: sourceFilePath },
+            // This selects the app/authoring-template epoch; TemplateCompilations
+            // intentionally has no sourceFile filtering axis in the query catalog.
             sourceFilePath,
           },
       guard,
