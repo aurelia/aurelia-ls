@@ -579,10 +579,15 @@ describe("LspFacade workspace routing", () => {
     const { logger } = createTestServices(vscode as unknown as VscodeApi);
     const facade = new LspFacade(manager, logger);
 
-    const related = await facade.getRelatedFile("file:///work/b/src/card.ts");
-    expect(related).toEqual({ uri: "file:///work/b/related.html", kind: "template" });
+    const related = await facade.getRelatedFiles("file:///work/b/src/card.ts");
+    expect(related).toEqual([{
+      uri: "file:///work/b/related.html",
+      role: "component-template",
+      elementName: "related-element",
+      className: "RelatedElement",
+    }]);
     expect(harness.clients[1]?.sendRequest).toHaveBeenCalledWith(
-      "aurelia/getRelatedFile",
+      "aurelia/getRelatedFiles",
       { uri: "file:///work/b/src/card.ts" },
       undefined,
     );
@@ -732,8 +737,13 @@ function createClientHarness(
         }
         case "aurelia/getResources":
           return harnessOptions.resourceResponse?.(workspaceUri) ?? resourceResponse(workspaceUri);
-        case "aurelia/getRelatedFile":
-          return { uri: `${workspaceUri}/related.html`, kind: "template" };
+        case "aurelia/getRelatedFiles":
+          return [{
+            uri: `${workspaceUri}/related.html`,
+            role: "component-template",
+            elementName: "related-element",
+            className: "RelatedElement",
+          }];
         default:
           return null;
       }

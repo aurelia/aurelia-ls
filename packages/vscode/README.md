@@ -123,7 +123,7 @@ these commands are part of your workflow.
 | Command | Description |
 |---------|-------------|
 | Aurelia: Find Resource | Search exact resources across active Aurelia workspace folders |
-| Aurelia: Open Related File | Toggle between a component class and its file-backed template |
+| Aurelia: Open Related File | Open a component class or file-backed template, prompting when topology proves multiple counterparts |
 | Aurelia: Show Available Resources | List exact resources visible in the current template's compiler world |
 | Aurelia: Diagnostics Report | Open the semantic answer, presentation, raw evidence, and follow-up analysis for the current document |
 | Aurelia: Refresh | Refresh the Resource Explorer |

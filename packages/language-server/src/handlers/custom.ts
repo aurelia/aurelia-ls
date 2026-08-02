@@ -36,7 +36,8 @@ import type {
   DiagnosticsSnapshotRelated,
   DiagnosticsSnapshotResponse,
   DocumentUriParams,
-  RelatedFileResponse,
+  RelatedFileCandidate,
+  RelatedFilesResponse,
   RenameFromTsParams,
   RenameFromTsResponse,
   ResourceExplorerBindable,
@@ -846,29 +847,21 @@ function renameFromTsBlocked(
   };
 }
 
-export async function handleGetRelatedFile(
+export async function handleGetRelatedFiles(
   ctx: ServerContext,
   params: DocumentUriParams,
   guard: SemanticRuntimeLspRequestGuard,
-): Promise<RelatedFileResponse> {
+): Promise<RelatedFilesResponse> {
   const uri = params?.uri;
-  if (!uri) return null;
+  if (!uri) return [];
   const filePath = ctx.documentUris.authoredHostPath(uri);
-  if (filePath == null) return null;
-  const definitions = await ctx.semanticRuntime.resourceDefinitions(guard);
+  if (filePath == null) return [];
+  const topology = await ctx.semanticRuntime.appTopology(filePath, guard);
   const requested = normalizedFilePath(filePath);
-  for (const definition of definitions.value.rows) {
-    if (`${definition.resourceKind}` !== "custom-element") {
-      continue;
-    }
-      const componentFile = semanticSourceReferenceFilePath(
-        definition.targetSource ?? definition.source,
-        ctx.documentUris,
-    ) ?? undefined;
-      const templateFile = semanticSourceReferenceFilePath(
-        definition.template?.source ?? null,
-        ctx.documentUris,
-    ) ?? undefined;
+  const candidates: RelatedFileCandidate[] = [];
+  for (const component of topology.value.components) {
+    const componentFile = semanticSourceReferenceFilePath(component.source, ctx.documentUris);
+    const templateFile = semanticSourceReferenceFilePath(component.template?.source ?? null, ctx.documentUris);
     if (componentFile == null || templateFile == null) {
       continue;
     }
@@ -876,13 +869,27 @@ export async function handleGetRelatedFile(
       continue;
     }
     if (normalizedFilePath(templateFile) === requested) {
-      return { uri: ctx.documentUris.uriForHostPath(componentFile), kind: "component" };
+      candidates.push({
+        uri: ctx.documentUris.uriForHostPath(componentFile),
+        role: "component-source",
+        elementName: component.elementName,
+        className: component.className,
+      });
     }
     if (normalizedFilePath(componentFile) === requested) {
-      return { uri: ctx.documentUris.uriForHostPath(templateFile), kind: "template" };
+      candidates.push({
+        uri: ctx.documentUris.uriForHostPath(templateFile),
+        role: "component-template",
+        elementName: component.elementName,
+        className: component.className,
+      });
     }
   }
-  return null;
+  return candidates.sort((left, right) =>
+    left.uri.localeCompare(right.uri)
+    || left.elementName.localeCompare(right.elementName)
+    || (left.className ?? "").localeCompare(right.className ?? "")
+  );
 }
 
 function normalizedFilePath(filePath: string): string {
@@ -902,9 +909,9 @@ export function registerCustomHandlers(ctx: ServerContext): void {
   ctx.connection.onRequest(AureliaProtocolRequest.ScopeResources, (params: DocumentUriParams, token: CancellationToken) =>
     request(ctx, "getScopeResources", token, params.uri,
       (guard) => handleGetScopeResources(ctx, params, guard)));
-  ctx.connection.onRequest(AureliaProtocolRequest.RelatedFile, (params: DocumentUriParams, token: CancellationToken) =>
-    request(ctx, "getRelatedFile", token, params.uri,
-      (guard) => handleGetRelatedFile(ctx, params, guard)));
+  ctx.connection.onRequest(AureliaProtocolRequest.RelatedFiles, (params: DocumentUriParams, token: CancellationToken) =>
+    request(ctx, "getRelatedFiles", token, params.uri,
+      (guard) => handleGetRelatedFiles(ctx, params, guard)));
   ctx.connection.onRequest(AureliaProtocolRequest.WorkspaceStatus, (_params: unknown, token: CancellationToken) =>
     request(ctx, "workspaceStatus", token, undefined,
       (guard) => handleWorkspaceStatus(ctx, guard)));

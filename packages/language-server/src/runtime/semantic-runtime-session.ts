@@ -8,6 +8,7 @@ import {
   NodeSemanticRuntimeProjectInputHost,
   SemanticRuntimeProjectInputAuthority,
   SemanticAppQueryKind,
+  type SemanticApplicationTopologyResult,
   type SemanticRouteNodesResult,
   type SemanticRuntime,
   type SemanticAppDiagnosticsResult,
@@ -525,6 +526,23 @@ export class SemanticRuntimeLspSession {
   ): Promise<SemanticRuntimeAnswer<SemanticResourceVisibilityResult>> {
     const runtime = await this.openRuntime(guard);
     return this.collectRows(runtime, SemanticAppQueryKind.ResourceVisibility, 500, { detail: "handles" }, guard);
+  }
+
+  async appTopology(
+    sourceFilePath: string,
+    guard: SemanticRuntimeLspRequestGuard,
+  ): Promise<SemanticRuntimeAnswer<SemanticApplicationTopologyResult>> {
+    const runtime = await this.openRuntime(guard);
+    const answer = await runtime.answerAppQuery({
+      kind: SemanticAppQueryKind.AppTopology,
+      sourceFilePath,
+      inquiryProfile: "lsp-cursor",
+      analysisDepth: "runtime-topology",
+      includeAuthoringTemplates: true,
+      appRetention: "retain-app",
+    }) as SemanticRuntimeAnswer<SemanticApplicationTopologyResult>;
+    this.assertRequestActive(guard);
+    return answer;
   }
 
   async templateCompilations(

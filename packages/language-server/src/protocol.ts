@@ -1,4 +1,5 @@
 import type {
+  ApplicationFileRole,
   SemanticAppDiagnosticRow,
   SemanticDiagnosticPresentationRelation,
   SemanticDiagnosticRelatedInformation,
@@ -17,7 +18,7 @@ export const AureliaProtocolRequest = {
   Diagnostics: "aurelia/getDiagnostics",
   Resources: "aurelia/getResources",
   ScopeResources: "aurelia/getScopeResources",
-  RelatedFile: "aurelia/getRelatedFile",
+  RelatedFiles: "aurelia/getRelatedFiles",
   WorkspaceStatus: "aurelia/workspaceStatus",
   RenameFromTypeScript: "aurelia/renameFromTs",
 } as const;
@@ -238,10 +239,16 @@ export type ScopeResourcesResponse = {
   readonly evidence: ResourceExplorerResponse["evidence"];
 } | null;
 
-export type RelatedFileResponse = {
-  uri: string;
-  kind: "template" | "component";
-} | null;
+export type RelatedFileRole = Extract<ApplicationFileRole, "component-source" | "component-template">;
+
+export interface RelatedFileCandidate {
+  readonly uri: string;
+  readonly role: RelatedFileRole;
+  readonly elementName: string;
+  readonly className: string | null;
+}
+
+export type RelatedFilesResponse = readonly RelatedFileCandidate[];
 
 export type RenameFromTsParams = {
   uri: string;

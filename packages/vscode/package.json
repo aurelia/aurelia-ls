@@ -104,7 +104,7 @@
         },
         {
           "command": "aurelia.openRelatedFile",
-          "when": "aurelia.active && aurelia.documentOwned && (editorLangId == html || editorLangId == typescript)",
+          "when": "aurelia.active && aurelia.documentOwned && (editorLangId == html || editorLangId == typescript || editorLangId == typescriptreact || editorLangId == javascript || editorLangId == javascriptreact)",
           "group": "aurelia@2"
         }
       ],

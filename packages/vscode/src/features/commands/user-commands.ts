@@ -6,6 +6,7 @@ import type { VscodeApi } from "../../vscode-api.js";
 import type {
   DiagnosticsSnapshotItem,
   DiagnosticsSnapshotResponse,
+  RelatedFileCandidate,
   ResourceExplorerItem,
 } from "../../types.js";
 
@@ -355,11 +356,16 @@ export const UserCommandsFeature: ClientFeature = {
             return;
           }
           const uri = editor.document.uri.toString();
-          const related = await lsp.getRelatedFile(uri);
-          if (!related) {
+          const candidates = await lsp.getRelatedFiles(uri);
+          if (candidates.length === 0) {
             vscode.window.showInformationMessage("No related Aurelia file found");
             return;
           }
+
+          const related = candidates.length === 1
+            ? candidates[0]
+            : await pickRelatedFile(vscode, candidates);
+          if (related == null) return;
 
           const doc = await vscode.workspace.openTextDocument(vscode.Uri.parse(related.uri));
           await vscode.window.showTextDocument(doc);
@@ -368,3 +374,30 @@ export const UserCommandsFeature: ClientFeature = {
     );
   },
 };
+
+type RelatedFileQuickPickItem = QuickPickItem & {
+  readonly candidate: RelatedFileCandidate;
+};
+
+async function pickRelatedFile(
+  vscode: VscodeApi,
+  candidates: readonly RelatedFileCandidate[],
+): Promise<RelatedFileCandidate | null> {
+  const items = candidates.map((candidate): RelatedFileQuickPickItem => {
+    const target = vscode.Uri.parse(candidate.uri);
+    const fileName = target.path.split("/").at(-1) ?? candidate.uri;
+    return {
+      label: `$(file-code) ${fileName}`,
+      description: candidate.role === "component-template" ? "template" : "component",
+      detail: `${candidate.className ?? candidate.elementName} (${candidate.elementName}) - ${target.fsPath}`,
+      candidate,
+    };
+  });
+  const picked = await vscode.window.showQuickPick(items, {
+    title: "Open Related Aurelia File",
+    placeHolder: "Choose a related component or template",
+    matchOnDescription: true,
+    matchOnDetail: true,
+  });
+  return picked?.candidate ?? null;
+}

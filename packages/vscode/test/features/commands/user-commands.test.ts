@@ -9,7 +9,7 @@ interface HarnessOptions {
   diagnosticsResult?: unknown;
   resourcesResult?: unknown;
   scopeResourcesResult?: unknown;
-  relatedResult?: unknown;
+  relatedFilesResult?: unknown;
   quickPickIndex?: number;
 }
 
@@ -26,13 +26,13 @@ function createHarness(options: HarnessOptions = {}) {
   const getDiagnostics = vi.fn(async () => options.diagnosticsResult ?? null);
   const getResources = vi.fn(async () => options.resourcesResult ?? null);
   const getScopeResources = vi.fn(async () => options.scopeResourcesResult ?? null);
-  const getRelatedFile = vi.fn(async () => options.relatedResult ?? null);
+  const getRelatedFiles = vi.fn(async () => options.relatedFilesResult ?? []);
   const ctx = {
     extension: stubExtensionContext(stubVscode),
     vscode,
     logger,
     errors,
-    lsp: { getDiagnostics, getResources, getScopeResources, getRelatedFile },
+    lsp: { getDiagnostics, getResources, getScopeResources, getRelatedFiles },
   };
 
   UserCommandsFeature.activate(ctx as never, (contribution) => contribution);
@@ -50,7 +50,7 @@ function createHarness(options: HarnessOptions = {}) {
     getDiagnostics,
     getResources,
     getScopeResources,
-    getRelatedFile,
+    getRelatedFiles,
   };
 }
 
@@ -282,13 +282,46 @@ describe("UserCommandsFeature", () => {
   });
 
   test("openRelatedFile navigates to the server-owned counterpart", async () => {
-    const { recorded, getRelatedFile } = createHarness({
-      relatedResult: { uri: "file:///component.ts", kind: "component" },
+    const { recorded, getRelatedFiles } = createHarness({
+      relatedFilesResult: [{
+        uri: "file:///component.ts",
+        role: "component-source",
+        elementName: "my-component",
+        className: "MyComponent",
+      }],
     });
 
     await recorded.commandHandlers.get(AureliaCommand.OpenRelatedFile)?.();
 
-    expect(getRelatedFile).toHaveBeenCalledWith("file:///component.html");
+    expect(getRelatedFiles).toHaveBeenCalledWith("file:///component.html");
     expect(recorded.openedDocuments.at(-1)?.uri.toString()).toBe("file:///component.ts");
+  });
+
+  test("openRelatedFile asks the user to resolve genuine topology ambiguity", async () => {
+    const { recorded, quickPicks } = createHarness({
+      relatedFilesResult: [
+        {
+          uri: "file:///primary.html",
+          role: "component-template",
+          elementName: "primary-card",
+          className: "PrimaryCard",
+        },
+        {
+          uri: "file:///secondary.html",
+          role: "component-template",
+          elementName: "secondary-card",
+          className: "SecondaryCard",
+        },
+      ],
+      quickPickIndex: 1,
+    });
+
+    await recorded.commandHandlers.get(AureliaCommand.OpenRelatedFile)?.();
+
+    expect(quickPicks[0]?.options).toEqual(expect.objectContaining({
+      title: "Open Related Aurelia File",
+    }));
+    expect(quickPicks[0]?.items).toHaveLength(2);
+    expect(recorded.openedDocuments.at(-1)?.uri.toString()).toBe("file:///secondary.html");
   });
 });

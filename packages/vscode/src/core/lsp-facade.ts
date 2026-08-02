@@ -9,7 +9,7 @@ import type { ClientLogger } from "../log.js";
 import type {
   DiagnosticsSnapshotResponse,
   ProtocolWorkspaceEdit,
-  RelatedFileResponse,
+  RelatedFilesResponse,
   RenameFromTsResponse,
   ResourceExplorerResponse,
   ScopeResourcesResponse,
@@ -127,10 +127,10 @@ export class LspFacade implements Disposable {
     return this.#sendRequest<ScopeResourcesResponse>(session, AureliaProtocolRequest.ScopeResources, { uri });
   }
 
-  async getRelatedFile(uri: string): Promise<RelatedFileResponse> {
+  async getRelatedFiles(uri: string): Promise<RelatedFilesResponse> {
     const session = this.#sessionForUri(uri);
-    if (session == null) return null;
-    return this.#sendRequest<RelatedFileResponse>(session, AureliaProtocolRequest.RelatedFile, { uri });
+    if (session == null) return [];
+    return this.#sendRequest<RelatedFilesResponse>(session, AureliaProtocolRequest.RelatedFiles, { uri });
   }
 
   async renameFromTs(

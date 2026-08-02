@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type {
+  RelatedFilesResponse,
   ResourceExplorerResponse,
   ScopeResourcesResponse,
 } from "../../src/protocol.js";
@@ -71,6 +72,17 @@ test("resource inventory preserves live definition and visibility identity", asy
     expect(scopedProductCards[0]?.visibility.every((row) =>
       scope?.compilerWorlds.includes(row.compilerWorld)
     )).toBe(true);
+
+    const related = await connection.sendRequest<RelatedFilesResponse>(
+      "aurelia/getRelatedFiles",
+      { uri: fileUri(fixture, "src/components/product-card.html") },
+    );
+    expect(related).toEqual([expect.objectContaining({
+      uri: fileUri(fixture, "src/components/product-card.ts"),
+      role: "component-source",
+      elementName: "product-card",
+      className: "ProductCard",
+    })]);
   } finally {
     dispose();
     child.kill("SIGKILL");

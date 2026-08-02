@@ -3,7 +3,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import {
   handleGetResources,
-  handleGetRelatedFile,
+  handleGetRelatedFiles,
   handleGetScopeResources,
   type ResourceExplorerResponse,
   type ScopeResourcesResponse,
@@ -159,6 +159,24 @@ function compilation(input: Partial<Record<string, unknown>> = {}) {
   };
 }
 
+function topologyComponent(input: {
+  elementName: string;
+  className?: string | null;
+  componentPath: string;
+  templatePath: string;
+  templateSourceKind?: string;
+}) {
+  return {
+    elementName: input.elementName,
+    className: input.className ?? null,
+    source: source(input.componentPath),
+    template: {
+      sourceKind: input.templateSourceKind ?? "markup",
+      source: source(input.templatePath),
+    },
+  };
+}
+
 function answer<T>(rows: T[]) {
   return Promise.resolve({
     schemaVersion: "0.2",
@@ -175,6 +193,7 @@ function createMockContext(input: {
   definitions?: unknown[];
   visibility?: unknown[];
   compilations?: unknown[];
+  topologyComponents?: unknown[];
 }) {
   const document = {
     uri: componentUri,
@@ -189,6 +208,15 @@ function createMockContext(input: {
       resourceDefinitions: vi.fn(() => answer(input.definitions ?? [])),
       resourceVisibility: vi.fn(() => answer(input.visibility ?? [])),
       templateCompilations: vi.fn(() => answer(input.compilations ?? [])),
+      appTopology: vi.fn(() => Promise.resolve({
+        schemaVersion: "0.2",
+        result: "answered",
+        selection: "not-applicable",
+        coverage: "complete",
+        summary: "mock topology",
+        value: { components: input.topologyComponents ?? [] },
+        page: null,
+      })),
     },
   };
 }
@@ -688,88 +716,128 @@ describe("runtime-backed related file lookup", () => {
     const componentFile = path.join(workspaceRoot, "src", "my-card.ts");
     const templateFile = path.join(workspaceRoot, "src", "my-card.html");
     const ctx = createMockContext({
-      definitions: [
-        definition({
-          resourceKind: "custom-element",
-          name: "my-card",
-          source: source("src/my-card.ts"),
-          targetSource: source("src/my-card.ts", 13, 19),
-          template: {
-            kind: "markup",
-            hasMarkup: true,
-            source: source("src/my-card.html"),
-          },
+      topologyComponents: [
+        topologyComponent({
+          elementName: "my-card",
+          className: "MyCard",
+          componentPath: "src/my-card.ts",
+          templatePath: "src/my-card.html",
         }),
       ],
     });
 
-    const result = await handleGetRelatedFile(
+    const result = await handleGetRelatedFiles(
       ctx as never,
       { uri: pathToFileURL(componentFile).toString() },
       testRequestGuard,
     );
 
-    expect(result).toEqual({
+    expect(result).toEqual([{
       uri: pathToFileURL(templateFile).toString(),
-      kind: "template",
-    });
+      role: "component-template",
+      elementName: "my-card",
+      className: "MyCard",
+    }]);
+    expect(ctx.semanticRuntime.appTopology).toHaveBeenCalledWith(componentFile, testRequestGuard);
+    expect(ctx.semanticRuntime.resourceDefinitions).not.toHaveBeenCalled();
   });
 
   test("opens the custom element component from the template source", async () => {
     const componentFile = path.join(workspaceRoot, "src", "my-card.ts");
     const templateFile = path.join(workspaceRoot, "src", "my-card.html");
     const ctx = createMockContext({
-      definitions: [
-        definition({
-          resourceKind: "custom-element",
-          name: "my-card",
-          source: source("src/my-card.ts"),
-          targetSource: source("src/my-card.ts", 13, 19),
-          template: {
-            kind: "markup",
-            hasMarkup: true,
-            source: source("src/my-card.html"),
-          },
+      topologyComponents: [
+        topologyComponent({
+          elementName: "my-card",
+          className: "MyCard",
+          componentPath: "src/my-card.ts",
+          templatePath: "src/my-card.html",
         }),
       ],
     });
 
-    const result = await handleGetRelatedFile(
+    const result = await handleGetRelatedFiles(
       ctx as never,
       { uri: pathToFileURL(templateFile).toString() },
       testRequestGuard,
     );
 
-    expect(result).toEqual({
+    expect(result).toEqual([{
       uri: pathToFileURL(componentFile).toString(),
-      kind: "component",
+      role: "component-source",
+      elementName: "my-card",
+      className: "MyCard",
+    }]);
+  });
+
+  test("preserves every topology relation when one source owns several components", async () => {
+    const componentFile = path.join(workspaceRoot, "src", "cards.ts");
+    const ctx = createMockContext({
+      topologyComponents: [
+        topologyComponent({
+          elementName: "secondary-card",
+          className: "SecondaryCard",
+          componentPath: "src/cards.ts",
+          templatePath: "src/secondary-card.html",
+        }),
+        topologyComponent({
+          elementName: "primary-card",
+          className: "PrimaryCard",
+          componentPath: "src/cards.ts",
+          templatePath: "src/primary-card.html",
+        }),
+      ],
     });
+
+    const result = await handleGetRelatedFiles(
+      ctx as never,
+      { uri: pathToFileURL(componentFile).toString() },
+      testRequestGuard,
+    );
+
+    expect(result.map((candidate) => candidate.elementName)).toEqual([
+      "primary-card",
+      "secondary-card",
+    ]);
+    expect(result.map((candidate) => candidate.uri)).toEqual([
+      pathToFileURL(path.join(workspaceRoot, "src", "primary-card.html")).toString(),
+      pathToFileURL(path.join(workspaceRoot, "src", "secondary-card.html")).toString(),
+    ]);
   });
 
   test("does not return a related file for inline templates", async () => {
     const componentFile = path.join(workspaceRoot, "src", "inline-card.ts");
     const ctx = createMockContext({
-      definitions: [
-        definition({
-          resourceKind: "custom-element",
-          name: "inline-card",
-          source: source("src/inline-card.ts"),
-          targetSource: source("src/inline-card.ts", 13, 24),
-          template: {
-            kind: "inline",
-            hasMarkup: true,
-            source: source("src/inline-card.ts", 40, 80),
-          },
+      topologyComponents: [
+        topologyComponent({
+          elementName: "inline-card",
+          className: "InlineCard",
+          componentPath: "src/inline-card.ts",
+          templatePath: "src/inline-card.ts",
+          templateSourceKind: "inline",
         }),
       ],
     });
 
     await expect(
-      handleGetRelatedFile(
+      handleGetRelatedFiles(
         ctx as never,
         { uri: pathToFileURL(componentFile).toString() },
         testRequestGuard,
       ),
-    ).resolves.toBeNull();
+    ).resolves.toEqual([]);
+  });
+
+  test("propagates topology failures instead of falling back to resource scans", async () => {
+    const componentFile = path.join(workspaceRoot, "src", "my-card.ts");
+    const ctx = createMockContext({});
+    ctx.semanticRuntime.appTopology.mockRejectedValueOnce(new Error("topology query failed"));
+
+    await expect(handleGetRelatedFiles(
+      ctx as never,
+      { uri: pathToFileURL(componentFile).toString() },
+      testRequestGuard,
+    )).rejects.toThrow("topology query failed");
+    expect(ctx.semanticRuntime.resourceDefinitions).not.toHaveBeenCalled();
   });
 });

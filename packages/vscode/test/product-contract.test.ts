@@ -8,7 +8,10 @@ interface ExtensionManifest {
     readonly commands?: readonly { readonly command: string }[];
     readonly keybindings?: readonly unknown[];
     readonly snippets?: readonly unknown[];
-    readonly menus?: Readonly<Record<string, readonly { readonly command: string }[]>>;
+    readonly menus?: Readonly<Record<string, readonly {
+      readonly command: string;
+      readonly when?: string;
+    }[]>>;
     readonly views?: Readonly<Record<string, readonly { readonly id: string }[]>>;
     readonly configuration?: {
       readonly properties?: Readonly<Record<string, {
@@ -52,6 +55,22 @@ describe("VS Code product contract", () => {
 
   test("does not contribute passive source generators outside semantic completion", () => {
     expect(manifest.contributes?.snippets).toBeUndefined();
+  });
+
+  test("offers related-file navigation for every supported script language", () => {
+    const menu = manifest.contributes?.menus?.["editor/context"]
+      ?.find((entry) => entry.command === AureliaCommand.OpenRelatedFile);
+
+    expect(menu?.when).toBeDefined();
+    for (const languageId of [
+      "html",
+      "typescript",
+      "typescriptreact",
+      "javascript",
+      "javascriptreact",
+    ]) {
+      expect(menu?.when).toContain(`editorLangId == ${languageId}`);
+    }
   });
 
   test("keeps product settings resource-scoped with quiet defaults", () => {
