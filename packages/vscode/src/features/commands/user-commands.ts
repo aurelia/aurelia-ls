@@ -139,7 +139,6 @@ function formatDetailValue(value: unknown): string {
 
 export const UserCommandsFeature: ClientFeature = {
   id: "commands.user",
-  isEnabled: (ctx) => ctx.config.current.features.commands,
   activate: (ctx) => {
     const store = new DisposableStore();
     const lsp = ctx.lsp;

@@ -4,7 +4,6 @@ import { ResourceExplorerProvider } from "./resource-explorer.js";
 
 export const ViewsFeature: ClientFeature = {
   id: "views.workspace",
-  isEnabled: (ctx) => ctx.config.current.features.views,
   activate: (ctx) => {
     const store = new DisposableStore();
 

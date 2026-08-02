@@ -17,6 +17,7 @@ export interface ServerContext {
   readonly logger: Logger;
   readonly trace: CompileTrace;
   readonly semanticRuntime: SemanticRuntimeLspSession;
+  readonly clientSupport: ServerClientSupport;
 
   workspaceRoot: string | null;
   /** Client can preserve CodeAction.data and lazily resolve the edit property. */
@@ -25,6 +26,12 @@ export interface ServerContext {
   ensureProgramDocument(uri: string): TextDocument | null;
   lookupDocumentSnapshot(uri: DocumentUri): DocumentSnapshot | null;
   lookupText(uri: DocumentUri): string | null;
+}
+
+export interface ServerClientSupport {
+  configurationPull: boolean;
+  configurationChangeRegistration: boolean;
+  inlayHintRefresh: boolean;
 }
 
 export interface DocumentSnapshot {
@@ -49,6 +56,11 @@ export function createServerContext(init: ServerContextInit): ServerContext {
     workspaceRoot,
     documents,
   });
+  const clientSupport: ServerClientSupport = {
+    configurationPull: false,
+    configurationChangeRegistration: false,
+    inlayHintRefresh: false,
+  };
 
   function ensureProgramDocument(uri: string): TextDocument | null {
     const live = liveDocumentForUri(uri);
@@ -109,6 +121,7 @@ export function createServerContext(init: ServerContextInit): ServerContext {
     logger,
     trace,
     semanticRuntime,
+    clientSupport,
 
     get workspaceRoot() { return workspaceRoot; },
     set workspaceRoot(v) {

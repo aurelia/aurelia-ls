@@ -71,8 +71,7 @@ function createHarness(options: {
   const middleware = createMiddleware(
     vscode as never,
     logger as never,
-    { enabled: false },
-    { client: rawClient, inlayHintsEnabled: true } as never,
+    { client: rawClient } as never,
   );
   return { action, convertedAction, logger, middleware, rawClient, showWarningMessage };
 }

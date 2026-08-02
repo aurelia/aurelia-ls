@@ -15,7 +15,6 @@ import { assertWorkspaceEditVersionsCurrent } from "../../workspace-edit-version
 
 export const TsRenameFeature: ClientFeature = {
   id: "rename.tsPropagate",
-  isEnabled: () => true,
   activate: async (ctx) => {
     const store = new DisposableStore();
     const vscode = ctx.vscode;

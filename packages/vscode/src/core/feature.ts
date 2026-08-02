@@ -4,7 +4,6 @@ import type { DisposableLike } from "./disposables.js";
 /** One explicitly ordered client-owned product surface. */
 export interface ClientFeature {
   readonly id: string;
-  readonly isEnabled?: (ctx: ClientContext) => boolean;
   activate(ctx: ClientContext):
     | void
     | DisposableLike

@@ -301,7 +301,11 @@ test("secondary template lanes stay usable after a live TypeScript source refres
   const diagnostics = createDiagnosticsRecorder(connection, child, getStderr);
 
   try {
-    await initialize(connection, child, getStderr, fixture);
+    await initialize(connection, child, getStderr, fixture, {
+      configuration: {
+        "aurelia.inlayHints.bindingMode": true,
+      },
+    });
     const myApp = openTrackedDocument(connection, fixture, "src/my-app.html", "html", documents, openUris);
     const productCardTs = openTrackedDocument(connection, fixture, "src/components/product-card.ts", "typescript", documents, openUris);
     await waitForCleanDiagnostics(diagnostics, myApp.uri);

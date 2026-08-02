@@ -8,7 +8,7 @@ import type {
 import { AureliaProtocolRequest } from "@aurelia-ls/language-server/protocol";
 import type { WorkspaceStatusResponse } from "@aurelia-ls/language-server/protocol";
 import type { AureliaWorkspaceIdentity } from "./types.js";
-import { createMiddleware, type DiagnosticsUxState } from "./client-middleware.js";
+import { createMiddleware } from "./client-middleware.js";
 import { DisposableStore, type DisposableLike } from "./core/disposables.js";
 import { SimpleEmitter, type Listener } from "./core/events.js";
 import { type ClientLogger } from "./log.js";
@@ -127,8 +127,6 @@ export class AureliaLanguageClient {
   #logger: ClientLogger;
   #vscode: VscodeApi;
   #createClient: LanguageClientFactory | null;
-  #diagnosticsUx: DiagnosticsUxState = { enabled: false };
-  #inlayHintsEnabled = true;
   #context: ExtensionContext | null = null;
   #serverModule: Promise<string> | null = null;
   #lifecycle: DisposableStore | null = null;
@@ -150,18 +148,6 @@ export class AureliaLanguageClient {
     this.#logger = logger;
     this.#vscode = vscode;
     this.#createClient = options.createClient ?? null;
-  }
-
-  setDiagnosticsUxEnabled(enabled: boolean): void {
-    this.#diagnosticsUx.enabled = enabled;
-  }
-
-  get inlayHintsEnabled(): boolean {
-    return this.#inlayHintsEnabled;
-  }
-
-  setInlayHintsEnabled(enabled: boolean): void {
-    this.#inlayHintsEnabled = enabled;
   }
 
   get sessions(): readonly AureliaLanguageClientSession[] {
@@ -530,13 +516,9 @@ export class AureliaLanguageClient {
     };
     const fileEvents = this.#createSessionWatchers(admission.folder);
     let client: LanguageClient | undefined;
-    const owner = this;
     const middlewareClient = {
       get client() {
         return client;
-      },
-      get inlayHintsEnabled() {
-        return owner.#inlayHintsEnabled;
       },
     };
     const clientOptions: LanguageClientOptions = {
@@ -546,7 +528,6 @@ export class AureliaLanguageClient {
       middleware: createMiddleware(
         this.#vscode,
         this.#logger,
-        this.#diagnosticsUx,
         middlewareClient,
       ),
     };

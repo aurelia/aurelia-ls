@@ -34,7 +34,6 @@ suite("extension-host IDE reliability", () => {
   let analysisReadySubscription;
 
   suiteSetup(async () => {
-    await configureAureliaForReliabilityTests();
     subscription = vscode.workspace.onDidChangeTextDocument((event) => {
       const rel = relativeWorkspacePath(event.document.uri);
       if (rel) {
@@ -496,16 +495,6 @@ async function activateAureliaExtension() {
     return Array.isArray(hovers) && hovers.length > 0;
   }, "Aurelia extension should answer language-feature requests");
   return api;
-}
-
-async function configureAureliaForReliabilityTests() {
-  const config = vscode.workspace.getConfiguration("aurelia");
-  await Promise.all([
-    config.update("features.commands", false, vscode.ConfigurationTarget.Workspace),
-    config.update("features.statusBar", false, vscode.ConfigurationTarget.Workspace),
-    config.update("features.views", false, vscode.ConfigurationTarget.Workspace),
-    config.update("features.inlayHints", false, vscode.ConfigurationTarget.Workspace),
-  ]);
 }
 
 async function resetWorkspaceToBaseline() {

@@ -7,6 +7,7 @@ import { createVscodeApi, stubExtensionContext } from "../helpers/vscode-stub.js
 class StubLanguageClient {
   startCalls = 0;
   stopCalls = 0;
+  reconcileCalls = 0;
   #lsp: LanguageClient;
   sessions: unknown[];
   sessionGeneration = 0;
@@ -27,7 +28,9 @@ class StubLanguageClient {
   }
 
   async restart() {}
-  async reconcile() {}
+  async reconcile() {
+    this.reconcileCalls += 1;
+  }
   onDidChangeSessions(listener: () => void) {
     this.#listeners.add(listener);
     return { dispose: () => this.#listeners.delete(listener) };
@@ -86,6 +89,36 @@ activationTest("activate wires the language client and explicit product features
 
   await deactivate();
   expect(languageClient.stopCalls).toBe(1);
+});
+
+activationTest("reconciles sessions only when workspace activation policy changes", async () => {
+  const { activate, deactivate } = await import("../../out/extension.js");
+  const { vscode: stubVscode, recorded } = createVscodeApi();
+  const vscode = stubVscode as unknown as VscodeApi;
+  const lsp = {
+    onNotification: vi.fn(() => ({ dispose: () => {} })),
+    sendRequest: vi.fn(async () => null),
+  } as unknown as LanguageClient;
+  const languageClient = new StubLanguageClient(lsp);
+
+  await activate(stubExtensionContext(stubVscode), {
+    vscode,
+    languageClient: languageClient as never,
+    features: [],
+  });
+
+  recorded.fireConfigurationChanged("aurelia.inlayHints.bindingMode");
+  await settleAsyncWork();
+  expect(languageClient.reconcileCalls).toBe(0);
+
+  recorded.fireConfigurationChanged("aurelia.activationMode");
+  await settleAsyncWork();
+  expect(languageClient.reconcileCalls).toBe(1);
+
+  await deactivate();
+  recorded.fireConfigurationChanged("aurelia.activationMode");
+  await settleAsyncWork();
+  expect(languageClient.reconcileCalls).toBe(1);
 });
 
 activationTest("keeps product features inactive until a workspace session is owned", async () => {

@@ -3,7 +3,6 @@ import type { VscodeApi } from "../vscode-api.js";
 import type { ClientLogger } from "../log.js";
 import type { AureliaLanguageClient } from "../client-core.js";
 import { DisposableStore } from "./disposables.js";
-import type { ConfigService } from "./config.js";
 import type { LspFacade } from "./lsp-facade.js";
 import type { ErrorReporter } from "./errors.js";
 
@@ -14,7 +13,6 @@ export interface ClientContext {
   errors: ErrorReporter;
   languageClient: AureliaLanguageClient;
   lsp: LspFacade;
-  config: ConfigService;
   disposables: DisposableStore;
 }
 

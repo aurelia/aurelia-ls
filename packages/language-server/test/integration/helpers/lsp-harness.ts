@@ -54,7 +54,23 @@ export async function initialize(
   child: ChildProcess,
   getStderr: () => string,
   workspaceRoot: string,
+  options: {
+    readonly configuration?: Readonly<Record<string, unknown>>;
+    readonly onInlayHintRefresh?: () => void;
+  } = {},
 ) {
+  if (options.configuration != null) {
+    connection.onRequest("workspace/configuration", (params: {
+      readonly items?: readonly { readonly section?: string }[];
+    }) => (params.items ?? []).map((item) =>
+      item.section == null ? null : options.configuration![item.section] ?? null
+    ));
+    connection.onRequest("client/registerCapability", () => null);
+    connection.onRequest("workspace/inlayHint/refresh", () => {
+      options.onInlayHintRefresh?.();
+      return null;
+    });
+  }
   const rootUri = pathToFileURL(workspaceRoot).toString();
   await new Promise<void>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(`initialize timeout; stderr=${getStderr()}`)), 5000);
@@ -67,6 +83,11 @@ export async function initialize(
       processId: process.pid,
       rootUri,
       capabilities: {
+        workspace: options.configuration == null ? undefined : {
+          configuration: true,
+          didChangeConfiguration: { dynamicRegistration: true },
+          inlayHint: { refreshSupport: true },
+        },
         textDocument: {
           codeAction: {
             dataSupport: true,

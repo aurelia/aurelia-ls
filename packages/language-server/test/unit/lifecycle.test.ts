@@ -1,5 +1,6 @@
 import { describe, test, expect, vi } from "vitest";
 import {
+  handleInitialize,
   refreshAllOpenDocuments,
   refreshDocument,
   registerLifecycleHandlers,
@@ -16,16 +17,33 @@ function createGeneration(sourceGeneration = 0) {
 
 function createMockContext(overrides: Record<string, unknown> = {}) {
   let generation = createGeneration();
+  const connection = {
+    onInitialize: vi.fn(),
+    onInitialized: vi.fn(),
+    onDidChangeConfiguration: vi.fn(),
+    onDidChangeWatchedFiles: vi.fn(),
+    sendDiagnostics: vi.fn(),
+    sendNotification: vi.fn(),
+    sendRequest: vi.fn(async () => undefined),
+    client: { register: vi.fn(async () => undefined) },
+    languages: { inlayHint: { refresh: vi.fn(async () => undefined) } },
+    ...((overrides.connection as Record<string, unknown> | undefined) ?? {}),
+  };
+  const { connection: _connection, ...remainingOverrides } = overrides;
   return {
     logger: { log: vi.fn(), info: vi.fn(), error: vi.fn(), warn: vi.fn() },
-    connection: {
-      sendDiagnostics: vi.fn(),
-      sendNotification: vi.fn(),
-      sendRequest: vi.fn(async () => undefined),
+    connection,
+    clientSupport: {
+      configurationPull: false,
+      configurationChangeRegistration: false,
+      inlayHintRefresh: false,
     },
     documents: {
       get: vi.fn(() => null),
       all: vi.fn(() => []),
+      onDidOpen: vi.fn(),
+      onDidChangeContent: vi.fn(),
+      onDidClose: vi.fn(),
     },
     workspace: {
       open: vi.fn(),
@@ -52,7 +70,7 @@ function createMockContext(overrides: Record<string, unknown> = {}) {
       appDiagnostics: vi.fn(async () => ({ value: { rows: [] } })),
     },
     lookupText: vi.fn(() => null),
-    ...overrides,
+    ...remainingOverrides,
   };
 }
 
@@ -63,6 +81,29 @@ function createMockDoc(uri = "file:///app/src/my-app.html") {
     version: 1,
   };
 }
+
+describe("handleInitialize", () => {
+  test("records standard configuration and inlay refresh capabilities", () => {
+    const ctx = createMockContext();
+
+    handleInitialize(ctx as never, {
+      rootUri: "file:///app",
+      capabilities: {
+        workspace: {
+          configuration: true,
+          didChangeConfiguration: { dynamicRegistration: true },
+          inlayHint: { refreshSupport: true },
+        },
+      },
+    } as never);
+
+    expect(ctx.clientSupport).toEqual({
+      configurationPull: true,
+      configurationChangeRegistration: true,
+      inlayHintRefresh: true,
+    });
+  });
+});
 
 describe("refreshDocument", () => {
   // Pattern AP: diagnostic analysis error → previous diagnostics preserved
@@ -212,6 +253,41 @@ describe("registerLifecycleHandlers — onDidClose", () => {
       diagnostics: [],
     });
     expect(ctx.semanticRuntime.recordSourceTextChanged).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("registerLifecycleHandlers — resource configuration", () => {
+  test("registers inlay invalidation and refreshes hints without rebuilding the project", async () => {
+    let initializedHandler: (() => void) | undefined;
+    let configurationHandler: (() => void) | undefined;
+    const register = vi.fn(async () => undefined);
+    const refresh = vi.fn(async () => undefined);
+    const ctx = createMockContext({
+      clientSupport: {
+        configurationPull: true,
+        configurationChangeRegistration: true,
+        inlayHintRefresh: true,
+      },
+      connection: {
+        onInitialized: vi.fn((handler: () => void) => { initializedHandler = handler; }),
+        onDidChangeConfiguration: vi.fn((handler: () => void) => { configurationHandler = handler; }),
+        client: { register },
+        languages: { inlayHint: { refresh } },
+      },
+    });
+
+    registerLifecycleHandlers(ctx as never);
+    initializedHandler!();
+    await settleAsyncWork();
+    expect(register).toHaveBeenCalledWith(
+      expect.objectContaining({ method: "workspace/didChangeConfiguration" }),
+      { section: "aurelia.inlayHints" },
+    );
+
+    configurationHandler!();
+    await settleAsyncWork();
+    expect(refresh).toHaveBeenCalledOnce();
+    expect(ctx.semanticRuntime.recordProjectTopologyChanged).not.toHaveBeenCalled();
   });
 });
 

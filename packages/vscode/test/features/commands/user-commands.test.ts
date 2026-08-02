@@ -7,7 +7,7 @@ import { createVscodeApi, stubExtensionContext } from "../../helpers/vscode-stub
 function createHarness(options: { inspectResult?: unknown; diagnosticsResult?: unknown } = {}) {
   const { vscode: stubVscode, recorded } = createVscodeApi();
   const vscode = stubVscode as unknown as VscodeApi;
-  const { errors, logger, config } = createTestServices(vscode);
+  const { errors, logger } = createTestServices(vscode);
   const inspectEntity = vi.fn(async () => options.inspectResult ?? null);
   const getDiagnostics = vi.fn(async () => options.diagnosticsResult ?? null);
   const ctx = {
@@ -15,7 +15,6 @@ function createHarness(options: { inspectResult?: unknown; diagnosticsResult?: u
     vscode,
     logger,
     errors,
-    config: { current: config },
     lsp: {
       getDiagnostics,
       inspectEntity,

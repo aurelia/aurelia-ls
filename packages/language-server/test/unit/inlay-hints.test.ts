@@ -2,9 +2,15 @@ import { test, expect, describe, vi } from "vitest";
 import { handleInlayHints } from "@aurelia-ls/language-server/api";
 import { testRequestGuard } from "./test-request-guard.js";
 
-function createMockContext(rows: unknown[]) {
+function createMockContext(rows: unknown[], enabled = true) {
   return {
     logger: { log: vi.fn(), info: vi.fn(), error: vi.fn(), warn: vi.fn() },
+    clientSupport: { configurationPull: true },
+    connection: {
+      workspace: {
+        getConfiguration: vi.fn(async () => enabled),
+      },
+    },
     ensureProgramDocument: vi.fn(() => ({
       languageId: "html",
       getText: () => "x".repeat(300),
@@ -59,6 +65,18 @@ describe("inlay hints: semantic-runtime mapping", () => {
     const result = await handleInlayHints(ctx as never, params(), testRequestGuard);
 
     expect(result).toBeNull();
+  });
+
+  test("does not query semantic-runtime when the resource-scoped setting is disabled", async () => {
+    const ctx = createMockContext([makeRow()], false);
+    const result = await handleInlayHints(ctx as never, params(), testRequestGuard);
+
+    expect(result).toBeNull();
+    expect(ctx.connection.workspace.getConfiguration).toHaveBeenCalledWith({
+      scopeUri: "file:///test.html",
+      section: "aurelia.inlayHints.bindingMode",
+    });
+    expect(ctx.semanticRuntime.templateInlayHints).not.toHaveBeenCalled();
   });
 
   test("skips rows without exact source spans", async () => {

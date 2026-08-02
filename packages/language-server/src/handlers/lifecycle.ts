@@ -4,6 +4,7 @@
 import {
   TextDocumentSyncKind,
   FileChangeType,
+  DidChangeConfigurationNotification,
   type InitializeParams,
   type InitializeResult,
   type DidChangeWatchedFilesParams,
@@ -303,6 +304,10 @@ export function handleInitialize(ctx: ServerContext, params: InitializeParams): 
   ctx.workspaceRoot = params.rootUri ? URI.parse(params.rootUri).fsPath : null;
   ctx.clientSupportsCodeActionResolveEdit = params.capabilities.textDocument?.codeAction?.dataSupport === true
     && params.capabilities.textDocument.codeAction.resolveSupport?.properties.includes("edit") === true;
+  ctx.clientSupport.configurationPull = params.capabilities.workspace?.configuration === true;
+  ctx.clientSupport.configurationChangeRegistration =
+    params.capabilities.workspace?.didChangeConfiguration?.dynamicRegistration === true;
+  ctx.clientSupport.inlayHintRefresh = params.capabilities.workspace?.inlayHint?.refreshSupport === true;
   ctx.logger.info(`initialize: root=${ctx.workspaceRoot ?? "<cwd>"}`);
 
   return {
@@ -336,6 +341,10 @@ export function handleInitialize(ctx: ServerContext, params: InitializeParams): 
 export function registerLifecycleHandlers(ctx: ServerContext): void {
   ctx.connection.onInitialize((params) => handleInitialize(ctx, params));
 
+  ctx.connection.onInitialized(() => {
+    void registerInlayHintConfigurationChanges(ctx);
+  });
+
   ctx.documents.onDidOpen((e) => {
     const state = lifecycleRefreshState(ctx);
     state.documentVersions.set(e.document.uri, e.document.version);
@@ -349,8 +358,11 @@ export function registerLifecycleHandlers(ctx: ServerContext): void {
   });
 
   ctx.connection.onDidChangeConfiguration(() => {
-    ctx.logger.log("didChangeConfiguration: reloading tsconfig and project index");
-    void reloadProjectConfiguration(ctx, "configuration change");
+    if (!ctx.clientSupport.inlayHintRefresh) return;
+    void ctx.connection.languages.inlayHint.refresh().catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      ctx.logger.warn(`inlay hint refresh failed after configuration change: ${message}`);
+    });
   });
 
   ctx.connection.onDidChangeWatchedFiles((e: DidChangeWatchedFilesParams) => {
@@ -432,6 +444,20 @@ export function registerLifecycleHandlers(ctx: ServerContext): void {
       void notifyWorkspaceChanged(ctx, ["diagnostics", "templates"], "close").catch(() => {});
     }
   });
+}
+
+async function registerInlayHintConfigurationChanges(ctx: ServerContext): Promise<void> {
+  if (!ctx.clientSupport.configurationChangeRegistration) return;
+  try {
+    // vscode-languageclient's configurationSection push is deprecated. Register only the
+    // invalidation signal, then pull the effective value for each document URI on request.
+    await ctx.connection.client.register(DidChangeConfigurationNotification.type, {
+      section: "aurelia.inlayHints",
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    ctx.logger.warn(`inlay hint configuration registration failed: ${message}`);
+  }
 }
 
 function recordSourceTextChanged(ctx: ServerContext, reason: string): void {

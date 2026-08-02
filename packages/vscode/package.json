@@ -202,37 +202,22 @@
           ],
           "default": "auto",
           "scope": "resource",
+          "order": 10,
           "description": "Control Aurelia project activation for each workspace folder."
         },
-        "aurelia.features.commands": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable Aurelia commands (find resource, open related file, inspect at cursor, show available resources, diagnostics report)."
-        },
-        "aurelia.features.statusBar": {
-          "type": "boolean",
-          "default": true,
-          "description": "Show transient Aurelia analysis progress in the status bar."
-        },
-        "aurelia.features.views": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable the Aurelia Resource Explorer sidebar panel."
-        },
-        "aurelia.features.diagnostics": {
+        "aurelia.inlayHints.bindingMode": {
           "type": "boolean",
           "default": false,
-          "description": "Append Aurelia taxonomy details (impact, actionability, category) to diagnostic messages."
+          "scope": "resource",
+          "order": 20,
+          "description": "Show the resolved binding mode for implicit .bind commands."
         },
-        "aurelia.features.inlayHints": {
-          "type": "boolean",
-          "default": true,
-          "description": "Show semantic-runtime binding mode inlay hints in templates (for example, .bind resolved to toView or twoWay from the target bindable)."
-        },
-        "aurelia.experimental.ai": {
+        "aurelia.diagnostics.includeTaxonomyDetails": {
           "type": "boolean",
           "default": false,
-          "description": "Enable experimental AI features."
+          "scope": "resource",
+          "order": 30,
+          "description": "Append Aurelia impact, actionability, category, and confidence details to diagnostic messages."
         }
       }
     }

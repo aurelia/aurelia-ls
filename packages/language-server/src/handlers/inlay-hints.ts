@@ -37,6 +37,7 @@ export async function handleInlayHints(
     const doc = ctx.ensureProgramDocument(uri);
     if (!doc) return null;
     if (!isTemplateDocument(doc)) return null;
+    if (!await bindingModeInlayHintsEnabled(ctx, uri)) return null;
 
     const answer = await ctx.semanticRuntime.templateInlayHints(
       doc,
@@ -54,6 +55,21 @@ export async function handleInlayHints(
     const message = e instanceof Error ? e.stack ?? e.message : String(e);
     ctx.logger.error(`[inlayHints] failed for ${params.textDocument.uri}: ${message}`);
     return null;
+  }
+}
+
+async function bindingModeInlayHintsEnabled(ctx: ServerContext, uri: string): Promise<boolean> {
+  if (!ctx.clientSupport.configurationPull) return false;
+  try {
+    const value = await ctx.connection.workspace.getConfiguration({
+      scopeUri: uri,
+      section: "aurelia.inlayHints.bindingMode",
+    }) as unknown;
+    return value === true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    ctx.logger.warn(`[inlayHints] resource configuration unavailable for ${uri}: ${message}`);
+    return false;
   }
 }
 

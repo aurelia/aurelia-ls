@@ -6,10 +6,6 @@ import type { VscodeApi } from "./vscode-api.js";
 import { applyDiagnosticsUxAugmentation } from "./features/diagnostics/taxonomy.js";
 import { workspaceEditVersionMismatches } from "./workspace-edit-versions.js";
 
-export type DiagnosticsUxState = {
-  enabled: boolean;
-};
-
 type MiddlewareLanguageClient = {
   readonly client: {
     sendRequest<T>(method: string, params?: unknown, token?: CancellationToken): Promise<T>;
@@ -20,13 +16,11 @@ type MiddlewareLanguageClient = {
       asCodeAction(action: ProtocolCodeAction, token: CancellationToken): Promise<CodeAction | undefined>;
     };
   } | undefined;
-  readonly inlayHintsEnabled: boolean;
 };
 
 export function createMiddleware(
   vscode: VscodeApi,
   logger: ClientLogger,
-  diagnosticsUx: DiagnosticsUxState,
   client: MiddlewareLanguageClient,
 ): Middleware {
   return {
@@ -65,14 +59,13 @@ export function createMiddleware(
       return converted;
     },
     handleDiagnostics: (uri, diagnostics, next) => {
-      if (diagnosticsUx.enabled) {
+      const includeTaxonomy = vscode.workspace
+        .getConfiguration("aurelia", uri)
+        .get<boolean>("diagnostics.includeTaxonomyDetails", false);
+      if (includeTaxonomy) {
         applyDiagnosticsUxAugmentation(diagnostics);
       }
       next(uri, diagnostics);
-    },
-    provideInlayHints: async (document, range, token, next) => {
-      if (!client.inlayHintsEnabled) return [];
-      return next(document, range, token);
     },
   };
 }

@@ -2,7 +2,6 @@ import type { ExtensionContext } from "vscode";
 import { AureliaLanguageClient } from "./client-core.js";
 import { ClientLogger } from "./log.js";
 import { getVscodeApi, type VscodeApi } from "./vscode-api.js";
-import { ConfigService } from "./core/config.js";
 import { createClientContext, type ClientContext } from "./core/context.js";
 import { ErrorReporter } from "./core/errors.js";
 import type { ClientFeature } from "./core/feature.js";
@@ -38,7 +37,6 @@ export class ClientApp {
   async activate(): Promise<ClientContext> {
     const vscode = this.#options.vscode ?? getVscodeApi();
     const logger = this.#options.logger ?? new ClientLogger("Aurelia LS (Client)", vscode);
-    const config = new ConfigService(vscode, logger);
     const errors = new ErrorReporter(logger, vscode);
     const languageClient = this.#options.languageClient ?? new AureliaLanguageClient(logger, vscode);
 
@@ -56,7 +54,6 @@ export class ClientApp {
       errors,
       languageClient,
       lsp,
-      config,
     });
 
     this.#ctx = ctx;
@@ -72,10 +69,13 @@ export class ClientApp {
     ctx.disposables.add(vscode.window.onDidChangeActiveTextEditor(() => {
       void synchronizeDocumentContext();
     }));
-    ctx.disposables.add(config.onDidChange(async () => {
-      await languageClient.reconcile({ reconfirmExisting: true });
-      await synchronizeClientState();
-      await synchronizeDocumentContext();
+    ctx.disposables.add(vscode.workspace.onDidChangeConfiguration((event) => {
+      if (!event.affectsConfiguration("aurelia.activationMode")) return;
+      void ctx.errors.capture("configuration.activationMode", async () => {
+        await languageClient.reconcile({ reconfirmExisting: true });
+        await synchronizeClientState();
+        await synchronizeDocumentContext();
+      }, { notify: false });
     }));
     await synchronizeClientState();
     await synchronizeDocumentContext();
@@ -155,7 +155,6 @@ async function activateFeatures(
   const activations = new DisposableStore();
   for (const feature of features) {
     try {
-      if (feature.isEnabled?.(ctx) === false) continue;
       ctx.logger.info(`[features] activating: ${feature.id}`);
       const activation = await feature.activate(ctx);
       if (isDisposableList(activation)) {

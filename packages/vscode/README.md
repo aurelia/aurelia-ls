@@ -117,8 +117,6 @@ extension host can access their filesystem; virtual workspaces are not currently
 | Aurelia: Diagnostics Report | | Open a semantic-runtime diagnostics summary for the current template |
 | Aurelia: Refresh | | Refresh the Resource Explorer |
 
-`Aurelia Debug: Dump Server State` is available when `aurelia.features.debugCommands` is enabled. Observability commands are available from the command palette for troubleshooting.
-
 ## Troubleshooting
 
 If features aren't working:

@@ -4,7 +4,6 @@ import { DisposableStore } from "../../core/disposables.js";
 
 export const StatusFeature: ClientFeature = {
   id: "status.bar",
-  isEnabled: (ctx) => ctx.config.current.features.statusBar,
   activate: (ctx) => {
     const store = new DisposableStore();
     const status = new StatusService(ctx.vscode);
