@@ -131,6 +131,7 @@ export function readSemanticTemplateResourceAvailability(
   emission: AureliaAppWorldProjectEmission,
   store: KernelStore,
   cursor: SemanticRuntimeSourceCursorInput | null | undefined,
+  requestedScopeIdentityKey: string | null | undefined,
 ): SemanticRuntimeAnswer<SemanticTemplateResourceAvailabilityResult> {
   const projection = new ResourceInventoryBuilder(emission, store).read();
   const emptyValue = (
@@ -195,7 +196,22 @@ export function readSemanticTemplateResourceAvailability(
       },
     );
   }
-  if (selectedScopes.length > 1) {
+  const requestedScope = requestedScopeIdentityKey == null
+    ? null
+    : selectedScopes.find((selection) => selection.candidate.scopeIdentityKey === requestedScopeIdentityKey) ?? null;
+  if (requestedScopeIdentityKey != null && requestedScope == null) {
+    const candidates = selectedScopes.map((selection) => selection.candidate);
+    return answer(
+      SemanticRuntimeAnswerResult.Answered,
+      'The requested template compiler scope is not available at the current source cursor.',
+      emptyValue('Choose a current template compiler scope before inspecting available resources.', candidates),
+      {
+        selection: SemanticRuntimeAnswerSelection.Absent,
+        coverage: SemanticRuntimeAnswerCoverage.Complete,
+      },
+    );
+  }
+  if (requestedScope == null && selectedScopes.length > 1) {
     const candidates = selectedScopes.map((selection) => selection.candidate);
     return answer(
       SemanticRuntimeAnswerResult.Answered,
@@ -208,7 +224,7 @@ export function readSemanticTemplateResourceAvailability(
     );
   }
 
-  const selected = selectedScopes[0]!;
+  const selected = requestedScope ?? selectedScopes[0]!;
   const rows = selected.selection.resource.compilation.compilerWorld.resourceScope.resources
     .map((visibleResource) => {
       const candidate = projection.candidateByVisibleResource.get(visibleResource);

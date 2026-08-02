@@ -4276,6 +4276,7 @@ export class SemanticApp {
       this.emission,
       this.runtime.workspace.store,
       query.cursor,
+      query.templateResourceScopeIdentityKey,
     );
   }
 

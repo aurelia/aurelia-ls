@@ -174,6 +174,7 @@ export function semanticAppQueryKey(query: SemanticAppQuery): string {
     semanticObservedDependencyLocusKey(shapedQuery.observedDependencyLocus),
     shapedQuery.includeDeclaration ?? 'default-include-declaration',
     shapedQuery.newName ?? 'no-new-name',
+    shapedQuery.templateResourceScopeIdentityKey ?? 'no-template-resource-scope',
     shapedQuery.cursor == null
       ? 'no-cursor'
       : `${shapedQuery.cursor.filePath}:${shapedQuery.cursor.line}:${shapedQuery.cursor.character}:${shapedQuery.cursor.offset ?? 'no-offset'}`,

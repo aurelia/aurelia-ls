@@ -11,6 +11,7 @@ import {
   SemanticResourceInventoryLocalityKind,
   SemanticResourceInventoryOriginKind,
   SemanticResourceNavigationUnavailableReason,
+  SemanticRuntimeAnswerResult,
   SemanticRuntimeAnswerSelection,
   SemanticRuntimeDetail,
   type SemanticResourceInventoryResult,
@@ -161,6 +162,22 @@ describe('resource discovery', () => {
     expect(answer.value.candidates).toHaveLength(2);
     expect(new Set(answer.value.candidates.map((candidate) => candidate.scopeIdentityKey)).size).toBe(2);
     expect(new Set(answer.value.candidates.map((candidate) => candidate.templateIdentityKey)).size).toBe(1);
+
+    const selected = await templateAvailability(
+      runtime,
+      templateFile,
+      '<template>',
+      answer.value.candidates[0]!.scopeIdentityKey,
+    );
+    expect(selected.selection).toBe(SemanticRuntimeAnswerSelection.Exact);
+    expect(selected.value.selectedTemplate?.scopeIdentityKey).toBe(answer.value.candidates[0]!.scopeIdentityKey);
+    expect(selected.value.rows).not.toHaveLength(0);
+
+    const unsupported = await runtime.answerAppQuery({
+      kind: SemanticAppQueryKind.ResourceInventory,
+      templateResourceScopeIdentityKey: answer.value.candidates[0]!.scopeIdentityKey,
+    });
+    expect(unsupported.result).toBe(SemanticRuntimeAnswerResult.Unsupported);
   }, 60_000);
 });
 
@@ -178,12 +195,14 @@ async function templateAvailability(
   runtime: Awaited<ReturnType<typeof createSemanticRuntime>>,
   filePath: string,
   marker: string,
+  templateResourceScopeIdentityKey?: string,
 ): Promise<SemanticRuntimeAnswer<SemanticTemplateResourceAvailabilityResult>> {
   const offset = readFileSync(filePath, 'utf8').indexOf(marker);
   expect(offset).toBeGreaterThanOrEqual(0);
   return await runtime.answerAppQuery({
     kind: SemanticAppQueryKind.TemplateResourceAvailability,
     cursor: { filePath, offset },
+    templateResourceScopeIdentityKey,
     includeAuthoringTemplates: true,
   }) as SemanticRuntimeAnswer<SemanticTemplateResourceAvailabilityResult>;
 }

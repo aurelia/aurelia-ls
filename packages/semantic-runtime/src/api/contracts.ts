@@ -796,6 +796,8 @@ export interface SemanticAppQuery {
   readonly rowPageSize?: number | null;
   /** Source cursor used by cursor-scoped authoring queries such as template completions. */
   readonly cursor?: SemanticRuntimeSourceCursorInput | null;
+  /** Exact compiler-resource scope selected from a prior template-resource-availability answer. */
+  readonly templateResourceScopeIdentityKey?: string | null;
   /** Source file used by file-scoped authoring queries such as template diagnostics. */
   readonly sourceFile?: SemanticRuntimeSourceFileInput | null;
   /** Include the declaration/source target when a cursor-scoped references query supports it. */

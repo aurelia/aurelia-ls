@@ -1462,7 +1462,9 @@ availability row points at the authored registration that admitted it.
 `TemplateResourceAvailability` is the cursor-scoped companion. It selects the narrowest compiled template occurrence
 and returns exactly that compiler world's effective runtime-resource scope. Equally specific occurrences from different
 app roots return `selection: ambiguous` with candidate template/scope identities and no unioned rows. A caller must
-choose a project before opening the app and must choose a candidate scope before treating availability as exact.
+choose a project before opening the app and must choose a candidate scope before treating availability as exact. Pass
+the chosen `scopeIdentityKey` back as `templateResourceScopeIdentityKey`; a stale or unrelated key returns
+`selection: absent` with the current candidates rather than selecting another scope.
 
 `ResourceDefinitions` exposes converged Aurelia resource definitions recognized from explicit decorators, runtime
 definition objects, static fields, metadata, and project conventions before app-world/compiler visibility is known.

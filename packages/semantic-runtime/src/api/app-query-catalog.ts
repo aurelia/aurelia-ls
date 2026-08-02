@@ -225,6 +225,12 @@ export function semanticAppQueryCatalogShape(
     ),
     ...(query.kind !== SemanticAppQueryKind.RouterOverview || query.rowPageSize == null ? {} : { rowPageSize: query.rowPageSize }),
     ...(row.requiresCursor && query.cursor != null ? { cursor: query.cursor } : {}),
+    ...(
+      query.kind === SemanticAppQueryKind.TemplateResourceAvailability
+      && query.templateResourceScopeIdentityKey != null
+        ? { templateResourceScopeIdentityKey: query.templateResourceScopeIdentityKey }
+        : {}
+    ),
     ...(query.kind !== SemanticAppQueryKind.TemplateReferences || query.includeDeclaration == null ? {} : { includeDeclaration: query.includeDeclaration }),
     ...(
       (query.kind !== SemanticAppQueryKind.TemplateRename && query.kind !== SemanticAppQueryKind.TemplateRenameFromTypeScript)
@@ -253,6 +259,12 @@ export function unsupportedSemanticAppQuerySelectorFields(
   }
   if (query.cursor != null && !row.requiresCursor && !row.supportsSourceFile) {
     unsupportedFields.push('cursor');
+  }
+  if (
+    query.templateResourceScopeIdentityKey != null
+    && query.kind !== SemanticAppQueryKind.TemplateResourceAvailability
+  ) {
+    unsupportedFields.push('templateResourceScopeIdentityKey');
   }
   if (query.includeTypeSurfaces != null && query.kind !== SemanticAppQueryKind.AppTopology) {
     unsupportedFields.push('includeTypeSurfaces');
