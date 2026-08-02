@@ -21,9 +21,6 @@ import type {
 } from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
 import { semanticSourceOffsetRangeForDocument } from "../mapping/source-locations.js";
-import {
-  logIfSemanticRuntimeRequestAborted,
-} from "./request-guard.js";
 import type { SemanticRuntimeLspRequestGuard } from "../runtime/semantic-runtime-session.js";
 import { isTemplateDocument } from "../utils/document-kind.js";
 
@@ -32,30 +29,21 @@ export async function handleInlayHints(
   params: InlayHintParams,
   guard: SemanticRuntimeLspRequestGuard,
 ): Promise<InlayHint[] | null> {
-  try {
-    const uri = params.textDocument.uri;
-    const doc = ctx.ensureProgramDocument(uri);
-    if (!doc) return null;
-    if (!isTemplateDocument(doc)) return null;
-    if (!await bindingModeInlayHintsEnabled(ctx, uri)) return null;
+  const uri = params.textDocument.uri;
+  const doc = ctx.ensureProgramDocument(uri);
+  if (!doc) return null;
+  if (!isTemplateDocument(doc)) return null;
+  if (!await bindingModeInlayHintsEnabled(ctx, uri)) return null;
 
-    const answer = await ctx.semanticRuntime.templateInlayHints(
-      doc,
-      guard,
-    );
-    const hints = answer.value.rows
-      .map((row) => mapSemanticRuntimeTemplateInlayHint(row, doc, params))
-      .filter((hint): hint is InlayHint => hint != null);
+  const answer = await ctx.semanticRuntime.templateInlayHints(
+    doc,
+    guard,
+  );
+  const hints = answer.value.rows
+    .map((row) => mapSemanticRuntimeTemplateInlayHint(row, doc, params))
+    .filter((hint): hint is InlayHint => hint != null);
 
-    return hints.length > 0 ? hints : null;
-  } catch (e) {
-    if (logIfSemanticRuntimeRequestAborted(ctx, "inlayHints", e, params.textDocument.uri)) {
-      return null;
-    }
-    const message = e instanceof Error ? e.stack ?? e.message : String(e);
-    ctx.logger.error(`[inlayHints] failed for ${params.textDocument.uri}: ${message}`);
-    return null;
-  }
+  return hints.length > 0 ? hints : null;
 }
 
 async function bindingModeInlayHintsEnabled(ctx: ServerContext, uri: string): Promise<boolean> {

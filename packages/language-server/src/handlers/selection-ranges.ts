@@ -20,9 +20,6 @@ import {
   semanticSourceOffsetRangeForDocument,
   semanticSourceReferenceMatchesDocument,
 } from "../mapping/source-locations.js";
-import {
-  logIfSemanticRuntimeRequestAborted,
-} from "./request-guard.js";
 import type { SemanticRuntimeLspRequestGuard } from "../runtime/semantic-runtime-session.js";
 import { isTemplateDocument } from "../utils/document-kind.js";
 
@@ -40,27 +37,18 @@ export async function handleSelectionRanges(
   if (!doc) return null;
   if (!isTemplateDocument(doc)) return null;
 
-  try {
-    const ranges: SelectionRange[] = [];
-    for (const position of params.positions) {
-      const answer = await ctx.semanticRuntime.templateCursorInfo(
-        doc,
-        position,
-        guard,
-      );
-      const range = selectionRangeForCursor(ctx, doc, position, answer.value);
-      if (range == null) return null;
-      ranges.push(range);
-    }
-    return ranges.length > 0 ? ranges : null;
-  } catch (e) {
-    if (logIfSemanticRuntimeRequestAborted(ctx, "selectionRange", e, params.textDocument.uri)) {
-      return null;
-    }
-    const message = e instanceof Error ? e.stack ?? e.message : String(e);
-    ctx.logger.error(`[selectionRange] failed for ${params.textDocument.uri}: ${message}`);
-    return null;
+  const ranges: SelectionRange[] = [];
+  for (const position of params.positions) {
+    const answer = await ctx.semanticRuntime.templateCursorInfo(
+      doc,
+      position,
+      guard,
+    );
+    const range = selectionRangeForCursor(ctx, doc, position, answer.value);
+    if (range == null) return null;
+    ranges.push(range);
   }
+  return ranges.length > 0 ? ranges : null;
 }
 
 function selectionRangeForCursor(
@@ -122,7 +110,7 @@ function offsetRangeForSource(
   doc: TextDocument,
   source: SemanticSourceReference | null,
 ): OffsetRange | null {
-  if (!semanticSourceReferenceMatchesDocument(source, ctx.workspaceRoot, doc.uri)) return null;
+  if (!semanticSourceReferenceMatchesDocument(source, ctx.documentUris, doc.uri)) return null;
   return semanticSourceOffsetRangeForDocument(source, doc);
 }
 

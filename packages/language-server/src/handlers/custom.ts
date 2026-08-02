@@ -1,14 +1,12 @@
 /**
  * Custom Aurelia request handlers for VS Code-facing semantic-runtime facades.
  *
- * Query handlers preserve semantic-runtime answer evidence. Presentation-only
- * requests may degrade to null, while inventory failures remain explicit so a
- * client never mistakes a failed query for an empty workspace.
+ * Query handlers preserve semantic-runtime answer evidence. The shared LSP
+ * request boundary keeps cancellation, staleness, and operational failure
+ * distinct from normal semantic absence and refusal.
  */
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 import type { CancellationToken } from "vscode-languageserver/node";
-import { URI } from "vscode-uri";
 import type {
   SemanticResourceDefinitionRow,
   SemanticResourceVisibilityRow,
@@ -20,10 +18,12 @@ import type {
   SemanticTemplateCompilationRow,
 } from "@aurelia-ls/semantic-runtime";
 import {
+  canonicalTypeSystemPath,
   diagnosticRepairAffordanceForSuggestion,
   semanticExactSourceReference,
 } from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
+import type { WorkspaceDocumentUris } from "../utils/document-uri.js";
 import type {
   DiagnosticCategory,
   DiagnosticImpact,
@@ -53,7 +53,6 @@ import type {
   WorkspaceStatusResponse,
 } from "../protocol.js";
 import { AureliaProtocolRequest } from "../protocol.js";
-import { canonicalDocumentUri } from "../utils/document-uri.js";
 import {
   mapSemanticRuntimeTemplatePrepareRename,
   mapSemanticRuntimeTemplateRenameEdit,
@@ -64,10 +63,10 @@ import {
   semanticSourceReferenceFilePath,
   semanticSourceReferenceMatchesDocument,
   semanticSourceReferencePath,
+  semanticSourceReferenceUri,
 } from "../mapping/source-locations.js";
 import {
-  logIfSemanticRuntimeRequestAborted,
-  semanticRuntimeRequestGuard,
+  runSemanticRuntimeRequest,
 } from "./request-guard.js";
 import type { SemanticRuntimeLspRequestGuard } from "../runtime/semantic-runtime-session.js";
 
@@ -89,38 +88,33 @@ function uriFromParam(params: MaybeUriParam): string | undefined {
   return undefined;
 }
 
-function formatError(e: unknown): string {
-  if (e instanceof Error) return e.stack ?? e.message;
-  return String(e);
-}
-
 function serializeRuntimeDiagnosticsSnapshot(
-  workspaceRoot: string | null,
+  documentUris: WorkspaceDocumentUris,
   result: SemanticAppDiagnosticsResult,
 ): DiagnosticsSnapshotBundle {
   const rows = result.rows;
   const presentation = result.presentation;
-  const raw = rows.map((row) => toRuntimeSnapshotItem(workspaceRoot, row));
+  const raw = rows.map((row) => toRuntimeSnapshotItem(documentUris, row));
   return {
     bySurface: {
       lsp: presentation == null
         ? raw
         : presentation.groups.flatMap((group) => {
           const row = rowAt(rows, group.primary.rowIndex);
-          return row == null ? [] : [toRuntimeSnapshotItem(workspaceRoot, row, "primary")];
+          return row == null ? [] : [toRuntimeSnapshotItem(documentUris, row, "primary")];
         }),
     },
     raw,
-    ...(presentation == null ? {} : { presentation: runtimeDiagnosticsPresentation(workspaceRoot, rows, presentation) }),
+    ...(presentation == null ? {} : { presentation: runtimeDiagnosticsPresentation(documentUris, rows, presentation) }),
   };
 }
 
 function toRuntimeSnapshotItem(
-  workspaceRoot: string | null,
+  documentUris: WorkspaceDocumentUris,
   row: SemanticAppDiagnosticRow,
   status: DiagnosticStatus = "canonical",
 ): DiagnosticsSnapshotItem {
-  const file = semanticSourceReferenceFilePath(row.source, workspaceRoot) ?? undefined;
+  const file = semanticSourceReferenceFilePath(row.source, documentUris) ?? undefined;
   const span = sourceSpanForSource(row.source);
   const code = semanticRuntimeDiagnosticCode(row);
   return {
@@ -132,10 +126,10 @@ function toRuntimeSnapshotItem(
     category: runtimeDiagnosticCategory(row),
     status,
     source: `semantic-runtime:${row.diagnosticDomain}`,
-    uri: file == null ? undefined : pathToFileURL(file).toString(),
+    uri: file == null ? undefined : documentUris.uriForHostPath(file),
     span,
     data: semanticRuntimeDiagnosticSnapshotData(row),
-    related: runtimeDiagnosticRelatedInformation(workspaceRoot, row.relatedInformation),
+    related: runtimeDiagnosticRelatedInformation(documentUris, row.relatedInformation),
     surfaces: ["lsp", "vscode-panel"],
     issues: [
       {
@@ -149,16 +143,16 @@ function toRuntimeSnapshotItem(
 }
 
 function runtimeDiagnosticRelatedInformation(
-  workspaceRoot: string | null,
+  documentUris: WorkspaceDocumentUris,
   relatedInformation: NonNullable<SemanticAppDiagnosticRow["relatedInformation"]>,
 ): readonly DiagnosticsSnapshotRelated[] {
   return relatedInformation.map((related): DiagnosticsSnapshotRelated => {
-    const file = semanticSourceReferenceFilePath(related.source, workspaceRoot) ?? undefined;
+    const file = semanticSourceReferenceFilePath(related.source, documentUris) ?? undefined;
     const span = sourceSpanForSource(related.source);
     return {
       ...(related.code == null ? {} : { code: related.code }),
       message: related.message,
-      ...(file == null ? {} : { uri: pathToFileURL(file).toString() }),
+      ...(file == null ? {} : { uri: documentUris.uriForHostPath(file) }),
       ...(span == null ? {} : { span }),
       ...(related.sourceRole == null ? {} : { sourceRole: related.sourceRole }),
       ...(related.relationKind == null ? {} : { relationKind: related.relationKind }),
@@ -167,7 +161,7 @@ function runtimeDiagnosticRelatedInformation(
 }
 
 function runtimeDiagnosticsPresentation(
-  workspaceRoot: string | null,
+  documentUris: WorkspaceDocumentUris,
   rows: readonly SemanticAppDiagnosticRow[],
   presentation: SemanticDiagnosticPresentationResult,
 ): DiagnosticsSnapshotPresentation {
@@ -178,18 +172,18 @@ function runtimeDiagnosticsPresentation(
     complete: presentation.complete,
     groups: presentation.groups.map((group): DiagnosticsSnapshotPresentationGroup => ({
       groupKey: group.groupKey,
-      ...(group.subject == null ? {} : { subject: runtimeDiagnosticSubject(workspaceRoot, group.subject) }),
+      ...(group.subject == null ? {} : { subject: runtimeDiagnosticSubject(documentUris, group.subject) }),
       primary: {
         rowId: group.primary.rowId,
         role: group.primary.role,
         ...(group.primary.relation == null ? {} : { relation: group.primary.relation }),
-        diagnostic: runtimePresentationSnapshotItem(workspaceRoot, rows, group.primary.rowIndex, "primary"),
+        diagnostic: runtimePresentationSnapshotItem(documentUris, rows, group.primary.rowIndex, "primary"),
       },
       related: group.related.map((row): DiagnosticsSnapshotPresentationItem => ({
         rowId: row.rowId,
         role: row.role,
         ...(row.relation == null ? {} : { relation: row.relation }),
-        diagnostic: runtimePresentationSnapshotItem(workspaceRoot, rows, row.rowIndex, "contextual"),
+        diagnostic: runtimePresentationSnapshotItem(documentUris, rows, row.rowIndex, "contextual"),
       })),
       rawRowCount: group.rawRowCount,
       primarySeverity: runtimeDiagnosticSeverity(group.primarySeverity),
@@ -199,13 +193,13 @@ function runtimeDiagnosticsPresentation(
 }
 
 function runtimePresentationSnapshotItem(
-  workspaceRoot: string | null,
+  documentUris: WorkspaceDocumentUris,
   rows: readonly SemanticAppDiagnosticRow[],
   rowIndex: number,
   status: DiagnosticStatus,
 ): DiagnosticsSnapshotItem | null {
   const row = rowAt(rows, rowIndex);
-  return row == null ? null : toRuntimeSnapshotItem(workspaceRoot, row, status);
+  return row == null ? null : toRuntimeSnapshotItem(documentUris, row, status);
 }
 
 function rowAt<TRow>(rows: readonly TRow[], index: number): TRow | null {
@@ -215,15 +209,15 @@ function rowAt<TRow>(rows: readonly TRow[], index: number): TRow | null {
 }
 
 function runtimeDiagnosticSubject(
-  workspaceRoot: string | null,
+  documentUris: WorkspaceDocumentUris,
   subject: NonNullable<SemanticAppDiagnosticRow["subject"]>,
 ): NonNullable<DiagnosticsSnapshotPresentationGroup["subject"]> {
   const source = semanticExactSourceReference(subject.source);
-  const file = semanticSourceReferenceFilePath(subject.source, workspaceRoot) ?? undefined;
+  const file = semanticSourceReferenceFilePath(subject.source, documentUris) ?? undefined;
   return {
     subjectKind: subject.subjectKind,
     subjectName: subject.subjectName,
-    ...(file == null ? {} : { uri: pathToFileURL(file).toString() }),
+    ...(file == null ? {} : { uri: documentUris.uriForHostPath(file) }),
     ...(source?.start == null || source.end == null
       ? {}
       : { span: { start: source.start, end: source.end } }),
@@ -282,59 +276,45 @@ export async function handleGetDiagnostics(
   params: MaybeUriParam,
   guard: SemanticRuntimeLspRequestGuard,
 ): Promise<DiagnosticsSnapshotResponse | null> {
-  try {
-    const uri = uriFromParam(params);
-    if (!uri) return null;
-    const canonical = canonicalDocumentUri(uri);
-    const doc = ctx.ensureProgramDocument(uri);
-    if (!doc) return null;
-    const answer = await ctx.semanticRuntime.appDiagnostics(doc, guard);
-    const diagnostics = serializeRuntimeDiagnosticsSnapshot(ctx.workspaceRoot, answer.value);
-    return {
-      uri: canonical.uri,
-      answer: {
-        schemaVersion: answer.schemaVersion,
-        result: `${answer.result}`,
-        selection: `${answer.selection}`,
-        coverage: `${answer.coverage}`,
-        summary: answer.summary,
-        page: answer.page,
-        ...(answer.analysisDepth == null ? {} : { analysisDepth: answer.analysisDepth }),
-        ...(answer.continuations == null ? {} : { continuations: answer.continuations }),
-      },
-      diagnostics,
-    };
-  } catch (e) {
-    if (!logIfSemanticRuntimeRequestAborted(ctx, "getDiagnostics", e, uriFromParam(params))) {
-      ctx.logger.error(`[getDiagnostics] failed: ${formatError(e)}`);
-    }
-    throw e;
-  }
+  const uri = uriFromParam(params);
+  if (!uri) return null;
+  const canonicalUri = ctx.documentUris.resolve(uri).uri;
+  const doc = ctx.ensureProgramDocument(uri);
+  if (!doc) return null;
+  const answer = await ctx.semanticRuntime.appDiagnostics(doc, guard);
+  const diagnostics = serializeRuntimeDiagnosticsSnapshot(ctx.documentUris, answer.value);
+  return {
+    uri: canonicalUri,
+    answer: {
+      schemaVersion: answer.schemaVersion,
+      result: `${answer.result}`,
+      selection: `${answer.selection}`,
+      coverage: `${answer.coverage}`,
+      summary: answer.summary,
+      page: answer.page,
+      ...(answer.analysisDepth == null ? {} : { analysisDepth: answer.analysisDepth }),
+      ...(answer.continuations == null ? {} : { continuations: answer.continuations }),
+    },
+    diagnostics,
+  };
 }
 
 export async function handleGetResources(
   ctx: ServerContext,
   guard: SemanticRuntimeLspRequestGuard,
 ): Promise<ResourceExplorerResponse> {
-  try {
-    const [definitions, visibility, compilations] = await Promise.all([
-      ctx.semanticRuntime.resourceDefinitions(guard),
-      ctx.semanticRuntime.resourceVisibility(guard),
-      ctx.semanticRuntime.templateCompilations(guard),
-    ]);
-    return buildRuntimeResourceExplorerResponse(
-      ctx.workspaceRoot,
-      guard.generation.fingerprint,
-      definitions,
-      visibility,
-      compilations,
-    );
-  } catch (e) {
-    if (!logIfSemanticRuntimeRequestAborted(ctx, "getResources", e)) {
-      ctx.logger.error(`[getResources] failed: ${formatError(e)}`);
-    }
-    throw e;
-  }
+  const [definitions, visibility, compilations] = await Promise.all([
+    ctx.semanticRuntime.resourceDefinitions(guard),
+    ctx.semanticRuntime.resourceVisibility(guard),
+    ctx.semanticRuntime.templateCompilations(guard),
+  ]);
+  return buildRuntimeResourceExplorerResponse(
+    ctx.documentUris,
+    guard.generation.fingerprint,
+    definitions,
+    visibility,
+    compilations,
+  );
 }
 
 const RESOURCE_EXPLORER_KIND_ORDER: readonly ResourceExplorerResourceKind[] = [
@@ -364,7 +344,7 @@ interface ResourceExplorerAccumulator {
 }
 
 function buildRuntimeResourceExplorerResponse(
-  workspaceRoot: string | null,
+  documentUris: WorkspaceDocumentUris,
   fingerprint: string,
   definitions: SemanticRuntimeAnswer<{ readonly rows: readonly SemanticResourceDefinitionRow[] }>,
   visibility: SemanticRuntimeAnswer<{ readonly rows: readonly SemanticResourceVisibilityRow[] }>,
@@ -438,7 +418,7 @@ function buildRuntimeResourceExplorerResponse(
       ...row,
       resourceKind: kind,
       visibilityKind: protocolVisibilityKind(row.visibilityKind),
-      file: semanticSourceReferenceFilePath(row.source, workspaceRoot),
+      uri: row.source == null ? null : semanticSourceReferenceUri(row.source, documentUris),
     });
     resource.source ??= row.source;
     for (const alias of row.aliases) {
@@ -454,7 +434,7 @@ function buildRuntimeResourceExplorerResponse(
       return {
         ...resource,
         visibility: [...resource.visibility].sort(compareResourceExplorerVisibility),
-        file: semanticSourceReferenceFilePath(resource.source, workspaceRoot),
+        uri: resource.source == null ? null : semanticSourceReferenceUri(resource.source, documentUris),
         package: packageName,
         origin: explorerOriginForSource(resource.source, packageName),
       };
@@ -667,61 +647,48 @@ export async function handleGetScopeResources(
   params: DocumentUriParams,
   guard: SemanticRuntimeLspRequestGuard,
 ): Promise<ScopeResourcesResponse> {
-  try {
-    const uri = params?.uri;
-    if (!uri) return null;
-    const doc = ctx.ensureProgramDocument(uri);
-    if (!doc) return null;
-    const filePath = URI.parse(uri).fsPath;
-    const [definitions, visibility, compilations] = await Promise.all([
-      ctx.semanticRuntime.resourceDefinitions(guard),
-      ctx.semanticRuntime.resourceVisibility(guard),
-      ctx.semanticRuntime.templateCompilations(guard, filePath),
-    ]);
-    const compilerWorlds = [...new Set(
-      compilations.value.rows
-        .filter((row) => semanticSourceReferenceMatchesDocument(row.source, ctx.workspaceRoot, uri))
-        .map((row) => row.compilerWorld),
-    )].sort();
-    if (compilerWorlds.length === 0) return null;
-    const compilerWorldSet = new Set(compilerWorlds);
-    const inventory = buildRuntimeResourceExplorerResponse(
-      ctx.workspaceRoot,
-      guard.generation.fingerprint,
-      definitions,
-      visibility,
-      compilations,
-    );
-    const resources = inventory.resources.flatMap((resource): readonly ResourceExplorerItem[] => {
-      const scopedVisibility = resource.visibility.filter((row) => compilerWorldSet.has(row.compilerWorld));
-      return scopedVisibility.length === 0 ? [] : [{ ...resource, visibility: scopedVisibility }];
-    });
-    return {
-      compilerWorlds,
-      scopeLabel: compilerWorlds.length === 1 ? compilerWorlds[0]! : `${compilerWorlds.length} compiler worlds`,
-      resources,
-      evidence: inventory.evidence,
-    };
-  } catch (e) {
-    if (!logIfSemanticRuntimeRequestAborted(ctx, "getScopeResources", e, params?.uri)) {
-      ctx.logger.error(`[getScopeResources] failed: ${formatError(e)}`);
-    }
-    throw e;
-  }
+  const uri = params?.uri;
+  if (!uri) return null;
+  const doc = ctx.ensureProgramDocument(uri);
+  if (!doc) return null;
+  const filePath = ctx.documentUris.hostPath(uri);
+  if (filePath == null) return null;
+  const [definitions, visibility, compilations] = await Promise.all([
+    ctx.semanticRuntime.resourceDefinitions(guard),
+    ctx.semanticRuntime.resourceVisibility(guard),
+    ctx.semanticRuntime.templateCompilations(guard, filePath),
+  ]);
+  const compilerWorlds = [...new Set(
+    compilations.value.rows
+      .filter((row) => semanticSourceReferenceMatchesDocument(row.source, ctx.documentUris, uri))
+      .map((row) => row.compilerWorld),
+  )].sort();
+  if (compilerWorlds.length === 0) return null;
+  const compilerWorldSet = new Set(compilerWorlds);
+  const inventory = buildRuntimeResourceExplorerResponse(
+    ctx.documentUris,
+    guard.generation.fingerprint,
+    definitions,
+    visibility,
+    compilations,
+  );
+  const resources = inventory.resources.flatMap((resource): readonly ResourceExplorerItem[] => {
+    const scopedVisibility = resource.visibility.filter((row) => compilerWorldSet.has(row.compilerWorld));
+    return scopedVisibility.length === 0 ? [] : [{ ...resource, visibility: scopedVisibility }];
+  });
+  return {
+    compilerWorlds,
+    scopeLabel: compilerWorlds.length === 1 ? compilerWorlds[0]! : `${compilerWorlds.length} compiler worlds`,
+    resources,
+    evidence: inventory.evidence,
+  };
 }
 
 export async function handleWorkspaceStatus(
   ctx: ServerContext,
   guard: SemanticRuntimeLspRequestGuard,
 ): Promise<WorkspaceStatusResponse | null> {
-  try {
-    return await ctx.semanticRuntime.workspaceSummary(guard);
-  } catch (e) {
-    if (!logIfSemanticRuntimeRequestAborted(ctx, "workspaceStatus", e)) {
-      ctx.logger.error(`[workspaceStatus] failed: ${formatError(e)}`);
-    }
-    throw e;
-  }
+  return await ctx.semanticRuntime.workspaceSummary(guard);
 }
 
 // ============================================================================
@@ -733,146 +700,132 @@ export async function handleRenameFromTs(
   params: RenameFromTsParams,
   guard: SemanticRuntimeLspRequestGuard,
 ): Promise<RenameFromTsResponse> {
-  try {
-    if (!params?.uri || !params.position || (params.newName != null && typeof params.newName !== "string")) {
-      return renameFromTsBlocked("invalid-request", "Aurelia cross-domain rename requires a URI and position, with an optional new name.");
-    }
+  if (!params?.uri || !params.position || (params.newName != null && typeof params.newName !== "string")) {
+    return renameFromTsBlocked("invalid-request", "Aurelia cross-domain rename requires a URI and position, with an optional new name.");
+  }
 
-    const canonical = canonicalDocumentUri(params.uri);
-    const doc = ctx.ensureProgramDocument(params.uri);
-    if (!doc) {
-      return renameFromTsBlocked("document-unavailable", "Aurelia cross-domain rename could not read the TypeScript document.");
-    }
-    const answer = await ctx.semanticRuntime.templateRenameFromTypeScript(
-      doc,
-      params.position,
-      guard,
-      params.newName ?? null,
-    );
-    const templateReferenceCount = answer.value.templateReferenceCount;
-    const typeScriptReferenceCount = answer.value.typeScriptReferenceCount;
-    const candidateCount = answer.value.candidateRows.length;
-    if (answer.value.status !== "available") {
-      const reason = answer.value.reason ?? answer.value.status;
-      const message = answer.value.displayText || answer.summary;
-      ctx.logger.info(`[renameFromTs] cross-domain rename declined for ${canonical.path}: ${reason}`);
-      if (reason === "no-aurelia-references" || reason === "no-source-backed-member") {
-        return {
-          status: "not-applicable",
-          reason,
-          message,
-          templateReferenceCount,
-          typeScriptReferenceCount,
-          candidateCount,
-        };
-      }
-      if (answer.value.status === "invalid-name") {
-        return {
-          status: "refused",
-          reason,
-          message,
-          templateReferenceCount,
-          typeScriptReferenceCount,
-          candidateCount,
-        };
-      }
-      return renameFromTsBlocked(
+  const sourcePath = ctx.documentUris.hostPath(params.uri) ?? params.uri;
+  const doc = ctx.ensureProgramDocument(params.uri);
+  if (!doc) {
+    return renameFromTsBlocked("document-unavailable", "Aurelia cross-domain rename could not read the TypeScript document.");
+  }
+  const answer = await ctx.semanticRuntime.templateRenameFromTypeScript(
+    doc,
+    params.position,
+    guard,
+    params.newName ?? null,
+  );
+  const templateReferenceCount = answer.value.templateReferenceCount;
+  const typeScriptReferenceCount = answer.value.typeScriptReferenceCount;
+  const candidateCount = answer.value.candidateRows.length;
+  if (answer.value.status !== "available") {
+    const reason = answer.value.reason ?? answer.value.status;
+    const message = answer.value.displayText || answer.summary;
+    ctx.logger.info(`[renameFromTs] cross-domain rename declined for ${sourcePath}: ${reason}`);
+    if (reason === "no-aurelia-references" || reason === "no-source-backed-member") {
+      return {
+        status: "not-applicable",
         reason,
         message,
-        undefined,
-        templateReferenceCount,
-        typeScriptReferenceCount,
-        candidateCount,
-      );
-    }
-
-    if (params.newName == null) {
-      const prepared = mapSemanticRuntimeTemplatePrepareRename(answer, {
-        workspaceRoot: ctx.workspaceRoot,
-        originDocument: doc,
-      });
-      if (prepared == null) {
-        return renameFromTsBlocked(
-          "prepare-mapping-failed",
-          "Aurelia cross-domain rename could not map the selected TypeScript token.",
-          undefined,
-          templateReferenceCount,
-          typeScriptReferenceCount,
-          candidateCount,
-        );
-      }
-      return {
-        status: "available",
-        ...prepared,
-        message: answer.value.displayText || answer.summary,
         templateReferenceCount,
         typeScriptReferenceCount,
         candidateCount,
       };
     }
-    if (answer.value.edits.length === 0) {
-      return renameFromTsBlocked(
-        "empty-edit-plan",
-        `Aurelia claimed a cross-domain rename for ${canonical.path} but produced no edits.`,
-        undefined,
+    if (answer.value.status === "invalid-name") {
+      return {
+        status: "refused",
+        reason,
+        message,
         templateReferenceCount,
         typeScriptReferenceCount,
         candidateCount,
-      );
+      };
     }
-    const mapping = mapSemanticRuntimeTemplateRenameEdit(answer, (uri) => ctx.lookupDocumentSnapshot(uri), {
-      workspaceRoot: ctx.workspaceRoot,
+    return renameFromTsBlocked(
+      reason,
+      message,
+      undefined,
+      templateReferenceCount,
+      typeScriptReferenceCount,
+      candidateCount,
+    );
+  }
+
+  if (params.newName == null) {
+    const prepared = mapSemanticRuntimeTemplatePrepareRename(answer, {
+      documentUris: ctx.documentUris,
       originDocument: doc,
     });
-    if (mapping.edit == null) {
-      ctx.logger.warn(`[renameFromTs] cross-domain edit mapping was blocked: ${mapping.failures.join(" ")}`);
+    if (prepared == null) {
       return renameFromTsBlocked(
-        "mapping-failed",
-        `Aurelia cross-domain rename was blocked: ${mapping.failures.join(" ")}`,
-        mapping.failures,
+        "prepare-mapping-failed",
+        "Aurelia cross-domain rename could not map the selected TypeScript token.",
+        undefined,
         templateReferenceCount,
         typeScriptReferenceCount,
         candidateCount,
       );
     }
-
-    const fileCount = new Set((mapping.edit.documentChanges ?? [])
-      .filter((change) => "textDocument" in change)
-      .map((change) => change.textDocument.uri)).size;
-
-    if (fileCount > 0) {
-      ctx.logger.info(`[renameFromTs] prepared ${fileCount} file(s), ${typeScriptReferenceCount} TypeScript and ${templateReferenceCount} Aurelia reference(s)`);
-    }
-    return fileCount
-      ? {
-        status: "success",
-        workspaceEdit: mapping.edit,
-        message: answer.value.displayText || answer.summary,
-        templateReferenceCount,
-        typeScriptReferenceCount,
-        candidateCount,
-      }
-      : {
-        status: "blocked",
-        reason: "empty-workspace-edit",
-        message: "Aurelia cross-domain rename produced no mappable file edits.",
-        templateReferenceCount,
-        typeScriptReferenceCount,
-        candidateCount,
-      };
-  } catch (e) {
-    if (logIfSemanticRuntimeRequestAborted(ctx, "renameFromTs", e, params?.uri)) {
-      const reason = e.reason === "cancelled" ? "request-cancelled" : "request-stale";
-      return renameFromTsBlocked(
-        reason,
-        `Aurelia cross-domain rename was skipped because the request was ${e.reason}.`,
-      );
-    }
-    const msg = e instanceof Error ? e.message : String(e);
-    const stack = e instanceof Error ? e.stack : undefined;
-    ctx.logger.error(`[renameFromTs] ${msg}${stack ? `\n${stack}` : ""}`);
-    return renameFromTsBlocked("server-error", `Aurelia cross-domain rename failed: ${msg}`);
+    return {
+      status: "available",
+      ...prepared,
+      message: answer.value.displayText || answer.summary,
+      templateReferenceCount,
+      typeScriptReferenceCount,
+      candidateCount,
+    };
   }
+  if (answer.value.edits.length === 0) {
+    return renameFromTsBlocked(
+      "empty-edit-plan",
+      `Aurelia claimed a cross-domain rename for ${sourcePath} but produced no edits.`,
+      undefined,
+      templateReferenceCount,
+      typeScriptReferenceCount,
+      candidateCount,
+    );
+  }
+  const mapping = mapSemanticRuntimeTemplateRenameEdit(answer, (uri) => ctx.lookupDocumentSnapshot(uri), {
+    documentUris: ctx.documentUris,
+    originDocument: doc,
+  });
+  if (mapping.edit == null) {
+    ctx.logger.warn(`[renameFromTs] cross-domain edit mapping was blocked: ${mapping.failures.join(" ")}`);
+    return renameFromTsBlocked(
+      "mapping-failed",
+      `Aurelia cross-domain rename was blocked: ${mapping.failures.join(" ")}`,
+      mapping.failures,
+      templateReferenceCount,
+      typeScriptReferenceCount,
+      candidateCount,
+    );
+  }
+
+  const fileCount = new Set((mapping.edit.documentChanges ?? [])
+    .filter((change) => "textDocument" in change)
+    .map((change) => change.textDocument.uri)).size;
+
+  if (fileCount > 0) {
+    ctx.logger.info(`[renameFromTs] prepared ${fileCount} file(s), ${typeScriptReferenceCount} TypeScript and ${templateReferenceCount} Aurelia reference(s)`);
+  }
+  return fileCount
+    ? {
+      status: "success",
+      workspaceEdit: mapping.edit,
+      message: answer.value.displayText || answer.summary,
+      templateReferenceCount,
+      typeScriptReferenceCount,
+      candidateCount,
+    }
+    : {
+      status: "blocked",
+      reason: "empty-workspace-edit",
+      message: "Aurelia cross-domain rename produced no mappable file edits.",
+      templateReferenceCount,
+      typeScriptReferenceCount,
+      candidateCount,
+    };
 }
 
 function renameFromTsBlocked(
@@ -899,48 +852,42 @@ export async function handleGetRelatedFile(
   params: DocumentUriParams,
   guard: SemanticRuntimeLspRequestGuard,
 ): Promise<RelatedFileResponse> {
-  try {
-    const uri = params?.uri;
-    if (!uri) return null;
-    const filePath = URI.parse(uri).fsPath;
-    const definitions = await ctx.semanticRuntime.resourceDefinitions(guard);
-    const requested = normalizedFilePath(filePath);
-    for (const definition of definitions.value.rows) {
-      if (`${definition.resourceKind}` !== "custom-element") {
-        continue;
-      }
+  const uri = params?.uri;
+  if (!uri) return null;
+  const filePath = ctx.documentUris.hostPath(uri);
+  if (filePath == null) return null;
+  const definitions = await ctx.semanticRuntime.resourceDefinitions(guard);
+  const requested = normalizedFilePath(filePath);
+  for (const definition of definitions.value.rows) {
+    if (`${definition.resourceKind}` !== "custom-element") {
+      continue;
+    }
       const componentFile = semanticSourceReferenceFilePath(
         definition.targetSource ?? definition.source,
-        ctx.workspaceRoot,
-      ) ?? undefined;
+        ctx.documentUris,
+    ) ?? undefined;
       const templateFile = semanticSourceReferenceFilePath(
         definition.template?.source ?? null,
-        ctx.workspaceRoot,
-      ) ?? undefined;
-      if (componentFile == null || templateFile == null) {
-        continue;
-      }
-      if (normalizedFilePath(componentFile) === normalizedFilePath(templateFile)) {
-        continue;
-      }
-      if (normalizedFilePath(templateFile) === requested) {
-        return { uri: pathToFileURL(componentFile).toString(), kind: "component" };
-      }
-      if (normalizedFilePath(componentFile) === requested) {
-        return { uri: pathToFileURL(templateFile).toString(), kind: "template" };
-      }
+        ctx.documentUris,
+    ) ?? undefined;
+    if (componentFile == null || templateFile == null) {
+      continue;
     }
-    return null;
-  } catch (e) {
-    if (!logIfSemanticRuntimeRequestAborted(ctx, "getRelatedFile", e, params?.uri)) {
-      ctx.logger.error(`[getRelatedFile] failed: ${formatError(e)}`);
+    if (normalizedFilePath(componentFile) === normalizedFilePath(templateFile)) {
+      continue;
     }
-    throw e;
+    if (normalizedFilePath(templateFile) === requested) {
+      return { uri: ctx.documentUris.uriForHostPath(componentFile), kind: "component" };
+    }
+    if (normalizedFilePath(componentFile) === requested) {
+      return { uri: ctx.documentUris.uriForHostPath(templateFile), kind: "template" };
+    }
   }
+  return null;
 }
 
 function normalizedFilePath(filePath: string): string {
-  return path.normalize(filePath).toLowerCase();
+  return canonicalTypeSystemPath(filePath);
 }
 
 /**
@@ -948,19 +895,31 @@ function normalizedFilePath(filePath: string): string {
  */
 export function registerCustomHandlers(ctx: ServerContext): void {
   ctx.connection.onRequest(AureliaProtocolRequest.Diagnostics, (params: MaybeUriParam, token: CancellationToken) =>
-    handleGetDiagnostics(ctx, params, requestGuard(ctx, token)));
+    request(ctx, "getDiagnostics", token, uriFromParam(params),
+      (guard) => handleGetDiagnostics(ctx, params, guard)));
   ctx.connection.onRequest(AureliaProtocolRequest.Resources, (_params: unknown, token: CancellationToken) =>
-    handleGetResources(ctx, requestGuard(ctx, token)));
+    request(ctx, "getResources", token, undefined,
+      (guard) => handleGetResources(ctx, guard)));
   ctx.connection.onRequest(AureliaProtocolRequest.ScopeResources, (params: DocumentUriParams, token: CancellationToken) =>
-    handleGetScopeResources(ctx, params, requestGuard(ctx, token)));
+    request(ctx, "getScopeResources", token, params.uri,
+      (guard) => handleGetScopeResources(ctx, params, guard)));
   ctx.connection.onRequest(AureliaProtocolRequest.RelatedFile, (params: DocumentUriParams, token: CancellationToken) =>
-    handleGetRelatedFile(ctx, params, requestGuard(ctx, token)));
+    request(ctx, "getRelatedFile", token, params.uri,
+      (guard) => handleGetRelatedFile(ctx, params, guard)));
   ctx.connection.onRequest(AureliaProtocolRequest.WorkspaceStatus, (_params: unknown, token: CancellationToken) =>
-    handleWorkspaceStatus(ctx, requestGuard(ctx, token)));
+    request(ctx, "workspaceStatus", token, undefined,
+      (guard) => handleWorkspaceStatus(ctx, guard)));
   ctx.connection.onRequest(AureliaProtocolRequest.RenameFromTypeScript, (params: RenameFromTsParams, token: CancellationToken) =>
-    handleRenameFromTs(ctx, params, requestGuard(ctx, token)));
+    request(ctx, "renameFromTs", token, params.uri,
+      (guard) => handleRenameFromTs(ctx, params, guard)));
 }
 
-function requestGuard(ctx: ServerContext, token: CancellationToken | undefined): SemanticRuntimeLspRequestGuard {
-  return semanticRuntimeRequestGuard(ctx, token);
+function request<T>(
+  ctx: ServerContext,
+  feature: string,
+  token: CancellationToken,
+  uri: string | undefined,
+  handler: (guard: SemanticRuntimeLspRequestGuard) => T | Promise<T>,
+): Promise<T> {
+  return runSemanticRuntimeRequest(ctx, feature, token, handler, uri);
 }

@@ -1,6 +1,8 @@
 import { describe, expect, test, vi } from "vitest";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { createServerContext } from "@aurelia-ls/language-server/api";
+import { createServerContext } from "../../src/context.js";
 
 function createLogger() {
   return {
@@ -13,7 +15,7 @@ function createLogger() {
 
 describe("createServerContext", () => {
   test("ensureProgramDocument returns open documents without syncing a second workspace", () => {
-    const uri = "file:///app/component.html";
+    const uri = pathToFileURL(path.resolve("test-workspace/component.html")).toString();
     const live = TextDocument.create(uri, "html", 1, "<template>${name}</template>");
     const documents = {
       get: vi.fn((nextUri: string) => (nextUri === uri ? live : undefined)),
@@ -31,7 +33,7 @@ describe("createServerContext", () => {
   });
 
   test("lookupText can resolve an open document by canonical equivalent URI", () => {
-    const uri = "file:///app/component.html";
+    const uri = pathToFileURL(path.resolve("test-workspace/component.html")).toString();
     const live = TextDocument.create(uri, "html", 1, "<template>${name}</template>");
     const documents = {
       get: vi.fn(() => undefined),

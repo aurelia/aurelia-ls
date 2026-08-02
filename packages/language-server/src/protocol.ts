@@ -23,8 +23,7 @@ export const AureliaProtocolRequest = {
 } as const;
 
 export const AureliaProtocolNotification = {
-  AnalysisReady: "aurelia/analysisReady",
-  WorkspaceChanged: "aurelia/workspaceChanged",
+  AnalysisChanged: "aurelia/analysisChanged",
 } as const;
 
 export const AURELIA_TEMPLATE_CODE_ACTION_RESOLVE_SCHEMA = "aurelia.template-code-action-resolve/1" as const;
@@ -32,19 +31,9 @@ export const AURELIA_TEMPLATE_CODE_ACTION_RESOLVE_SCHEMA = "aurelia.template-cod
 /** Exact semantic-runtime project-shape answer used to confirm one LSP workspace ownership root. */
 export type WorkspaceStatusResponse = SemanticRuntimeAnswer<SemanticRuntimeSummary>;
 
-/** Current-document diagnostics publication acknowledged by the semantic-runtime generation that produced it. */
-export interface AnalysisReadyPayload {
-  readonly uri: string;
-  readonly version: number;
-  readonly diags: number;
+/** A newer semantic-runtime generation has settled and should replace cached client views. */
+export interface AnalysisChangedPayload {
   readonly fingerprint: string;
-}
-
-/** Workspace semantic products invalidated by one observed source/topology event. */
-export interface WorkspaceChangedPayload {
-  readonly fingerprint: string;
-  readonly domains: readonly string[];
-  readonly reason?: string;
 }
 
 export type TemplateCodeActionResolveData = {
@@ -207,7 +196,7 @@ export type ResourceExplorerVisibility = Omit<
 > & {
   readonly resourceKind: ResourceExplorerResourceKind;
   readonly visibilityKind: ResourceExplorerVisibilityKind;
-  readonly file: string | null;
+  readonly uri: string | null;
 };
 
 export type ResourceExplorerItem = {
@@ -220,7 +209,7 @@ export type ResourceExplorerItem = {
   readonly definition: ResourceExplorerDefinition | null;
   readonly visibility: readonly ResourceExplorerVisibility[];
   readonly source: SemanticSourceReference | null;
-  readonly file: string | null;
+  readonly uri: string | null;
   readonly package: string | null;
   readonly origin: ResourceExplorerOrigin;
 };

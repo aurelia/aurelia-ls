@@ -2,8 +2,9 @@ import { describe, expect, test, vi } from "vitest";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { handleCodeLens } from "@aurelia-ls/language-server/api";
+import { handleCodeLens } from "../../src/handlers/code-lens.js";
 import { testRequestGuard } from "./test-request-guard.js";
+import { testWorkspaceDocumentUris } from "./test-document-uris.js";
 
 const workspaceRoot = path.resolve("test-workspace");
 const resourcePath = path.join(workspaceRoot, "src", "resources.ts");
@@ -69,9 +70,11 @@ function createMockContext(input: {
 
   return {
     workspaceRoot,
+    documentUris: testWorkspaceDocumentUris(workspaceRoot),
     documents: {
       get: vi.fn((uri: string) => (uri === resourceUri ? document : undefined)),
     },
+    openDocument: vi.fn((uri: string) => (uri === resourceUri ? document : null)),
     logger: { log: vi.fn(), info: vi.fn(), error: vi.fn(), warn: vi.fn() },
     semanticRuntime: {
       resourceDefinitions: vi.fn(() => answer(input.definitions ?? [])),

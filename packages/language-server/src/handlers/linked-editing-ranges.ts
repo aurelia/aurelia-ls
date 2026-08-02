@@ -20,9 +20,6 @@ import {
   semanticSourceOffsetRangeForDocument,
   semanticSourceReferenceMatchesDocument,
 } from "../mapping/source-locations.js";
-import {
-  logIfSemanticRuntimeRequestAborted,
-} from "./request-guard.js";
 import type { SemanticRuntimeLspRequestGuard } from "../runtime/semantic-runtime-session.js";
 import { isTemplateDocument } from "../utils/document-kind.js";
 
@@ -40,21 +37,12 @@ export async function handleLinkedEditingRange(
   if (!doc) return null;
   if (!isTemplateDocument(doc)) return null;
 
-  try {
-    const answer = await ctx.semanticRuntime.templateCursorInfo(
-      doc,
-      params.position,
-      guard,
-    );
-    return linkedEditingRangesForCursor(ctx, doc, params.position, answer.value);
-  } catch (e) {
-    if (logIfSemanticRuntimeRequestAborted(ctx, "linkedEditingRange", e, params.textDocument.uri)) {
-      return null;
-    }
-    const message = e instanceof Error ? e.stack ?? e.message : String(e);
-    ctx.logger.error(`[linkedEditingRange] failed for ${params.textDocument.uri}: ${message}`);
-    return null;
-  }
+  const answer = await ctx.semanticRuntime.templateCursorInfo(
+    doc,
+    params.position,
+    guard,
+  );
+  return linkedEditingRangesForCursor(ctx, doc, params.position, answer.value);
 }
 
 function linkedEditingRangesForCursor(
@@ -86,7 +74,7 @@ function exactOffsetRangeForDocument(
   doc: TextDocument,
   source: SemanticSourceReference | null,
 ): OffsetRange | null {
-  if (!semanticSourceReferenceMatchesDocument(source, ctx.workspaceRoot, doc.uri)) return null;
+  if (!semanticSourceReferenceMatchesDocument(source, ctx.documentUris, doc.uri)) return null;
   const range = semanticSourceOffsetRangeForDocument(source, doc);
   return range != null && range.end > range.start ? range : null;
 }

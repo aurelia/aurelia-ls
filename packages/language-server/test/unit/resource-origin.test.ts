@@ -7,8 +7,9 @@ import {
   handleGetScopeResources,
   type ResourceExplorerResponse,
   type ScopeResourcesResponse,
-} from "@aurelia-ls/language-server/api";
+} from "../../src/handlers/custom.js";
 import { testRequestGuard } from "./test-request-guard.js";
+import { testWorkspaceDocumentUris } from "./test-document-uris.js";
 
 /**
  * Boundary: semantic-runtime resource rows -> VS Code resource explorer DTOs.
@@ -181,6 +182,7 @@ function createMockContext(input: {
   };
   return {
     workspaceRoot,
+    documentUris: testWorkspaceDocumentUris(workspaceRoot),
     logger: { log: vi.fn(), info: vi.fn(), error: vi.fn(), warn: vi.fn() },
     ensureProgramDocument: vi.fn(() => document),
     semanticRuntime: {
@@ -254,7 +256,7 @@ describe("runtime-backed resource explorer", () => {
       id: "definition:product:definition:custom-element:my-resource",
       name: "my-resource",
       kind: "custom-element",
-      file: path.join(workspaceRoot, "src", "my-resource.ts"),
+      uri: pathToFileURL(path.join(workspaceRoot, "src", "my-resource.ts")).toString(),
       origin: "project",
     }));
     expect(result.resources[0].definition).toEqual(expect.objectContaining({
@@ -268,7 +270,7 @@ describe("runtime-backed resource explorer", () => {
       expect.objectContaining({
         visibilityKind: "app-root",
         compilerWorld: "app-root src/main.ts@0..10",
-        file: path.join(workspaceRoot, "src", "my-resource.ts"),
+        uri: pathToFileURL(path.join(workspaceRoot, "src", "my-resource.ts")).toString(),
       }),
     ]);
     expect(result.resources[0].bindables[0]).toEqual(
@@ -335,14 +337,14 @@ describe("runtime-backed resource explorer", () => {
         name: "plugin-card",
         package: "@scope/plugin",
         origin: "package",
-        file: path.join(
+        uri: pathToFileURL(path.join(
           workspaceRoot,
           "node_modules",
           "@scope",
           "plugin",
           "dist",
           "plugin-card.js",
-        ),
+        )).toString(),
       }),
     );
   });
@@ -500,7 +502,6 @@ describe("runtime-backed resource explorer", () => {
     await expect(handleGetResources(ctx as never, testRequestGuard)).rejects.toThrow(
       `Duplicate resource definition product handle: ${handle}`,
     );
-    expect(ctx.logger.error).toHaveBeenCalledWith(expect.stringContaining("[getResources] failed"));
   });
 
   test("propagates query failure instead of presenting an empty inventory", async () => {
@@ -508,7 +509,6 @@ describe("runtime-backed resource explorer", () => {
     ctx.semanticRuntime.resourceDefinitions.mockRejectedValueOnce(new Error("definition query failed"));
 
     await expect(handleGetResources(ctx as never, testRequestGuard)).rejects.toThrow("definition query failed");
-    expect(ctx.logger.error).toHaveBeenCalledWith(expect.stringContaining("definition query failed"));
   });
 });
 
@@ -586,7 +586,7 @@ describe("runtime-backed scope resources", () => {
         id: "definition:product:definition:custom-element:in-scope",
         name: "in-scope",
         kind: "custom-element",
-        file: path.join(workspaceRoot, "src", "in-scope.ts"),
+        uri: pathToFileURL(path.join(workspaceRoot, "src", "in-scope.ts")).toString(),
         aliases: [expect.objectContaining({ name: "also-in-scope" })],
         bindables: [expect.objectContaining({ name: "value", primary: true })],
         definition: expect.objectContaining({ targetName: "InScope" }),
@@ -680,7 +680,6 @@ describe("runtime-backed scope resources", () => {
       { uri: componentUri },
       testRequestGuard,
     )).rejects.toThrow("visibility query failed");
-    expect(ctx.logger.error).toHaveBeenCalledWith(expect.stringContaining("[getScopeResources] failed"));
   });
 });
 

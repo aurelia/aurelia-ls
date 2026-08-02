@@ -1,5 +1,6 @@
 import path from 'node:path';
 import type { SemanticRuntimeProjectInputHost } from '../kernel/project-input.js';
+import { canonicalTypeSystemPath } from '../type-system/source-file-path.js';
 
 export interface BootPackageManifest {
   readonly [key: string]: unknown;
@@ -113,7 +114,7 @@ export function normalizePosixPath(fileName: string): string {
 }
 
 export function sameHostPath(left: string, right: string): boolean {
-  return normalizePosixPath(path.resolve(left)).toLowerCase() === normalizePosixPath(path.resolve(right)).toLowerCase();
+  return canonicalTypeSystemPath(left) === canonicalTypeSystemPath(right);
 }
 
 export function isHostPathWithin(fileName: string, rootDir: string): boolean {

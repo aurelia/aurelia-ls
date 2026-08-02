@@ -3,12 +3,16 @@ import { pathToFileURL } from "node:url";
 import { test, expect, describe, vi } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import {
-  canonicalDocumentUri,
   handleGetDiagnostics,
   handleRenameFromTs,
   handleWorkspaceStatus,
-} from "@aurelia-ls/language-server/api";
+} from "../../src/handlers/custom.js";
 import { testRequestGuard } from "./test-request-guard.js";
+import { testWorkspaceDocumentUris } from "./test-document-uris.js";
+
+const defaultWorkspaceRoot = "/test/workspace";
+const defaultDocumentUris = testWorkspaceDocumentUris(defaultWorkspaceRoot);
+const defaultTemplateUri = defaultDocumentUris.uriForWorkspaceRelativePath("test.html")!;
 
 function createMockLogger() {
   return {
@@ -26,7 +30,7 @@ function snapshot(
   languageId = uri.endsWith(".ts") ? "typescript" : "html",
 ) {
   return {
-    uri: canonicalDocumentUri(uri).uri,
+    uri,
     languageId,
     version,
     text,
@@ -35,12 +39,16 @@ function snapshot(
 
 function createMockContext(overrides: Record<string, unknown> = {}) {
   const logger = createMockLogger();
+  const workspaceRoot = typeof overrides["workspaceRoot"] === "string"
+    ? overrides["workspaceRoot"]
+    : defaultWorkspaceRoot;
   return {
     logger,
     ensureProgramDocument: vi.fn(() => ({ offsetAt: vi.fn(() => 0) })),
     lookupText: vi.fn(() => null),
     lookupDocumentSnapshot: vi.fn(() => null),
-    workspaceRoot: "/test/workspace",
+    workspaceRoot,
+    documentUris: testWorkspaceDocumentUris(workspaceRoot),
     documents: {
       all: vi.fn(() => []),
     },
@@ -222,7 +230,7 @@ describe("handleGetDiagnostics", () => {
 
     const result = await handleGetDiagnostics(
       ctx as never,
-      { uri: "file:///test.html" },
+      { uri: defaultTemplateUri },
       testRequestGuard,
     );
 
@@ -231,7 +239,7 @@ describe("handleGetDiagnostics", () => {
       testRequestGuard,
     );
     expect(result).toEqual({
-      uri: canonicalDocumentUri("file:///test.html").uri,
+      uri: defaultTemplateUri,
       answer: {
         schemaVersion: "0.2",
         result: "answered",
@@ -368,7 +376,7 @@ describe("handleGetDiagnostics", () => {
 
     const result = await handleGetDiagnostics(
       ctx as never,
-      { uri: "file:///test.html" },
+      { uri: defaultTemplateUri },
       testRequestGuard,
     );
 
@@ -452,7 +460,7 @@ describe("handleGetDiagnostics", () => {
 
     const result = await handleGetDiagnostics(
       ctx as never,
-      { uri: "file:///test.html" },
+      { uri: defaultTemplateUri },
       testRequestGuard,
     );
     const item = result?.diagnostics.bySurface.lsp[0];
@@ -500,7 +508,7 @@ describe("handleRenameFromTs", () => {
       ensureProgramDocument: vi.fn(() => tsDocument),
       lookupText: vi.fn(() => templateText),
       lookupDocumentSnapshot: vi.fn((uri: string) =>
-        canonicalDocumentUri(uri).uri.endsWith("/src/app.html")
+        uri.endsWith("/src/app.html")
           ? snapshot(uri, templateText, 4, "html")
           : null,
       ),
@@ -745,7 +753,7 @@ describe("handleRenameFromTs", () => {
       ensureProgramDocument: vi.fn(() => tsDocument),
       lookupText: vi.fn(() => "<p>${stale}</p>"),
       lookupDocumentSnapshot: vi.fn((uri: string) =>
-        canonicalDocumentUri(uri).uri.endsWith("/src/app.html")
+        uri.endsWith("/src/app.html")
           ? snapshot(uri, "<p>${stale}</p>", 4, "html")
           : null,
       ),

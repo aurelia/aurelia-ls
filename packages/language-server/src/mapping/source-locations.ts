@@ -6,7 +6,7 @@ import {
   semanticExactSourceReference,
   type SemanticSourceReference,
 } from "@aurelia-ls/semantic-runtime";
-import { canonicalDocumentUri, toFileUri } from "../utils/document-uri.js";
+import type { WorkspaceDocumentUris } from "../utils/document-uri.js";
 
 export interface SemanticSourceOffsetRange {
   readonly start: number;
@@ -25,26 +25,33 @@ export function semanticSourceReferencePath(
 /** Resolve a semantic source path through the workspace without guessing for pathless/external addresses. */
 export function semanticSourceReferenceUri(
   source: SemanticSourceReference,
-  workspaceRoot: string | null,
+  documentUris: WorkspaceDocumentUris,
 ): string | null {
   const sourcePath = semanticSourceReferencePath(source);
   if (sourcePath == null) return null;
-  if (sourcePath.startsWith("file:")) return canonicalDocumentUri(sourcePath).uri;
-  if (path.isAbsolute(sourcePath)) return canonicalDocumentUri(toFileUri(sourcePath)).uri;
-  return workspaceRoot == null
-    ? null
-    : canonicalDocumentUri(toFileUri(path.resolve(workspaceRoot, sourcePath))).uri;
+  if (sourcePath.includes(":")) {
+    const parsed = URI.parse(sourcePath);
+    if (parsed.scheme.length > 1) {
+      const filePath = documentUris.hostPath(sourcePath);
+      return filePath == null ? parsed.toString() : documentUris.uriForHostPath(filePath);
+    }
+  }
+  if (path.isAbsolute(sourcePath)) return documentUris.uriForHostPath(sourcePath);
+  return documentUris.uriForWorkspaceRelativePath(sourcePath);
 }
 
 export function semanticSourceReferenceFilePath(
   source: SemanticSourceReference | null,
-  workspaceRoot: string | null,
+  documentUris: WorkspaceDocumentUris,
 ): string | null {
   const sourcePath = semanticSourceReferencePath(source);
   if (sourcePath == null) return null;
-  if (sourcePath.startsWith("file:")) return URI.parse(sourcePath).fsPath;
+  if (sourcePath.includes(":")) {
+    const filePath = documentUris.hostPath(sourcePath);
+    if (filePath != null) return filePath;
+  }
   if (path.isAbsolute(sourcePath)) return sourcePath;
-  return workspaceRoot == null ? null : path.resolve(workspaceRoot, sourcePath);
+  return documentUris.workspaceRoot == null ? null : path.join(documentUris.workspaceRoot, sourcePath);
 }
 
 /** Resolve an exact source span only when its offsets are valid for the current document text. */
@@ -82,12 +89,11 @@ export function semanticSourceRangeForDocument(
 
 export function semanticSourceReferenceMatchesDocument(
   source: SemanticSourceReference | null,
-  workspaceRoot: string | null,
+  documentUris: WorkspaceDocumentUris,
   documentUri: string,
 ): boolean {
   const exact = semanticExactSourceReference(source);
   if (exact == null) return false;
-  const uri = semanticSourceReferenceUri(exact, workspaceRoot);
-  return uri != null
-    && canonicalDocumentUri(uri).uri === canonicalDocumentUri(documentUri).uri;
+  const uri = semanticSourceReferenceUri(exact, documentUris);
+  return uri != null && documentUris.sameDocument(uri, documentUri);
 }

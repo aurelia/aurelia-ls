@@ -1,10 +1,13 @@
 import { describe, expect, test, vi } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { handleFoldingRanges } from "@aurelia-ls/language-server/api";
+import { handleFoldingRanges } from "../../src/handlers/folding-ranges.js";
 import type { SemanticTemplateFoldingRangeRow } from "@aurelia-ls/semantic-runtime";
 import { testRequestGuard } from "./test-request-guard.js";
+import { testWorkspaceDocumentUris } from "./test-document-uris.js";
 
-const uri = "file:///app/src/app.html";
+const documentUris = testWorkspaceDocumentUris("/app");
+const uri = documentUris.uriForWorkspaceRelativePath("src/app.html")!;
+const otherUri = documentUris.uriForWorkspaceRelativePath("src/other.html")!;
 const text = [
   "<template>",
   "  <section>",
@@ -49,7 +52,8 @@ function row(
 
 function createMockContext(rows: SemanticTemplateFoldingRangeRow[]) {
   return {
-    workspaceRoot: "/app",
+    workspaceRoot: documentUris.workspaceRoot,
+    documentUris,
     logger: { log: vi.fn(), info: vi.fn(), error: vi.fn(), warn: vi.fn() },
     ensureProgramDocument: vi.fn(() => doc),
     semanticRuntime: {
@@ -103,7 +107,7 @@ describe("runtime-backed folding ranges", () => {
 
   test("returns null when runtime rows do not belong to the active document", async () => {
     const ctx = createMockContext([
-      row(sectionStart, sectionEnd, "section", "file:///app/src/other.html"),
+      row(sectionStart, sectionEnd, "section", otherUri),
     ]);
 
     const result = await handleFoldingRanges(

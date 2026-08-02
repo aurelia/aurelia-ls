@@ -15,7 +15,7 @@ import { URI } from "vscode-uri";
 import {
   WORKSPACE_TOKEN_MODIFIER_GAP_AWARE,
   WORKSPACE_TOKEN_MODIFIER_GAP_CONSERVATIVE,
-} from "@aurelia-ls/language-server/api";
+} from "../../src/handlers/semantic-tokens.js";
 
 describe("Server initialization", () => {
   test("responds to initialize request with capabilities", async () => {
@@ -99,7 +99,7 @@ describe("Server initialization", () => {
     }
   });
 
-  test("handles initialize with null rootUri", async () => {
+  test("uses workspaceFolders when rootUri is absent", async () => {
     const fixture = createFixture({
       "tsconfig.json": JSON.stringify({
         compilerOptions: { target: "ES2022", module: "NodeNext", moduleResolution: "NodeNext" },
@@ -120,6 +120,7 @@ describe("Server initialization", () => {
         connection.sendRequest("initialize", {
           processId: process.pid,
           rootUri: null,
+          workspaceFolders: [{ uri: URI.file(fixture).toString(), name: "fixture" }],
           capabilities: {},
         }).then(
           (res) => {
@@ -133,13 +134,62 @@ describe("Server initialization", () => {
         );
       });
 
-      // Should still return capabilities even with null rootUri
       const initResult = result as { capabilities?: unknown };
       expect(initResult.capabilities).toBeDefined();
     } finally {
       dispose();
       child.kill("SIGKILL");
       await waitForExit(child);
+      fs.rmSync(fixture, { recursive: true, force: true });
+    }
+  });
+
+  test("rejects initialize when the client supplies no workspace root", async () => {
+    const fixture = createFixture({
+      "tsconfig.json": JSON.stringify({ compilerOptions: { target: "ES2022" }, files: [] }),
+    });
+    const { connection, child, dispose } = startServer(fixture);
+
+    try {
+      await expect(connection.sendRequest("initialize", {
+        processId: process.pid,
+        rootUri: null,
+        workspaceFolders: null,
+        capabilities: {},
+      })).rejects.toMatchObject({ code: -32602 });
+    } finally {
+      dispose();
+      child.kill("SIGKILL");
+      await waitForExit(child);
+      fs.rmSync(fixture, { recursive: true, force: true });
+    }
+  });
+
+  test("retires the semantic session and exits through the standard shutdown sequence", async () => {
+    const fixture = createFixture({
+      "tsconfig.json": JSON.stringify({ compilerOptions: { target: "ES2022" }, files: [] }),
+    });
+    const { connection, child, dispose, getStderr } = startServer(fixture);
+
+    try {
+      await connection.sendRequest("initialize", {
+        processId: process.pid,
+        rootUri: URI.file(fixture).toString(),
+        capabilities: {},
+      });
+      connection.sendNotification("initialized", {});
+      await connection.sendRequest("shutdown");
+      connection.sendNotification("exit");
+      await waitForExit(child, 5_000);
+      expect(child.exitCode).toBe(0);
+    } catch (error) {
+      throw new Error(`${String(error)}; stderr=${getStderr()}`);
+    } finally {
+      dispose();
+      if (child.exitCode == null && child.signalCode == null) {
+        child.kill("SIGKILL");
+        await waitForExit(child);
+      }
       fs.rmSync(fixture, { recursive: true, force: true });
     }
   });

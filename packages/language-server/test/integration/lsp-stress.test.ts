@@ -2,7 +2,7 @@ import { test, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { TOKEN_TYPES } from "@aurelia-ls/language-server/api";
+import { TOKEN_TYPES } from "../../src/handlers/semantic-tokens.js";
 import {
   applyWorkspaceEditToTrackedDocuments,
   changeDocument,

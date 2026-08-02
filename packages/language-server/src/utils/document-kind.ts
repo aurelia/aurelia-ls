@@ -1,16 +1,28 @@
-export function isTemplateDocument(doc: { readonly languageId: string }): boolean {
-  return doc.languageId === "html";
+import {
+  inferSourceLanguage,
+  SourceLanguage,
+} from "@aurelia-ls/semantic-runtime";
+
+export function isTemplateDocument(doc: { readonly uri: string }): boolean {
+  return inferSourceLanguage(doc.uri) === SourceLanguage.Html;
 }
 
-export function isScriptDocumentUri(uri: string): boolean {
-  const lower = uri.toLowerCase();
-  return lower.endsWith(".ts") || lower.endsWith(".js") || lower.endsWith(".tsx") || lower.endsWith(".jsx");
-}
-
-export function isTemplateDocumentUri(uri: string): boolean {
-  return uri.toLowerCase().endsWith(".html");
+export function isScriptDocument(doc: { readonly uri: string }): boolean {
+  const language = inferSourceLanguage(doc.uri);
+  return language === SourceLanguage.TypeScript || language === SourceLanguage.JavaScript;
 }
 
 export function isAnalyzedSourceDocumentUri(uri: string): boolean {
-  return isTemplateDocumentUri(uri) || isScriptDocumentUri(uri);
+  return inferSourceLanguage(uri) !== SourceLanguage.Unknown;
+}
+
+export function languageIdForSource(source: string): string {
+  switch (inferSourceLanguage(source)) {
+    case SourceLanguage.TypeScript: return "typescript";
+    case SourceLanguage.JavaScript: return "javascript";
+    case SourceLanguage.Json: return "json";
+    case SourceLanguage.Css: return "css";
+    case SourceLanguage.Html: return "html";
+    case SourceLanguage.Unknown: return "plaintext";
+  }
 }

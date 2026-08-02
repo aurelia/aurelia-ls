@@ -1,6 +1,6 @@
-import { URI } from "vscode-uri";
 import type { Position } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
+import { randomUUID } from "node:crypto";
 import {
   createSemanticRuntime,
   appDiagnosticPresentation,
@@ -33,10 +33,11 @@ import {
   OpenDocumentSourceTextOverlay,
   type OpenTextDocumentStore,
 } from "./open-document-source-text-overlay.js";
+import type { WorkspaceDocumentUris } from "../utils/document-uri.js";
 
 export interface SemanticRuntimeLspSessionOptions {
-  readonly workspaceRoot: string | null;
   readonly documents: OpenTextDocumentStore;
+  readonly documentUris: WorkspaceDocumentUris;
 }
 
 export interface SemanticRuntimeLspGeneration {
@@ -222,7 +223,9 @@ export function isSemanticRuntimeLspRequestAborted(
 }
 
 export class SemanticRuntimeLspSession {
+  private readonly sessionIdentity = randomUUID();
   private readonly projectInputAuthority: SemanticRuntimeProjectInputAuthority;
+  private readonly documentUris: WorkspaceDocumentUris;
   private runtime: Promise<SemanticRuntime> | null = null;
   private workspaceRoot: string | null;
   private workspaceGeneration = 0;
@@ -230,13 +233,17 @@ export class SemanticRuntimeLspSession {
   constructor(
     options: SemanticRuntimeLspSessionOptions,
   ) {
-    this.workspaceRoot = options.workspaceRoot;
+    this.documentUris = options.documentUris;
+    this.workspaceRoot = options.documentUris.workspaceRoot;
     this.projectInputAuthority = new SemanticRuntimeProjectInputAuthority(
-      new NodeSemanticRuntimeProjectInputHost(new OpenDocumentSourceTextOverlay(options.documents)),
+      new NodeSemanticRuntimeProjectInputHost(
+        new OpenDocumentSourceTextOverlay(options.documents, options.documentUris),
+      ),
     );
   }
 
-  configureWorkspace(workspaceRoot: string | null): void {
+  configureWorkspace(): void {
+    const workspaceRoot = this.documentUris.workspaceRoot;
     if (this.workspaceRoot === workspaceRoot) {
       return;
     }
@@ -251,16 +258,25 @@ export class SemanticRuntimeLspSession {
     return this.currentGeneration();
   }
 
-  async recordSourceTextChanged(): Promise<SemanticRuntimeLspGeneration> {
+  recordSourceTextChanged(): SemanticRuntimeLspGeneration {
     this.projectInputAuthority.advance();
     return this.currentGeneration();
+  }
+
+  async dispose(): Promise<void> {
+    this.projectInputAuthority.advance();
+    const activeRuntime = this.runtime;
+    this.runtime = null;
+    if (activeRuntime != null) {
+      (await activeRuntime).clearAnalysisCache();
+    }
   }
 
   currentGeneration(): SemanticRuntimeLspGeneration {
     return {
       workspaceGeneration: this.workspaceGeneration,
       sourceGeneration: this.projectInputAuthority.currentEventSequence,
-      fingerprint: `semantic-runtime:${this.workspaceRoot ?? "no-root"}:workspace-${this.workspaceGeneration}:source-${this.projectInputAuthority.currentEventSequence}`,
+      fingerprint: `semantic-runtime:${this.sessionIdentity}:workspace-${this.workspaceGeneration}:source-${this.projectInputAuthority.currentEventSequence}`,
     };
   }
 
@@ -291,7 +307,7 @@ export class SemanticRuntimeLspSession {
     guard: SemanticRuntimeLspRequestGuard,
   ): Promise<SemanticRuntimeAnswer<SemanticTemplateCompletionResult>> {
     const runtime = await this.openRuntime(guard);
-    const filePath = URI.parse(document.uri).fsPath;
+    const filePath = this.documentHostPath(document);
     return drainSemanticRuntimePages({
       label: "template completion",
       assertActive: () => this.assertRequestActive(guard),
@@ -321,7 +337,7 @@ export class SemanticRuntimeLspSession {
     guard: SemanticRuntimeLspRequestGuard,
   ): Promise<SemanticRuntimeAnswer<SemanticAppDiagnosticsResult>> {
     const runtime = await this.openRuntime(guard);
-    const filePath = URI.parse(document.uri).fsPath;
+    const filePath = this.documentHostPath(document);
     return drainSemanticRuntimePages({
       label: "app diagnostic",
       assertActive: () => this.assertRequestActive(guard),
@@ -352,7 +368,7 @@ export class SemanticRuntimeLspSession {
     guard: SemanticRuntimeLspRequestGuard,
   ): Promise<SemanticRuntimeAnswer<SemanticTemplateCursorInfoResult>> {
     const runtime = await this.openRuntime(guard);
-    const filePath = URI.parse(document.uri).fsPath;
+    const filePath = this.documentHostPath(document);
     const answer = await runtime.answerAppQuery({
       kind: SemanticAppQueryKind.TemplateCursorInfo,
       sourceFilePath: filePath,
@@ -379,7 +395,7 @@ export class SemanticRuntimeLspSession {
     guard: SemanticRuntimeLspRequestGuard,
   ): Promise<SemanticRuntimeAnswer<SemanticTemplateReferencesResult>> {
     const runtime = await this.openRuntime(guard);
-    const filePath = URI.parse(document.uri).fsPath;
+    const filePath = this.documentHostPath(document);
     return drainSemanticRuntimePages({
       label: "template reference",
       assertActive: () => this.assertRequestActive(guard),
@@ -416,7 +432,7 @@ export class SemanticRuntimeLspSession {
     newName?: string | null,
   ): Promise<SemanticRuntimeAnswer<SemanticTemplateRenameResult>> {
     const runtime = await this.openRuntime(guard);
-    const filePath = URI.parse(document.uri).fsPath;
+    const filePath = this.documentHostPath(document);
     const answer = await runtime.answerAppQuery({
       kind: SemanticAppQueryKind.TemplateRename,
       sourceFilePath: filePath,
@@ -444,7 +460,7 @@ export class SemanticRuntimeLspSession {
     newName?: string | null,
   ): Promise<SemanticRuntimeAnswer<SemanticTemplateRenameResult>> {
     const runtime = await this.openRuntime(guard);
-    const filePath = URI.parse(document.uri).fsPath;
+    const filePath = this.documentHostPath(document);
     const answer = await runtime.answerAppQuery({
       kind: SemanticAppQueryKind.TemplateRenameFromTypeScript,
       sourceFilePath: filePath,
@@ -471,7 +487,7 @@ export class SemanticRuntimeLspSession {
     guard: SemanticRuntimeLspRequestGuard,
   ): Promise<SemanticRuntimeAnswer<SemanticTemplateCodeActionsResult>> {
     const runtime = await this.openRuntime(guard);
-    const filePath = URI.parse(document.uri).fsPath;
+    const filePath = this.documentHostPath(document);
     const answer = await runtime.answerAppQuery({
       kind: SemanticAppQueryKind.TemplateCodeActions,
       sourceFilePath: filePath,
@@ -559,7 +575,7 @@ export class SemanticRuntimeLspSession {
     guard: SemanticRuntimeLspRequestGuard,
   ): Promise<SemanticRuntimeAnswer<SemanticTemplateInlayHintsResult>> {
     const runtime = await this.openRuntime(guard);
-    const filePath = URI.parse(document.uri).fsPath;
+    const filePath = this.documentHostPath(document);
     return drainSemanticRuntimePages({
       label: "template inlay hint",
       assertActive: () => this.assertRequestActive(guard),
@@ -586,7 +602,7 @@ export class SemanticRuntimeLspSession {
     guard: SemanticRuntimeLspRequestGuard,
   ): Promise<SemanticRuntimeAnswer<SemanticTemplateSemanticTokensResult>> {
     const runtime = await this.openRuntime(guard);
-    const filePath = URI.parse(document.uri).fsPath;
+    const filePath = this.documentHostPath(document);
     return drainSemanticRuntimePages({
       label: "template semantic token",
       assertActive: () => this.assertRequestActive(guard),
@@ -613,7 +629,7 @@ export class SemanticRuntimeLspSession {
     guard: SemanticRuntimeLspRequestGuard,
   ): Promise<SemanticRuntimeAnswer<SemanticTemplateFoldingRangesResult>> {
     const runtime = await this.openRuntime(guard);
-    const filePath = URI.parse(document.uri).fsPath;
+    const filePath = this.documentHostPath(document);
     return drainSemanticRuntimePages({
       label: "template folding range",
       assertActive: () => this.assertRequestActive(guard),
@@ -648,6 +664,14 @@ export class SemanticRuntimeLspSession {
     const runtime = await this.runtime;
     this.assertRequestActive(guard);
     return runtime;
+  }
+
+  private documentHostPath(document: TextDocument): string {
+    const filePath = this.documentUris.hostPath(document.uri);
+    if (filePath == null) {
+      throw new Error(`Cannot project document URI into the workspace host: ${document.uri}`);
+    }
+    return filePath;
   }
 
   private async collectRows<T extends { readonly rows: readonly unknown[] }>(

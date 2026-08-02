@@ -16,9 +16,6 @@ import {
 } from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
 import { semanticSourceOffsetRangeForDocument } from "../mapping/source-locations.js";
-import {
-  logIfSemanticRuntimeRequestAborted,
-} from "./request-guard.js";
 import type { SemanticRuntimeLspRequestGuard } from "../runtime/semantic-runtime-session.js";
 import { isTemplateDocument } from "../utils/document-kind.js";
 
@@ -49,32 +46,19 @@ export async function handleSemanticTokensFull(
   params: SemanticTokensParams,
   guard: SemanticRuntimeLspRequestGuard,
 ): Promise<SemanticTokens | null> {
-  return ctx.trace.spanAsync("lsp.semanticTokens", async () => {
-    try {
-      ctx.trace.setAttribute("lsp.semanticTokens.uri", params.textDocument.uri);
+  const doc = ctx.ensureProgramDocument(params.textDocument.uri);
+  if (!doc) return null;
+  if (!isTemplateDocument(doc)) return null;
 
-      const doc = ctx.ensureProgramDocument(params.textDocument.uri);
-      if (!doc) return null;
-      if (!isTemplateDocument(doc)) return null;
+  const response = await ctx.semanticRuntime.templateSemanticTokens(
+    doc,
+    guard,
+  );
+  const tokens = response.value.rows;
+  if (tokens.length === 0) return null;
 
-      const response = await ctx.semanticRuntime.templateSemanticTokens(
-        doc,
-        guard,
-      );
-      const tokens = response.value.rows;
-      if (tokens.length === 0) return null;
-
-      const encoded = encodeTokens(tokens, doc.getText());
-      return encoded.length ? { data: encoded } : null;
-    } catch (e) {
-      if (logIfSemanticRuntimeRequestAborted(ctx, "semanticTokens", e, params.textDocument.uri)) {
-        return null;
-      }
-      const message = e instanceof Error ? e.stack ?? e.message : String(e);
-      ctx.logger.error(`[semanticTokens] failed for ${params.textDocument.uri}: ${message}`);
-      return null;
-    }
-  });
+  const encoded = encodeTokens(tokens, doc.getText());
+  return encoded.length ? { data: encoded } : null;
 }
 
 export function encodeTokens(tokens: readonly SemanticTemplateSemanticTokenRow[], text: string): number[] {

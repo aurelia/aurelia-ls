@@ -69,7 +69,7 @@ const completeEvidence = {
   compilations: completeAnswer,
 };
 
-function resource(name: string, file: string) {
+function resource(name: string, uri: string) {
   return {
     id: `definition:${name}`,
     name,
@@ -95,10 +95,10 @@ function resource(name: string, file: string) {
       aliases: [`${name}-alias`],
       visibilityKind: "app-root",
       source: null,
-      file,
+      uri,
     }],
     source: null,
-    file,
+    uri,
     package: null,
     origin: "project",
   };
@@ -192,7 +192,7 @@ describe("UserCommandsFeature", () => {
   });
 
   test("findResource presents exact metadata and opens the selected declaration", async () => {
-    const selected = resource("product-card", "C:/repo/src/product-card.ts");
+    const selected = resource("product-card", "file:///C:/repo/src/product-card.ts");
     const { recorded, quickPicks, getResources } = createHarness({
       resourcesResult: {
         fingerprint: "one:ready",
@@ -211,13 +211,13 @@ describe("UserCommandsFeature", () => {
       label: "$(home) product-card",
       description: "element",
       detail: "ProductCard · decorator · 1 alias · 1 bindable · 1 compiler world",
-      resourceFile: "C:/repo/src/product-card.ts",
+      resourceUri: "file:///C:/repo/src/product-card.ts",
     }));
     expect(recorded.openedDocuments.at(-1)?.uri.fsPath).toContain("product-card.ts");
   });
 
   test("findResource exposes partial workspace failure instead of silently presenting completeness", async () => {
-    const selected = resource("product-card", "C:/repo/src/product-card.ts");
+    const selected = resource("product-card", "file:///C:/repo/src/product-card.ts");
     const { recorded } = createHarness({
       resourcesResult: {
         fingerprint: "one:ready|two:error",

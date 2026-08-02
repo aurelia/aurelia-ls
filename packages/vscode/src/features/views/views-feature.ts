@@ -17,11 +17,9 @@ export const ViewsFeature: ClientFeature = {
     });
     store.add(treeView);
 
-    // Refresh when semantic-runtime resource visibility changes.
-    store.add(ctx.lsp.onWorkspaceChanged((payload) => {
-      if (payload.domains.includes("resources") || payload.domains.includes("scopes")) {
-        void explorer.refresh();
-      }
+    // The server publishes only after a newer semantic generation has settled.
+    store.add(ctx.lsp.onAnalysisChanged(() => {
+      void explorer.refresh();
     }));
 
     // Refresh command

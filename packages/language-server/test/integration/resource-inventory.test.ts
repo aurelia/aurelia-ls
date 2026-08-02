@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import type {
   ResourceExplorerResponse,
   ScopeResourcesResponse,
-} from "@aurelia-ls/language-server/api";
+} from "../../src/protocol.js";
 import {
   copyFixtureDirectory,
   fileUri,

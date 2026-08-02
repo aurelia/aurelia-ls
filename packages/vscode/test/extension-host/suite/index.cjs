@@ -5,7 +5,9 @@ function run() {
   const mocha = new Mocha({
     ui: "tdd",
     color: true,
-    timeout: 120000,
+    // Scenario assertions own their deadlines; this ceiling only covers the sum
+    // of several intentional cold compiler and editor lifecycle cycles.
+    timeout: 300000,
   });
   if (process.env.AURELIA_LS_EXTENSION_HOST_GREP) {
     mocha.grep(process.env.AURELIA_LS_EXTENSION_HOST_GREP);

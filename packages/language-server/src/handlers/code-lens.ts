@@ -5,12 +5,10 @@
  * class declarations. The source of truth is semantic-runtime row data; the
  * custom request shape is the VS Code extension's small presentation contract.
  */
-import path from "node:path";
 import type {
   CodeLens,
   CodeLensParams,
 } from "vscode-languageserver/node";
-import { URI } from "vscode-uri";
 import type {
   SemanticBindingBehaviorApplicationRow,
   SemanticResourceDefinitionRow,
@@ -18,17 +16,18 @@ import type {
   SemanticSourceReference,
   SemanticValueConverterApplicationRow,
 } from "@aurelia-ls/semantic-runtime";
-import { semanticExactSourceReference } from "@aurelia-ls/semantic-runtime";
+import {
+  canonicalTypeSystemPath,
+  semanticExactSourceReference,
+} from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
 import {
   semanticSourceOffsetRangeForDocument,
   semanticSourceReferenceFilePath,
   semanticSourceReferencePath,
 } from "../mapping/source-locations.js";
-import {
-  logIfSemanticRuntimeRequestAborted,
-} from "./request-guard.js";
 import type { SemanticRuntimeLspRequestGuard } from "../runtime/semantic-runtime-session.js";
+import { isScriptDocument } from "../utils/document-kind.js";
 
 const CODE_LENS_RESOURCE_KINDS = new Set<string>([
   "custom-element",
@@ -51,73 +50,64 @@ export async function handleCodeLens(
   params: CodeLensParams,
   guard: SemanticRuntimeLspRequestGuard,
 ): Promise<CodeLens[] | null> {
-  try {
-    const uri = params.textDocument.uri;
-    if (!uri.endsWith(".ts")) return null;
+  const uri = params.textDocument.uri;
+  const doc = ctx.openDocument(uri);
+  if (doc == null || !isScriptDocument(doc)) return null;
 
-    const doc = ctx.documents.get(uri);
-    if (!doc) return null;
+  const requestedPath = ctx.documentUris.hostPath(uri);
+  if (requestedPath == null) return null;
+  const requested = normalizedFilePath(requestedPath);
+  const [
+    definitionsAnswer,
+    controllerAnswer,
+    behaviorAnswer,
+    converterAnswer,
+  ] = await Promise.all([
+    ctx.semanticRuntime.resourceDefinitions(guard),
+    ctx.semanticRuntime.runtimeControllers(guard),
+    ctx.semanticRuntime.bindingBehaviorApplications(guard),
+    ctx.semanticRuntime.valueConverterApplications(guard),
+  ]);
 
-    const requested = normalizedFilePath(URI.parse(uri).fsPath);
-    const [
-      definitionsAnswer,
-      controllerAnswer,
-      behaviorAnswer,
-      converterAnswer,
-    ] = await Promise.all([
-      ctx.semanticRuntime.resourceDefinitions(guard),
-      ctx.semanticRuntime.runtimeControllers(guard),
-      ctx.semanticRuntime.bindingBehaviorApplications(guard),
-      ctx.semanticRuntime.valueConverterApplications(guard),
-    ]);
+  const controllers = controllerAnswer.value.rows;
+  const bindingBehaviors = behaviorAnswer.value.rows;
+  const valueConverters = converterAnswer.value.rows;
+  const lenses: CodeLens[] = [];
 
-    const controllers = controllerAnswer.value.rows;
-    const bindingBehaviors = behaviorAnswer.value.rows;
-    const valueConverters = converterAnswer.value.rows;
-    const lenses: CodeLens[] = [];
-
-    for (const definition of definitionsAnswer.value.rows) {
-      if (!isCodeLensResourceDefinition(definition)) {
-        continue;
-      }
-      const targetSource = semanticExactSourceReference(definition.targetSource ?? definition.source);
-      const resourceFile = semanticSourceReferenceFilePath(targetSource, ctx.workspaceRoot);
-      if (resourceFile == null || normalizedFilePath(resourceFile) !== requested) {
-        continue;
-      }
-      const targetRange = semanticSourceOffsetRangeForDocument(targetSource, doc);
-      if (targetRange == null || targetRange.start >= targetRange.end) continue;
-
-      const targetPosition = doc.positionAt(targetRange.start);
-      const lensPosition = { line: targetPosition.line, character: 0 };
-      const usageCount = templateUsageCount(definition, controllers, bindingBehaviors, valueConverters);
-      const title = codeLensTitle(definition, usageCount);
-      lenses.push({
-        range: {
-          start: lensPosition,
-          end: lensPosition,
-        },
-        command: usageCount > 0
-          ? {
-              title,
-              command: "editor.action.findReferences",
-              arguments: [uri, targetPosition],
-            }
-          : { title, command: "" },
-      });
+  for (const definition of definitionsAnswer.value.rows) {
+    if (!isCodeLensResourceDefinition(definition)) {
+      continue;
     }
-
-    return lenses.length > 0
-      ? lenses.sort((left, right) => left.range.start.line - right.range.start.line)
-      : null;
-  } catch (e) {
-    if (logIfSemanticRuntimeRequestAborted(ctx, "codeLens", e, params.textDocument.uri)) {
-      return null;
+    const targetSource = semanticExactSourceReference(definition.targetSource ?? definition.source);
+    const resourceFile = semanticSourceReferenceFilePath(targetSource, ctx.documentUris);
+    if (resourceFile == null || normalizedFilePath(resourceFile) !== requested) {
+      continue;
     }
-    const message = e instanceof Error ? e.stack ?? e.message : String(e);
-    ctx.logger.error(`[codeLens] failed for ${params.textDocument.uri}: ${message}`);
-    return null;
+    const targetRange = semanticSourceOffsetRangeForDocument(targetSource, doc);
+    if (targetRange == null || targetRange.start >= targetRange.end) continue;
+
+    const targetPosition = doc.positionAt(targetRange.start);
+    const lensPosition = { line: targetPosition.line, character: 0 };
+    const usageCount = templateUsageCount(definition, controllers, bindingBehaviors, valueConverters);
+    const title = codeLensTitle(definition, usageCount);
+    lenses.push({
+      range: {
+        start: lensPosition,
+        end: lensPosition,
+      },
+      command: usageCount > 0
+        ? {
+            title,
+            command: "editor.action.findReferences",
+            arguments: [uri, targetPosition],
+          }
+        : { title, command: "" },
+    });
   }
+
+  return lenses.length > 0
+    ? lenses.sort((left, right) => left.range.start.line - right.range.start.line)
+    : null;
 }
 
 function isCodeLensResourceDefinition(
@@ -191,5 +181,5 @@ function countDistinctSourcePaths(sources: readonly (SemanticSourceReference | n
 }
 
 function normalizedFilePath(filePath: string): string {
-  return path.normalize(filePath).toLowerCase();
+  return canonicalTypeSystemPath(filePath);
 }

@@ -29,7 +29,7 @@ const RESOURCE_GROUP_ICONS: Readonly<Record<string, string>> = {
 
 type CommandResource = Pick<
   ResourceExplorerItem,
-  "name" | "kind" | "aliases" | "bindables" | "definition" | "visibility" | "file" | "package" | "origin"
+  "name" | "kind" | "aliases" | "bindables" | "definition" | "visibility" | "uri" | "package" | "origin"
 > & {
   readonly workspace?: ResourceExplorerItem["workspace"];
 };
@@ -269,7 +269,7 @@ export const UserCommandsFeature: ClientFeature = {
           }
           const showWorkspace = response.workspaces.length > 1;
 
-          type ResourceQuickPickItem = QuickPickItem & { resourceFile?: string };
+          type ResourceQuickPickItem = QuickPickItem & { resourceUri?: string };
 
           const items: ResourceQuickPickItem[] = response.resources.map((r) => {
             const kindLabel = RESOURCE_KIND_LABELS[r.kind] ?? r.kind;
@@ -278,7 +278,7 @@ export const UserCommandsFeature: ClientFeature = {
               label: `${originIcon} ${r.name}`,
               description: kindLabel,
               detail: resourceDetail(r, showWorkspace ? r.workspace.name : undefined),
-              resourceFile: r.file ?? undefined,
+              resourceUri: r.uri ?? undefined,
             };
           });
 
@@ -288,8 +288,8 @@ export const UserCommandsFeature: ClientFeature = {
             matchOnDetail: true,
           });
 
-          if (picked?.resourceFile) {
-            const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(picked.resourceFile));
+          if (picked?.resourceUri) {
+            const doc = await vscode.workspace.openTextDocument(vscode.Uri.parse(picked.resourceUri));
             await vscode.window.showTextDocument(doc);
           }
         });
@@ -319,7 +319,7 @@ export const UserCommandsFeature: ClientFeature = {
             vscode.window.showInformationMessage("Available resource results are incomplete for this template.");
           }
 
-          type ScopeQuickPickItem = QuickPickItem & { resourceFile?: string };
+          type ScopeQuickPickItem = QuickPickItem & { resourceUri?: string };
 
           const items: ScopeQuickPickItem[] = response.resources.map((r) => {
             const kindLabel = RESOURCE_KIND_LABELS[r.kind] ?? r.kind;
@@ -328,7 +328,7 @@ export const UserCommandsFeature: ClientFeature = {
               label: `${originIcon} ${r.name}`,
               description: kindLabel,
               detail: resourceDetail(r),
-              resourceFile: r.file ?? undefined,
+              resourceUri: r.uri ?? undefined,
             };
           });
 
@@ -339,8 +339,8 @@ export const UserCommandsFeature: ClientFeature = {
             matchOnDetail: true,
           });
 
-          if (picked?.resourceFile) {
-            const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(picked.resourceFile));
+          if (picked?.resourceUri) {
+            const doc = await vscode.workspace.openTextDocument(vscode.Uri.parse(picked.resourceUri));
             await vscode.window.showTextDocument(doc);
           }
         });
@@ -363,10 +363,7 @@ export const UserCommandsFeature: ClientFeature = {
             return;
           }
 
-          const targetUri = related.uri.startsWith("file://")
-            ? vscode.Uri.parse(related.uri)
-            : vscode.Uri.file(related.uri);
-          const doc = await vscode.workspace.openTextDocument(targetUri);
+          const doc = await vscode.workspace.openTextDocument(vscode.Uri.parse(related.uri));
           await vscode.window.showTextDocument(doc);
         });
       }),

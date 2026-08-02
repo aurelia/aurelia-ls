@@ -5,8 +5,8 @@ import {
   SEMANTIC_TOKENS_LEGEND,
   WORKSPACE_TOKEN_MODIFIER_GAP_AWARE,
   WORKSPACE_TOKEN_MODIFIER_GAP_CONSERVATIVE,
-  type ServerContext,
-} from "@aurelia-ls/language-server/api";
+} from "../../src/handlers/semantic-tokens.js";
+import type { ServerContext } from "../../src/context.js";
 import type { SemanticTemplateSemanticTokenRow } from "@aurelia-ls/semantic-runtime";
 import { testRequestGuard } from "./test-request-guard.js";
 

@@ -41,6 +41,18 @@ export {
   SemanticRuntimeProjectInputReadKind,
 } from '../kernel/project-input.js';
 export {
+  SourceFileRole,
+  SourceLanguage,
+} from '../kernel/address.js';
+export {
+  inferSourceFileRole,
+  inferSourceLanguage,
+} from '../kernel/source-classification.js';
+export {
+  canonicalTypeSystemPath,
+  normalizeTypeSystemPath,
+} from '../type-system/source-file-path.js';
+export {
   OpenSeamBoundaryKind,
   OpenSeamReasonKind,
   openSeamBoundaryKindForReason,

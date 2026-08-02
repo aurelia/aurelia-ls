@@ -41,12 +41,12 @@ function resource(input: {
   name: string;
   workspace?: ReturnType<typeof workspace>;
   origin?: string;
-  file?: string | null;
+  uri?: string | null;
   package?: string | null;
   targetName?: string | null;
   aliases?: string[];
   bindables?: Array<{ name: string; attribute?: string; valueType?: string | null; primary?: boolean }>;
-  visibility?: Array<{ visibilityKind: string; compilerWorld: string; file?: string | null }>;
+  visibility?: Array<{ visibilityKind: string; compilerWorld: string; uri?: string | null }>;
   kind?: string;
 }) {
   const owner = input.workspace ?? workspace();
@@ -100,10 +100,10 @@ function resource(input: {
       aliases: input.aliases ?? [],
       visibilityKind: row.visibilityKind,
       source: null,
-      file: row.file ?? null,
+      uri: row.uri ?? null,
     })),
     source: null,
-    file: input.file ?? null,
+    uri: input.uri ?? null,
     package: input.package ?? null,
     origin: input.origin ?? "project",
     workspace: owner,
@@ -154,18 +154,18 @@ describe("ResourceExplorerProvider", () => {
       id: "definition:app-root",
       name: "app-root",
       workspace: owner,
-      file: "C:/repo/src/app-root.ts",
+      uri: "file:///C:/repo/src/app-root.ts",
       targetName: "AppRoot",
       aliases: ["shell-root"],
       bindables: [{ name: "value", valueType: "string", primary: true }],
-      visibility: [{ visibilityKind: "app-root", compilerWorld: "app-root src/main.ts", file: "C:/repo/src/main.ts" }],
+      visibility: [{ visibilityKind: "app-root", compilerWorld: "app-root src/main.ts", uri: "file:///C:/repo/src/main.ts" }],
     });
     const packageResource = resource({
       id: "definition:plugin-card",
       name: "plugin-card",
       workspace: owner,
       origin: "package",
-      file: "C:/repo/node_modules/@scope/plugin/plugin-card.js",
+      uri: "file:///C:/repo/node_modules/@scope/plugin/plugin-card.js",
       package: "@scope/plugin",
       targetName: "PluginCard",
     });

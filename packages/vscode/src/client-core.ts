@@ -525,6 +525,12 @@ export class AureliaLanguageClient {
       workspaceFolder: admission.folder,
       documentSelector: workspaceDocumentSelector(admission.folder),
       synchronize: { fileEvents },
+      // The server requests one standard pull refresh after its semantic source
+      // generation settles. An additional client pull on every didChange races
+      // that refresh, cancels the expensive first request, and repeats the same
+      // analysis. VS Code still owns open/focus priority, cancellation, and the
+      // diagnostic collection itself.
+      diagnosticPullOptions: { onChange: false, onFocus: true },
       middleware: createMiddleware(
         this.#vscode,
         this.#logger,

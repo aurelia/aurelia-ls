@@ -1,5 +1,5 @@
 import { test, expect, describe, vi } from "vitest";
-import { handleInlayHints } from "@aurelia-ls/language-server/api";
+import { handleInlayHints } from "../../src/handlers/inlay-hints.js";
 import { testRequestGuard } from "./test-request-guard.js";
 
 function createMockContext(rows: unknown[], enabled = true) {
@@ -12,6 +12,7 @@ function createMockContext(rows: unknown[], enabled = true) {
       },
     },
     ensureProgramDocument: vi.fn(() => ({
+      uri: "file:///test.html",
       languageId: "html",
       getText: () => "x".repeat(300),
       positionAt: (offset: number) => ({ line: Math.floor(offset / 100), character: offset % 100 }),

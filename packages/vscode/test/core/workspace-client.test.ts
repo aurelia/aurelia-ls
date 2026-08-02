@@ -138,6 +138,7 @@ describe("AureliaLanguageClient workspace ownership", () => {
     expect(harness.clients).toHaveLength(2);
     for (const client of harness.clients) {
       expect(client.options.workspaceFolder?.uri.toString()).toBe(client.workspaceUri);
+      expect(client.options.diagnosticPullOptions).toEqual({ onChange: false, onFocus: true });
       expect(client.options.documentSelector).not.toContainEqual(expect.objectContaining({ scheme: "untitled" }));
       expect(client.options.documentSelector).toContainEqual(expect.objectContaining({
         scheme: "file",
@@ -788,24 +789,24 @@ describe("LspFacade workspace routing", () => {
     const facade = new LspFacade(manager, logger);
     const first = vi.fn();
     const second = vi.fn();
-    const firstSubscription = facade.onWorkspaceChanged(first);
-    facade.onWorkspaceChanged(second);
+    const firstSubscription = facade.onAnalysisChanged(first);
+    facade.onAnalysisChanged(second);
 
-    harness.clients[0]?.emit("aurelia/workspaceChanged", { fingerprint: "1", domains: ["resources"] });
+    harness.clients[0]?.emit("aurelia/analysisChanged", { fingerprint: "1" });
     expect(first).toHaveBeenCalledTimes(1);
     expect(second).toHaveBeenCalledTimes(1);
     expect(first.mock.calls[0]?.[0].workspace.name).toBe("a");
 
     firstSubscription.dispose();
-    harness.clients[0]?.emit("aurelia/workspaceChanged", { fingerprint: "2", domains: ["resources"] });
+    harness.clients[0]?.emit("aurelia/analysisChanged", { fingerprint: "2" });
     expect(first).toHaveBeenCalledTimes(1);
     expect(second).toHaveBeenCalledTimes(2);
 
     const retired = harness.clients[0]!;
     await manager.restart(stubExtensionContext(vscode));
     const replacement = harness.clients.filter((client) => client.workspaceUri === "file:///work/a").at(-1)!;
-    retired.emit("aurelia/workspaceChanged", { fingerprint: "old", domains: ["resources"] });
-    replacement.emit("aurelia/workspaceChanged", { fingerprint: "new", domains: ["resources"] });
+    retired.emit("aurelia/analysisChanged", { fingerprint: "old" });
+    replacement.emit("aurelia/analysisChanged", { fingerprint: "new" });
     expect(second).toHaveBeenCalledTimes(3);
 
     facade.dispose();

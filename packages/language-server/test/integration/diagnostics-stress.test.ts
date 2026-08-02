@@ -252,7 +252,7 @@ test("diagnostics from one dirty template do not publish on another open templat
   }
 }, 30000);
 
-test("closing a dirty diagnostic document clears its published diagnostics", async () => {
+test("closing a dirty diagnostic document returns diagnostics to the host-owned text", async () => {
   const fixture = copyFixtureDirectory(helloWorldFixture);
   const { connection, child, dispose, getStderr } = startServer(fixture);
   const documents = new Map<string, TrackedDocument>();
@@ -264,7 +264,7 @@ test("closing a dirty diagnostic document clears its published diagnostics", asy
     const productCardHtml = openTrackedDocument(connection, fixture, "src/components/product-card.html", "html", documents, openUris);
     await waitForCleanDiagnostics(diagnostics, productCardHtml.uri);
 
-    changeTrackedDocument(
+    changeOpenBufferDocument(
       connection,
       productCardHtml,
       productCardHtml.text.replace("item.description", "missingCardMember"),

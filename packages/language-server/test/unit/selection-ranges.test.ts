@@ -1,9 +1,11 @@
 import { describe, expect, test, vi } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { handleSelectionRanges } from "@aurelia-ls/language-server/api";
+import { handleSelectionRanges } from "../../src/handlers/selection-ranges.js";
 import { testRequestGuard } from "./test-request-guard.js";
+import { testWorkspaceDocumentUris } from "./test-document-uris.js";
 
-const uri = "file:///app/src/app.html";
+const documentUris = testWorkspaceDocumentUris("/app");
+const uri = documentUris.uriForWorkspaceRelativePath("src/app.html")!;
 const text = '<template><input value.bind="title"></template>';
 const doc = TextDocument.create(uri, "html", 1, text);
 
@@ -27,7 +29,8 @@ function source(start: number, end: number) {
 
 function createMockContext(value: Record<string, unknown>) {
   return {
-    workspaceRoot: "/app",
+    workspaceRoot: documentUris.workspaceRoot,
+    documentUris,
     logger: { log: vi.fn(), info: vi.fn(), error: vi.fn(), warn: vi.fn() },
     ensureProgramDocument: vi.fn(() => doc),
     semanticRuntime: {

@@ -2,11 +2,12 @@
  * LSP feature handlers: completions, hover, definition, references, rename, code actions.
  *
  * Runtime-retargeted features call semantic-runtime through the LSP session.
- * Runtime-backed handlers catch at the protocol boundary and return the best
- * feature-specific degradation shape.
+ * Runtime-backed handlers preserve ordinary semantic absence and let the
+ * shared request boundary classify cancellation, staleness, and failure.
  */
 import {
   ResponseError,
+  LSPErrorCodes,
   SemanticTokensRequest,
   type CompletionList,
   type Hover,
@@ -35,7 +36,6 @@ import { handleLinkedEditingRange } from "./linked-editing-ranges.js";
 import { handleFoldingRanges } from "./folding-ranges.js";
 import { handleInlayHints } from "./inlay-hints.js";
 import { handleCodeLens } from "./code-lens.js";
-import { canonicalDocumentUri } from "../utils/document-uri.js";
 import {
   mapSemanticRuntimeTemplateCodeActions,
   mapSemanticRuntimeUnresolvedTemplateCodeActions,
@@ -52,30 +52,10 @@ import {
 } from "../mapping/lsp-types.js";
 import { handleSemanticTokensFull } from "./semantic-tokens.js";
 import {
-  degradationFromError,
-  renderDegradationAsHoverMarkdown,
-  renderDegradationAsMessage,
-  type Degradation,
-} from "../feature-response.js";
-import {
-  logIfSemanticRuntimeRequestAborted,
-  semanticRuntimeRequestGuard,
+  runSemanticRuntimeRequest,
 } from "./request-guard.js";
 import type { SemanticRuntimeLspRequestGuard } from "../runtime/semantic-runtime-session.js";
 import { isTemplateDocument } from "../utils/document-kind.js";
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
-/**
- * Log a degradation. Always log, never swallow.
- * This replaces the old catch-and-log pattern with structured output.
- */
-function logDegradation(ctx: ServerContext, feature: string, d: Degradation, uri?: string): void {
-  const location = uri ? ` for ${uri}` : "";
-  ctx.logger.warn(`[${feature}] degraded (rung ${d.rung})${location}: ${d.what} — ${d.why}`);
-}
 
 // ============================================================================
 // Completion Handler
@@ -90,26 +70,17 @@ export async function handleCompletion(
   if (!doc) return { isIncomplete: false, items: [] };
   if (!isTemplateDocument(doc)) return { isIncomplete: false, items: [] };
 
-  try {
-    const response = await ctx.semanticRuntime.templateCompletions(
-      doc,
-      params.position,
-      guard,
+  const response = await ctx.semanticRuntime.templateCompletions(
+    doc,
+    params.position,
+    guard,
+  );
+  if (response.coverage !== "complete" || response.value.missingInputs.length > 0) {
+    ctx.logger.info(
+      `[completion] semantic coverage is ${response.coverage}; missing inputs: ${response.value.missingInputs.join(", ") || "none"}`,
     );
-    if (response.coverage !== "complete" || response.value.missingInputs.length > 0) {
-      ctx.logger.info(
-        `[completion] semantic coverage is ${response.coverage}; missing inputs: ${response.value.missingInputs.join(", ") || "none"}`,
-      );
-    }
-    return mapSemanticRuntimeTemplateCompletions(response);
-  } catch (error) {
-    if (logIfSemanticRuntimeRequestAborted(ctx, "completion", error, params.textDocument.uri)) {
-      return { isIncomplete: false, items: [] };
-    }
-    const response = degradationFromError("completion", error);
-    logDegradation(ctx, "completion", response, params.textDocument.uri);
-    return { isIncomplete: false, items: [] };
   }
+  return mapSemanticRuntimeTemplateCompletions(response);
 }
 
 // ============================================================================
@@ -125,23 +96,12 @@ export async function handleHover(
   if (!doc) return null;
   if (!isTemplateDocument(doc)) return null;
 
-  try {
-    const response = await ctx.semanticRuntime.templateCursorInfo(
-      doc,
-      params.position,
-      guard,
-    );
-    return mapSemanticRuntimeTemplateHover(response);
-  } catch (error) {
-    if (logIfSemanticRuntimeRequestAborted(ctx, "hover", error, params.textDocument.uri)) {
-      return null;
-    }
-    const response = degradationFromError("hover", error);
-    logDegradation(ctx, "hover", response, params.textDocument.uri);
-    return {
-      contents: { kind: "markdown", value: renderDegradationAsHoverMarkdown(response) },
-    };
-  }
+  const response = await ctx.semanticRuntime.templateCursorInfo(
+    doc,
+    params.position,
+    guard,
+  );
+  return mapSemanticRuntimeTemplateHover(response);
 }
 
 // ============================================================================
@@ -158,48 +118,25 @@ export async function handleDefinition(
   if (!isTemplateDocument(doc)) return null;
 
   const lookupText: LookupTextFn = (uri) => ctx.lookupText(uri);
-  try {
-    const response = await ctx.semanticRuntime.templateCursorInfo(
-      doc,
-      params.position,
-      guard,
-    );
-    const templateDefinition = mapSemanticRuntimeTemplateDefinition(response, lookupText, {
-      workspaceRoot: ctx.workspaceRoot,
-      originDocument: doc,
-    });
-    if (templateDefinition != null) {
-      return templateDefinition;
-    }
-
-    try {
-      const routeNodes = await ctx.semanticRuntime.routeNodes(guard);
-      const routeDefinition = mapSemanticRuntimeRouteNodeDefinition(routeNodes, lookupText, {
-        workspaceRoot: ctx.workspaceRoot,
-        originDocument: doc,
-        position: params.position,
-      });
-      if (routeDefinition != null) {
-        return routeDefinition;
-      }
-    } catch (error) {
-      if (logIfSemanticRuntimeRequestAborted(ctx, "routeDefinition", error, params.textDocument.uri)) {
-        return null;
-      }
-      const response = degradationFromError("routeDefinition", error);
-      logDegradation(ctx, "routeDefinition", response, params.textDocument.uri);
-    }
-
-    return null;
-  } catch (error) {
-    if (logIfSemanticRuntimeRequestAborted(ctx, "definition", error, params.textDocument.uri)) {
-      return null;
-    }
-    const response = degradationFromError("definition", error);
-    logDegradation(ctx, "definition", response, params.textDocument.uri);
-    // Definition can't render explanation text in standard LSP; log and return null
-    return null;
+  const response = await ctx.semanticRuntime.templateCursorInfo(
+    doc,
+    params.position,
+    guard,
+  );
+  const templateDefinition = mapSemanticRuntimeTemplateDefinition(response, lookupText, {
+    documentUris: ctx.documentUris,
+    originDocument: doc,
+  });
+  if (templateDefinition != null) {
+    return templateDefinition;
   }
+
+  const routeNodes = await ctx.semanticRuntime.routeNodes(guard);
+  return mapSemanticRuntimeRouteNodeDefinition(routeNodes, lookupText, {
+    documentUris: ctx.documentUris,
+    originDocument: doc,
+    position: params.position,
+  });
 }
 
 // ============================================================================
@@ -215,41 +152,32 @@ export async function handleReferences(
   if (!doc) return null;
 
   const lookupText: LookupTextFn = (uri) => ctx.lookupText(uri);
-  try {
-    const response = await ctx.semanticRuntime.templateReferences(
-      doc,
-      params.position,
-      params.context.includeDeclaration,
-      guard,
-    );
-    const mapping = mapSemanticRuntimeTemplateReferences(response, lookupText, {
-      workspaceRoot: ctx.workspaceRoot,
-      originDocument: doc,
-      scope: "workspace",
-    });
-    if (mapping.failures.length > 0) {
-      ctx.logger.warn(`[references] omitted source-backed rows: ${mapping.failures.join(" ")}`);
-    }
-    const candidateCount = response.value.candidateRows.length;
-    if (candidateCount > 0 || mapping.failures.length > 0) {
-      await ctx.connection.sendNotification("window/showMessage", {
-        type: mapping.failures.length > 0 ? MessageType.Warning : MessageType.Info,
-        message: referenceCoverageMessage(
-          mapping.value?.length ?? 0,
-          candidateCount,
-          mapping.failures.length,
-        ),
-      });
-    }
-    return mapping.value;
-  } catch (error) {
-    if (logIfSemanticRuntimeRequestAborted(ctx, "references", error, params.textDocument.uri)) {
-      return null;
-    }
-    const response = degradationFromError("references", error);
-    logDegradation(ctx, "references", response, params.textDocument.uri);
-    return null;
+  const response = await ctx.semanticRuntime.templateReferences(
+    doc,
+    params.position,
+    params.context.includeDeclaration,
+    guard,
+  );
+  const mapping = mapSemanticRuntimeTemplateReferences(response, lookupText, {
+    documentUris: ctx.documentUris,
+    originDocument: doc,
+    scope: "workspace",
+  });
+  if (mapping.failures.length > 0) {
+    ctx.logger.warn(`[references] omitted source-backed rows: ${mapping.failures.join(" ")}`);
   }
+  const candidateCount = response.value.candidateRows.length;
+  if (candidateCount > 0 || mapping.failures.length > 0) {
+    await ctx.connection.sendNotification("window/showMessage", {
+      type: mapping.failures.length > 0 ? MessageType.Warning : MessageType.Info,
+      message: referenceCoverageMessage(
+        mapping.value?.length ?? 0,
+        candidateCount,
+        mapping.failures.length,
+      ),
+    });
+  }
+  return mapping.value;
 }
 
 // ============================================================================
@@ -266,41 +194,32 @@ export async function handleDocumentHighlight(
   if (!isTemplateDocument(doc)) return null;
 
   const lookupText: LookupTextFn = (uri) => ctx.lookupText(uri);
-  try {
-    const response = await ctx.semanticRuntime.templateReferences(
-      doc,
-      params.position,
-      true,
-      guard,
-    );
-    const mapping = mapSemanticRuntimeTemplateReferences(response, lookupText, {
-      workspaceRoot: ctx.workspaceRoot,
-      originDocument: doc,
-      scope: "origin-document",
-    });
-    if (mapping.failures.length > 0) {
-      ctx.logger.warn(`[documentHighlight] omitted source-backed rows: ${mapping.failures.join(" ")}`);
-    }
-    const locations = mapping.value;
-    if (!locations) return null;
-
-    const originUri = canonicalDocumentUri(doc.uri).uri;
-    const highlights = locations
-      .filter((location) => canonicalDocumentUri(location.uri).uri === originUri)
-      .map((location): DocumentHighlight => ({
-        range: location.range,
-        kind: DocumentHighlightKind.Text,
-      }));
-
-    return highlights.length > 0 ? highlights : null;
-  } catch (error) {
-    if (logIfSemanticRuntimeRequestAborted(ctx, "documentHighlight", error, params.textDocument.uri)) {
-      return null;
-    }
-    const response = degradationFromError("documentHighlight", error);
-    logDegradation(ctx, "documentHighlight", response, params.textDocument.uri);
-    return null;
+  const response = await ctx.semanticRuntime.templateReferences(
+    doc,
+    params.position,
+    true,
+    guard,
+  );
+  const mapping = mapSemanticRuntimeTemplateReferences(response, lookupText, {
+    documentUris: ctx.documentUris,
+    originDocument: doc,
+    scope: "origin-document",
+  });
+  if (mapping.failures.length > 0) {
+    ctx.logger.warn(`[documentHighlight] omitted source-backed rows: ${mapping.failures.join(" ")}`);
   }
+  const locations = mapping.value;
+  if (!locations) return null;
+
+  const originUri = ctx.documentUris.resolve(doc.uri).uri;
+  const highlights = locations
+    .filter((location) => ctx.documentUris.sameDocument(location.uri, originUri))
+    .map((location): DocumentHighlight => ({
+      range: location.range,
+      kind: DocumentHighlightKind.Text,
+    }));
+
+  return highlights.length > 0 ? highlights : null;
 }
 
 // ============================================================================
@@ -316,25 +235,14 @@ export function handlePrepareRename(
   if (!doc) return Promise.resolve(null);
   if (!isTemplateDocument(doc)) return Promise.resolve(null);
 
-  return ctx.trace.spanAsync("lsp.prepareRename", async () => {
-    try {
-      const response = await ctx.semanticRuntime.templateRename(doc, params.position, guard);
-      if (response.value.status !== "available") {
-        return null;
-      }
-      return mapSemanticRuntimeTemplatePrepareRename(response, {
-        workspaceRoot: ctx.workspaceRoot,
-        originDocument: doc,
-      });
-    } catch (e) {
-      if (logIfSemanticRuntimeRequestAborted(ctx, "prepareRename", e, params.textDocument.uri)) {
-        return null;
-      }
-      if (e instanceof ResponseError) throw e;
-      const d = degradationFromError("prepareRename", e);
-      logDegradation(ctx, "prepareRename", d, params.textDocument.uri);
+  return ctx.semanticRuntime.templateRename(doc, params.position, guard).then((response) => {
+    if (response.value.status !== "available") {
       return null;
     }
+    return mapSemanticRuntimeTemplatePrepareRename(response, {
+      documentUris: ctx.documentUris,
+      originDocument: doc,
+    });
   });
 }
 
@@ -347,44 +255,32 @@ export async function handleRename(
   if (!doc) return null;
   if (!isTemplateDocument(doc)) return null;
 
-  try {
-    const response = await ctx.semanticRuntime.templateRename(
-      doc,
-      params.position,
-      guard,
-      params.newName,
-    );
-    if (response.value.status !== "available") {
-      throw new ResponseError(0, response.value.displayText || response.summary);
-    }
-    const mapping = mapSemanticRuntimeTemplateRenameEdit(response, (uri) => ctx.lookupDocumentSnapshot(uri), {
-      workspaceRoot: ctx.workspaceRoot,
-      originDocument: doc,
-    });
-    if (mapping.edit == null) {
-      // All-or-nothing: name every unmappable or stale row instead of applying a partial rename.
-      throw new ResponseError(
-        0,
-        `Rename to '${params.newName}' was blocked: ${mapping.failures.join(" ")}`,
-      );
-    }
-    if (response.value.candidateRows.length > 0) {
-      await ctx.connection.sendNotification("window/showMessage", {
-        type: MessageType.Info,
-        message: candidateRenameMessage(response.value.edits.length, response.value.candidateRows.length),
-      });
-    }
-    return mapping.edit;
-  } catch (e) {
-    if (logIfSemanticRuntimeRequestAborted(ctx, "rename", e, params.textDocument.uri)) {
-      return null;
-    }
-    if (e instanceof ResponseError) throw e;
-    // Boot doc: Degradation for rename → error response, NOT null
-    const d = degradationFromError("rename", e);
-    logDegradation(ctx, "rename", d, params.textDocument.uri);
-    throw new ResponseError(0, renderDegradationAsMessage(d));
+  const response = await ctx.semanticRuntime.templateRename(
+    doc,
+    params.position,
+    guard,
+    params.newName,
+  );
+  if (response.value.status !== "available") {
+    throw new ResponseError(LSPErrorCodes.RequestFailed, response.value.displayText || response.summary);
   }
+  const mapping = mapSemanticRuntimeTemplateRenameEdit(response, (uri) => ctx.lookupDocumentSnapshot(uri), {
+    documentUris: ctx.documentUris,
+    originDocument: doc,
+  });
+  if (mapping.edit == null) {
+    throw new ResponseError(
+      LSPErrorCodes.RequestFailed,
+      `Rename to '${params.newName}' was blocked: ${mapping.failures.join(" ")}`,
+    );
+  }
+  if (response.value.candidateRows.length > 0) {
+    await ctx.connection.sendNotification("window/showMessage", {
+      type: MessageType.Info,
+      message: candidateRenameMessage(response.value.edits.length, response.value.candidateRows.length),
+    });
+  }
+  return mapping.edit;
 }
 
 function candidateRenameMessage(verifiedEditCount: number, candidateCount: number): string {
@@ -425,34 +321,25 @@ export async function handleCodeAction(
   if (!doc) return null;
   if (!isTemplateDocument(doc)) return null;
 
-  try {
-    const response = await ctx.semanticRuntime.templateCodeActions(
-      doc,
-      params.range.start,
-      guard,
-    );
-    const mappingOptions = {
-      workspaceRoot: ctx.workspaceRoot,
-      originDocument: doc,
-      diagnostics: params.context.diagnostics,
-      onMappingFailure: (row: { readonly title: string }, failures: readonly string[]) => {
-        ctx.logger.warn(`[codeAction] skipped unsafe code action "${row.title}": ${failures.join(" ")}`);
-      },
-    };
-    return ctx.clientSupportsCodeActionResolveEdit
-      ? mapSemanticRuntimeUnresolvedTemplateCodeActions(response, (uri) => ctx.lookupDocumentSnapshot(uri), {
-          ...mappingOptions,
-          position: params.range.start,
-        })
-      : mapSemanticRuntimeTemplateCodeActions(response, (uri) => ctx.lookupDocumentSnapshot(uri), mappingOptions);
-  } catch (e) {
-    if (logIfSemanticRuntimeRequestAborted(ctx, "codeAction", e, params.textDocument.uri)) {
-      return null;
-    }
-    const d = degradationFromError("codeAction", e);
-    logDegradation(ctx, "codeAction", d, params.textDocument.uri);
-    return null;
-  }
+  const response = await ctx.semanticRuntime.templateCodeActions(
+    doc,
+    params.range.start,
+    guard,
+  );
+  const mappingOptions = {
+    documentUris: ctx.documentUris,
+    originDocument: doc,
+    diagnostics: params.context.diagnostics,
+    onMappingFailure: (row: { readonly title: string }, failures: readonly string[]) => {
+      ctx.logger.warn(`[codeAction] skipped unsafe code action "${row.title}": ${failures.join(" ")}`);
+    },
+  };
+  return ctx.clientSupportsCodeActionResolveEdit
+    ? mapSemanticRuntimeUnresolvedTemplateCodeActions(response, (uri) => ctx.lookupDocumentSnapshot(uri), {
+        ...mappingOptions,
+        position: params.range.start,
+      })
+    : mapSemanticRuntimeTemplateCodeActions(response, (uri) => ctx.lookupDocumentSnapshot(uri), mappingOptions);
 }
 
 export async function handleCodeActionResolve(
@@ -470,41 +357,32 @@ export async function handleCodeActionResolve(
     return action;
   }
 
-  try {
-    const response = await ctx.semanticRuntime.templateCodeActions(doc, resolve.position, guard);
-    const candidates = mapSemanticRuntimeTemplateCodeActions(
-      response,
-      (uri) => ctx.lookupDocumentSnapshot(uri),
-      {
-        workspaceRoot: ctx.workspaceRoot,
-        originDocument: doc,
-        diagnostics: action.diagnostics,
-        onMappingFailure: (row, failures) => {
-          ctx.logger.warn(`[codeAction/resolve] skipped unsafe code action "${row.title}": ${failures.join(" ")}`);
-        },
+  const response = await ctx.semanticRuntime.templateCodeActions(doc, resolve.position, guard);
+  const candidates = mapSemanticRuntimeTemplateCodeActions(
+    response,
+    (uri) => ctx.lookupDocumentSnapshot(uri),
+    {
+      documentUris: ctx.documentUris,
+      originDocument: doc,
+      diagnostics: action.diagnostics,
+      onMappingFailure: (row, failures) => {
+        ctx.logger.warn(`[codeAction/resolve] skipped unsafe code action "${row.title}": ${failures.join(" ")}`);
       },
-    ) ?? [];
-    const matches = candidates.filter((candidate) =>
-      semanticRuntimeTemplateCodeActionIdentityFromData(candidate.data) === resolve.actionIdentity
+    },
+  ) ?? [];
+  const matches = candidates.filter((candidate) =>
+    semanticRuntimeTemplateCodeActionIdentityFromData(candidate.data) === resolve.actionIdentity
+  );
+  if (matches.length !== 1 || matches[0]?.edit == null) {
+    ctx.logger.warn(
+      `[codeAction/resolve] action is no longer uniquely applicable: ${action.title} (${matches.length} current matches)`,
     );
-    if (matches.length !== 1 || matches[0]?.edit == null) {
-      ctx.logger.warn(
-        `[codeAction/resolve] action is no longer uniquely applicable: ${action.title} (${matches.length} current matches)`,
-      );
-      return action;
-    }
-    return {
-      ...action,
-      edit: matches[0].edit,
-    };
-  } catch (error) {
-    if (logIfSemanticRuntimeRequestAborted(ctx, "codeAction/resolve", error, resolve.textDocument.uri)) {
-      return action;
-    }
-    const degradation = degradationFromError("codeAction/resolve", error);
-    logDegradation(ctx, "codeAction/resolve", degradation, resolve.textDocument.uri);
     return action;
   }
+  return {
+    ...action,
+    edit: matches[0].edit,
+  };
 }
 
 // ============================================================================
@@ -512,42 +390,55 @@ export async function handleCodeActionResolve(
 // ============================================================================
 
 export function registerFeatureHandlers(ctx: ServerContext): void {
-  ctx.connection.onCompletion((params, token) => handleCompletion(ctx, params, requestGuard(ctx, token)));
-  ctx.connection.onHover((params, token) => handleHover(ctx, params, requestGuard(ctx, token)));
-  ctx.connection.onDefinition((params, token) => handleDefinition(ctx, params, requestGuard(ctx, token)));
-  ctx.connection.onReferences((params, token) => handleReferences(ctx, params, requestGuard(ctx, token)));
-  ctx.connection.onDocumentHighlight((params, token) => handleDocumentHighlight(ctx, params, requestGuard(ctx, token)));
-  ctx.connection.onPrepareRename((params, token) => handlePrepareRename(ctx, params, requestGuard(ctx, token)));
-  ctx.connection.onRenameRequest((params, token) => handleRename(ctx, params, requestGuard(ctx, token)));
-  ctx.connection.onCodeAction((params, token) => handleCodeAction(ctx, params, requestGuard(ctx, token)));
-  ctx.connection.onCodeActionResolve((action, token) => handleCodeActionResolve(ctx, action, requestGuard(ctx, token)));
-  ctx.connection.onDocumentSymbol((params, token) => handleDocumentSymbols(ctx, params, requestGuard(ctx, token)));
-  ctx.connection.onWorkspaceSymbol((params, token) => handleWorkspaceSymbols(ctx, params, requestGuard(ctx, token)));
-  ctx.connection.onCodeLens((params, token) => handleCodeLens(ctx, params, requestGuard(ctx, token)));
-  ctx.connection.onSelectionRanges((params, token) => handleSelectionRanges(ctx, params, requestGuard(ctx, token)));
-  ctx.connection.languages.onLinkedEditingRange((params, token) => handleLinkedEditingRange(ctx, params, requestGuard(ctx, token)));
-  ctx.connection.onFoldingRanges((params, token) => handleFoldingRanges(ctx, params, requestGuard(ctx, token)));
+  ctx.connection.onCompletion((params, token) => request(ctx, "completion", token, params.textDocument.uri,
+    (guard) => handleCompletion(ctx, params, guard)));
+  ctx.connection.onHover((params, token) => request(ctx, "hover", token, params.textDocument.uri,
+    (guard) => handleHover(ctx, params, guard)));
+  ctx.connection.onDefinition((params, token) => request(ctx, "definition", token, params.textDocument.uri,
+    (guard) => handleDefinition(ctx, params, guard)));
+  ctx.connection.onReferences((params, token) => request(ctx, "references", token, params.textDocument.uri,
+    (guard) => handleReferences(ctx, params, guard)));
+  ctx.connection.onDocumentHighlight((params, token) => request(ctx, "documentHighlight", token, params.textDocument.uri,
+    (guard) => handleDocumentHighlight(ctx, params, guard)));
+  ctx.connection.onPrepareRename((params, token) => request(ctx, "prepareRename", token, params.textDocument.uri,
+    (guard) => handlePrepareRename(ctx, params, guard)));
+  ctx.connection.onRenameRequest((params, token) => request(ctx, "rename", token, params.textDocument.uri,
+    (guard) => handleRename(ctx, params, guard)));
+  ctx.connection.onCodeAction((params, token) => request(ctx, "codeAction", token, params.textDocument.uri,
+    (guard) => handleCodeAction(ctx, params, guard)));
+  ctx.connection.onCodeActionResolve((action, token) => request(ctx, "codeAction/resolve", token, undefined,
+    (guard) => handleCodeActionResolve(ctx, action, guard)));
+  ctx.connection.onDocumentSymbol((params, token) => request(ctx, "documentSymbol", token, params.textDocument.uri,
+    (guard) => handleDocumentSymbols(ctx, params, guard)));
+  ctx.connection.onWorkspaceSymbol((params, token) => request(ctx, "workspaceSymbol", token, undefined,
+    (guard) => handleWorkspaceSymbols(ctx, params, guard)));
+  ctx.connection.onCodeLens((params, token) => request(ctx, "codeLens", token, params.textDocument.uri,
+    (guard) => handleCodeLens(ctx, params, guard)));
+  ctx.connection.onSelectionRanges((params, token) => request(ctx, "selectionRange", token, params.textDocument.uri,
+    (guard) => handleSelectionRanges(ctx, params, guard)));
+  ctx.connection.languages.onLinkedEditingRange((params, token) => request(ctx, "linkedEditingRange", token, params.textDocument.uri,
+    (guard) => handleLinkedEditingRange(ctx, params, guard)));
+  ctx.connection.onFoldingRanges((params, token) => request(ctx, "foldingRange", token, params.textDocument.uri,
+    (guard) => handleFoldingRanges(ctx, params, guard)));
 
   // Inlay hints — binding mode resolution
-  ctx.connection.languages.inlayHint.on((params, token) => handleInlayHints(ctx, params, requestGuard(ctx, token)));
+  ctx.connection.languages.inlayHint.on((params, token) => request(ctx, "inlayHints", token, params.textDocument.uri,
+    (guard) => handleInlayHints(ctx, params, guard)));
 
 
-  ctx.connection.onRequest(SemanticTokensRequest.type, async (params, token) => {
-    try {
-      return await handleSemanticTokensFull(ctx, params, requestGuard(ctx, token)) ?? { data: [] };
-    } catch (error) {
-      if (logIfSemanticRuntimeRequestAborted(ctx, "semanticTokens", error, params.textDocument.uri)) {
-        return { data: [] };
-      }
-      const response = degradationFromError("semanticTokens", error);
-      logDegradation(ctx, "semanticTokens", response, params.textDocument.uri);
-      return { data: [] };
-    }
-  });
+  ctx.connection.onRequest(SemanticTokensRequest.type, (params, token) =>
+    request(ctx, "semanticTokens", token, params.textDocument.uri,
+      async (guard) => await handleSemanticTokensFull(ctx, params, guard) ?? { data: [] }));
 }
 
-function requestGuard(ctx: ServerContext, token: CancellationToken): SemanticRuntimeLspRequestGuard {
-  return semanticRuntimeRequestGuard(ctx, token);
+function request<T>(
+  ctx: ServerContext,
+  feature: string,
+  token: CancellationToken,
+  uri: string | undefined,
+  handler: (guard: SemanticRuntimeLspRequestGuard) => T | Promise<T>,
+): Promise<T> {
+  return runSemanticRuntimeRequest(ctx, feature, token, handler, uri);
 }
 
 export { SEMANTIC_TOKENS_LEGEND } from "./semantic-tokens.js";

@@ -14,7 +14,6 @@ import type {
   DiagnosticsSnapshotItem,
   DiagnosticsSnapshotRelated,
   DiagnosticsSnapshotResponse,
-  AnalysisReadyPayload,
   ProtocolRange,
   ProtocolWorkspaceEdit,
   RelatedFileResponse,
@@ -23,7 +22,7 @@ import type {
   ResourceExplorerResponse as ProtocolResourceExplorerResponse,
   ScopeResourcesResponse,
   SourceSpan,
-  WorkspaceChangedPayload,
+  AnalysisChangedPayload,
 } from "@aurelia-ls/language-server/protocol";
 
 export type {
@@ -42,14 +41,13 @@ export type {
   DiagnosticsSnapshotItem,
   DiagnosticsSnapshotRelated,
   DiagnosticsSnapshotResponse,
-  AnalysisReadyPayload,
   ProtocolRange,
   ProtocolWorkspaceEdit,
   RelatedFileResponse,
   RenameFromTsResponse,
   ScopeResourcesResponse,
   SourceSpan,
-  WorkspaceChangedPayload,
+  AnalysisChangedPayload,
 };
 
 export interface AureliaWorkspaceIdentity {

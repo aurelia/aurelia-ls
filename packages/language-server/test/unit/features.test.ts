@@ -1,7 +1,6 @@
 import { describe, test, expect, vi } from "vitest";
 import { CompletionItemKind, ResponseError } from "vscode-languageserver/node";
 import {
-  canonicalDocumentUri,
   handleCodeAction,
   handleCodeActionResolve,
   handleCompletion,
@@ -11,15 +10,18 @@ import {
   handlePrepareRename,
   handleReferences,
   handleRename,
-  workspaceEditChanges,
-} from "@aurelia-ls/language-server/api";
+} from "../../src/handlers/features.js";
+import { workspaceEditChanges } from "../../src/mapping/lsp-types.js";
 import { testRequestGuard } from "./test-request-guard.js";
+import { testWorkspaceDocumentUris } from "./test-document-uris.js";
 
 const testText = "<template>\n  <my-el></my-el>\n</template>";
+const documentUris = testWorkspaceDocumentUris("/app");
+const templateUri = documentUris.uriForWorkspaceRelativePath("src/my-app.html")!;
 const renameText = "<template>${title}</template>";
 const renameStart = renameText.indexOf("title");
-const definitionLspUri = "file:///app/src/my-app.ts";
-const definitionUri = canonicalDocumentUri(definitionLspUri).uri;
+const definitionLspUri = documentUris.uriForWorkspaceRelativePath("src/my-app.ts")!;
+const definitionUri = documentUris.resolve(definitionLspUri).uri;
 const definitionText = 'export class MyApp {\n  message = "hello";\n}';
 const renameDefinitionText =
   'export class MyApp {\n  title = "hello";\n  summary() { return this.title; }\n}';
@@ -34,7 +36,7 @@ function mockMissingMemberDiagnostic() {
     label: `src/my-app.html@${codeActionStart}..${
       codeActionStart + "titel".length
     }`,
-    path: "file:///app/src/my-app.html",
+    path: templateUri,
     start: codeActionStart,
     end: codeActionStart + "titel".length,
   };
@@ -90,7 +92,7 @@ function snapshot(
   languageId = uri.endsWith(".ts") ? "typescript" : "html",
 ) {
   return {
-    uri: canonicalDocumentUri(uri).uri,
+    uri: documentUris.resolve(uri).uri,
     languageId,
     version,
     text,
@@ -99,7 +101,7 @@ function snapshot(
 
 function createMockRenameContext(value: Record<string, unknown>) {
   const document = {
-    uri: "file:///app/src/my-app.html",
+    uri: templateUri,
     languageId: "html",
     version: 3,
     offsetAt: vi.fn(() => renameStart + 1),
@@ -107,7 +109,8 @@ function createMockRenameContext(value: Record<string, unknown>) {
     getText: vi.fn(() => renameText),
   };
   return {
-    workspaceRoot: "/app",
+    workspaceRoot: documentUris.workspaceRoot,
+    documentUris,
     connection: { sendNotification: vi.fn() },
     logger: { log: vi.fn(), info: vi.fn(), error: vi.fn(), warn: vi.fn() },
     trace: {
@@ -130,7 +133,7 @@ function createMockRenameContext(value: Record<string, unknown>) {
       uri === definitionUri ? renameDefinitionText : null,
     ),
     lookupDocumentSnapshot: vi.fn((uri: string) =>
-      canonicalDocumentUri(uri).uri === definitionUri
+      documentUris.resolve(uri).uri === definitionUri
         ? snapshot(definitionUri, renameDefinitionText, 8, "typescript")
         : null,
     ),
@@ -151,7 +154,7 @@ function createMockCompletionContext(input: {
   return {
     logger: { log: vi.fn(), info: vi.fn(), error: vi.fn(), warn: vi.fn() },
     ensureProgramDocument: vi.fn(() => ({
-      uri: "file:///app/src/my-app.html",
+      uri: templateUri,
       languageId: "html",
       offsetAt: vi.fn(() => 0),
     })),
@@ -201,7 +204,7 @@ function createMockCompletionContext(input: {
 
 function createMockHoverContext() {
   const document = {
-    uri: "file:///app/src/my-app.html",
+    uri: templateUri,
     languageId: "html",
     offsetAt: vi.fn(() => 14),
   };
@@ -275,14 +278,15 @@ function createMockDefinitionContext(
         }
       : options.selectedMemberSource;
   const document = {
-    uri: "file:///app/src/my-app.html",
+    uri: templateUri,
     languageId: "html",
     offsetAt: vi.fn(() => 14),
     positionAt: vi.fn((offset: number) => ({ line: 0, character: offset })),
     getText: vi.fn(() => testText),
   };
   return {
-    workspaceRoot: "/app",
+    workspaceRoot: documentUris.workspaceRoot,
+    documentUris,
     logger: { log: vi.fn(), info: vi.fn(), error: vi.fn(), warn: vi.fn() },
     ensureProgramDocument: vi.fn(() => document),
     semanticRuntime: {
@@ -349,7 +353,7 @@ function createMockReferencesContext(options: {
   const messageStart = testText.indexOf("my-el");
   const declarationStart = definitionText.indexOf("message");
   const document = {
-    uri: "file:///app/src/my-app.html",
+    uri: templateUri,
     languageId: "html",
     offsetAt: vi.fn(() => messageStart),
     positionAt: vi.fn((offset: number) => {
@@ -360,7 +364,8 @@ function createMockReferencesContext(options: {
     getText: vi.fn(() => testText),
   };
   return {
-    workspaceRoot: "/app",
+    workspaceRoot: documentUris.workspaceRoot,
+    documentUris,
     connection: { sendNotification: vi.fn() },
     logger: { log: vi.fn(), info: vi.fn(), error: vi.fn(), warn: vi.fn() },
     ensureProgramDocument: vi.fn(() => document),
@@ -396,7 +401,7 @@ function createMockReferencesContext(options: {
                   label: `src/my-app.html@${messageStart}..${
                     messageStart + "my-el".length
                   }`,
-                  path: "file:///app/src/my-app.html",
+                  path: templateUri,
                   start: messageStart,
                   end: messageStart + "my-el".length,
                 },
@@ -434,7 +439,7 @@ function createMockReferencesContext(options: {
 
 function createMockCodeActionContext(input: { actions?: unknown[] } = {}) {
   const document = {
-    uri: "file:///app/src/my-app.html",
+    uri: templateUri,
     languageId: "html",
     version: 5,
     offsetAt: vi.fn(() => codeActionStart + 1),
@@ -465,7 +470,8 @@ function createMockCodeActionContext(input: { actions?: unknown[] } = {}) {
     },
   ];
   return {
-    workspaceRoot: "/app",
+    workspaceRoot: documentUris.workspaceRoot,
+    documentUris,
     clientSupportsCodeActionResolveEdit: true,
     logger: { log: vi.fn(), info: vi.fn(), error: vi.fn(), warn: vi.fn() },
     ensureProgramDocument: vi.fn(() => document),
@@ -488,7 +494,7 @@ function createMockCodeActionContext(input: { actions?: unknown[] } = {}) {
       uri === definitionUri ? definitionText : null,
     ),
     lookupDocumentSnapshot: vi.fn((uri: string) =>
-      canonicalDocumentUri(uri).uri === definitionUri
+      documentUris.resolve(uri).uri === definitionUri
         ? snapshot(definitionUri, definitionText, 9, "typescript")
         : null,
     ),
@@ -497,7 +503,7 @@ function createMockCodeActionContext(input: { actions?: unknown[] } = {}) {
 
 describe("handleRename", () => {
   const params = {
-    textDocument: { uri: "file:///app/src/my-app.html" },
+    textDocument: { uri: templateUri },
     position: { line: 0, character: 14 },
     newName: "heading",
   };
@@ -540,7 +546,7 @@ describe("handleRename", () => {
         label: `src/my-app.html@${renameStart}..${
           renameStart + "title".length
         }`,
-        path: "file:///app/src/my-app.html",
+        path: templateUri,
         start: renameStart,
         end: renameStart + "title".length,
       },
@@ -552,7 +558,7 @@ describe("handleRename", () => {
             label: `src/my-app.html@${renameStart}..${
               renameStart + "title".length
             }`,
-            path: "file:///app/src/my-app.html",
+            path: templateUri,
             start: renameStart,
             end: renameStart + "title".length,
           },
@@ -584,7 +590,7 @@ describe("handleRename", () => {
     expect(result!.documentChanges).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          textDocument: { uri: "file:///app/src/my-app.html", version: 3 },
+          textDocument: { uri: templateUri, version: 3 },
         }),
         expect.objectContaining({
           textDocument: { uri: definitionLspUri, version: 8 },
@@ -594,9 +600,9 @@ describe("handleRename", () => {
     const changes = workspaceEditChanges(result!);
     const uris = Object.keys(changes);
     expect(uris.sort()).toEqual(
-      ["file:///app/src/my-app.html", definitionLspUri].sort(),
+      [templateUri, definitionLspUri].sort(),
     );
-    expect(changes["file:///app/src/my-app.html"]).toEqual([
+    expect(changes[templateUri]).toEqual([
       expect.objectContaining({ newText: "heading" }),
     ]);
     expect(changes[definitionLspUri]).toEqual([
@@ -607,7 +613,7 @@ describe("handleRename", () => {
 
 describe("handlePrepareRename", () => {
   const params = {
-    textDocument: { uri: "file:///app/src/my-app.html" },
+    textDocument: { uri: templateUri },
     position: { line: 0, character: 14 },
   };
 
@@ -624,7 +630,7 @@ describe("handlePrepareRename", () => {
         label: `src/my-app.html@${renameStart}..${
           renameStart + "title".length
         }`,
-        path: "file:///app/src/my-app.html",
+        path: templateUri,
         start: renameStart,
         end: renameStart + "title".length,
       },
@@ -640,7 +646,7 @@ describe("handlePrepareRename", () => {
     );
 
     expect(ctx.semanticRuntime.templateRename).toHaveBeenCalledWith(
-      expect.objectContaining({ uri: "file:///app/src/my-app.html" }),
+      expect.objectContaining({ uri: templateUri }),
       params.position,
       testRequestGuard,
     );
@@ -656,7 +662,7 @@ describe("handlePrepareRename", () => {
 
 describe("handleReferences", () => {
   const params = {
-    textDocument: { uri: "file:///app/src/my-app.html" },
+    textDocument: { uri: templateUri },
     position: { line: 1, character: 3 },
     context: { includeDeclaration: true },
   };
@@ -671,13 +677,13 @@ describe("handleReferences", () => {
     );
 
     expect(ctx.semanticRuntime.templateReferences).toHaveBeenCalledWith(
-      expect.objectContaining({ uri: "file:///app/src/my-app.html" }),
+      expect.objectContaining({ uri: templateUri }),
       params.position,
       true,
       testRequestGuard,
     );
     expect(result).toHaveLength(2);
-    expect(result?.[0]?.uri).toBe("file:///app/src/my-app.html");
+    expect(result?.[0]?.uri).toBe(templateUri);
     expect(result?.[0]?.range.start).toEqual({ line: 1, character: 3 });
     expect(result?.[1]?.uri).toBe(definitionLspUri);
     expect(result?.[1]?.range.start).toEqual({ line: 1, character: 2 });
@@ -725,7 +731,7 @@ describe("handleReferences", () => {
 
 describe("handleDocumentHighlight", () => {
   const params = {
-    textDocument: { uri: "file:///app/src/my-app.html" },
+    textDocument: { uri: templateUri },
     position: { line: 1, character: 3 },
   };
 
@@ -739,7 +745,7 @@ describe("handleDocumentHighlight", () => {
     );
 
     expect(ctx.semanticRuntime.templateReferences).toHaveBeenCalledWith(
-      expect.objectContaining({ uri: "file:///app/src/my-app.html" }),
+      expect.objectContaining({ uri: templateUri }),
       params.position,
       true,
       testRequestGuard,
@@ -758,7 +764,7 @@ describe("handleDocumentHighlight", () => {
 
 describe("handleCodeAction", () => {
   const params = {
-    textDocument: { uri: "file:///app/src/my-app.html" },
+    textDocument: { uri: templateUri },
     range: {
       start: { line: 0, character: codeActionStart + 1 },
       end: { line: 0, character: codeActionStart + 1 },
@@ -776,7 +782,7 @@ describe("handleCodeAction", () => {
     );
 
     expect(ctx.semanticRuntime.templateCodeActions).toHaveBeenCalledWith(
-      expect.objectContaining({ uri: "file:///app/src/my-app.html" }),
+      expect.objectContaining({ uri: templateUri }),
       params.range.start,
       testRequestGuard,
     );
@@ -802,7 +808,7 @@ describe("handleCodeAction", () => {
         semanticRuntime: expect.objectContaining({
           resolve: expect.objectContaining({
             schema: "aurelia.template-code-action-resolve/1",
-            textDocument: { uri: "file:///app/src/my-app.html" },
+            textDocument: { uri: templateUri },
             position: params.range.start,
             actionIdentity: expect.any(String),
           }),
@@ -984,7 +990,7 @@ describe("handleCodeAction", () => {
 
 describe("handleCompletion", () => {
   const params = {
-    textDocument: { uri: "file:///app/src/my-app.html" },
+    textDocument: { uri: templateUri },
     position: { line: 0, character: 5 },
   };
 
@@ -1077,19 +1083,17 @@ describe("handleCompletion", () => {
     const ctx = createMockCompletionContext({ completions: [] });
     ctx.semanticRuntime.templateCompletions = vi.fn(() => Promise.reject(new Error("completion failed")));
 
-    const result = await handleCompletion(
+    await expect(handleCompletion(
       ctx as never,
       params,
       testRequestGuard,
-    );
-
-    expect(result).toEqual({ isIncomplete: false, items: [] });
+    )).rejects.toThrow("completion failed");
   });
 });
 
 describe("handleHover", () => {
   const params = {
-    textDocument: { uri: "file:///app/src/my-app.html" },
+    textDocument: { uri: templateUri },
     position: { line: 0, character: 14 },
   };
 
@@ -1099,7 +1103,7 @@ describe("handleHover", () => {
     const result = await handleHover(ctx as never, params, testRequestGuard);
 
     expect(ctx.semanticRuntime.templateCursorInfo).toHaveBeenCalledWith(
-      expect.objectContaining({ uri: "file:///app/src/my-app.html" }),
+      expect.objectContaining({ uri: templateUri }),
       params.position,
       testRequestGuard,
     );
@@ -1111,7 +1115,7 @@ describe("handleHover", () => {
 
 describe("handleDefinition", () => {
   const params = {
-    textDocument: { uri: "file:///app/src/my-app.html" },
+    textDocument: { uri: templateUri },
     position: { line: 0, character: 14 },
   };
 
@@ -1126,7 +1130,7 @@ describe("handleDefinition", () => {
 
     expect(ctx.semanticRuntime.routeNodes).not.toHaveBeenCalled();
     expect(ctx.semanticRuntime.templateCursorInfo).toHaveBeenCalledWith(
-      expect.objectContaining({ uri: "file:///app/src/my-app.html" }),
+      expect.objectContaining({ uri: templateUri }),
       params.position,
       testRequestGuard,
     );
@@ -1143,7 +1147,7 @@ describe("handleDefinition", () => {
     const routeSource = {
       kind: "source-span-address",
       label: "src/my-app.html@12..18",
-      path: "file:///app/src/my-app.html",
+      path: templateUri,
       start: 12,
       end: 18,
       role: "value",

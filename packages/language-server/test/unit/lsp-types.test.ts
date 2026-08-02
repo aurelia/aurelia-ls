@@ -4,8 +4,6 @@ import { TextDocument } from "vscode-languageserver-textdocument";
 import {
   AURELIA_LSP_DIAGNOSTIC_NAMESPACE_KEY,
   AURELIA_LSP_DIAGNOSTIC_TAXONOMY_SCHEMA,
-  canonicalDocumentUri,
-  guessLanguage,
   mapSemanticRuntimeAppDiagnostics,
   mapSemanticRuntimeTemplateCodeActions,
   mapSemanticRuntimeTemplateDefinition,
@@ -13,73 +11,33 @@ import {
   mapSemanticRuntimeTemplateCompletions,
   mapSemanticRuntimeTemplateReferences,
   mapSemanticRuntimeTemplateRenameEdit,
-  spanToRange,
-  toLspUri,
   type LookupTextFn,
-} from "@aurelia-ls/language-server/api";
+} from "../../src/mapping/lsp-types.js";
+import { languageIdForSource } from "../../src/utils/document-kind.js";
+import { WorkspaceDocumentUris } from "../../src/utils/document-uri.js";
 
 type DocumentUri = string;
-type SourceSpan = { start: number; end: number };
-
-const spanUri: DocumentUri = canonicalDocumentUri(
-  "file:///C:/projects/app/src/span.html",
-).uri;
+const appDocumentUris = new WorkspaceDocumentUris();
+appDocumentUris.configure("file:///C:/projects/app");
 const definitionLspUri = "file:///C:/projects/app/src/component.ts";
-const definitionUri = canonicalDocumentUri(definitionLspUri).uri;
+const definitionUri = appDocumentUris.resolve(definitionLspUri).uri;
 const definitionText = 'export class Component {\n  message = "hello";\n}';
-
 const textByUri = new Map<DocumentUri, string>([
-  [spanUri, "alpha\nbeta\ngamma"],
   [definitionUri, definitionText],
 ]);
 
 const lookupText: LookupTextFn = (uri) => textByUri.get(uri) ?? null;
 
-function makeSpan(start: number, end: number): SourceSpan {
-  return { start, end };
-}
-
-describe("toLspUri", () => {
-  test("converts document URI to proper file URI", () => {
-    const result = toLspUri(
-      canonicalDocumentUri("file:///C:/projects/app/src/component.html").uri,
-    );
-    expect(result).toMatch(
-      /^file:\/\/\/[Cc]:\/projects\/app\/src\/component\.html$/,
-    );
-  });
-
-  test("preserves Unix paths correctly", () => {
-    const result = toLspUri(
-      canonicalDocumentUri("file:///home/user/project/src/view.html").uri,
-    );
-    expect(result).toBe("file:///home/user/project/src/view.html");
-  });
-});
-
-describe("guessLanguage", () => {
+describe("languageIdForSource", () => {
   test("returns typescript for .ts and .js files", () => {
-    expect(guessLanguage("file:///app/src/component.ts")).toBe("typescript");
-    expect(guessLanguage("file:///app/src/component.js")).toBe("typescript");
+    expect(languageIdForSource("file:///app/src/component.ts")).toBe("typescript");
+    expect(languageIdForSource("file:///app/src/component.js")).toBe("javascript");
   });
 
-  test("returns json for .json files and html by default", () => {
-    expect(guessLanguage("file:///app/package.json")).toBe("json");
-    expect(guessLanguage("file:///app/src/component.html")).toBe("html");
-    expect(guessLanguage("file:///app/src/view.au")).toBe("html");
-  });
-});
-
-describe("spanToRange", () => {
-  test("maps offsets to line and character positions", () => {
-    const range = spanToRange(
-      { uri: spanUri, span: makeSpan(6, 10) },
-      lookupText,
-    );
-    expect(range).toEqual({
-      start: { line: 1, character: 0 },
-      end: { line: 1, character: 4 },
-    });
+  test("returns json for .json files and plaintext for unsupported source forms", () => {
+    expect(languageIdForSource("file:///app/package.json")).toBe("json");
+    expect(languageIdForSource("file:///app/src/component.html")).toBe("html");
+    expect(languageIdForSource("file:///app/src/view.au")).toBe("plaintext");
   });
 });
 
@@ -158,6 +116,7 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
         },
       } as never,
       doc,
+      appDocumentUris,
     );
 
     expect(mapped.failures).toEqual([]);
@@ -245,6 +204,7 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
         },
       } as never,
       doc,
+      appDocumentUris,
     );
 
     expect(mapped.failures).toEqual([]);
@@ -291,11 +251,49 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
           suggestion: null,
         }],
       },
-    } as never, doc);
+    } as never, doc, appDocumentUris);
 
     expect(mapped.value).toEqual([]);
     expect(mapped.failures).toEqual([
       expect.stringContaining("src/component.html@10..16"),
+    ]);
+  });
+
+  test("does not project a diagnostic from another source onto matching offsets in the current document", () => {
+    const doc = TextDocument.create(
+      "file:///C:/projects/app/src/component.html",
+      "html",
+      1,
+      "value",
+    );
+    const mapped = mapSemanticRuntimeAppDiagnostics({
+      value: {
+        rows: [{
+          diagnosticDomain: "template",
+          diagnosticKind: "missing-expression-member",
+          diagnosticAuthority: "semantic-authoring-policy",
+          frameworkErrorCode: null,
+          severity: "error",
+          summary: "Missing member",
+          missingInput: "member",
+          missingInputs: ["member"],
+          source: {
+            kind: "source-span-address",
+            label: "src/other.html@0..5",
+            path: "src/other.html",
+            start: 0,
+            end: 5,
+            role: "expression",
+          },
+          relatedInformation: [],
+          suggestion: null,
+        }],
+      },
+    } as never, doc, appDocumentUris);
+
+    expect(mapped.value).toEqual([]);
+    expect(mapped.failures).toEqual([
+      expect.stringContaining("src/other.html@0..5"),
     ]);
   });
 
@@ -349,11 +347,11 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
           suggestion: null,
         }],
       },
-    } as never, doc, "C:/projects/app", () => null);
+    } as never, doc, appDocumentUris, () => null);
 
     expect(mapped.value[0]?.relatedInformation).toEqual([{
       location: {
-        uri: "file:///c:/projects/app/src/owner.ts",
+        uri: "file:///C:/projects/app/src/owner.ts",
         range: {
           start: { line: 0, character: 0 },
           end: { line: 0, character: 0 },
@@ -441,7 +439,7 @@ describe("mapSemanticRuntimeTemplateCodeActions", () => {
       } as never,
       () => null,
       {
-        workspaceRoot: null,
+        documentUris: appDocumentUris,
         originDocument: doc,
         diagnostics,
       },
@@ -485,7 +483,7 @@ describe("source-backed edit mapping", () => {
       } as never,
       () => null,
       {
-        workspaceRoot: "C:/projects/app",
+        documentUris: appDocumentUris,
         originDocument: doc,
       },
     );
@@ -703,13 +701,13 @@ describe("mapSemanticRuntimeTemplateReferences", () => {
         ],
       },
     } as never, () => "short", {
-      workspaceRoot: "C:/projects/app",
+      documentUris: appDocumentUris,
       originDocument,
       scope: "workspace",
     });
 
     expect(mapping.value).toHaveLength(1);
-    expect(mapping.value?.[0]?.uri).toBe(canonicalDocumentUri(originDocument.uri).uri);
+    expect(mapping.value?.[0]?.uri).toBe(appDocumentUris.resolve(originDocument.uri).uri);
     expect(mapping.failures).toEqual([
       expect.stringContaining("src/component.ts@50..57"),
     ]);
@@ -738,7 +736,7 @@ describe("mapSemanticRuntimeTemplateReferences", () => {
         }],
       },
     } as never, () => null, {
-      workspaceRoot: "C:/projects/app",
+      documentUris: appDocumentUris,
       originDocument,
       scope: "origin-document",
     });
@@ -788,7 +786,7 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
       } as never,
       lookupText,
       {
-        workspaceRoot: "C:/projects/app",
+        documentUris: appDocumentUris,
         originDocument,
       },
     );
@@ -838,7 +836,7 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
       } as never,
       lookupText,
       {
-        workspaceRoot: "C:/projects/app",
+        documentUris: appDocumentUris,
         originDocument,
       },
     );
@@ -900,7 +898,7 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
       } as never,
       lookupText,
       {
-        workspaceRoot: "C:/projects/app",
+        documentUris: appDocumentUris,
         originDocument,
       },
     );
@@ -922,9 +920,7 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
 
   test("selects an ordinary resource implementation rather than its explicit name literal", () => {
     const resourceText = '@customElement("my-el")\nexport class Component {}';
-    const resourceUri = canonicalDocumentUri(
-      "file:///C:/projects/app/src/my-el.ts",
-    ).uri;
+    const resourceUri = appDocumentUris.resolve("file:///C:/projects/app/src/my-el.ts").uri;
     const nameStart = resourceText.indexOf("my-el");
     const classStart = resourceText.indexOf("Component");
     const originDocument = TextDocument.create(
@@ -961,7 +957,7 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
       } as never,
       (uri) => (uri === resourceUri ? resourceText : null),
       {
-        workspaceRoot: "C:/projects/app",
+        documentUris: appDocumentUris,
         originDocument,
       },
     );
@@ -1019,7 +1015,7 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
       } as never,
       lookupText,
       {
-        workspaceRoot: "C:/projects/app",
+        documentUris: appDocumentUris,
         originDocument,
       },
     );
@@ -1090,7 +1086,7 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
       } as never,
       lookupText,
       {
-        workspaceRoot: "C:/projects/app",
+        documentUris: appDocumentUris,
         originDocument,
       },
     );
@@ -1149,7 +1145,7 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
       } as never,
       lookupText,
       {
-        workspaceRoot: "C:/projects/app",
+        documentUris: appDocumentUris,
         originDocument,
       },
     );

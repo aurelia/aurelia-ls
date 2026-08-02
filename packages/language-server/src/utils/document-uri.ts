@@ -1,45 +1,124 @@
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { canonicalTypeSystemPath } from "@aurelia-ls/semantic-runtime";
 import { URI } from "vscode-uri";
 
 export type DocumentUri = string;
 
-export interface CanonicalDocumentUri {
+export interface WorkspaceDocumentLocation {
   readonly uri: DocumentUri;
-  readonly path: string;
-  readonly file: string;
+  readonly hostPath: string | null;
 }
 
-export function canonicalDocumentUri(input: string): CanonicalDocumentUri {
-  if (looksLikeHostPath(input)) {
-    return canonicalFileUri(input);
+/** Maps semantic host paths into the URI space of one filesystem-backed workspace. */
+export class WorkspaceDocumentUris {
+  private root: URI | null = null;
+  private rootFilePath: string | null = null;
+
+  configure(rootUri: DocumentUri): void {
+    const root = URI.parse(rootUri);
+    this.root = root;
+    this.rootFilePath = hostPathForDocumentUri(rootUri, root);
   }
 
-  const parsed = URI.parse(input);
-  if (parsed.scheme === "file") {
-    if (isPosixFileUri(parsed.path, parsed.authority)) {
-      const uri = parsed.toString();
-      return { uri, path: parsed.path, file: parsed.path };
+  get workspaceRoot(): string | null {
+    return this.rootFilePath;
+  }
+
+  resolve(input: DocumentUri): WorkspaceDocumentLocation {
+    const file = this.hostPath(input);
+    if (file == null) {
+      const parsed = URI.parse(input);
+      return {
+        uri: parsed.toString(),
+        hostPath: null,
+      };
     }
-    return canonicalFileUri(parsed.fsPath);
+    return {
+      uri: this.uriForHostPath(file),
+      hostPath: file,
+    };
   }
 
-  const logicalPath = parsed.path || input;
-  return { uri: input, path: logicalPath, file: logicalPath };
+  hostPath(input: DocumentUri): string | null {
+    if (looksLikeHostPath(input)) {
+      return path.normalize(input);
+    }
+    const parsed = URI.parse(input);
+    if (parsed.scheme === "file" || this.belongsToWorkspaceUriSpace(parsed)) {
+      return hostPathForDocumentUri(input, parsed);
+    }
+    return null;
+  }
+
+  uriForHostPath(hostPath: string): DocumentUri {
+    const normalized = path.normalize(hostPath);
+    const workspaceRelativePath = this.workspaceRelativePath(normalized);
+    if (this.root != null && workspaceRelativePath != null) {
+      return this.uriForWorkspaceRelativePath(workspaceRelativePath)!;
+    }
+    if (this.root == null || this.root.scheme === "file") return toFileUri(normalized);
+
+    const fileUri = URI.file(normalized);
+    return URI.from({
+      scheme: this.root.scheme,
+      authority: this.root.authority,
+      path: fileUri.path,
+    }).toString();
+  }
+
+  uriForWorkspaceRelativePath(relativePath: string): DocumentUri | null {
+    if (this.root == null || this.rootFilePath == null) return null;
+    if (this.root.scheme === "file") {
+      return toFileUri(path.resolve(this.rootFilePath, relativePath));
+    }
+    return URI.from({
+      scheme: this.root.scheme,
+      authority: this.root.authority,
+      path: path.posix.join(this.root.path, relativePath.replace(/\\/g, "/")),
+    }).toString();
+  }
+
+  /** Stable identity for maps and equality; display URIs remain in the client's workspace URI space. */
+  key(input: DocumentUri): string {
+    const filePath = this.hostPath(input);
+    return filePath == null
+      ? URI.parse(input).toString()
+      : canonicalTypeSystemPath(filePath);
+  }
+
+  sameDocument(left: DocumentUri, right: DocumentUri): boolean {
+    return this.key(left) === this.key(right);
+  }
+
+  private belongsToWorkspaceUriSpace(uri: URI): boolean {
+    return this.root != null
+      && uri.scheme === this.root.scheme
+      && uri.authority === this.root.authority;
+  }
+
+  private workspaceRelativePath(hostPath: string): string | null {
+    if (this.rootFilePath == null) return null;
+    const relative = path.relative(this.rootFilePath, hostPath);
+    return relative === ""
+      ? ""
+      : relative.startsWith(`..${path.sep}`) || relative === ".." || path.isAbsolute(relative)
+        ? null
+        : relative;
+  }
 }
 
-export function toFileUri(filePath: string): DocumentUri {
+function toFileUri(filePath: string): DocumentUri {
   return pathToFileURL(path.normalize(filePath)).toString();
 }
 
-function canonicalFileUri(filePath: string): CanonicalDocumentUri {
-  const normalized = path.normalize(filePath);
-  const uri = toFileUri(normalized);
-  return { uri, path: normalized, file: normalized };
-}
-
-function isPosixFileUri(uriPath: string, authority: string): boolean {
-  return authority.length === 0 && uriPath.startsWith("/") && !/^\/[a-zA-Z]:/.test(uriPath);
+function hostPathForDocumentUri(input: DocumentUri, uri: URI): string {
+  return path.normalize(
+    // vscode-uri canonicalizes Windows drive-letter casing while serializing.
+    // File URLs are decoded from the client-authored string so canonical identity
+    // never leaks into the URI spelling returned to that client.
+    uri.scheme === "file" ? fileURLToPath(input) : uri.path,
+  );
 }
 
 function looksLikeHostPath(value: string): boolean {

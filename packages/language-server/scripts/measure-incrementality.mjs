@@ -9,6 +9,7 @@ import {
   SemanticRuntimeLspSession,
   isSemanticRuntimeLspRequestAborted,
 } from "../out/runtime/semantic-runtime-session.js";
+import { WorkspaceDocumentUris } from "../out/utils/document-uri.js";
 
 const packageRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const repoRoot = path.resolve(packageRoot, "../..");
@@ -64,7 +65,9 @@ async function main() {
   }
 
   const cursorPositions = cursorPositionsForDocument(targetHtml);
-  const session = new SemanticRuntimeLspSession({ workspaceRoot: fixtureRoot, documents });
+  const documentUris = new WorkspaceDocumentUris();
+  documentUris.configure(pathToFileURL(fixtureRoot).toString());
+  const session = new SemanticRuntimeLspSession({ documents, documentUris });
   const report = {
     fixture: {
       name: fixtureName,

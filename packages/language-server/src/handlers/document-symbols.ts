@@ -4,7 +4,6 @@
  * The outline is intentionally conservative: it only emits symbols when
  * semantic-runtime can point at authored TypeScript source.
  */
-import path from "node:path";
 import {
   SymbolKind,
   type DocumentSymbol,
@@ -12,24 +11,23 @@ import {
   type Range,
 } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
-import { URI } from "vscode-uri";
 import type {
   SemanticResourceDefinitionBindableRow,
   SemanticResourceDefinitionRow,
 } from "@aurelia-ls/semantic-runtime";
 import {
+  canonicalTypeSystemPath,
   semanticExactSourceReference,
   type SemanticSourceReference,
 } from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
+import type { WorkspaceDocumentUris } from "../utils/document-uri.js";
 import {
   semanticSourceRangeForDocument,
   semanticSourceReferenceFilePath,
 } from "../mapping/source-locations.js";
-import {
-  logIfSemanticRuntimeRequestAborted,
-} from "./request-guard.js";
 import type { SemanticRuntimeLspRequestGuard } from "../runtime/semantic-runtime-session.js";
+import { isScriptDocument } from "../utils/document-kind.js";
 
 const DOCUMENT_SYMBOL_RESOURCE_KINDS = new Set<string>([
   "custom-element",
@@ -52,37 +50,28 @@ export async function handleDocumentSymbols(
   params: DocumentSymbolParams,
   guard: SemanticRuntimeLspRequestGuard,
 ): Promise<DocumentSymbol[] | null> {
-  try {
-    const uri = params.textDocument.uri;
-    if (!uri.endsWith(".ts") && !uri.endsWith(".js")) return null;
+  const uri = params.textDocument.uri;
+  const doc = ctx.openDocument(uri);
+  if (doc == null || !isScriptDocument(doc)) return null;
 
-    const doc = ctx.documents.get(uri);
-    if (!doc) return null;
+  const requestedPath = ctx.documentUris.hostPath(uri);
+  if (requestedPath == null) return null;
+  const requested = normalizedFilePath(requestedPath);
+  const definitions = await ctx.semanticRuntime.resourceDefinitions(guard);
+  const symbols: DocumentSymbol[] = [];
 
-    const requested = normalizedFilePath(URI.parse(uri).fsPath);
-    const definitions = await ctx.semanticRuntime.resourceDefinitions(guard);
-    const symbols: DocumentSymbol[] = [];
-
-    for (const definition of definitions.value.rows) {
-      const symbol = documentSymbolForResource(ctx.workspaceRoot, requested, doc, definition);
-      if (symbol) symbols.push(symbol);
-    }
-
-    return symbols.length > 0
-      ? symbols.sort((left, right) => compareRanges(left.range, right.range))
-      : null;
-  } catch (e) {
-    if (logIfSemanticRuntimeRequestAborted(ctx, "documentSymbol", e, params.textDocument.uri)) {
-      return null;
-    }
-    const message = e instanceof Error ? e.stack ?? e.message : String(e);
-    ctx.logger.error(`[documentSymbol] failed for ${params.textDocument.uri}: ${message}`);
-    return null;
+  for (const definition of definitions.value.rows) {
+    const symbol = documentSymbolForResource(ctx.documentUris, requested, doc, definition);
+    if (symbol) symbols.push(symbol);
   }
+
+  return symbols.length > 0
+    ? symbols.sort((left, right) => compareRanges(left.range, right.range))
+    : null;
 }
 
 function documentSymbolForResource(
-  workspaceRoot: string | null,
+  documentUris: WorkspaceDocumentUris,
   requested: string,
   doc: Pick<TextDocument, "getText" | "positionAt">,
   definition: SemanticResourceDefinitionRow,
@@ -92,11 +81,11 @@ function documentSymbolForResource(
   }
   const selectionSource = semanticExactSourceReference(definition.targetSource ?? definition.source);
   const declarationSource = semanticExactSourceReference(definition.targetDeclarationSource);
-  if (!sourceMatches(workspaceRoot, requested, selectionSource)) {
+  if (!sourceMatches(documentUris, requested, selectionSource)) {
     return null;
   }
   const selectionRange = semanticSourceRangeForDocument(selectionSource, doc);
-  const declarationRange = sourceMatches(workspaceRoot, requested, declarationSource)
+  const declarationRange = sourceMatches(documentUris, requested, declarationSource)
     ? semanticSourceRangeForDocument(declarationSource, doc)
     : null;
   const className = definition.targetName ?? definition.name;
@@ -110,12 +99,12 @@ function documentSymbolForResource(
     kind: RESOURCE_SYMBOL_KIND[definition.resourceKind] ?? SymbolKind.Class,
     range: declarationRange ?? selectionRange,
     selectionRange,
-    children: bindableSymbols(workspaceRoot, requested, doc, definition.bindables),
+    children: bindableSymbols(documentUris, requested, doc, definition.bindables),
   };
 }
 
 function bindableSymbols(
-  workspaceRoot: string | null,
+  documentUris: WorkspaceDocumentUris,
   requested: string,
   doc: Pick<TextDocument, "getText" | "positionAt">,
   bindables: readonly SemanticResourceDefinitionBindableRow[],
@@ -125,7 +114,7 @@ function bindableSymbols(
     const source = semanticExactSourceReference(
       bindable.propertySource ?? bindable.nameSource ?? bindable.source,
     );
-    if (!sourceMatches(workspaceRoot, requested, source)) {
+    if (!sourceMatches(documentUris, requested, source)) {
       continue;
     }
     const range = semanticSourceRangeForDocument(source, doc);
@@ -156,11 +145,11 @@ function bindableDetail(bindable: SemanticResourceDefinitionBindableRow): string
 }
 
 function sourceMatches(
-  workspaceRoot: string | null,
+  documentUris: WorkspaceDocumentUris,
   requested: string,
   source: SemanticSourceReference | null,
 ): boolean {
-  const filePath = semanticSourceReferenceFilePath(source, workspaceRoot);
+  const filePath = semanticSourceReferenceFilePath(source, documentUris);
   return filePath != null && normalizedFilePath(filePath) === requested;
 }
 
@@ -176,5 +165,5 @@ function comparePositions(
 }
 
 function normalizedFilePath(filePath: string): string {
-  return path.normalize(filePath).toLowerCase();
+  return canonicalTypeSystemPath(filePath);
 }

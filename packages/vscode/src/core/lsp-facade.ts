@@ -7,14 +7,13 @@ import {
 import type { AureliaLanguageClient, AureliaLanguageClientSession } from "../client-core.js";
 import type { ClientLogger } from "../log.js";
 import type {
-  AnalysisReadyPayload,
   DiagnosticsSnapshotResponse,
   ProtocolWorkspaceEdit,
   RelatedFileResponse,
   RenameFromTsResponse,
   ResourceExplorerResponse,
   ScopeResourcesResponse,
-  WorkspaceChangedPayload,
+  AnalysisChangedPayload,
   WorkspaceNotificationPayload,
 } from "../types.js";
 import { toDisposable, type DisposableLike } from "./disposables.js";
@@ -117,12 +116,6 @@ export class LspFacade implements DisposableLike {
     };
   }
 
-  onAnalysisReady(
-    handler: (payload: WorkspaceNotificationPayload<AnalysisReadyPayload>) => void,
-  ): DisposableLike {
-    return this.onNotification(AureliaProtocolNotification.AnalysisReady, handler);
-  }
-
   async getScopeResources(uri: string): Promise<ScopeResourcesResponse | null> {
     const session = this.#sessionForUri(uri);
     if (session == null) return null;
@@ -184,10 +177,10 @@ export class LspFacade implements DisposableLike {
     return client.protocol2CodeConverter.asWorkspaceEdit(workspaceEdit, token);
   }
 
-  onWorkspaceChanged(
-    handler: (payload: WorkspaceNotificationPayload<WorkspaceChangedPayload>) => void,
+  onAnalysisChanged(
+    handler: (payload: WorkspaceNotificationPayload<AnalysisChangedPayload>) => void,
   ): DisposableLike {
-    return this.onNotification(AureliaProtocolNotification.WorkspaceChanged, handler);
+    return this.onNotification(AureliaProtocolNotification.AnalysisChanged, handler);
   }
 
   #sessionForUri(uri: string): AureliaLanguageClientSession | undefined {

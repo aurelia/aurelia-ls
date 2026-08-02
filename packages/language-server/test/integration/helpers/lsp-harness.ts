@@ -34,6 +34,9 @@ export function startServer(cwd: string) {
     new StreamMessageReader(child.stdout!),
     new StreamMessageWriter(child.stdin!),
   );
+  connection.onNotification("window/logMessage", (params: { type?: number; message?: string }) => {
+    stderr.push(`[lsp:${params.type ?? "?"}] ${params.message ?? ""}\n`);
+  });
   connection.listen();
   return {
     child,
@@ -153,22 +156,8 @@ export function waitForDiagnostics(
   getStderr: () => string,
   uri: string,
   timeoutMs = 5000,
-) {
-  return new Promise<unknown[]>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`diagnostics timeout for ${uri}`)), timeoutMs);
-    const onExit = (code: number | null, signal: string | null) => {
-      clearTimeout(timer);
-      reject(new Error(`server exited (code=${code ?? "null"} signal=${signal ?? "null"}): ${getStderr()}`));
-    };
-    child.once("exit", onExit);
-    const sub = connection.onNotification("textDocument/publishDiagnostics", (params: { uri: string; diagnostics?: unknown[] }) => {
-      if (params.uri !== uri) return;
-      clearTimeout(timer);
-      child.off("exit", onExit);
-      if (typeof sub.dispose === "function") sub.dispose();
-      resolve(params.diagnostics ?? []);
-    });
-  });
+): Promise<unknown[]> {
+  return pullDiagnostics(connection, child, getStderr, uri, timeoutMs);
 }
 
 export function createDiagnosticsRecorder(
@@ -176,66 +165,46 @@ export function createDiagnosticsRecorder(
   child: ChildProcess,
   getStderr: () => string,
 ) {
-  const buffered = new Map<string, unknown[][]>();
-  const waiters = new Map<string, Array<(diagnostics: unknown[]) => void>>();
-  const sub = connection.onNotification("textDocument/publishDiagnostics", (params: { uri: string; diagnostics?: unknown[] }) => {
-    const diagnostics = params.diagnostics ?? [];
-    const uriWaiters = waiters.get(params.uri);
-    if (uriWaiters != null && uriWaiters.length > 0) {
-      uriWaiters.shift()!(diagnostics);
-      return;
-    }
-    const bucket = buffered.get(params.uri) ?? [];
-    bucket.push(diagnostics);
-    buffered.set(params.uri, bucket);
-  });
-
   return {
     wait(uri: string, timeoutMs = 5000): Promise<unknown[]> {
-      const bucket = buffered.get(uri);
-      if (bucket != null && bucket.length > 0) {
-        return Promise.resolve(bucket.shift()!);
-      }
-      return new Promise<unknown[]>((resolve, reject) => {
-        let wrapped: ((diagnostics: unknown[]) => void) | null = null;
-        const removeWaiter = () => {
-          if (wrapped == null) return;
-          const uriWaiters = waiters.get(uri);
-          if (uriWaiters == null) return;
-          const next = uriWaiters.filter((waiter) => waiter !== wrapped);
-          if (next.length === 0) {
-            waiters.delete(uri);
-          } else {
-            waiters.set(uri, next);
-          }
-        };
-        const timer = setTimeout(() => {
-          removeWaiter();
-          child.off("exit", onExit);
-          reject(new Error(`diagnostics timeout for ${uri}`));
-        }, timeoutMs);
-        const onExit = (code: number | null, signal: string | null) => {
-          clearTimeout(timer);
-          removeWaiter();
-          reject(new Error(`server exited (code=${code ?? "null"} signal=${signal ?? "null"}): ${getStderr()}`));
-        };
-        child.once("exit", onExit);
-        wrapped = (diagnostics: unknown[]) => {
-          clearTimeout(timer);
-          child.off("exit", onExit);
-          resolve(diagnostics);
-        };
-        const uriWaiters = waiters.get(uri) ?? [];
-        uriWaiters.push(wrapped);
-        waiters.set(uri, uriWaiters);
-      });
+      return pullDiagnostics(connection, child, getStderr, uri, timeoutMs);
     },
-    dispose(): void {
-      sub.dispose();
-      buffered.clear();
-      waiters.clear();
-    },
+    dispose(): void {},
   };
+}
+
+function pullDiagnostics(
+  connection: MessageConnection,
+  child: ChildProcess,
+  getStderr: () => string,
+  uri: string,
+  timeoutMs: number,
+): Promise<unknown[]> {
+  return new Promise<unknown[]>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      child.off("exit", onExit);
+      reject(new Error(`diagnostics timeout for ${uri}`));
+    }, timeoutMs);
+    const onExit = (code: number | null, signal: string | null) => {
+      clearTimeout(timer);
+      reject(new Error(`server exited (code=${code ?? "null"} signal=${signal ?? "null"}): ${getStderr()}`));
+    };
+    child.once("exit", onExit);
+    void connection.sendRequest("textDocument/diagnostic", {
+      textDocument: { uri },
+    }).then((report: unknown) => {
+      clearTimeout(timer);
+      child.off("exit", onExit);
+      const items = report != null && typeof report === "object" && !Array.isArray(report)
+        ? (report as { items?: unknown }).items
+        : undefined;
+      resolve(Array.isArray(items) ? items : []);
+    }, (error: unknown) => {
+      clearTimeout(timer);
+      child.off("exit", onExit);
+      reject(error);
+    });
+  });
 }
 
 export function positionAt(text: string, offset: number) {
@@ -371,8 +340,11 @@ export function copyFixtureDirectory(sourceDir: string): string {
 }
 
 export function waitForExit(child: ChildProcess, timeoutMs = 2000): Promise<void> {
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => resolve(), timeoutMs);
+  if (child.exitCode != null || child.signalCode != null) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`server did not exit within ${timeoutMs}ms`)), timeoutMs);
     child.once("exit", () => {
       clearTimeout(timer);
       resolve();

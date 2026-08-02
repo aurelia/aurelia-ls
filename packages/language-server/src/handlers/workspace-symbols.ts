@@ -10,7 +10,6 @@ import {
   type WorkspaceSymbolParams,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { URI } from "vscode-uri";
 import type {
   SemanticResourceDefinitionRow,
 } from "@aurelia-ls/semantic-runtime";
@@ -19,14 +18,11 @@ import {
   type SemanticSourceReference,
 } from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
-import { canonicalDocumentUri } from "../utils/document-uri.js";
+import { languageIdForSource } from "../utils/document-kind.js";
 import {
   semanticSourceRangeForDocument,
   semanticSourceReferenceUri,
 } from "../mapping/source-locations.js";
-import {
-  logIfSemanticRuntimeRequestAborted,
-} from "./request-guard.js";
 import type { SemanticRuntimeLspRequestGuard } from "../runtime/semantic-runtime-session.js";
 
 const WORKSPACE_SYMBOL_RESOURCE_KINDS = new Set<string>([
@@ -52,32 +48,23 @@ export async function handleWorkspaceSymbols(
   params: WorkspaceSymbolParams,
   guard: SemanticRuntimeLspRequestGuard,
 ): Promise<SymbolInformation[] | null> {
-  try {
-    const query = params.query.trim().toLowerCase();
-    const definitions = await ctx.semanticRuntime.resourceDefinitions(guard);
-    const symbols: SymbolInformation[] = [];
+  const query = params.query.trim().toLowerCase();
+  const definitions = await ctx.semanticRuntime.resourceDefinitions(guard);
+  const symbols: SymbolInformation[] = [];
 
-    for (const definition of definitions.value.rows) {
-      const symbol = workspaceSymbolForResource(ctx, query, definition);
-      if (!symbol) continue;
-      symbols.push(symbol);
-      if (symbols.length >= MAX_WORKSPACE_SYMBOLS) break;
-    }
-
-    return symbols.length > 0
-      ? symbols.sort((left, right) =>
-          left.location.uri.localeCompare(right.location.uri)
-          || compareRanges(left.location.range, right.location.range)
-        )
-      : null;
-  } catch (e) {
-    if (logIfSemanticRuntimeRequestAborted(ctx, "workspaceSymbol", e)) {
-      return null;
-    }
-    const message = e instanceof Error ? e.stack ?? e.message : String(e);
-    ctx.logger.error(`[workspaceSymbol] failed: ${message}`);
-    return null;
+  for (const definition of definitions.value.rows) {
+    const symbol = workspaceSymbolForResource(ctx, query, definition);
+    if (!symbol) continue;
+    symbols.push(symbol);
+    if (symbols.length >= MAX_WORKSPACE_SYMBOLS) break;
   }
+
+  return symbols.length > 0
+    ? symbols.sort((left, right) =>
+        left.location.uri.localeCompare(right.location.uri)
+        || compareRanges(left.location.range, right.location.range)
+      )
+    : null;
 }
 
 function workspaceSymbolForResource(
@@ -95,14 +82,14 @@ function workspaceSymbolForResource(
   const source = semanticExactSourceReference(definition.targetSource ?? definition.source);
   if (source == null) return null;
 
-  const uri = semanticSourceReferenceUri(source, ctx.workspaceRoot);
+  const uri = semanticSourceReferenceUri(source, ctx.documentUris);
   if (uri == null) return null;
 
-  const canonicalUri = canonicalDocumentUri(uri).uri;
+  const canonicalUri = ctx.documentUris.resolve(uri).uri;
   const text = ctx.lookupText(canonicalUri);
   if (text == null) return null;
 
-  const document = TextDocument.create(canonicalUri, guessLanguage(canonicalUri), 0, text);
+  const document = TextDocument.create(canonicalUri, languageIdForSource(canonicalUri), 0, text);
   const range = semanticSourceRangeForDocument(source, document);
   if (range == null) return null;
 
@@ -129,13 +116,6 @@ function resourceContainer(definition: SemanticResourceDefinitionRow): string {
   return definition.name == null
     ? definition.resourceKind
     : `${definition.resourceKind}: ${definition.name}`;
-}
-
-function guessLanguage(uri: string): string {
-  const fsPath = uri.startsWith("file:") ? URI.parse(uri).fsPath : uri;
-  if (fsPath.endsWith(".ts") || fsPath.endsWith(".js")) return "typescript";
-  if (fsPath.endsWith(".json")) return "json";
-  return "html";
 }
 
 function compareRanges(

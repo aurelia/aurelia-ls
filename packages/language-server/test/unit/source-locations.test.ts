@@ -1,13 +1,15 @@
 import { describe, expect, test } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import {
-  canonicalDocumentUri,
   semanticSourceOffsetRangeForDocument,
   semanticSourceReferenceMatchesDocument,
   semanticSourceReferenceUri,
-} from "@aurelia-ls/language-server/api";
+} from "../../src/mapping/source-locations.js";
+import { WorkspaceDocumentUris } from "../../src/utils/document-uri.js";
 
-const uri = canonicalDocumentUri("file:///C:/projects/app/src/app.html").uri;
+const documentUris = new WorkspaceDocumentUris();
+documentUris.configure("file:///C:/projects/app");
+const uri = documentUris.resolve("file:///C:/projects/app/src/app.html").uri;
 const document = TextDocument.create(uri, "html", 1, "<p>value</p>");
 
 function source(start: number, end: number) {
@@ -41,9 +43,17 @@ describe("semantic source locations", () => {
       label: "generated",
       anchor: source(3, 8),
     };
-    const workspaceRoot = "C:/projects/app";
+    expect(semanticSourceReferenceUri(anchored, documentUris)).toBe(uri);
+    expect(semanticSourceReferenceMatchesDocument(anchored, documentUris, uri)).toBe(true);
+  });
 
-    expect(semanticSourceReferenceUri(anchored, workspaceRoot)).toBe(uri);
-    expect(semanticSourceReferenceMatchesDocument(anchored, workspaceRoot, uri)).toBe(true);
+  test("projects semantic paths into a remote workspace URI instead of inventing file URIs", () => {
+    const remoteUris = new WorkspaceDocumentUris();
+    remoteUris.configure("vscode-remote://ssh-remote+host/work/app");
+
+    const resolved = semanticSourceReferenceUri(source(3, 8), remoteUris);
+
+    expect(resolved).toBe("vscode-remote://ssh-remote%2Bhost/work/app/src/app.html");
+    expect(remoteUris.sameDocument(resolved!, "vscode-remote://ssh-remote+host/work/app/src/app.html")).toBe(true);
   });
 });

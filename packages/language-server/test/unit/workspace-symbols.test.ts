@@ -2,17 +2,14 @@ import { describe, expect, test, vi } from "vitest";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { SymbolKind } from "vscode-languageserver/node";
-import {
-  canonicalDocumentUri,
-  handleWorkspaceSymbols,
-} from "@aurelia-ls/language-server/api";
+import { handleWorkspaceSymbols } from "../../src/handlers/workspace-symbols.js";
 import { testRequestGuard } from "./test-request-guard.js";
+import { testWorkspaceDocumentUris } from "./test-document-uris.js";
 
 const workspaceRoot = path.resolve("test-workspace");
+const documentUris = testWorkspaceDocumentUris(workspaceRoot);
 const resourcePath = path.join(workspaceRoot, "src", "resources.ts");
-const resourceUri = canonicalDocumentUri(
-  pathToFileURL(resourcePath).toString(),
-).uri;
+const resourceUri = documentUris.resolve(pathToFileURL(resourcePath).toString()).uri;
 
 function source(filePath: string, start: number, end: number) {
   return {
@@ -40,6 +37,7 @@ function answer<T>(rows: T[]) {
 function createMockContext(input: { text: string; definitions: unknown[] }) {
   return {
     workspaceRoot,
+    documentUris,
     documents: {
       get: vi.fn(),
       all: vi.fn(() => []),

@@ -12,9 +12,6 @@ import {
   semanticSourceOffsetRangeForDocument,
   semanticSourceReferenceMatchesDocument,
 } from "../mapping/source-locations.js";
-import {
-  logIfSemanticRuntimeRequestAborted,
-} from "./request-guard.js";
 import type { SemanticRuntimeLspRequestGuard } from "../runtime/semantic-runtime-session.js";
 import { isTemplateDocument } from "../utils/document-kind.js";
 
@@ -32,23 +29,14 @@ export async function handleFoldingRanges(
   if (!doc) return null;
   if (!isTemplateDocument(doc)) return null;
 
-  try {
-    const answer = await ctx.semanticRuntime.templateFoldingRanges(
-      doc,
-      guard,
-    );
-    const ranges = answer.value.rows
-      .map((row) => foldingRangeForRow(ctx, doc, row))
-      .filter((range): range is FoldingRange => range != null);
-    return ranges.length > 0 ? ranges : null;
-  } catch (e) {
-    if (logIfSemanticRuntimeRequestAborted(ctx, "foldingRange", e, params.textDocument.uri)) {
-      return null;
-    }
-    const message = e instanceof Error ? e.stack ?? e.message : String(e);
-    ctx.logger.error(`[foldingRange] failed for ${params.textDocument.uri}: ${message}`);
-    return null;
-  }
+  const answer = await ctx.semanticRuntime.templateFoldingRanges(
+    doc,
+    guard,
+  );
+  const ranges = answer.value.rows
+    .map((row) => foldingRangeForRow(ctx, doc, row))
+    .filter((range): range is FoldingRange => range != null);
+  return ranges.length > 0 ? ranges : null;
 }
 
 function foldingRangeForRow(
@@ -76,7 +64,7 @@ function offsetRangeForSource(
   doc: TextDocument,
   source: SemanticSourceReference | null,
 ): OffsetRange | null {
-  if (!semanticSourceReferenceMatchesDocument(source, ctx.workspaceRoot, doc.uri)) return null;
+  if (!semanticSourceReferenceMatchesDocument(source, ctx.documentUris, doc.uri)) return null;
   const range = semanticSourceOffsetRangeForDocument(source, doc);
   return range != null && range.end > range.start ? range : null;
 }

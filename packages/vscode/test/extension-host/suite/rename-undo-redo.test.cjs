@@ -9,6 +9,10 @@ const extensionId = "AureliaEffect.aurelia-2";
 // Latency acceptance is measured separately; the reliability witness must not
 // become flaky merely because its cumulative cold semantic work nears 120s.
 const CODE_ACTION_RELIABILITY_TIMEOUT_MS = 180_000;
+// Reliability owns eventual IDE state. Product latency has a separate acceptance
+// gate, so a slow semantic rebuild should produce timing evidence rather than a
+// false state-machine failure in this suite.
+const DIAGNOSTIC_RELIABILITY_TIMEOUT_MS = 120_000;
 const trackedFiles = [
   "src/my-app.html",
   "src/my-app.ts",
@@ -27,11 +31,11 @@ const baseline = new Map(
   trackedFiles.map((rel) => [rel, fs.readFileSync(filePath(rel), "utf8")]),
 );
 let changeLog = [];
-let analysisReadyLog = [];
+let diagnosticsChangeLog = [];
 
 suite("extension-host IDE reliability", () => {
   let subscription;
-  let analysisReadySubscription;
+  let diagnosticsSubscription;
 
   suiteSetup(async () => {
     subscription = vscode.workspace.onDidChangeTextDocument((event) => {
@@ -42,33 +46,46 @@ suite("extension-host IDE reliability", () => {
           reason: event.reason,
           version: event.document.version,
           changeCount: event.contentChanges.length,
+          contentChanges: event.contentChanges.map((change) => ({
+            range: {
+              start: change.range.start,
+              end: change.range.end,
+            },
+            text: change.text,
+          })),
         });
       }
     });
 
-    const app = await activateAureliaExtension();
-    assert(app?.ctx?.lsp, "Expected extension activation to expose its live LSP facade.");
-    analysisReadySubscription = app.ctx.lsp.onAnalysisReady((payload) => {
-      analysisReadyLog.push({
-        uri: payload.uri,
-        version: payload.version,
-        diags: payload.diags,
-        fingerprint: payload.fingerprint,
-      });
+    diagnosticsSubscription = vscode.languages.onDidChangeDiagnostics((event) => {
+      for (const uri of event.uris) {
+        const document = vscode.workspace.textDocuments.find((candidate) => candidate.uri.toString() === uri.toString());
+        diagnosticsChangeLog.push({
+          uri: uri.toString(),
+          version: document?.version ?? null,
+          diagnostics: vscode.languages.getDiagnostics(uri).map((diagnostic) => ({
+            source: diagnostic.source,
+            code: typeof diagnostic.code === "object" ? diagnostic.code.value : diagnostic.code,
+            text: document?.getText(diagnostic.range) ?? null,
+            message: diagnostic.message,
+          })),
+        });
+      }
     });
+    await activateAureliaExtension();
   });
 
   suiteTeardown(() => {
     subscription?.dispose();
-    analysisReadySubscription?.dispose();
+    diagnosticsSubscription?.dispose();
   });
 
   setup(async () => {
     changeLog = [];
-    analysisReadyLog = [];
+    diagnosticsChangeLog = [];
     await resetWorkspaceToBaseline();
     changeLog = [];
-    analysisReadyLog = [];
+    diagnosticsChangeLog = [];
   });
 
   test("HTML-origin bindable rename survives one-step undo, redo, and a subsequent rename", async () => {
@@ -402,6 +419,7 @@ suite("extension-host IDE reliability", () => {
     }, "Aurelia language features should settle after the baseline document opens");
     const original = "${preview.name}";
     const replacement = "${heading()}";
+    const diagnosticStartedAt = Date.now();
     const start = document.getText().indexOf(original);
     assert.notStrictEqual(start, -1, `Could not find ${JSON.stringify(original)} in ${rel}`);
 
@@ -422,14 +440,6 @@ suite("extension-host IDE reliability", () => {
       changeLog.some((event) => event.rel === rel && event.changeCount > 0),
       `template type-error edit should emit a non-empty document change; saw ${JSON.stringify(changeLog)}`,
     );
-    await waitFor(
-      () => analysisReadyLog.some((event) =>
-        event.uri === document.uri.toString() && event.version === document.version
-      ),
-      `semantic-runtime should acknowledge diagnostics for ${rel}@${document.version}`,
-      60000,
-    );
-
     let nonCallableDiagnostic;
     try {
       await waitFor(() => {
@@ -440,7 +450,7 @@ suite("extension-host IDE reliability", () => {
             && document.getText(diagnostic.range) === "heading";
         });
         return nonCallableDiagnostic != null;
-      }, "unsaved non-callable template expression should publish TS2349 on the authored member token");
+      }, "unsaved non-callable template expression should publish TS2349 on the authored member token", DIAGNOSTIC_RELIABILITY_TIMEOUT_MS);
     } catch (error) {
       const diagnostics = vscode.languages.getDiagnostics(document.uri).map((diagnostic) => ({
         source: diagnostic.source,
@@ -448,10 +458,11 @@ suite("extension-host IDE reliability", () => {
         text: document.getText(diagnostic.range),
         message: diagnostic.message,
       }));
+      const semanticDiagnostics = await semanticDiagnosticFailureEvidence(document.uri);
       throw new Error(
-        `${error.message}; document=${document.languageId}@${document.version}; `
-        + `changes=${JSON.stringify(changeLog)}; analysisReady=${JSON.stringify(analysisReadyLog)}; `
-        + `diagnostics=${JSON.stringify(diagnostics)}`,
+        `${error.message}; elapsedMs=${Date.now() - diagnosticStartedAt}; document=${document.languageId}@${document.version}; `
+        + `changes=${JSON.stringify(changeLog)}; diagnosticsChanges=${JSON.stringify(diagnosticsChangeLog)}; `
+        + `diagnostics=${JSON.stringify(diagnostics)}; semanticDiagnostics=${JSON.stringify(semanticDiagnostics)}`,
       );
     }
     assert.strictEqual(nonCallableDiagnostic.severity, vscode.DiagnosticSeverity.Error);
@@ -484,7 +495,7 @@ function relativeWorkspacePath(uri) {
 async function activateAureliaExtension() {
   const extension = vscode.extensions.getExtension(extensionId);
   assert(extension, `Expected extension ${extensionId} to be installed in the Extension Development Host.`);
-  const api = await extension.activate();
+  await extension.activate();
   await showDocument("src/my-app.html");
   await waitFor(async () => {
     const hovers = await vscode.commands.executeCommand(
@@ -494,7 +505,6 @@ async function activateAureliaExtension() {
     );
     return Array.isArray(hovers) && hovers.length > 0;
   }, "Aurelia extension should answer language-feature requests");
-  return api;
 }
 
 async function resetWorkspaceToBaseline() {
@@ -665,10 +675,50 @@ async function waitForDiagnosticsClean(files, label) {
     const diagnostics = [];
     for (const rel of files) {
       const uri = uriFor(rel);
-      diagnostics.push(...vscode.languages.getDiagnostics(uri).filter(isRelevantDiagnostic));
+      diagnostics.push(...vscode.languages.getDiagnostics(uri)
+        .filter(isRelevantDiagnostic)
+        .map((diagnostic) => ({
+          file: rel,
+          source: diagnostic.source,
+          code: typeof diagnostic.code === "object" ? diagnostic.code?.value : diagnostic.code,
+          message: diagnostic.message,
+          range: {
+            start: diagnostic.range.start,
+            end: diagnostic.range.end,
+          },
+        })));
     }
-    return diagnostics.length === 0;
+    if (diagnostics.length > 0) {
+      throw new Error(`${label}: expected no relevant diagnostics; observed ${JSON.stringify(diagnostics)}`);
+    }
+    return true;
   }, `${label}: expected no relevant diagnostics`);
+}
+
+async function semanticDiagnosticFailureEvidence(uri) {
+  const extension = vscode.extensions.getExtension(extensionId);
+  try {
+    const snapshot = await extension?.exports?.ctx?.lsp?.getDiagnostics(uri.toString());
+    if (snapshot == null) return null;
+    return {
+      answer: {
+        result: snapshot.answer.result,
+        selection: snapshot.answer.selection,
+        coverage: snapshot.answer.coverage,
+        summary: snapshot.answer.summary,
+        analysisDepth: snapshot.answer.analysisDepth ?? null,
+      },
+      diagnostics: (snapshot.diagnostics.bySurface.lsp ?? []).map((diagnostic) => ({
+        code: diagnostic.code,
+        severity: diagnostic.severity,
+        uri: diagnostic.uri ?? null,
+        span: diagnostic.span ?? null,
+        message: diagnostic.message,
+      })),
+    };
+  } catch (error) {
+    return { requestError: String(error) };
+  }
 }
 
 async function executeCodeActionProvider(uri, range, itemResolveCount) {

@@ -18,6 +18,7 @@ import {
   isSemanticRuntimeLspRequestAborted,
 } from "../../src/runtime/semantic-runtime-session.js";
 import type { OpenTextDocumentStore } from "../../src/runtime/open-document-source-text-overlay.js";
+import { WorkspaceDocumentUris } from "../../src/utils/document-uri.js";
 
 class TestDocumentStore implements OpenTextDocumentStore {
   private readonly documents = new Map<string, TextDocument>();
@@ -36,6 +37,16 @@ class TestDocumentStore implements OpenTextDocumentStore {
 }
 
 describe("SemanticRuntimeLspSession", () => {
+  test("uses an opaque session identity in transport fingerprints", () => {
+    const fixtureRoot = minimalFixtureRoot();
+    const session = createSession(fixtureRoot, new TestDocumentStore());
+
+    const fingerprint = session.currentGeneration().fingerprint;
+
+    expect(fingerprint).toMatch(/^semantic-runtime:[^:]+:workspace-\d+:source-\d+$/);
+    expect(fingerprint).not.toContain(fixtureRoot);
+  });
+
   test("answers template completions from open document source text", async () => {
     const packageRoot = path.resolve(
       fileURLToPath(new URL("../..", import.meta.url)),
@@ -63,10 +74,7 @@ describe("SemanticRuntimeLspSession", () => {
     documents.add(htmlDocument);
     documents.add(tsDocument);
 
-    const session = new SemanticRuntimeLspSession({
-      workspaceRoot: fixtureRoot,
-      documents,
-    });
+    const session = createSession(fixtureRoot, documents);
     const guard = session.requestGuard(null);
 
     const answer = await session.templateCompletions(
@@ -108,10 +116,7 @@ describe("SemanticRuntimeLspSession", () => {
     documents.add(TextDocument.create(htmlUri, "html", 2, htmlText));
     documents.add(TextDocument.create(tsUri, "typescript", 2, tsText));
 
-    const session = new SemanticRuntimeLspSession({
-      workspaceRoot: fixtureRoot,
-      documents,
-    });
+    const session = createSession(fixtureRoot, documents);
     const firstGuard = session.requestGuard(null);
 
     const firstAnswer = await session.templateCompletions(
@@ -169,10 +174,7 @@ describe("SemanticRuntimeLspSession", () => {
     const htmlDocument = TextDocument.create(htmlUri, "html", 2, htmlText);
     documents.add(htmlDocument);
     documents.add(TextDocument.create(tsUri, "typescript", 2, tsText));
-    const session = new SemanticRuntimeLspSession({
-      workspaceRoot: fixtureRoot,
-      documents,
-    });
+    const session = createSession(fixtureRoot, documents);
 
     const answer = await session.templateCompletions(
       htmlDocument,
@@ -200,10 +202,7 @@ describe("SemanticRuntimeLspSession", () => {
     );
     const documents = new TestDocumentStore();
     documents.add(document);
-    const session = new SemanticRuntimeLspSession({
-      workspaceRoot: fixtureRoot,
-      documents,
-    });
+    const session = createSession(fixtureRoot, documents);
     const guard = session.requestGuard(() => true);
 
     await expect(
@@ -227,10 +226,7 @@ describe("SemanticRuntimeLspSession", () => {
     );
     const documents = new TestDocumentStore();
     documents.add(document);
-    const session = new SemanticRuntimeLspSession({
-      workspaceRoot: fixtureRoot,
-      documents,
-    });
+    const session = createSession(fixtureRoot, documents);
     const guard = session.requestGuard(null);
 
     await session.recordSourceTextChanged();
@@ -527,6 +523,15 @@ function minimalFixtureRoot(): string {
     packageRoot,
     "../semantic-runtime/fixtures/pressure/app-pattern-minimal-app",
   );
+}
+
+function createSession(
+  workspaceRoot: string,
+  documents: OpenTextDocumentStore,
+): SemanticRuntimeLspSession {
+  const documentUris = new WorkspaceDocumentUris();
+  documentUris.configure(pathToFileURL(workspaceRoot).toString());
+  return new SemanticRuntimeLspSession({ documents, documentUris });
 }
 
 function positionAfter(

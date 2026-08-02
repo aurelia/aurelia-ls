@@ -2,11 +2,8 @@
  * Type mapping utilities: semantic-runtime types -> LSP types
  *
  * This is the Boundary 5 conversion layer. All workspace types are
- * converted to LSP wire format here. The FeatureResponse unwrapping
- * happens in the handler layer (handlers/features.ts); this module
- * handles the T → LSP mapping for successful results.
+ * converted to LSP wire format here.
  */
-import { pathToFileURL } from "node:url";
 import {
   CompletionItemKind,
   DiagnosticSeverity,
@@ -42,7 +39,8 @@ import {
   semanticExactSourceReference,
   semanticSourceReferenceContainsOffset,
 } from "@aurelia-ls/semantic-runtime";
-import { canonicalDocumentUri, type DocumentUri } from "../utils/document-uri.js";
+import type { DocumentUri, WorkspaceDocumentUris } from "../utils/document-uri.js";
+import { languageIdForSource } from "../utils/document-kind.js";
 import {
   AURELIA_TEMPLATE_CODE_ACTION_RESOLVE_SCHEMA,
   type TemplateCodeActionResolveData,
@@ -53,16 +51,6 @@ import {
   semanticSourceReferencePath,
   semanticSourceReferenceUri,
 } from "./source-locations.js";
-
-export interface SourceSpan {
-  readonly start: number;
-  readonly end: number;
-}
-
-export interface DocumentSpan {
-  readonly uri: DocumentUri;
-  readonly span: SourceSpan;
-}
 
 export type LookupTextFn = (uri: DocumentUri) => string | null;
 export interface LspDocumentSnapshot {
@@ -89,31 +77,6 @@ type DiagnosticCategory =
   | "resource-resolution"
   | "bindable-validation"
   | "project";
-
-// ============================================================================
-// URI and Span Conversion
-// ============================================================================
-
-export function toLspUri(uri: DocumentUri): string {
-  const canonical = canonicalDocumentUri(uri);
-  if (canonical.uri.startsWith("file://")) return canonical.uri;
-  const pathOrUri = canonical.path;
-  if (pathOrUri.startsWith("file://")) return pathOrUri;
-  return pathToFileURL(pathOrUri).toString();
-}
-
-export function guessLanguage(uri: DocumentUri): string {
-  if (uri.endsWith(".ts") || uri.endsWith(".js")) return "typescript";
-  if (uri.endsWith(".json")) return "json";
-  return "html";
-}
-
-export function spanToRange(loc: DocumentSpan, lookupText: LookupTextFn): Range | null {
-  const text = lookupText(loc.uri);
-  if (!text) return null;
-  const doc = TextDocument.create(toLspUri(loc.uri), guessLanguage(loc.uri), 0, text);
-  return { start: doc.positionAt(loc.span.start), end: doc.positionAt(loc.span.end) };
-}
 
 // ============================================================================
 // Severity Mapping — L2 demotion table produces 4 severity levels
@@ -168,7 +131,7 @@ function semanticRuntimeDiagnosticCategory(row: SemanticAppDiagnosticRow): Diagn
 export function mapSemanticRuntimeAppDiagnostics(
   answer: SemanticRuntimeAnswer<SemanticAppDiagnosticsResult>,
   document: TextDocument,
-  workspaceRoot: string | null = null,
+  documentUris: WorkspaceDocumentUris,
   lookupText: LookupTextFn | null = null,
 ): SemanticRuntimeReadMapping<Diagnostic[]> {
   const mapped: Diagnostic[] = [];
@@ -184,14 +147,14 @@ export function mapSemanticRuntimeAppDiagnostics(
           failures.push(`Diagnostic presentation group references missing related row ${related.rowIndex}.`);
           continue;
         }
-        const relatedMapping = semanticRuntimeDiagnosticRelatedInformation(row, document, workspaceRoot, lookupText);
+        const relatedMapping = semanticRuntimeDiagnosticRelatedInformation(row, document, documentUris, lookupText);
         relatedInformation.push(...relatedMapping.value);
         failures.push(...relatedMapping.failures);
       }
       const diagnosticMapping = semanticRuntimeDiagnostic(
         rows[group.primary.rowIndex] ?? null,
         document,
-        workspaceRoot,
+        documentUris,
         lookupText,
         relatedInformation,
       );
@@ -210,7 +173,7 @@ export function mapSemanticRuntimeAppDiagnostics(
     return { value: mapped, failures };
   }
   for (const row of answer.value.rows) {
-    const diagnosticMapping = semanticRuntimeDiagnostic(row, document, workspaceRoot, lookupText, []);
+    const diagnosticMapping = semanticRuntimeDiagnostic(row, document, documentUris, lookupText, []);
     failures.push(...diagnosticMapping.failures);
     if (diagnosticMapping.value != null) {
       mapped.push(diagnosticMapping.value);
@@ -224,12 +187,12 @@ export function mapSemanticRuntimeAppDiagnostics(
 function semanticRuntimeDiagnostic(
   row: SemanticAppDiagnosticRow | null,
   document: TextDocument,
-  workspaceRoot: string | null,
+  documentUris: WorkspaceDocumentUris,
   lookupText: LookupTextFn | null,
   relatedInformation: DiagnosticRelatedInformation[],
 ): SemanticRuntimeReadMapping<Diagnostic | null> {
   if (row == null) return { value: null, failures: [] };
-  const range = semanticRuntimeDiagnosticRange(row.source, document);
+  const range = semanticRuntimeDiagnosticRange(row.source, document, documentUris);
   if (range == null) return { value: null, failures: [] };
   const rowRelatedInformation: DiagnosticRelatedInformation[] = [];
   const failures: string[] = [];
@@ -237,7 +200,7 @@ function semanticRuntimeDiagnostic(
     const mapping = semanticRuntimeDiagnosticRelatedSourceInformation(
       related,
       document,
-      workspaceRoot,
+      documentUris,
       lookupText,
     );
     rowRelatedInformation.push(...mapping.value);
@@ -279,24 +242,24 @@ function semanticRuntimeTypeScriptDiagnosticCode(row: SemanticAppDiagnosticRow):
 function semanticRuntimeDiagnosticRelatedInformation(
   row: SemanticAppDiagnosticRow | null,
   document: TextDocument,
-  workspaceRoot: string | null,
+  documentUris: WorkspaceDocumentUris,
   lookupText: LookupTextFn | null,
 ): SemanticRuntimeReadMapping<DiagnosticRelatedInformation[]> {
   if (row == null) return { value: [], failures: [] };
-  return semanticRuntimeRelatedInformationForSource(row.source, row.summary, document, workspaceRoot, lookupText);
+  return semanticRuntimeRelatedInformationForSource(row.source, row.summary, document, documentUris, lookupText);
 }
 
 function semanticRuntimeDiagnosticRelatedSourceInformation(
   related: SemanticDiagnosticRelatedInformation,
   document: TextDocument,
-  workspaceRoot: string | null,
+  documentUris: WorkspaceDocumentUris,
   lookupText: LookupTextFn | null,
 ): SemanticRuntimeReadMapping<DiagnosticRelatedInformation[]> {
   return semanticRuntimeRelatedInformationForSource(
     related.source,
     related.message,
     document,
-    workspaceRoot,
+    documentUris,
     lookupText,
   );
 }
@@ -305,21 +268,21 @@ function semanticRuntimeRelatedInformationForSource(
   source: SemanticSourceReference | null,
   message: string,
   document: TextDocument,
-  workspaceRoot: string | null,
+  documentUris: WorkspaceDocumentUris,
   lookupText: LookupTextFn | null,
 ): SemanticRuntimeReadMapping<DiagnosticRelatedInformation[]> {
   const exact = semanticExactSourceReference(source);
   if (source == null) return { value: [], failures: [] };
   const locatedSource = exact ?? source;
-  const uri = semanticSourceReferenceUri(locatedSource, workspaceRoot);
+  const uri = semanticSourceReferenceUri(locatedSource, documentUris);
   if (uri == null) {
     return {
       value: [],
       failures: [`Related diagnostic evidence ${source.label} cannot be resolved to a workspace document.`],
     };
   }
-  const canonical = canonicalDocumentUri(uri).uri;
-  const originCanonical = canonicalDocumentUri(document.uri).uri;
+  const canonical = documentUris.resolve(uri).uri;
+  const originCanonical = documentUris.resolve(document.uri).uri;
   if (exact == null) {
     return {
       value: [{
@@ -341,7 +304,7 @@ function semanticRuntimeRelatedInformationForSource(
   }
   const targetDocument = canonical === originCanonical
     ? document
-    : TextDocument.create(canonical, guessLanguage(canonical), 0, text);
+    : TextDocument.create(canonical, languageIdForSource(canonical), 0, text);
   const range = semanticSourceRangeForDocument(exact, targetDocument);
   if (range == null) {
     return {
@@ -358,12 +321,18 @@ function semanticRuntimeRelatedInformationForSource(
 function semanticRuntimeDiagnosticRange(
   source: SemanticSourceReference | null,
   document: TextDocument,
+  documentUris: WorkspaceDocumentUris,
 ): Range | null {
+  if (source == null) return null;
+  const sourceUri = semanticSourceReferenceUri(source, documentUris);
+  if (sourceUri == null || !documentUris.sameDocument(sourceUri, document.uri)) {
+    return null;
+  }
   const exact = semanticExactSourceReference(source);
   if (exact?.start != null && exact.end != null) {
     return semanticSourceRangeForDocument(exact, document);
   }
-  return source == null ? null : {
+  return {
     start: { line: 0, character: 0 },
     end: { line: 0, character: 0 },
   };
@@ -643,7 +612,7 @@ export function mapSemanticRuntimeTemplateDefinition(
   answer: SemanticRuntimeAnswer<SemanticTemplateCursorInfoResult>,
   lookupText: LookupTextFn,
   options: {
-    readonly workspaceRoot: string | null;
+    readonly documentUris: WorkspaceDocumentUris;
     readonly originDocument: TextDocument;
   },
 ): LocationLink[] | null {
@@ -652,13 +621,13 @@ export function mapSemanticRuntimeTemplateDefinition(
     return null;
   }
 
-  const targetUri = semanticSourceReferenceUri(target.selectionSource, options.workspaceRoot);
+  const targetUri = semanticSourceReferenceUri(target.selectionSource, options.documentUris);
   if (targetUri == null) {
     return null;
   }
 
-  const targetCanonical = canonicalDocumentUri(targetUri).uri;
-  const originCanonical = canonicalDocumentUri(options.originDocument.uri).uri;
+  const targetCanonical = options.documentUris.resolve(targetUri).uri;
+  const originCanonical = options.documentUris.resolve(options.originDocument.uri).uri;
   const targetText = targetCanonical === originCanonical
     ? options.originDocument.getText()
     : lookupText(targetCanonical);
@@ -668,7 +637,7 @@ export function mapSemanticRuntimeTemplateDefinition(
 
   const targetDocument = TextDocument.create(
     targetUri,
-    guessLanguage(targetCanonical),
+    languageIdForSource(targetCanonical),
     0,
     targetText,
   );
@@ -684,7 +653,7 @@ export function mapSemanticRuntimeTemplateDefinition(
     targetUri,
     targetDocument,
     targetSelectionRange,
-    options.workspaceRoot,
+    options.documentUris,
   );
 
   return [{
@@ -698,13 +667,13 @@ export function mapSemanticRuntimeRouteNodeDefinition(
   answer: SemanticRuntimeAnswer<SemanticRouteNodesResult>,
   lookupText: LookupTextFn,
   options: {
-    readonly workspaceRoot: string | null;
+    readonly documentUris: WorkspaceDocumentUris;
     readonly originDocument: TextDocument;
     readonly position: { readonly line: number; readonly character: number };
   },
 ): LocationLink[] | null {
   const cursorOffset = options.originDocument.offsetAt(options.position);
-  const originCanonical = canonicalDocumentUri(options.originDocument.uri).uri;
+  const originCanonical = options.documentUris.resolve(options.originDocument.uri).uri;
 
   for (const row of answer.value.rows) {
     const originSource = firstSemanticRuntimeExactSourceReference([
@@ -722,15 +691,15 @@ export function mapSemanticRuntimeRouteNodeDefinition(
     if (!semanticSourceReferenceContainsOffset(originSource, cursorOffset)) {
       continue;
     }
-    const originUri = semanticSourceReferenceUri(originSource, options.workspaceRoot);
-    if (originUri == null || canonicalDocumentUri(originUri).uri !== originCanonical) {
+    const originUri = semanticSourceReferenceUri(originSource, options.documentUris);
+    if (originUri == null || !options.documentUris.sameDocument(originUri, originCanonical)) {
       continue;
     }
 
     const link = locationLinkForSemanticSource(
       targetSource,
       lookupText,
-      options.workspaceRoot,
+      options.documentUris,
       options.originDocument,
       originSource,
     );
@@ -827,10 +796,10 @@ function containingDefinitionRange(
   selectionUri: string,
   document: TextDocument,
   selectionRange: Range,
-  workspaceRoot: string | null,
+  documentUris: WorkspaceDocumentUris,
 ): Range {
-  const sourceUri = semanticSourceReferenceUri(source, workspaceRoot);
-  if (sourceUri == null || canonicalDocumentUri(sourceUri).uri !== canonicalDocumentUri(selectionUri).uri) {
+  const sourceUri = semanticSourceReferenceUri(source, documentUris);
+  if (sourceUri == null || !documentUris.sameDocument(sourceUri, selectionUri)) {
     return selectionRange;
   }
   const range = semanticSourceRangeForDocument(source, document);
@@ -861,17 +830,17 @@ function firstSemanticRuntimeExactSourceReference(
 function locationLinkForSemanticSource(
   target: SemanticSourceReference,
   lookupText: LookupTextFn,
-  workspaceRoot: string | null,
+  documentUris: WorkspaceDocumentUris,
   originDocument: TextDocument,
   originSource?: SemanticSourceReference | null,
 ): LocationLink | null {
-  const targetUri = semanticSourceReferenceUri(target, workspaceRoot);
+  const targetUri = semanticSourceReferenceUri(target, documentUris);
   if (targetUri == null) {
     return null;
   }
 
-  const targetCanonical = canonicalDocumentUri(targetUri).uri;
-  const originCanonical = canonicalDocumentUri(originDocument.uri).uri;
+  const targetCanonical = documentUris.resolve(targetUri).uri;
+  const originCanonical = documentUris.resolve(originDocument.uri).uri;
   const targetText = targetCanonical === originCanonical
     ? originDocument.getText()
     : lookupText(targetCanonical);
@@ -881,7 +850,7 @@ function locationLinkForSemanticSource(
 
   const targetDocument = TextDocument.create(
     targetUri,
-    guessLanguage(targetCanonical),
+    languageIdForSource(targetCanonical),
     0,
     targetText,
   );
@@ -906,14 +875,14 @@ export function mapSemanticRuntimeTemplateReferences(
   answer: SemanticRuntimeAnswer<SemanticTemplateReferencesResult>,
   lookupText: LookupTextFn,
   options: {
-    readonly workspaceRoot: string | null;
+    readonly documentUris: WorkspaceDocumentUris;
     readonly originDocument: TextDocument;
     readonly scope: "workspace" | "origin-document";
   },
 ): SemanticRuntimeReadMapping<Location[] | null> {
   const mapped: Location[] = [];
   const failures: string[] = [];
-  const originCanonical = canonicalDocumentUri(options.originDocument.uri).uri;
+  const originCanonical = options.documentUris.resolve(options.originDocument.uri).uri;
 
   for (const row of answer.value.rows) {
     const rowLabel = row.source?.label ?? `${row.referenceKind}:${row.name}`;
@@ -922,12 +891,12 @@ export function mapSemanticRuntimeTemplateReferences(
       failures.push(`Reference ${rowLabel} has no exact authored source span.`);
       continue;
     }
-    const uri = semanticSourceReferenceUri(source, options.workspaceRoot);
+    const uri = semanticSourceReferenceUri(source, options.documentUris);
     if (uri == null) {
       failures.push(`Reference ${rowLabel} cannot be resolved to a workspace document.`);
       continue;
     }
-    const canonical = canonicalDocumentUri(uri).uri;
+    const canonical = options.documentUris.resolve(uri).uri;
     if (options.scope === "origin-document" && canonical !== originCanonical) {
       continue;
     }
@@ -940,7 +909,7 @@ export function mapSemanticRuntimeTemplateReferences(
     }
     const document = TextDocument.create(
       uri,
-      guessLanguage(canonical),
+      languageIdForSource(canonical),
       0,
       text,
     );
@@ -961,7 +930,7 @@ export function mapSemanticRuntimeTemplateReferences(
 export function mapSemanticRuntimeTemplatePrepareRename(
   answer: SemanticRuntimeAnswer<SemanticTemplateRenameResult>,
   options: {
-    readonly workspaceRoot: string | null;
+    readonly documentUris: WorkspaceDocumentUris;
     readonly originDocument: TextDocument;
   },
 ): { range: Range; placeholder: string } | null {
@@ -972,11 +941,11 @@ export function mapSemanticRuntimeTemplatePrepareRename(
   if (source == null) {
     return null;
   }
-  const uri = semanticSourceReferenceUri(source, options.workspaceRoot);
+  const uri = semanticSourceReferenceUri(source, options.documentUris);
   if (uri == null) {
     return null;
   }
-  if (canonicalDocumentUri(uri).uri !== canonicalDocumentUri(options.originDocument.uri).uri) {
+  if (!options.documentUris.sameDocument(uri, options.originDocument.uri)) {
     return null;
   }
   const range = semanticSourceRangeForDocument(source, options.originDocument);
@@ -1006,7 +975,7 @@ export function mapSemanticRuntimeTemplateRenameEdit(
   answer: SemanticRuntimeAnswer<SemanticTemplateRenameResult>,
   lookupDocumentSnapshot: LookupDocumentSnapshotFn,
   options: {
-    readonly workspaceRoot: string | null;
+    readonly documentUris: WorkspaceDocumentUris;
     readonly originDocument: TextDocument;
   },
 ): SemanticRuntimeRenameEditMapping {
@@ -1014,7 +983,7 @@ export function mapSemanticRuntimeTemplateRenameEdit(
     return { edit: null, failures: ["The rename answer carries no applicable edits."] };
   }
   return mapSemanticRuntimeWorkspaceEditRows(answer.value.edits, {
-    workspaceRoot: options.workspaceRoot,
+    documentUris: options.documentUris,
     originDocument: options.originDocument,
     lookupDocumentSnapshot,
     emptyFailure: "No rename edit rows could be mapped.",
@@ -1024,7 +993,7 @@ export function mapSemanticRuntimeTemplateRenameEdit(
 function mapSemanticRuntimeWorkspaceEditRows(
   rows: readonly SemanticRuntimeWorkspaceEditRow[],
   options: {
-    readonly workspaceRoot: string | null;
+    readonly documentUris: WorkspaceDocumentUris;
     readonly originDocument: TextDocument;
     readonly lookupDocumentSnapshot: LookupDocumentSnapshotFn;
     readonly emptyFailure: string;
@@ -1035,7 +1004,7 @@ function mapSemanticRuntimeWorkspaceEditRows(
     edits: { range: Range; newText: string }[];
   }>();
   const failures: string[] = [];
-  const originCanonical = canonicalDocumentUri(options.originDocument.uri).uri;
+  const originCanonical = options.documentUris.resolve(options.originDocument.uri).uri;
 
   for (const row of rows) {
     const rowLabel = row.source?.label ?? `${row.oldText ?? "?"} -> ${row.newText}`;
@@ -1044,14 +1013,14 @@ function mapSemanticRuntimeWorkspaceEditRows(
       failures.push(`Edit ${rowLabel} has no exact authored source span.`);
       continue;
     }
-    const uri = semanticSourceReferenceUri(source, options.workspaceRoot);
+    const uri = semanticSourceReferenceUri(source, options.documentUris);
     if (uri == null) {
       failures.push(`Edit ${rowLabel} cannot be resolved to a workspace document.`);
       continue;
     }
-    const canonical = canonicalDocumentUri(uri).uri;
+    const canonical = options.documentUris.resolve(uri).uri;
     const snapshot = canonical === originCanonical
-      ? snapshotForDocument(options.originDocument)
+      ? snapshotForDocument(options.originDocument, options.documentUris)
       : options.lookupDocumentSnapshot(canonical);
     if (snapshot == null) {
       failures.push(`Edit ${rowLabel} targets a document with no readable text.`);
@@ -1098,7 +1067,7 @@ export function mapSemanticRuntimeTemplateCodeActions(
   answer: SemanticRuntimeAnswer<SemanticTemplateCodeActionsResult>,
   lookupDocumentSnapshot: LookupDocumentSnapshotFn,
   options: {
-    readonly workspaceRoot: string | null;
+    readonly documentUris: WorkspaceDocumentUris;
     readonly originDocument: TextDocument;
     readonly diagnostics?: readonly Diagnostic[];
     readonly onMappingFailure?: (
@@ -1110,7 +1079,7 @@ export function mapSemanticRuntimeTemplateCodeActions(
   const actions: CodeAction[] = [];
   for (const row of answer.value.rows) {
     const mapping = mapSemanticRuntimeWorkspaceEditRows(row.edits, {
-      workspaceRoot: options.workspaceRoot,
+      documentUris: options.documentUris,
       originDocument: options.originDocument,
       lookupDocumentSnapshot,
       emptyFailure: `Code action '${row.title}' has no mapped edit rows.`,
@@ -1142,7 +1111,7 @@ export function mapSemanticRuntimeUnresolvedTemplateCodeActions(
   answer: SemanticRuntimeAnswer<SemanticTemplateCodeActionsResult>,
   lookupDocumentSnapshot: LookupDocumentSnapshotFn,
   options: {
-    readonly workspaceRoot: string | null;
+    readonly documentUris: WorkspaceDocumentUris;
     readonly originDocument: TextDocument;
     readonly position: { readonly line: number; readonly character: number };
     readonly diagnostics?: readonly Diagnostic[];
@@ -1290,9 +1259,12 @@ export function workspaceEditChanges(
   return changes;
 }
 
-function snapshotForDocument(document: TextDocument): LspDocumentSnapshot {
+function snapshotForDocument(
+  document: TextDocument,
+  documentUris: WorkspaceDocumentUris,
+): LspDocumentSnapshot {
   return {
-    uri: canonicalDocumentUri(document.uri).uri,
+    uri: documentUris.resolve(document.uri).uri,
     languageId: document.languageId,
     version: document.version,
     text: document.getText(),

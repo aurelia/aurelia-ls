@@ -78,7 +78,7 @@ interface TreeNode {
   readonly collapsible: boolean;
   readonly defaultExpanded?: boolean;
   readonly children?: readonly TreeNode[];
-  readonly resourceFile?: string;
+  readonly resourceUri?: string;
   readonly contextValue?: string;
 }
 
@@ -211,7 +211,7 @@ function buildResourceNode(item: ResourceExplorerItem, idPrefix: string): TreeNo
       tooltip: alias.source?.label,
       iconId: "symbol-string",
       collapsible: false,
-      resourceFile: item.file ?? undefined,
+      resourceUri: item.uri ?? undefined,
       contextValue: "resourceAlias",
     });
   });
@@ -230,7 +230,7 @@ function buildResourceNode(item: ResourceExplorerItem, idPrefix: string): TreeNo
       tooltip: bindable.source?.label,
       iconId: "symbol-field",
       collapsible: false,
-      resourceFile: item.file ?? undefined,
+      resourceUri: item.uri ?? undefined,
       contextValue: "bindable",
     });
   });
@@ -243,18 +243,18 @@ function buildResourceNode(item: ResourceExplorerItem, idPrefix: string): TreeNo
       tooltip: visibility.source?.label,
       iconId: visibility.visibilityKind === "open" ? "warning" : "eye",
       collapsible: false,
-      resourceFile: visibility.file ?? undefined,
+      resourceUri: visibility.uri ?? undefined,
       contextValue: "resourceVisibility",
     });
   });
-  if (item.file != null && item.origin === "project") {
+  if (item.uri != null && item.origin === "project") {
     children.push({
       nodeKind: "info",
       id: prefixedId(idPrefix, `${item.id}:file`),
-      label: shortSourcePath(item.file),
+      label: shortSourcePath(item.source?.path ?? item.uri),
       iconId: "file-code",
       collapsible: false,
-      resourceFile: item.file,
+      resourceUri: item.uri,
       contextValue: "fileLink",
     });
   }
@@ -281,7 +281,7 @@ function buildResourceNode(item: ResourceExplorerItem, idPrefix: string): TreeNo
     iconId: resourceIcon(item),
     collapsible: children.length > 0,
     children,
-    resourceFile: item.file ?? undefined,
+    resourceUri: item.uri ?? undefined,
     contextValue: "resource",
   };
 }
@@ -326,7 +326,7 @@ function buildResourceTooltip(item: ResourceExplorerItem): string {
     lines.push(`  ${visibility.visibilityKind}: ${visibility.compilerWorld}`);
   }
   if (item.source != null) lines.push(`Source: ${item.source.label}`);
-  if (item.file != null) lines.push(`File: ${item.file}`);
+  if (item.uri != null) lines.push(`URI: ${item.uri}`);
   if (item.package != null) lines.push(`Package: ${item.package}`);
   return lines.join("\n");
 }
@@ -408,11 +408,11 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Dis
         ? this.#vscode.TreeItemCollapsibleState.Expanded
         : this.#vscode.TreeItemCollapsibleState.Collapsed)
       : this.#vscode.TreeItemCollapsibleState.None;
-    if (element.resourceFile != null) {
+    if (element.resourceUri != null) {
       item.command = {
         title: "Open",
         command: "vscode.open",
-        arguments: [this.#vscode.Uri.file(element.resourceFile)],
+        arguments: [this.#vscode.Uri.parse(element.resourceUri)],
       };
     }
     item.contextValue = element.contextValue;
