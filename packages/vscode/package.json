@@ -151,7 +151,7 @@
           "enumDescriptions": [
             "Start a candidate server from cheap Aurelia evidence, then require semantic-runtime project-shape confirmation.",
             "Always run Aurelia tooling for this workspace folder.",
-            "Never run Aurelia tooling for this workspace folder."
+            "Exclude this workspace folder and its complete subtree from Aurelia tooling."
           ],
           "default": "auto",
           "scope": "resource",

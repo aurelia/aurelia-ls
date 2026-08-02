@@ -5,6 +5,7 @@ import type {
   ProjectBootFrame,
   SourceFileAdmission,
 } from '../boot/frames.js';
+import type { AuthoredSourceBoundary } from '../boot/source-boundary.js';
 import {
   normalizeModuleKey,
 } from '../evaluation/module-graph.js';
@@ -32,7 +33,6 @@ import {
 import {
   canonicalTypeSystemPath,
   isDefaultLibrarySourceFile,
-  isTypeSystemPathAtOrUnder,
 } from './source-file-path.js';
 import {
   createTypeSystemOverlaySourceFile,
@@ -353,18 +353,17 @@ export class TypeSystemProject {
     }
     return typeSystemProgramSourceFileRole(
       sourceFile,
-      canonicalTypeSystemPath(this.project.rootDir),
+      this.project.authoredSources,
       this.overlaySourcePaths,
     );
   }
 
   /** Read project-root TS/JS sources selected by the tsconfig diagnostic policy. */
   readProjectDiagnosticProgramSourceFiles(): readonly ts.SourceFile[] {
-    const projectRootPath = canonicalTypeSystemPath(this.project.rootDir);
     return [...this.programSourceFilesByPath.values()]
       .filter((sourceFile) => typeSystemProjectProgramDiagnosticSourceFile(
         sourceFile.fileName,
-        projectRootPath,
+        this.project.authoredSources,
         this.overlaySourcePaths,
         this.diagnosticSourcePaths,
       ))
@@ -729,14 +728,14 @@ export class TypeSystemProjectBuilder {
     const programSourceFilesByPath = typeSystemProgramSourceFileIndex(programSourceFiles);
     const programRootFiles = typeSystemRootFileStats(
       rootNames,
-      project.rootDir,
+      project.authoredSources,
       evaluatedSourcePaths,
       overlaySourcePaths,
       programSourceFilesByPath,
     );
     const programRootFileGroups = typeSystemRootFileGroups(
       rootNames,
-      project.rootDir,
+      project.authoredSources,
       evaluatedSourcePaths,
       overlaySourcePaths,
       programSourceFilesByPath,
@@ -762,14 +761,14 @@ export class TypeSystemProjectBuilder {
         programRootFiles,
         programSourceFiles: typeSystemProgramSourceFileStats(
           programSourceFiles,
-          project.rootDir,
+          project.authoredSources,
           evaluatedSourcePaths,
           overlaySourcePaths,
         ),
         programRootFileGroups,
         programSourceFileGroups: typeSystemProgramSourceFileGroups(
           programSourceFiles,
-          project.rootDir,
+          project.authoredSources,
           evaluatedSourcePaths,
           overlaySourcePaths,
         ),
@@ -959,11 +958,10 @@ function addOverlaySourceFiles(
 
 function typeSystemProgramSourceFileStats(
   sourceFiles: readonly ts.SourceFile[],
-  projectRootDir: string,
+  authoredSources: AuthoredSourceBoundary,
   evaluatedSourcePaths: ReadonlySet<string>,
   overlaySourcePaths: ReadonlySet<string>,
 ): TypeSystemProgramSourceFileStats {
-  const projectRootPath = canonicalTypeSystemPath(projectRootDir);
   let evaluatedSources = 0;
   let overlaySources = 0;
   let projectSources = 0;
@@ -992,7 +990,7 @@ function typeSystemProgramSourceFileStats(
       overlaySources += 1;
       overlaySourceTextCharacters += sourceTextLength;
     }
-    if (isTypeSystemPathAtOrUnder(normalized, projectRootPath)) {
+    if (authoredSources.contains(normalized)) {
       projectSources += 1;
       projectSourceTextCharacters += sourceTextLength;
     } else if (normalized.includes('/node_modules/')) {
@@ -1034,11 +1032,10 @@ function typeSystemProgramSourceFileStats(
 
 function typeSystemProgramSourceFileGroups(
   sourceFiles: readonly ts.SourceFile[],
-  projectRootDir: string,
+  authoredSources: AuthoredSourceBoundary,
   evaluatedSourcePaths: ReadonlySet<string>,
   overlaySourcePaths: ReadonlySet<string>,
 ): readonly TypeSystemProgramSourceFileGroupStats[] {
-  const projectRootPath = canonicalTypeSystemPath(projectRootDir);
   const groups = new Map<string, MutableTypeSystemProgramSourceFileGroupStats>();
   for (const sourceFile of sourceFiles) {
     recordTypeSystemProgramSourceFileGroup(
@@ -1046,7 +1043,7 @@ function typeSystemProgramSourceFileGroups(
       sourceFile.fileName,
       sourceFile.text.length,
       sourceFile.isDeclarationFile,
-      projectRootPath,
+      authoredSources,
       evaluatedSourcePaths,
       overlaySourcePaths,
     );
@@ -1056,12 +1053,11 @@ function typeSystemProgramSourceFileGroups(
 
 function typeSystemRootFileStats(
   rootNames: readonly string[],
-  projectRootDir: string,
+  authoredSources: AuthoredSourceBoundary,
   evaluatedSourcePaths: ReadonlySet<string>,
   overlaySourcePaths: ReadonlySet<string>,
   programSourceFilesByPath: ReadonlyMap<string, ts.SourceFile>,
 ): TypeSystemProgramSourceFileStats {
-  const projectRootPath = canonicalTypeSystemPath(projectRootDir);
   let evaluatedSources = 0;
   let overlaySources = 0;
   let projectSources = 0;
@@ -1090,7 +1086,7 @@ function typeSystemRootFileStats(
       overlaySources += 1;
       overlaySourceTextCharacters += sourceTextLength;
     }
-    if (isTypeSystemPathAtOrUnder(normalized, projectRootPath)) {
+    if (authoredSources.contains(normalized)) {
       projectSources += 1;
       projectSourceTextCharacters += sourceTextLength;
     } else if (normalized.includes('/node_modules/')) {
@@ -1132,12 +1128,11 @@ function typeSystemRootFileStats(
 
 function typeSystemRootFileGroups(
   rootNames: readonly string[],
-  projectRootDir: string,
+  authoredSources: AuthoredSourceBoundary,
   evaluatedSourcePaths: ReadonlySet<string>,
   overlaySourcePaths: ReadonlySet<string>,
   programSourceFilesByPath: ReadonlyMap<string, ts.SourceFile>,
 ): readonly TypeSystemProgramSourceFileGroupStats[] {
-  const projectRootPath = canonicalTypeSystemPath(projectRootDir);
   const groups = new Map<string, MutableTypeSystemProgramSourceFileGroupStats>();
   for (const rootName of rootNames) {
     const normalized = canonicalTypeSystemPath(rootName);
@@ -1147,7 +1142,7 @@ function typeSystemRootFileGroups(
       rootName,
       sourceFile?.text.length ?? 0,
       sourceFile?.isDeclarationFile ?? normalized.endsWith('.d.ts'),
-      projectRootPath,
+      authoredSources,
       evaluatedSourcePaths,
       overlaySourcePaths,
     );
@@ -1169,12 +1164,12 @@ function recordTypeSystemProgramSourceFileGroup(
   fileName: string,
   sourceTextCharacters: number,
   isDeclarationFile: boolean,
-  projectRootPath: string,
+  authoredSources: AuthoredSourceBoundary,
   evaluatedSourcePaths: ReadonlySet<string>,
   overlaySourcePaths: ReadonlySet<string>,
 ): void {
   const normalized = canonicalTypeSystemPath(fileName);
-  const group = typeSystemProgramSourceFileGroup(normalized, projectRootPath, overlaySourcePaths);
+  const group = typeSystemProgramSourceFileGroup(normalized, authoredSources, overlaySourcePaths);
   const key = `${group.groupKind}:${group.groupKey}`;
   const current = groups.get(key) ?? {
     groupKind: group.groupKind,
@@ -1197,7 +1192,7 @@ function recordTypeSystemProgramSourceFileGroup(
 
 function typeSystemProgramSourceFileGroup(
   normalizedFileName: string,
-  projectRootPath: string,
+  authoredSources: AuthoredSourceBoundary,
   overlaySourcePaths: ReadonlySet<string>,
 ): Pick<TypeSystemProgramSourceFileGroupStats, 'groupKind' | 'groupKey'> {
   if (overlaySourcePaths.has(normalizedFileName)) {
@@ -1210,7 +1205,7 @@ function typeSystemProgramSourceFileGroup(
   if (packageName != null) {
     return { groupKind: 'node-module-package', groupKey: packageName };
   }
-  if (isTypeSystemPathAtOrUnder(normalizedFileName, projectRootPath)) {
+  if (authoredSources.contains(normalizedFileName)) {
     return { groupKind: 'project-source', groupKey: 'project' };
   }
   return normalizedFileName.endsWith('.d.ts')
@@ -1220,7 +1215,7 @@ function typeSystemProgramSourceFileGroup(
 
 function typeSystemProgramSourceFileRole(
   sourceFile: ts.SourceFile,
-  projectRootPath: string,
+  authoredSources: AuthoredSourceBoundary,
   overlaySourcePaths: ReadonlySet<string>,
 ): SourceFileRole {
   const normalized = canonicalTypeSystemPath(sourceFile.fileName);
@@ -1233,7 +1228,7 @@ function typeSystemProgramSourceFileRole(
   if (typeSystemNodeModulePackageName(normalized) != null) {
     return SourceFileRole.ExternalSource;
   }
-  if (isTypeSystemPathAtOrUnder(normalized, projectRootPath)) {
+  if (authoredSources.contains(normalized)) {
     return SourceFileRole.Unknown;
   }
   return SourceFileRole.ExternalSource;
@@ -1300,10 +1295,8 @@ function typeSystemProgramRootNames(
       addUniqueTypeSystemRootName(rootNames, seen, fileName);
     }
   }
-  const projectRootPath = canonicalTypeSystemPath(project.rootDir);
   for (const source of evaluatedSources) {
-    const sourcePath = canonicalTypeSystemPath(source.sourceFile.fileName);
-    if (!isTypeSystemPathAtOrUnder(sourcePath, projectRootPath)) {
+    if (!project.authoredSources.contains(source.sourceFile.fileName)) {
       continue;
     }
     if (!isTypeSystemProgramRootSourceFile(source.sourceFile.fileName)) {
@@ -1355,12 +1348,12 @@ function isTypeSystemProgramRootAdmission(
 
 function typeSystemProjectProgramDiagnosticSourceFile(
   fileName: string,
-  projectRootPath: string,
+  authoredSources: AuthoredSourceBoundary,
   overlaySourcePaths: ReadonlySet<string>,
   diagnosticSourcePaths: ReadonlySet<string> | null,
 ): boolean {
   const normalized = canonicalTypeSystemPath(fileName);
-  return isTypeSystemPathAtOrUnder(normalized, projectRootPath)
+  return authoredSources.contains(normalized)
     && !overlaySourcePaths.has(normalized)
     && !normalized.includes('/node_modules/')
     && !isDefaultLibrarySourceFile(normalized)

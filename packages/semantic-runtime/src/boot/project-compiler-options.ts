@@ -16,6 +16,7 @@ import {
   safeIsDirectory,
   safeReadDirectory,
 } from './host-files.js';
+import type { AuthoredSourceBoundary } from './source-boundary.js';
 
 /** Process/toolchain facts that participate in semantic-runtime's effective compiler options. */
 export class ProjectCompilerOptionsEnvironment implements ComputationRead {
@@ -77,6 +78,7 @@ interface ProjectCompilerOptionsValues {
 export function buildProjectCompilerOptionsResult(
   inputGeneration: SemanticRuntimeProjectInputGeneration,
   rootDir: string,
+  authoredSources: AuthoredSourceBoundary,
   discoveryRootDirs: readonly string[] = [],
 ): ProjectCompilerOptionsResult {
   const inputReadScope = inputGeneration.createReadScope('project-compiler-options');
@@ -86,6 +88,7 @@ export function buildProjectCompilerOptionsResult(
     rootDir,
     discoveryRootDirs,
     environment,
+    authoredSources,
   );
   return new ProjectCompilerOptionsResult(
     values.options,
@@ -102,6 +105,7 @@ function readProjectCompilerOptions(
   rootDir: string,
   discoveryRootDirs: readonly string[],
   environment: ProjectCompilerOptionsEnvironment,
+  authoredSources: AuthoredSourceBoundary,
 ): ProjectCompilerOptionsValues {
   const defaults = defaultProjectCompilerOptions(host, rootDir, discoveryRootDirs, environment);
   const configFile = path.join(rootDir, 'tsconfig.json');
@@ -153,7 +157,7 @@ function readProjectCompilerOptions(
     options: merged,
     configFilePath: configFile,
     diagnostics: parsed.errors,
-    rootFileNames: parsed.fileNames,
+    rootFileNames: parsed.fileNames.filter((fileName) => authoredSources.contains(fileName)),
   };
 }
 

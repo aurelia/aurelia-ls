@@ -1,6 +1,9 @@
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { canonicalTypeSystemPath } from "@aurelia-ls/semantic-runtime";
+import {
+  AuthoredSourceBoundary,
+  canonicalTypeSystemPath,
+} from "@aurelia-ls/semantic-runtime";
 import { URI } from "vscode-uri";
 
 export type DocumentUri = string;
@@ -14,15 +17,43 @@ export interface WorkspaceDocumentLocation {
 export class WorkspaceDocumentUris {
   private root: URI | null = null;
   private rootFilePath: string | null = null;
+  private authoredSources: AuthoredSourceBoundary | null = null;
 
-  configure(rootUri: DocumentUri): void {
+  configure(rootUri: DocumentUri, excludedRootUris: readonly DocumentUri[] = []): void {
     const root = URI.parse(rootUri);
+    const rootFilePath = hostPathForDocumentUri(rootUri, root);
+    const excludedRootFilePaths = excludedRootUris.map((excludedRootUri) => {
+      const excludedRoot = URI.parse(excludedRootUri);
+      if (!sameUriSpace(root, excludedRoot)) {
+        throw new Error(
+          `Excluded workspace root '${excludedRootUri}' does not share the workspace URI space '${rootUri}'.`,
+        );
+      }
+      return hostPathForDocumentUri(excludedRootUri, excludedRoot);
+    });
     this.root = root;
-    this.rootFilePath = hostPathForDocumentUri(rootUri, root);
+    this.rootFilePath = rootFilePath;
+    this.authoredSources = new AuthoredSourceBoundary(rootFilePath, excludedRootFilePaths);
   }
 
   get workspaceRoot(): string | null {
     return this.rootFilePath;
+  }
+
+  get excludedWorkspaceRoots(): readonly string[] {
+    return this.authoredSources?.excludedRootDirs ?? [];
+  }
+
+  /** True only for incoming authored documents owned by this workspace session. */
+  ownsDocument(input: DocumentUri): boolean {
+    if (this.root == null || this.authoredSources == null) return false;
+    if (!looksLikeHostPath(input) && !sameUriSpace(this.root, URI.parse(input))) return false;
+    const hostPath = this.hostPath(input);
+    return hostPath != null && this.authoredSources.contains(hostPath);
+  }
+
+  authoredHostPath(input: DocumentUri): string | null {
+    return this.ownsDocument(input) ? this.hostPath(input) : null;
   }
 
   resolve(input: DocumentUri): WorkspaceDocumentLocation {
@@ -92,9 +123,7 @@ export class WorkspaceDocumentUris {
   }
 
   private belongsToWorkspaceUriSpace(uri: URI): boolean {
-    return this.root != null
-      && uri.scheme === this.root.scheme
-      && uri.authority === this.root.authority;
+    return this.root != null && sameUriSpace(this.root, uri);
   }
 
   private workspaceRelativePath(hostPath: string): string | null {
@@ -106,6 +135,10 @@ export class WorkspaceDocumentUris {
         ? null
         : relative;
   }
+}
+
+function sameUriSpace(left: URI, right: URI): boolean {
+  return left.scheme === right.scheme && left.authority === right.authority;
 }
 
 function toFileUri(filePath: string): DocumentUri {

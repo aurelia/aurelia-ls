@@ -75,3 +75,6 @@ export {
   SemanticProjectAureliaSourceSignalKind,
   SemanticProjectShapeKind,
 } from '../boot/project-shape.js';
+export {
+  AuthoredSourceBoundary,
+} from '../boot/source-boundary.js';

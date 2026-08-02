@@ -11,6 +11,10 @@ import {
   safeReadDirectory,
   isHostPathWithin,
 } from './host-files.js';
+import {
+  AuthoredSourceBoundary,
+  authoredSourceExclusionsWithin,
+} from './source-boundary.js';
 
 const DISCOVERY_EXCLUDED_DIRECTORIES = new Set([
   'coverage',
@@ -26,19 +30,27 @@ export function discoverBootProjects(
   rootDir: string,
   host: SemanticRuntimeProjectInputHost,
   mode: BootProjectDiscoveryMode | `${BootProjectDiscoveryMode}` = BootProjectDiscoveryMode.PackageTsconfig,
+  excludedWorkspaceRoots: readonly string[] = [],
 ): readonly BootProjectInput[] {
   const absoluteRoot = path.resolve(rootDir);
+  const workspaceBoundary = new AuthoredSourceBoundary(absoluteRoot, excludedWorkspaceRoots);
   if (mode === BootProjectDiscoveryMode.SingleRoot) {
-    return [{ rootDir: absoluteRoot }];
+    return [{
+      rootDir: absoluteRoot,
+      excludedSourceRoots: workspaceBoundary.excludedRootDirs,
+    }];
   }
   if (mode !== BootProjectDiscoveryMode.PackageTsconfig) {
-    throw new Error(`Unknown boot project discovery mode '${mode}'.`);
+    throw new Error(`Unknown boot project discovery mode '${String(mode)}'.`);
   }
 
-  const packageRoots = discoverPackageRoots(host, absoluteRoot);
+  const packageRoots = discoverPackageRoots(host, workspaceBoundary);
   const projectRoots = packageRoots.filter((directory) => hasProjectManifest(host, directory));
   if (projectRoots.length === 0) {
-    return [{ rootDir: absoluteRoot }];
+    return [{
+      rootDir: absoluteRoot,
+      excludedSourceRoots: workspaceBoundary.excludedRootDirs,
+    }];
   }
 
   const uniqueRoots = [...new Set(projectRoots.map((root) => path.resolve(root)))]
@@ -54,18 +66,26 @@ export function discoverBootProjects(
     return {
       rootDir: projectRoot,
       projectKey,
-      sourceDiscoveryOptions: {
-        excludedSubtrees: new Set(nestedPackageRoots),
-      },
+      excludedSourceRoots: [
+        ...authoredSourceExclusionsWithin(projectRoot, workspaceBoundary.excludedRootDirs),
+        ...nestedPackageRoots,
+      ],
     };
   });
 }
 
-function discoverPackageRoots(host: SemanticRuntimeProjectInputHost, rootDir: string): readonly string[] {
+function discoverPackageRoots(
+  host: SemanticRuntimeProjectInputHost,
+  boundary: AuthoredSourceBoundary,
+): readonly string[] {
   const result: string[] = [];
 
   function visit(directory: string, depth: number): void {
-    if (depth > MAX_PROJECT_DISCOVERY_DEPTH || !host.directoryExists(directory)) {
+    if (
+      depth > MAX_PROJECT_DISCOVERY_DEPTH
+      || !boundary.contains(directory)
+      || !host.directoryExists(directory)
+    ) {
       return;
     }
     if (hasPackageManifest(host, directory)) {
@@ -86,7 +106,7 @@ function discoverPackageRoots(host: SemanticRuntimeProjectInputHost, rootDir: st
     }
   }
 
-  visit(rootDir, 0);
+  visit(boundary.rootDir, 0);
   return result;
 }
 

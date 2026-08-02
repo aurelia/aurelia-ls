@@ -15,6 +15,7 @@ function createLogger() {
 
 describe("createServerContext", () => {
   test("ensureProgramDocument returns open documents without syncing a second workspace", () => {
+    const rootUri = pathToFileURL(path.resolve("test-workspace")).toString();
     const uri = pathToFileURL(path.resolve("test-workspace/component.html")).toString();
     const live = TextDocument.create(uri, "html", 1, "<template>${name}</template>");
     const documents = {
@@ -26,6 +27,7 @@ describe("createServerContext", () => {
       documents: documents as never,
       logger: createLogger(),
     });
+    ctx.configureWorkspace(rootUri);
 
     expect(ctx.ensureProgramDocument(uri)).toBe(live);
     expect(ctx.ensureProgramDocument(uri)).toBe(live);
@@ -33,6 +35,7 @@ describe("createServerContext", () => {
   });
 
   test("lookupText can resolve an open document by canonical equivalent URI", () => {
+    const rootUri = pathToFileURL(path.resolve("test-workspace")).toString();
     const uri = pathToFileURL(path.resolve("test-workspace/component.html")).toString();
     const live = TextDocument.create(uri, "html", 1, "<template>${name}</template>");
     const documents = {
@@ -44,7 +47,31 @@ describe("createServerContext", () => {
       documents: documents as never,
       logger: createLogger(),
     });
+    ctx.configureWorkspace(rootUri);
 
     expect(ctx.lookupText(uri)).toBe("<template>${name}</template>");
+  });
+
+  test("does not expose synchronized text from an excluded workspace subtree", () => {
+    const rootUri = pathToFileURL(path.resolve("test-workspace")).toString();
+    const excludedRootUri = pathToFileURL(path.resolve("test-workspace/packages/disabled")).toString();
+    const uri = pathToFileURL(path.resolve("test-workspace/packages/disabled/component.html")).toString();
+    const live = TextDocument.create(uri, "html", 1, "<template>${name}</template>");
+    const documents = {
+      get: vi.fn(() => live),
+      all: vi.fn(() => [live]),
+    };
+    const ctx = createServerContext({
+      connection: {} as never,
+      documents: documents as never,
+      logger: createLogger(),
+    });
+    ctx.configureWorkspace(rootUri, [excludedRootUri]);
+
+    expect(ctx.ownsDocument(uri)).toBe(false);
+    expect(ctx.openDocument(uri)).toBeNull();
+    expect(ctx.ensureProgramDocument(uri)).toBeNull();
+    expect(ctx.lookupText(uri)).toBeNull();
+    expect(ctx.documentUris.hostPath(uri)).toBe(path.resolve("test-workspace/packages/disabled/component.html"));
   });
 });

@@ -613,6 +613,7 @@ export interface SemanticRuntimeProjectInput {
   readonly projectKey?: string;
   readonly sourceFiles?: BootProjectInput['sourceFiles'];
   readonly sourceDiscoveryOptions?: BootProjectInput['sourceDiscoveryOptions'];
+  readonly excludedSourceRoots?: BootProjectInput['excludedSourceRoots'];
 }
 
 export interface SemanticRuntimeOptions {
@@ -624,6 +625,8 @@ export interface SemanticRuntimeOptions {
   readonly projects?: readonly SemanticRuntimeProjectInput[];
   /** Project discovery strategy used when projects are omitted. */
   readonly projectDiscovery?: BootProjectDiscoveryMode | `${BootProjectDiscoveryMode}`;
+  /** Workspace-relative or absolute descendant roots excluded from authored project/source membership. */
+  readonly excludedWorkspaceRoots?: readonly string[];
   /** Sole authority for captured project source/config generations. */
   readonly projectInputAuthority?: SemanticRuntimeProjectInputAuthority;
 }

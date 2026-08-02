@@ -99,11 +99,14 @@ Set `aurelia.activationMode` per workspace folder when automatic admission is no
 
 - `auto` uses candidate evidence followed by semantic project-shape confirmation;
 - `on` keeps tooling active for dynamic, incomplete, or unusual project layouts;
-- `off` prevents tooling from starting for that folder.
+- `off` excludes that folder and its complete subtree from Aurelia tooling.
 
-Disjoint multi-root folders receive independent language-server sessions. Semantic-runtime owns nested projects inside
-each root, while untitled and out-of-workspace documents remain unclaimed. Remote folders are supported when the
-extension host can access their filesystem; virtual workspaces are not currently supported.
+An `off` subtree cannot be re-enabled by a nested `on` folder. An admitted outer project may still read code under an
+excluded subtree when ordinary imports make it a dependency, but the extension will not directly own its documents,
+publish its diagnostics, or include it as authored project source. Disjoint multi-root folders receive independent
+language-server sessions. Semantic-runtime owns admitted nested projects inside each root, while untitled and
+out-of-workspace documents remain unclaimed. Remote folders are supported when the extension host can access their
+filesystem; virtual workspaces are not currently supported.
 
 ## Getting Started
 

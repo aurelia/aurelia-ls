@@ -25,8 +25,9 @@ export interface ServerContext {
   /** Client can preserve CodeAction.data and lazily resolve the edit property. */
   clientSupportsCodeActionResolveEdit: boolean;
 
-  configureWorkspace(rootUri: DocumentUri): void;
+  configureWorkspace(rootUri: DocumentUri, excludedRootUris?: readonly DocumentUri[]): void;
 
+  ownsDocument(uri: DocumentUri): boolean;
   openDocument(uri: DocumentUri): TextDocument | null;
   ensureProgramDocument(uri: string): TextDocument | null;
   lookupDocumentSnapshot(uri: DocumentUri): DocumentSnapshot | null;
@@ -82,6 +83,9 @@ export function createServerContext(init: ServerContextInit): ServerContext {
   }
 
   function lookupDocumentSnapshot(uri: DocumentUri): DocumentSnapshot | null {
+    if (!documentUris.ownsDocument(uri)) {
+      return null;
+    }
     const live = openDocument(uri);
     if (live) {
       return {
@@ -109,6 +113,9 @@ export function createServerContext(init: ServerContextInit): ServerContext {
   }
 
   function openDocument(uri: DocumentUri): TextDocument | null {
+    if (!documentUris.ownsDocument(uri)) {
+      return null;
+    }
     const direct = documents.get(uri);
     if (direct) {
       return direct;
@@ -126,12 +133,13 @@ export function createServerContext(init: ServerContextInit): ServerContext {
     documentUris,
 
     get workspaceRoot() { return documentUris.workspaceRoot; },
-    configureWorkspace(rootUri) {
-      documentUris.configure(rootUri);
+    configureWorkspace(rootUri, excludedRootUris = []) {
+      documentUris.configure(rootUri, excludedRootUris);
       semanticRuntime.configureWorkspace();
     },
     clientSupportsCodeActionResolveEdit: false,
 
+    ownsDocument: (uri) => documentUris.ownsDocument(uri),
     openDocument,
     ensureProgramDocument,
     lookupDocumentSnapshot,

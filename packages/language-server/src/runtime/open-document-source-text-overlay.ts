@@ -25,7 +25,10 @@ export class OpenDocumentSourceTextOverlay implements SemanticRuntimeSourceTextO
 
   private openDocumentForFileName(fileName: string): TextDocument | null {
     for (const document of this.documents.all()) {
-      if (this.documentUris.sameDocument(document.uri, fileName)) {
+      if (
+        this.documentUris.ownsDocument(document.uri)
+        && this.documentUris.sameDocument(document.uri, fileName)
+      ) {
         return document;
       }
     }

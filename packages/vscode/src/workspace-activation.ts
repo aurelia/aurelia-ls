@@ -8,7 +8,7 @@ export const enum AureliaActivationMode {
   Auto = "auto",
   /** Retain a workspace session even when automatic project-shape confirmation is unavailable. */
   On = "on",
-  /** Do not create a language-server session for this workspace ownership root. */
+  /** Exclude this workspace-folder subtree from Aurelia tooling. */
   Off = "off",
 }
 
@@ -22,6 +22,52 @@ export interface WorkspaceActivationAdmission {
   readonly folder: WorkspaceFolder;
   readonly mode: AureliaActivationMode;
   readonly evidence: WorkspaceActivationEvidenceKind;
+}
+
+/** Resource-scoped activation modes interpreted as one non-overlapping workspace topology. */
+export class WorkspaceActivationTopology {
+  readonly disabledFolders: readonly WorkspaceFolder[];
+  private readonly modesByFolderKey: ReadonlyMap<string, AureliaActivationMode>;
+
+  constructor(
+    readonly folders: readonly WorkspaceFolder[],
+    readMode: (folder: WorkspaceFolder) => AureliaActivationMode,
+  ) {
+    this.modesByFolderKey = new Map(folders.map((folder) => [workspaceFolderKey(folder), readMode(folder)]));
+    this.disabledFolders = orderWorkspaceFolders(
+      folders.filter((folder) => this.modeFor(folder) === AureliaActivationMode.Off),
+    );
+  }
+
+  modeFor(folder: WorkspaceFolder): AureliaActivationMode {
+    return this.modesByFolderKey.get(workspaceFolderKey(folder)) ?? AureliaActivationMode.Auto;
+  }
+
+  isDisabled(uri: Uri): boolean {
+    return this.disabledFolders.some((folder) => workspaceFolderContainsUri(folder, uri));
+  }
+
+  excludedFoldersFor(owner: WorkspaceFolder): readonly WorkspaceFolder[] {
+    const descendants = this.disabledFolders.filter((folder) =>
+      workspaceFolderKey(folder) !== workspaceFolderKey(owner)
+      && workspaceFolderContainsUri(owner, folder.uri)
+    );
+    const outermost: WorkspaceFolder[] = [];
+    for (const folder of descendants) {
+      if (outermost.some((candidate) => workspaceFolderContainsUri(candidate, folder.uri))) {
+        continue;
+      }
+      outermost.push(folder);
+    }
+    return outermost;
+  }
+}
+
+export function readWorkspaceActivationTopology(vscode: VscodeApi): WorkspaceActivationTopology {
+  return new WorkspaceActivationTopology(
+    vscode.workspace.workspaceFolders ?? [],
+    (folder) => readWorkspaceActivationMode(vscode, folder),
+  );
 }
 
 const PACKAGE_MANIFEST_GLOB = "**/package.json";
@@ -79,6 +125,13 @@ export function orderWorkspaceAdmissions(
   return [...admissions].sort((left, right) =>
     workspacePathLength(left.folder) - workspacePathLength(right.folder)
     || left.folder.uri.toString().localeCompare(right.folder.uri.toString())
+  );
+}
+
+function orderWorkspaceFolders(folders: readonly WorkspaceFolder[]): readonly WorkspaceFolder[] {
+  return [...folders].sort((left, right) =>
+    workspacePathLength(left) - workspacePathLength(right)
+    || left.uri.toString().localeCompare(right.uri.toString())
   );
 }
 

@@ -553,7 +553,8 @@ export class SemanticRuntimeProjectInputAuthority {
   private nextGenerationOrdinal = 1;
 
   constructor(
-    private readonly liveHost: SemanticRuntimeProjectInputHost = nodeSemanticRuntimeProjectInputHost,
+    /** Uncaptured host used for workspace topology before project generations exist. */
+    readonly host: SemanticRuntimeProjectInputHost = nodeSemanticRuntimeProjectInputHost,
   ) {}
 
   /** Synchronously revoke captured generations after an editor/host source event. */
@@ -603,23 +604,23 @@ export class SemanticRuntimeProjectInputAuthority {
   }
 
   readLiveFile(fileName: string): string | undefined {
-    return this.liveHost.readFile(fileName);
+    return this.host.readFile(fileName);
   }
 
   liveFileExists(fileName: string): boolean {
-    return this.liveHost.fileExists(fileName);
+    return this.host.fileExists(fileName);
   }
 
   readLiveDirectory(directoryName: string): readonly string[] {
-    return this.liveHost.readDirectory(directoryName);
+    return this.host.readDirectory(directoryName);
   }
 
   liveDirectoryExists(directoryName: string): boolean {
-    return this.liveHost.directoryExists(directoryName);
+    return this.host.directoryExists(directoryName);
   }
 
   readLiveRealpath(fileName: string): string {
-    return this.liveHost.realpath(fileName);
+    return this.host.realpath(fileName);
   }
 
   matchLiveFiles(
@@ -629,7 +630,7 @@ export class SemanticRuntimeProjectInputAuthority {
     includes: readonly string[],
     depth?: number,
   ): readonly string[] {
-    return this.liveHost.matchFiles(rootDir, extensions, excludes, includes, depth);
+    return this.host.matchFiles(rootDir, extensions, excludes, includes, depth);
   }
 }
 

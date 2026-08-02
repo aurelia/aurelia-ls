@@ -154,6 +154,86 @@ describe("AureliaLanguageClient workspace ownership", () => {
     expect(harness.clients.every((client) => client.stop.mock.calls.length === 1)).toBe(true);
   });
 
+  test("treats nested off as a hard subtree boundary and replaces the owning session when it changes", async () => {
+    const configuration: Record<string, Record<string, unknown>> = {
+      "file:///work/repo/packages/disabled": { "aurelia.activationMode": "off" },
+      "file:///work/repo/packages/disabled/examples/reentry": { "aurelia.activationMode": "on" },
+    };
+    const { vscode } = createVscodeApi({
+      workspaceFolders: [
+        { name: "outer", uri: "file:///work/repo" },
+        { name: "disabled", uri: "file:///work/repo/packages/disabled" },
+        { name: "reentry", uri: "file:///work/repo/packages/disabled/examples/reentry" },
+      ],
+      files: {
+        "file:///work/repo/package.json": JSON.stringify({ dependencies: { aurelia: "latest" } }),
+        "file:///work/repo/packages/disabled/package.json": JSON.stringify({ dependencies: { aurelia: "latest" } }),
+        "file:///work/repo/packages/disabled/examples/reentry/package.json": JSON.stringify({ dependencies: { aurelia: "latest" } }),
+      },
+      workspaceConfiguration: configuration,
+    });
+    const harness = createClientHarness(new Map([
+      ["file:///work/repo", workspaceStatus("app-world")],
+    ]));
+    const manager = createManager(vscode, harness);
+
+    await manager.start(stubExtensionContext(vscode));
+
+    expect(manager.sessions).toHaveLength(1);
+    expect(manager.sessions[0]?.excludedFolders.map((folder) => folder.name)).toEqual(["disabled"]);
+    expect(harness.clients[0]?.options.initializationOptions).toEqual({
+      excludedWorkspaceRootUris: ["file:///work/repo/packages/disabled"],
+    });
+    expect(manager.clientForUri("file:///work/repo/src/main.ts")).toBe(harness.clients[0]?.raw);
+    expect(manager.clientForUri("file:///work/repo/packages/disabled/src/main.ts")).toBeUndefined();
+    expect(manager.clientForUri("file:///work/repo/packages/disabled/examples/reentry/src/main.ts")).toBeUndefined();
+
+    configuration["file:///work/repo/packages/disabled"] = { "aurelia.activationMode": "auto" };
+    await manager.reconcile();
+
+    expect(harness.clients).toHaveLength(2);
+    expect(harness.clients[0]?.stop).toHaveBeenCalledOnce();
+    expect(harness.clients[0]!.stop.mock.invocationCallOrder[0]).toBeLessThan(
+      harness.clients[1]!.start.mock.invocationCallOrder[0]!,
+    );
+    expect(manager.sessions).toHaveLength(1);
+    expect(manager.sessions[0]?.excludedFolders).toEqual([]);
+    expect(harness.clients[1]?.options.initializationOptions).toEqual({ excludedWorkspaceRootUris: [] });
+    expect(manager.clientForUri("file:///work/repo/packages/disabled/src/main.ts")).toBe(harness.clients[1]?.raw);
+    await manager.stop();
+  });
+
+  test("does not serialize workspace reconciliation behind server process retirement", async () => {
+    const { vscode } = createVscodeApi({
+      workspaceFolders: [{ name: "app", uri: "file:///work/app" }],
+      files: {
+        "file:///work/app/package.json": JSON.stringify({ dependencies: { aurelia: "latest" } }),
+      },
+    });
+    const stopGate = deferred<void>();
+    const harness = createClientHarness(new Map([
+      ["file:///work/app", workspaceStatus("app-world")],
+    ]), {
+      clientStop: () => stopGate.promise,
+    });
+    const manager = createManager(vscode, harness);
+    await manager.start(stubExtensionContext(vscode));
+
+    vscode.workspace.workspaceFolders?.splice(0, 1);
+    const reconciliation = manager.reconcile();
+    const reconciled = await Promise.race([
+      reconciliation.then(() => true),
+      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 100)),
+    ]);
+
+    expect(reconciled).toBe(true);
+    expect(manager.sessions).toEqual([]);
+    expect(harness.clients[0]?.stop).toHaveBeenCalledWith(30_000);
+
+    stopGate.resolve(undefined);
+    await manager.stop();
+  });
+
   test("rejects a false-positive outer candidate before assigning its nested Aurelia workspace", async () => {
     const { vscode } = createVscodeApi({
       workspaceFolders: [

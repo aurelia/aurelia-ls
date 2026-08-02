@@ -3,11 +3,12 @@ const path = require("path");
 const vscode = require("vscode");
 
 const aureliaWorkspace = process.env.AURELIA_LS_EXTENSION_HOST_WORKSPACE;
+const excludedAureliaWorkspace = process.env.AURELIA_LS_EXTENSION_HOST_EXCLUDED_WORKSPACE;
 const plainTypeScriptWorkspace = process.env.AURELIA_LS_EXTENSION_HOST_PLAIN_WORKSPACE;
 const extensionId = "AureliaEffect.aurelia-2";
 
-if (!aureliaWorkspace || !plainTypeScriptWorkspace) {
-  throw new Error("Both extension-host workspace paths are required.");
+if (!aureliaWorkspace || !excludedAureliaWorkspace || !plainTypeScriptWorkspace) {
+  throw new Error("All extension-host workspace paths are required.");
 }
 
 suite("extension-host product surface", () => {
@@ -125,6 +126,18 @@ suite("extension-host product surface", () => {
     assert(entries.flatMap(([, edits]) => edits).every((entry) => entry.newText === "standaloneValue"));
   });
 
+  test("hard-excludes a nested workspace folder configured off", async () => {
+    const uri = vscode.Uri.file(path.join(excludedAureliaWorkspace, "src", "excluded-view.html"));
+    const document = await vscode.workspace.openTextDocument(uri);
+    await vscode.window.showTextDocument(document, { preview: false });
+    const position = positionIn(document, "excludedMessage");
+
+    const hovers = await vscode.commands.executeCommand("vscode.executeHoverProvider", uri, position);
+    const definitions = await vscode.commands.executeCommand("vscode.executeDefinitionProvider", uri, position);
+    assert.deepStrictEqual(hovers ?? [], []);
+    assert.deepStrictEqual(definitions ?? [], []);
+  });
+
   test("retires and re-admits the Aurelia root without leaking a session", async () => {
     const document = await showAureliaDocument("src/my-app.html");
     const folder = vscode.workspace.workspaceFolders?.find((candidate) =>
@@ -190,7 +203,7 @@ async function definitionsAt(document, anchor, token = anchor) {
   });
 }
 
-function positionIn(document, anchor, token) {
+function positionIn(document, anchor, token = anchor) {
   const text = document.getText();
   const anchorOffset = text.indexOf(anchor);
   assert.notStrictEqual(anchorOffset, -1, `Expected anchor ${anchor}.`);

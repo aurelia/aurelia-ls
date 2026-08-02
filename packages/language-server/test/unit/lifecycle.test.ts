@@ -57,6 +57,9 @@ function createLifecycleHarness() {
       return generation;
     }),
     currentGeneration: vi.fn(() => generation),
+    invalidateRequests: vi.fn(() => {
+      generation = createGeneration(generation.sourceGeneration + 1, generation.workspaceGeneration);
+    }),
     dispose: vi.fn(async () => undefined),
   };
   const connection = {
@@ -104,11 +107,14 @@ function createLifecycleHarness() {
     logger,
     clientSupportsCodeActionResolveEdit: false,
     get workspaceRoot() { return documentUris.workspaceRoot; },
-    configureWorkspace: vi.fn((rootUri: string) => {
-      documentUris.configure(rootUri);
+    configureWorkspace: vi.fn((rootUri: string, excludedRootUris: readonly string[] = []) => {
+      documentUris.configure(rootUri, excludedRootUris);
       semanticRuntime.configureWorkspace();
     }),
-    openDocument: (uri: string) => openDocuments.get(documentUris.key(uri)) ?? null,
+    ownsDocument: (uri: string) => documentUris.ownsDocument(uri),
+    openDocument: (uri: string) => documentUris.ownsDocument(uri)
+      ? openDocuments.get(documentUris.key(uri)) ?? null
+      : null,
     lookupText: vi.fn(() => null),
   };
 
@@ -166,7 +172,7 @@ describe("initialization", () => {
       },
     } as never);
 
-    expect(harness.ctx.configureWorkspace).toHaveBeenCalledWith(fallbackRootUri);
+    expect(harness.ctx.configureWorkspace).toHaveBeenCalledWith(fallbackRootUri, []);
     expect(harness.clientSupport).toEqual({
       configurationPull: true,
       configurationChangeRegistration: true,
@@ -189,9 +195,42 @@ describe("initialization", () => {
       capabilities: {},
     } as never)).toThrowError(expect.objectContaining({ code: ErrorCodes.InvalidParams }));
   });
+
+  test("configures typed nested workspace exclusions and rejects malformed topology", () => {
+    const harness = createLifecycleHarness();
+    const excludedUri = workspaceFileUri("packages/disabled");
+
+    handleInitialize(harness.ctx as never, {
+      rootUri: workspaceUri,
+      initializationOptions: { excludedWorkspaceRootUris: [excludedUri] },
+      capabilities: {},
+    } as never);
+    expect(harness.ctx.configureWorkspace).toHaveBeenCalledWith(workspaceUri, [excludedUri]);
+
+    expect(() => handleInitialize(harness.ctx as never, {
+      rootUri: workspaceUri,
+      initializationOptions: { excludedWorkspaceRootUris: "not-an-array" },
+      capabilities: {},
+    } as never)).toThrowError(expect.objectContaining({ code: ErrorCodes.InvalidParams }));
+  });
 });
 
 describe("document source authority", () => {
+  test("ignores synchronized documents inside an excluded workspace subtree", async () => {
+    const harness = createLifecycleHarness();
+    harness.ctx.configureWorkspace(workspaceUri, [workspaceFileUri("packages/disabled")]);
+    const doc = document(workspaceFileUri("packages/disabled/src/my-app.html"));
+
+    harness.emitOpen(doc);
+    harness.synchronize(doc);
+    harness.close(doc);
+    harness.watch([{ uri: doc.uri, type: FileChangeType.Changed }]);
+    await settleAsyncWork();
+
+    expect(harness.semanticRuntime.recordSourceTextChanged).not.toHaveBeenCalled();
+    expect(harness.semanticRuntime.recordProjectTopologyChanged).not.toHaveBeenCalled();
+  });
+
   test("ignores events outside semantic-runtime source admission", async () => {
     const harness = createLifecycleHarness();
     const doc = TextDocument.create(
@@ -401,7 +440,7 @@ describe("configuration and shutdown", () => {
     );
   });
 
-  test("shares one shutdown and drains foreground operations before disposal", async () => {
+  test("shares one prompt shutdown and retires resources after foreground operations settle", async () => {
     const harness = createLifecycleHarness();
     let resolveOperation!: () => void;
     const operation = runServerOperation(
@@ -413,11 +452,13 @@ describe("configuration and shutdown", () => {
     const first = harness.handlers.shutdown?.();
     const second = harness.handlers.shutdown?.();
     expect(first).toBe(second);
+    await first;
+    expect(harness.semanticRuntime.invalidateRequests).toHaveBeenCalledOnce();
     expect(harness.semanticRuntime.dispose).not.toHaveBeenCalled();
 
     resolveOperation();
     await operation;
-    await first;
+    await settleAsyncWork();
 
     expect(harness.semanticRuntime.dispose).toHaveBeenCalledOnce();
   });
@@ -429,12 +470,36 @@ describe("configuration and shutdown", () => {
       harness.synchronize(document());
 
       await harness.handlers.shutdown?.();
+      await settleAsyncWork();
       await vi.advanceTimersByTimeAsync(300);
       await settleAsyncWork();
 
       expect(harness.semanticRuntime.dispose).toHaveBeenCalledOnce();
       expect(harness.connection.sendNotification).not.toHaveBeenCalled();
       expect(harness.connection.languages.diagnostics.refresh).not.toHaveBeenCalled();
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  test("does not let an unanswered client refresh acknowledgement block shutdown", async () => {
+    vi.useFakeTimers();
+    try {
+      const harness = createLifecycleHarness();
+      harness.clientSupport.diagnosticRefresh = true;
+      harness.connection.languages.diagnostics.refresh.mockImplementationOnce(
+        () => new Promise<void>(() => {}),
+      );
+      harness.synchronize(document());
+
+      await vi.advanceTimersByTimeAsync(300);
+      await settleAsyncWork();
+      expect(harness.connection.languages.diagnostics.refresh).toHaveBeenCalledOnce();
+
+      await harness.handlers.shutdown?.();
+      await settleAsyncWork();
+      expect(harness.semanticRuntime.dispose).toHaveBeenCalledOnce();
     } finally {
       vi.clearAllTimers();
       vi.useRealTimers();

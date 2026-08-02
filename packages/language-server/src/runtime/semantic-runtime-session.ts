@@ -228,6 +228,7 @@ export class SemanticRuntimeLspSession {
   private readonly documentUris: WorkspaceDocumentUris;
   private runtime: Promise<SemanticRuntime> | null = null;
   private workspaceRoot: string | null;
+  private workspaceBoundaryKey: string;
   private workspaceGeneration = 0;
 
   constructor(
@@ -235,6 +236,7 @@ export class SemanticRuntimeLspSession {
   ) {
     this.documentUris = options.documentUris;
     this.workspaceRoot = options.documentUris.workspaceRoot;
+    this.workspaceBoundaryKey = semanticWorkspaceBoundaryKey(options.documentUris);
     this.projectInputAuthority = new SemanticRuntimeProjectInputAuthority(
       new NodeSemanticRuntimeProjectInputHost(
         new OpenDocumentSourceTextOverlay(options.documents, options.documentUris),
@@ -244,10 +246,12 @@ export class SemanticRuntimeLspSession {
 
   configureWorkspace(): void {
     const workspaceRoot = this.documentUris.workspaceRoot;
-    if (this.workspaceRoot === workspaceRoot) {
+    const workspaceBoundaryKey = semanticWorkspaceBoundaryKey(this.documentUris);
+    if (this.workspaceRoot === workspaceRoot && this.workspaceBoundaryKey === workspaceBoundaryKey) {
       return;
     }
     this.workspaceRoot = workspaceRoot;
+    this.workspaceBoundaryKey = workspaceBoundaryKey;
     this.recordProjectTopologyChanged();
   }
 
@@ -261,6 +265,11 @@ export class SemanticRuntimeLspSession {
   recordSourceTextChanged(): SemanticRuntimeLspGeneration {
     this.projectInputAuthority.advance();
     return this.currentGeneration();
+  }
+
+  /** Revoke every captured request guard without inventing a source or topology change. */
+  invalidateRequests(): void {
+    this.projectInputAuthority.advance();
   }
 
   async dispose(): Promise<void> {
@@ -659,6 +668,7 @@ export class SemanticRuntimeLspSession {
     this.runtime ??= createSemanticRuntime({
       workspaceRoot: this.workspaceRoot,
       storeKey: `lsp:${this.workspaceGeneration}:${this.workspaceRoot}`,
+      excludedWorkspaceRoots: this.documentUris.excludedWorkspaceRoots,
       projectInputAuthority: this.projectInputAuthority,
     });
     const runtime = await this.runtime;
@@ -667,7 +677,7 @@ export class SemanticRuntimeLspSession {
   }
 
   private documentHostPath(document: TextDocument): string {
-    const filePath = this.documentUris.hostPath(document.uri);
+    const filePath = this.documentUris.authoredHostPath(document.uri);
     if (filePath == null) {
       throw new Error(`Cannot project document URI into the workspace host: ${document.uri}`);
     }
@@ -709,4 +719,11 @@ export class SemanticRuntimeLspSession {
       throw new SemanticRuntimeLspRequestAbortedError("stale");
     }
   }
+}
+
+function semanticWorkspaceBoundaryKey(documentUris: WorkspaceDocumentUris): string {
+  return JSON.stringify([
+    documentUris.workspaceRoot,
+    documentUris.excludedWorkspaceRoots,
+  ]);
 }

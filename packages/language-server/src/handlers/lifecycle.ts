@@ -15,7 +15,10 @@ import {
 import path from "node:path";
 import type { ServerContext } from "../context.js";
 import { AureliaProtocolNotification } from "../protocol.js";
-import type { AnalysisChangedPayload } from "../protocol.js";
+import type {
+  AnalysisChangedPayload,
+  AureliaInitializeOptions,
+} from "../protocol.js";
 import { isAnalyzedSourceDocumentUri } from "../utils/document-kind.js";
 import { SEMANTIC_TOKENS_LEGEND } from "./semantic-tokens.js";
 
@@ -59,7 +62,7 @@ function shouldReloadForFileChange(
   changes: readonly FileEvent[],
 ): boolean {
   for (const change of changes) {
-    const hostPath = ctx.documentUris.hostPath(change.uri);
+    const hostPath = ctx.documentUris.authoredHostPath(change.uri);
     if (hostPath == null) continue;
     const base = path.basename(hostPath).toLowerCase();
     // Project-shape authority reads dependency scope and workspace membership
@@ -100,7 +103,15 @@ function scheduleAnalysisRefresh(ctx: ServerContext, reason: string): void {
 
 export function handleInitialize(ctx: ServerContext, params: InitializeParams): InitializeResult {
   const rootUri = initializeRootUri(ctx, params);
-  ctx.configureWorkspace(rootUri);
+  const options = initializeOptions(params.initializationOptions);
+  try {
+    ctx.configureWorkspace(rootUri, options.excludedWorkspaceRootUris);
+  } catch (error) {
+    throw new ResponseError(
+      ErrorCodes.InvalidParams,
+      error instanceof Error ? error.message : String(error),
+    );
+  }
   ctx.clientSupportsCodeActionResolveEdit = params.capabilities.textDocument?.codeAction?.dataSupport === true
     && params.capabilities.textDocument.codeAction.resolveSupport?.properties.includes("edit") === true;
   ctx.clientSupport.configurationPull = params.capabilities.workspace?.configuration === true;
@@ -109,7 +120,7 @@ export function handleInitialize(ctx: ServerContext, params: InitializeParams): 
   ctx.clientSupport.inlayHintRefresh = params.capabilities.workspace?.inlayHint?.refreshSupport === true;
   ctx.clientSupport.semanticTokensRefresh = params.capabilities.workspace?.semanticTokens?.refreshSupport === true;
   ctx.clientSupport.diagnosticRefresh = params.capabilities.workspace?.diagnostics?.refreshSupport === true;
-  ctx.logger.info(`initialize: root=${ctx.workspaceRoot}`);
+  ctx.logger.info(`initialize: root=${rootUri}`);
 
   return {
     capabilities: {
@@ -141,6 +152,29 @@ export function handleInitialize(ctx: ServerContext, params: InitializeParams): 
   };
 }
 
+function initializeOptions(value: unknown): AureliaInitializeOptions {
+  if (value == null) {
+    return { excludedWorkspaceRootUris: [] };
+  }
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new ResponseError(ErrorCodes.InvalidParams, "Aurelia initialization options must be an object.");
+  }
+  const excludedWorkspaceRootUris = (value as Record<string, unknown>).excludedWorkspaceRootUris;
+  if (excludedWorkspaceRootUris == null) {
+    return { excludedWorkspaceRootUris: [] };
+  }
+  if (
+    !Array.isArray(excludedWorkspaceRootUris)
+    || !excludedWorkspaceRootUris.every((entry): entry is string => typeof entry === "string")
+  ) {
+    throw new ResponseError(
+      ErrorCodes.InvalidParams,
+      "Aurelia excludedWorkspaceRootUris must be an array of document URI strings.",
+    );
+  }
+  return { excludedWorkspaceRootUris };
+}
+
 function initializeRootUri(ctx: ServerContext, params: InitializeParams): string {
   const rootUri = params.rootUri
     ?? params.workspaceFolders?.[0]?.uri
@@ -166,7 +200,7 @@ export function registerLifecycleHandlers(ctx: ServerContext): void {
   });
 
   ctx.documents.onDidOpen((e) => {
-    if (!isAnalyzedSourceDocumentUri(e.document.uri)) return;
+    if (!ctx.ownsDocument(e.document.uri) || !isAnalyzedSourceDocumentUri(e.document.uri)) return;
     const state = lifecycleRefreshState(ctx);
     if (state.shutdown != null) return;
     ctx.logger.log(`didOpen ${e.document.uri}`);
@@ -174,27 +208,29 @@ export function registerLifecycleHandlers(ctx: ServerContext): void {
 
   ctx.connection.onDidChangeConfiguration(() => {
     if (!ctx.clientSupport.inlayHintRefresh) return;
-    runLifecycleTask(ctx, "inlay hint configuration refresh", () =>
+    requestClientRefresh(ctx, "inlay hints", () =>
       ctx.connection.languages.inlayHint.refresh());
   });
 
   ctx.connection.onDidChangeWatchedFiles((e: DidChangeWatchedFilesParams) => {
     if (!e.changes?.length) return;
+    const changes = e.changes.filter((change) => ctx.ownsDocument(change.uri));
+    if (changes.length === 0) return;
 
-    if (shouldReloadForFileChange(ctx, e.changes)) {
+    if (shouldReloadForFileChange(ctx, changes)) {
       ctx.logger.log("didChangeWatchedFiles: tsconfig/jsconfig changed, reloading project");
       recordProjectTopologyChanged(ctx, "watched files");
       return;
     }
 
     // Any admitted source can change project membership or semantic topology.
-    if (hasSourceFileStructuralChange(e.changes)) {
+    if (hasSourceFileStructuralChange(changes)) {
       ctx.logger.log("didChangeWatchedFiles: source file created/deleted, reloading project");
       recordProjectTopologyChanged(ctx, "watched files");
       return;
     }
 
-    if (hasClosedAnalyzedSourceContentChange(ctx, e.changes)) {
+    if (hasClosedAnalyzedSourceContentChange(ctx, changes)) {
       ctx.logger.log("didChangeWatchedFiles: analyzed source content changed");
       recordSourceTextChanged(ctx, "watched files");
     }
@@ -202,7 +238,7 @@ export function registerLifecycleHandlers(ctx: ServerContext): void {
 
   ctx.documents.onDidChangeContent((e) => {
     const uri = e.document.uri;
-    if (!isAnalyzedSourceDocumentUri(uri)) return;
+    if (!ctx.ownsDocument(uri) || !isAnalyzedSourceDocumentUri(uri)) return;
     const state = lifecycleRefreshState(ctx);
     if (state.shutdown != null) return;
     // TextDocuments emits this event for both didOpen and didChange. It is the
@@ -212,7 +248,7 @@ export function registerLifecycleHandlers(ctx: ServerContext): void {
   });
 
   ctx.documents.onDidClose((e) => {
-    if (!isAnalyzedSourceDocumentUri(e.document.uri)) return;
+    if (!ctx.ownsDocument(e.document.uri) || !isAnalyzedSourceDocumentUri(e.document.uri)) return;
     ctx.logger.log(`didClose ${e.document.uri}`);
 
     const state = lifecycleRefreshState(ctx);
@@ -245,11 +281,31 @@ async function notifyAnalysisChanged(ctx: ServerContext): Promise<void> {
   // analysis. One source can invalidate diagnostics owned by any visible file,
   // so the standard workspace refresh remains project-wide.
   if (ctx.clientSupport.diagnosticRefresh) {
-    await ctx.connection.languages.diagnostics.refresh();
+    requestClientRefresh(ctx, "diagnostics", () =>
+      ctx.connection.languages.diagnostics.refresh());
   }
   if (ctx.clientSupport.semanticTokensRefresh) {
-    await ctx.connection.languages.semanticTokens.refresh();
+    requestClientRefresh(ctx, "semantic tokens", () =>
+      ctx.connection.languages.semanticTokens.refresh());
   }
+}
+
+/**
+ * LSP refresh methods are server-to-client requests despite their command-like API.
+ * Their response only acknowledges client scheduling; it is not semantic work. Joining
+ * that response to the shutdown drain deadlocks when a client waits for `shutdown`
+ * while retiring the providers that would answer the refresh request.
+ */
+function requestClientRefresh(
+  ctx: ServerContext,
+  label: string,
+  request: () => Promise<void>,
+): void {
+  void Promise.resolve().then(request).catch((error: unknown) => {
+    if (lifecycleRefreshState(ctx).shutdown != null) return;
+    const message = error instanceof Error ? error.stack ?? error.message : String(error);
+    ctx.logger.warn(`[workspace] ${label} refresh request failed: ${message}`);
+  });
 }
 
 export function shutdownLifecycle(ctx: ServerContext): Promise<void> {
@@ -257,13 +313,25 @@ export function shutdownLifecycle(ctx: ServerContext): Promise<void> {
   if (state.shutdown != null) {
     return state.shutdown;
   }
-  const shutdown = Promise.resolve().then(async () => {
+  const shutdown = Promise.resolve().then(() => {
     if (state.pendingAnalysisRefresh != null) {
       clearTimeout(state.pendingAnalysisRefresh);
       state.pendingAnalysisRefresh = null;
     }
-    await Promise.allSettled([...state.tasks]);
-    await ctx.semanticRuntime.dispose();
+    ctx.semanticRuntime.invalidateRequests();
+
+    // LSP shutdown retires this dedicated server process. Waiting for obsolete
+    // requests here deadlocks with clients that wait for the shutdown response
+    // before cancelling providers and their in-flight requests. Revoke guards,
+    // answer shutdown, and retain task settlement only as deferred cleanup for
+    // hosts that do not immediately follow with the standard `exit` notification.
+    const tasks = [...state.tasks];
+    void Promise.allSettled(tasks)
+      .then(() => ctx.semanticRuntime.dispose())
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.stack ?? error.message : String(error);
+        ctx.logger.error(`semantic session retirement failed: ${message}`);
+      });
   });
   state.shutdown = shutdown;
   return shutdown;

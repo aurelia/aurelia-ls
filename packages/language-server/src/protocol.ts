@@ -28,6 +28,11 @@ export const AureliaProtocolNotification = {
 
 export const AURELIA_TEMPLATE_CODE_ACTION_RESOLVE_SCHEMA = "aurelia.template-code-action-resolve/1" as const;
 
+/** Client-owned workspace topology supplied before the server admits documents or projects. */
+export interface AureliaInitializeOptions {
+  readonly excludedWorkspaceRootUris: readonly string[];
+}
+
 /** Exact semantic-runtime project-shape answer used to confirm one LSP workspace ownership root. */
 export type WorkspaceStatusResponse = SemanticRuntimeAnswer<SemanticRuntimeSummary>;
 

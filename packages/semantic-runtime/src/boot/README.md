@@ -74,6 +74,13 @@ source files becomes a resource-library authoring candidate, while activation ca
 package is treated as an app-world. If a host already knows the intended app package, it should still pass an explicit
 `projects` entry or `projectKey`.
 
+`excludedWorkspaceRoots` is an authored-source boundary, not a filesystem read embargo. Excluded roots cannot become
+project frames, source admissions, TypeScript root files, or diagnostic owners, and an excluded parent dominates every
+nested root. Admitted source may still import an excluded file as a dependency; module resolution and outward source
+locations must retain that fact without promoting the dependency into authored project membership. Workspace topology
+and source discovery both read through the supplied `SemanticRuntimeProjectInputAuthority`, including for non-filesystem
+hosts, so the boundary and the observed source world cannot diverge.
+
 External source roots are deliberately ephemeral. They let pressure runs resolve public or private sibling package
 source without copying those paths into fixtures or durable docs. Materializers may then recognize resources,
 configuration, and registration bodies in the linked package source if project evaluation reaches those modules through

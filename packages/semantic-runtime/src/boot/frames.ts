@@ -17,6 +17,7 @@ import {
   buildProjectCompilerOptionsResult,
   type ProjectCompilerOptionsResult,
 } from './project-compiler-options.js';
+import { AuthoredSourceBoundary } from './source-boundary.js';
 
 /** Input source admitted during boot before Aurelia semantics are interpreted. */
 export interface BootSourceFileInput {
@@ -40,6 +41,8 @@ export interface BootProjectInput {
   readonly sourceFiles?: readonly BootSourceFileInput[];
   /** Discovery options used when source files are not supplied by the host. */
   readonly sourceDiscoveryOptions?: SourceDiscoveryOptions;
+  /** Descendant roots excluded from this project's authored source membership. */
+  readonly excludedSourceRoots?: readonly string[];
 }
 
 /** Boot configuration for one active analysis workspace. */
@@ -54,6 +57,8 @@ export interface BootWorkspaceInput {
   readonly projects?: readonly BootProjectInput[];
   /** Project discovery strategy used when `projects` is omitted. */
   readonly projectDiscovery?: BootProjectDiscoveryMode | `${BootProjectDiscoveryMode}`;
+  /** Descendant workspace roots excluded from project discovery and authored source admission. */
+  readonly excludedWorkspaceRoots?: readonly string[];
   /** Runtime-owned authority for coherent source/config generations. */
   readonly projectInputAuthority?: SemanticRuntimeProjectInputAuthority;
 }
@@ -105,6 +110,8 @@ export class SourceFileAdmission {
 export class ProjectBootFrame {
   /** One config/compiler-options product derived from this frame's captured input generation. */
   readonly compilerOptions: ProjectCompilerOptionsResult;
+  /** Authored project membership; dependency resolution may still read sources outside this boundary. */
+  readonly authoredSources: AuthoredSourceBoundary;
   readonly observedRevision: string;
 
   constructor(
@@ -118,12 +125,16 @@ export class ProjectBootFrame {
     readonly sourceFiles: readonly SourceFileAdmission[],
     /** Discovery result when boot discovered sources itself; null when the host supplied sources. */
     readonly sourceDiscovery: SourceDiscoveryResult | null = null,
+    /** Descendant roots that do not belong to this authored project. */
+    excludedSourceRoots: readonly string[],
     /** Exact source/config generation consumed by this project frame. */
     readonly inputGeneration: SemanticRuntimeProjectInputGeneration,
   ) {
+    this.authoredSources = new AuthoredSourceBoundary(rootDir, excludedSourceRoots);
     this.compilerOptions = buildProjectCompilerOptionsResult(
       inputGeneration,
       rootDir,
+      this.authoredSources,
       [workspaceRootDir],
     );
     this.observedRevision = projectBootFrameRevision(this);
@@ -150,6 +161,7 @@ export class ProjectBootFrame {
           this.projectKey,
           this.sourceFiles,
           this.sourceDiscovery,
+          this.authoredSources.excludedRootDirs,
           inputGeneration,
         );
   }
@@ -160,6 +172,7 @@ function projectBootFrameRevision(project: ProjectBootFrame): string {
     workspaceRootDir: project.workspaceRootDir,
     rootDir: project.rootDir,
     projectKey: project.projectKey,
+    excludedSourceRoots: project.authoredSources.excludedRootDirs,
     compilerOptions: project.compilerOptions.revision,
     sourceFiles: project.sourceFiles.map((source) => ({
       path: source.path,

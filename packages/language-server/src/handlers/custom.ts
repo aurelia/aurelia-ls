@@ -5,7 +5,6 @@
  * request boundary keeps cancellation, staleness, and operational failure
  * distinct from normal semantic absence and refusal.
  */
-import path from "node:path";
 import type { CancellationToken } from "vscode-languageserver/node";
 import type {
   SemanticResourceDefinitionRow,
@@ -651,7 +650,7 @@ export async function handleGetScopeResources(
   if (!uri) return null;
   const doc = ctx.ensureProgramDocument(uri);
   if (!doc) return null;
-  const filePath = ctx.documentUris.hostPath(uri);
+  const filePath = ctx.documentUris.authoredHostPath(uri);
   if (filePath == null) return null;
   const [definitions, visibility, compilations] = await Promise.all([
     ctx.semanticRuntime.resourceDefinitions(guard),
@@ -704,9 +703,9 @@ export async function handleRenameFromTs(
     return renameFromTsBlocked("invalid-request", "Aurelia cross-domain rename requires a URI and position, with an optional new name.");
   }
 
-  const sourcePath = ctx.documentUris.hostPath(params.uri) ?? params.uri;
-  const doc = ctx.ensureProgramDocument(params.uri);
-  if (!doc) {
+  const sourcePath = ctx.documentUris.authoredHostPath(params.uri);
+  const doc = sourcePath == null ? null : ctx.ensureProgramDocument(params.uri);
+  if (doc == null || sourcePath == null) {
     return renameFromTsBlocked("document-unavailable", "Aurelia cross-domain rename could not read the TypeScript document.");
   }
   const answer = await ctx.semanticRuntime.templateRenameFromTypeScript(
@@ -854,7 +853,7 @@ export async function handleGetRelatedFile(
 ): Promise<RelatedFileResponse> {
   const uri = params?.uri;
   if (!uri) return null;
-  const filePath = ctx.documentUris.hostPath(uri);
+  const filePath = ctx.documentUris.authoredHostPath(uri);
   if (filePath == null) return null;
   const definitions = await ctx.semanticRuntime.resourceDefinitions(guard);
   const requested = normalizedFilePath(filePath);

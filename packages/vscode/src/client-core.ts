@@ -14,7 +14,10 @@ import type {
   WorkspaceFolder,
 } from "vscode";
 import { AureliaProtocolRequest } from "@aurelia-ls/language-server/protocol";
-import type { WorkspaceStatusResponse } from "@aurelia-ls/language-server/protocol";
+import type {
+  AureliaInitializeOptions,
+  WorkspaceStatusResponse,
+} from "@aurelia-ls/language-server/protocol";
 import type { AureliaWorkspaceIdentity } from "./types.js";
 import { createMiddleware } from "./client-middleware.js";
 import { type ClientLogger } from "./log.js";
@@ -26,7 +29,7 @@ import {
   WorkspaceActivationEvidenceKind,
   orderWorkspaceAdmissions,
   readWorkspaceActivationAdmission,
-  readWorkspaceActivationMode,
+  readWorkspaceActivationTopology,
   workspaceFolderContainsUri,
   workspaceFolderKey,
   workspaceStatusConfirmsAurelia,
@@ -39,6 +42,7 @@ export interface AureliaLanguageClientSession {
   readonly activationMode: AureliaActivationMode;
   readonly activationEvidence: WorkspaceActivationEvidenceKind;
   readonly status: WorkspaceStatusResponse | null;
+  readonly excludedFolders: readonly WorkspaceFolder[];
   readonly fileEvents: readonly FileSystemWatcher[];
 }
 
@@ -89,6 +93,11 @@ const ANALYZED_DOCUMENT_LANGUAGE_IDS = [
   "json",
 ] as const;
 
+// vscode-languageclient defaults to two seconds, which is shorter than one cold
+// semantic-runtime compilation. Session reconciliation does not wait on this
+// process deadline; extension deactivation does, and therefore remains bounded.
+const LANGUAGE_SERVER_SHUTDOWN_TIMEOUT_MS = 30_000;
+
 async function fileExists(vscode: VscodeApi, p: string): Promise<boolean> {
   try {
     await vscode.workspace.fs.stat(vscode.Uri.file(p));
@@ -136,6 +145,7 @@ export class AureliaLanguageClient {
   readonly #sessionsChanged: EventEmitter<readonly AureliaLanguageClientSession[]>;
   readonly onDidChangeSessions: Event<readonly AureliaLanguageClientSession[]>;
   #transitionTail: Promise<void> = Promise.resolve();
+  readonly #retirements = new Map<LanguageClient, Promise<void>>();
   #lifecycleIntent = createLifecycleIntent(0);
   #pendingPackageChanges = new Map<string, PendingPackageChange>();
   #acceptingLifecycleRequests = false;
@@ -172,7 +182,10 @@ export class AureliaLanguageClient {
   sessionForUri(uri: string | Uri): AureliaLanguageClientSession | undefined {
     const target = typeof uri === "string" ? this.#vscode.Uri.parse(uri) : uri;
     return this.sessions
-      .filter((session) => workspaceFolderContainsUri(session.folder, target))
+      .filter((session) =>
+        workspaceFolderContainsUri(session.folder, target)
+        && !session.excludedFolders.some((folder) => workspaceFolderContainsUri(folder, target))
+      )
       .sort((left, right) => right.folder.uri.fsPath.length - left.folder.uri.fsPath.length)[0];
   }
 
@@ -219,8 +232,11 @@ export class AureliaLanguageClient {
     this.#pendingPackageChanges.clear();
     const sessions = this.sessions;
     this.#publishSessions(new Map());
+    for (const session of sessions) {
+      void this.#retireSession(session);
+    }
     await this.#enqueueTransition(async () => {
-      await Promise.all(sessions.map((session) => stopSession(session, this.#logger)));
+      await this.#drainRetirements();
       this.#sessionsChanged.dispose();
       this.#logger.log("[client] stopped");
     });
@@ -257,7 +273,11 @@ export class AureliaLanguageClient {
       this.#requestReconcile({ reconfirmExisting: true });
     }));
     lifecycle.push(this.#vscode.workspace.onDidOpenTextDocument((document) => {
-      if (SCRIPT_LANGUAGE_IDS.has(document.languageId) && this.sessionForUri(document.uri) == null) {
+      if (
+        SCRIPT_LANGUAGE_IDS.has(document.languageId)
+        && !this.#isDisabledUri(document.uri)
+        && this.sessionForUri(document.uri) == null
+      ) {
         this.#scheduleSourceAdmission();
       }
     }));
@@ -265,6 +285,7 @@ export class AureliaLanguageClient {
       const session = this.sessionForUri(document.uri);
       if (
         SCRIPT_LANGUAGE_IDS.has(document.languageId)
+        && !this.#isDisabledUri(document.uri)
         && (session == null || session.activationEvidence === WorkspaceActivationEvidenceKind.OpenSourceDocument)
       ) {
         this.#scheduleSourceAdmission();
@@ -273,6 +294,7 @@ export class AureliaLanguageClient {
     lifecycle.push(this.#vscode.workspace.onDidCloseTextDocument((document) => {
       if (
         SCRIPT_LANGUAGE_IDS.has(document.languageId)
+        && !this.#isDisabledUri(document.uri)
         && this.sessionForUri(document.uri)?.activationEvidence === WorkspaceActivationEvidenceKind.OpenSourceDocument
       ) {
         this.#scheduleSourceAdmission();
@@ -281,7 +303,11 @@ export class AureliaLanguageClient {
   }
 
   #handlePackageChange(uri: Uri, changeType: ProtocolFileChangeType): void {
-    if (!isWorkspaceProjectManifestUri(uri) || !this.#acceptingLifecycleRequests) return;
+    if (
+      !isWorkspaceProjectManifestUri(uri)
+      || !this.#acceptingLifecycleRequests
+      || this.#isDisabledUri(uri)
+    ) return;
     this.#pendingPackageChanges.set(uri.toString(), { uri, type: changeType });
     this.#requestReconcile({ reconfirmExisting: true });
   }
@@ -294,6 +320,10 @@ export class AureliaLanguageClient {
       this.#sourceAdmissionTimer = null;
       this.#requestReconcile({ reconfirmExisting: true });
     }, 300);
+  }
+
+  #isDisabledUri(uri: Uri): boolean {
+    return readWorkspaceActivationTopology(this.#vscode).isDisabled(uri);
   }
 
   async #runReconcile(reconfirmExisting: boolean, intent: LifecycleIntent): Promise<void> {
@@ -344,38 +374,31 @@ export class AureliaLanguageClient {
 
   async #reconcileSessions(reconfirmExisting: boolean, intent: LifecycleIntent): Promise<void> {
     const previousSessions = new Map(this.#sessions);
-    const nextSessions = new Map(previousSessions);
-    const retiredSessions = new Set<AureliaLanguageClientSession>();
-    const createdSessions = new Set<AureliaLanguageClientSession>();
     const folders = this.#vscode.workspace.workspaceFolders ?? [];
-    const folderKeys = new Set(folders.map(workspaceFolderKey));
+    const topology = readWorkspaceActivationTopology(this.#vscode);
     const admissions: WorkspaceActivationAdmission[] = [];
 
     for (const folder of folders) {
       const key = workspaceFolderKey(folder);
       const existing = previousSessions.get(key);
-      const mode = readWorkspaceActivationMode(this.#vscode, folder);
+      const mode = topology.modeFor(folder);
       let admission: WorkspaceActivationAdmission | null = null;
-      try {
-        const result = await this.#awaitLifecycle(
-          readWorkspaceActivationAdmission(this.#vscode, folder),
-          intent,
-        );
-        if (result.status === "invalidated") {
-          await Promise.all([...createdSessions].map((session) => stopSession(session, this.#logger)));
-          return;
+      if (!topology.isDisabled(folder.uri)) {
+        try {
+          const result = await this.#awaitLifecycle(
+            readWorkspaceActivationAdmission(this.#vscode, folder),
+            intent,
+          );
+          if (result.status === "invalidated") return;
+          admission = result.value;
+        } catch (error) {
+          this.#logger.warn(`[client] activation preflight failed for ${key}: ${errorMessage(error)}`);
         }
-        admission = result.value;
-      } catch (error) {
-        this.#logger.warn(`[client] activation preflight failed for ${key}: ${errorMessage(error)}`);
       }
-      if (!this.#isCurrentLifecycle(intent)) {
-        await Promise.all([...createdSessions].map((session) => stopSession(session, this.#logger)));
-        return;
-      }
+      if (!this.#isCurrentLifecycle(intent)) return;
       if (admission != null) {
         admissions.push(admission);
-      } else if (existing != null && mode !== AureliaActivationMode.Off) {
+      } else if (existing != null && !topology.isDisabled(folder.uri)) {
         // Once semantic-runtime has confirmed a source-only workspace, keep the
         // session long enough to let that authority re-evaluate future changes.
         admissions.push({
@@ -386,40 +409,72 @@ export class AureliaLanguageClient {
       }
     }
 
+    const nextSessions = new Map(previousSessions);
+    const createdSessions: AureliaLanguageClientSession[] = [];
+    const retireActiveSession = (session: AureliaLanguageClientSession): void => {
+      if (nextSessions.get(session.workspace.key)?.client === session.client) {
+        nextSessions.delete(session.workspace.key);
+        this.#publishSessions(new Map(nextSessions));
+      }
+      void this.#retireSession(session);
+    };
+
+    const admissionKeys = new Set(admissions.map((admission) => workspaceFolderKey(admission.folder)));
+    for (const session of previousSessions.values()) {
+      if (!admissionKeys.has(session.workspace.key)) {
+        retireActiveSession(session);
+      }
+    }
+
     const accepted: WorkspaceActivationAdmission[] = [];
     for (const admission of orderWorkspaceAdmissions(admissions)) {
       if (accepted.some((owner) => workspaceFolderContainsUri(owner.folder, admission.folder.uri))) {
         continue;
       }
       const key = workspaceFolderKey(admission.folder);
-      let session = previousSessions.get(key);
+      const excludedFolders = topology.excludedFoldersFor(admission.folder);
+
+      // An outer root wins disjoint ownership. Withdraw any currently active
+      // descendants before the outer candidate starts; if semantic confirmation
+      // rejects it, the ordered pass can admit those descendants again.
+      for (const owned of [...nextSessions.values()]) {
+        if (
+          owned.workspace.key !== key
+          && workspaceFolderContainsUri(admission.folder, owned.folder.uri)
+        ) {
+          retireActiveSession(owned);
+        }
+      }
+
+      let session = nextSessions.get(key);
+      if (session != null && !sameWorkspaceFolders(session.excludedFolders, excludedFolders)) {
+        retireActiveSession(session);
+        session = undefined;
+      }
       if (session == null) {
         try {
-          session = await this.#createStartedSession(admission, intent) ?? undefined;
+          session = await this.#createStartedSession(admission, excludedFolders, intent) ?? undefined;
         } catch (error) {
           this.#logger.warn(`[client] failed to start ${key}: ${errorMessage(error)}`);
         }
-        if (session != null) createdSessions.add(session);
+        if (session != null) createdSessions.push(session);
         if (!this.#isCurrentLifecycle(intent)) {
-          await Promise.all([...createdSessions].map((session) => stopSession(session, this.#logger)));
+          for (const created of createdSessions) void this.#retireSession(created);
           return;
         }
-        if (session == null) {
-          continue;
-        }
+        if (session == null) continue;
       } else if (reconfirmExisting && admission.mode === AureliaActivationMode.Auto) {
         const statusResult = await this.#awaitLifecycle(
           readWorkspaceStatus(session.client, this.#logger, session.workspace.uri),
           intent,
         );
         if (statusResult.status === "invalidated" || !this.#isCurrentLifecycle(intent)) {
-          await Promise.all([...createdSessions].map((session) => stopSession(session, this.#logger)));
+          for (const created of createdSessions) void this.#retireSession(created);
           return;
         }
         const status = statusResult.value;
         if (status != null && !workspaceStatusConfirmsAurelia(status)) {
-          nextSessions.delete(key);
-          retiredSessions.add(session);
+          retireActiveSession(session);
           continue;
         }
         if (status != null && status !== session.status) {
@@ -437,26 +492,21 @@ export class AureliaLanguageClient {
         };
       }
       nextSessions.set(key, session);
+      this.#publishSessions(new Map(nextSessions));
       accepted.push(admission);
     }
 
     const acceptedKeys = new Set(accepted.map((admission) => workspaceFolderKey(admission.folder)));
-    for (const session of previousSessions.values()) {
-      if (!folderKeys.has(session.workspace.key) || !acceptedKeys.has(session.workspace.key)) {
-        nextSessions.delete(session.workspace.key);
-        retiredSessions.add(session);
+    for (const session of [...nextSessions.values()]) {
+      if (!acceptedKeys.has(session.workspace.key)) {
+        retireActiveSession(session);
       }
     }
-    if (!this.#isCurrentLifecycle(intent)) {
-      await Promise.all([...createdSessions].map((session) => stopSession(session, this.#logger)));
-      return;
-    }
-    this.#publishSessions(nextSessions);
-    await Promise.all([...retiredSessions].map((session) => stopSession(session, this.#logger)));
   }
 
   async #createStartedSession(
     admission: WorkspaceActivationAdmission,
+    excludedFolders: readonly WorkspaceFolder[],
     intent: LifecycleIntent,
   ): Promise<AureliaLanguageClientSession | null> {
     const context = this.#context;
@@ -482,7 +532,14 @@ export class AureliaLanguageClient {
     };
     const clientOptions: LanguageClientOptions = {
       workspaceFolder: admission.folder,
+      // LSP document filters and VS Code filesystem watchers have no subtractive
+      // subtree form. Keep their registration coarse, then send the immutable
+      // boundary to the server, which rejects excluded events and requests before
+      // semantic-runtime work. Client-side commands use sessionForUri as the same gate.
       documentSelector: workspaceDocumentSelector(admission.folder),
+      initializationOptions: {
+        excludedWorkspaceRootUris: excludedFolders.map((folder) => folder.uri.toString()),
+      } satisfies AureliaInitializeOptions,
       synchronize: { fileEvents },
       // The server requests one standard pull refresh after its semantic source
       // generation settles. An additional client pull on every didChange races
@@ -530,16 +587,16 @@ export class AureliaLanguageClient {
           intent,
         );
         if (statusResult.status === "invalidated") {
-          await stopClient(client, this.#logger, workspace.uri);
           disposeWatchers(fileEvents, this.#logger, workspace.uri);
+          void this.#retireClient(client, workspace.uri);
           return null;
         }
         status = statusResult.value;
       }
       if (admission.mode === AureliaActivationMode.Auto && !workspaceStatusConfirmsAurelia(status)) {
         this.#logger.log(`[client] semantic project shape did not confirm candidate workspace ${workspace.uri}`);
-        await stopClient(client, this.#logger, workspace.uri);
         disposeWatchers(fileEvents, this.#logger, workspace.uri);
+        void this.#retireClient(client, workspace.uri);
         return null;
       }
       this.#logger.log(
@@ -552,11 +609,12 @@ export class AureliaLanguageClient {
         activationMode: admission.mode,
         activationEvidence: admission.evidence,
         status,
+        excludedFolders,
         fileEvents,
       };
     } catch (error) {
       if (client != null) {
-        await stopClient(client, this.#logger, workspace.uri);
+        void this.#retireClient(client, workspace.uri);
       }
       disposeWatchers(fileEvents, this.#logger, workspace.uri);
       throw error;
@@ -594,12 +652,36 @@ export class AureliaLanguageClient {
     // shutdown on a third-party promise that may never settle.
     void start
       .then(
-        () => stopClient(client, this.#logger, workspaceUri),
+        () => this.#retireClient(client, workspaceUri),
         () => undefined,
       )
       .finally(() => {
         disposeWatchers(fileEvents, this.#logger, workspaceUri);
       });
+  }
+
+  #retireSession(session: AureliaLanguageClientSession): Promise<void> {
+    disposeWatchers(session.fileEvents, this.#logger, session.workspace.uri);
+    return this.#retireClient(session.client, session.workspace.uri);
+  }
+
+  #retireClient(client: LanguageClient, workspaceUri: string): Promise<void> {
+    const existing = this.#retirements.get(client);
+    if (existing != null) return existing;
+    const retirement = stopClient(client, this.#logger, workspaceUri)
+      .finally(() => {
+        if (this.#retirements.get(client) === retirement) {
+          this.#retirements.delete(client);
+        }
+      });
+    this.#retirements.set(client, retirement);
+    return retirement;
+  }
+
+  async #drainRetirements(): Promise<void> {
+    while (this.#retirements.size > 0) {
+      await Promise.all([...this.#retirements.values()]);
+    }
   }
 
   #enqueueTransition(operation: () => Promise<void>): Promise<void> {
@@ -665,21 +747,13 @@ async function readWorkspaceStatus(
   }
 }
 
-async function stopSession(
-  session: AureliaLanguageClientSession,
-  logger: ClientLogger,
-): Promise<void> {
-  await stopClient(session.client, logger, session.workspace.uri);
-  disposeWatchers(session.fileEvents, logger, session.workspace.uri);
-}
-
 async function stopClient(
   client: LanguageClient,
   logger: ClientLogger,
   workspaceUri: string,
 ): Promise<void> {
   try {
-    await client.stop();
+    await client.stop(LANGUAGE_SERVER_SHUTDOWN_TIMEOUT_MS);
   } catch (error) {
     // Retire every independent workspace even when one server has already failed.
     logger.warn(`[client] failed to stop ${workspaceUri}: ${errorMessage(error)}`);
@@ -715,6 +789,14 @@ function sameSessions(
     if (right.get(key) !== session) return false;
   }
   return true;
+}
+
+function sameWorkspaceFolders(
+  left: readonly WorkspaceFolder[],
+  right: readonly WorkspaceFolder[],
+): boolean {
+  return left.length === right.length
+    && left.every((folder, index) => workspaceFolderKey(folder) === workspaceFolderKey(right[index]!));
 }
 
 function createLifecycleIntent(generation: number): LifecycleIntent {

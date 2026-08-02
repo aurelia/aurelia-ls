@@ -7,7 +7,7 @@ import {
   type SemanticProjectShape,
 } from '../boot/project-shape.js';
 import { safeIsDirectory } from '../boot/host-files.js';
-import { nodeSemanticRuntimeProjectInputHost } from '../kernel/project-input.js';
+import { SemanticRuntimeProjectInputAuthority } from '../kernel/project-input.js';
 import { SourceFileRole } from '../kernel/address.js';
 import {
   KernelStore,
@@ -532,7 +532,8 @@ export class SemanticRuntime {
 
   static async open(options: SemanticRuntimeOptions): Promise<SemanticRuntime> {
     const workspaceRoot = path.resolve(options.workspaceRoot);
-    if (!safeIsDirectory(nodeSemanticRuntimeProjectInputHost, workspaceRoot)) {
+    const projectInputAuthority = options.projectInputAuthority ?? new SemanticRuntimeProjectInputAuthority();
+    if (!safeIsDirectory(projectInputAuthority.host, workspaceRoot)) {
       throw new Error(`Cannot open semantic-runtime workspace: workspaceRoot '${workspaceRoot}' does not exist or is not a directory.`);
     }
     const projects = options.projects?.map((project): BootProjectInput => ({
@@ -540,7 +541,7 @@ export class SemanticRuntime {
       rootDir: path.resolve(workspaceRoot, project.rootDir),
     }));
     for (const project of projects ?? []) {
-      if (!safeIsDirectory(nodeSemanticRuntimeProjectInputHost, project.rootDir)) {
+      if (!safeIsDirectory(projectInputAuthority.host, project.rootDir)) {
         throw new Error(
           `Cannot open semantic-runtime workspace: project rootDir '${project.rootDir}' does not exist or is not a directory.`,
         );
@@ -551,7 +552,8 @@ export class SemanticRuntime {
       storeKey: options.storeKey,
       projects,
       projectDiscovery: options.projectDiscovery,
-      projectInputAuthority: options.projectInputAuthority,
+      excludedWorkspaceRoots: options.excludedWorkspaceRoots,
+      projectInputAuthority,
     });
     return new SemanticRuntime(workspace);
   }

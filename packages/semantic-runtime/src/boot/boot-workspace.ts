@@ -13,7 +13,6 @@ import { KernelPublicationPlan, type KernelPublicationContext } from '../kernel/
 import { ProvenanceRecord } from '../kernel/provenance.js';
 import { KernelStore, KernelStoreBatch } from '../kernel/store.js';
 import {
-  nodeSemanticRuntimeProjectInputHost,
   SemanticRuntimeProjectInputAuthority,
 } from '../kernel/project-input.js';
 import {
@@ -32,6 +31,11 @@ import {
   inferSourceLanguage,
 } from '../kernel/source-classification.js';
 import { discoverSourceFiles } from './source-discovery.js';
+import { isHostPathWithin } from './host-files.js';
+import {
+  AuthoredSourceBoundary,
+  authoredSourceExclusionsWithin,
+} from './source-boundary.js';
 
 function normalizePathForProject(rootDir: string, path: string): string {
   const normalized = isAbsolute(path)
@@ -79,11 +83,15 @@ export function bootWorkspace(input: BootWorkspaceInput): WorkspaceBootFrame {
   const workspaceKey = input.storeKey ?? `workspace:${input.rootDir}`;
   const store = input.store ?? new KernelStore(workspaceKey);
   const projectInputAuthority = input.projectInputAuthority ?? new SemanticRuntimeProjectInputAuthority();
-  const projectInputs = input.projects ?? discoverBootProjects(
-    input.rootDir,
-    nodeSemanticRuntimeProjectInputHost,
-    input.projectDiscovery ?? BootProjectDiscoveryMode.PackageTsconfig,
-  );
+  const workspaceBoundary = new AuthoredSourceBoundary(input.rootDir, input.excludedWorkspaceRoots);
+  const projectInputs = input.projects == null
+    ? discoverBootProjects(
+        input.rootDir,
+        projectInputAuthority.host,
+        input.projectDiscovery ?? BootProjectDiscoveryMode.PackageTsconfig,
+        workspaceBoundary.excludedRootDirs,
+      )
+    : input.projects.map((project) => projectInputWithinWorkspaceBoundary(project, workspaceBoundary));
   assertUniqueProjectKeys(projectInputs);
   const projects = projectInputs
     .map((project) => bootProject(store, input.rootDir, project, projectInputAuthority));
@@ -113,16 +121,42 @@ export function bootProject(
   projectInputAuthority: SemanticRuntimeProjectInputAuthority = new SemanticRuntimeProjectInputAuthority(),
 ): ProjectBootFrame {
   const projectKey = input.projectKey ?? defaultProjectKey(input.rootDir);
+  const inputGeneration = projectInputAuthority.capture({ projectKey, rootDir: input.rootDir });
+  const authoredSources = new AuthoredSourceBoundary(input.rootDir, input.excludedSourceRoots);
   const discovery: SourceDiscoveryResult | null = input.sourceFiles == null
-    ? discoverSourceFiles(input.rootDir, input.sourceDiscoveryOptions)
+    ? discoverSourceFiles(inputGeneration.host, input.rootDir, authoredSources, input.sourceDiscoveryOptions)
     : null;
-  const sources = input.sourceFiles ?? discovery?.sourceFiles ?? [];
+  const sources = (input.sourceFiles ?? discovery?.sourceFiles ?? [])
+    .filter((source) => authoredSources.contains(source.path));
   const admissions = sources.map((source) =>
     admitSourceFile(store, workspaceRootDir, input.rootDir, projectKey, source)
   );
 
-  const inputGeneration = projectInputAuthority.capture({ projectKey, rootDir: input.rootDir });
-  return new ProjectBootFrame(workspaceRootDir, input.rootDir, projectKey, admissions, discovery, inputGeneration);
+  return new ProjectBootFrame(
+    workspaceRootDir,
+    input.rootDir,
+    projectKey,
+    admissions,
+    discovery,
+    authoredSources.excludedRootDirs,
+    inputGeneration,
+  );
+}
+
+function projectInputWithinWorkspaceBoundary(
+  project: BootProjectInput,
+  workspaceBoundary: AuthoredSourceBoundary,
+): BootProjectInput {
+  if (isHostPathWithin(project.rootDir, workspaceBoundary.rootDir) && !workspaceBoundary.contains(project.rootDir)) {
+    throw new Error(`Explicit project root '${project.rootDir}' is excluded from workspace '${workspaceBoundary.rootDir}'.`);
+  }
+  return {
+    ...project,
+    excludedSourceRoots: [
+      ...(project.excludedSourceRoots ?? []),
+      ...authoredSourceExclusionsWithin(project.rootDir, workspaceBoundary.excludedRootDirs),
+    ],
+  };
 }
 
 /** Admit one source file as an address plus evidence/provenance records. */

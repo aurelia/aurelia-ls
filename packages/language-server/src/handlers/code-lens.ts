@@ -54,7 +54,7 @@ export async function handleCodeLens(
   const doc = ctx.openDocument(uri);
   if (doc == null || !isScriptDocument(doc)) return null;
 
-  const requestedPath = ctx.documentUris.hostPath(uri);
+  const requestedPath = ctx.documentUris.authoredHostPath(uri);
   if (requestedPath == null) return null;
   const requested = normalizedFilePath(requestedPath);
   const [
