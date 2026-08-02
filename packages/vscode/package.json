@@ -44,17 +44,8 @@
     "workspaceContains:node_modules/aurelia/package.json"
   ],
   "contributes": {
-    "viewsContainers": {
-      "activityBar": [
-        {
-          "id": "aurelia",
-          "title": "Aurelia",
-          "icon": "images/logo.png"
-        }
-      ]
-    },
     "views": {
-      "aurelia": [
+      "explorer": [
         {
           "id": "aureliaResourceExplorer",
           "name": "Resource Explorer",

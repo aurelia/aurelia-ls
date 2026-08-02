@@ -1,56 +1,51 @@
-/**
- * Resource Explorer TreeView — persistent ambient revelation surface.
- *
- * Shows all discovered Aurelia resources organized by origin (Project,
- * Packages, Framework) then by kind (Elements, Attributes, etc.).
- *
- * Origin and scope are runtime facts: project/package/framework resources have
- * different navigation affordances, and local resources reveal which compiler
- * world made them visible.
- */
-import type { TreeDataProvider, TreeItem, ProviderResult, Event } from "vscode";
-import type { VscodeApi } from "../../vscode-api.js";
+/** Resource inventory projected from exact semantic-runtime definition and compiler-world identities. */
+import type { Event, ProviderResult, TreeDataProvider, TreeItem } from "vscode";
 import type { LspFacade } from "../../core/lsp-facade.js";
+import type { DisposableLike } from "../../core/disposables.js";
 import type { ClientLogger } from "../../log.js";
-import type { ResourceExplorerItem, ResourceExplorerResponse } from "../../types.js";
+import type {
+  ResourceExplorerItem,
+  ResourceExplorerResponse,
+  ResourceExplorerWorkspace,
+} from "../../types.js";
+import type { VscodeApi } from "../../vscode-api.js";
 
-/** Display grouping for the Resource Explorer tree — derived from runtime source provenance. */
-type ExplorerGroup = "project" | "package" | "framework";
-
-function toExplorerGroup(item: ResourceExplorerItem): ExplorerGroup {
-  if (item.package) return "package";
-  if (item.origin === "builtin" || item.origin === "config") return "framework";
-  return "project";
-}
+type ExplorerGroup = "project" | "package" | "framework" | "external";
 
 const GROUP_LABELS: Record<ExplorerGroup, string> = {
   project: "Project",
   package: "Packages",
   framework: "Framework",
+  external: "External / unresolved",
 };
 
 const GROUP_ICONS: Record<ExplorerGroup, string> = {
   project: "home",
   package: "package",
   framework: "library",
+  external: "question",
 };
 
-const GROUP_ORDER: ExplorerGroup[] = ["project", "package", "framework"];
+const GROUP_ORDER: readonly ExplorerGroup[] = ["project", "package", "framework", "external"];
 
-const KIND_LABELS: Record<string, string> = {
+const KIND_LABELS: Readonly<Record<string, string>> = {
   "custom-element": "Elements",
   "custom-attribute": "Attributes",
-  "template-controller": "Controllers",
+  "template-controller": "Template Controllers",
   "value-converter": "Value Converters",
   "binding-behavior": "Binding Behaviors",
+  "binding-command": "Binding Commands",
+  "attribute-pattern": "Attribute Patterns",
 };
 
-const KIND_ICONS: Record<string, string> = {
+const KIND_ICONS: Readonly<Record<string, string>> = {
   "custom-element": "symbol-class",
   "custom-attribute": "symbol-property",
   "template-controller": "symbol-struct",
   "value-converter": "symbol-function",
   "binding-behavior": "symbol-event",
+  "binding-command": "symbol-method",
+  "attribute-pattern": "symbol-key",
 };
 
 const KIND_ORDER = [
@@ -59,9 +54,19 @@ const KIND_ORDER = [
   "custom-attribute",
   "value-converter",
   "binding-behavior",
-];
+  "binding-command",
+  "attribute-pattern",
+] as const;
 
-type TreeNodeKind = "workspace-group" | "origin-group" | "kind-group" | "resource" | "bindable" | "info";
+type TreeNodeKind =
+  | "workspace-group"
+  | "origin-group"
+  | "kind-group"
+  | "resource"
+  | "alias"
+  | "bindable"
+  | "visibility"
+  | "info";
 
 interface TreeNode {
   readonly nodeKind: TreeNodeKind;
@@ -71,162 +76,182 @@ interface TreeNode {
   readonly tooltip?: string;
   readonly iconId?: string;
   readonly collapsible: boolean;
-  readonly children?: TreeNode[];
+  readonly defaultExpanded?: boolean;
+  readonly children?: readonly TreeNode[];
   readonly resourceFile?: string;
   readonly contextValue?: string;
 }
 
-function buildTree(response: ResourceExplorerResponse): TreeNode[] {
-  const workspaces = response.workspaces ?? [];
-  if (workspaces.length > 1) {
-    return workspaces.map((workspace) => {
-      const resources = response.resources.filter((resource) => resource.workspace?.key === workspace.key);
-      return {
-        nodeKind: "workspace-group",
-        id: `workspace:${workspace.key}`,
-        label: workspace.name,
-        description: `${resources.length} resource${resources.length === 1 ? "" : "s"}`,
-        tooltip: workspace.uri,
-        iconId: "root-folder",
-        collapsible: true,
-        children: buildWorkspaceTree({
-          ...response,
-          resources,
-          templateCount: workspace.templateCount,
-          inlineTemplateCount: workspace.inlineTemplateCount,
-          workspaces: [workspace],
-        }, `workspace:${workspace.key}`),
-        contextValue: "workspaceGroup",
-      };
-    });
-  }
-  return buildWorkspaceTree(response, workspaces[0] == null ? "" : `workspace:${workspaces[0].key}`);
+interface WorkspaceTreeInput {
+  readonly resources: readonly ResourceExplorerItem[];
+  readonly templateCount: number;
+  readonly evidence?: Extract<ResourceExplorerWorkspace, { status: "ready" }>["evidence"];
 }
 
-function buildWorkspaceTree(response: ResourceExplorerResponse, idPrefix: string): TreeNode[] {
-  const byGroup = new Map<ExplorerGroup, Map<string, ResourceExplorerItem[]>>();
+function buildTree(response: ResourceExplorerResponse): readonly TreeNode[] {
+  if (response.workspaces.length === 0) {
+    return [infoNode("no-workspaces", "No active Aurelia workspace", "info")];
+  }
+  if (response.workspaces.length === 1) {
+    const workspace = response.workspaces[0]!;
+    return workspace.status === "error"
+      ? [workspaceErrorNode(workspace, "")]
+      : buildWorkspaceTree({
+          resources: response.resources,
+          templateCount: workspace.templateCount,
+          evidence: workspace.evidence,
+        }, `workspace:${workspace.key}`);
+  }
+  return response.workspaces.map((workspace): TreeNode => {
+    const prefix = `workspace:${workspace.key}`;
+    const resources = response.resources.filter((resource) => resource.workspace.key === workspace.key);
+    return {
+      nodeKind: "workspace-group",
+      id: prefix,
+      label: workspace.name,
+      description: workspace.status === "ready"
+        ? `${resources.length} resource${resources.length === 1 ? "" : "s"}`
+        : "analysis failed",
+      tooltip: workspace.status === "ready" ? workspace.uri : workspace.error,
+      iconId: workspace.status === "ready" ? "root-folder" : "error",
+      collapsible: true,
+      defaultExpanded: true,
+      children: workspace.status === "ready"
+        ? buildWorkspaceTree({
+            resources,
+            templateCount: workspace.templateCount,
+            evidence: workspace.evidence,
+          }, prefix)
+        : [workspaceErrorNode(workspace, prefix)],
+      contextValue: "workspaceGroup",
+    };
+  });
+}
 
-  for (const resource of response.resources) {
-    const group = toExplorerGroup(resource);
-    let groupMap = byGroup.get(group);
-    if (!groupMap) {
-      groupMap = new Map();
-      byGroup.set(group, groupMap);
-    }
-    const kindGroup = groupMap.get(resource.kind);
-    if (kindGroup) {
-      kindGroup.push(resource);
-    } else {
-      groupMap.set(resource.kind, [resource]);
-    }
+function buildWorkspaceTree(input: WorkspaceTreeInput, idPrefix: string): readonly TreeNode[] {
+  const byGroup = new Map<ExplorerGroup, Map<string, ResourceExplorerItem[]>>();
+  for (const resource of input.resources) {
+    const group = explorerGroup(resource);
+    const groupMap = byGroup.get(group) ?? new Map<string, ResourceExplorerItem[]>();
+    const kindRows = groupMap.get(resource.kind) ?? [];
+    kindRows.push(resource);
+    groupMap.set(resource.kind, kindRows);
+    byGroup.set(group, groupMap);
   }
 
   const tree: TreeNode[] = [];
-
   for (const origin of GROUP_ORDER) {
     const originMap = byGroup.get(origin);
-    if (!originMap || originMap.size === 0) continue;
-
-    const originCount = Array.from(originMap.values()).reduce((sum, items) => sum + items.length, 0);
+    if (originMap == null || originMap.size === 0) continue;
     const kindGroups: TreeNode[] = [];
-
+    let originCount = 0;
     for (const kind of KIND_ORDER) {
-      const items = originMap.get(kind);
-      if (!items || items.length === 0) continue;
-
-      const resourceNodes = items.map((item) => buildResourceNode(item, idPrefix));
+      const resources = originMap.get(kind);
+      if (resources == null || resources.length === 0) continue;
+      originCount += resources.length;
+      const kindLabel = KIND_LABELS[kind] ?? kind;
       kindGroups.push({
         nodeKind: "kind-group",
         id: prefixedId(idPrefix, `${origin}:kind:${kind}`),
-        label: `${KIND_LABELS[kind] ?? kind} (${items.length})`,
-        iconId: KIND_ICONS[kind] ?? "symbol-misc",
+        label: `${kindLabel} (${resources.length})`,
+        iconId: KIND_ICONS[kind],
         collapsible: true,
-        children: resourceNodes,
+        children: resources.map((resource) => buildResourceNode(resource, idPrefix)),
         contextValue: "kindGroup",
       });
     }
-
-    // If only one kind group in this origin, flatten it
-    if (kindGroups.length === 1 && kindGroups[0]) {
-      tree.push({
-        nodeKind: "origin-group",
-        id: prefixedId(idPrefix, `origin:${origin}`),
-        label: `${GROUP_LABELS[origin]} — ${kindGroups[0].label}`,
-        iconId: GROUP_ICONS[origin],
-        collapsible: true,
-        children: kindGroups[0].children,
-        contextValue: "originGroup",
-      });
-    } else {
-      tree.push({
-        nodeKind: "origin-group",
-        id: prefixedId(idPrefix, `origin:${origin}`),
-        label: `${GROUP_LABELS[origin]} (${originCount})`,
-        iconId: GROUP_ICONS[origin],
-        collapsible: true,
-        children: kindGroups,
-        contextValue: "originGroup",
-      });
-    }
+    const singleKindGroup = kindGroups.length === 1 ? kindGroups[0] : undefined;
+    tree.push({
+      nodeKind: "origin-group",
+      id: prefixedId(idPrefix, `origin:${origin}`),
+      label: singleKindGroup == null
+        ? `${GROUP_LABELS[origin]} (${originCount})`
+        : `${GROUP_LABELS[origin]} - ${singleKindGroup.label}`,
+      iconId: GROUP_ICONS[origin],
+      collapsible: true,
+      defaultExpanded: origin === "project" || origin === "package",
+      children: singleKindGroup?.children ?? kindGroups,
+      contextValue: "originGroup",
+    });
   }
 
-  // Summary
-  const totalResources = response.resources.length;
-  const projectCount = response.resources.filter((r) => toExplorerGroup(r) === "project").length;
-  const packageCount = response.resources.filter((r) => toExplorerGroup(r) === "package").length;
-  const frameworkCount = response.resources.filter((r) => toExplorerGroup(r) === "framework").length;
-  const localCount = response.resources.filter((r) => r.scope === "local").length;
-
-  const summaryParts = [`${totalResources} resources`];
-  if (projectCount > 0) summaryParts.push(`${projectCount} project`);
-  if (packageCount > 0) summaryParts.push(`${packageCount} package`);
-  if (frameworkCount > 0) summaryParts.push(`${frameworkCount} framework`);
-  if (localCount > 0) summaryParts.push(`${localCount} local`);
-  if (response.templateCount > 0) summaryParts.push(`${response.templateCount} templates`);
-
-  tree.push({
-    nodeKind: "info",
-    id: prefixedId(idPrefix, "summary"),
-    label: summaryParts.join(" | "),
-    iconId: "info",
-    collapsible: false,
-    contextValue: "summary",
-  });
-
+  if (input.resources.length === 0) {
+    tree.push(infoNode(
+      prefixedId(idPrefix, "empty"),
+      "No resources discovered",
+      "info",
+      "The current semantic app contains no recognized resource definitions or compiler-visible resources.",
+    ));
+  }
+  const evidenceConcern = resourceEvidenceConcern(input.evidence);
+  if (evidenceConcern != null) {
+    tree.push(infoNode(
+      prefixedId(idPrefix, "coverage"),
+      "Resource inventory may be incomplete",
+      "warning",
+      evidenceConcern,
+    ));
+  }
+  tree.push(infoNode(
+    prefixedId(idPrefix, "summary"),
+    resourceSummary(input.resources, input.templateCount),
+    "info",
+  ));
   return tree;
 }
 
 function buildResourceNode(item: ResourceExplorerItem, idPrefix: string): TreeNode {
   const children: TreeNode[] = [];
-
-  // Bindables as children
-  for (const b of item.bindables) {
-    const parts: string[] = [];
-    if (b.type) parts.push(`: ${b.type}`);
-    if (b.primary) parts.push("(primary)");
-    if (b.mode && b.mode !== "default") {
-      parts.push(`[${b.mode}]`);
-    }
-
+  item.aliases.forEach((alias, index) => {
+    children.push({
+      nodeKind: "alias",
+      id: prefixedId(idPrefix, `${item.id}:alias:${index}:${alias.name}`),
+      label: alias.name,
+      description: "alias",
+      tooltip: alias.source?.label,
+      iconId: "symbol-string",
+      collapsible: false,
+      resourceFile: item.file ?? undefined,
+      contextValue: "resourceAlias",
+    });
+  });
+  item.bindables.forEach((bindable, index) => {
+    const description: string[] = [];
+    if (bindable.valueType != null) description.push(`: ${bindable.valueType}`);
+    if (bindable.primary) description.push("primary");
+    if (bindable.mode !== "default") description.push(bindable.mode);
     children.push({
       nodeKind: "bindable",
-      id: prefixedId(idPrefix, `${item.kind}:${item.name}:bindable:${b.name}`),
-      label: b.name,
-      description: parts.join(" "),
+      id: prefixedId(idPrefix, `${item.id}:bindable:${index}:${bindable.name}`),
+      label: bindable.attribute === bindable.name
+        ? bindable.name
+        : `${bindable.name} (${bindable.attribute})`,
+      description: description.join(" | "),
+      tooltip: bindable.source?.label,
       iconId: "symbol-field",
       collapsible: false,
-      resourceFile: item.file,
+      resourceFile: item.file ?? undefined,
       contextValue: "bindable",
     });
-  }
-
-  // Source file info (project resources)
-  if (item.file && toExplorerGroup(item) === "project") {
-    const shortFile = item.file.replace(/^.*[\\/]packages[\\/]/, "").replace(/^.*[\\/]src[\\/]/, "src/");
+  });
+  item.visibility.forEach((visibility, index) => {
+    children.push({
+      nodeKind: "visibility",
+      id: prefixedId(idPrefix, `${item.id}:visibility:${index}`),
+      label: visibility.visibilityKind,
+      description: visibility.compilerWorld,
+      tooltip: visibility.source?.label,
+      iconId: visibility.visibilityKind === "open" ? "warning" : "eye",
+      collapsible: false,
+      resourceFile: visibility.file ?? undefined,
+      contextValue: "resourceVisibility",
+    });
+  });
+  if (item.file != null && item.origin === "project") {
     children.push({
       nodeKind: "info",
-      id: prefixedId(idPrefix, `${item.kind}:${item.name}:file`),
-      label: shortFile,
+      id: prefixedId(idPrefix, `${item.id}:file`),
+      label: shortSourcePath(item.file),
       iconId: "file-code",
       collapsible: false,
       resourceFile: item.file,
@@ -234,98 +259,168 @@ function buildResourceNode(item: ResourceExplorerItem, idPrefix: string): TreeNo
     });
   }
 
-  // Description line
-  const descParts: string[] = [];
-  if (item.className && item.className !== item.name) descParts.push(item.className);
-  if (item.declarationForm) descParts.push(item.declarationForm);
-  if (item.scope === "local") {
-    descParts.push(item.scopeOwner ? `local to ${item.scopeOwner}` : "local");
-  } else if (item.scope === "orphan") {
-    descParts.push("not registered");
+  const description: string[] = [];
+  const definition = item.definition;
+  const targetName = definition?.targetName;
+  if (targetName != null && targetName !== item.name) description.push(targetName);
+  if (definition != null && definition.declarationModes.length > 0) {
+    description.push(definition.declarationModes.join(", "));
   }
-  if (item.bindableCount > 0) descParts.push(`${item.bindableCount} bindable${item.bindableCount === 1 ? "" : "s"}`);
-  if (item.package) descParts.push(item.package);
+  description.push(resourceVisibilitySummary(item));
+  if (item.bindables.length > 0) {
+    description.push(`${item.bindables.length} bindable${item.bindables.length === 1 ? "" : "s"}`);
+  }
+  if (item.package != null) description.push(item.package);
 
   return {
     nodeKind: "resource",
-    id: prefixedId(idPrefix, `${item.kind}:${item.name}`),
+    id: prefixedId(idPrefix, item.id),
     label: item.name,
-    description: descParts.join(" | "),
+    description: description.join(" | "),
     tooltip: buildResourceTooltip(item),
-    iconId: item.scope === "local" ? "lock" : item.scope === "orphan" ? "question" : (KIND_ICONS[item.kind] ?? "symbol-misc"),
+    iconId: resourceIcon(item),
     collapsible: children.length > 0,
     children,
-    resourceFile: item.file,
+    resourceFile: item.file ?? undefined,
     contextValue: "resource",
   };
 }
 
+function explorerGroup(item: ResourceExplorerItem): ExplorerGroup {
+  return item.origin === "unknown" ? "external" : item.origin;
+}
+
+function resourceVisibilitySummary(item: ResourceExplorerItem): string {
+  if (item.visibility.length === 0) return "not visible in current app";
+  const worlds = new Set(item.visibility.map((row) => row.compilerWorld)).size;
+  const unresolved = item.visibility.some((row) => row.visibilityKind === "open");
+  const onlyLocal = item.visibility.every((row) =>
+    row.visibilityKind === "local" || row.visibilityKind === "routeable"
+  );
+  const base = onlyLocal
+    ? `local in ${worlds} compiler world${worlds === 1 ? "" : "s"}`
+    : `visible in ${worlds} compiler world${worlds === 1 ? "" : "s"}`;
+  return unresolved ? `${base}; some visibility unresolved` : base;
+}
+
+function resourceIcon(item: ResourceExplorerItem): string {
+  if (item.visibility.some((row) => row.visibilityKind === "open")) return "warning";
+  if (item.visibility.length === 0) return "circle-slash";
+  if (item.visibility.every((row) => row.visibilityKind === "local" || row.visibilityKind === "routeable")) {
+    return "lock";
+  }
+  return KIND_ICONS[item.kind] ?? "symbol-misc";
+}
+
 function buildResourceTooltip(item: ResourceExplorerItem): string {
-  const lines = [`${item.kind}: ${item.name}`];
-  if (item.workspace) lines.push(`Workspace: ${item.workspace.name}`);
-  if (item.className) lines.push(`Class: ${item.className}`);
-  lines.push(`Origin: ${item.origin}`);
-  if (item.declarationForm) lines.push(`Declaration: ${item.declarationForm}`);
-  lines.push(`Scope: ${item.scope}${item.scopeOwner ? ` (${item.scopeOwner})` : ""}`);
-  if (item.file) lines.push(`File: ${item.file}`);
-  if (item.package) lines.push(`Package: ${item.package}`);
-  if (item.bindableCount > 0) lines.push(`Bindables: ${item.bindableCount}`);
+  const lines = [`${item.kind}: ${item.name}`, `Origin: ${item.origin}`];
+  const definition = item.definition;
+  if (definition?.targetName != null) lines.push(`Class: ${definition.targetName}`);
+  if (item.aliases.length > 0) lines.push(`Aliases: ${item.aliases.map((alias) => alias.name).join(", ")}`);
+  if (definition?.key != null) lines.push(`Registration key: ${definition.key}`);
+  if (definition != null && definition.declarationModes.length > 0) {
+    lines.push(`Declaration: ${definition.declarationModes.join(", ")}`);
+  }
+  lines.push(`Visibility: ${resourceVisibilitySummary(item)}`);
+  for (const visibility of item.visibility) {
+    lines.push(`  ${visibility.visibilityKind}: ${visibility.compilerWorld}`);
+  }
+  if (item.source != null) lines.push(`Source: ${item.source.label}`);
+  if (item.file != null) lines.push(`File: ${item.file}`);
+  if (item.package != null) lines.push(`Package: ${item.package}`);
   return lines.join("\n");
+}
+
+function resourceSummary(resources: readonly ResourceExplorerItem[], templateCount: number): string {
+  const parts = [`${resources.length} resources`];
+  for (const group of GROUP_ORDER) {
+    const count = resources.filter((resource) => explorerGroup(resource) === group).length;
+    if (count > 0) parts.push(`${count} ${group}`);
+  }
+  if (templateCount > 0) parts.push(`${templateCount} templates`);
+  return parts.join(" | ");
+}
+
+function resourceEvidenceConcern(input: WorkspaceTreeInput["evidence"]): string | null {
+  if (input == null) return null;
+  const concerns = Object.entries(input)
+    .filter(([, answer]) => answer.result !== "answered" || answer.coverage !== "complete")
+    .map(([name, answer]) => `${name}: ${answer.summary}`);
+  return concerns.length === 0 ? null : concerns.join("\n");
+}
+
+function workspaceErrorNode(
+  workspace: Extract<ResourceExplorerWorkspace, { status: "error" }>,
+  idPrefix: string,
+): TreeNode {
+  return infoNode(
+    prefixedId(idPrefix, "error"),
+    "Resource analysis failed",
+    "error",
+    `${workspace.name}: ${workspace.error}`,
+  );
+}
+
+function infoNode(id: string, label: string, iconId: string, tooltip?: string): TreeNode {
+  return { nodeKind: "info", id, label, iconId, tooltip, collapsible: false, contextValue: "summary" };
+}
+
+function shortSourcePath(file: string): string {
+  return file.replace(/^.*[\\/]packages[\\/]/, "").replace(/^.*[\\/]src[\\/]/, "src/");
 }
 
 function prefixedId(prefix: string, id: string): string {
   return prefix === "" ? id : `${prefix}:${id}`;
 }
 
-export class ResourceExplorerProvider implements TreeDataProvider<TreeNode> {
-  #vscode: VscodeApi;
-  #lsp: LspFacade;
-  #logger: ClientLogger;
-  #tree: TreeNode[] = [];
-  #changeEmitter: { fire: () => void; event: Event<void> };
+export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, DisposableLike {
+  readonly #vscode: VscodeApi;
+  readonly #lsp: LspFacade;
+  readonly #logger: ClientLogger;
+  readonly #changeEmitter: { readonly event: Event<void>; fire(): void; dispose(): void };
+  #tree: readonly TreeNode[] = [];
   #refreshGeneration = 0;
 
   constructor(vscode: VscodeApi, lsp: LspFacade, logger: ClientLogger) {
     this.#vscode = vscode;
     this.#lsp = lsp;
     this.#logger = logger;
-
-    const eventEmitter = new vscode.EventEmitter<void>();
-    this.#changeEmitter = { fire: () => eventEmitter.fire(), event: eventEmitter.event };
+    this.#changeEmitter = new vscode.EventEmitter<void>();
   }
 
   get onDidChangeTreeData(): Event<void> {
     return this.#changeEmitter.event;
   }
 
+  dispose(): void {
+    this.#refreshGeneration += 1;
+    this.#tree = [];
+    this.#changeEmitter.dispose();
+  }
+
   getTreeItem(element: TreeNode): TreeItem {
-    const item: TreeItem = { label: element.label };
-
-    if (element.description) item.description = element.description;
-    if (element.tooltip) item.tooltip = element.tooltip;
-    if (element.iconId) item.iconPath = new this.#vscode.ThemeIcon(element.iconId);
-
+    const item: TreeItem = { label: element.label, id: element.id };
+    if (element.description != null) item.description = element.description;
+    if (element.tooltip != null) item.tooltip = element.tooltip;
+    if (element.iconId != null) item.iconPath = new this.#vscode.ThemeIcon(element.iconId);
     item.collapsibleState = element.collapsible
-      ? (element.nodeKind === "workspace-group" || element.nodeKind === "origin-group"
+      ? (element.defaultExpanded === true
         ? this.#vscode.TreeItemCollapsibleState.Expanded
         : this.#vscode.TreeItemCollapsibleState.Collapsed)
       : this.#vscode.TreeItemCollapsibleState.None;
-
-    if (element.resourceFile && (element.contextValue === "resource" || element.contextValue === "fileLink")) {
+    if (element.resourceFile != null) {
       item.command = {
         title: "Open",
         command: "vscode.open",
         arguments: [this.#vscode.Uri.file(element.resourceFile)],
       };
     }
-
     item.contextValue = element.contextValue;
     return item;
   }
 
   getChildren(element?: TreeNode): ProviderResult<TreeNode[]> {
-    if (!element) return this.#tree;
-    return element.children ?? [];
+    return [...(element == null ? this.#tree : element.children ?? [])];
   }
 
   async refresh(): Promise<void> {
@@ -334,40 +429,20 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode> {
       this.#logger.debug("resourceExplorer.refresh.start");
       const response = await this.#lsp.getResources();
       if (generation !== this.#refreshGeneration) return;
-      if (!response) {
-        this.#tree = [{
-          nodeKind: "info",
-          id: "no-data",
-          label: "No workspace data available",
-          iconId: "info",
-          collapsible: false,
-        }];
-      } else if (response.resources.length === 0) {
-        this.#tree = [{
-          nodeKind: "info",
-          id: "empty",
-          label: "No resources discovered yet",
-          description: "Open an Aurelia template to trigger analysis",
-          iconId: "info",
-          collapsible: false,
-        }];
-      } else {
-        this.#tree = buildTree(response);
-      }
+      this.#tree = response == null
+        ? [infoNode("no-data", "No active Aurelia workspace", "info")]
+        : buildTree(response);
       this.#changeEmitter.fire();
       this.#logger.debug("resourceExplorer.refresh.complete", {
         resources: response?.resources.length ?? 0,
+        failedWorkspaces: response?.workspaces.filter((workspace) => workspace.status === "error").length ?? 0,
       });
-    } catch (err) {
+    } catch (error) {
       if (generation !== this.#refreshGeneration) return;
-      this.#logger.warn(`resourceExplorer.refresh.failed: ${err instanceof Error ? err.message : String(err)}`);
-      this.#tree = [{
-        nodeKind: "info",
-        id: "error",
-        label: "Failed to load resources",
-        iconId: "error",
-        collapsible: false,
-      }];
+      this.#logger.warn("resourceExplorer.refresh.failed", {
+        message: error instanceof Error ? error.message : String(error),
+      });
+      this.#tree = [infoNode("error", "Failed to load resource inventory", "error", String(error))];
       this.#changeEmitter.fire();
     }
   }

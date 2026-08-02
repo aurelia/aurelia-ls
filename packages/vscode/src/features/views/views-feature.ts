@@ -8,6 +8,7 @@ export const ViewsFeature: ClientFeature = {
     const store = new DisposableStore();
 
     const explorer = new ResourceExplorerProvider(ctx.vscode, ctx.lsp, ctx.logger);
+    store.add(explorer);
 
     const treeView = ctx.vscode.window.createTreeView("aureliaResourceExplorer", {
       treeDataProvider: explorer,

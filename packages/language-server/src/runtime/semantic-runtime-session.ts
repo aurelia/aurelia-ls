@@ -488,14 +488,14 @@ export class SemanticRuntimeLspSession {
     guard: SemanticRuntimeLspRequestGuard,
   ): Promise<SemanticRuntimeAnswer<SemanticResourceDefinitionsResult>> {
     const runtime = await this.openRuntime(guard);
-    return this.collectRows(runtime, SemanticAppQueryKind.ResourceDefinitions, 500, {}, guard);
+    return this.collectRows(runtime, SemanticAppQueryKind.ResourceDefinitions, 500, { detail: "handles" }, guard);
   }
 
   async resourceVisibility(
     guard: SemanticRuntimeLspRequestGuard,
   ): Promise<SemanticRuntimeAnswer<SemanticResourceVisibilityResult>> {
     const runtime = await this.openRuntime(guard);
-    return this.collectRows(runtime, SemanticAppQueryKind.ResourceVisibility, 500, {}, guard);
+    return this.collectRows(runtime, SemanticAppQueryKind.ResourceVisibility, 500, { detail: "handles" }, guard);
   }
 
   async runtimeControllers(
@@ -529,8 +529,9 @@ export class SemanticRuntimeLspSession {
       SemanticAppQueryKind.TemplateCompilations,
       500,
       sourceFilePath == null
-        ? {}
+        ? { detail: "handles" }
         : {
+            detail: "handles",
             sourceFile: { filePath: sourceFilePath },
             sourceFilePath,
           },

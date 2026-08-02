@@ -1,5 +1,9 @@
 import type { CancellationToken, WorkspaceEdit } from "vscode";
-import { AureliaProtocolNotification, AureliaProtocolRequest } from "@aurelia-ls/language-server/protocol";
+import {
+  AureliaProtocolNotification,
+  AureliaProtocolRequest,
+  type ResourceExplorerResponse as ProtocolResourceExplorerResponse,
+} from "@aurelia-ls/language-server/protocol";
 import type { AureliaLanguageClient, AureliaLanguageClientSession } from "../client-core.js";
 import type { ClientLogger } from "../log.js";
 import type {
@@ -84,23 +88,25 @@ export class LspFacade implements DisposableLike {
   }
 
   async getResources(): Promise<ResourceExplorerResponse | null> {
-    const rows = await Promise.all(this.#clients.sessions.map(async (session) => {
+    const sessions = this.#clients.sessions;
+    if (sessions.length === 0) return null;
+    const rows = await Promise.all(sessions.map(async (session) => {
       try {
-        const response = await this.#sendRequest<ResourceExplorerResponse | null>(session, AureliaProtocolRequest.Resources);
-        return response == null ? null : { session, response };
+        const response = await this.#sendRequest<ProtocolResourceExplorerResponse>(session, AureliaProtocolRequest.Resources);
+        return { status: "ready" as const, session, response };
       } catch (err) {
-        this.#logger.warn("resources.request.failed", {
-          workspace: session.workspace.uri,
-          message: errorMessage(err),
-        });
-        return null;
+        return { status: "error" as const, session, error: errorMessage(err) };
       }
     }));
-    const available = rows.filter((row): row is NonNullable<typeof row> => row != null);
-    if (available.length === 0) return null;
+    const available = rows.filter((row): row is Extract<typeof rows[number], { status: "ready" }> =>
+      row.status === "ready"
+    );
     return {
-      fingerprint: available
-        .map(({ session, response }) => `${session.workspace.key}:${response.fingerprint ?? ""}`)
+      fingerprint: rows
+        .map((row) => row.status === "ready"
+          ? `${row.session.workspace.key}:${row.response.fingerprint}`
+          : `${row.session.workspace.key}:error`
+        )
         .sort()
         .join("|"),
       resources: available.flatMap(({ session, response }) =>
@@ -108,12 +114,21 @@ export class LspFacade implements DisposableLike {
       ),
       templateCount: available.reduce((sum, row) => sum + row.response.templateCount, 0),
       inlineTemplateCount: available.reduce((sum, row) => sum + row.response.inlineTemplateCount, 0),
-      workspaces: available.map(({ session, response }) => ({
-        ...session.workspace,
-        resourceCount: response.resources.length,
-        templateCount: response.templateCount,
-        inlineTemplateCount: response.inlineTemplateCount,
-      })),
+      workspaces: rows.map((row) => row.status === "ready"
+        ? {
+            ...row.session.workspace,
+            status: row.status,
+            resourceCount: row.response.resources.length,
+            templateCount: row.response.templateCount,
+            inlineTemplateCount: row.response.inlineTemplateCount,
+            evidence: row.response.evidence,
+          }
+        : {
+            ...row.session.workspace,
+            status: row.status,
+            error: row.error,
+          }
+      ),
     };
   }
 

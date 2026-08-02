@@ -6,7 +6,7 @@
  * - Inspect at Cursor → Revelation
  *
  */
-import type { TextEditor } from "vscode";
+import type { QuickPickItem, TextEditor } from "vscode";
 import type { ClientFeature } from "../../core/feature.js";
 import { DisposableStore } from "../../core/disposables.js";
 import type { VscodeApi } from "../../vscode-api.js";
@@ -15,6 +15,32 @@ import type {
   DiagnosticsSnapshotResponse,
   InspectEntityResponse,
 } from "../../types.js";
+
+const RESOURCE_KIND_LABELS: Readonly<Record<string, string>> = {
+  "custom-element": "element",
+  "custom-attribute": "attribute",
+  "template-controller": "template controller",
+  "value-converter": "value converter",
+  "binding-behavior": "binding behavior",
+  "binding-command": "binding command",
+  "attribute-pattern": "attribute pattern",
+};
+
+const RESOURCE_GROUP_ICONS: Readonly<Record<string, string>> = {
+  project: "$(home)",
+  package: "$(package)",
+  framework: "$(library)",
+  external: "$(question)",
+};
+
+function resourceGroup(resource: { readonly package?: string | null; readonly origin?: string | null }): string {
+  if (resource.package != null) return "package";
+  if (resource.origin === "framework" || resource.origin === "builtin" || resource.origin === "config") {
+    return "framework";
+  }
+  if (resource.origin === "external" || resource.origin === "unknown") return "external";
+  return "project";
+}
 
 function activeEditor(vscode: VscodeApi): TextEditor | null {
   return vscode.window.activeTextEditor ?? null;
@@ -211,37 +237,28 @@ export const UserCommandsFeature: ClientFeature = {
             return;
           }
 
-          const KIND_LABELS: Record<string, string> = {
-            "custom-element": "element",
-            "custom-attribute": "attribute",
-            "template-controller": "controller",
-            "value-converter": "converter",
-            "binding-behavior": "behavior",
-          };
-
-          const GROUP_ICONS: Record<string, string> = {
-            project: "$(home)",
-            package: "$(package)",
-            framework: "$(library)",
-          };
-
-          type ResourceQuickPickItem = import("vscode").QuickPickItem & { resourceFile?: string };
+          type ResourceQuickPickItem = QuickPickItem & { resourceFile?: string };
 
           const items: ResourceQuickPickItem[] = response.resources.map((r) => {
-            const kindLabel = KIND_LABELS[r.kind] ?? r.kind;
-            const group = r.package ? "package" : (r.origin === "builtin" || r.origin === "config") ? "framework" : "project";
-            const originIcon = GROUP_ICONS[group] ?? "";
+            const kindLabel = RESOURCE_KIND_LABELS[r.kind] ?? r.kind;
+            const originIcon = RESOURCE_GROUP_ICONS[resourceGroup(r)] ?? "";
             const detailParts: string[] = [];
-            if (r.className && r.className !== r.name) detailParts.push(r.className);
-            if (r.declarationForm) detailParts.push(r.declarationForm);
-            if (r.package) detailParts.push(r.package);
-            if (r.bindableCount > 0) detailParts.push(`${r.bindableCount} bindable${r.bindableCount === 1 ? "" : "s"}`);
+            if (r.definition?.targetName != null && r.definition.targetName !== r.name) {
+              detailParts.push(r.definition.targetName);
+            }
+            if (r.definition != null && r.definition.declarationModes.length > 0) {
+              detailParts.push(r.definition.declarationModes.join(", "));
+            }
+            if (r.package != null) detailParts.push(r.package);
+            if (r.bindables.length > 0) {
+              detailParts.push(`${r.bindables.length} bindable${r.bindables.length === 1 ? "" : "s"}`);
+            }
 
             return {
               label: `${originIcon} ${r.name}`,
               description: kindLabel,
               detail: detailParts.join(" · "),
-              resourceFile: r.file,
+              resourceFile: r.file ?? undefined,
             };
           });
 
@@ -276,26 +293,11 @@ export const UserCommandsFeature: ClientFeature = {
             return;
           }
 
-          const KIND_LABELS: Record<string, string> = {
-            "custom-element": "element",
-            "custom-attribute": "attribute",
-            "template-controller": "controller",
-            "value-converter": "converter",
-            "binding-behavior": "behavior",
-          };
-
-          const GROUP_ICONS: Record<string, string> = {
-            project: "$(home)",
-            package: "$(package)",
-            framework: "$(library)",
-          };
-
-          type ScopeQuickPickItem = import("vscode").QuickPickItem & { resourceFile?: string };
+          type ScopeQuickPickItem = QuickPickItem & { resourceFile?: string };
 
           const items: ScopeQuickPickItem[] = response.resources.map((r) => {
-            const kindLabel = KIND_LABELS[r.kind] ?? r.kind;
-            const group = r.package ? "package" : (r.origin === "builtin" || r.origin === "config") ? "framework" : "project";
-            const originIcon = GROUP_ICONS[group] ?? "";
+            const kindLabel = RESOURCE_KIND_LABELS[r.kind] ?? r.kind;
+            const originIcon = RESOURCE_GROUP_ICONS[resourceGroup(r)] ?? "";
             const scopeTag = r.scope === "local" ? "$(lock) local" : "";
             const detailParts: string[] = [];
             if (r.className) detailParts.push(r.className);

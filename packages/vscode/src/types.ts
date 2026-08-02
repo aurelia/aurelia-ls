@@ -69,14 +69,21 @@ export type DiagnosticsSpan = SourceSpan;
 
 /** Client-local workspace ownership added while aggregating per-session resource answers. */
 export type ResourceExplorerItem = ProtocolResourceExplorerItem & {
-  workspace?: AureliaWorkspaceIdentity;
+  readonly workspace: AureliaWorkspaceIdentity;
 };
 
-export type ResourceExplorerResponse = Omit<ProtocolResourceExplorerResponse, "resources"> & {
-  resources: ResourceExplorerItem[];
-  workspaces?: readonly (AureliaWorkspaceIdentity & {
-    readonly resourceCount: number;
-    readonly templateCount: number;
-    readonly inlineTemplateCount: number;
-  })[];
+export type ResourceExplorerWorkspace = AureliaWorkspaceIdentity & ({
+  readonly status: "ready";
+  readonly resourceCount: number;
+  readonly templateCount: number;
+  readonly inlineTemplateCount: number;
+  readonly evidence: ProtocolResourceExplorerResponse["evidence"];
+} | {
+  readonly status: "error";
+  readonly error: string;
+});
+
+export type ResourceExplorerResponse = Omit<ProtocolResourceExplorerResponse, "resources" | "evidence"> & {
+  readonly resources: readonly ResourceExplorerItem[];
+  readonly workspaces: readonly ResourceExplorerWorkspace[];
 };

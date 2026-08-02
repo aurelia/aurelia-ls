@@ -45,6 +45,7 @@ interface ClientHarnessOptions {
     params: unknown,
     notificationIndex: number,
   ) => void | Promise<void>;
+  readonly resourceResponse?: (workspaceUri: string) => unknown | Promise<unknown>;
 }
 
 describe("workspace activation admission", () => {
@@ -730,7 +731,9 @@ describe("LspFacade workspace routing", () => {
       ["shared-name", "a"],
       ["shared-name", "b"],
     ]);
-    expect(resources?.workspaces?.map((workspace) => workspace.resourceCount)).toEqual([1, 1]);
+    expect(resources?.workspaces.map((workspace) =>
+      workspace.status === "ready" ? workspace.resourceCount : -1
+    )).toEqual([1, 1]);
 
     const converted = await facade.convertWorkspaceEdit(
       "file:///work/b/src/card.ts",
@@ -739,6 +742,35 @@ describe("LspFacade workspace routing", () => {
     );
     expect(converted).toEqual({ convertedBy: "file:///work/b" });
     expect(harness.clients[1]?.convertWorkspaceEdit).toHaveBeenCalledTimes(1);
+
+    facade.dispose();
+    await manager.stop();
+  });
+
+  test("preserves a failed resource workspace beside healthy aggregate results", async () => {
+    const { vscode } = twoWorkspaceApi();
+    const harness = createClientHarness(new Map([
+      ["file:///work/a", workspaceStatus("app-world")],
+      ["file:///work/b", workspaceStatus("app-world")],
+    ]), {
+      resourceResponse: (workspaceUri) => {
+        if (workspaceUri === "file:///work/b") throw new Error("resource inventory failed");
+        return resourceResponse(workspaceUri);
+      },
+    });
+    const manager = createManager(vscode, harness);
+    await manager.start(stubExtensionContext(vscode));
+    const { logger } = createTestServices(vscode as unknown as VscodeApi);
+    const facade = new LspFacade(manager, logger);
+
+    const resources = await facade.getResources();
+
+    expect(resources?.resources.map((resource) => resource.workspace.name)).toEqual(["a"]);
+    expect(resources?.workspaces.map((workspace) => workspace.status)).toEqual(["ready", "error"]);
+    expect(resources?.workspaces[1]).toEqual(expect.objectContaining({
+      status: "error",
+      error: "resource inventory failed",
+    }));
 
     facade.dispose();
     await manager.stop();
@@ -836,18 +868,7 @@ function createClientHarness(
           return statusByWorkspace.get(workspaceUri) ?? null;
         }
         case "aurelia/getResources":
-          return {
-            fingerprint: workspaceUri,
-            resources: [{
-              name: "shared-name",
-              kind: "custom-element",
-              bindableCount: 0,
-              bindables: [],
-              scope: "global",
-            }],
-            templateCount: 1,
-            inlineTemplateCount: 0,
-          };
+          return harnessOptions.resourceResponse?.(workspaceUri) ?? resourceResponse(workspaceUri);
         case "aurelia/getRelatedFile":
           return { uri: `${workspaceUri}/related.html`, kind: "template" };
         default:
@@ -887,6 +908,38 @@ function createClientHarness(
     return raw;
   });
   return { clients, createClient, statusByWorkspace };
+}
+
+function resourceResponse(workspaceUri: string) {
+  const answer = {
+    result: "answered",
+    selection: "not-applicable",
+    coverage: "complete",
+    summary: "complete",
+  };
+  return {
+    fingerprint: workspaceUri,
+    resources: [{
+      id: `definition:${workspaceUri}:shared-name`,
+      name: "shared-name",
+      kind: "custom-element",
+      aliases: [],
+      bindables: [],
+      definition: null,
+      visibility: [],
+      source: null,
+      file: null,
+      package: null,
+      origin: "project",
+    }],
+    templateCount: 1,
+    inlineTemplateCount: 0,
+    evidence: {
+      definitions: answer,
+      visibility: answer,
+      compilations: answer,
+    },
+  };
 }
 
 function workspaceStatus(analysisKind: ProjectAnalysisKind): WorkspaceStatusResponse {

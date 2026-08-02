@@ -2,8 +2,14 @@ import type {
   SemanticAppDiagnosticRow,
   SemanticDiagnosticPresentationRelation,
   SemanticDiagnosticRelatedInformation,
+  SemanticResourceDeclarationMode,
+  SemanticResourceDefinitionAliasRow,
+  SemanticResourceDefinitionBindableRow,
+  SemanticResourceDefinitionRow,
+  SemanticResourceVisibilityRow,
   SemanticRuntimeAnswer,
   SemanticRuntimeSummary,
+  SemanticSourceReference,
 } from "@aurelia-ls/semantic-runtime";
 import type { Position, Range, WorkspaceEdit } from "vscode-languageserver/node";
 
@@ -155,35 +161,84 @@ export type ProtocolRange = Range;
 
 export type DocumentUriParams = { uri: string };
 
-export type ResourceExplorerBindable = {
-  name: string;
-  attribute?: string;
-  mode?: string;
-  primary?: boolean;
-  type?: string;
+type ResourceExplorerAnswerFields = Pick<
+  SemanticRuntimeAnswer<unknown>,
+  "schemaVersion" | "result" | "selection" | "coverage" | "summary" | "page" | "analysisDepth" | "continuations"
+>;
+
+/** JSON transport form of semantic-runtime's const-enum answer vocabulary. */
+export type ResourceExplorerAnswer = Omit<
+  ResourceExplorerAnswerFields,
+  "result" | "selection" | "coverage"
+> & {
+  readonly result: `${ResourceExplorerAnswerFields["result"]}`;
+  readonly selection: `${ResourceExplorerAnswerFields["selection"]}`;
+  readonly coverage: `${ResourceExplorerAnswerFields["coverage"]}`;
+};
+
+/** JSON transport form of semantic-runtime's author-facing resource taxonomy. */
+export type ResourceExplorerResourceKind = `${SemanticResourceDefinitionRow["resourceKind"]}`;
+
+/** JSON transport form of compiler-world visibility. */
+export type ResourceExplorerVisibilityKind = `${SemanticResourceVisibilityRow["visibilityKind"]}`;
+
+export type ResourceExplorerBindable = SemanticResourceDefinitionBindableRow & {
+  readonly primary: boolean;
+};
+
+export type ResourceExplorerDefinition = Pick<
+  SemanticResourceDefinitionRow,
+  | "projectKey"
+  | "key"
+  | "targetName"
+  | "defaultProperty"
+  | "source"
+  | "nameSource"
+  | "targetSource"
+  | "targetDeclarationSource"
+  | "handles"
+> & {
+  readonly declarationModes: readonly SemanticResourceDeclarationMode[];
+};
+
+export type ResourceExplorerOrigin = "project" | "package" | "framework" | "external" | "unknown";
+
+export type ResourceExplorerVisibility = Omit<
+  SemanticResourceVisibilityRow,
+  "resourceKind" | "visibilityKind"
+> & {
+  readonly resourceKind: ResourceExplorerResourceKind;
+  readonly visibilityKind: ResourceExplorerVisibilityKind;
+  readonly file: string | null;
 };
 
 export type ResourceScope = "global" | "local" | "orphan";
 
 export type ResourceExplorerItem = {
-  name: string;
-  kind: string;
-  className?: string;
-  file?: string;
-  package?: string;
-  bindableCount: number;
-  bindables: ResourceExplorerBindable[];
-  origin?: string;
-  scope: ResourceScope;
-  scopeOwner?: string;
-  declarationForm?: string;
+  /** Exact within the response generation and stable when the owning semantic source remains stable. */
+  readonly id: string;
+  readonly name: string;
+  readonly kind: ResourceExplorerResourceKind;
+  readonly aliases: readonly SemanticResourceDefinitionAliasRow[];
+  readonly bindables: readonly ResourceExplorerBindable[];
+  readonly definition: ResourceExplorerDefinition | null;
+  readonly visibility: readonly ResourceExplorerVisibility[];
+  readonly source: SemanticSourceReference | null;
+  readonly file: string | null;
+  readonly package: string | null;
+  readonly origin: ResourceExplorerOrigin;
 };
 
 export type ResourceExplorerResponse = {
-  fingerprint: string;
-  resources: ResourceExplorerItem[];
-  templateCount: number;
-  inlineTemplateCount: number;
+  readonly fingerprint: string;
+  readonly resources: readonly ResourceExplorerItem[];
+  readonly templateCount: number;
+  readonly inlineTemplateCount: number;
+  readonly evidence: {
+    readonly definitions: ResourceExplorerAnswer;
+    readonly visibility: ResourceExplorerAnswer;
+    readonly compilations: ResourceExplorerAnswer;
+  };
 };
 
 export type InspectEntityParams = {

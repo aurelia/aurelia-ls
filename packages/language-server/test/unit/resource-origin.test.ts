@@ -13,9 +13,8 @@ import { testRequestGuard } from "./test-request-guard.js";
 /**
  * Boundary: semantic-runtime resource rows -> VS Code resource explorer DTOs.
  *
- * The language server keeps the existing extension-facing shape, but the
- * authority is now semantic-runtime ResourceDefinitions/ResourceVisibility
- * instead of a legacy catalog snapshot.
+ * The language server preserves exact semantic-runtime definition and
+ * visibility identity instead of reconstructing a catalog by resource name.
  */
 
 const workspaceRoot = path.resolve("test-workspace");
@@ -48,12 +47,14 @@ function definition(
     name: string;
   },
 ) {
+  const definitionProductHandle = input.definitionProductHandle
+    ?? `product:definition:${input.resourceKind}:${input.name}`;
   return {
     projectKey: "app",
     resourceKind: input.resourceKind,
     declarationModes: ["decorator"],
     name: input.name,
-    aliases: [],
+    aliases: input.aliases ?? [],
     key: `au:resource:${input.resourceKind}:${input.name}`,
     targetName: input.targetName ?? "MyResource",
     captureKind: null,
@@ -65,15 +66,28 @@ function definition(
     isTemplateController:
       input.resourceKind === "template-controller" ? true : null,
     containerStrategy: null,
-    defaultProperty: null,
+    defaultProperty: input.defaultProperty ?? null,
+    noMultiBindings: null,
     containerless: null,
     shadowMode: null,
     hasSlots: null,
     needsCompile: null,
     patterns: [],
     source: input.source ?? source("src/my-resource.ts"),
+    nameSource: input.nameSource ?? input.source ?? source("src/my-resource.ts", 0, 10),
     targetSource:
       input.targetSource ?? input.source ?? source("src/my-resource.ts", 2, 12),
+    targetDeclarationSource:
+      input.targetDeclarationSource ?? input.source ?? source("src/my-resource.ts", 0, 20),
+    handles: {
+      definitionProductHandle,
+      identityHandle: `identity:definition:${input.resourceKind}:${input.name}`,
+      targetIdentityHandle: `identity:target:${input.resourceKind}:${input.name}`,
+      sourceAddressHandle: `address:source:${input.resourceKind}:${input.name}`,
+      nameSourceAddressHandle: `address:name:${input.resourceKind}:${input.name}`,
+      targetAddressHandle: `address:target:${input.resourceKind}:${input.name}`,
+      targetDeclarationSourceAddressHandle: `address:declaration:${input.resourceKind}:${input.name}`,
+    },
   };
 }
 
@@ -83,14 +97,29 @@ function visibility(input: {
   visibilityKind?: string;
   compilerWorld?: string;
   source?: Record<string, unknown>;
+  aliases?: string[];
+  definitionProductHandle?: string | null;
+  resourceProductHandle?: string | null;
 }) {
+  const definitionProductHandle = input.definitionProductHandle === undefined
+    ? `product:definition:${input.resourceKind}:${input.name}`
+    : input.definitionProductHandle;
+  const resourceProductHandle = input.resourceProductHandle === undefined
+    ? definitionProductHandle ?? `product:resource:${input.resourceKind}:${input.name}`
+    : input.resourceProductHandle;
   return {
     compilerWorld: input.compilerWorld ?? "app-root src/main.ts@0..10",
     resourceKind: input.resourceKind,
     name: input.name,
-    aliases: [],
+    aliases: input.aliases ?? [],
     visibilityKind: input.visibilityKind ?? "app-root",
     source: input.source ?? source("src/my-resource.ts"),
+    handles: {
+      compilerWorldProductHandle: `product:compiler-world:${input.compilerWorld ?? "app-root"}`,
+      resourceProductHandle,
+      definitionProductHandle,
+      sourceAddressHandle: `address:visibility:${input.resourceKind}:${input.name}`,
+    },
   };
 }
 
@@ -187,6 +216,8 @@ describe("runtime-backed resource explorer", () => {
           name: "my-resource",
           targetName: "MyResource",
           bindables,
+          defaultProperty: "value",
+          aliases: [{ name: "alternate-resource", source: source("src/my-resource.ts", 30, 48) }],
         }),
       ],
       visibility: [
@@ -194,6 +225,7 @@ describe("runtime-backed resource explorer", () => {
           resourceKind: "custom-element",
           name: "my-resource",
           visibilityKind: "app-root",
+          aliases: ["alternate-resource"],
         }),
       ],
       compilations: [
@@ -215,16 +247,28 @@ describe("runtime-backed resource explorer", () => {
 
     expect(result.templateCount).toBe(2);
     expect(result.inlineTemplateCount).toBe(1);
-    expect(result.resources).toEqual([
+    expect(result.fingerprint).toBe("semantic-runtime:test");
+    expect(result.evidence.definitions.coverage).toBe("complete");
+    expect(result.resources).toHaveLength(1);
+    expect(result.resources[0]).toEqual(expect.objectContaining({
+      id: "definition:product:definition:custom-element:my-resource",
+      name: "my-resource",
+      kind: "custom-element",
+      file: path.join(workspaceRoot, "src", "my-resource.ts"),
+      origin: "project",
+    }));
+    expect(result.resources[0].definition).toEqual(expect.objectContaining({
+      targetName: "MyResource",
+      declarationModes: ["decorator"],
+    }));
+    expect(result.resources[0].aliases).toEqual([
+      expect.objectContaining({ name: "alternate-resource", source: expect.objectContaining({ start: 30, end: 48 }) }),
+    ]);
+    expect(result.resources[0].visibility).toEqual([
       expect.objectContaining({
-        name: "my-resource",
-        kind: "custom-element",
-        className: "MyResource",
+        visibilityKind: "app-root",
+        compilerWorld: "app-root src/main.ts@0..10",
         file: path.join(workspaceRoot, "src", "my-resource.ts"),
-        origin: "source",
-        scope: "global",
-        bindableCount: 1,
-        declarationForm: "decorator",
       }),
     ]);
     expect(result.resources[0].bindables[0]).toEqual(
@@ -232,7 +276,8 @@ describe("runtime-backed resource explorer", () => {
         name: "value",
         attribute: "value",
         mode: "twoWay",
-        type: "string",
+        valueType: "string",
+        primary: true,
       }),
     );
   });
@@ -246,6 +291,7 @@ describe("runtime-backed resource explorer", () => {
           name: "if",
           visibilityKind: "local",
           source: externalCatalogSource(),
+          definitionProductHandle: null,
         }),
       ],
     });
@@ -256,9 +302,10 @@ describe("runtime-backed resource explorer", () => {
       expect.objectContaining({
         name: "if",
         kind: "template-controller",
-        origin: "builtin",
-        package: undefined,
-        scope: "local",
+        origin: "framework",
+        package: null,
+        definition: null,
+        visibility: [expect.objectContaining({ visibilityKind: "local" })],
       }),
     ]);
   });
@@ -287,7 +334,7 @@ describe("runtime-backed resource explorer", () => {
       expect.objectContaining({
         name: "plugin-card",
         package: "@scope/plugin",
-        origin: "source",
+        origin: "package",
         file: path.join(
           workspaceRoot,
           "node_modules",
@@ -300,7 +347,7 @@ describe("runtime-backed resource explorer", () => {
     );
   });
 
-  test("does not duplicate resources present in definitions and visibility", async () => {
+  test("joins definitions and visibility only through exact product identity", async () => {
     const ctx = createMockContext({
       definitions: [
         definition({ resourceKind: "template-controller", name: "if" }),
@@ -318,6 +365,150 @@ describe("runtime-backed resource explorer", () => {
 
     expect(result.resources).toHaveLength(1);
     expect(result.resources[0].kind).toBe("template-controller");
+    expect(result.resources[0].visibility).toHaveLength(1);
+  });
+
+  test("keeps same-named definitions distinct across product identities and compiler worlds", async () => {
+    const firstHandle = "product:definition:custom-element:shared:first";
+    const secondHandle = "product:definition:custom-element:shared:second";
+    const ctx = createMockContext({
+      definitions: [
+        definition({
+          resourceKind: "custom-element",
+          name: "shared-card",
+          targetName: "FirstCard",
+          definitionProductHandle: firstHandle,
+          source: source("src/first-card.ts"),
+        }),
+        definition({
+          resourceKind: "custom-element",
+          name: "shared-card",
+          targetName: "SecondCard",
+          definitionProductHandle: secondHandle,
+          source: source("src/second-card.ts"),
+        }),
+      ],
+      visibility: [
+        visibility({
+          resourceKind: "custom-element",
+          name: "shared-card",
+          compilerWorld: "app-root first",
+          definitionProductHandle: firstHandle,
+          resourceProductHandle: firstHandle,
+          source: source("src/first-card.ts"),
+        }),
+        visibility({
+          resourceKind: "custom-element",
+          name: "shared-card",
+          compilerWorld: "app-root second",
+          definitionProductHandle: secondHandle,
+          resourceProductHandle: secondHandle,
+          source: source("src/second-card.ts"),
+        }),
+      ],
+    });
+
+    const result = await handleGetResources(ctx as never, testRequestGuard);
+
+    expect(result.resources).toHaveLength(2);
+    expect(result.resources.map((resource) => resource.id)).toEqual([
+      `definition:${firstHandle}`,
+      `definition:${secondHandle}`,
+    ]);
+    expect(result.resources.map((resource) => resource.definition?.targetName)).toEqual(["FirstCard", "SecondCard"]);
+    expect(result.resources.map((resource) => resource.visibility[0]?.compilerWorld)).toEqual([
+      "app-root first",
+      "app-root second",
+    ]);
+  });
+
+  test("keeps compiler extension resources in the inventory taxonomy", async () => {
+    const ctx = createMockContext({
+      visibility: [
+        visibility({ resourceKind: "binding-command", name: "bind" }),
+        visibility({ resourceKind: "attribute-pattern", name: "dot-separated" }),
+      ],
+    });
+
+    const result = await handleGetResources(ctx as never, testRequestGuard);
+
+    expect(result.resources.map((resource) => resource.kind)).toEqual([
+      "binding-command",
+      "attribute-pattern",
+    ]);
+  });
+
+  test("does not guess a join between same-named rows without product handles", async () => {
+    const looseDefinition = definition({ resourceKind: "custom-element", name: "shared-card" });
+    const looseVisibility = visibility({
+      resourceKind: "custom-element",
+      name: "shared-card",
+      definitionProductHandle: null,
+      resourceProductHandle: null,
+    });
+    looseDefinition.handles = null;
+    looseVisibility.handles = null;
+    const ctx = createMockContext({
+      definitions: [looseDefinition],
+      visibility: [looseVisibility],
+    });
+
+    const result = await handleGetResources(ctx as never, testRequestGuard);
+
+    expect(result.resources).toHaveLength(2);
+    expect(result.resources.map((resource) => resource.definition == null)).toEqual([false, true]);
+  });
+
+  test("does not compare resource-product handles with definition-product handles", async () => {
+    const coincidentalHandle = "product:coincidental-cross-role-handle";
+    const ctx = createMockContext({
+      definitions: [
+        definition({
+          resourceKind: "custom-element",
+          name: "shared-card",
+          definitionProductHandle: coincidentalHandle,
+        }),
+      ],
+      visibility: [
+        visibility({
+          resourceKind: "custom-element",
+          name: "shared-card",
+          definitionProductHandle: null,
+          resourceProductHandle: coincidentalHandle,
+        }),
+      ],
+    });
+
+    const result = await handleGetResources(ctx as never, testRequestGuard);
+
+    expect(result.resources).toHaveLength(2);
+    expect(result.resources.map((resource) => resource.id)).toEqual([
+      `definition:${coincidentalHandle}`,
+      `resource:${coincidentalHandle}`,
+    ]);
+  });
+
+  test("rejects duplicate exact definition identity", async () => {
+    const handle = "product:definition:custom-element:duplicate";
+    const ctx = createMockContext({
+      definitions: [
+        definition({ resourceKind: "custom-element", name: "first-card", definitionProductHandle: handle }),
+        definition({ resourceKind: "custom-element", name: "second-card", definitionProductHandle: handle }),
+      ],
+    });
+
+    await expect(handleGetResources(ctx as never, testRequestGuard)).rejects.toThrow(
+      `Duplicate resource definition product handle: ${handle}`,
+    );
+    expect(ctx.logger.error).toHaveBeenCalledWith(expect.stringContaining("[getResources] failed"));
+  });
+
+  test("propagates query failure instead of presenting an empty inventory", async () => {
+    const ctx = createMockContext({});
+    ctx.semanticRuntime.resourceDefinitions.mockRejectedValueOnce(new Error("definition query failed"));
+
+    await expect(handleGetResources(ctx as never, testRequestGuard)).rejects.toThrow("definition query failed");
+    expect(ctx.logger.error).toHaveBeenCalledWith(expect.stringContaining("definition query failed"));
   });
 });
 
