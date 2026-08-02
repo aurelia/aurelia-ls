@@ -4,7 +4,7 @@ Language intelligence for Aurelia 2 templates, powered by the shared Aurelia sem
 
 The extension analyzes your Aurelia project to understand what your components are, what they accept, where they came from, and how templates connect to TypeScript. It handles decorators, conventions, `static $au`, `.define()` calls, third-party packages, and the full binding syntax.
 
-When it cannot prove a fact, it preserves that uncertainty in diagnostics, hover details, resource evidence, and diagnostic reports instead of fabricating a confident answer.
+When it cannot prove a fact, it preserves that uncertainty in diagnostics, hover details, and resource evidence instead of fabricating a confident answer.
 
 ## Features
 
@@ -56,12 +56,6 @@ Optional inline hints show the resolved binding mode so you can see whether `.bi
 given target. They are disabled by default and can be enabled per workspace folder with
 `aurelia.inlayHints.bindingMode`.
 
-### Diagnostics Report
-
-The command-palette-only Diagnostics Report opens a source-linked account of the current document's diagnostics. It
-retains semantic answer state, presentation groups, raw rows, related evidence, continuations, and blockers rather than
-reconstructing confidence from only the diagnostics that fit the standard LSP surface.
-
 ## What Aurelia constructs are supported
 
 - Custom elements (decorator, convention, `static $au`, and `.define()` forms)
@@ -78,8 +72,8 @@ reconstructing confidence from only the diagnostics that fit the standard LSP su
 Most framework tooling either achieves complete knowledge by restricting what you can write, or provides incomplete knowledge without telling you.
 
 This extension takes a different approach: it analyzes what it can analyze, and when it reaches a limit (a dynamic
-registration pattern or a complex third-party package), it keeps the uncertainty visible. Diagnostics, hover, the
-Diagnostics Report, and the Resource Explorer all prefer source-linked facts and provenance over guessed results.
+registration pattern or a complex third-party package), it keeps the uncertainty visible. Diagnostics, hover, and the
+Resource Explorer all prefer source-linked facts and provenance over guessed results.
 
 The goal is that you can trust what the extension tells you.
 
@@ -125,7 +119,6 @@ these commands are part of your workflow.
 | Aurelia: Find Resource | Search exact resources across active Aurelia workspace folders |
 | Aurelia: Open Related File | Open a component class or file-backed template, prompting when topology proves multiple counterparts |
 | Aurelia: Show Available Resources | List exact resources visible in the current template's compiler world |
-| Aurelia: Diagnostics Report | Open the semantic answer, presentation, raw evidence, and follow-up analysis for the current document |
 | Aurelia: Refresh | Refresh the Resource Explorer |
 
 ## Troubleshooting

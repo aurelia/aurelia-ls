@@ -4,8 +4,6 @@ import type { ClientFeature } from "../../core/feature.js";
 import { AureliaCommand } from "../../product-contract.js";
 import type { VscodeApi } from "../../vscode-api.js";
 import type {
-  DiagnosticsSnapshotItem,
-  DiagnosticsSnapshotResponse,
   RelatedFileCandidate,
   ResourceExplorerItem,
 } from "../../types.js";
@@ -45,150 +43,6 @@ function activeEditor(vscode: VscodeApi): TextEditor | null {
   return vscode.window.activeTextEditor ?? null;
 }
 
-type SeverityCounts = { total: number; error: number; warning: number; info: number; unknown: number };
-
-function countSeverities(items: readonly DiagnosticsSnapshotItem[]): SeverityCounts {
-  return items.reduce(
-    (acc, diag) => {
-      acc.total += 1;
-      if (diag.severity === "error" || diag.severity === "warning" || diag.severity === "info") {
-        acc[diag.severity] += 1;
-      } else {
-        acc.unknown += 1;
-      }
-      return acc;
-    },
-    { total: 0, error: 0, warning: 0, info: 0, unknown: 0 },
-  );
-}
-
-function formatDiagnosticsReport(snapshot: DiagnosticsSnapshotResponse): string {
-  const diagnostics = snapshot.diagnostics;
-  const lspDiags = diagnostics.bySurface["lsp"] ?? [];
-  const totalCounts = countSeverities(lspDiags);
-
-  const lines: string[] = ["# Aurelia Diagnostics Report", ""];
-
-  lines.push(`**File:** \`${snapshot.uri}\``);
-  lines.push(`**Analysis:** ${snapshot.answer.summary}`);
-  lines.push(`**State:** result=${snapshot.answer.result}; selection=${snapshot.answer.selection}; coverage=${snapshot.answer.coverage}`);
-  if (snapshot.answer.analysisDepth != null) {
-    lines.push(`**Depth:** ${snapshot.answer.analysisDepth}`);
-  }
-  lines.push(`**Evidence:** ${diagnostics.raw.length} raw row${diagnostics.raw.length === 1 ? "" : "s"}; ${totalCounts.total} presented issue${totalCounts.total === 1 ? "" : "s"}`);
-  lines.push("");
-
-  if (totalCounts.total === 0) {
-    lines.push(snapshot.answer.coverage === "complete"
-      ? "No diagnostics. Analysis is clean for the declared semantic basis."
-      : "No diagnostics were presented, but analysis coverage is not complete.");
-    lines.push("");
-  }
-
-  const presentation = diagnostics.presentation;
-  if (presentation != null) {
-    lines.push(`## Presented Diagnostics (${presentation.primaryCount})`, "");
-    lines.push(
-      presentation.complete
-        ? `${presentation.rawRowCount} raw rows were grouped into ${presentation.primaryCount} primary diagnostics and ${presentation.contextualCount} contextual rows.`
-        : "Diagnostic grouping is incomplete for the current semantic basis.",
-      "",
-    );
-    for (const group of presentation.groups) {
-      const primary = group.primary.diagnostic;
-      if (primary == null) {
-        lines.push(`### Unmapped presentation row`, "", `Group: \`${group.groupKey}\``, "");
-        continue;
-      }
-      appendDiagnostic(lines, primary, "###");
-      if (group.subject != null) {
-        const subjectName = group.subject.subjectName == null ? "" : ` ${group.subject.subjectName}`;
-        lines.push(`Subject: ${group.subject.subjectKind}${subjectName}${formatLocation(group.subject)}`);
-      }
-      if (group.related.length > 0) {
-        lines.push("", "Context:");
-        for (const related of group.related) {
-          if (related.diagnostic == null) continue;
-          lines.push(`- ${related.relation ?? "related"}: **${related.diagnostic.code}** - ${related.diagnostic.message}${formatLocation(related.diagnostic)}`);
-        }
-      }
-      lines.push("");
-    }
-  } else if (totalCounts.total > 0) {
-    const parts: string[] = [];
-    if (totalCounts.error > 0) parts.push(`${totalCounts.error} error${totalCounts.error > 1 ? "s" : ""}`);
-    if (totalCounts.warning > 0) parts.push(`${totalCounts.warning} warning${totalCounts.warning > 1 ? "s" : ""}`);
-    if (totalCounts.info > 0) parts.push(`${totalCounts.info} info`);
-    lines.push(`## Presented Diagnostics (${parts.join(", ")})`, "");
-
-    for (const diag of lspDiags) {
-      appendDiagnostic(lines, diag, "###");
-      lines.push("");
-    }
-  }
-
-  lines.push(`## Raw Evidence (${diagnostics.raw.length})`, "");
-  if (diagnostics.raw.length === 0) {
-    lines.push("No raw diagnostic rows.");
-  } else {
-    for (const diagnostic of diagnostics.raw) {
-      const status = diagnostic.status == null ? "" : ` [${diagnostic.status}]`;
-      lines.push(`### ${diagnostic.code}${status}`, "", diagnostic.message);
-      appendDiagnosticFacts(lines, diagnostic);
-      lines.push("");
-    }
-  }
-
-  const continuations = snapshot.answer.continuations ?? [];
-  if (continuations.length > 0) {
-    lines.push(`## Follow-up Analysis (${continuations.length})`, "");
-    for (const continuation of continuations) {
-      const target = continuation.targetQueryKind ?? continuation.targetAppBuilderQueryKind ?? continuation.kind;
-      lines.push(`- **${target}:** ${continuation.rationale}`);
-      if (continuation.cost != null) lines.push(`  - Cost: ${continuation.cost}`);
-      for (const blocker of continuation.blockers) lines.push(`  - Blocked: ${blocker}`);
-    }
-  }
-
-  return lines.join("\n");
-}
-
-function appendDiagnostic(lines: string[], diagnostic: DiagnosticsSnapshotItem, heading: string): void {
-  lines.push(`${heading} ${diagnostic.code}`, "", diagnostic.message);
-  appendDiagnosticFacts(lines, diagnostic);
-}
-
-function appendDiagnosticFacts(lines: string[], diagnostic: DiagnosticsSnapshotItem): void {
-  const facts = [
-    diagnostic.severity == null ? null : `Severity: ${diagnostic.severity}`,
-    diagnostic.category == null ? null : `Category: ${diagnostic.category}`,
-    diagnostic.actionability == null || diagnostic.actionability === "none"
-      ? null
-      : `Actionability: ${diagnostic.actionability}`,
-    diagnostic.stage == null ? null : `Stage: ${diagnostic.stage}`,
-  ].filter((fact): fact is string => fact != null);
-  if (facts.length > 0) lines.push("", facts.join(" | "));
-  const location = formatLocation(diagnostic);
-  if (location !== "") lines.push(`Source${location}`);
-  for (const related of diagnostic.related ?? []) {
-    lines.push(`- Related: ${related.message}${formatLocation(related)}`);
-  }
-  for (const issue of diagnostic.issues ?? []) {
-    const field = issue.field == null ? "" : ` (${issue.field})`;
-    lines.push(`- Evidence: ${issue.kind}${field} - ${issue.message}`);
-  }
-  if (diagnostic.data != null && Object.keys(diagnostic.data).length > 0) {
-    lines.push("", "```json", JSON.stringify(diagnostic.data, null, 2), "```");
-  }
-}
-
-function formatLocation(value: { readonly uri?: string; readonly span?: { readonly start: number; readonly end: number } }): string {
-  if (value.uri == null && value.span == null) return "";
-  const uri = value.uri ?? "current document";
-  const span = value.span == null ? "" : `@${value.span.start}..${value.span.end}`;
-  return `: \`${uri}${span}\``;
-}
-
 function resourceDetail(resource: CommandResource, workspaceName?: string): string {
   const parts: string[] = [];
   const targetName = resource.definition?.targetName;
@@ -218,31 +72,6 @@ export const UserCommandsFeature: ClientFeature = {
 
     const run = <T>(id: string, fn: () => Promise<T>) =>
       errors.capture(`command.${id}`, fn, { context: { command: id } });
-
-    // "Aurelia: Diagnostics Report" — the human-readable diagnostics view
-    own(
-      vscode.commands.registerCommand(AureliaCommand.DiagnosticsReport, () => {
-        return run("diagnosticsReport", async () => {
-          const editor = activeEditor(vscode);
-          if (!editor) {
-            vscode.window.showInformationMessage("No active editor");
-            return;
-          }
-          const uri = editor.document.uri.toString();
-          const snapshot = await lsp.getDiagnostics(uri);
-          if (!snapshot) {
-            vscode.window.showInformationMessage("No diagnostics available for this document");
-            return;
-          }
-          const report = formatDiagnosticsReport(snapshot);
-          const doc = await vscode.workspace.openTextDocument({
-            language: "markdown",
-            content: report,
-          });
-          await vscode.window.showTextDocument(doc, { preview: true, viewColumn: vscode.ViewColumn.Beside });
-        });
-      }),
-    );
 
     // "Aurelia: Find Resource" — quick-pick search across all known resources
     own(

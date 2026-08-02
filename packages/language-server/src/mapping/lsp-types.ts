@@ -60,23 +60,12 @@ export interface LspDocumentSnapshot {
   readonly text: string;
 }
 export type LookupDocumentSnapshotFn = (uri: DocumentUri) => LspDocumentSnapshot | null;
-export const AURELIA_LSP_DIAGNOSTIC_NAMESPACE_KEY = "__aurelia" as const;
-export const AURELIA_LSP_DIAGNOSTIC_TAXONOMY_SCHEMA = "diagnostics-taxonomy/1" as const;
 
 /** Best-effort read projection plus every source-backed row the adapter could not represent. */
 export interface SemanticRuntimeReadMapping<TValue> {
   readonly value: TValue;
   readonly failures: readonly string[];
 }
-
-type DiagnosticImpact = "blocking" | "degraded" | "informational";
-type DiagnosticActionability = "guided" | "manual";
-type DiagnosticCategory =
-  | "expression"
-  | "template-syntax"
-  | "resource-resolution"
-  | "bindable-validation"
-  | "project";
 
 // ============================================================================
 // Severity Mapping — L2 demotion table produces 4 severity levels
@@ -89,42 +78,6 @@ function semanticRuntimeSeverityToLsp(
     case "error": return DiagnosticSeverity.Error;
     case "warning": return DiagnosticSeverity.Warning;
     case "information": return DiagnosticSeverity.Information;
-  }
-}
-
-function semanticRuntimeDiagnosticImpact(
-  severity: SemanticAppDiagnosticRow["severity"],
-): DiagnosticImpact {
-  switch (severity) {
-    case "error":
-      return "blocking";
-    case "warning":
-      return "degraded";
-    case "information":
-      return "informational";
-  }
-}
-
-function semanticRuntimeDiagnosticActionability(
-  row: SemanticAppDiagnosticRow,
-): DiagnosticActionability {
-  return diagnosticRepairAffordanceForSuggestion(row.suggestion).actionability;
-}
-
-function semanticRuntimeDiagnosticCategory(row: SemanticAppDiagnosticRow): DiagnosticCategory {
-  switch (row.diagnosticDomain) {
-    case "template":
-      return "template-syntax";
-    case "resource":
-      return "resource-resolution";
-    case "validation":
-      return "bindable-validation";
-    case "typescript":
-    case "evaluation":
-    case "observation":
-      return "expression";
-    default:
-      return "project";
   }
 }
 
@@ -341,18 +294,7 @@ function semanticRuntimeDiagnosticRange(
 export function semanticRuntimeDiagnosticData(
   row: SemanticAppDiagnosticRow,
 ): Record<string, unknown> {
-  return semanticRuntimeDiagnosticDataEnvelope(row, semanticRuntimeDetachedDiagnosticData(row));
-}
-
-/** Preserve answer-local diagnostic relations only while the complete answer travels as one custom response. */
-export function semanticRuntimeDiagnosticSnapshotData(
-  row: SemanticAppDiagnosticRow,
-): Record<string, unknown> {
-  return semanticRuntimeDiagnosticDataEnvelope(row, {
-    ...semanticRuntimeDetachedDiagnosticData(row),
-    diagnosticIdentityHandle: row.diagnosticIdentityHandle,
-    ...(row.diagnosticRelations == null ? {} : { diagnosticRelations: row.diagnosticRelations }),
-  });
+  return { semanticRuntime: semanticRuntimeDetachedDiagnosticData(row) };
 }
 
 function semanticRuntimeDetachedDiagnosticData(row: SemanticAppDiagnosticRow): Record<string, unknown> {
@@ -376,27 +318,6 @@ function semanticRuntimeDetachedDiagnosticData(row: SemanticAppDiagnosticRow): R
     sourceRole: row.sourceRole,
     relatedQueryKind: row.relatedQueryKind,
     repairAffordance: diagnosticRepairAffordanceForSuggestion(row.suggestion),
-  };
-}
-
-function semanticRuntimeDiagnosticDataEnvelope(
-  row: SemanticAppDiagnosticRow,
-  runtime: Record<string, unknown>,
-): Record<string, unknown> {
-  const impact = semanticRuntimeDiagnosticImpact(row.severity);
-  const actionability = semanticRuntimeDiagnosticActionability(row);
-  const category = semanticRuntimeDiagnosticCategory(row);
-  return {
-    semanticRuntime: runtime,
-    [AURELIA_LSP_DIAGNOSTIC_NAMESPACE_KEY]: {
-      diagnostics: {
-        schema: AURELIA_LSP_DIAGNOSTIC_TAXONOMY_SCHEMA,
-        impact,
-        actionability,
-        category,
-        runtime,
-      },
-    },
   };
 }
 

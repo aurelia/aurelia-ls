@@ -458,11 +458,10 @@ suite("extension-host IDE reliability", () => {
         text: document.getText(diagnostic.range),
         message: diagnostic.message,
       }));
-      const semanticDiagnostics = await semanticDiagnosticFailureEvidence(document.uri);
       throw new Error(
         `${error.message}; elapsedMs=${Date.now() - diagnosticStartedAt}; document=${document.languageId}@${document.version}; `
         + `changes=${JSON.stringify(changeLog)}; diagnosticsChanges=${JSON.stringify(diagnosticsChangeLog)}; `
-        + `diagnostics=${JSON.stringify(diagnostics)}; semanticDiagnostics=${JSON.stringify(semanticDiagnostics)}`,
+        + `diagnostics=${JSON.stringify(diagnostics)}`,
       );
     }
     assert.strictEqual(nonCallableDiagnostic.severity, vscode.DiagnosticSeverity.Error);
@@ -693,32 +692,6 @@ async function waitForDiagnosticsClean(files, label) {
     }
     return true;
   }, `${label}: expected no relevant diagnostics`);
-}
-
-async function semanticDiagnosticFailureEvidence(uri) {
-  const extension = vscode.extensions.getExtension(extensionId);
-  try {
-    const snapshot = await extension?.exports?.ctx?.lsp?.getDiagnostics(uri.toString());
-    if (snapshot == null) return null;
-    return {
-      answer: {
-        result: snapshot.answer.result,
-        selection: snapshot.answer.selection,
-        coverage: snapshot.answer.coverage,
-        summary: snapshot.answer.summary,
-        analysisDepth: snapshot.answer.analysisDepth ?? null,
-      },
-      diagnostics: (snapshot.diagnostics.bySurface.lsp ?? []).map((diagnostic) => ({
-        code: diagnostic.code,
-        severity: diagnostic.severity,
-        uri: diagnostic.uri ?? null,
-        span: diagnostic.span ?? null,
-        message: diagnostic.message,
-      })),
-    };
-  } catch (error) {
-    return { requestError: String(error) };
-  }
 }
 
 async function executeCodeActionProvider(uri, range, itemResolveCount) {

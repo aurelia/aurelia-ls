@@ -6,7 +6,6 @@ import { createTestServices } from "../../helpers/test-helpers.js";
 import { createVscodeApi, stubExtensionContext } from "../../helpers/vscode-stub.js";
 
 interface HarnessOptions {
-  diagnosticsResult?: unknown;
   resourcesResult?: unknown;
   scopeResourcesResult?: unknown;
   relatedFilesResult?: unknown;
@@ -23,7 +22,6 @@ function createHarness(options: HarnessOptions = {}) {
   Object.assign(stubVscode.window, { showQuickPick });
   const vscode = stubVscode as unknown as VscodeApi;
   const { errors, logger } = createTestServices(vscode);
-  const getDiagnostics = vi.fn(async () => options.diagnosticsResult ?? null);
   const getResources = vi.fn(async () => options.resourcesResult ?? null);
   const getScopeResources = vi.fn(async () => options.scopeResourcesResult ?? null);
   const getRelatedFiles = vi.fn(async () => options.relatedFilesResult ?? []);
@@ -32,7 +30,7 @@ function createHarness(options: HarnessOptions = {}) {
     vscode,
     logger,
     errors,
-    lsp: { getDiagnostics, getResources, getScopeResources, getRelatedFiles },
+    lsp: { getResources, getScopeResources, getRelatedFiles },
   };
 
   UserCommandsFeature.activate(ctx as never, (contribution) => contribution);
@@ -47,7 +45,6 @@ function createHarness(options: HarnessOptions = {}) {
     recorded,
     quickPicks,
     showQuickPick,
-    getDiagnostics,
     getResources,
     getScopeResources,
     getRelatedFiles,
@@ -105,92 +102,6 @@ function resource(name: string, uri: string) {
 }
 
 describe("UserCommandsFeature", () => {
-  test("diagnosticsReport renders grouped diagnostics, raw evidence, and continuations", async () => {
-    const diagnostic = {
-      code: "missing-expression-member",
-      message: "Property title does not exist",
-      severity: "error",
-      category: "expression",
-      actionability: "guided",
-      uri: "file:///component.html",
-      span: { start: 8, end: 13 },
-      related: [{ message: "Binding context is App", uri: "file:///component.ts", span: { start: 6, end: 9 } }],
-      issues: [{ kind: "template-expression-typescript-diagnostic", message: "TS2339", field: "title" }],
-      data: { semanticRuntime: { authority: "typescript" } },
-    };
-    const { recorded, getDiagnostics } = createHarness({
-      diagnosticsResult: {
-        uri: "file:///component.html",
-        answer: {
-          ...completeAnswer,
-          summary: "One diagnostic.",
-          analysisDepth: "type-projection",
-          continuations: [{
-            kind: "query",
-            targetQueryKind: "template-cursor-info",
-            rationale: "Inspect the owning expression.",
-            cost: "low",
-            blockers: ["typescript-program-unavailable"],
-          }],
-        },
-        diagnostics: {
-          bySurface: { lsp: [diagnostic] },
-          raw: [{ ...diagnostic, status: "primary" }],
-          presentation: {
-            rawRowCount: 1,
-            primaryCount: 1,
-            contextualCount: 0,
-            complete: true,
-            groups: [{
-              groupKey: "member:title",
-              subject: { subjectKind: "expression-member", subjectName: "title", uri: "file:///component.html", span: { start: 8, end: 13 } },
-              primary: { rowId: "row:1", role: "primary", diagnostic },
-              related: [],
-              rawRowCount: 1,
-              primarySeverity: "error",
-              maxRawSeverity: "error",
-            }],
-          },
-        },
-      },
-    });
-
-    await recorded.commandHandlers.get(AureliaCommand.DiagnosticsReport)?.();
-
-    expect(getDiagnostics).toHaveBeenCalledWith("file:///component.html");
-    const report = recorded.openedDocuments.at(-1)?.text ?? "";
-    expect(report).toContain("# Aurelia Diagnostics Report");
-    expect(report).toContain("## Presented Diagnostics (1)");
-    expect(report).toContain("### missing-expression-member");
-    expect(report).toContain("Subject: expression-member title");
-    expect(report).toContain("Evidence: template-expression-typescript-diagnostic (title) - TS2339");
-    expect(report).toContain('"authority": "typescript"');
-    expect(report).toContain("## Raw Evidence (1)");
-    expect(report).toContain("## Follow-up Analysis (1)");
-    expect(report).toContain("Blocked: typescript-program-unavailable");
-    expect(recorded.shownDocuments.at(-1)?.opts).toEqual(expect.objectContaining({ viewColumn: 2 }));
-  });
-
-  test("diagnosticsReport retains raw evidence when presentation is empty", async () => {
-    const { recorded } = createHarness({
-      diagnosticsResult: {
-        uri: "file:///component.html",
-        answer: { ...completeAnswer, coverage: "open", summary: "One contextual row remains." },
-        diagnostics: {
-          bySurface: { lsp: [] },
-          raw: [{ code: "analysis-context", message: "Context remains inspectable.", severity: "info", status: "contextual" }],
-        },
-      },
-    });
-
-    await recorded.commandHandlers.get(AureliaCommand.DiagnosticsReport)?.();
-
-    const report = recorded.openedDocuments.at(-1)?.text ?? "";
-    expect(report).toContain("No diagnostics were presented, but analysis coverage is not complete.");
-    expect(report).toContain("## Raw Evidence (1)");
-    expect(report).toContain("### analysis-context [contextual]");
-  });
-
   test("findResource presents exact metadata and opens the selected declaration", async () => {
     const selected = resource("product-card", "file:///C:/repo/src/product-card.ts");
     const { recorded, quickPicks, getResources } = createHarness({

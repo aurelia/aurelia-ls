@@ -3,7 +3,6 @@ import type { CodeAction as ProtocolCodeAction, Middleware } from "vscode-langua
 import { AURELIA_TEMPLATE_CODE_ACTION_RESOLVE_SCHEMA } from "@aurelia-ls/language-server/protocol";
 import type { ClientLogger } from "./log.js";
 import type { VscodeApi } from "./vscode-api.js";
-import { applyDiagnosticsUxAugmentation } from "./features/diagnostics/taxonomy.js";
 import { workspaceEditVersionMismatches } from "./workspace-edit-versions.js";
 
 type MiddlewareLanguageClient = {
@@ -57,15 +56,6 @@ export function createMiddleware(
         return action;
       }
       return converted;
-    },
-    handleDiagnostics: (uri, diagnostics, next) => {
-      const includeTaxonomy = vscode.workspace
-        .getConfiguration("aurelia", uri)
-        .get<boolean>("diagnostics.includeTaxonomyDetails", false);
-      if (includeTaxonomy) {
-        applyDiagnosticsUxAugmentation(diagnostics);
-      }
-      next(uri, diagnostics);
     },
   };
 }

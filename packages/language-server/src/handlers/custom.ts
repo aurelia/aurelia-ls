@@ -10,31 +10,13 @@ import type {
   SemanticResourceDefinitionRow,
   SemanticResourceVisibilityRow,
   SemanticRuntimeAnswer,
-  SemanticAppDiagnosticRow,
-  SemanticAppDiagnosticsResult,
-  SemanticDiagnosticPresentationResult,
   SemanticSourceReference,
   SemanticTemplateCompilationRow,
 } from "@aurelia-ls/semantic-runtime";
-import {
-  canonicalTypeSystemPath,
-  diagnosticRepairAffordanceForSuggestion,
-  semanticExactSourceReference,
-} from "@aurelia-ls/semantic-runtime";
+import { canonicalTypeSystemPath } from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
 import type { WorkspaceDocumentUris } from "../utils/document-uri.js";
 import type {
-  DiagnosticCategory,
-  DiagnosticImpact,
-  DiagnosticSeverity,
-  DiagnosticStatus,
-  DiagnosticsSnapshotBundle,
-  DiagnosticsSnapshotItem,
-  DiagnosticsSnapshotPresentation,
-  DiagnosticsSnapshotPresentationGroup,
-  DiagnosticsSnapshotPresentationItem,
-  DiagnosticsSnapshotRelated,
-  DiagnosticsSnapshotResponse,
   DocumentUriParams,
   RelatedFileCandidate,
   RelatedFilesResponse,
@@ -49,15 +31,12 @@ import type {
   ResourceExplorerVisibility,
   ResourceExplorerVisibilityKind,
   ScopeResourcesResponse,
-  SourceSpan,
   WorkspaceStatusResponse,
 } from "../protocol.js";
 import { AureliaProtocolRequest } from "../protocol.js";
 import {
   mapSemanticRuntimeTemplatePrepareRename,
   mapSemanticRuntimeTemplateRenameEdit,
-  semanticRuntimeDiagnosticCode,
-  semanticRuntimeDiagnosticSnapshotData,
 } from "../mapping/lsp-types.js";
 import {
   semanticSourceReferenceFilePath,
@@ -79,225 +58,6 @@ export type {
   ResourceExplorerResponse,
   ScopeResourcesResponse,
 } from "../protocol.js";
-
-type MaybeUriParam = { uri?: string } | string | null;
-
-function uriFromParam(params: MaybeUriParam): string | undefined {
-  if (typeof params === "string") return params;
-  if (params && typeof params === "object" && typeof params.uri === "string") return params.uri;
-  return undefined;
-}
-
-function serializeRuntimeDiagnosticsSnapshot(
-  documentUris: WorkspaceDocumentUris,
-  result: SemanticAppDiagnosticsResult,
-): DiagnosticsSnapshotBundle {
-  const rows = result.rows;
-  const presentation = result.presentation;
-  const raw = rows.map((row) => toRuntimeSnapshotItem(documentUris, row));
-  return {
-    bySurface: {
-      lsp: presentation == null
-        ? raw
-        : presentation.groups.flatMap((group) => {
-          const row = rowAt(rows, group.primary.rowIndex);
-          return row == null ? [] : [toRuntimeSnapshotItem(documentUris, row, "primary")];
-        }),
-    },
-    raw,
-    ...(presentation == null ? {} : { presentation: runtimeDiagnosticsPresentation(documentUris, rows, presentation) }),
-  };
-}
-
-function toRuntimeSnapshotItem(
-  documentUris: WorkspaceDocumentUris,
-  row: SemanticAppDiagnosticRow,
-  status: DiagnosticStatus = "canonical",
-): DiagnosticsSnapshotItem {
-  const file = semanticSourceReferenceFilePath(row.source, documentUris) ?? undefined;
-  const span = sourceSpanForSource(row.source);
-  const code = semanticRuntimeDiagnosticCode(row);
-  return {
-    code,
-    message: row.summary,
-    severity: runtimeDiagnosticSeverity(row.severity),
-    impact: runtimeDiagnosticImpact(row.severity),
-    actionability: diagnosticRepairAffordanceForSuggestion(row.suggestion).actionability,
-    category: runtimeDiagnosticCategory(row),
-    status,
-    source: `semantic-runtime:${row.diagnosticDomain}`,
-    uri: file == null ? undefined : documentUris.uriForHostPath(file),
-    span,
-    data: semanticRuntimeDiagnosticSnapshotData(row),
-    related: runtimeDiagnosticRelatedInformation(documentUris, row.relatedInformation),
-    surfaces: ["lsp", "vscode-panel"],
-    issues: [
-      {
-        kind: row.diagnosticKind,
-        message: row.summary,
-        code,
-        rawCode: row.frameworkRawErrorAuthority ?? undefined,
-      },
-    ],
-  };
-}
-
-function runtimeDiagnosticRelatedInformation(
-  documentUris: WorkspaceDocumentUris,
-  relatedInformation: NonNullable<SemanticAppDiagnosticRow["relatedInformation"]>,
-): readonly DiagnosticsSnapshotRelated[] {
-  return relatedInformation.map((related): DiagnosticsSnapshotRelated => {
-    const file = semanticSourceReferenceFilePath(related.source, documentUris) ?? undefined;
-    const span = sourceSpanForSource(related.source);
-    return {
-      ...(related.code == null ? {} : { code: related.code }),
-      message: related.message,
-      ...(file == null ? {} : { uri: documentUris.uriForHostPath(file) }),
-      ...(span == null ? {} : { span }),
-      ...(related.sourceRole == null ? {} : { sourceRole: related.sourceRole }),
-      ...(related.relationKind == null ? {} : { relationKind: related.relationKind }),
-    };
-  });
-}
-
-function runtimeDiagnosticsPresentation(
-  documentUris: WorkspaceDocumentUris,
-  rows: readonly SemanticAppDiagnosticRow[],
-  presentation: SemanticDiagnosticPresentationResult,
-): DiagnosticsSnapshotPresentation {
-  return {
-    rawRowCount: presentation.rawRowCount,
-    primaryCount: presentation.primaryCount,
-    contextualCount: presentation.contextualCount,
-    complete: presentation.complete,
-    groups: presentation.groups.map((group): DiagnosticsSnapshotPresentationGroup => ({
-      groupKey: group.groupKey,
-      ...(group.subject == null ? {} : { subject: runtimeDiagnosticSubject(documentUris, group.subject) }),
-      primary: {
-        rowId: group.primary.rowId,
-        role: group.primary.role,
-        ...(group.primary.relation == null ? {} : { relation: group.primary.relation }),
-        diagnostic: runtimePresentationSnapshotItem(documentUris, rows, group.primary.rowIndex, "primary"),
-      },
-      related: group.related.map((row): DiagnosticsSnapshotPresentationItem => ({
-        rowId: row.rowId,
-        role: row.role,
-        ...(row.relation == null ? {} : { relation: row.relation }),
-        diagnostic: runtimePresentationSnapshotItem(documentUris, rows, row.rowIndex, "contextual"),
-      })),
-      rawRowCount: group.rawRowCount,
-      primarySeverity: runtimeDiagnosticSeverity(group.primarySeverity),
-      maxRawSeverity: runtimeDiagnosticSeverity(group.maxRawSeverity),
-    })),
-  };
-}
-
-function runtimePresentationSnapshotItem(
-  documentUris: WorkspaceDocumentUris,
-  rows: readonly SemanticAppDiagnosticRow[],
-  rowIndex: number,
-  status: DiagnosticStatus,
-): DiagnosticsSnapshotItem | null {
-  const row = rowAt(rows, rowIndex);
-  return row == null ? null : toRuntimeSnapshotItem(documentUris, row, status);
-}
-
-function rowAt<TRow>(rows: readonly TRow[], index: number): TRow | null {
-  return Number.isInteger(index) && index >= 0 && index < rows.length
-    ? rows[index] ?? null
-    : null;
-}
-
-function runtimeDiagnosticSubject(
-  documentUris: WorkspaceDocumentUris,
-  subject: NonNullable<SemanticAppDiagnosticRow["subject"]>,
-): NonNullable<DiagnosticsSnapshotPresentationGroup["subject"]> {
-  const source = semanticExactSourceReference(subject.source);
-  const file = semanticSourceReferenceFilePath(subject.source, documentUris) ?? undefined;
-  return {
-    subjectKind: subject.subjectKind,
-    subjectName: subject.subjectName,
-    ...(file == null ? {} : { uri: documentUris.uriForHostPath(file) }),
-    ...(source?.start == null || source.end == null
-      ? {}
-      : { span: { start: source.start, end: source.end } }),
-  };
-}
-
-function runtimeDiagnosticSeverity(
-  severity: SemanticAppDiagnosticRow["severity"],
-): DiagnosticSeverity {
-  return severity === "information" ? "info" : severity;
-}
-
-function runtimeDiagnosticImpact(
-  severity: SemanticAppDiagnosticRow["severity"],
-): DiagnosticImpact {
-  switch (severity) {
-    case "error":
-      return "blocking";
-    case "warning":
-      return "degraded";
-    case "information":
-      return "informational";
-  }
-}
-
-function runtimeDiagnosticCategory(row: SemanticAppDiagnosticRow): DiagnosticCategory {
-  switch (row.diagnosticDomain) {
-    case "template":
-      return "template-syntax";
-    case "resource":
-      return "resource-resolution";
-    case "validation":
-      return "bindable-validation";
-    case "typescript":
-    case "evaluation":
-    case "observation":
-      return "expression";
-    default:
-      return "project";
-  }
-}
-
-function sourceSpanForSource(source: SemanticSourceReference | null): SourceSpan | undefined {
-  const exact = semanticExactSourceReference(source);
-  if (exact?.start == null || exact.end == null) {
-    return undefined;
-  }
-  return {
-    start: exact.start,
-    end: exact.end,
-  };
-}
-
-export async function handleGetDiagnostics(
-  ctx: ServerContext,
-  params: MaybeUriParam,
-  guard: SemanticRuntimeLspRequestGuard,
-): Promise<DiagnosticsSnapshotResponse | null> {
-  const uri = uriFromParam(params);
-  if (!uri) return null;
-  const canonicalUri = ctx.documentUris.resolve(uri).uri;
-  const doc = ctx.ensureProgramDocument(uri);
-  if (!doc) return null;
-  const answer = await ctx.semanticRuntime.appDiagnostics(doc, guard);
-  const diagnostics = serializeRuntimeDiagnosticsSnapshot(ctx.documentUris, answer.value);
-  return {
-    uri: canonicalUri,
-    answer: {
-      schemaVersion: answer.schemaVersion,
-      result: `${answer.result}`,
-      selection: `${answer.selection}`,
-      coverage: `${answer.coverage}`,
-      summary: answer.summary,
-      page: answer.page,
-      ...(answer.analysisDepth == null ? {} : { analysisDepth: answer.analysisDepth }),
-      ...(answer.continuations == null ? {} : { continuations: answer.continuations }),
-    },
-    diagnostics,
-  };
-}
 
 export async function handleGetResources(
   ctx: ServerContext,
@@ -900,9 +660,6 @@ function normalizedFilePath(filePath: string): string {
  * Registers all custom Aurelia request handlers on the connection.
  */
 export function registerCustomHandlers(ctx: ServerContext): void {
-  ctx.connection.onRequest(AureliaProtocolRequest.Diagnostics, (params: MaybeUriParam, token: CancellationToken) =>
-    request(ctx, "getDiagnostics", token, uriFromParam(params),
-      (guard) => handleGetDiagnostics(ctx, params, guard)));
   ctx.connection.onRequest(AureliaProtocolRequest.Resources, (_params: unknown, token: CancellationToken) =>
     request(ctx, "getResources", token, undefined,
       (guard) => handleGetResources(ctx, guard)));

@@ -62,11 +62,6 @@
         "category": "Aurelia"
       },
       {
-        "command": "aurelia.diagnosticsReport",
-        "title": "Diagnostics Report",
-        "category": "Aurelia"
-      },
-      {
         "command": "aurelia.findResource",
         "title": "Find Resource",
         "icon": "$(search)",
@@ -114,10 +109,6 @@
           "when": "aurelia.active"
         },
         {
-          "command": "aurelia.diagnosticsReport",
-          "when": "aurelia.active && aurelia.documentOwned"
-        },
-        {
           "command": "aurelia.findResource",
           "when": "aurelia.active"
         },
@@ -158,13 +149,6 @@
           "scope": "resource",
           "order": 20,
           "description": "Show the resolved binding mode for implicit .bind commands."
-        },
-        "aurelia.diagnostics.includeTaxonomyDetails": {
-          "type": "boolean",
-          "default": false,
-          "scope": "resource",
-          "order": 30,
-          "description": "Append Aurelia impact, actionability, category, and confidence details to diagnostic messages."
         }
       }
     }

@@ -7,7 +7,6 @@ import {
 import type { AureliaLanguageClient, AureliaLanguageClientSession } from "../client-core.js";
 import type { ClientLogger } from "../log.js";
 import type {
-  DiagnosticsSnapshotResponse,
   ProtocolWorkspaceEdit,
   RelatedFilesResponse,
   RenameFromTsResponse,
@@ -67,13 +66,6 @@ export class LspFacade implements Disposable {
         }
       },
     };
-  }
-
-  async getDiagnostics(uri: string): Promise<DiagnosticsSnapshotResponse | null> {
-    const session = this.#sessionForUri(uri);
-    return session == null
-      ? null
-      : this.#sendRequest(session, AureliaProtocolRequest.Diagnostics, { uri });
   }
 
   async getResources(): Promise<ResourceExplorerResponse | null> {

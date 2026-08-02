@@ -27,7 +27,6 @@ suite("extension-host product surface", () => {
   test("ships only the retained command and Explorer surface", async () => {
     const commands = new Set(await vscode.commands.getCommands(true));
     for (const command of [
-      "aurelia.diagnosticsReport",
       "aurelia.findResource",
       "aurelia.showAvailableResources",
       "aurelia.openRelatedFile",
@@ -35,6 +34,7 @@ suite("extension-host product surface", () => {
     ]) {
       assert(commands.has(command), `Expected ${command} to be registered.`);
     }
+    assert(!commands.has("aurelia.diagnosticsReport"), "Withheld Diagnostics Report command must not be registered.");
     assert(!commands.has("aurelia.inspectAtCursor"), "Removed Inspect at Cursor command must not be registered.");
 
     await vscode.commands.executeCommand("workbench.view.explorer");
@@ -58,15 +58,7 @@ suite("extension-host product surface", () => {
     ), "Expected product-card to resolve to its authored definition.");
   });
 
-  test("renders diagnostics evidence and opens related files through retained commands", async () => {
-    await showAureliaDocument("src/my-app.html");
-    await vscode.commands.executeCommand("aurelia.diagnosticsReport");
-    const report = vscode.window.activeTextEditor?.document;
-    assert(report, "Diagnostics Report should open a document.");
-    assert.strictEqual(report.languageId, "markdown");
-    assert(report.getText().includes("# Aurelia Diagnostics Report"));
-    assert(report.getText().includes("## Raw Evidence"));
-
+  test("opens related files through the retained topology command", async () => {
     await showAureliaDocument("src/components/product-card.html");
     await vscode.commands.executeCommand("aurelia.openRelatedFile");
     await waitFor(

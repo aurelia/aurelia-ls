@@ -78,7 +78,6 @@ describe("VS Code product contract", () => {
 
     expect(Object.keys(properties).sort()).toEqual([
       "aurelia.activationMode",
-      "aurelia.diagnostics.includeTaxonomyDetails",
       "aurelia.inlayHints.bindingMode",
     ]);
     expect(properties["aurelia.activationMode"]).toEqual(expect.objectContaining({
@@ -86,10 +85,6 @@ describe("VS Code product contract", () => {
       scope: "resource",
     }));
     expect(properties["aurelia.inlayHints.bindingMode"]).toEqual(expect.objectContaining({
-      default: false,
-      scope: "resource",
-    }));
-    expect(properties["aurelia.diagnostics.includeTaxonomyDetails"]).toEqual(expect.objectContaining({
       default: false,
       scope: "resource",
     }));

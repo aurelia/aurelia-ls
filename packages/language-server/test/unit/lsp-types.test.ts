@@ -2,8 +2,6 @@ import { describe, test, expect } from "vitest";
 import { CompletionItemKind } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import {
-  AURELIA_LSP_DIAGNOSTIC_NAMESPACE_KEY,
-  AURELIA_LSP_DIAGNOSTIC_TAXONOMY_SCHEMA,
   mapSemanticRuntimeAppDiagnostics,
   mapSemanticRuntimeTemplateCodeActions,
   mapSemanticRuntimeTemplateDefinition,
@@ -141,17 +139,6 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
             message: "The member is declared here.",
           },
         ],
-      },
-      [AURELIA_LSP_DIAGNOSTIC_NAMESPACE_KEY]: {
-        diagnostics: {
-          schema: AURELIA_LSP_DIAGNOSTIC_TAXONOMY_SCHEMA,
-          impact: "degraded",
-          actionability: "manual",
-          category: "template-syntax",
-          runtime: {
-            relatedQueryKind: "template-diagnostics",
-          },
-        },
       },
     });
     expect(mapped.value[0]?.data).not.toHaveProperty("semanticRuntime.diagnosticIdentityHandle");
