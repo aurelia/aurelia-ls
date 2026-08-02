@@ -264,40 +264,6 @@ describe("AureliaLanguageClient workspace ownership", () => {
     }
   });
 
-  test("re-arms workspace listeners when the manager starts after being stopped", async () => {
-    const { vscode, recorded } = createVscodeApi({
-      workspaceFolders: [{ name: "first", uri: "file:///work/first" }],
-      files: {
-        "file:///work/first/package.json": JSON.stringify({ dependencies: { aurelia: "latest" } }),
-      },
-    });
-    const harness = createClientHarness(new Map([
-      ["file:///work/first", workspaceStatus("app-world")],
-      ["file:///work/second", workspaceStatus("app-world")],
-    ]));
-    const manager = createManager(vscode, harness);
-
-    await manager.start(stubExtensionContext(vscode));
-    await manager.stop();
-    await manager.start(stubExtensionContext(vscode));
-
-    vscode.workspace.workspaceFolders?.push({
-      name: "second",
-      index: 1,
-      uri: vscode.Uri.parse("file:///work/second"),
-    });
-    recorded.setFile(
-      "file:///work/second/package.json",
-      JSON.stringify({ dependencies: { aurelia: "latest" } }),
-    );
-    recorded.fireWorkspaceFoldersChanged();
-
-    await vi.waitFor(() => {
-      expect(manager.sessions.map((session) => session.workspace.name)).toEqual(["first", "second"]);
-    });
-    await manager.stop();
-  });
-
   test("preserves a package topology change when a newer reconciliation supersedes its request", async () => {
     const { vscode, recorded } = createVscodeApi({
       workspaceFolders: [{ name: "app", uri: "file:///work/app" }],
@@ -488,191 +454,7 @@ describe("AureliaLanguageClient workspace ownership", () => {
     expect(manager.sessions).toEqual([]);
   });
 
-  test("does not resurrect a replacement session when stop interrupts restart confirmation", async () => {
-    const { vscode } = createVscodeApi({
-      workspaceFolders: [{ name: "app", uri: "file:///work/app" }],
-      files: {
-        "file:///work/app/package.json": JSON.stringify({ dependencies: { aurelia: "latest" } }),
-      },
-    });
-    const status = workspaceStatus("app-world");
-    const restartGate = deferred<WorkspaceStatusResponse | null>();
-    const harness = createClientHarness(new Map([["file:///work/app", status]]), {
-      workspaceStatus: (_workspaceUri, requestIndex) => requestIndex === 0 ? status : restartGate.promise,
-    });
-    const manager = createManager(vscode, harness);
-    await manager.start(stubExtensionContext(vscode));
-    const publications: string[][] = [];
-    manager.onDidChangeSessions((sessions) => {
-      publications.push(sessions.map((session) => session.workspace.name));
-    });
-
-    const restarting = manager.restart(stubExtensionContext(vscode));
-    await vi.waitFor(() => expect(harness.clients).toHaveLength(2));
-    const stopping = manager.stop();
-    restartGate.resolve(status);
-    await Promise.all([restarting, stopping]);
-
-    expect(manager.sessions).toEqual([]);
-    expect(publications).toEqual([[]]);
-    expect(harness.clients[0]?.stop).toHaveBeenCalledTimes(1);
-    expect(harness.clients[1]?.stop).toHaveBeenCalledTimes(1);
-    expect(sessionWatchers(harness.clients[1]!).every((watcher) => watcher.disposed)).toBe(true);
-  });
-
-  test("restarts cleanly when the request supersedes initial semantic admission", async () => {
-    const { vscode } = createVscodeApi({
-      workspaceFolders: [{ name: "app", uri: "file:///work/app" }],
-      files: {
-        "file:///work/app/package.json": JSON.stringify({ dependencies: { aurelia: "latest" } }),
-      },
-    });
-    const status = workspaceStatus("app-world");
-    const initialGate = deferred<WorkspaceStatusResponse | null>();
-    const harness = createClientHarness(new Map([["file:///work/app", status]]), {
-      workspaceStatus: (_workspaceUri, requestIndex) => requestIndex === 0 ? initialGate.promise : status,
-    });
-    const manager = createManager(vscode, harness);
-    const context = stubExtensionContext(vscode);
-
-    const starting = manager.start(context);
-    await vi.waitFor(() => expect(harness.clients).toHaveLength(1));
-    const restarting = manager.restart(context);
-    initialGate.resolve(status);
-    await Promise.all([starting, restarting]);
-
-    expect(harness.clients).toHaveLength(2);
-    expect(harness.clients[0]?.stop).toHaveBeenCalledTimes(1);
-    expect(manager.sessions[0]?.client).toBe(harness.clients[1]?.raw);
-    await manager.stop();
-  });
-
-  test("orders a new start after stop has retired the previous client", async () => {
-    const { vscode } = createVscodeApi({
-      workspaceFolders: [{ name: "app", uri: "file:///work/app" }],
-      files: {
-        "file:///work/app/package.json": JSON.stringify({ dependencies: { aurelia: "latest" } }),
-      },
-    });
-    const stopGate = deferred<void>();
-    const harness = createClientHarness(new Map([
-      ["file:///work/app", workspaceStatus("app-world")],
-    ]), {
-      clientStop: (_workspaceUri, clientIndex) => clientIndex === 0 ? stopGate.promise : undefined,
-    });
-    const manager = createManager(vscode, harness);
-    const context = stubExtensionContext(vscode);
-    await manager.start(context);
-
-    const stopping = manager.stop();
-    const starting = manager.start(context);
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(harness.clients).toHaveLength(1);
-
-    stopGate.resolve(undefined);
-    await Promise.all([stopping, starting]);
-    expect(harness.clients).toHaveLength(2);
-    expect(manager.sessions[0]?.client).toBe(harness.clients[1]?.raw);
-    expect(harness.clients[0]?.stop).toHaveBeenCalledTimes(1);
-    await manager.stop();
-  });
-
-  test("keeps restart failure local to one workspace root", async () => {
-    const { vscode } = twoWorkspaceApi();
-    const statusByWorkspace = new Map([
-      ["file:///work/a", workspaceStatus("app-world")],
-      ["file:///work/b", workspaceStatus("app-world")],
-    ]);
-    const harness = createClientHarness(statusByWorkspace, {
-      clientStart: (_workspaceUri, clientIndex) => {
-        if (clientIndex === 2) throw new Error("replacement failed");
-      },
-    });
-    const manager = createManager(vscode, harness);
-    const context = stubExtensionContext(vscode);
-    await manager.start(context);
-    const originalA = harness.clients[0]!;
-    const originalB = harness.clients[1]!;
-
-    await manager.restart(context);
-
-    expect(manager.sessions.find((session) => session.workspace.name === "a")?.client).toBe(originalA.raw);
-    expect(manager.sessions.find((session) => session.workspace.name === "b")?.client).toBe(harness.clients[3]?.raw);
-    expect(originalA.stop).not.toHaveBeenCalled();
-    expect(originalB.stop).toHaveBeenCalledTimes(1);
-    expect(harness.clients[2]?.stop).toHaveBeenCalledTimes(1);
-
-    await manager.reconcile({ reconfirmExisting: true });
-    expect(manager.sessions).toHaveLength(2);
-    await manager.stop();
-  });
-
-  test("cuts over each independent root before starting the next replacement", async () => {
-    const { vscode } = twoWorkspaceApi();
-    const status = workspaceStatus("app-world");
-    const secondRootGate = deferred<WorkspaceStatusResponse | null>();
-    const harness = createClientHarness(new Map([
-      ["file:///work/a", status],
-      ["file:///work/b", status],
-    ]), {
-      workspaceStatus: (_workspaceUri, requestIndex) => requestIndex === 3 ? secondRootGate.promise : status,
-    });
-    const manager = createManager(vscode, harness);
-    const context = stubExtensionContext(vscode);
-    await manager.start(context);
-
-    const restarting = manager.restart(context);
-    await vi.waitFor(() => expect(harness.clients).toHaveLength(4));
-
-    expect(manager.sessions.find((session) => session.workspace.name === "a")?.client).toBe(harness.clients[2]?.raw);
-    expect(manager.sessions.find((session) => session.workspace.name === "b")?.client).toBe(harness.clients[1]?.raw);
-    expect(harness.clients[0]?.stop).toHaveBeenCalledTimes(1);
-
-    secondRootGate.resolve(status);
-    await restarting;
-    expect(manager.sessions.find((session) => session.workspace.name === "b")?.client).toBe(harness.clients[3]?.raw);
-    expect(harness.clients[1]?.stop).toHaveBeenCalledTimes(1);
-    await manager.stop();
-  });
-
-  test("does not publish a replacement after its workspace root is removed", async () => {
-    const { vscode, recorded } = createVscodeApi({
-      workspaceFolders: [{ name: "app", uri: "file:///work/app" }],
-      files: {
-        "file:///work/app/package.json": JSON.stringify({ dependencies: { aurelia: "latest" } }),
-      },
-    });
-    const replacementStart = deferred<void>();
-    const harness = createClientHarness(new Map([
-      ["file:///work/app", workspaceStatus("app-world")],
-    ]), {
-      clientStart: (_workspaceUri, clientIndex) => clientIndex === 1 ? replacementStart.promise : undefined,
-    });
-    const manager = createManager(vscode, harness);
-    const context = stubExtensionContext(vscode);
-    await manager.start(context);
-    const publications: string[][] = [];
-    manager.onDidChangeSessions((sessions) => {
-      publications.push(sessions.map((session) => session.workspace.name));
-    });
-
-    const restarting = manager.restart(context);
-    await vi.waitFor(() => expect(harness.clients[1]?.start).toHaveBeenCalledTimes(1));
-    vscode.workspace.workspaceFolders?.splice(0, 1);
-    recorded.fireWorkspaceFoldersChanged();
-    await vi.waitFor(() => expect(manager.sessions).toEqual([]));
-    await restarting;
-
-    expect(publications).toEqual([[]]);
-    expect(sessionWatchers(harness.clients[1]!).every((watcher) => watcher.disposed)).toBe(true);
-
-    replacementStart.resolve(undefined);
-    await vi.waitFor(() => expect(harness.clients[1]?.stop).toHaveBeenCalledTimes(1));
-    expect(publications).toEqual([[]]);
-    await manager.stop();
-  });
-
-  test("rolls back partial listener installation so a later start can retry", async () => {
+  test("rolls back partial listener installation and keeps start single-use", async () => {
     const { vscode, recorded } = createVscodeApi({
       workspaceFolders: [{ name: "app", uri: "file:///work/app" }],
       files: {
@@ -700,8 +482,7 @@ describe("AureliaLanguageClient workspace ownership", () => {
     await expect(manager.start(context)).rejects.toThrow("watcher registration failed");
     expect(recorded.fileWatchers[0]?.disposed).toBe(true);
 
-    await manager.start(context);
-    expect(manager.sessions).toHaveLength(1);
+    await expect(manager.start(context)).rejects.toThrow("may start only once");
     await manager.stop();
   });
 });
@@ -777,8 +558,8 @@ describe("LspFacade workspace routing", () => {
     await manager.stop();
   });
 
-  test("multicasts one raw notification, honors local disposal, and rebinds exactly once after restart", async () => {
-    const { vscode } = twoWorkspaceApi();
+  test("multicasts one raw notification and rebinds when workspace ownership changes", async () => {
+    const { vscode, recorded } = twoWorkspaceApi();
     const harness = createClientHarness(new Map([
       ["file:///work/a", workspaceStatus("app-world")],
       ["file:///work/b", workspaceStatus("app-world")],
@@ -803,10 +584,11 @@ describe("LspFacade workspace routing", () => {
     expect(second).toHaveBeenCalledTimes(2);
 
     const retired = harness.clients[0]!;
-    await manager.restart(stubExtensionContext(vscode));
-    const replacement = harness.clients.filter((client) => client.workspaceUri === "file:///work/a").at(-1)!;
+    vscode.workspace.workspaceFolders?.splice(0, 1);
+    recorded.fireWorkspaceFoldersChanged();
+    await vi.waitFor(() => expect(manager.sessions.map((session) => session.workspace.name)).toEqual(["b"]));
     retired.emit("aurelia/analysisChanged", { fingerprint: "old" });
-    replacement.emit("aurelia/analysisChanged", { fingerprint: "new" });
+    harness.clients[1]?.emit("aurelia/analysisChanged", { fingerprint: "new" });
     expect(second).toHaveBeenCalledTimes(3);
 
     facade.dispose();

@@ -1,7 +1,6 @@
-/** User-facing Aurelia commands registered while at least one semantic workspace is owned. */
+/** Extension-lifetime commands that resolve active workspace ownership when invoked. */
 import type { QuickPickItem, TextEditor } from "vscode";
 import type { ClientFeature } from "../../core/feature.js";
-import { DisposableStore } from "../../core/disposables.js";
 import { AureliaCommand } from "../../product-contract.js";
 import type { VscodeApi } from "../../vscode-api.js";
 import type {
@@ -211,8 +210,7 @@ function resourceDetail(resource: CommandResource, workspaceName?: string): stri
 
 export const UserCommandsFeature: ClientFeature = {
   id: "commands.user",
-  activate: (ctx) => {
-    const store = new DisposableStore();
+  activate: (ctx, own) => {
     const lsp = ctx.lsp;
     const vscode = ctx.vscode;
     const errors = ctx.errors;
@@ -221,7 +219,7 @@ export const UserCommandsFeature: ClientFeature = {
       errors.capture(`command.${id}`, fn, { context: { command: id } });
 
     // "Aurelia: Diagnostics Report" — the human-readable diagnostics view
-    store.add(
+    own(
       vscode.commands.registerCommand(AureliaCommand.DiagnosticsReport, () => {
         return run("diagnosticsReport", async () => {
           const editor = activeEditor(vscode);
@@ -246,7 +244,7 @@ export const UserCommandsFeature: ClientFeature = {
     );
 
     // "Aurelia: Find Resource" — quick-pick search across all known resources
-    store.add(
+    own(
       vscode.commands.registerCommand(AureliaCommand.FindResource, () => {
         return run("findResource", async () => {
           const response = await lsp.getResources();
@@ -297,7 +295,7 @@ export const UserCommandsFeature: ClientFeature = {
     );
 
     // "Aurelia: Show Available Resources" — what's visible in the current template's scope
-    store.add(
+    own(
       vscode.commands.registerCommand(AureliaCommand.ShowAvailableResources, () => {
         return run("showAvailableResources", async () => {
           const editor = activeEditor(vscode);
@@ -348,7 +346,7 @@ export const UserCommandsFeature: ClientFeature = {
     );
 
     // "Aurelia: Open Related File" — toggle between component class and template
-    store.add(
+    own(
       vscode.commands.registerCommand(AureliaCommand.OpenRelatedFile, () => {
         return run("openRelatedFile", async () => {
           const editor = activeEditor(vscode);
@@ -368,7 +366,5 @@ export const UserCommandsFeature: ClientFeature = {
         });
       }),
     );
-
-    return store;
   },
 };

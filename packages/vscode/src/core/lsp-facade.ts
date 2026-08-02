@@ -1,4 +1,4 @@
-import type { CancellationToken, WorkspaceEdit } from "vscode";
+import type { CancellationToken, Disposable, WorkspaceEdit } from "vscode";
 import {
   AureliaProtocolNotification,
   AureliaProtocolRequest,
@@ -16,17 +16,16 @@ import type {
   AnalysisChangedPayload,
   WorkspaceNotificationPayload,
 } from "../types.js";
-import { toDisposable, type DisposableLike } from "./disposables.js";
 
 type NotificationHandler = (payload: unknown) => void;
 
 /** Routes custom LSP traffic across the active workspace-owned client sessions. */
-export class LspFacade implements DisposableLike {
+export class LspFacade implements Disposable {
   #clients: AureliaLanguageClient;
   #logger: ClientLogger;
   #notificationHandlers = new Map<string, Set<NotificationHandler>>();
-  #rawNotificationSubscriptions: DisposableLike[] = [];
-  #sessionSubscription: DisposableLike;
+  #rawNotificationSubscriptions: Disposable[] = [];
+  #sessionSubscription: Disposable;
   #disposed = false;
 
   constructor(clients: AureliaLanguageClient, logger: ClientLogger) {
@@ -38,7 +37,11 @@ export class LspFacade implements DisposableLike {
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
-    this.#sessionSubscription.dispose();
+    try {
+      this.#sessionSubscription.dispose();
+    } catch (error) {
+      this.#logger.warn("session-subscription.dispose.failed", undefined, error);
+    }
     this.#disposeRawNotifications();
     this.#notificationHandlers.clear();
   }
@@ -46,7 +49,7 @@ export class LspFacade implements DisposableLike {
   onNotification<T>(
     method: string,
     handler: (payload: WorkspaceNotificationPayload<T>) => void,
-  ): DisposableLike {
+  ): Disposable {
     let handlers = this.#notificationHandlers.get(method);
     if (handlers == null) {
       handlers = new Set();
@@ -54,14 +57,16 @@ export class LspFacade implements DisposableLike {
     }
     handlers.add(handler as NotificationHandler);
     this.#rebindNotifications();
-    return toDisposable(() => {
-      const current = this.#notificationHandlers.get(method);
-      current?.delete(handler as NotificationHandler);
-      if (current?.size === 0) {
-        this.#notificationHandlers.delete(method);
-        this.#rebindNotifications();
-      }
-    });
+    return {
+      dispose: () => {
+        const current = this.#notificationHandlers.get(method);
+        current?.delete(handler as NotificationHandler);
+        if (current?.size === 0) {
+          this.#notificationHandlers.delete(method);
+          this.#rebindNotifications();
+        }
+      },
+    };
   }
 
   async getDiagnostics(uri: string): Promise<DiagnosticsSnapshotResponse | null> {
@@ -179,7 +184,7 @@ export class LspFacade implements DisposableLike {
 
   onAnalysisChanged(
     handler: (payload: WorkspaceNotificationPayload<AnalysisChangedPayload>) => void,
-  ): DisposableLike {
+  ): Disposable {
     return this.onNotification(AureliaProtocolNotification.AnalysisChanged, handler);
   }
 
@@ -233,8 +238,8 @@ export class LspFacade implements DisposableLike {
     for (const subscription of this.#rawNotificationSubscriptions.splice(0)) {
       try {
         subscription.dispose();
-      } catch {
-        // A failed/restarted raw client may already have disposed the handler.
+      } catch (error) {
+        this.#logger.warn("raw-notification.dispose.failed", undefined, error);
       }
     }
   }

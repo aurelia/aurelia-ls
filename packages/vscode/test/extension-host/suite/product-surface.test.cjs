@@ -11,16 +11,14 @@ if (!aureliaWorkspace || !plainTypeScriptWorkspace) {
 }
 
 suite("extension-host product surface", () => {
-  let app;
-
   suiteSetup(async () => {
     const extension = vscode.extensions.getExtension(extensionId);
     assert(extension, `Expected extension ${extensionId} in the Extension Development Host.`);
-    app = await extension.activate();
-    await showAureliaDocument("src/my-app.html");
+    await extension.activate();
+    const document = await showAureliaDocument("src/my-app.html");
     await waitFor(
-      () => app?.ctx?.languageClient?.sessions?.length === 1,
-      "exactly one Aurelia workspace session should be admitted",
+      async () => (await hoverMarkdown(document, "state.searchText")).includes("searchText"),
+      "the admitted Aurelia workspace should answer template hover",
       60_000,
     );
   });
@@ -43,29 +41,20 @@ suite("extension-host product surface", () => {
     await vscode.commands.executeCommand("aurelia.refreshResourceExplorer");
   });
 
-  test("preserves exact resource facts through the live client facade", async () => {
-    const response = await app.ctx.lsp.getResources();
-    assert(response, "Expected a live resource response.");
-    assert.strictEqual(response.workspaces.length, 1);
-    assert.strictEqual(response.workspaces[0].status, "ready");
+  test("projects resource and bindable facts through live editor providers", async () => {
+    const document = await showAureliaDocument("src/my-app.html");
+    const resourceHover = await hoverMarkdown(document, "<product-card", "product-card");
+    assert(resourceHover.includes("**Resource** `product-card`"));
+    assert(resourceHover.includes("kind: `custom-element`"));
 
-    const productCard = response.resources.find((resource) =>
-      resource.kind === "custom-element" && resource.name === "product-card"
-    );
-    assert(productCard, "Expected product-card in the exact resource inventory.");
-    assert(productCard.id.startsWith("definition:"), "Expected definition-owned resource identity.");
-    assert.strictEqual(productCard.definition?.targetName, "ProductCard");
-    assert(productCard.bindables.some((bindable) => bindable.name === "item"));
-    assert(productCard.bindables.some((bindable) => bindable.attribute === "display-label"));
-    assert(productCard.visibility.length > 0, "Expected compiler-world visibility evidence.");
-    assert.strictEqual(productCard.workspace.name, "hello-world");
+    const bindableHover = await hoverMarkdown(document, "<product-card", "item.bind");
+    assert(bindableHover.includes("**Bindable** `item`"));
+    assert(bindableHover.includes("**Resource** `product-card`"));
 
-    const scope = await app.ctx.lsp.getScopeResources(
-      vscode.Uri.file(path.join(aureliaWorkspace, "src", "my-app.html")).toString(),
-    );
-    assert(scope, "Expected exact scope resources for my-app.html.");
-    assert.strictEqual(scope.compilerWorlds.length, 1, "Scope must not union sibling template compiler worlds.");
-    assert(scope.resources.some((resource) => resource.id === productCard.id));
+    const definitions = await definitionsAt(document, "<product-card", "product-card");
+    assert(definitions.some((uri) =>
+      normalize(uri.fsPath) === normalize(path.join(aureliaWorkspace, "src", "components", "product-card.ts"))
+    ), "Expected product-card to resolve to its authored definition.");
   });
 
   test("renders diagnostics evidence and opens related files through retained commands", async () => {
@@ -137,17 +126,18 @@ suite("extension-host product surface", () => {
   });
 
   test("retires and re-admits the Aurelia root without leaking a session", async () => {
+    const document = await showAureliaDocument("src/my-app.html");
     const folder = vscode.workspace.workspaceFolders?.find((candidate) =>
       normalize(candidate.uri.fsPath) === normalize(aureliaWorkspace)
     );
     assert(folder, "Expected the Aurelia workspace folder before retirement.");
     assert.strictEqual(vscode.workspace.updateWorkspaceFolders(folder.index, 1), true);
     await waitFor(
-      () => app.ctx.languageClient.sessions.length === 0,
-      "removing the Aurelia root should retire its semantic session",
+      async () => !(await hoverMarkdown(document, "<product-card", "product-card"))
+        .includes("**Resource** `product-card`"),
+      "removing the Aurelia root should retire its editor providers",
       60_000,
     );
-    assert.strictEqual(await app.ctx.lsp.getResources(), null);
 
     const insertAt = vscode.workspace.workspaceFolders?.length ?? 0;
     assert.strictEqual(vscode.workspace.updateWorkspaceFolders(insertAt, 0, {
@@ -155,13 +145,12 @@ suite("extension-host product surface", () => {
       name: "hello-world",
     }), true);
     await waitFor(
-      () => app.ctx.languageClient.sessions.length === 1,
-      "restoring the Aurelia root should admit exactly one semantic session",
+      async () => (await hoverMarkdown(document, "<product-card", "product-card"))
+        .includes("**Resource** `product-card`"),
+      "restoring the Aurelia root should re-admit its editor providers",
       60_000,
     );
     await vscode.commands.executeCommand("aurelia.refreshResourceExplorer");
-    const response = await app.ctx.lsp.getResources();
-    assert(response?.resources.some((resource) => resource.name === "product-card"));
   });
 });
 
@@ -176,6 +165,38 @@ async function showAureliaDocument(relativePath) {
 async function inlayHints(uri, range) {
   const hints = await vscode.commands.executeCommand("vscode.executeInlayHintProvider", uri, range);
   return Array.isArray(hints) ? hints : [];
+}
+
+async function hoverMarkdown(document, anchor, token = anchor) {
+  const position = positionIn(document, anchor, token);
+  const hovers = await vscode.commands.executeCommand("vscode.executeHoverProvider", document.uri, position);
+  if (!Array.isArray(hovers)) return "";
+  return hovers.flatMap((hover) => hover.contents ?? []).map((content) =>
+    typeof content === "string" ? content : content?.value ?? ""
+  ).join("\n");
+}
+
+async function definitionsAt(document, anchor, token = anchor) {
+  const position = positionIn(document, anchor, token);
+  const definitions = await vscode.commands.executeCommand(
+    "vscode.executeDefinitionProvider",
+    document.uri,
+    position,
+  );
+  if (!Array.isArray(definitions)) return [];
+  return definitions.flatMap((definition) => {
+    const uri = definition?.targetUri ?? definition?.uri;
+    return uri == null ? [] : [uri];
+  });
+}
+
+function positionIn(document, anchor, token) {
+  const text = document.getText();
+  const anchorOffset = text.indexOf(anchor);
+  assert.notStrictEqual(anchorOffset, -1, `Expected anchor ${anchor}.`);
+  const tokenOffset = text.indexOf(token, anchorOffset);
+  assert.notStrictEqual(tokenOffset, -1, `Expected token ${token} after ${anchor}.`);
+  return document.positionAt(tokenOffset + Math.max(0, Math.floor(token.length / 2)));
 }
 
 function normalize(value) {

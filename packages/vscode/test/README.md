@@ -12,12 +12,14 @@ Structure:
 - `helpers/`: VS Code API stubs and test utilities
 
 Guidelines:
-- Tests import compiled output (`packages/vscode/out`) to match runtime shape.
+- Tests import compiled output (`packages/vscode/out`) to match runtime shape;
+  use the root `test:vscode` scripts, which build that output first.
 - Custom protocol calls go through the typed `ctx.lsp` facade. Long-lived
   presenters own their own latest-wins sequencing rather than a generic query
   cache.
-- Every feature activation returns all registrations and presenters it owns so
-  session retirement can dispose them as one unit.
+- Product contributions register once for the extension lifetime. Session
+  changes update their request-time ownership and visible state; they do not
+  dispose and recreate commands, providers, or views.
 - Avoid real filesystem/network; use stubs.
 - Activation test runs under `@vscode/test-electron` (set `VSCODE_RUNNER=1`).
 - Extension-host reliability tests launch real VS Code against a disposable
@@ -26,7 +28,7 @@ Guidelines:
   Keep this suite focused on client-boundary behavior that Vitest stubs cannot
   observe, such as multi-file edit application,
   lazy code-action resolution, undo/redo grouping, dirty state, diagnostics
-  after rollback, native-provider pass-through, exact live resource transport,
+  after rollback, native-provider pass-through, live resource/definition projection,
   quiet configuration defaults, command/view activation, and workspace-root
   retirement. Set `AURELIA_LS_EXTENSION_HOST_GREP` to a Mocha grep pattern when
   iterating on one host journey.

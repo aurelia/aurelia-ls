@@ -34,13 +34,6 @@ class StubUri {
   }
 }
 
-class StubRelativePattern {
-  constructor(
-    readonly base: unknown,
-    readonly pattern: string,
-  ) {}
-}
-
 class StubWorkspaceEdit {
   readonly replacements: Array<{ uri: StubUri; range: StubRange; newText: string }> = [];
 
@@ -99,8 +92,6 @@ function createContext(options: {
   const providers: StubProvider[] = [];
   const selectors: unknown[] = [];
   const registrations: Array<{ dispose: ReturnType<typeof vi.fn> }> = [];
-  const sessionListeners = new Set<() => void>();
-  const sessions = [{ folder: { uri: new StubUri("file:///") } }];
   const infoMessages: string[] = [];
   const renameFromTs = vi.fn(async () => options.renameResponse ?? notApplicableResponse());
   const registerRenameProvider = vi.fn((selector: unknown, provider: StubProvider): StubDisposable => {
@@ -134,7 +125,6 @@ function createContext(options: {
       Range: StubRange,
       Uri: { parse: (value: string) => new StubUri(value) },
       WorkspaceEdit: StubWorkspaceEdit,
-      RelativePattern: StubRelativePattern,
       workspace: { textDocuments: options.textDocuments ?? [] },
       window: {
         showInformationMessage: vi.fn((message: string) => {
@@ -146,14 +136,7 @@ function createContext(options: {
     },
     lsp: { renameFromTs, convertWorkspaceEdit },
     languageClient: {
-      get sessions() {
-        return sessions;
-      },
       sessionForUri: () => options.ownsDocument === false ? undefined : {},
-      onDidChangeSessions: (listener: () => void) => {
-        sessionListeners.add(listener);
-        return { dispose: () => sessionListeners.delete(listener) };
-      },
     },
     logger: { debug: vi.fn(), warn: vi.fn() },
   } as unknown as ClientContext;
@@ -166,16 +149,12 @@ function createContext(options: {
     renameFromTs,
     convertWorkspaceEdit,
     infoMessages,
-    setSessions(roots: string[]) {
-      sessions.splice(0, sessions.length, ...roots.map((root) => ({ folder: { uri: new StubUri(root) } })));
-      for (const listener of sessionListeners) listener();
-    },
   };
 }
 
-function createDocument(): StubDocument {
+function createDocument(languageId = "typescript"): StubDocument {
   return {
-    languageId: "typescript",
+    languageId,
     uri: new StubUri("file:///app.ts"),
     version: 1,
   };
@@ -241,28 +220,49 @@ function notApplicableResponse(candidateCount = 0): RenameResponse {
   };
 }
 
+async function activateFeature(ctx: ClientContext): Promise<StubDisposable> {
+  const contributions: StubDisposable[] = [];
+  await TsRenameFeature.activate(ctx, (contribution) => {
+    contributions.push(contribution);
+    return contribution;
+  });
+  return {
+    dispose: () => {
+      for (const contribution of contributions.reverse()) contribution.dispose();
+    },
+  };
+}
+
 describe("TsRenameFeature", () => {
-  test("keeps provider selectors aligned with current owned workspace roots", async () => {
+  test("registers one stable provider for every TypeScript and JavaScript language form", async () => {
     const harness = createContext();
-    const activation = await TsRenameFeature.activate(harness.ctx) as StubDisposable;
+    const activation = await activateFeature(harness.ctx);
 
     expect(harness.selectors[0]).toEqual([
-      expect.objectContaining({ language: "typescript", pattern: expect.objectContaining({ pattern: "**/*.ts" }) }),
-      expect.objectContaining({ language: "typescriptreact", pattern: expect.objectContaining({ pattern: "**/*.tsx" }) }),
+      { language: "typescript" },
+      { language: "typescriptreact" },
+      { language: "javascript" },
+      { language: "javascriptreact" },
     ]);
-
-    harness.setSessions(["file:///other"]);
-    expect(harness.registrations[0]?.dispose).toHaveBeenCalledTimes(1);
-    harness.setSessions([]);
-    expect(harness.registrations[1]?.dispose).toHaveBeenCalledTimes(1);
-    harness.setSessions(["file:///third"]);
     activation.dispose();
-    expect(harness.registrations[2]?.dispose).toHaveBeenCalledTimes(1);
+    expect(harness.registrations[0]?.dispose).toHaveBeenCalledTimes(1);
+  });
+
+  test("routes JavaScript origins through the same semantic rename plan", async () => {
+    const harness = createContext({ renameResponse: availableResponse() });
+    await activateFeature(harness.ctx);
+
+    await harness.providers[0]?.prepareRename(
+      createDocument("javascriptreact"),
+      new StubPosition(2, 11),
+    );
+
+    expect(harness.renameFromTs).toHaveBeenCalledTimes(1);
   });
 
   test("claims preparation only for a proven Aurelia cross-domain symbol", async () => {
     const harness = createContext({ renameResponse: availableResponse() });
-    await TsRenameFeature.activate(harness.ctx);
+    await activateFeature(harness.ctx);
     const document = createDocument();
     const position = new StubPosition(2, 11);
 
@@ -282,7 +282,7 @@ describe("TsRenameFeature", () => {
 
   test("falls through to TypeScript for symbols without Aurelia references", async () => {
     const harness = createContext();
-    await TsRenameFeature.activate(harness.ctx);
+    await activateFeature(harness.ctx);
     const document = createDocument();
     const position = new StubPosition(2, 11);
 
@@ -293,7 +293,7 @@ describe("TsRenameFeature", () => {
 
   test("does not claim TypeScript documents outside an owned Aurelia workspace", async () => {
     const harness = createContext({ ownsDocument: false });
-    await TsRenameFeature.activate(harness.ctx);
+    await activateFeature(harness.ctx);
     const document = createDocument();
     const position = new StubPosition(2, 11);
 
@@ -304,7 +304,7 @@ describe("TsRenameFeature", () => {
 
   test("returns the server's atomic TypeScript and Aurelia edit plan", async () => {
     const harness = createContext({ renameResponse: successResponse() });
-    await TsRenameFeature.activate(harness.ctx);
+    await activateFeature(harness.ctx);
     const token = { isCancellationRequested: false } as never;
 
     const edit = await harness.providers[0]?.provideRenameEdits(
@@ -329,7 +329,7 @@ describe("TsRenameFeature", () => {
   test("blocks the atomic rename when any open document version is stale", async () => {
     const openTemplate = { languageId: "html", uri: new StubUri("file:///app.html"), version: 8 };
     const harness = createContext({ textDocuments: [openTemplate], renameResponse: successResponse() });
-    await TsRenameFeature.activate(harness.ctx);
+    await activateFeature(harness.ctx);
 
     await expect(harness.providers[0]?.provideRenameEdits(
       createDocument(),
@@ -340,7 +340,7 @@ describe("TsRenameFeature", () => {
 
   test("honors cancellation before, after, and during cross-domain requests", async () => {
     const harness = createContext({ renameResponse: successResponse() });
-    await TsRenameFeature.activate(harness.ctx);
+    await activateFeature(harness.ctx);
     const provider = harness.providers[0]!;
     const document = createDocument();
     const position = new StubPosition(2, 11);
@@ -374,7 +374,7 @@ describe("TsRenameFeature", () => {
 
   test("does not collapse identical concurrent user retries", async () => {
     const harness = createContext();
-    await TsRenameFeature.activate(harness.ctx);
+    await activateFeature(harness.ctx);
     const firstGate = deferred<RenameResponse>();
     const secondGate = deferred<RenameResponse>();
     harness.renameFromTs
@@ -406,7 +406,7 @@ describe("TsRenameFeature", () => {
         candidateCount: 0,
       },
     });
-    await TsRenameFeature.activate(blocked.ctx);
+    await activateFeature(blocked.ctx);
     await expect(blocked.providers[0]?.provideRenameEdits(
       createDocument(),
       new StubPosition(2, 11),
@@ -414,7 +414,7 @@ describe("TsRenameFeature", () => {
     )).rejects.toThrow("Aurelia cross-domain rename was blocked: stale edit.");
 
     const candidates = createContext({ renameResponse: notApplicableResponse(2) });
-    await TsRenameFeature.activate(candidates.ctx);
+    await activateFeature(candidates.ctx);
     expect(await candidates.providers[0]?.provideRenameEdits(
       createDocument(),
       new StubPosition(2, 11),

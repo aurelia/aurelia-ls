@@ -1,4 +1,5 @@
 import { describe, test, expect } from "vitest";
+import type { LogOutputChannel } from "vscode";
 import { ClientLogger } from "../../out/log.js";
 import type { VscodeApi } from "../../out/vscode-api.js";
 import { createVscodeApi } from "../helpers/vscode-stub.js";
@@ -7,14 +8,15 @@ describe("ClientLogger", () => {
   function createLogger(channelName = "Test") {
     const { vscode: stubVscode } = createVscodeApi();
     const vscode = stubVscode as unknown as VscodeApi;
-    const logger = new ClientLogger(channelName, vscode);
-    const channel = logger.channel as unknown as { lines: string[] };
+    const outputChannel = vscode.window.createOutputChannel(channelName, { log: true });
+    const logger = new ClientLogger(outputChannel);
+    const channel = outputChannel as LogOutputChannel & { lines: string[] };
     return { logger, channel };
   }
 
   test("creates output channel with given name", () => {
-    const { logger } = createLogger("Aurelia");
-    expect(logger.channel.name).toBe("Aurelia");
+    const { channel } = createLogger("Aurelia");
+    expect(channel.name).toBe("Aurelia");
   });
 
   test("log writes INFO line", () => {

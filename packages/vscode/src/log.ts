@@ -1,50 +1,31 @@
 import type { LogOutputChannel } from "vscode";
-import { getVscodeApi, type VscodeApi } from "./vscode-api.js";
-
-interface LoggerState {
-  readonly channel: LogOutputChannel;
-}
 
 /** Thin scoped adapter over VS Code's native level-aware output channel. */
 export class ClientLogger {
-  readonly #state: LoggerState;
+  readonly #channel: LogOutputChannel;
   readonly #scope: readonly string[];
   readonly #context: Readonly<Record<string, unknown>>;
 
   constructor(
-    channelName: string,
-    vscode?: VscodeApi,
-    state?: LoggerState,
+    channel: LogOutputChannel,
     scope: readonly string[] = [],
     context: Readonly<Record<string, unknown>> = {},
   ) {
-    this.#state = state ?? {
-      channel: (vscode ?? getVscodeApi()).window.createOutputChannel(channelName, { log: true }),
-    };
+    this.#channel = channel;
     this.#scope = scope;
     this.#context = context;
   }
 
-  get channel(): LogOutputChannel {
-    return this.#state.channel;
-  }
-
   child(scope: string, context?: Record<string, unknown>): ClientLogger {
     return new ClientLogger(
-      this.#state.channel.name,
-      undefined,
-      this.#state,
+      this.#channel,
       [...this.#scope, scope],
       { ...this.#context, ...(context ?? {}) },
     );
   }
 
-  dispose(): void {
-    this.#state.channel.dispose();
-  }
-
   show(preserveFocus = false): void {
-    this.#state.channel.show(preserveFocus);
+    this.#channel.show(preserveFocus);
   }
 
   log(message: string, context?: Record<string, unknown>): void {
@@ -52,23 +33,23 @@ export class ClientLogger {
   }
 
   trace(message: string, context?: Record<string, unknown>): void {
-    this.#state.channel.trace(this.#format(message, context));
+    this.#channel.trace(this.#format(message, context));
   }
 
   debug(message: string, context?: Record<string, unknown>): void {
-    this.#state.channel.debug(this.#format(message, context));
+    this.#channel.debug(this.#format(message, context));
   }
 
   info(message: string, context?: Record<string, unknown>): void {
-    this.#state.channel.info(this.#format(message, context));
+    this.#channel.info(this.#format(message, context));
   }
 
   warn(message: string, context?: Record<string, unknown>, error?: unknown): void {
-    this.#state.channel.warn(this.#format(message, context), ...errorArgs(error));
+    this.#channel.warn(this.#format(message, context), ...errorArgs(error));
   }
 
   error(message: string, context?: Record<string, unknown>, error?: unknown): void {
-    this.#state.channel.error(this.#format(message, context), ...errorArgs(error));
+    this.#channel.error(this.#format(message, context), ...errorArgs(error));
   }
 
   #format(message: string, context?: Record<string, unknown>): string {

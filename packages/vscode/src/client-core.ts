@@ -1,5 +1,13 @@
-import type { LanguageClient, LanguageClientOptions, ServerOptions, TransportKind } from "vscode-languageclient/node";
+import type { LanguageClient, LanguageClientOptions } from "vscode-languageclient/node";
+import {
+  DidChangeWatchedFilesNotification,
+  FileChangeType,
+  type FileChangeType as ProtocolFileChangeType,
+} from "vscode-languageserver-protocol";
 import type {
+  Disposable,
+  Event,
+  EventEmitter,
   ExtensionContext,
   FileSystemWatcher,
   Uri,
@@ -9,10 +17,8 @@ import { AureliaProtocolRequest } from "@aurelia-ls/language-server/protocol";
 import type { WorkspaceStatusResponse } from "@aurelia-ls/language-server/protocol";
 import type { AureliaWorkspaceIdentity } from "./types.js";
 import { createMiddleware } from "./client-middleware.js";
-import { DisposableStore, type DisposableLike } from "./core/disposables.js";
-import { SimpleEmitter, type Listener } from "./core/events.js";
 import { type ClientLogger } from "./log.js";
-import { getVscodeApi, type VscodeApi } from "./vscode-api.js";
+import type { VscodeApi } from "./vscode-api.js";
 import {
   AureliaActivationMode,
   isWorkspaceProjectManifestUri,
@@ -36,15 +42,15 @@ export interface AureliaLanguageClientSession {
   readonly fileEvents: readonly FileSystemWatcher[];
 }
 
-type LanguageClientFactory = (
+export type LanguageClientFactory = (
   id: string,
   name: string,
-  serverOptions: ServerOptions,
+  serverModule: string,
   clientOptions: LanguageClientOptions,
 ) => LanguageClient;
 
 export interface AureliaLanguageClientOptions {
-  readonly createClient?: LanguageClientFactory;
+  readonly createClient: LanguageClientFactory;
 }
 
 interface ReconcileOptions {
@@ -59,32 +65,29 @@ interface LifecycleIntent {
 
 interface PendingPackageChange {
   readonly uri: Uri;
-  readonly type: LspFileChangeType;
+  readonly type: ProtocolFileChangeType;
 }
 
 type LifecycleAwaitResult<T> =
   | { readonly status: "completed"; readonly value: T }
   | { readonly status: "invalidated" };
 
-const SOURCE_LANGUAGE_IDS = new Set([
+const SCRIPT_LANGUAGE_IDS = new Set([
   "typescript",
   "typescriptreact",
   "javascript",
   "javascriptreact",
 ]);
 
-// vscode-languageclient declares IPC as TransportKind.ipc = 1. Keeping the
-// protocol value here lets candidate detection stay host-independent; the real
-// client module is loaded only after a workspace has passed preflight.
-const IPC_TRANSPORT = 1 as TransportKind;
-
-// LSP FileChangeType values. The manager owns package-manifest watching so it
-// can order topology invalidation before semantic workspace confirmation.
-const enum LspFileChangeType {
-  Created = 1,
-  Changed = 2,
-  Deleted = 3,
-}
+const ANALYZED_DOCUMENT_LANGUAGE_IDS = [
+  "html",
+  "typescript",
+  "typescriptreact",
+  "javascript",
+  "javascriptreact",
+  "css",
+  "json",
+] as const;
 
 async function fileExists(vscode: VscodeApi, p: string): Promise<boolean> {
   try {
@@ -126,28 +129,31 @@ export class AureliaLanguageClient {
   #sessions = new Map<string, AureliaLanguageClientSession>();
   #logger: ClientLogger;
   #vscode: VscodeApi;
-  #createClient: LanguageClientFactory | null;
+  readonly #createClient: LanguageClientFactory;
   #context: ExtensionContext | null = null;
   #serverModule: Promise<string> | null = null;
-  #lifecycle: DisposableStore | null = null;
-  #sessionsChanged = new SimpleEmitter<readonly AureliaLanguageClientSession[]>();
+  #lifecycle: Disposable | null = null;
+  readonly #sessionsChanged: EventEmitter<readonly AureliaLanguageClientSession[]>;
+  readonly onDidChangeSessions: Event<readonly AureliaLanguageClientSession[]>;
   #transitionTail: Promise<void> = Promise.resolve();
   #lifecycleIntent = createLifecycleIntent(0);
-  #sessionGeneration = 0;
-  #detachedRetirements = new Set<Promise<void>>();
   #pendingPackageChanges = new Map<string, PendingPackageChange>();
   #acceptingLifecycleRequests = false;
+  #startConsumed = false;
+  #stopRequest: Promise<void> | null = null;
   #started = false;
   #sourceAdmissionTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     logger: ClientLogger,
-    vscode: VscodeApi = getVscodeApi(),
-    options: AureliaLanguageClientOptions = {},
+    vscode: VscodeApi,
+    options: AureliaLanguageClientOptions,
   ) {
     this.#logger = logger;
     this.#vscode = vscode;
-    this.#createClient = options.createClient ?? null;
+    this.#createClient = options.createClient;
+    this.#sessionsChanged = new vscode.EventEmitter<readonly AureliaLanguageClientSession[]>();
+    this.onDidChangeSessions = this.#sessionsChanged.event;
   }
 
   get sessions(): readonly AureliaLanguageClientSession[] {
@@ -157,14 +163,6 @@ export class AureliaLanguageClient {
 
   get hasSessions(): boolean {
     return this.#sessions.size > 0;
-  }
-
-  get sessionGeneration(): number {
-    return this.#sessionGeneration;
-  }
-
-  onDidChangeSessions(listener: Listener<readonly AureliaLanguageClientSession[]>): DisposableLike {
-    return this.#sessionsChanged.on(listener);
   }
 
   clientForUri(uri: string | Uri): LanguageClient | undefined {
@@ -179,10 +177,12 @@ export class AureliaLanguageClient {
   }
 
   async start(context: ExtensionContext): Promise<void> {
-    if (!this.#acceptingLifecycleRequests) {
-      this.#acceptingLifecycleRequests = true;
-      this.#advanceLifecycleIntent();
+    if (this.#startConsumed || this.#stopRequest != null) {
+      throw new Error("Aurelia language-client ownership may start only once.");
     }
+    this.#startConsumed = true;
+    this.#acceptingLifecycleRequests = true;
+    this.#advanceLifecycleIntent();
     const intent = this.#lifecycleIntent;
     await this.#enqueueTransition(async () => {
       if (!this.#isCurrentLifecycle(intent)) return;
@@ -201,21 +201,12 @@ export class AureliaLanguageClient {
     });
   }
 
-  async restart(context: ExtensionContext): Promise<void> {
-    if (!this.#acceptingLifecycleRequests) return;
-    const intent = this.#advanceLifecycleIntent();
-    await this.#enqueueTransition(async () => {
-      if (!this.#isCurrentLifecycle(intent)) return;
-      this.#context = context;
-      this.#ensureLifecycleStarted();
-      await this.#restartSessions(intent);
-      if (this.#isCurrentLifecycle(intent)) {
-        await this.#runReconcile(false, intent);
-      }
-    });
+  stop(): Promise<void> {
+    return this.#stopRequest ??= this.#runStop();
   }
 
-  async stop(): Promise<void> {
+  async #runStop(): Promise<void> {
+    if (!this.#acceptingLifecycleRequests && !this.#started) return;
     this.#acceptingLifecycleRequests = false;
     this.#advanceLifecycleIntent();
     this.#started = false;
@@ -229,58 +220,59 @@ export class AureliaLanguageClient {
     const sessions = this.sessions;
     this.#publishSessions(new Map());
     await this.#enqueueTransition(async () => {
-      await Promise.all(sessions.map(stopSession));
+      await Promise.all(sessions.map((session) => stopSession(session, this.#logger)));
+      this.#sessionsChanged.dispose();
       this.#logger.log("[client] stopped");
     });
   }
 
   #ensureLifecycleStarted(): void {
     if (this.#started) return;
-    const lifecycle = new DisposableStore();
+    const lifecycle: Disposable[] = [];
     try {
       this.#installLifecycleListeners(lifecycle);
-      this.#lifecycle = lifecycle;
+      this.#lifecycle = this.#vscode.Disposable.from(...lifecycle);
       this.#started = true;
     } catch (error) {
-      lifecycle.dispose();
+      this.#vscode.Disposable.from(...lifecycle).dispose();
       this.#lifecycle = null;
       this.#started = false;
       throw error;
     }
   }
 
-  #installLifecycleListeners(lifecycle: DisposableStore): void {
+  #installLifecycleListeners(lifecycle: Disposable[]): void {
     const packageWatcher = this.#vscode.workspace.createFileSystemWatcher("**/package.json");
-    lifecycle.add(packageWatcher);
-    lifecycle.add(packageWatcher.onDidCreate((uri) => {
-      this.#handlePackageChange(uri, LspFileChangeType.Created);
+    lifecycle.push(packageWatcher);
+    lifecycle.push(packageWatcher.onDidCreate((uri) => {
+      this.#handlePackageChange(uri, FileChangeType.Created);
     }));
-    lifecycle.add(packageWatcher.onDidChange((uri) => {
-      this.#handlePackageChange(uri, LspFileChangeType.Changed);
+    lifecycle.push(packageWatcher.onDidChange((uri) => {
+      this.#handlePackageChange(uri, FileChangeType.Changed);
     }));
-    lifecycle.add(packageWatcher.onDidDelete((uri) => {
-      this.#handlePackageChange(uri, LspFileChangeType.Deleted);
+    lifecycle.push(packageWatcher.onDidDelete((uri) => {
+      this.#handlePackageChange(uri, FileChangeType.Deleted);
     }));
-    lifecycle.add(this.#vscode.workspace.onDidChangeWorkspaceFolders(() => {
+    lifecycle.push(this.#vscode.workspace.onDidChangeWorkspaceFolders(() => {
       this.#requestReconcile({ reconfirmExisting: true });
     }));
-    lifecycle.add(this.#vscode.workspace.onDidOpenTextDocument((document) => {
-      if (SOURCE_LANGUAGE_IDS.has(document.languageId) && this.sessionForUri(document.uri) == null) {
+    lifecycle.push(this.#vscode.workspace.onDidOpenTextDocument((document) => {
+      if (SCRIPT_LANGUAGE_IDS.has(document.languageId) && this.sessionForUri(document.uri) == null) {
         this.#scheduleSourceAdmission();
       }
     }));
-    lifecycle.add(this.#vscode.workspace.onDidSaveTextDocument((document) => {
+    lifecycle.push(this.#vscode.workspace.onDidSaveTextDocument((document) => {
       const session = this.sessionForUri(document.uri);
       if (
-        SOURCE_LANGUAGE_IDS.has(document.languageId)
+        SCRIPT_LANGUAGE_IDS.has(document.languageId)
         && (session == null || session.activationEvidence === WorkspaceActivationEvidenceKind.OpenSourceDocument)
       ) {
         this.#scheduleSourceAdmission();
       }
     }));
-    lifecycle.add(this.#vscode.workspace.onDidCloseTextDocument((document) => {
+    lifecycle.push(this.#vscode.workspace.onDidCloseTextDocument((document) => {
       if (
-        SOURCE_LANGUAGE_IDS.has(document.languageId)
+        SCRIPT_LANGUAGE_IDS.has(document.languageId)
         && this.sessionForUri(document.uri)?.activationEvidence === WorkspaceActivationEvidenceKind.OpenSourceDocument
       ) {
         this.#scheduleSourceAdmission();
@@ -288,7 +280,7 @@ export class AureliaLanguageClient {
     }));
   }
 
-  #handlePackageChange(uri: Uri, changeType: LspFileChangeType): void {
+  #handlePackageChange(uri: Uri, changeType: ProtocolFileChangeType): void {
     if (!isWorkspaceProjectManifestUri(uri) || !this.#acceptingLifecycleRequests) return;
     this.#pendingPackageChanges.set(uri.toString(), { uri, type: changeType });
     this.#requestReconcile({ reconfirmExisting: true });
@@ -333,7 +325,7 @@ export class AureliaLanguageClient {
     for (const [session, changes] of bySession) {
       try {
         const result = await this.#awaitLifecycle(
-          session.client.sendNotification("workspace/didChangeWatchedFiles", {
+          session.client.sendNotification(DidChangeWatchedFilesNotification.type.method, {
             changes: changes.map((change) => ({
               uri: change.uri.toString(),
               type: change.type,
@@ -370,7 +362,7 @@ export class AureliaLanguageClient {
           intent,
         );
         if (result.status === "invalidated") {
-          await Promise.all([...createdSessions].map(stopSession));
+          await Promise.all([...createdSessions].map((session) => stopSession(session, this.#logger)));
           return;
         }
         admission = result.value;
@@ -378,7 +370,7 @@ export class AureliaLanguageClient {
         this.#logger.warn(`[client] activation preflight failed for ${key}: ${errorMessage(error)}`);
       }
       if (!this.#isCurrentLifecycle(intent)) {
-        await Promise.all([...createdSessions].map(stopSession));
+        await Promise.all([...createdSessions].map((session) => stopSession(session, this.#logger)));
         return;
       }
       if (admission != null) {
@@ -409,7 +401,7 @@ export class AureliaLanguageClient {
         }
         if (session != null) createdSessions.add(session);
         if (!this.#isCurrentLifecycle(intent)) {
-          await Promise.all([...createdSessions].map(stopSession));
+          await Promise.all([...createdSessions].map((session) => stopSession(session, this.#logger)));
           return;
         }
         if (session == null) {
@@ -421,7 +413,7 @@ export class AureliaLanguageClient {
           intent,
         );
         if (statusResult.status === "invalidated" || !this.#isCurrentLifecycle(intent)) {
-          await Promise.all([...createdSessions].map(stopSession));
+          await Promise.all([...createdSessions].map((session) => stopSession(session, this.#logger)));
           return;
         }
         const status = statusResult.value;
@@ -456,36 +448,11 @@ export class AureliaLanguageClient {
       }
     }
     if (!this.#isCurrentLifecycle(intent)) {
-      await Promise.all([...createdSessions].map(stopSession));
+      await Promise.all([...createdSessions].map((session) => stopSession(session, this.#logger)));
       return;
     }
     this.#publishSessions(nextSessions);
-    await Promise.all([...retiredSessions].map(stopSession));
-  }
-
-  async #restartSessions(intent: LifecycleIntent): Promise<void> {
-    for (const existing of this.sessions) {
-      let replacement: AureliaLanguageClientSession | null = null;
-      try {
-        replacement = await this.#createStartedSession({
-          folder: existing.folder,
-          mode: existing.activationMode,
-          evidence: existing.activationEvidence,
-        }, intent);
-      } catch (error) {
-        this.#logger.warn(`[client] restart failed for ${existing.workspace.uri}: ${errorMessage(error)}`);
-      }
-      if (!this.#isCurrentLifecycle(intent)) {
-        if (replacement != null) await stopSession(replacement);
-        return;
-      }
-      if (replacement == null) continue;
-      const nextSessions = new Map(this.#sessions);
-      nextSessions.set(existing.workspace.key, replacement);
-      this.#publishSessions(nextSessions);
-      await stopSession(existing);
-      if (!this.#isCurrentLifecycle(intent)) return;
-    }
+    await Promise.all([...retiredSessions].map((session) => stopSession(session, this.#logger)));
   }
 
   async #createStartedSession(
@@ -506,14 +473,6 @@ export class AureliaLanguageClient {
     const serverModuleResult = await this.#awaitLifecycle(this.#serverModule, intent);
     if (serverModuleResult.status === "invalidated") return null;
     const serverModule = serverModuleResult.value;
-    const serverOptions: ServerOptions = {
-      run: { module: serverModule, transport: IPC_TRANSPORT },
-      debug: {
-        module: serverModule,
-        transport: IPC_TRANSPORT,
-        options: { execArgv: ["--inspect=6009"] },
-      },
-    };
     const fileEvents = this.#createSessionWatchers(admission.folder);
     let client: LanguageClient | undefined;
     const middlewareClient = {
@@ -545,23 +504,23 @@ export class AureliaLanguageClient {
     };
     try {
       const clientResult = await this.#awaitLifecycle(
-        this.#newLanguageClient(
+        Promise.resolve(this.#createClient(
           `aurelia-ls:${key}`,
           `Aurelia Language Server (${admission.folder.name})`,
-          serverOptions,
+          serverModule,
           clientOptions,
-        ),
+        )),
         intent,
       );
       if (clientResult.status === "invalidated") {
-        disposeWatchers(fileEvents);
+        disposeWatchers(fileEvents, this.#logger, workspace.uri);
         return null;
       }
       client = clientResult.value;
       const start = client.start();
       const startResult = await this.#awaitLifecycle(start, intent);
       if (startResult.status === "invalidated") {
-        this.#retireAfterStart(client, start, fileEvents);
+        this.#retireAfterStart(client, start, fileEvents, workspace.uri);
         return null;
       }
       let status: WorkspaceStatusResponse | null = null;
@@ -571,16 +530,16 @@ export class AureliaLanguageClient {
           intent,
         );
         if (statusResult.status === "invalidated") {
-          await client.stop().catch(() => {});
-          disposeWatchers(fileEvents);
+          await stopClient(client, this.#logger, workspace.uri);
+          disposeWatchers(fileEvents, this.#logger, workspace.uri);
           return null;
         }
         status = statusResult.value;
       }
       if (admission.mode === AureliaActivationMode.Auto && !workspaceStatusConfirmsAurelia(status)) {
         this.#logger.log(`[client] semantic project shape did not confirm candidate workspace ${workspace.uri}`);
-        await client.stop().catch(() => {});
-        disposeWatchers(fileEvents);
+        await stopClient(client, this.#logger, workspace.uri);
+        disposeWatchers(fileEvents, this.#logger, workspace.uri);
         return null;
       }
       this.#logger.log(
@@ -597,9 +556,9 @@ export class AureliaLanguageClient {
       };
     } catch (error) {
       if (client != null) {
-        await client.stop().catch(() => {});
+        await stopClient(client, this.#logger, workspace.uri);
       }
-      disposeWatchers(fileEvents);
+      disposeWatchers(fileEvents, this.#logger, workspace.uri);
       throw error;
     }
   }
@@ -610,30 +569,11 @@ export class AureliaLanguageClient {
       "**/tsconfig.*.json",
       "**/jsconfig.json",
       "**/*.html",
+      "**/*.css",
       "**/*.{ts,tsx,js,jsx,mts,cts,mjs,cjs}",
     ].map((glob) => this.#vscode.workspace.createFileSystemWatcher(
       new this.#vscode.RelativePattern(folder, glob),
     ));
-  }
-
-  async #newLanguageClient(
-    id: string,
-    name: string,
-    serverOptions: ServerOptions,
-    clientOptions: LanguageClientOptions,
-  ): Promise<LanguageClient> {
-    this.#createClient ??= await import("vscode-languageclient/node")
-      .then(({ LanguageClient: Client }) => (
-        clientId: string,
-        clientName: string,
-        options: ServerOptions,
-        languageOptions: LanguageClientOptions,
-      ) => new Client(clientId, clientName, options, languageOptions));
-    const createClient = this.#createClient;
-    if (createClient == null) {
-      throw new Error("vscode-languageclient did not provide a LanguageClient constructor.");
-    }
-    return createClient(id, name, serverOptions, clientOptions);
   }
 
   #requestReconcile(options: ReconcileOptions): void {
@@ -646,22 +586,20 @@ export class AureliaLanguageClient {
     client: LanguageClient,
     start: Promise<void>,
     fileEvents: readonly FileSystemWatcher[],
+    workspaceUri: string,
   ): void {
-    disposeWatchers(fileEvents);
-    let retirement: Promise<void>;
-    retirement = start
-      .then(async () => {
-        try {
-          await client.stop();
-        } catch (error) {
-          this.#logger.warn(`[client] detached client retirement failed: ${errorMessage(error)}`);
-        }
-      }, () => {})
+    disposeWatchers(fileEvents, this.#logger, workspaceUri);
+    // vscode-languageclient cannot stop while initialization is in flight.
+    // Attach retirement to that owned start instead of blocking extension
+    // shutdown on a third-party promise that may never settle.
+    void start
+      .then(
+        () => stopClient(client, this.#logger, workspaceUri),
+        () => undefined,
+      )
       .finally(() => {
-        disposeWatchers(fileEvents);
-        this.#detachedRetirements.delete(retirement);
+        disposeWatchers(fileEvents, this.#logger, workspaceUri);
       });
-    this.#detachedRetirements.add(retirement);
   }
 
   #enqueueTransition(operation: () => Promise<void>): Promise<void> {
@@ -694,8 +632,7 @@ export class AureliaLanguageClient {
   #publishSessions(nextSessions: Map<string, AureliaLanguageClientSession>): void {
     if (sameSessions(this.#sessions, nextSessions)) return;
     this.#sessions = nextSessions;
-    this.#sessionGeneration += 1;
-    this.#sessionsChanged.emit(this.sessions);
+    this.#sessionsChanged.fire(this.sessions);
   }
 }
 
@@ -706,13 +643,11 @@ function workspaceDocumentSelector(
   // structurally similar RelativePattern. The client converts this URI-backed
   // protocol shape into a real vscode.RelativePattern before registration.
   const pattern = { baseUri: folder.uri.toString(), pattern: "**/*" };
-  return [
-    { scheme: folder.uri.scheme, language: "html", pattern },
-    { scheme: folder.uri.scheme, language: "typescript", pattern },
-    { scheme: folder.uri.scheme, language: "typescriptreact", pattern },
-    { scheme: folder.uri.scheme, language: "javascript", pattern },
-    { scheme: folder.uri.scheme, language: "javascriptreact", pattern },
-  ];
+  return ANALYZED_DOCUMENT_LANGUAGE_IDS.map((language) => ({
+    scheme: folder.uri.scheme,
+    language,
+    pattern,
+  }));
 }
 
 async function readWorkspaceStatus(
@@ -730,21 +665,39 @@ async function readWorkspaceStatus(
   }
 }
 
-async function stopSession(session: AureliaLanguageClientSession): Promise<void> {
-  try {
-    await session.client.stop();
-  } catch {
-    // Extension shutdown/restart must continue across an already-failed server.
-  }
-  disposeWatchers(session.fileEvents);
+async function stopSession(
+  session: AureliaLanguageClientSession,
+  logger: ClientLogger,
+): Promise<void> {
+  await stopClient(session.client, logger, session.workspace.uri);
+  disposeWatchers(session.fileEvents, logger, session.workspace.uri);
 }
 
-function disposeWatchers(watchers: readonly FileSystemWatcher[]): void {
+async function stopClient(
+  client: LanguageClient,
+  logger: ClientLogger,
+  workspaceUri: string,
+): Promise<void> {
+  try {
+    await client.stop();
+  } catch (error) {
+    // Retire every independent workspace even when one server has already failed.
+    logger.warn(`[client] failed to stop ${workspaceUri}: ${errorMessage(error)}`);
+  }
+}
+
+function disposeWatchers(
+  watchers: readonly FileSystemWatcher[],
+  logger?: ClientLogger,
+  workspaceUri?: string,
+): void {
   for (const watcher of watchers) {
     try {
       watcher.dispose();
-    } catch {
-      // Best-effort shutdown after the owning language client has stopped.
+    } catch (error) {
+      logger?.warn(
+        `[client] failed to dispose a file watcher${workspaceUri == null ? "" : ` for ${workspaceUri}`}: ${errorMessage(error)}`,
+      );
     }
   }
 }

@@ -35,7 +35,7 @@ function createHarness(options: HarnessOptions = {}) {
     lsp: { getDiagnostics, getResources, getScopeResources, getRelatedFile },
   };
 
-  UserCommandsFeature.activate(ctx as never);
+  UserCommandsFeature.activate(ctx as never, (contribution) => contribution);
 
   const uri = stubVscode.Uri.parse("file:///component.html");
   stubVscode.window.activeTextEditor = {

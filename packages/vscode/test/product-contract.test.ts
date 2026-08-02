@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import { AureliaCommand, AureliaView } from "../out/product-contract.js";
 
 interface ExtensionManifest {
+  readonly api?: string;
   readonly contributes?: {
     readonly commands?: readonly { readonly command: string }[];
     readonly keybindings?: readonly unknown[];
@@ -22,6 +23,10 @@ const manifest = JSON.parse(
 ) as ExtensionManifest;
 
 describe("VS Code product contract", () => {
+  test("does not expose the activation object as a public extension API", () => {
+    expect(manifest.api).toBe("none");
+  });
+
   test("keeps contributed commands and menus on the client-owned command vocabulary", () => {
     const expectedCommands = Object.values(AureliaCommand).sort();
     const contributedCommands = (manifest.contributes?.commands ?? [])

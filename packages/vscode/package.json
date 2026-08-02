@@ -6,6 +6,7 @@
   "publisher": "AureliaEffect",
   "icon": "images/logo.png",
   "type": "module",
+  "api": "none",
   "main": "./dist/extension.cjs",
   "extensionKind": [
     "workspace"
@@ -185,7 +186,8 @@
   },
   "dependencies": {
     "typescript": "^6.0.3",
-    "vscode-languageclient": "^10.1.0"
+    "vscode-languageclient": "^10.1.0",
+    "vscode-languageserver-protocol": "^3.18.2"
   },
   "devDependencies": {
     "@aurelia-ls/language-server": "workspace:*",

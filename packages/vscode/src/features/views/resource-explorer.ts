@@ -1,7 +1,6 @@
 /** Resource inventory projected from exact semantic-runtime definition and compiler-world identities. */
-import type { Event, ProviderResult, TreeDataProvider, TreeItem } from "vscode";
+import type { Disposable, Event, ProviderResult, TreeDataProvider, TreeItem } from "vscode";
 import type { LspFacade } from "../../core/lsp-facade.js";
-import type { DisposableLike } from "../../core/disposables.js";
 import type { ClientLogger } from "../../log.js";
 import type {
   ResourceExplorerItem,
@@ -373,7 +372,7 @@ function prefixedId(prefix: string, id: string): string {
   return prefix === "" ? id : `${prefix}:${id}`;
 }
 
-export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, DisposableLike {
+export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Disposable {
   readonly #vscode: VscodeApi;
   readonly #lsp: LspFacade;
   readonly #logger: ClientLogger;

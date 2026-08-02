@@ -9,14 +9,19 @@
  * built-in provider and the command re-enters this provider through RPC.
  */
 import type { ClientFeature } from "../../core/feature.js";
-import { DisposableStore, toDisposable, type DisposableLike } from "../../core/disposables.js";
 import type { ProtocolWorkspaceEdit, RenameFromTsResponse } from "../../types.js";
 import { assertWorkspaceEditVersionsCurrent } from "../../workspace-edit-versions.js";
 
+const SCRIPT_RENAME_SELECTOR: import("vscode").DocumentSelector = [
+  { language: "typescript" },
+  { language: "typescriptreact" },
+  { language: "javascript" },
+  { language: "javascriptreact" },
+];
+
 export const TsRenameFeature: ClientFeature = {
   id: "rename.tsPropagate",
-  activate: async (ctx) => {
-    const store = new DisposableStore();
+  activate: (ctx, own) => {
     const vscode = ctx.vscode;
     const log = ctx.logger;
 
@@ -24,7 +29,7 @@ export const TsRenameFeature: ClientFeature = {
       provideRenameEdits: async (document, position, newName, token) => {
         if (
           isCancelled(token)
-          || !isTypeScriptDocument(document)
+          || !isScriptDocument(document)
           || ctx.languageClient.sessionForUri(document.uri) == null
         ) {
           return undefined;
@@ -79,7 +84,7 @@ export const TsRenameFeature: ClientFeature = {
       prepareRename: async (document, position, token) => {
         if (
           isCancelled(token)
-          || !isTypeScriptDocument(document)
+          || !isScriptDocument(document)
           || ctx.languageClient.sessionForUri(document.uri) == null
         ) {
           return undefined;
@@ -108,37 +113,16 @@ export const TsRenameFeature: ClientFeature = {
       },
     };
 
-    let registration: DisposableLike | null = null;
-    const registerForOwnedWorkspaces = () => {
-      registration?.dispose();
-      registration = null;
-      const selector = ctx.languageClient.sessions.flatMap((session) => [
-        {
-          language: "typescript",
-          scheme: session.folder.uri.scheme,
-          pattern: new vscode.RelativePattern(session.folder, "**/*.ts"),
-        },
-        {
-          language: "typescriptreact",
-          scheme: session.folder.uri.scheme,
-          pattern: new vscode.RelativePattern(session.folder, "**/*.tsx"),
-        },
-      ]);
-      if (selector.length > 0) {
-        registration = vscode.languages.registerRenameProvider(selector, provider);
-      }
-    };
-    registerForOwnedWorkspaces();
-    store.add(ctx.languageClient.onDidChangeSessions(registerForOwnedWorkspaces));
-    store.add(toDisposable(() => registration?.dispose()));
-
     log.debug("[TsRename] activated");
-    return store;
+    own(vscode.languages.registerRenameProvider(SCRIPT_RENAME_SELECTOR, provider));
   },
 };
 
-function isTypeScriptDocument(document: import("vscode").TextDocument): boolean {
-  return document.languageId === "typescript" || document.languageId === "typescriptreact";
+function isScriptDocument(document: import("vscode").TextDocument): boolean {
+  return document.languageId === "typescript"
+    || document.languageId === "typescriptreact"
+    || document.languageId === "javascript"
+    || document.languageId === "javascriptreact";
 }
 
 function isCancelled(token: import("vscode").CancellationToken | undefined): boolean {

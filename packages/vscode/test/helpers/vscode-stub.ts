@@ -143,6 +143,7 @@ export interface StubVscodeApi {
   };
   RelativePattern: new (base: unknown, pattern: string) => { base: unknown; baseUri: StubUri; pattern: string };
   EventEmitter: typeof EventEmitter;
+  Disposable: typeof Disposable;
   StatusBarAlignment: { Left: number; Right: number };
   ViewColumn: { Beside: number; One: number };
 }
@@ -190,6 +191,12 @@ class Disposable implements VscodeDisposable {
     this.#dispose = dispose;
   }
 
+  static from(...disposables: readonly VscodeDisposable[]): Disposable {
+    return new Disposable(() => {
+      for (const disposable of disposables) disposable.dispose();
+    });
+  }
+
   dispose(): void {
     this.disposed = true;
     this.#dispose?.();
@@ -226,6 +233,7 @@ class RelativePattern {
     const candidate = base as { uri?: StubUri; fsPath?: string };
     this.baseUri = candidate.uri ?? createUri(`file://${candidate.fsPath ?? ""}`);
   }
+
 }
 
 class FileWatcher implements StubFileWatcher {
@@ -511,6 +519,7 @@ export function createVscodeApi(options: CreateVscodeApiOptions = {}): { vscode:
     Uri,
     RelativePattern,
     EventEmitter,
+    Disposable,
     StatusBarAlignment: { Left: 1, Right: 2 },
     ViewColumn: { Beside: 2, One: 1 },
   };

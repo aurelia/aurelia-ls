@@ -1,178 +1,186 @@
-import type { ExtensionContext } from "vscode";
-import { AureliaLanguageClient } from "./client-core.js";
-import { ClientLogger } from "./log.js";
-import { getVscodeApi, type VscodeApi } from "./vscode-api.js";
+import type { Disposable, ExtensionContext, LogOutputChannel } from "vscode";
+import type { AureliaLanguageClient } from "./client-core.js";
+import type { ClientLogger } from "./log.js";
+import type { VscodeApi } from "./vscode-api.js";
 import { createClientContext, type ClientContext } from "./core/context.js";
 import { ErrorReporter } from "./core/errors.js";
 import type { ClientFeature } from "./core/feature.js";
 import { LspFacade } from "./core/lsp-facade.js";
-import { DisposableStore, type DisposableLike } from "./core/disposables.js";
-import { DefaultFeatures } from "./features/index.js";
 
-export interface ClientAppOptions {
-  vscode?: VscodeApi;
-  logger?: ClientLogger;
-  languageClient?: AureliaLanguageClient;
-  features?: readonly ClientFeature[];
+export interface ClientAppServices {
+  readonly vscode: VscodeApi;
+  /** Non-owning logger view over outputChannel. */
+  readonly logger: ClientLogger;
+  /** Root output resource owned by ClientApp. */
+  readonly outputChannel: LogOutputChannel;
+  readonly languageClient: AureliaLanguageClient;
+  readonly features: readonly ClientFeature[];
 }
 
+/** Owns the single extension-lifetime composition of client contributions. */
 export class ClientApp {
-  #context: ExtensionContext;
-  #options: ClientAppOptions;
+  readonly #extension: ExtensionContext;
+  readonly #services: ClientAppServices;
   #ctx: ClientContext | null = null;
-  #clientStateTransition: Promise<void> = Promise.resolve();
-  #documentContextTransition: Promise<void> = Promise.resolve();
-  #documentContextRequest = 0;
-  #featureActivations: DisposableLike | null = null;
+  #lsp: LspFacade | null = null;
+  #subscriptions: readonly Disposable[] = [];
+  #featureActivations: readonly Disposable[] = [];
+  #contextTransition: Promise<void> = Promise.resolve();
+  #contextRequest = 0;
+  #activationStarted = false;
+  #deactivation: Promise<void> | null = null;
 
-  constructor(context: ExtensionContext, options: ClientAppOptions = {}) {
-    this.#context = context;
-    this.#options = options;
+  constructor(extension: ExtensionContext, services: ClientAppServices) {
+    this.#extension = extension;
+    this.#services = services;
   }
 
   get ctx(): ClientContext | null {
     return this.#ctx;
   }
 
-  async activate(): Promise<ClientContext> {
-    const vscode = this.#options.vscode ?? getVscodeApi();
-    const logger = this.#options.logger ?? new ClientLogger("Aurelia LS (Client)", vscode);
+  async activate(): Promise<void> {
+    if (this.#activationStarted) {
+      throw new Error("Aurelia client application activation may run only once.");
+    }
+    this.#activationStarted = true;
+
+    const { vscode, logger, languageClient, features } = this.#services;
     const errors = new ErrorReporter(logger, vscode);
-    const languageClient = this.#options.languageClient ?? new AureliaLanguageClient(logger, vscode);
+    try {
+      await setClientContextKeys(vscode, false, false);
+      await languageClient.start(this.#extension);
 
-    await Promise.all([
-      vscode.commands.executeCommand("setContext", "aurelia.active", false),
-      vscode.commands.executeCommand("setContext", "aurelia.documentOwned", false),
-    ]);
-    await languageClient.start(this.#context);
-    const lsp = new LspFacade(languageClient, logger);
+      const lsp = new LspFacade(languageClient, logger);
+      this.#lsp = lsp;
+      const ctx = createClientContext({
+        extension: this.#extension,
+        vscode,
+        logger,
+        errors,
+        languageClient,
+        lsp,
+      });
+      this.#ctx = ctx;
 
-    const ctx = createClientContext({
-      extension: this.#context,
-      vscode,
-      logger,
-      errors,
-      languageClient,
-      lsp,
-    });
-
-    this.#ctx = ctx;
-    ctx.disposables.add(lsp);
-    ctx.disposables.add(logger);
-
-    const synchronizeClientState = () => this.#queueClientStateTransition(ctx);
-    const synchronizeDocumentContext = () => this.#queueDocumentContextTransition(ctx);
-    ctx.disposables.add(languageClient.onDidChangeSessions(() => {
-      void synchronizeClientState();
-      void synchronizeDocumentContext();
-    }));
-    ctx.disposables.add(vscode.window.onDidChangeActiveTextEditor(() => {
-      void synchronizeDocumentContext();
-    }));
-    ctx.disposables.add(vscode.workspace.onDidChangeConfiguration((event) => {
-      if (!event.affectsConfiguration("aurelia.activationMode")) return;
-      void ctx.errors.capture("configuration.activationMode", async () => {
-        await languageClient.reconcile({ reconfirmExisting: true });
-        await synchronizeClientState();
-        await synchronizeDocumentContext();
-      }, { notify: false });
-    }));
-    await synchronizeClientState();
-    await synchronizeDocumentContext();
-    return ctx;
+      this.#featureActivations = await activateFeatures(ctx, features);
+      this.#subscriptions = this.#registerStateListeners(ctx);
+      await this.#queueContextTransition(ctx);
+    } catch (error) {
+      this.#deactivation ??= this.#deactivate(error);
+      await this.#deactivation;
+      throw error;
+    }
   }
 
-  async deactivate(): Promise<void> {
-    const ctx = this.#ctx;
-    if (ctx) {
-      await this.#clientStateTransition.catch(() => {});
-      await this.#documentContextTransition.catch(() => {});
-      this.#disposeFeatures();
+  deactivate(): Promise<void> {
+    return this.#deactivation ??= this.#deactivate(null);
+  }
+
+  #registerStateListeners(ctx: ClientContext): readonly Disposable[] {
+    const synchronizeContext = () => {
+      void this.#queueContextTransition(ctx);
+    };
+    const subscriptions: Disposable[] = [];
+    try {
+      subscriptions.push(ctx.languageClient.onDidChangeSessions(synchronizeContext));
+      subscriptions.push(ctx.vscode.window.onDidChangeActiveTextEditor(synchronizeContext));
+      subscriptions.push(ctx.vscode.workspace.onDidChangeConfiguration((event) => {
+        if (!event.affectsConfiguration("aurelia.activationMode")) return;
+        void ctx.errors.capture("configuration.activationMode", async () => {
+          await ctx.languageClient.reconcile({ reconfirmExisting: true });
+          await this.#queueContextTransition(ctx);
+        }, { notify: false });
+      }));
+      return subscriptions;
+    } catch (error) {
+      disposeOwned(ctx.logger, "partially registered client subscriptions", subscriptions.reverse());
+      throw error;
+    }
+  }
+
+  #queueContextTransition(ctx: ClientContext): Promise<void> {
+    const request = ++this.#contextRequest;
+    const transition = this.#contextTransition.then(async () => {
+      if (request !== this.#contextRequest || this.#ctx !== ctx) return;
+      const active = ctx.languageClient.hasSessions;
+      const document = ctx.vscode.window.activeTextEditor?.document;
+      const documentOwned = document != null && ctx.languageClient.sessionForUri(document.uri) != null;
+      await setClientContextKeys(ctx.vscode, active, documentOwned);
+    });
+    this.#contextTransition = transition.catch((error) => {
+      ctx.logger.warn(`[client] context transition failed: ${errorMessage(error)}`);
+    });
+    return transition;
+  }
+
+  async #deactivate(activationError: unknown): Promise<void> {
+    const { vscode, logger, languageClient } = this.#services;
+    this.#ctx = null;
+    this.#contextRequest += 1;
+    await this.#contextTransition.catch(() => {});
+
+    disposeOwned(logger, "client subscriptions", [...this.#subscriptions].reverse());
+    this.#subscriptions = [];
+    disposeOwned(logger, "feature contributions", [...this.#featureActivations].reverse());
+    this.#featureActivations = [];
+    disposeOwned(logger, "LSP facade", this.#lsp == null ? [] : [this.#lsp]);
+    this.#lsp = null;
+
+    try {
+      await languageClient.stop();
+    } catch (error) {
+      logger.error("[client] language client shutdown failed", undefined, error);
     }
     try {
-      await ctx?.languageClient.stop();
-    } catch {
-      /* ignore */
+      await setClientContextKeys(vscode, false, false);
+    } catch (error) {
+      logger.error("[client] context reset failed", undefined, error);
     }
-    ctx?.disposables.dispose();
-    if (ctx) {
-      await Promise.all([
-        ctx.vscode.commands.executeCommand("setContext", "aurelia.active", false),
-        ctx.vscode.commands.executeCommand("setContext", "aurelia.documentOwned", false),
-      ]);
+    if (activationError != null) {
+      logger.error("[client] activation rolled back", undefined, activationError);
     }
-    this.#ctx = null;
-  }
-
-  #queueClientStateTransition(ctx: ClientContext): Promise<void> {
-    const generation = ctx.languageClient.sessionGeneration;
-    const transition = this.#clientStateTransition.then(async () => {
-      if (generation !== ctx.languageClient.sessionGeneration) return;
-      const active = ctx.languageClient.hasSessions;
-      await ctx.vscode.commands.executeCommand("setContext", "aurelia.active", active);
-      if (generation !== ctx.languageClient.sessionGeneration) return;
-      this.#disposeFeatures();
-      if (!active) {
-        return;
-      }
-      const activations = await activateFeatures(ctx, this.#options.features ?? DefaultFeatures);
-      if (generation !== ctx.languageClient.sessionGeneration) {
-        activations.dispose();
-        return;
-      }
-      this.#featureActivations = activations;
-    });
-    this.#clientStateTransition = transition.catch((error) => {
-      ctx.logger.warn(`[client] session-state transition failed: ${error instanceof Error ? error.message : String(error)}`);
-    });
-    return transition;
-  }
-
-  #queueDocumentContextTransition(ctx: ClientContext): Promise<void> {
-    const request = ++this.#documentContextRequest;
-    const transition = this.#documentContextTransition.then(async () => {
-      if (request !== this.#documentContextRequest) return;
-      const document = ctx.vscode.window.activeTextEditor?.document;
-      const owned = document != null && ctx.languageClient.sessionForUri(document.uri) != null;
-      await ctx.vscode.commands.executeCommand("setContext", "aurelia.documentOwned", owned);
-    });
-    this.#documentContextTransition = transition.catch((error) => {
-      ctx.logger.warn(`[client] document-context transition failed: ${error instanceof Error ? error.message : String(error)}`);
-    });
-    return transition;
-  }
-
-  #disposeFeatures(): void {
-    this.#featureActivations?.dispose();
-    this.#featureActivations = null;
+    this.#services.outputChannel.dispose();
   }
 }
 
 async function activateFeatures(
   ctx: ClientContext,
   features: readonly ClientFeature[],
-): Promise<DisposableLike> {
-  const activations = new DisposableStore();
-  for (const feature of features) {
-    try {
+): Promise<readonly Disposable[]> {
+  const activations: Disposable[] = [];
+  try {
+    for (const feature of features) {
       ctx.logger.info(`[features] activating: ${feature.id}`);
-      const activation = await feature.activate(ctx);
-      if (isDisposableList(activation)) {
-        for (const disposable of activation) activations.add(disposable);
-      } else if (activation != null) {
-        activations.add(activation as DisposableLike);
-      }
-    } catch (error) {
-      ctx.errors.report(error, `feature.activate.${feature.id}`, {
-        context: { feature: feature.id },
+      await feature.activate(ctx, (contribution) => {
+        activations.push(contribution);
+        return contribution;
       });
     }
+    return activations;
+  } catch (error) {
+    disposeOwned(ctx.logger, "partially activated features", [...activations].reverse());
+    throw error;
   }
-  return activations;
 }
 
-function isDisposableList(
-  value: void | DisposableLike | readonly DisposableLike[],
-): value is readonly DisposableLike[] {
-  return Array.isArray(value);
+function disposeOwned(logger: ClientLogger, owner: string, disposables: readonly Disposable[]): void {
+  for (const disposable of disposables) {
+    try {
+      disposable.dispose();
+    } catch (error) {
+      logger.error(`[client] ${owner} disposal failed`, undefined, error);
+    }
+  }
+}
+
+function setClientContextKeys(vscode: VscodeApi, active: boolean, documentOwned: boolean): Promise<unknown[]> {
+  return Promise.all([
+    vscode.commands.executeCommand("setContext", "aurelia.active", active),
+    vscode.commands.executeCommand("setContext", "aurelia.documentOwned", documentOwned),
+  ]);
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

@@ -1,6 +1,8 @@
-import { test, expect, vi } from "vitest";
+import { expect, test, vi } from "vitest";
 import type { LanguageClient } from "vscode-languageclient/node";
+import { ClientApp } from "../../out/app.js";
 import type { ClientFeature } from "../../out/core/feature.js";
+import { ClientLogger } from "../../out/log.js";
 import type { VscodeApi } from "../../out/vscode-api.js";
 import { createVscodeApi, stubExtensionContext } from "../helpers/vscode-stub.js";
 
@@ -10,31 +12,29 @@ class StubLanguageClient {
   reconcileCalls = 0;
   #lsp: LanguageClient;
   sessions: unknown[];
-  sessionGeneration = 0;
   #listeners = new Set<() => void>();
 
   constructor(lsp: LanguageClient, active = true) {
     this.#lsp = lsp;
-    this.sessions = active ? [{
-      workspace: { key: "file:///workspace", name: "workspace", uri: "file:///workspace" },
-      client: lsp,
-    }] : [];
+    this.sessions = active ? [workspaceSession(lsp)] : [];
   }
 
   get hasSessions() { return this.sessions.length > 0; }
+  get listenerCount() { return this.#listeners.size; }
 
   async start() {
     this.startCalls += 1;
   }
 
-  async restart() {}
   async reconcile() {
     this.reconcileCalls += 1;
   }
+
   onDidChangeSessions(listener: () => void) {
     this.#listeners.add(listener);
     return { dispose: () => this.#listeners.delete(listener) };
   }
+
   sessionForUri(uri: { toString(): string }) {
     const session = this.sessions[0] as { workspace?: { uri?: string } } | undefined;
     const workspaceUri = session?.workspace?.uri;
@@ -44,6 +44,7 @@ class StubLanguageClient {
       ? session
       : undefined;
   }
+
   clientForUri() { return this.#lsp; }
 
   async stop() {
@@ -52,60 +53,41 @@ class StubLanguageClient {
   }
 
   setActive(active: boolean) {
-    this.sessions = active ? [{
-      workspace: { key: "file:///workspace", name: "workspace", uri: "file:///workspace" },
-      client: this.#lsp,
-    }] : [];
-    this.sessionGeneration += 1;
+    this.sessions = active ? [workspaceSession(this.#lsp)] : [];
     for (const listener of this.#listeners) listener();
   }
 }
 
-const activationTest = test;
-
-activationTest("activate wires the language client and explicit product features", async () => {
-  const { activate, deactivate } = await import("../../out/extension.js");
+test("activates the language client and product contributions once", async () => {
   const { vscode: stubVscode } = createVscodeApi();
-  const vscode = stubVscode as unknown as VscodeApi;
-  const lsp = {
-    onNotification: vi.fn(() => ({ dispose: () => {} })),
-    sendRequest: vi.fn(async () => null),
-  } as unknown as LanguageClient;
+  const lsp = stubProtocolClient();
   const languageClient = new StubLanguageClient(lsp);
   const activated: string[] = [];
+  let disposed = 0;
   const feature: ClientFeature = {
     id: "test.feature",
-    activate: () => {
+    activate: (_ctx, own) => {
       activated.push("test.feature");
-      return { dispose: () => {} };
+      own({ dispose: () => { disposed += 1; } });
     },
   };
-  const context = stubExtensionContext(stubVscode);
+  const app = createApp(stubVscode, languageClient, [feature]);
 
-  await activate(context, { vscode, languageClient: languageClient as never, features: [feature] });
+  await app.activate();
 
   expect(languageClient.startCalls).toBe(1);
   expect(activated).toEqual(["test.feature"]);
 
-  await deactivate();
+  await app.deactivate();
   expect(languageClient.stopCalls).toBe(1);
+  expect(disposed).toBe(1);
 });
 
-activationTest("reconciles sessions only when workspace activation policy changes", async () => {
-  const { activate, deactivate } = await import("../../out/extension.js");
+test("reconciles sessions only when workspace activation policy changes", async () => {
   const { vscode: stubVscode, recorded } = createVscodeApi();
-  const vscode = stubVscode as unknown as VscodeApi;
-  const lsp = {
-    onNotification: vi.fn(() => ({ dispose: () => {} })),
-    sendRequest: vi.fn(async () => null),
-  } as unknown as LanguageClient;
-  const languageClient = new StubLanguageClient(lsp);
-
-  await activate(stubExtensionContext(stubVscode), {
-    vscode,
-    languageClient: languageClient as never,
-    features: [],
-  });
+  const languageClient = new StubLanguageClient(stubProtocolClient());
+  const app = createApp(stubVscode, languageClient, []);
+  await app.activate();
 
   recorded.fireConfigurationChanged("aurelia.inlayHints.bindingMode");
   await settleAsyncWork();
@@ -115,74 +97,57 @@ activationTest("reconciles sessions only when workspace activation policy change
   await settleAsyncWork();
   expect(languageClient.reconcileCalls).toBe(1);
 
-  await deactivate();
+  await app.deactivate();
   recorded.fireConfigurationChanged("aurelia.activationMode");
   await settleAsyncWork();
   expect(languageClient.reconcileCalls).toBe(1);
 });
 
-activationTest("keeps product features inactive until a workspace session is owned", async () => {
-  const { activate, deactivate } = await import("../../out/extension.js");
+test("keeps contributions stable while workspace sessions come and go", async () => {
   const { vscode: stubVscode, recorded } = createVscodeApi();
-  const vscode = stubVscode as unknown as VscodeApi;
-  const lsp = {
-    onNotification: vi.fn(() => ({ dispose: () => {} })),
-    sendRequest: vi.fn(async () => ({ contracts: { query: { version: "1" } } })),
-  } as unknown as LanguageClient;
-  const languageClient = new StubLanguageClient(lsp, false);
-  const activated: string[] = [];
-  let disposed = 0;
+  const languageClient = new StubLanguageClient(stubProtocolClient(), false);
+  let activations = 0;
+  let disposals = 0;
   const feature: ClientFeature = {
     id: "test.feature",
-    activate: () => {
-      activated.push("test.feature");
-      return { dispose: () => { disposed += 1; } };
+    activate: (_ctx, own) => {
+      activations += 1;
+      own({ dispose: () => { disposals += 1; } });
     },
   };
+  const app = createApp(stubVscode, languageClient, [feature]);
 
-  await activate(stubExtensionContext(stubVscode), {
-    vscode,
-    languageClient: languageClient as never,
-    features: [feature],
-  });
-  expect(activated).toEqual([]);
+  await app.activate();
+  expect(activations).toBe(1);
   expect(recorded.contextValues.get("aurelia.active")).toBe(false);
 
   languageClient.setActive(true);
   await settleAsyncWork();
-  expect(activated).toEqual(["test.feature"]);
+  expect(activations).toBe(1);
+  expect(disposals).toBe(0);
   expect(recorded.contextValues.get("aurelia.active")).toBe(true);
 
   languageClient.setActive(false);
   await settleAsyncWork();
-  expect(disposed).toBe(1);
+  expect(activations).toBe(1);
+  expect(disposals).toBe(0);
   expect(recorded.contextValues.get("aurelia.active")).toBe(false);
 
-  await deactivate();
+  await app.deactivate();
+  expect(disposals).toBe(1);
 });
 
-activationTest("scopes editor contributions to the active document's owning session", async () => {
-  const { activate, deactivate } = await import("../../out/extension.js");
+test("scopes editor context to the active document's owning session", async () => {
   const { vscode: stubVscode, recorded } = createVscodeApi({
-    activeTextEditor: {
-      document: { uri: "placeholder" },
-    },
+    activeTextEditor: { document: { uri: "placeholder" } },
   });
-  const vscode = stubVscode as unknown as VscodeApi;
   stubVscode.window.activeTextEditor = {
     document: { uri: stubVscode.Uri.parse("file:///workspace/src/app.html") },
   };
-  const lsp = {
-    onNotification: vi.fn(() => ({ dispose: () => {} })),
-    sendRequest: vi.fn(async () => ({ contracts: { query: { version: "1" } } })),
-  } as unknown as LanguageClient;
-  const languageClient = new StubLanguageClient(lsp);
+  const languageClient = new StubLanguageClient(stubProtocolClient());
+  const app = createApp(stubVscode, languageClient, []);
 
-  await activate(stubExtensionContext(stubVscode), {
-    vscode,
-    languageClient: languageClient as never,
-    features: [],
-  });
+  await app.activate();
   expect(recorded.contextValues.get("aurelia.active")).toBe(true);
   expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(true);
 
@@ -190,7 +155,6 @@ activationTest("scopes editor contributions to the active document's owning sess
     document: { uri: stubVscode.Uri.parse("file:///plain/src/plain.ts") },
   });
   await settleAsyncWork();
-  expect(recorded.contextValues.get("aurelia.active")).toBe(true);
   expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(false);
 
   recorded.fireActiveTextEditorChanged(undefined);
@@ -207,65 +171,76 @@ activationTest("scopes editor contributions to the active document's owning sess
   await settleAsyncWork();
   expect(recorded.contextValues.get("aurelia.active")).toBe(false);
   expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(false);
-
-  await deactivate();
+  await app.deactivate();
 });
 
-activationTest("deactivates feature work that completes after its session generation retires", async () => {
-  const { activate, deactivate } = await import("../../out/extension.js");
-  const { vscode: stubVscode } = createVscodeApi();
-  const vscode = stubVscode as unknown as VscodeApi;
-  const executeCommand = stubVscode.commands.executeCommand;
-  let blockInactiveContext = false;
-  let inactiveContextRequests = 0;
-  let releaseInactiveContext!: () => void;
-  const inactiveContext = new Promise<void>((resolve) => {
-    releaseInactiveContext = resolve;
-  });
-  stubVscode.commands.executeCommand = async (command, ...args) => {
-    if (blockInactiveContext && command === "setContext" && args[0] === "aurelia.active" && args[1] === false) {
-      inactiveContextRequests += 1;
-      await inactiveContext;
-    }
-    return executeCommand(command, ...args);
-  };
-  const lsp = {
-    onNotification: vi.fn(() => ({ dispose: () => {} })),
-    sendRequest: vi.fn(async () => ({ contracts: { query: { version: "1" } } })),
-  } as unknown as LanguageClient;
-  const languageClient = new StubLanguageClient(lsp, false);
-  let activationStarted = false;
-  let resolveActivation!: () => void;
-  const activationGate = new Promise<void>((resolve) => {
-    resolveActivation = resolve;
-  });
-  let disposals = 0;
-  const feature: ClientFeature = {
-    id: "test.slow",
-    activate: async () => {
-      activationStarted = true;
-      await activationGate;
-      return { dispose: () => { disposals += 1; } };
+test("rolls back all owned contributions when activation fails", async () => {
+  const { vscode: stubVscode, recorded } = createVscodeApi();
+  const languageClient = new StubLanguageClient(stubProtocolClient());
+  let disposed = 0;
+  const app = createApp(stubVscode, languageClient, [{
+    id: "test.first",
+    activate: (_ctx, own) => { own({ dispose: () => { disposed += 1; } }); },
+  }, {
+    id: "test.failure",
+    activate: (_ctx, own) => {
+      own({ dispose: () => { disposed += 1; } });
+      throw new Error("registration failed");
     },
-  };
+  }]);
 
-  await activate(stubExtensionContext(stubVscode), {
-    vscode,
-    languageClient: languageClient as never,
-    features: [feature],
-  });
-  languageClient.setActive(true);
-  await vi.waitFor(() => expect(activationStarted).toBe(true));
-  blockInactiveContext = true;
-  languageClient.setActive(false);
-  resolveActivation();
-  await vi.waitFor(() => expect(inactiveContextRequests).toBe(1));
+  await expect(app.activate()).rejects.toThrow("registration failed");
 
-  expect(disposals).toBe(1);
-  releaseInactiveContext();
-  await settleAsyncWork();
-  await deactivate();
+  expect(disposed).toBe(2);
+  expect(languageClient.stopCalls).toBe(1);
+  expect(recorded.contextValues.get("aurelia.active")).toBe(false);
+  expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(false);
 });
+
+test("rolls back earlier state listeners when listener registration fails", async () => {
+  const { vscode: stubVscode } = createVscodeApi();
+  stubVscode.window.onDidChangeActiveTextEditor = () => {
+    throw new Error("editor listener registration failed");
+  };
+  const languageClient = new StubLanguageClient(stubProtocolClient());
+  const app = createApp(stubVscode, languageClient, []);
+
+  await expect(app.activate()).rejects.toThrow("editor listener registration failed");
+
+  expect(languageClient.listenerCount).toBe(0);
+  expect(languageClient.stopCalls).toBe(1);
+});
+
+function createApp(
+  stubVscode: ReturnType<typeof createVscodeApi>["vscode"],
+  languageClient: StubLanguageClient,
+  features: readonly ClientFeature[],
+): ClientApp {
+  const vscode = stubVscode as unknown as VscodeApi;
+  const outputChannel = vscode.window.createOutputChannel("test", { log: true });
+  const logger = new ClientLogger(outputChannel);
+  return new ClientApp(stubExtensionContext(stubVscode), {
+    vscode,
+    logger,
+    outputChannel,
+    languageClient: languageClient as never,
+    features,
+  });
+}
+
+function stubProtocolClient(): LanguageClient {
+  return {
+    onNotification: vi.fn(() => ({ dispose: () => {} })),
+    sendRequest: vi.fn(async () => null),
+  } as unknown as LanguageClient;
+}
+
+function workspaceSession(client: LanguageClient) {
+  return {
+    workspace: { key: "file:///workspace", name: "workspace", uri: "file:///workspace" },
+    client,
+  };
+}
 
 async function settleAsyncWork(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0));
