@@ -1,7 +1,9 @@
 import type { Connection, TextDocuments } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import fs from "node:fs";
+import { NodeSemanticRuntimeProjectInputHost } from "@aurelia-ls/semantic-runtime";
 import type { Logger } from "./services/types.js";
+import { OpenDocumentSourceTextOverlay } from "./runtime/open-document-source-text-overlay.js";
 import { SemanticRuntimeLspSession } from "./runtime/semantic-runtime-session.js";
 import {
   WorkspaceDocumentUris,
@@ -60,8 +62,10 @@ export function createServerContext(init: ServerContextInit): ServerContext {
 
   const documentUris = new WorkspaceDocumentUris();
   const semanticRuntime = new SemanticRuntimeLspSession({
-    documents,
     documentUris,
+    projectInputHost: new NodeSemanticRuntimeProjectInputHost(
+      new OpenDocumentSourceTextOverlay(documents, documentUris),
+    ),
   });
   const clientSupport: ServerClientSupport = {
     configurationPull: false,

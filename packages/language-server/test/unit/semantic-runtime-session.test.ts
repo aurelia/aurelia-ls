@@ -5,6 +5,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import {
   InquiryContinuationKind,
+  NodeSemanticRuntimeProjectInputHost,
   SEMANTIC_RUNTIME_API_VERSION,
   SemanticRuntimeAnswerCoverage,
   SemanticRuntimeAnswerResult,
@@ -17,7 +18,10 @@ import {
   drainSemanticRuntimePages,
   isSemanticRuntimeLspRequestAborted,
 } from "../../src/runtime/semantic-runtime-session.js";
-import type { OpenTextDocumentStore } from "../../src/runtime/open-document-source-text-overlay.js";
+import {
+  OpenDocumentSourceTextOverlay,
+  type OpenTextDocumentStore,
+} from "../../src/runtime/open-document-source-text-overlay.js";
 import { WorkspaceDocumentUris } from "../../src/utils/document-uri.js";
 
 class TestDocumentStore implements OpenTextDocumentStore {
@@ -531,7 +535,12 @@ function createSession(
 ): SemanticRuntimeLspSession {
   const documentUris = new WorkspaceDocumentUris();
   documentUris.configure(pathToFileURL(workspaceRoot).toString());
-  return new SemanticRuntimeLspSession({ documents, documentUris });
+  return new SemanticRuntimeLspSession({
+    documentUris,
+    projectInputHost: new NodeSemanticRuntimeProjectInputHost(
+      new OpenDocumentSourceTextOverlay(documents, documentUris),
+    ),
+  });
 }
 
 function positionAfter(

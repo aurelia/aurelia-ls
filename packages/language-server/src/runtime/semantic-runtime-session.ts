@@ -7,11 +7,11 @@ import {
   appDiagnosticPresentation,
   canonicalTypeSystemPath,
   InquiryContinuationKind,
-  NodeSemanticRuntimeProjectInputHost,
   SemanticRuntimeProjectInputAuthority,
   SemanticAppQueryKind,
   type SemanticApplicationTopologyResult,
   type SemanticRuntime,
+  type SemanticRuntimeProjectInputHost,
   type SemanticAppDiagnosticsResult,
   type SemanticResourceDefinitionsResult,
   type SemanticResourceInventoryResult,
@@ -30,15 +30,11 @@ import {
   type SemanticTemplateRenameResult,
   type SemanticTemplateSemanticTokensResult,
 } from "@aurelia-ls/semantic-runtime";
-import {
-  OpenDocumentSourceTextOverlay,
-  type OpenTextDocumentStore,
-} from "./open-document-source-text-overlay.js";
 import type { WorkspaceDocumentUris } from "../utils/document-uri.js";
 
 export interface SemanticRuntimeLspSessionOptions {
-  readonly documents: OpenTextDocumentStore;
   readonly documentUris: WorkspaceDocumentUris;
+  readonly projectInputHost: SemanticRuntimeProjectInputHost;
 }
 
 export interface SemanticRuntimeLspGeneration {
@@ -238,11 +234,7 @@ export class SemanticRuntimeLspSession {
     this.documentUris = options.documentUris;
     this.workspaceRoot = options.documentUris.workspaceRoot;
     this.workspaceBoundaryKey = semanticWorkspaceBoundaryKey(options.documentUris);
-    this.projectInputAuthority = new SemanticRuntimeProjectInputAuthority(
-      new NodeSemanticRuntimeProjectInputHost(
-        new OpenDocumentSourceTextOverlay(options.documents, options.documentUris),
-      ),
-    );
+    this.projectInputAuthority = new SemanticRuntimeProjectInputAuthority(options.projectInputHost);
   }
 
   configureWorkspace(): void {

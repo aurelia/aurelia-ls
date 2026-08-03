@@ -1,14 +1,21 @@
 #!/usr/bin/env node
+/**
+ * Measurement-only LSP journey. Project-input counters and timers wrap the host only in this process, so the
+ * production extension pays no instrumentation cost. For sampled call stacks, run this script through Node's
+ * `--cpu-prof` and keep the generated profile outside committed source.
+ */
 import fs from "node:fs/promises";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
 import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { TextDocument } from "vscode-languageserver-textdocument";
+import { NodeSemanticRuntimeProjectInputHost } from "@aurelia-ls/semantic-runtime";
 import {
   SemanticRuntimeLspSession,
   isSemanticRuntimeLspRequestAborted,
 } from "../out/runtime/semantic-runtime-session.js";
+import { OpenDocumentSourceTextOverlay } from "../out/runtime/open-document-source-text-overlay.js";
 import { WorkspaceDocumentUris } from "../out/utils/document-uri.js";
 
 const packageRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
@@ -20,17 +27,116 @@ const fixtureStatExtensions = new Set([".ts", ".js", ".html", ".json", ".css"]);
 
 class MeasurementDocumentStore {
   documents = new Map();
+  counters = {
+    getCalls: 0,
+    allCalls: 0,
+    allDocumentsVisited: 0,
+  };
 
   add(document) {
     this.documents.set(document.uri, document);
   }
 
   get(uri) {
+    this.counters.getCalls += 1;
     return this.documents.get(uri);
   }
 
   all() {
+    this.counters.allCalls += 1;
+    this.counters.allDocumentsVisited += this.documents.size;
     return [...this.documents.values()];
+  }
+
+  snapshot() {
+    return { ...this.counters };
+  }
+}
+
+class MeasuredProjectInputHost {
+  operations = new Map();
+
+  constructor(delegate) {
+    this.delegate = delegate;
+  }
+
+  readFile(fileName) {
+    return this.measure("readFile", () => this.delegate.readFile(fileName));
+  }
+
+  fileExists(fileName) {
+    return this.measure("fileExists", () => this.delegate.fileExists(fileName));
+  }
+
+  readDirectory(directoryName) {
+    return this.measure("readDirectory", () => this.delegate.readDirectory(directoryName));
+  }
+
+  directoryExists(directoryName) {
+    return this.measure("directoryExists", () => this.delegate.directoryExists(directoryName));
+  }
+
+  realpath(fileName) {
+    return this.measure("realpath", () => this.delegate.realpath(fileName));
+  }
+
+  matchFiles(rootDir, extensions, excludes, includes, depth) {
+    return this.measure("matchFiles", () =>
+      this.delegate.matchFiles(rootDir, extensions, excludes, includes, depth));
+  }
+
+  snapshot() {
+    return Object.fromEntries(
+      [...this.operations]
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([name, value]) => [name, { ...value }]),
+    );
+  }
+
+  measure(name, read) {
+    const started = performance.now();
+    const value = read();
+    const elapsedMilliseconds = performance.now() - started;
+    const operation = this.operations.get(name) ?? {
+      calls: 0,
+      elapsedMilliseconds: 0,
+      returnedCharacters: 0,
+      returnedItems: 0,
+    };
+    operation.calls += 1;
+    operation.elapsedMilliseconds += elapsedMilliseconds;
+    if (typeof value === "string") {
+      operation.returnedCharacters += value.length;
+    } else if (Array.isArray(value)) {
+      operation.returnedItems += value.length;
+    }
+    this.operations.set(name, operation);
+    return value;
+  }
+}
+
+class MeasurementProbe {
+  constructor(host, documents) {
+    this.host = host;
+    this.documents = documents;
+  }
+
+  snapshot() {
+    return {
+      host: this.host.snapshot(),
+      documents: this.documents.snapshot(),
+      memory: memorySnapshot(),
+    };
+  }
+
+  delta(before) {
+    const after = this.snapshot();
+    return {
+      host: counterMapDelta(before.host, after.host),
+      documents: counterDelta(before.documents, after.documents),
+      memory: counterDelta(before.memory, after.memory),
+      memoryAfter: after.memory,
+    };
   }
 }
 
@@ -67,7 +173,13 @@ async function main() {
   const cursorPositions = cursorPositionsForDocument(targetHtml);
   const documentUris = new WorkspaceDocumentUris();
   documentUris.configure(pathToFileURL(fixtureRoot).toString());
-  const session = new SemanticRuntimeLspSession({ documents, documentUris });
+  const projectInputHost = new MeasuredProjectInputHost(
+    new NodeSemanticRuntimeProjectInputHost(
+      new OpenDocumentSourceTextOverlay(documents, documentUris),
+    ),
+  );
+  const measurement = new MeasurementProbe(projectInputHost, documents);
+  const session = new SemanticRuntimeLspSession({ documentUris, projectInputHost });
   const report = {
     fixture: {
       name: fixtureName,
@@ -86,34 +198,34 @@ async function main() {
 
   recordGeneration(report, "initial", session.currentGeneration());
 
-  const coldDiagnostics = await timed("cold appDiagnostics", () =>
+  const coldDiagnostics = await timed("cold appDiagnostics", measurement, () =>
     session.appDiagnostics(targetHtml, session.requestGuard(null)));
   report.timings.push(timingSummary(coldDiagnostics));
   recordGeneration(report, "after cold diagnostics", session.currentGeneration());
   report.cache.push(await cacheSnapshot("after cold diagnostics", session));
 
-  const warmDiagnostics = await timed("warm same-generation appDiagnostics", () =>
+  const warmDiagnostics = await timed("warm same-generation appDiagnostics", measurement, () =>
     session.appDiagnostics(targetHtml, session.requestGuard(null)));
   report.timings.push(timingSummary(warmDiagnostics));
   report.cache.push(await cacheSnapshot("after warm diagnostics", session));
 
-  const cursorInfo = await timed("warm same-generation templateCursorInfo", () =>
+  const cursorInfo = await timed("warm same-generation templateCursorInfo", measurement, () =>
     session.templateCursorInfo(targetHtml, cursorPositions.member, session.requestGuard(null)));
   report.timings.push(timingSummary(cursorInfo));
 
   editOpenDocuments(documents, fixtureRoot, sourceFiles);
-  const sourceChange = await timed("recordSourceTextChanged after TS+HTML edits", () =>
+  const sourceChange = await timed("recordSourceTextChanged after TS+HTML edits", measurement, () =>
     session.recordSourceTextChanged());
   report.timings.push(timingSummary(sourceChange));
   recordGeneration(report, "after source change", session.currentGeneration());
   report.cache.push(await cacheSnapshot("after source change clear", session));
 
-  const afterEditDiagnostics = await timed("post-edit appDiagnostics", () =>
+  const afterEditDiagnostics = await timed("post-edit appDiagnostics", measurement, () =>
     session.appDiagnostics(targetHtml, session.requestGuard(null)));
   report.timings.push(timingSummary(afterEditDiagnostics));
   report.cache.push(await cacheSnapshot("after post-edit diagnostics", session));
 
-  const afterEditCompletion = await timed("post-edit templateCompletions", () =>
+  const afterEditCompletion = await timed("post-edit templateCompletions", measurement, () =>
     session.templateCompletions(targetHtml, cursorPositions.completion, session.requestGuard(null)));
   report.timings.push(timingSummary(afterEditCompletion));
   report.cache.push(await cacheSnapshot("after post-edit completion", session));
@@ -206,19 +318,71 @@ function replaceDocumentText(documents, filePath, edit) {
   documents.add(TextDocument.create(uri, current.languageId, current.version + 1, edit(current.getText())));
 }
 
-async function timed(label, run) {
+async function timed(label, measurement, run) {
+  const measurementBefore = measurement.snapshot();
   const started = performance.now();
   const value = await run();
   const elapsedMilliseconds = performance.now() - started;
-  return { label, elapsedMilliseconds, value };
+  return {
+    label,
+    elapsedMilliseconds,
+    measurement: measurement.delta(measurementBefore),
+    value,
+  };
 }
 
 function timingSummary(timing) {
   return {
     label: timing.label,
     elapsedMilliseconds: timing.elapsedMilliseconds,
+    measurement: timing.measurement,
     summary: timing.value?.summary ?? null,
     outcome: timing.value?.outcome ?? null,
+  };
+}
+
+function memorySnapshot() {
+  const memory = process.memoryUsage();
+  return {
+    rssBytes: memory.rss,
+    heapUsedBytes: memory.heapUsed,
+    externalBytes: memory.external,
+    arrayBuffersBytes: memory.arrayBuffers,
+  };
+}
+
+function counterMapDelta(before, after) {
+  const names = new Set([...Object.keys(before), ...Object.keys(after)]);
+  return Object.fromEntries(
+    [...names]
+      .sort((left, right) => left.localeCompare(right))
+      .map((name) => [name, counterDelta(before[name] ?? {}, after[name] ?? {})]),
+  );
+}
+
+function counterDelta(before, after) {
+  const names = new Set([...Object.keys(before), ...Object.keys(after)]);
+  return Object.fromEntries(
+    [...names]
+      .sort((left, right) => left.localeCompare(right))
+      .map((name) => [name, (after[name] ?? 0) - (before[name] ?? 0)]),
+  );
+}
+
+function projectInputSummary(measurement) {
+  const operations = Object.entries(measurement.host)
+    .filter(([, value]) => value.calls > 0);
+  const calls = operations.reduce((total, [, value]) => total + value.calls, 0);
+  const elapsedMilliseconds = operations.reduce(
+    (total, [, value]) => total + value.elapsedMilliseconds,
+    0,
+  );
+  return {
+    calls,
+    elapsedMilliseconds,
+    detail: operations
+      .map(([name, value]) => `${name}=${value.calls}`)
+      .join(", "),
   };
 }
 
@@ -410,7 +574,7 @@ function parseArgs(argv) {
 
 function markdownReport(report) {
   return [
-    "# Incrementality Bridge Measurement",
+    "# Interactive Performance Measurement",
     "",
     `Fixture: \`${report.fixture.name}\``,
     `Target: \`${report.fixture.targetDocument}\``,
@@ -431,11 +595,30 @@ function markdownReport(report) {
     "## Timings",
     "",
     table(
-      ["operation", "ms", "outcome"],
+      ["operation", "ms", "host calls", "host ms", "heap delta", "outcome"],
+      report.timings.map((row) => {
+        const projectInput = projectInputSummary(row.measurement);
+        return [
+          row.label,
+          row.elapsedMilliseconds.toFixed(2),
+          String(projectInput.calls),
+          projectInput.elapsedMilliseconds.toFixed(2),
+          formatBytes(row.measurement.memory.heapUsedBytes),
+          row.outcome ?? "",
+        ];
+      }),
+    ),
+    "",
+    "## Project Input",
+    "",
+    table(
+      ["operation", "host operations", "document get", "document scans", "documents visited"],
       report.timings.map((row) => [
         row.label,
-        row.elapsedMilliseconds.toFixed(2),
-        row.outcome ?? "",
+        projectInputSummary(row.measurement).detail,
+        String(row.measurement.documents.getCalls),
+        String(row.measurement.documents.allCalls),
+        String(row.measurement.documents.allDocumentsVisited),
       ]),
     ),
     "",
@@ -486,6 +669,18 @@ function table(headers, rows) {
 
 function escapeTableCell(value) {
   return String(value).replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
+}
+
+function formatBytes(value) {
+  const sign = value < 0 ? "-" : "+";
+  const absolute = Math.abs(value);
+  if (absolute < 1024) {
+    return `${sign}${absolute} B`;
+  }
+  if (absolute < 1024 * 1024) {
+    return `${sign}${(absolute / 1024).toFixed(1)} KiB`;
+  }
+  return `${sign}${(absolute / (1024 * 1024)).toFixed(1)} MiB`;
 }
 
 function relativePath(root, filePath) {
