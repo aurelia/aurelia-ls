@@ -129,25 +129,37 @@ export function mergeKernelDetailReferences(
   if (groups.length === 0) {
     return noDetailReferences;
   }
-  const byKey = new Map<string, KernelDetailReference>();
+  const bySurface = new Map<KernelPublicationSurface, Map<string, KernelDetailReference>>();
   for (const group of groups) {
     for (const reference of group) {
       if (reference == null) {
         continue;
       }
-      const existing = byKey.get(reference.key);
+      let byHandle = bySurface.get(reference.surface);
+      if (byHandle == null) {
+        byHandle = new Map();
+        bySurface.set(reference.surface, byHandle);
+      }
+      const existing = byHandle.get(reference.handle);
       if (existing != null && existing.detailKind !== reference.detailKind) {
         throw new Error(
           `Kernel detail reference ${reference.key} expects both ${String(existing.detailKind)} and `
           + `${String(reference.detailKind)}.`,
         );
       }
-      byKey.set(reference.key, reference);
+      byHandle.set(reference.handle, reference);
     }
   }
   return Object.freeze(
-    [...byKey.values()].sort((left, right) => left.key.localeCompare(right.key)),
+    [...bySurface.values()].flatMap((byHandle) => [...byHandle.values()]).sort(compareKernelDetailReferences),
   ) as unknown as KernelDetailReferenceClosure;
+}
+
+function compareKernelDetailReferences(
+  left: KernelDetailReference,
+  right: KernelDetailReference,
+): number {
+  return left.surface.localeCompare(right.surface) || left.handle.localeCompare(right.handle);
 }
 
 /** Compare two already-normalized structural closures without inspecting rich payload objects. */

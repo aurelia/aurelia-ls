@@ -9,7 +9,9 @@ import { ComputationReadValidationScope } from '../src/kernel/computation-lifecy
 import {
   NodeSemanticRuntimeProjectInputHost,
   SemanticRuntimeProjectInputAuthority,
+  SemanticRuntimeProjectInputChange,
   SemanticRuntimeProjectInputChangeDetection,
+  SemanticRuntimeProjectInputChangeKind,
   type SemanticRuntimeProjectInputHost,
   SemanticRuntimeProjectInputReadKind,
 } from '../src/kernel/project-input.js';
@@ -163,6 +165,36 @@ describe('SemanticRuntimeProjectInputAuthority', () => {
     expect(second).not.toBe(first);
     expect(second.host.readFile(sourceFile)).toContain('2');
     expect(host.fileReadCount(sourceFile)).toBe(1);
+  });
+
+  test('rebases unaffected consumer reads without polling after an exact file event', () => {
+    const rootDir = normalize('C:/workspace/app');
+    const scriptFile = normalize(`${rootDir}/src/app.ts`);
+    const templateFile = normalize(`${rootDir}/src/app.html`);
+    const host = new MutableProjectInputHost();
+    host.write(scriptFile, 'export class App {}');
+    host.write(templateFile, '<template>before</template>');
+    const authority = new SemanticRuntimeProjectInputAuthority(
+      host,
+      SemanticRuntimeProjectInputChangeDetection.ExplicitEvents,
+    );
+    const first = authority.capture({ projectKey: 'app', rootDir });
+    const scriptConsumer = first.createReadScope('script-consumer');
+    const templateConsumer = first.createReadScope('template-consumer');
+    expect(scriptConsumer.host.readFile(scriptFile)).toContain('class App');
+    expect(templateConsumer.host.readFile(templateFile)).toContain('before');
+
+    host.write(templateFile, '<template>after</template>');
+    host.resetFileReadCounts();
+    authority.advance([
+      new SemanticRuntimeProjectInputChange(SemanticRuntimeProjectInputChangeKind.File, templateFile),
+    ]);
+    const second = authority.capture({ projectKey: 'app', rootDir });
+
+    expect(scriptConsumer.tryRebaseCurrent(second)).toBe(true);
+    expect(host.fileReadCount(scriptFile)).toBe(0);
+    expect(templateConsumer.tryRebaseCurrent(second)).toBe(false);
+    expect(host.fileReadCount(templateFile)).toBe(1);
   });
 
   test('retains narrow product reads inside one synchronous owner scope', () => {

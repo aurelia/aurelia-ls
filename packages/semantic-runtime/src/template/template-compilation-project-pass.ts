@@ -383,6 +383,7 @@ class TemplateCompilationFamilyCarryRebaser {
   constructor(
     private readonly owner: TemplateCompilationOwnerPlan,
     private readonly previous: TemplateCompilationFamilyFrontDoorEmission,
+    private readonly project: ProjectBootFrame | null,
   ) {
     for (const cohort of owner.cohorts) {
       const world = cohort.parentCompilerWorld;
@@ -400,6 +401,10 @@ class TemplateCompilationFamilyCarryRebaser {
     read: ComputationRead,
     context: ComputationReadRebaseContext,
   ): ComputationRead | null | undefined => {
+    const projectInput = this.project?.inputGeneration.rebaseComputationRead(read);
+    if (projectInput !== undefined) {
+      return projectInput;
+    }
     if (!(read instanceof TemplateCompilerReadObservation)) {
       return undefined;
     }
@@ -501,6 +506,7 @@ export class TemplateCompilationFrontDoorEmission {
 /** Rebase candidate-owned compiler reads through the current complete front-door compiler scopes. */
 export function templateCompilerReadRebaserForFrontDoor(
   frontDoor: TemplateCompilationFrontDoorEmission,
+  project: ProjectBootFrame,
 ): ComputationReadRebaser {
   const worldsByScope = new Map(uniqueCompilerWorlds([
     ...frontDoor.plan.appWorld.compilerWorlds,
@@ -518,6 +524,10 @@ export function templateCompilerReadRebaserForFrontDoor(
     (read: TemplateCompilerReadObservation) => TemplateCompilerReadObservation | null
   >();
   return (read, context) => {
+    const projectInput = project.inputGeneration.rebaseComputationRead(read);
+    if (projectInput !== undefined) {
+      return projectInput;
+    }
     if (!(read instanceof TemplateCompilerReadObservation)) {
       return undefined;
     }
@@ -850,7 +860,7 @@ export class TemplateCompilationProjectPass {
       const previousFamily = previous?.familyForOwner(owner.ownerHandle) ?? null;
       const familyRebaser = previousFamily == null
         ? null
-        : new TemplateCompilationFamilyCarryRebaser(owner, previousFamily);
+        : new TemplateCompilationFamilyCarryRebaser(owner, previousFamily, project);
       if (previousFamily?.matches(owner) === true && familyRebaser != null) {
         const carry = this.publication.tryCarryChild(locus, familyRebaser.rebaseRead);
         if (carry != null) {

@@ -341,6 +341,11 @@ describe('app analysis computation', () => {
       ).build(resource).overlaySource)
       .find((source) => source?.text.includes('item.label') === true) ?? null;
 
+    expect(second.project.observedRevision).toBe(first.project.observedRevision);
+    expect(second.emission.profile.evaluationAcquisitions).toEqual([
+      expect.objectContaining({ kind: StaticProjectEvaluationAcquisitionKind.Computed }),
+      expect.objectContaining({ kind: StaticProjectEvaluationAcquisitionKind.Reused }),
+    ]);
     expect(second.emission.typeSystem.program).toBe(firstProgram);
     expect(second.emission.typeSystem.checker).toBe(firstChecker);
     expect(second.emission.profile.typeSystemAcquisition.kind).toBe(TypeSystemProjectAcquisitionKind.Reused);

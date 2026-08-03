@@ -224,6 +224,51 @@ export interface ComputationDomainReadProjection extends ProductDetailReadView, 
   readMaterializationsByOwner(ownerHandle: MaterializationOwnerHandle): readonly MaterializationRecord[];
 }
 
+/** Durable read facade that sheds its candidate transaction after commit. */
+class ComputationDomainReadProjectionAuthority implements ComputationDomainReadProjection {
+  private candidate: ComputationDomainReadProjection | null;
+  private committed = false;
+
+  constructor(
+    candidate: ComputationDomainReadProjection,
+    private readonly store: ComputationDomainReadProjection,
+  ) {
+    this.candidate = candidate;
+  }
+
+  finish(committed: boolean): void {
+    this.candidate = null;
+    this.committed = committed;
+  }
+
+  readProjectionRevision() {
+    return this.delegate().readProjectionRevision();
+  }
+
+  readMaterializationsByOwner(
+    ownerHandle: MaterializationOwnerHandle,
+  ): readonly MaterializationRecord[] {
+    return this.delegate().readMaterializationsByOwner(ownerHandle);
+  }
+
+  readProductDetail<TDetail>(
+    slot: ProductDetailSlot<TDetail>,
+    productHandle: ProductHandle,
+  ): TDetail | null {
+    return this.delegate().readProductDetail(slot, productHandle);
+  }
+
+  private delegate(): ComputationDomainReadProjection {
+    if (this.candidate != null) {
+      return this.candidate;
+    }
+    if (this.committed) {
+      return this.store;
+    }
+    throw new Error('Aborted computation read projection is no longer available.');
+  }
+}
+
 /** Candidate projection after the prospective child carry, available while rebasing its prior reads. */
 export interface ComputationReadRebaseContext extends ComputationDomainReadProjection {}
 
@@ -1044,6 +1089,7 @@ export class ComputationRun implements KernelPublicationContext {
   private phase = ComputationRunPhase.Preparing;
   private carryReadRebaseActive = false;
   private carryDecisionPreviewActive = false;
+  private readonly domainReadProjectionAuthority: ComputationDomainReadProjectionAuthority;
   /** Candidate-aware values for constructing domain reads without also registering lower-level exact reads. */
   readonly domainReadProjection: ComputationDomainReadProjection;
 
@@ -1065,13 +1111,18 @@ export class ComputationRun implements KernelPublicationContext {
       previousPublication,
       this.remainderChild.childId,
     );
-    this.domainReadProjection = Object.freeze({
+    const candidateDomainReadProjection: ComputationDomainReadProjection = Object.freeze({
       readProjectionRevision: () => this.publications.readProjectionRevision(),
       readMaterializationsByOwner: (ownerHandle: MaterializationOwnerHandle) =>
         this.readProjectedMaterializationsByOwner(ownerHandle),
       readProductDetail: <TDetail>(slot: ProductDetailSlot<TDetail>, productHandle: ProductHandle) =>
         this.readProjectedProductDetail(slot, productHandle),
     });
+    this.domainReadProjectionAuthority = new ComputationDomainReadProjectionAuthority(
+      candidateDomainReadProjection,
+      store,
+    );
+    this.domainReadProjection = this.domainReadProjectionAuthority;
   }
 
   /** Declare that this run owns a complete child partition, including an explicit possibly-empty remainder. */
@@ -1705,6 +1756,7 @@ export class ComputationRun implements KernelPublicationContext {
       try {
         this.publications.finishCandidateBindings(committed);
       } finally {
+        this.domainReadProjectionAuthority.finish(committed);
         this.phase = ComputationRunPhase.Finished;
         this.registry.finishRun(this);
       }
@@ -1718,6 +1770,7 @@ export class ComputationRun implements KernelPublicationContext {
     try {
       this.publications.finishCandidateBindings(false);
     } finally {
+      this.domainReadProjectionAuthority.finish(false);
       this.phase = ComputationRunPhase.Finished;
       this.registry.finishRun(this);
     }
@@ -1773,6 +1826,9 @@ export class ComputationRun implements KernelPublicationContext {
     ]));
     const outputsByChild = new Map<ComputationChildId, ComputationOutput[]>();
     const outputOwnerByReadKey = new Map<string, ComputationChildId>();
+    const carriedOutputsByReadKey = new Map([...this.childrenById.values()].flatMap((child) =>
+      child.carriedState?.outputs.map((output) => [output.readKey, output] as const) ?? []
+    ));
     const outputs: ComputationOutput[] = [];
     for (const decision of decisions) {
       if (decision.decision === KernelPublicationDecisionKind.Withdraw) {
@@ -1782,7 +1838,13 @@ export class ComputationRun implements KernelPublicationContext {
       if (revision?.writerId == null || revision.actualKind !== decision.detailKind) {
         throw new Error(`Admitted output ${decision.handle} has no coherent staged writer revision.`);
       }
-      const output = new ComputationOutput(decision.surface, decision.handle, decision.detailKind);
+      const carriedOutput = carriedOutputsByReadKey.get(computationOutputReadKey(decision.surface, decision.handle));
+      const output = carriedOutput?.surface === decision.surface
+        && carriedOutput.handle === decision.handle
+        && carriedOutput.detailKind === decision.detailKind
+        && decision.decision === KernelPublicationDecisionKind.Retain
+        ? carriedOutput
+        : new ComputationOutput(decision.surface, decision.handle, decision.detailKind);
       outputs.push(output);
       const child = this.childrenById.get(revision.writerId);
       if (child == null) {
@@ -2075,6 +2137,9 @@ export class ComputationRun implements KernelPublicationContext {
       .filter((snapshot) => snapshot.expectedEntry != null)
       .map((snapshot) => snapshot.handle));
     for (const record of candidate.plan.batch.records) {
+      if (candidate.explicitlyRetains(KernelPublicationSurface.Record, record.handle, record.kind)) {
+        continue;
+      }
       const writerId = requiredCandidateWriter(candidate, KernelPublicationSurface.Record, record.handle);
       for (const reference of referencedKernelRecordHandles(record)) {
         this.registerStructuralDependency(
@@ -2084,6 +2149,13 @@ export class ComputationRun implements KernelPublicationContext {
       }
     }
     for (const publication of candidate.plan.productDetails) {
+      if (candidate.explicitlyRetains(
+        KernelPublicationSurface.ProductDetail,
+        publication.productHandle,
+        publication.slot.detailKind,
+      )) {
+        continue;
+      }
       if (
         publication.admission === KernelDetailAdmission.IfAbsent
         && borrowedProductDetails.has(publication.productHandle)
@@ -2104,6 +2176,13 @@ export class ComputationRun implements KernelPublicationContext {
       }
     }
     for (const publication of candidate.plan.hotDetails) {
+      if (candidate.explicitlyRetains(
+        KernelPublicationSurface.HotDetail,
+        publication.handle,
+        publication.slot.detailKind,
+      )) {
+        continue;
+      }
       if (
         publication.admission === KernelDetailAdmission.IfAbsent
         && borrowedHotDetails.has(publication.handle)

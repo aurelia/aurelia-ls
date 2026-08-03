@@ -65,6 +65,9 @@ import {
 import { KernelPublicationSurface } from "../src/kernel/publication-surface.js";
 import { KernelStore, KernelStoreBatch } from "../src/kernel/store.js";
 import {
+  KernelHotDetailReference,
+  KernelProductDetailReference,
+  KernelRecordReference,
   kernelHotDetailReference,
   kernelProductDetailReference,
   kernelRecordReferences,
@@ -78,6 +81,45 @@ import {
   GenerationCurrentnessClock,
   type GenerationCurrentnessWitness,
 } from "../src/kernel/generation-authority.js";
+
+describe("kernel detail reference normalization", () => {
+  test("preserves surface identity while deduplicating into canonical order", () => {
+    const duplicateProductReference = new KernelProductDetailReference(
+      "shared" as ProductHandle,
+      "test.product-detail",
+    );
+    const closure = mergeKernelDetailReferences(
+      [
+        new KernelRecordReference("shared" as KernelRecordHandle),
+        duplicateProductReference,
+        new KernelHotDetailReference("shared" as HotDetailHandle, "test.hot-detail"),
+      ],
+      [
+        null,
+        new KernelProductDetailReference("alpha" as ProductHandle, "test.product-detail"),
+        duplicateProductReference,
+        undefined,
+      ],
+    );
+
+    expect(closure).toEqual([
+      new KernelHotDetailReference("shared" as HotDetailHandle, "test.hot-detail"),
+      new KernelProductDetailReference("alpha" as ProductHandle, "test.product-detail"),
+      duplicateProductReference,
+      new KernelRecordReference("shared" as KernelRecordHandle),
+    ]);
+    expect(Object.isFrozen(closure)).toBe(true);
+  });
+
+  test("rejects contradictory detail kinds for one surface and handle", () => {
+    expect(() => mergeKernelDetailReferences([
+      new KernelProductDetailReference("shared" as ProductHandle, "test.left"),
+      new KernelProductDetailReference("shared" as ProductHandle, "test.right"),
+    ])).toThrow(
+      "Kernel detail reference product-detail:shared expects both test.left and test.right.",
+    );
+  });
+});
 
 class MutableRevisionAuthority {
   private readonly revisions = new Map<string, string>();
@@ -285,6 +327,57 @@ describe("computation lifecycle", () => {
     ]);
     expect(run1.commit().state).toBe(ComputationCommitState.Committed);
     expect(store.read(ownedHandle)).toBe(owned1);
+  });
+
+  test("detaches durable domain reads from finished computation candidates", () => {
+    const store = new KernelStore("computation-durable-domain-read-projection");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const ownerHandle = store.handles.address("durable-domain-read-projection:owner");
+    const materializationHandle = store.handles.materialization("durable-domain-read-projection:materialization");
+    const provenanceHandle = store.handles.provenance("durable-domain-read-projection:provenance");
+    const productHandle = store.handles.product("durable-domain-read-projection:product");
+    const detail = { productHandle, value: 1 };
+    const slot = defineTestProductDetailSlot<typeof detail>(
+      KernelVocabulary.Template.Source.key,
+      "test.durable-domain-read-projection",
+      "Durable domain read projection.",
+    );
+    const run = lifecycle.begin(locus("durable-domain-read-projection"));
+    run.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([
+        new SourceFileAddress(ownerHandle, "test", "src/owner.html", SourceLanguage.Html),
+        new MaterializationRecord(materializationHandle, ownerHandle),
+        new ProvenanceRecord(provenanceHandle),
+        new MaterializedProduct(
+          productHandle,
+          KernelVocabulary.Template.Source.key,
+          null,
+          null,
+          provenanceHandle,
+        ),
+      ], "durable-domain-read-projection"),
+      [publishProductDetail(slot, productHandle, detail)],
+    ));
+    const projection = run.domainReadProjection;
+    const candidateRevision = projection.readProjectionRevision();
+
+    expect(projection.readMaterializationsByOwner(ownerHandle)).toEqual([
+      new MaterializationRecord(materializationHandle, ownerHandle),
+    ]);
+    expect(projection.readProductDetail(slot, productHandle)).toBe(detail);
+    expect(run.commit().state).toBe(ComputationCommitState.Committed);
+
+    expect(projection.readMaterializationsByOwner(ownerHandle)).toEqual([
+      new MaterializationRecord(materializationHandle, ownerHandle),
+    ]);
+    expect(projection.readProductDetail(slot, productHandle)).toBe(detail);
+    expect(candidateRevision.equals(projection.readProjectionRevision())).toBe(false);
+    expect(projection.readProjectionRevision().equals(store.readProjectionRevision())).toBe(true);
+
+    const aborted = lifecycle.begin(locus("aborted-domain-read-projection"));
+    const abortedProjection = aborted.domainReadProjection;
+    aborted.abort();
+    expect(() => abortedProjection.readProjectionRevision()).toThrow(/aborted computation read projection/i);
   });
 
   test("tracks exact foreign records and details through their committed producer", () => {
@@ -876,6 +969,7 @@ describe("computation lifecycle", () => {
     expect(nextFamily?.outputs.map((output) => output.readKey).sort()).toEqual(
       initialFamily.outputs.map((output) => output.readKey).sort(),
     );
+    expect(nextFamily?.outputs.every((output) => initialFamily.outputs.includes(output))).toBe(true);
     expect(result.transition.children).toEqual(expect.arrayContaining([
       expect.objectContaining({
         childId: nextFamily?.childId,

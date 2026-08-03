@@ -581,7 +581,7 @@ class AureliaAppWorldProjectConstructionFrame {
     const templates = carriedTemplateRuntime != null
       && this.publication.tryCarryChild(
         templateRuntimeLocus,
-        templateCompilerReadRebaserForFrontDoor(frontDoor),
+        templateCompilerReadRebaserForFrontDoor(frontDoor, this.project),
       ) != null
         ? carriedTemplateRuntime
         : this.executeTemplateRuntime(templateRuntimeLocus, templatePass, preTemplate, frontDoor);
@@ -589,7 +589,7 @@ class AureliaAppWorldProjectConstructionFrame {
     const postTemplate = carriedPostTemplate != null
       && this.publication.tryCarryChild(
         postTemplateLocus,
-        templateCompilerReadRebaserForFrontDoor(frontDoor),
+        templateCompilerReadRebaserForFrontDoor(frontDoor, this.project),
       ) != null
         ? carriedPostTemplate
         : this.executePostTemplate(postTemplateLocus, templateRuntimeLocus, preTemplate, templates);

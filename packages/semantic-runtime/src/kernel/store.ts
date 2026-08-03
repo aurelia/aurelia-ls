@@ -1494,9 +1494,6 @@ export class KernelStore {
     next: KernelStoreRecord | null,
     decisionCandidate: KernelPublicationComparisonAuthority | null,
   ): KernelPublicationDecisionKind {
-    let decision = next == null || previous == null
-      ? KernelPublicationDecisionKind.Withdraw
-      : compareKernelRecords(previous, next);
     if (
       next != null
       && previous != null
@@ -1505,9 +1502,11 @@ export class KernelStore {
       if (next !== previous) {
         throw new Error(`Explicitly carried record ${handle} is not the exact committed record.`);
       }
-      decision = KernelPublicationDecisionKind.Retain;
+      return KernelPublicationDecisionKind.Retain;
     }
-    return decision;
+    return next == null || previous == null
+      ? KernelPublicationDecisionKind.Withdraw
+      : compareKernelRecords(previous, next);
   }
 
   private recordPublicationDecisions(

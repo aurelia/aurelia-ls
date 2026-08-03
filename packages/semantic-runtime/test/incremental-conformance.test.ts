@@ -149,13 +149,17 @@ describe('incremental production conformance', () => {
     const fixtureRoot = pressureFixtureRoot('resource-registration-local-templates');
     const resourceFileName = path.join(fixtureRoot, 'src/secondary-host.ts');
     const originalResource = readFileSync(resourceFileName, 'utf8');
+    const withdrawnResource = 'export {};\n';
+    expect(withdrawnResource).not.toBe(originalResource);
     const harness = await IncrementalConformanceHarness.open({
       fixtureRoot,
       scenarioKey: 'resource-template-family-withdrawal',
     });
 
-    const withdrawn = await harness.advance('template resource source withdrawal', (overlay) => {
-      overlay.remove(resourceFileName);
+    // Source-admission membership is boot topology. Withdraw the semantic declaration while
+    // keeping its admitted physical source so this test isolates child-computation retirement.
+    const withdrawn = await harness.advance('template resource declaration withdrawal', (overlay) => {
+      overlay.write(resourceFileName, withdrawnResource);
     });
     expect(withdrawn.equivalent).toBe(true);
     expect(withdrawn.trace.children).toContainEqual(expect.objectContaining({
@@ -168,7 +172,7 @@ describe('incremental production conformance', () => {
     expect(analysisPhaseTransition(withdrawn.trace.children, AureliaAppAnalysisPhase.PostTemplate))
       .toBe(ComputationChildTransitionKind.Executed);
 
-    const reintroduced = await harness.advance('template resource source reintroduction', (overlay) => {
+    const reintroduced = await harness.advance('template resource declaration reintroduction', (overlay) => {
       overlay.write(resourceFileName, originalResource);
     });
     expect(reintroduced.equivalent).toBe(true);

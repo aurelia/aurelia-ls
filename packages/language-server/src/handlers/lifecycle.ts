@@ -41,10 +41,11 @@ function hasSourceFileStructuralChange(changes: readonly FileEvent[]): boolean {
   return false;
 }
 
-function hasClosedAnalyzedSourceContentChange(
+function closedAnalyzedSourceContentPaths(
   ctx: ServerContext,
   changes: readonly FileEvent[],
-): boolean {
+): readonly string[] {
+  const filePaths: string[] = [];
   for (const change of changes) {
     if (change.type !== FileChangeType.Changed) continue;
     if (!isAnalyzedSourceDocumentUri(change.uri)) continue;
@@ -52,9 +53,10 @@ function hasClosedAnalyzedSourceContentChange(
     // the ensuing filesystem save would invalidate the same source generation
     // twice and enqueue a second all-document diagnostics wave.
     if (ctx.openDocument(change.uri) != null) continue;
-    return true;
+    const filePath = ctx.documentUris.authoredHostPath(change.uri);
+    if (filePath != null) filePaths.push(filePath);
   }
-  return false;
+  return filePaths;
 }
 
 function shouldReloadForFileChange(
@@ -81,9 +83,13 @@ function recordProjectTopologyChanged(ctx: ServerContext, reason: string): void 
   scheduleAnalysisRefresh(ctx, reason);
 }
 
-function recordSourceTextChanged(ctx: ServerContext, reason: string): void {
-  ctx.semanticRuntime.recordSourceTextChanged();
-  ctx.logger.log(`${reason}: semantic-runtime source generation advanced`);
+function recordSourceTextChanged(
+  ctx: ServerContext,
+  reason: string,
+  filePaths: readonly string[],
+): void {
+  ctx.semanticRuntime.recordSourceTextChanged(filePaths);
+  ctx.logger.log(`${reason}: semantic-runtime source generation advanced for ${filePaths.length} file(s)`);
   scheduleAnalysisRefresh(ctx, reason);
 }
 
@@ -229,9 +235,10 @@ export function registerLifecycleHandlers(ctx: ServerContext): void {
       return;
     }
 
-    if (hasClosedAnalyzedSourceContentChange(ctx, changes)) {
+    const changedFilePaths = closedAnalyzedSourceContentPaths(ctx, changes);
+    if (changedFilePaths.length > 0) {
       ctx.logger.log("didChangeWatchedFiles: analyzed source content changed");
-      recordSourceTextChanged(ctx, "watched files");
+      recordSourceTextChanged(ctx, "watched files", changedFilePaths);
     }
   });
 
@@ -243,7 +250,10 @@ export function registerLifecycleHandlers(ctx: ServerContext): void {
     // TextDocuments emits this event for both didOpen and didChange. It is the
     // single point where the synchronized client text becomes authoritative.
     ctx.logger.log(`document text synchronized ${uri}@${e.document.version}`);
-    recordSourceTextChanged(ctx, "document text synchronization");
+    const filePath = ctx.documentUris.authoredHostPath(uri);
+    if (filePath != null) {
+      recordSourceTextChanged(ctx, "document text synchronization", [filePath]);
+    }
   });
 
   ctx.documents.onDidClose((e) => {
@@ -254,7 +264,10 @@ export function registerLifecycleHandlers(ctx: ServerContext): void {
     if (state.shutdown != null) return;
     // Closing returns source-text authority to the workspace host. Diagnostic
     // pull owns editor collection cleanup; the server only invalidates meaning.
-    recordSourceTextChanged(ctx, "document close");
+    const filePath = ctx.documentUris.authoredHostPath(e.document.uri);
+    if (filePath != null) {
+      recordSourceTextChanged(ctx, "document close", [filePath]);
+    }
   });
 }
 

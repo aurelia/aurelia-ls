@@ -143,7 +143,7 @@ describe("SemanticRuntimeLspSession", () => {
       );
     documents.add(TextDocument.create(htmlUri, "html", 3, nextHtmlText));
     documents.add(TextDocument.create(tsUri, "typescript", 3, nextTsText));
-    await session.recordSourceTextChanged();
+    session.recordSourceTextChanged([htmlPath, tsPath]);
     const secondGuard = session.requestGuard(null);
 
     const secondAnswer = await session.templateCompletions(
@@ -233,7 +233,7 @@ describe("SemanticRuntimeLspSession", () => {
     const session = createSession(fixtureRoot, documents);
     const guard = session.requestGuard(null);
 
-    await session.recordSourceTextChanged();
+    session.recordSourceTextChanged([path.join(fixtureRoot, "src/app.html")]);
 
     await expect(
       session.templateCompletions(document, { line: 0, character: 13 }, guard),

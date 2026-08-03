@@ -141,6 +141,25 @@ export const enum SemanticRuntimeProjectInputChangeDetection {
   ExplicitEvents = 1,
 }
 
+/** Granularity carried by an explicit project-input change event. */
+export const enum SemanticRuntimeProjectInputChangeKind {
+  /** Values owned by one file path may have changed; directory and matched-file membership did not. */
+  File = 0,
+}
+
+/** One owner-declared project-input change, normalized into the host identity space used by captured reads. */
+export class SemanticRuntimeProjectInputChange {
+  readonly pathKey: string;
+
+  constructor(
+    readonly kind: SemanticRuntimeProjectInputChangeKind,
+    fileName: string,
+  ) {
+    this.pathKey = projectInputPathKey(resolveProjectInputPath(fileName));
+    Object.freeze(this);
+  }
+}
+
 type ProjectInputReadValue = string | boolean | readonly string[] | undefined;
 
 /** Exact positive or negative host read retained by one project-input generation. */
@@ -155,6 +174,8 @@ export class SemanticRuntimeProjectInputRead implements ComputationRead {
     private readonly readCurrent: () => ProjectInputReadValue,
     readonly value: ProjectInputReadValue,
     private readonly currentnessWitness: GenerationCurrentnessWitness,
+    private readonly changeLocus: string,
+    private readonly observedEventSequence: number,
   ) {
     this.observedRevision = projectInputValueRevision(value);
   }
@@ -191,8 +212,12 @@ export class SemanticRuntimeProjectInputRead implements ComputationRead {
   /** Re-capture this exact input under a specific current project generation. */
   tryRebaseForGeneration(
     currentnessWitness: GenerationCurrentnessWitness,
+    eventSequence: number,
   ): SemanticRuntimeProjectInputRead | null {
-    const currentValue = freezeProjectInputReadValue(this.readCurrent());
+    const currentValue = this.authority.changeDetection === SemanticRuntimeProjectInputChangeDetection.ExplicitEvents
+      && !this.authority.mayHaveChanged(this.kind, this.changeLocus, this.observedEventSequence)
+      ? this.value
+      : freezeProjectInputReadValue(this.readCurrent());
     return sameProjectInputReadValue(this.value, currentValue)
       ? new SemanticRuntimeProjectInputRead(
           this.authority,
@@ -201,6 +226,8 @@ export class SemanticRuntimeProjectInputRead implements ComputationRead {
           this.readCurrent,
           currentValue,
           currentnessWitness,
+          this.changeLocus,
+          eventSequence,
         )
       : null;
   }
@@ -350,48 +377,54 @@ class CapturedSemanticRuntimeProjectInputHost implements SemanticRuntimeProjectI
     );
   }
 
+  // Rebased reads retain these callbacks. Capture the long-lived authority, never this generation-owned host.
   readFile(fileName: string): string | undefined {
     const hostPath = resolveProjectInputPath(fileName);
+    const authority = this.authority;
     return this.read(
       SemanticRuntimeProjectInputReadKind.FileContent,
       projectInputPathKey(hostPath),
-      () => this.authority.readLiveFile(hostPath),
+      () => authority.readLiveFile(hostPath),
     ) as string | undefined;
   }
 
   fileExists(fileName: string): boolean {
     const hostPath = resolveProjectInputPath(fileName);
+    const authority = this.authority;
     return this.read(
       SemanticRuntimeProjectInputReadKind.FileExistence,
       projectInputPathKey(hostPath),
-      () => this.authority.liveFileExists(hostPath),
+      () => authority.liveFileExists(hostPath),
     ) as boolean;
   }
 
   readDirectory(directoryName: string): readonly string[] {
     const hostPath = resolveProjectInputPath(directoryName);
+    const authority = this.authority;
     return this.read(
       SemanticRuntimeProjectInputReadKind.DirectoryEntries,
       projectInputPathKey(hostPath),
-      () => this.authority.readLiveDirectory(hostPath),
+      () => authority.readLiveDirectory(hostPath),
     ) as readonly string[];
   }
 
   directoryExists(directoryName: string): boolean {
     const hostPath = resolveProjectInputPath(directoryName);
+    const authority = this.authority;
     return this.read(
       SemanticRuntimeProjectInputReadKind.DirectoryExistence,
       projectInputPathKey(hostPath),
-      () => this.authority.liveDirectoryExists(hostPath),
+      () => authority.liveDirectoryExists(hostPath),
     ) as boolean;
   }
 
   realpath(fileName: string): string {
     const hostPath = resolveProjectInputPath(fileName);
+    const authority = this.authority;
     return this.read(
       SemanticRuntimeProjectInputReadKind.Realpath,
       projectInputPathKey(hostPath),
-      () => this.authority.readLiveRealpath(hostPath),
+      () => authority.readLiveRealpath(hostPath),
     ) as string;
   }
 
@@ -404,10 +437,11 @@ class CapturedSemanticRuntimeProjectInputHost implements SemanticRuntimeProjectI
   ): readonly string[] {
     const hostPath = resolveProjectInputPath(rootDir);
     const requestKey = JSON.stringify([projectInputPathKey(hostPath), extensions, excludes, includes, depth ?? null]);
+    const authority = this.authority;
     return this.read(
       SemanticRuntimeProjectInputReadKind.MatchedFiles,
       requestKey,
-      () => this.authority.matchLiveFiles(hostPath, extensions, excludes, includes, depth),
+      () => authority.matchLiveFiles(hostPath, extensions, excludes, includes, depth),
     ) as readonly string[];
   }
 
@@ -427,7 +461,10 @@ class CapturedSemanticRuntimeProjectInputHost implements SemanticRuntimeProjectI
     }
     let current = this.readsByKey.get(read.readKey);
     if (current == null) {
-      const rebased = read.tryRebaseForGeneration(this.generation.currentnessWitness);
+      const rebased = read.tryRebaseForGeneration(
+        this.generation.currentnessWitness,
+        this.generation.eventSequence,
+      );
       if (rebased == null) {
         return null;
       }
@@ -460,6 +497,8 @@ class CapturedSemanticRuntimeProjectInputHost implements SemanticRuntimeProjectI
         readCurrent,
         value,
         this.generation.currentnessWitness,
+        locus,
+        this.generation.eventSequence,
       );
       this.readsByKey.set(readKey, read);
     }
@@ -541,6 +580,13 @@ export class SemanticRuntimeProjectInputGeneration implements GenerationAuthorit
     return this.capturedHost.tryRebaseRead(read);
   }
 
+  /** Rebase this domain's computation reads through the current event generation; delegate every other domain. */
+  rebaseComputationRead(read: ComputationRead): SemanticRuntimeProjectInputRead | null | undefined {
+    return read instanceof SemanticRuntimeProjectInputRead
+      ? this.tryRebaseRead(read)
+      : undefined;
+  }
+
   /** Refuse read-scope rebasing across logical projects or independent input authorities. */
   requireCompatibleReadScopeOwner(previous: SemanticRuntimeProjectInputGeneration): void {
     if (
@@ -595,6 +641,8 @@ export class SemanticRuntimeProjectInputAuthority {
   private readonly generationsByProjectKey = new Map<string, SemanticRuntimeProjectInputGeneration>();
   private readonly generationCurrentnessByProjectKey = new Map<string, GenerationCurrentnessClock>();
   private readonly eventCurrentness = new GenerationCurrentnessClock();
+  private readonly fileChangeSequenceByPathKey = new Map<string, number>();
+  private lastBroadChangeSequence = 0;
   private nextGenerationOrdinal = 1;
 
   constructor(
@@ -605,13 +653,46 @@ export class SemanticRuntimeProjectInputAuthority {
       SemanticRuntimeProjectInputChangeDetection.PullValidation,
   ) {}
 
-  /** Synchronously revoke captured generations after an editor/host source event. */
-  advance(): number {
-    return this.eventCurrentness.advance();
+  /** Synchronously revoke captured generations after exact owner-declared changes, or broadly when detail is absent. */
+  advance(changes: readonly SemanticRuntimeProjectInputChange[] | null = null): number {
+    const sequence = this.eventCurrentness.advance();
+    if (changes == null) {
+      this.lastBroadChangeSequence = sequence;
+      return sequence;
+    }
+    for (const change of changes) {
+      switch (change.kind) {
+        case SemanticRuntimeProjectInputChangeKind.File:
+          this.fileChangeSequenceByPathKey.set(change.pathKey, sequence);
+          break;
+      }
+    }
+    return sequence;
   }
 
   get currentEventSequence(): number {
     return this.eventCurrentness.currentOrdinal;
+  }
+
+  /** Whether an explicit event since one captured read could have changed that read's value. */
+  mayHaveChanged(
+    readKind: SemanticRuntimeProjectInputReadKind,
+    changeLocus: string,
+    observedEventSequence: number,
+  ): boolean {
+    if (this.lastBroadChangeSequence > observedEventSequence) {
+      return true;
+    }
+    switch (readKind) {
+      case SemanticRuntimeProjectInputReadKind.FileContent:
+      case SemanticRuntimeProjectInputReadKind.FileExistence:
+      case SemanticRuntimeProjectInputReadKind.Realpath:
+        return (this.fileChangeSequenceByPathKey.get(changeLocus) ?? 0) > observedEventSequence;
+      case SemanticRuntimeProjectInputReadKind.DirectoryEntries:
+      case SemanticRuntimeProjectInputReadKind.DirectoryExistence:
+      case SemanticRuntimeProjectInputReadKind.MatchedFiles:
+        return false;
+    }
   }
 
   capture(scope: SemanticRuntimeProjectInputScope): SemanticRuntimeProjectInputGeneration {

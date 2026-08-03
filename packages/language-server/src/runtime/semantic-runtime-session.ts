@@ -8,7 +8,9 @@ import {
   canonicalTypeSystemPath,
   InquiryContinuationKind,
   SemanticRuntimeProjectInputAuthority,
+  SemanticRuntimeProjectInputChange,
   SemanticRuntimeProjectInputChangeDetection,
+  SemanticRuntimeProjectInputChangeKind,
   SemanticAppQueryKind,
   type SemanticApplicationTopologyResult,
   type SemanticRuntime,
@@ -260,8 +262,12 @@ export class SemanticRuntimeLspSession {
     return this.currentGeneration();
   }
 
-  recordSourceTextChanged(): SemanticRuntimeLspGeneration {
-    this.projectInputAuthority.advance();
+  recordSourceTextChanged(filePaths: readonly string[]): SemanticRuntimeLspGeneration {
+    if (filePaths.length === 0) {
+      throw new Error("A source-text change must identify at least one authored file.");
+    }
+    this.projectInputAuthority.advance(filePaths.map((filePath) =>
+      new SemanticRuntimeProjectInputChange(SemanticRuntimeProjectInputChangeKind.File, filePath)));
     return this.currentGeneration();
   }
 

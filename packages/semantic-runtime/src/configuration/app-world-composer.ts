@@ -380,12 +380,13 @@ class AppRootCompilerWorldFrame {
       resourceDefinitions: this.resourceDefinitions,
     });
     const frameworkServiceCustomization = this.frameworkServiceCustomizations.forContainer(container);
+    const evaluationAuthority = this.evaluationAuthority;
     const callableBindings = mergeStaticCallableExecutionBindings(
       [
         this.resourceCallableBindings,
         frameworkServiceCustomization.callableBindings,
       ],
-      () => this.evaluationAuthority.requireCurrent(),
+      () => evaluationAuthority.requireCurrent(),
     );
     const request = new TemplateCompilerWorldConstructionRequest(
       `app-root:${appRoot.productHandle}`,

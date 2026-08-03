@@ -9,6 +9,7 @@ import path from "node:path";
 import { performance } from "node:perf_hooks";
 import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { writeHeapSnapshot } from "node:v8";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { NodeSemanticRuntimeProjectInputHost } from "@aurelia-ls/semantic-runtime";
 import {
@@ -140,19 +141,71 @@ class MeasurementProbe {
   }
 }
 
+/** Opt-in inspector sampling for measurement runs; the module is never loaded when profiling is disabled. */
+class MeasurementCpuProfiler {
+  constructor(directory) {
+    this.directory = directory;
+    this.capturedLabels = new Set();
+  }
+
+  async captureOnce(label, operation) {
+    if (this.directory == null || this.capturedLabels.has(label)) {
+      return operation();
+    }
+    this.capturedLabels.add(label);
+    const { Session } = await import("node:inspector/promises");
+    const session = new Session();
+    session.connect();
+    await session.post("Profiler.enable");
+    await session.post("Profiler.start");
+    try {
+      return await operation();
+    } finally {
+      const { profile } = await session.post("Profiler.stop");
+      session.disconnect();
+      await fs.writeFile(path.join(this.directory, `${label}.cpuprofile`), JSON.stringify(profile));
+    }
+  }
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  const fixtureName = args.fixture === "largest" || args.fixture == null
-    ? await largestPressureFixtureName()
-    : args.fixture;
+  const fixtureName = args.workspace == null
+    ? args.fixture === "largest" || args.fixture == null
+      ? await largestPressureFixtureName()
+      : args.fixture
+    : path.basename(path.resolve(args.workspace));
   const requestCount = Number.parseInt(args.requests ?? "20", 10);
   if (!Number.isFinite(requestCount) || requestCount < 1) {
     throw new Error("--requests must be a positive integer.");
   }
+  const editCycles = Number.parseInt(args.cycles ?? "8", 10);
+  if (!Number.isFinite(editCycles) || editCycles < 0) {
+    throw new Error("--cycles must be a non-negative integer.");
+  }
+  const forceGc = args["force-gc"] === "true";
+  if (forceGc && typeof globalThis.gc !== "function") {
+    throw new Error("--force-gc requires running Node with --expose-gc.");
+  }
+  const heapSnapshotDirectory = args["heap-snapshots"] == null
+    ? null
+    : path.resolve(args["heap-snapshots"]);
+  if (heapSnapshotDirectory != null) {
+    await fs.mkdir(heapSnapshotDirectory, { recursive: true });
+  }
+  const cpuProfileDirectory = args["cpu-profiles"] == null
+    ? null
+    : path.resolve(args["cpu-profiles"]);
+  if (cpuProfileDirectory != null) {
+    await fs.mkdir(cpuProfileDirectory, { recursive: true });
+  }
+  const cpuProfiler = new MeasurementCpuProfiler(cpuProfileDirectory);
 
-  const fixtureRoot = path.join(pressureFixtureRoot, fixtureName);
-  await assertDirectory(fixtureRoot, `fixture '${fixtureName}'`);
-  const fixtureStats = await pressureFixtureStats(fixtureName);
+  const fixtureRoot = args.workspace == null
+    ? path.join(pressureFixtureRoot, fixtureName)
+    : path.resolve(args.workspace);
+  await assertDirectory(fixtureRoot, `workspace '${fixtureName}'`);
+  const fixtureStats = await workspaceStats(fixtureRoot, fixtureName);
   const sourceFiles = await collectFiles(path.join(fixtureRoot, "src"), sourceExtensions);
   if (sourceFiles.length === 0) {
     throw new Error(`Fixture ${fixtureName} has no source files under src/.`);
@@ -184,6 +237,7 @@ async function main() {
     fixture: {
       name: fixtureName,
       root: fixtureRoot,
+      source: args.workspace == null ? "pressure-fixture" : "workspace",
       sourceFiles: sourceFiles.length,
       measuredBytes: fixtureStats.bytes,
       measuredFiles: fixtureStats.files,
@@ -192,8 +246,14 @@ async function main() {
     generations: [],
     timings: [],
     cache: [],
+    editJourneys: [],
     abortPressure: [],
+    referenceDensity: null,
     invariants: [],
+    measurement: {
+      editCycles,
+      forceGc,
+    },
   };
 
   recordGeneration(report, "initial", session.currentGeneration());
@@ -202,33 +262,94 @@ async function main() {
     session.appDiagnostics(targetHtml, session.requestGuard(null)));
   report.timings.push(timingSummary(coldDiagnostics));
   recordGeneration(report, "after cold diagnostics", session.currentGeneration());
-  report.cache.push(await cacheSnapshot("after cold diagnostics", session));
+  report.cache.push(await cacheSnapshot("after cold diagnostics", session, forceGc));
 
   const warmDiagnostics = await timed("warm same-generation appDiagnostics", measurement, () =>
     session.appDiagnostics(targetHtml, session.requestGuard(null)));
   report.timings.push(timingSummary(warmDiagnostics));
-  report.cache.push(await cacheSnapshot("after warm diagnostics", session));
+  report.cache.push(await cacheSnapshot("after warm diagnostics", session, forceGc));
 
   const cursorInfo = await timed("warm same-generation templateCursorInfo", measurement, () =>
     session.templateCursorInfo(targetHtml, cursorPositions.member, session.requestGuard(null)));
   report.timings.push(timingSummary(cursorInfo));
 
-  editOpenDocuments(documents, fixtureRoot, sourceFiles);
+  const initialEditedPaths = editOpenDocuments(documents, fixtureRoot, sourceFiles);
   const sourceChange = await timed("recordSourceTextChanged after TS+HTML edits", measurement, () =>
-    session.recordSourceTextChanged());
+    session.recordSourceTextChanged(initialEditedPaths));
   report.timings.push(timingSummary(sourceChange));
   recordGeneration(report, "after source change", session.currentGeneration());
-  report.cache.push(await cacheSnapshot("after source change clear", session));
+  report.cache.push(await cacheSnapshot("after source change clear", session, forceGc));
 
   const afterEditDiagnostics = await timed("post-edit appDiagnostics", measurement, () =>
     session.appDiagnostics(targetHtml, session.requestGuard(null)));
   report.timings.push(timingSummary(afterEditDiagnostics));
-  report.cache.push(await cacheSnapshot("after post-edit diagnostics", session));
+  report.cache.push(await cacheSnapshot("after post-edit diagnostics", session, forceGc));
 
   const afterEditCompletion = await timed("post-edit templateCompletions", measurement, () =>
     session.templateCompletions(targetHtml, cursorPositions.completion, session.requestGuard(null)));
   report.timings.push(timingSummary(afterEditCompletion));
-  report.cache.push(await cacheSnapshot("after post-edit completion", session));
+  const postEditCompletionCache = await cacheSnapshot("after post-edit completion", session, forceGc);
+  report.cache.push(postEditCompletionCache);
+  writeMeasurementHeapSnapshot(heapSnapshotDirectory, "steady-baseline");
+
+  const editTargets = measurementEditTargets(fixtureRoot, sourceFiles);
+  let priorComputation = await appComputationStateSnapshot(
+    session,
+    postEditCompletionCache.firstCachedApp?.projectKey ?? null,
+  );
+  for (let index = 0; index < editCycles; index += 1) {
+    const target = index % 2 === 0 ? editTargets.html : editTargets.typeScript;
+    if (target == null) {
+      continue;
+    }
+    applyMeasurementMarker(documents, target.filePath, target.kind, index);
+    const change = await timed(
+      `steady ${target.kind} edit ${index + 1}: recordSourceTextChanged`,
+      measurement,
+      () => session.recordSourceTextChanged([target.filePath]),
+    );
+    const completion = await cpuProfiler.captureOnce(
+      `${target.kind}-first-completion`,
+      () => timed(
+        `steady ${target.kind} edit ${index + 1}: first completion`,
+        measurement,
+        () => session.templateCompletions(targetHtml, cursorPositions.completion, session.requestGuard(null)),
+      ),
+    );
+    const warmCompletion = await cpuProfiler.captureOnce(
+      `${target.kind}-warm-completion`,
+      () => timed(
+        `steady ${target.kind} edit ${index + 1}: warm completion`,
+        measurement,
+        () => session.templateCompletions(targetHtml, cursorPositions.completion, session.requestGuard(null)),
+      ),
+    );
+    const diagnostics = await cpuProfiler.captureOnce(
+      `${target.kind}-warm-diagnostics`,
+      () => timed(
+        `steady ${target.kind} edit ${index + 1}: warm diagnostics`,
+        measurement,
+        () => session.appDiagnostics(targetHtml, session.requestGuard(null)),
+      ),
+    );
+    const cache = await cacheSnapshot(`after steady edit ${index + 1}`, session, forceGc);
+    const currentComputation = await appComputationStateSnapshot(
+      session,
+      cache.firstCachedApp?.projectKey ?? null,
+    );
+    report.editJourneys.push({
+      index: index + 1,
+      kind: target.kind,
+      change: timingSummary(change),
+      firstQuery: timingSummary(completion),
+      warmQuery: timingSummary(warmCompletion),
+      warmDiagnostics: timingSummary(diagnostics),
+      cache,
+      computation: computationJourneySummary(priorComputation, currentComputation),
+    });
+    priorComputation = currentComputation;
+  }
+  writeMeasurementHeapSnapshot(heapSnapshotDirectory, "steady-final");
 
   const stalePressure = await staleAbortPressure(session, targetHtml, cursorPositions.member, requestCount);
   report.abortPressure.push(stalePressure);
@@ -236,6 +357,10 @@ async function main() {
 
   const cancelledPressure = await cancelledAbortPressure(session, targetHtml, cursorPositions.member, requestCount);
   report.abortPressure.push(cancelledPressure);
+
+  if (args["reference-density"] === "true") {
+    report.referenceDensity = await kernelReferenceDensity(session);
+  }
 
   addInvariants(report);
 
@@ -253,7 +378,7 @@ async function main() {
 
 async function staleAbortPressure(session, document, position, requestCount) {
   const guard = session.requestGuard(null);
-  await session.recordSourceTextChanged();
+  session.invalidateRequests();
   return abortPressure("stale templateCursorInfo", requestCount, async () => {
     try {
       await session.templateCursorInfo(document, position, guard);
@@ -300,13 +425,38 @@ async function abortPressure(label, requestCount, run) {
 }
 
 function editOpenDocuments(documents, fixtureRoot, sourceFiles) {
-  const htmlPath = preferredTargetHtmlPath(fixtureRoot, sourceFiles);
-  replaceDocumentText(documents, htmlPath, (text) => `${text}\n<!-- incrementality measurement edit -->\n`);
-  const tsPath = sourceFiles.find((filePath) => filePath.endsWith(path.normalize("src/state/catalog-state.ts")))
-    ?? sourceFiles.find((filePath) => filePath.endsWith(".ts"));
+  const targets = measurementEditTargets(fixtureRoot, sourceFiles);
+  const editedPaths = [targets.html.filePath];
+  applyMeasurementMarker(documents, targets.html.filePath, targets.html.kind, -1);
+  const tsPath = targets.typeScript?.filePath ?? null;
   if (tsPath != null) {
-    replaceDocumentText(documents, tsPath, (text) => `${text}\n// incrementality measurement edit\n`);
+    applyMeasurementMarker(documents, tsPath, "typescript", -1);
+    editedPaths.push(tsPath);
   }
+  return editedPaths;
+}
+
+function measurementEditTargets(fixtureRoot, sourceFiles) {
+  const typeScriptPath = sourceFiles.find((filePath) => filePath.endsWith(path.normalize("src/state/catalog-state.ts")))
+    ?? sourceFiles.find((filePath) => filePath.endsWith(".ts"))
+    ?? null;
+  return {
+    html: { kind: "html", filePath: preferredTargetHtmlPath(fixtureRoot, sourceFiles) },
+    typeScript: typeScriptPath == null ? null : { kind: "typescript", filePath: typeScriptPath },
+  };
+}
+
+function applyMeasurementMarker(documents, filePath, kind, sequence) {
+  const state = Math.floor(sequence / 2) % 2 === 0 ? "A" : "B";
+  const pattern = kind === "html"
+    ? /\n<!-- interactive performance marker: [AB] -->\n?$/
+    : /\n\/\/ interactive performance marker: [AB]\n?$/;
+  const marker = kind === "html"
+    ? `\n<!-- interactive performance marker: ${state} -->\n`
+    : `\n// interactive performance marker: ${state}\n`;
+  replaceDocumentText(documents, filePath, (text) => pattern.test(text)
+    ? text.replace(pattern, marker)
+    : `${text.replace(/\s*$/, "")}\n${marker}`);
 }
 
 function replaceDocumentText(documents, filePath, edit) {
@@ -386,15 +536,23 @@ function projectInputSummary(measurement) {
   };
 }
 
-async function cacheSnapshot(label, session) {
+async function cacheSnapshot(label, session, forceGc) {
+  if (forceGc) {
+    globalThis.gc();
+  }
   const runtime = await session.runtime;
-  const answer = runtime.analysisCacheOverview({ rowLimit: 3 });
+  const answer = runtime.analysisCacheOverview({ rowLimit: 10 });
   const firstApp = answer.value.cachedApps[0] ?? null;
   return {
     label,
     cachedAppCount: answer.value.cachedAppCount,
+    staticProjectEvaluationCount: runtime.projectEvaluations.readEntryCount(),
+    typeSystemProjectCount: answer.value.typeSystemProjectCount,
     workspaceKernelRecords: answer.value.workspaceKernel.totalRecords,
+    workspaceKernelHandleCharacters: answer.value.workspaceKernel.handleCharacters,
     runtimeQueryClaimProfiles: answer.value.runtimeQueryClaimProfiles.length,
+    runtimeQueryClaims: queryClaimSummary(answer.value.runtimeQueryClaimProfiles),
+    processMemory: answer.value.processMemory,
     typeSystemDependencyCache: {
       entries: answer.value.typeSystemDependencyCache.entries,
       hits: answer.value.typeSystemDependencyCache.hits,
@@ -408,13 +566,268 @@ async function cacheSnapshot(label, session) {
           projectKey: firstApp.projectKey,
           analysisDepth: firstApp.analysisDepth,
           totalMilliseconds: firstApp.profile.totalMilliseconds,
-          topPhases: firstApp.profile.topPhases.slice(0, 3).map((phase) => ({
+          topPhases: firstApp.profile.topPhases.map((phase) => ({
             name: phase.name,
             milliseconds: phase.milliseconds,
             itemCount: phase.itemCount ?? null,
           })),
+          templatePhases: firstApp.profile.templatePhases.map((phase) => ({
+            name: phase.name,
+            milliseconds: phase.milliseconds,
+            itemCount: phase.itemCount ?? null,
+          })),
+          templateRuntimePhases: firstApp.profile.templateRuntimePhases.map((phase) => ({
+            name: phase.name,
+            milliseconds: phase.milliseconds,
+            itemCount: phase.itemCount ?? null,
+          })),
+          staticEvaluationAcquisitions: firstApp.profile.staticEvaluationAcquisitions,
+          typeSystemAcquisition: firstApp.profile.typeSystemAcquisition,
+          queryClaims: queryClaimSummary(firstApp.queryClaimProfiles),
         },
   };
+}
+
+/** Opt-in post-journey graph scan; it runs after every timed operation and never ships in the extension process. */
+async function kernelReferenceDensity(session) {
+  const runtime = await session.runtime;
+  return [
+    referenceClosureDensity("product detail", runtime.workspace.store.productDetails.readEntries()),
+    referenceClosureDensity("hot detail", runtime.workspace.store.hotDetails.readEntries()),
+  ];
+}
+
+function referenceClosureDensity(kind, entries) {
+  const lengths = entries.map((entry) => entry.references.length).sort((left, right) => left - right);
+  const bucketCounts = new Map([
+    ["0", 0], ["1", 0], ["2", 0], ["3-4", 0], ["5-8", 0], ["9-16", 0], [">16", 0],
+  ]);
+  for (const length of lengths) {
+    const bucket = length === 0 ? "0"
+      : length === 1 ? "1"
+        : length === 2 ? "2"
+          : length <= 4 ? "3-4"
+            : length <= 8 ? "5-8"
+              : length <= 16 ? "9-16"
+                : ">16";
+    bucketCounts.set(bucket, bucketCounts.get(bucket) + 1);
+  }
+  return {
+    kind,
+    entries: lengths.length,
+    references: lengths.reduce((total, length) => total + length, 0),
+    p50: percentile(lengths, 0.5) ?? 0,
+    p95: percentile(lengths, 0.95) ?? 0,
+    max: lengths.at(-1) ?? 0,
+    buckets: [...bucketCounts].map(([bucket, count]) => ({ bucket, count })),
+  };
+}
+
+async function appComputationStateSnapshot(session, projectKey) {
+  if (projectKey == null) {
+    return null;
+  }
+  const runtime = await session.runtime;
+  const generation = runtime.appAnalysisComputations.authorityFor(projectKey).current();
+  if (generation == null) {
+    return null;
+  }
+  const state = runtime.computationLifecycle.readState(generation.computationId);
+  const transition = runtime.computationLifecycle.readLatestTransition(generation.computationId);
+  if (state == null || transition == null) {
+    return null;
+  }
+  return {
+    templateFamilies: generation.emission.templates.frontDoor.plan.cohortPlan.ownerPlans.map((owner) => ({
+      locusKey: encodeLengthPrefixedParts([projectKey, owner.ownerHandle]),
+      subject: owner.definition.name,
+      cohortKeys: owner.cohorts.map((cohort) => cohort.key),
+    })),
+    templateRuntimeResources: [
+      ...generation.emission.templates.resources,
+      ...generation.emission.templates.authoringResources,
+    ].map((resource) => ({
+      localKey: resource.compilation.localKey,
+      subject: resource.compilation.definition.name,
+      analysisContextProductHandle: resource.compilation.analysisContextProductHandle,
+      milliseconds: resource.runtimeAnalysis.profile.totalMilliseconds,
+      phases: resource.runtimeAnalysis.profile.phases.map((phase) => ({
+        name: phase.name,
+        milliseconds: phase.milliseconds,
+        skipped: phase.skipped === true,
+      })),
+    })),
+    children: state.children.map((child) => ({
+      childId: child.childId,
+      locusKind: child.locus.kind,
+      locusKey: child.locus.reconciliationKey,
+      summary: child.locus.summary,
+      role: child.role,
+      sccKind: child.scc.kind,
+      reads: child.reads.map((read) => ({
+        readKey: read.readKey,
+        domain: read.domain,
+        observedRevision: read.observedRevision,
+      })),
+      candidateReads: child.candidateReads.map((read) => ({
+        surface: read.surface,
+        handle: read.handle,
+        detailKind: read.actualKind,
+        state: read.state,
+        producerChildId: read.producerChildId,
+      })),
+      structuralDependencies: child.structuralDependencies.length,
+      resultDependencies: child.resultDependencies.length,
+      openReads: child.openReads.length,
+      outputs: child.outputs.map((output) => ({
+        surface: output.surface,
+        handle: output.handle,
+        detailKind: output.detailKind,
+      })),
+    })),
+    transition: {
+      state: transition.state,
+      changedReads: transition.changedReads.map((read) => ({
+        readKey: read.readKey,
+        domain: read.domain,
+        previousRevision: read.previousRevision,
+        nextRevision: read.nextRevision,
+      })),
+      publications: transition.publications.map((publication) => ({
+        surface: publication.surface,
+        handle: publication.handle,
+        detailKind: publication.detailKind,
+        decision: publication.decision,
+      })),
+      children: transition.children.map((child) => ({
+        childId: child.childId,
+        locusKind: child.locus.kind,
+        locusKey: child.locus.reconciliationKey,
+        summary: child.locus.summary,
+        kind: child.kind,
+        hadPreviousState: child.hadPreviousState,
+      })),
+    },
+  };
+}
+
+function computationJourneySummary(previous, current) {
+  if (current == null) {
+    return null;
+  }
+  const previousByLocus = new Map((previous?.children ?? []).map((child) => [child.locusKey, child]));
+  const currentByLocus = new Map(current.children.map((child) => [child.locusKey, child]));
+  const previousFamiliesByLocus = new Map(
+    (previous?.templateFamilies ?? []).map((family) => [family.locusKey, family]),
+  );
+  const currentFamiliesByLocus = new Map(current.templateFamilies.map((family) => [family.locusKey, family]));
+  const publicationDecisions = new Map(current.transition.publications.map((publication) => [
+    `${publication.surface}\u0000${publication.handle}`,
+    publication,
+  ]));
+  return {
+    state: current.transition.state,
+    changedReads: current.transition.changedReads,
+    templateRuntimeResources: current.templateRuntimeResources,
+    children: current.transition.children.map((transition) => {
+      const prior = previousByLocus.get(transition.locusKey) ?? null;
+      const next = currentByLocus.get(transition.locusKey) ?? null;
+      const priorFamily = previousFamiliesByLocus.get(transition.locusKey) ?? null;
+      const nextFamily = currentFamiliesByLocus.get(transition.locusKey) ?? null;
+      return {
+        ...transition,
+        subject: nextFamily?.subject ?? priorFamily?.subject ?? null,
+        role: next?.role ?? prior?.role ?? null,
+        sccKind: next?.sccKind ?? prior?.sccKind ?? null,
+        cohortChanged: JSON.stringify(priorFamily?.cohortKeys ?? null)
+          !== JSON.stringify(nextFamily?.cohortKeys ?? null),
+        reads: next?.reads.length ?? prior?.reads.length ?? 0,
+        candidateReads: next?.candidateReads.length ?? prior?.candidateReads.length ?? 0,
+        candidatePublicationDecisions: computationPublicationDecisionSummary(
+          next?.candidateReads ?? prior?.candidateReads ?? [],
+          publicationDecisions,
+        ),
+        structuralDependencies: next?.structuralDependencies ?? prior?.structuralDependencies ?? 0,
+        resultDependencies: next?.resultDependencies ?? prior?.resultDependencies ?? 0,
+        openReads: next?.openReads ?? prior?.openReads ?? 0,
+        outputs: next?.outputs.length ?? prior?.outputs.length ?? 0,
+        publicationDecisions: computationPublicationDecisionSummary(
+          next?.outputs ?? prior?.outputs ?? [],
+          publicationDecisions,
+        ),
+        changedReads: changedComputationReads(prior?.reads ?? [], next?.reads ?? []),
+      };
+    }),
+  };
+}
+
+function encodeLengthPrefixedParts(parts) {
+  return parts.map((part) => `${part.length}:${part}`).join("|");
+}
+
+function computationPublicationDecisionSummary(outputs, decisions) {
+  const counts = new Map();
+  for (const output of outputs) {
+    const publication = decisions.get(`${output.surface}\u0000${output.handle}`) ?? null;
+    const decision = publication?.decision ?? "unreported";
+    const key = decision === "retain"
+      ? decision
+      : `${decision}:${publication?.detailKind ?? output.detailKind}`;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return [...counts]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([decision, count]) => `${decision}=${count}`)
+    .join(", ");
+}
+
+function changedComputationReads(previous, current) {
+  const previousByKey = new Map(previous.map((read) => [read.readKey, read]));
+  const currentByKey = new Map(current.map((read) => [read.readKey, read]));
+  const changed = [];
+  for (const readKey of new Set([...previousByKey.keys(), ...currentByKey.keys()])) {
+    const prior = previousByKey.get(readKey) ?? null;
+    const next = currentByKey.get(readKey) ?? null;
+    if (prior?.observedRevision === next?.observedRevision && prior?.domain === next?.domain) {
+      continue;
+    }
+    changed.push({
+      readKey,
+      domain: next?.domain ?? prior?.domain ?? "unknown",
+      previousRevision: prior?.observedRevision ?? null,
+      nextRevision: next?.observedRevision ?? null,
+    });
+  }
+  return changed.sort((left, right) => left.readKey.localeCompare(right.readKey));
+}
+
+function queryClaimSummary(profiles) {
+  return profiles.reduce((summary, profile) => {
+    summary.profiles += 1;
+    summary.createdRecords += profile.queryClaims.createdRecords;
+    summary.retainedRecords += profile.queryClaims.retainedRecords;
+    summary.disposedRecords += profile.queryClaims.disposed;
+    summary.budgetDisposedRecords += profile.queryClaims.budgetDisposedRecords;
+    summary.retainedQueryKeyCharacters += profile.queryClaims.retainedQueryKeyCharacters;
+    return summary;
+  }, {
+    profiles: 0,
+    createdRecords: 0,
+    retainedRecords: 0,
+    disposedRecords: 0,
+    budgetDisposedRecords: 0,
+    retainedQueryKeyCharacters: 0,
+  });
+}
+
+function writeMeasurementHeapSnapshot(directory, label) {
+  if (directory == null) {
+    return null;
+  }
+  if (typeof globalThis.gc === "function") {
+    globalThis.gc();
+  }
+  return writeHeapSnapshot(path.join(directory, `${label}.heapsnapshot`));
 }
 
 function addInvariants(report) {
@@ -442,6 +855,30 @@ function addInvariants(report) {
   report.invariants.push({
     name: "cancelled guards abort every sampled request",
     status: cancelled?.outcomes?.cancelled === cancelled?.requestCount ? "pass" : "fail",
+  });
+  const allMeasuredOperations = [
+    ...report.timings,
+    ...report.editJourneys.flatMap((journey) => [
+      journey.change,
+      journey.firstQuery,
+      journey.warmQuery,
+      journey.warmDiagnostics,
+    ]),
+  ];
+  report.invariants.push({
+    name: "measurement never falls back to full open-document scans",
+    status: allMeasuredOperations.every((operation) => operation.measurement.documents.allCalls === 0) ? "pass" : "fail",
+  });
+  report.invariants.push({
+    name: "steady edit cycles retain at most one app epoch",
+    status: report.editJourneys.every((journey) => journey.cache.cachedAppCount <= 1) ? "pass" : "fail",
+  });
+  report.invariants.push({
+    name: "measurement retains no detached V8 contexts",
+    status: report.cache.every((entry) => entry.processMemory.v8DetachedContextCount === 0)
+      && report.editJourneys.every((journey) => journey.cache.processMemory.v8DetachedContextCount === 0)
+      ? "pass"
+      : "fail",
   });
 }
 
@@ -502,6 +939,10 @@ async function fixtureNames() {
 
 async function pressureFixtureStats(name) {
   const root = path.join(pressureFixtureRoot, name);
+  return workspaceStats(root, name);
+}
+
+async function workspaceStats(root, name) {
   const files = await collectFiles(root, fixtureStatExtensions);
   const sizes = await Promise.all(files.map(async (filePath) => (await fs.stat(filePath)).size));
   return {
@@ -625,15 +1066,158 @@ function markdownReport(report) {
     "## Cache",
     "",
     table(
-      ["label", "apps", "kernel records", "ts dep entries", "ts hits", "ts misses", "first app ms"],
+      ["label", "apps", "evaluations", "kernel records", "app claims", "heap", "rss", "ts dep entries", "first app ms"],
       report.cache.map((row) => [
         row.label,
         String(row.cachedAppCount),
+        String(row.staticProjectEvaluationCount),
         String(row.workspaceKernelRecords),
+        String(row.firstCachedApp?.queryClaims.retainedRecords ?? 0),
+        formatAbsoluteBytes(row.processMemory.heapUsedBytes),
+        formatAbsoluteBytes(row.processMemory.rssBytes),
         String(row.typeSystemDependencyCache.entries),
-        String(row.typeSystemDependencyCache.hits),
-        String(row.typeSystemDependencyCache.misses),
         row.firstCachedApp == null ? "" : row.firstCachedApp.totalMilliseconds.toFixed(2),
+      ]),
+    ),
+    "",
+    "## Steady Edit Journeys",
+    "",
+    table(
+      ["cycle", "source", "first completion ms", "app build ms", "warm completion ms", "warm diagnostics ms", "kernel records", "app claims", "heap", "rss"],
+      report.editJourneys.map((journey) => [
+        String(journey.index),
+        journey.kind,
+        journey.firstQuery.elapsedMilliseconds.toFixed(2),
+        journey.cache.firstCachedApp?.totalMilliseconds.toFixed(2) ?? "",
+        journey.warmQuery.elapsedMilliseconds.toFixed(2),
+        journey.warmDiagnostics.elapsedMilliseconds.toFixed(2),
+        String(journey.cache.workspaceKernelRecords),
+        String(journey.cache.firstCachedApp?.queryClaims.retainedRecords ?? 0),
+        formatAbsoluteBytes(journey.cache.processMemory.heapUsedBytes),
+        formatAbsoluteBytes(journey.cache.processMemory.rssBytes),
+      ]),
+    ),
+    "",
+    "## Steady Compiler Acquisitions",
+    "",
+    table(
+      ["cycle", "source", "type system", "type-system ms", "type-system build ms", "static evaluations"],
+      report.editJourneys.map((journey) => {
+        const app = journey.cache.firstCachedApp;
+        return [
+          String(journey.index),
+          journey.kind,
+          app?.typeSystemAcquisition.acquisitionKind ?? "",
+          app?.typeSystemAcquisition.acquisitionMilliseconds.toFixed(2) ?? "",
+          app?.typeSystemAcquisition.constructionMilliseconds.toFixed(2) ?? "",
+          app?.staticEvaluationAcquisitions.map((acquisition) =>
+            `${acquisition.profileKey}:${acquisition.acquisitionKind}=${acquisition.acquisitionMilliseconds.toFixed(2)}ms`
+          ).join("; ") ?? "",
+        ];
+      }),
+    ),
+    "",
+    "## Steady Top Phases",
+    "",
+    table(
+      ["cycle", "source", "phase", "ms", "items"],
+      report.editJourneys.flatMap((journey) =>
+        (journey.cache.firstCachedApp?.topPhases ?? []).map((phase) => [
+          String(journey.index),
+          journey.kind,
+          phase.name,
+          phase.milliseconds.toFixed(2),
+          phase.itemCount == null ? "" : String(phase.itemCount),
+        ])),
+    ),
+    "",
+    "## Steady Computation Transitions",
+    "",
+    table(
+      ["cycle", "source", "locus", "subject", "transition", "prior", "role", "SCC", "cohort changed", "reads", "changed read domains", "candidate", "candidate decisions", "structural", "result", "open", "outputs", "publication decisions"],
+      report.editJourneys.flatMap((journey) =>
+        (journey.computation?.children ?? []).map((child) => [
+          String(journey.index),
+          journey.kind,
+          `${child.locusKind}: ${child.summary}`,
+          child.subject ?? "",
+          child.kind,
+          child.hadPreviousState ? "yes" : "no",
+          child.role ?? "",
+          child.sccKind ?? "",
+          child.cohortChanged ? "yes" : "no",
+          String(child.reads),
+          computationReadDomainSummary(child.changedReads),
+          String(child.candidateReads),
+          child.candidatePublicationDecisions,
+          String(child.structuralDependencies),
+          String(child.resultDependencies),
+          String(child.openReads),
+          String(child.outputs),
+          child.publicationDecisions,
+        ])),
+    ),
+    "",
+    "## Steady Template Phases",
+    "",
+    table(
+      ["cycle", "source", "phase", "ms", "items"],
+      report.editJourneys.flatMap((journey) =>
+        (journey.cache.firstCachedApp?.templatePhases ?? []).map((phase) => [
+          String(journey.index),
+          journey.kind,
+          phase.name,
+          phase.milliseconds.toFixed(2),
+          phase.itemCount == null ? "" : String(phase.itemCount),
+        ])),
+    ),
+    "",
+    "## Steady Template Runtime Phases",
+    "",
+    table(
+      ["cycle", "source", "phase", "ms", "items"],
+      report.editJourneys.flatMap((journey) =>
+        (journey.cache.firstCachedApp?.templateRuntimePhases ?? []).map((phase) => [
+          String(journey.index),
+          journey.kind,
+          phase.name,
+          phase.milliseconds.toFixed(2),
+          phase.itemCount == null ? "" : String(phase.itemCount),
+        ])),
+    ),
+    "",
+    "## Steady Template Runtime Resources",
+    "",
+    table(
+      ["cycle", "source", "resource", "ms", "top phases"],
+      report.editJourneys.flatMap((journey) =>
+        (journey.computation?.templateRuntimeResources ?? []).map((resource) => [
+          String(journey.index),
+          journey.kind,
+          resource.subject,
+          resource.milliseconds.toFixed(2),
+          resource.phases
+            .filter((phase) => !phase.skipped)
+            .sort((left, right) => right.milliseconds - left.milliseconds)
+            .slice(0, 4)
+            .map((phase) => `${phase.name}=${phase.milliseconds.toFixed(2)}ms`)
+            .join(", "),
+        ]),
+      ),
+    ),
+    "",
+    "## Steady Distributions",
+    "",
+    table(
+      ["source", "operation", "samples", "min ms", "p50 ms", "p95 ms", "max ms"],
+      editJourneyDistributions(report.editJourneys).map((row) => [
+        row.kind,
+        row.operation,
+        String(row.samples),
+        row.min.toFixed(2),
+        row.p50.toFixed(2),
+        row.p95.toFixed(2),
+        row.max.toFixed(2),
       ]),
     ),
     "",
@@ -649,6 +1233,23 @@ function markdownReport(report) {
         Object.entries(row.outcomes).map(([key, value]) => `${key}=${value}`).join(", "),
       ]),
     ),
+    ...(report.referenceDensity == null ? [] : [
+      "",
+      "## Structural Reference Density",
+      "",
+      table(
+        ["surface", "entries", "references", "p50", "p95", "max", "closure buckets"],
+        report.referenceDensity.map((row) => [
+          row.kind,
+          String(row.entries),
+          String(row.references),
+          String(row.p50),
+          String(row.p95),
+          String(row.max),
+          row.buckets.map((bucket) => `${bucket.bucket}=${bucket.count}`).join(", "),
+        ]),
+      ),
+    ]),
     "",
     "## Invariants",
     "",
@@ -671,6 +1272,17 @@ function escapeTableCell(value) {
   return String(value).replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
 }
 
+function computationReadDomainSummary(reads) {
+  const counts = new Map();
+  for (const read of reads) {
+    counts.set(read.domain, (counts.get(read.domain) ?? 0) + 1);
+  }
+  return [...counts]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([domain, count]) => `${domain}=${count}`)
+    .join(", ");
+}
+
 function formatBytes(value) {
   const sign = value < 0 ? "-" : "+";
   const absolute = Math.abs(value);
@@ -681,6 +1293,42 @@ function formatBytes(value) {
     return `${sign}${(absolute / 1024).toFixed(1)} KiB`;
   }
   return `${sign}${(absolute / (1024 * 1024)).toFixed(1)} MiB`;
+}
+
+function formatAbsoluteBytes(value) {
+  return formatBytes(value).replace(/^\+/, "");
+}
+
+function editJourneyDistributions(journeys) {
+  const rows = [];
+  for (const kind of ["html", "typescript"]) {
+    const selected = journeys.filter((journey) => journey.kind === kind);
+    for (const [operation, read] of [
+      ["first completion", (journey) => journey.firstQuery.elapsedMilliseconds],
+      ["warm completion", (journey) => journey.warmQuery.elapsedMilliseconds],
+      ["warm diagnostics", (journey) => journey.warmDiagnostics.elapsedMilliseconds],
+    ]) {
+      const values = selected.map(read).sort((left, right) => left - right);
+      if (values.length === 0) {
+        continue;
+      }
+      rows.push({
+        kind,
+        operation,
+        samples: values.length,
+        min: values[0],
+        p50: percentile(values, 0.5),
+        p95: percentile(values, 0.95),
+        max: values[values.length - 1],
+      });
+    }
+  }
+  return rows;
+}
+
+function percentile(sortedValues, fraction) {
+  const index = Math.max(0, Math.ceil(sortedValues.length * fraction) - 1);
+  return sortedValues[index];
 }
 
 function relativePath(root, filePath) {
