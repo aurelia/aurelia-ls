@@ -4543,6 +4543,147 @@
       ]
     },
     {
+      "id": "resource-definition-origin-references",
+      "fixture": "fixtures/pressure/resource-registration-lab",
+      "aureliaDomain": "resource-registration",
+      "capability": "resource-registration-model",
+      "domainAxis": "resources",
+      "coverageIntent": "boundary-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/resources.ts",
+      "requirement": "TypeScript resource declarations and exact authored public-name metadata dispatch the same resource-identity reference relation as template usages without fabricating TypeScript reference rows.",
+      "cases": [
+        {
+          "id": "decorator-custom-element-class-origin",
+          "cursor": { "marker": "export class DecoratorCard", "token": "DecoratorCard" },
+          "expectations": [
+            {
+              "name": "resource references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "equals": { "value.selectedMemberName": "decorator-card", "value.rows.length": 9 },
+              "rows": [
+                { "fields": { "referenceKind": "declaration", "resourceDeclarationKind": "alias-name" }, "source": { "marker": "@alias('decorator-card-annotation')", "token": "decorator-card-annotation" }, "count": 1 },
+                { "fields": { "referenceKind": "declaration", "resourceDeclarationKind": "primary-name" }, "source": { "marker": "name: 'decorator-card'", "token": "decorator-card" }, "count": 1 },
+                { "fields": { "referenceKind": "declaration", "resourceDeclarationKind": "alias-name" }, "source": { "marker": "aliases: ['decorator-card-alias']", "token": "decorator-card-alias" }, "count": 1 },
+                { "fields": { "referenceKind": "resource-usage" }, "source": { "sourceFile": "src/resource-lab-app.html", "marker": "<decorator-card label.bind=\"title\">", "token": "decorator-card" }, "count": 1 },
+                { "fields": { "referenceKind": "resource-usage" }, "source": { "sourceFile": "src/resource-lab-app.html", "marker": "<decorator-card-alias label.bind=\"title\">", "token": "decorator-card-alias" }, "count": 1 },
+                { "fields": { "referenceKind": "resource-usage" }, "source": { "sourceFile": "src/resource-lab-app.html", "marker": "as-element=\"decorator-card-alias\"", "token": "decorator-card-alias" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "decorator-custom-element-alias-origin",
+          "cursor": { "marker": "aliases: ['decorator-card-alias']", "token": "decorator-card-alias" },
+          "expectations": [
+            {
+              "name": "resource references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "equals": { "value.selectedMemberName": "decorator-card-alias", "value.rows.length": 9 },
+              "rows": [
+                { "fields": { "referenceKind": "declaration", "resourceDeclarationKind": "primary-name" }, "source": { "marker": "name: 'decorator-card'", "token": "decorator-card" }, "count": 1 },
+                { "fields": { "referenceKind": "declaration", "resourceDeclarationKind": "alias-name" }, "source": { "marker": "aliases: ['decorator-card-alias']", "token": "decorator-card-alias" }, "count": 1 },
+                { "fields": { "referenceKind": "resource-usage" }, "source": { "sourceFile": "src/resource-lab-app.html", "marker": "<decorator-card label.bind=\"title\">", "token": "decorator-card" }, "count": 1 },
+                { "fields": { "referenceKind": "resource-usage" }, "source": { "sourceFile": "src/resource-lab-app.html", "marker": "<decorator-card-alias label.bind=\"title\">", "token": "decorator-card-alias" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "static-custom-element-class-origin",
+          "cursor": { "marker": "export class StaticPanel", "token": "StaticPanel" },
+          "expectations": [
+            {
+              "name": "resource references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "equals": { "value.selectedMemberName": "static-panel", "value.rows.length": 6 },
+              "rows": [
+                { "fields": { "referenceKind": "declaration", "resourceDeclarationKind": "primary-name" }, "source": { "marker": "name: 'static-panel'", "token": "static-panel" }, "count": 1 },
+                { "fields": { "referenceKind": "declaration", "resourceDeclarationKind": "alias-name" }, "source": { "marker": "aliases: ['static-panel-alias']", "token": "static-panel-alias" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "define-call-custom-element-class-origin",
+          "cursor": { "marker": "export class DefinedBadge", "token": "DefinedBadge" },
+          "expectations": [
+            {
+              "name": "resource references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "equals": { "value.selectedMemberName": "defined-badge", "value.rows.length": 6 },
+              "rows": [
+                { "fields": { "referenceKind": "declaration", "resourceDeclarationKind": "primary-name" }, "source": { "marker": "name: 'defined-badge'", "token": "defined-badge" }, "count": 1 },
+                { "fields": { "referenceKind": "declaration", "resourceDeclarationKind": "alias-name" }, "source": { "marker": "aliases: ['defined-badge-alias']", "token": "defined-badge-alias" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "template-controller-class-origin",
+          "cursor": { "marker": "export class SurfaceGate", "token": "SurfaceGate" },
+          "expectations": [
+            {
+              "name": "resource references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "equals": { "value.selectedMemberName": "surface-gate", "value.rows.length": 4 },
+              "rows": [
+                { "fields": { "referenceKind": "declaration", "resourceDeclarationKind": "primary-name" }, "source": { "marker": "name: 'surface-gate'", "token": "surface-gate" }, "count": 1 },
+                { "fields": { "referenceKind": "declaration", "resourceDeclarationKind": "alias-name" }, "source": { "marker": "aliases: ['surface-door']", "token": "surface-door" }, "count": 1 },
+                { "fields": { "referenceKind": "resource-usage" }, "source": { "sourceFile": "src/resource-lab-app.html", "marker": "surface-gate.bind=\"isActive\"", "token": "surface-gate" }, "count": 1 },
+                { "fields": { "referenceKind": "resource-usage" }, "source": { "sourceFile": "src/resource-lab-app.html", "marker": "surface-door.bind=\"isActive\"", "token": "surface-door" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "expression-resource-class-origins",
+          "cursor": { "marker": "export class FormatNameValueConverter", "token": "FormatNameValueConverter" },
+          "expectations": [
+            {
+              "name": "value-converter references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "equals": { "value.selectedMemberName": "formatName", "value.rows.length": 4 },
+              "rows": [
+                { "fields": { "referenceKind": "declaration", "resourceDeclarationKind": "primary-name" }, "source": { "marker": "name: 'formatName'", "token": "formatName" }, "count": 1 },
+                { "fields": { "referenceKind": "declaration", "resourceDeclarationKind": "alias-name" }, "source": { "marker": "aliases: ['fmtName']", "token": "fmtName" }, "count": 1 },
+                { "fields": { "referenceKind": "resource-usage" }, "source": { "sourceFile": "src/resource-lab-app.html", "marker": "title | formatName", "token": "formatName" }, "count": 1 },
+                { "fields": { "referenceKind": "resource-usage" }, "source": { "sourceFile": "src/resource-lab-app.html", "marker": "title | fmtName", "token": "fmtName" }, "count": 1 }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "resource-typescript-use-origin-references",
+      "fixture": "fixtures/pressure/resource-registration-lab",
+      "aureliaDomain": "resource-registration",
+      "capability": "resource-registration-model",
+      "domainAxis": "resources",
+      "coverageIntent": "boundary-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/resource-lab-app.ts",
+      "requirement": "A non-declaration TypeScript use activates the same resource-identity reference relation while ordinary TypeScript reference rows remain owned by the TypeScript provider.",
+      "cases": [
+        {
+          "id": "dependency-list-resource-use-origin",
+          "cursor": { "marker": "    DecoratorCard,", "token": "DecoratorCard" },
+          "expectations": [
+            {
+              "name": "resource references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "equals": { "value.selectedMemberName": "decorator-card", "value.rows.length": 9 },
+              "rows": [
+                { "fields": { "referenceKind": "declaration", "resourceDeclarationKind": "primary-name" }, "source": { "sourceFile": "src/resources.ts", "marker": "name: 'decorator-card'", "token": "decorator-card" }, "count": 1 },
+                { "fields": { "referenceKind": "resource-usage" }, "source": { "sourceFile": "src/resource-lab-app.html", "marker": "<decorator-card label.bind=\"title\">", "token": "decorator-card" }, "count": 1 }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "resource-registration-effective-definitions",
       "fixture": "fixtures/pressure/resource-registration-effective-definitions",
       "aureliaDomain": "resource-registration",
@@ -5173,7 +5314,7 @@
               "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
               "equals": { "value.selectedMemberName": "DataAttributePattern" },
               "rows": [
-                { "fields": { "referenceKind": "declaration" }, "source": { "sourceFile": "src/resources.ts", "marker": "export class DataAttributePattern", "token": "DataAttributePattern" }, "count": 1 },
+                { "fields": { "referenceKind": "declaration", "resourceDeclarationKind": "pattern-name" }, "source": { "sourceFile": "src/resources.ts", "marker": "{ pattern: 'PART.data', symbols: '.' }", "token": "PART.data" }, "count": 1 },
                 { "fields": { "referenceKind": "resource-usage", "resourceUsageKind": "attribute-pattern-literal", "name": "data" }, "source": { "marker": "title.data=", "token": "data" }, "count": 1 },
                 { "fields": { "referenceKind": "resource-usage", "resourceUsageKind": "attribute-pattern-literal", "name": "data" }, "source": { "marker": "patterned.data: message", "token": "data" }, "count": 1 }
               ]
@@ -5183,7 +5324,7 @@
               "query": { "kind": "template-references", "cursor": { "marker": "patterned.data: message", "token": "data" }, "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
               "equals": { "value.selectedMemberName": "DataAttributePattern" },
               "rows": [
-                { "fields": { "referenceKind": "declaration" }, "source": { "sourceFile": "src/resources.ts", "marker": "export class DataAttributePattern", "token": "DataAttributePattern" }, "count": 1 },
+                { "fields": { "referenceKind": "declaration", "resourceDeclarationKind": "pattern-name" }, "source": { "sourceFile": "src/resources.ts", "marker": "{ pattern: 'PART.data', symbols: '.' }", "token": "PART.data" }, "count": 1 },
                 { "fields": { "referenceKind": "resource-usage", "resourceUsageKind": "attribute-pattern-literal", "name": "data" }, "source": { "marker": "title.data=", "token": "data" }, "count": 1 },
                 { "fields": { "referenceKind": "resource-usage", "resourceUsageKind": "attribute-pattern-literal", "name": "data" }, "source": { "marker": "patterned.data: message", "token": "data" }, "count": 1 }
               ]
@@ -5193,7 +5334,7 @@
               "query": { "kind": "template-references", "cursor": { "marker": "title::created=", "token": "created" }, "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
               "equals": { "value.selectedMemberName": "CreatedAttributePattern" },
               "rows": [
-                { "fields": { "referenceKind": "declaration" }, "source": { "sourceFile": "src/resources.ts", "marker": "export class CreatedAttributePattern", "token": "CreatedAttributePattern" }, "count": 1 },
+                { "fields": { "referenceKind": "declaration", "resourceDeclarationKind": "pattern-name" }, "source": { "sourceFile": "src/resources.ts", "marker": "{ pattern: 'PART::created', symbols: ':' }", "token": "PART::created" }, "count": 1 },
                 { "fields": { "referenceKind": "resource-usage", "resourceUsageKind": "attribute-pattern-literal", "name": "created" }, "source": { "marker": "title::created=", "token": "created" }, "count": 1 }
               ]
             },

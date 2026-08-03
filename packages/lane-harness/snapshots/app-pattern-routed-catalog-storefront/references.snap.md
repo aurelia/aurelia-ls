@@ -2341,3 +2341,543 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   ]
 }
 ```
+
+## resource-class-item-card
+
+### Probe
+
+```json
+{
+  "anchor": "export class ItemCard",
+  "at": "ItemCard",
+  "atOccurrence": 1,
+  "displayPosition": "src/components/item-card.ts:10:14",
+  "file": "src/components/item-card.ts",
+  "lspPosition": {
+    "character": 13,
+    "line": 9
+  },
+  "occurrence": 1
+}
+```
+
+### references
+
+```json
+{
+  "outcome": "result",
+  "result": [
+    {
+      "range": {
+        "end": {
+          "character": 18,
+          "line": 6
+        },
+        "start": {
+          "character": 9,
+          "line": 6
+        }
+      },
+      "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/components/item-card.ts"
+    },
+    {
+      "range": {
+        "end": {
+          "character": 20,
+          "line": 25
+        },
+        "start": {
+          "character": 11,
+          "line": 25
+        }
+      },
+      "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-list-route.html"
+    },
+    {
+      "range": {
+        "end": {
+          "character": 49,
+          "line": 25
+        },
+        "start": {
+          "character": 40,
+          "line": 25
+        }
+      },
+      "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-list-route.html"
+    }
+  ]
+}
+```
+
+### Notifications
+
+```json
+{
+  "notificationCount": 0,
+  "notifications": []
+}
+```
+
+### Resolved locations
+
+```json
+{
+  "locationCount": 3,
+  "locations": [
+    {
+      "anomaly": null,
+      "file": "src/components/item-card.ts",
+      "range": {
+        "end": {
+          "character": 18,
+          "line": 6
+        },
+        "start": {
+          "character": 9,
+          "line": 6
+        }
+      },
+      "rangeText": "item-card",
+      "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/components/item-card.ts"
+    },
+    {
+      "anomaly": null,
+      "file": "src/routes/item-list-route.html",
+      "range": {
+        "end": {
+          "character": 20,
+          "line": 25
+        },
+        "start": {
+          "character": 11,
+          "line": 25
+        }
+      },
+      "rangeText": "item-card",
+      "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-list-route.html"
+    },
+    {
+      "anomaly": null,
+      "file": "src/routes/item-list-route.html",
+      "range": {
+        "end": {
+          "character": 49,
+          "line": 25
+        },
+        "start": {
+          "character": 40,
+          "line": 25
+        }
+      },
+      "rangeText": "item-card",
+      "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-list-route.html"
+    }
+  ]
+}
+```
+
+## resource-name-item-card
+
+### Probe
+
+```json
+{
+  "anchor": "name: 'item-card'",
+  "at": "item-card",
+  "atOccurrence": 1,
+  "displayPosition": "src/components/item-card.ts:7:10",
+  "file": "src/components/item-card.ts",
+  "lspPosition": {
+    "character": 9,
+    "line": 6
+  },
+  "occurrence": 1
+}
+```
+
+### references
+
+```json
+{
+  "outcome": "result",
+  "result": [
+    {
+      "range": {
+        "end": {
+          "character": 18,
+          "line": 6
+        },
+        "start": {
+          "character": 9,
+          "line": 6
+        }
+      },
+      "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/components/item-card.ts"
+    },
+    {
+      "range": {
+        "end": {
+          "character": 20,
+          "line": 25
+        },
+        "start": {
+          "character": 11,
+          "line": 25
+        }
+      },
+      "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-list-route.html"
+    },
+    {
+      "range": {
+        "end": {
+          "character": 49,
+          "line": 25
+        },
+        "start": {
+          "character": 40,
+          "line": 25
+        }
+      },
+      "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-list-route.html"
+    }
+  ]
+}
+```
+
+### Notifications
+
+```json
+{
+  "notificationCount": 0,
+  "notifications": []
+}
+```
+
+### Resolved locations
+
+```json
+{
+  "locationCount": 3,
+  "locations": [
+    {
+      "anomaly": null,
+      "file": "src/components/item-card.ts",
+      "range": {
+        "end": {
+          "character": 18,
+          "line": 6
+        },
+        "start": {
+          "character": 9,
+          "line": 6
+        }
+      },
+      "rangeText": "item-card",
+      "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/components/item-card.ts"
+    },
+    {
+      "anomaly": null,
+      "file": "src/routes/item-list-route.html",
+      "range": {
+        "end": {
+          "character": 20,
+          "line": 25
+        },
+        "start": {
+          "character": 11,
+          "line": 25
+        }
+      },
+      "rangeText": "item-card",
+      "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-list-route.html"
+    },
+    {
+      "anomaly": null,
+      "file": "src/routes/item-list-route.html",
+      "range": {
+        "end": {
+          "character": 49,
+          "line": 25
+        },
+        "start": {
+          "character": 40,
+          "line": 25
+        }
+      },
+      "rangeText": "item-card",
+      "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-list-route.html"
+    }
+  ]
+}
+```
+
+## resource-ts-use-item-card
+
+### Probe
+
+```json
+{
+  "anchor": "dependencies: [ItemCard]",
+  "at": "ItemCard",
+  "atOccurrence": 1,
+  "displayPosition": "src/routes/item-list-route.ts:9:18",
+  "file": "src/routes/item-list-route.ts",
+  "lspPosition": {
+    "character": 17,
+    "line": 8
+  },
+  "occurrence": 1
+}
+```
+
+### references
+
+```json
+{
+  "outcome": "result",
+  "result": [
+    {
+      "range": {
+        "end": {
+          "character": 18,
+          "line": 6
+        },
+        "start": {
+          "character": 9,
+          "line": 6
+        }
+      },
+      "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/components/item-card.ts"
+    },
+    {
+      "range": {
+        "end": {
+          "character": 20,
+          "line": 25
+        },
+        "start": {
+          "character": 11,
+          "line": 25
+        }
+      },
+      "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-list-route.html"
+    },
+    {
+      "range": {
+        "end": {
+          "character": 49,
+          "line": 25
+        },
+        "start": {
+          "character": 40,
+          "line": 25
+        }
+      },
+      "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-list-route.html"
+    }
+  ]
+}
+```
+
+### Notifications
+
+```json
+{
+  "notificationCount": 0,
+  "notifications": []
+}
+```
+
+### Resolved locations
+
+```json
+{
+  "locationCount": 3,
+  "locations": [
+    {
+      "anomaly": null,
+      "file": "src/components/item-card.ts",
+      "range": {
+        "end": {
+          "character": 18,
+          "line": 6
+        },
+        "start": {
+          "character": 9,
+          "line": 6
+        }
+      },
+      "rangeText": "item-card",
+      "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/components/item-card.ts"
+    },
+    {
+      "anomaly": null,
+      "file": "src/routes/item-list-route.html",
+      "range": {
+        "end": {
+          "character": 20,
+          "line": 25
+        },
+        "start": {
+          "character": 11,
+          "line": 25
+        }
+      },
+      "rangeText": "item-card",
+      "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-list-route.html"
+    },
+    {
+      "anomaly": null,
+      "file": "src/routes/item-list-route.html",
+      "range": {
+        "end": {
+          "character": 49,
+          "line": 25
+        },
+        "start": {
+          "character": 40,
+          "line": 25
+        }
+      },
+      "rangeText": "item-card",
+      "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-list-route.html"
+    }
+  ]
+}
+```
+
+## ts-member-use-searchText
+
+### Probe
+
+```json
+{
+  "anchor": "const query = this.searchText.trim()",
+  "at": "searchText",
+  "atOccurrence": 1,
+  "displayPosition": "src/state/catalog-state.ts:16:24",
+  "file": "src/state/catalog-state.ts",
+  "lspPosition": {
+    "character": 23,
+    "line": 15
+  },
+  "occurrence": 1
+}
+```
+
+### references
+
+```json
+{
+  "outcome": "result",
+  "result": [
+    {
+      "range": {
+        "end": {
+          "character": 12,
+          "line": 7
+        },
+        "start": {
+          "character": 2,
+          "line": 7
+        }
+      },
+      "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/state/catalog-state.ts"
+    },
+    {
+      "range": {
+        "end": {
+          "character": 33,
+          "line": 15
+        },
+        "start": {
+          "character": 23,
+          "line": 15
+        }
+      },
+      "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/state/catalog-state.ts"
+    },
+    {
+      "range": {
+        "end": {
+          "character": 63,
+          "line": 7
+        },
+        "start": {
+          "character": 53,
+          "line": 7
+        }
+      },
+      "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-list-route.html"
+    }
+  ]
+}
+```
+
+### Notifications
+
+```json
+{
+  "notificationCount": 0,
+  "notifications": []
+}
+```
+
+### Resolved locations
+
+```json
+{
+  "locationCount": 3,
+  "locations": [
+    {
+      "anomaly": null,
+      "file": "src/routes/item-list-route.html",
+      "range": {
+        "end": {
+          "character": 63,
+          "line": 7
+        },
+        "start": {
+          "character": 53,
+          "line": 7
+        }
+      },
+      "rangeText": "searchText",
+      "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-list-route.html"
+    },
+    {
+      "anomaly": null,
+      "file": "src/state/catalog-state.ts",
+      "range": {
+        "end": {
+          "character": 12,
+          "line": 7
+        },
+        "start": {
+          "character": 2,
+          "line": 7
+        }
+      },
+      "rangeText": "searchText",
+      "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/state/catalog-state.ts"
+    },
+    {
+      "anomaly": null,
+      "file": "src/state/catalog-state.ts",
+      "range": {
+        "end": {
+          "character": 33,
+          "line": 15
+        },
+        "start": {
+          "character": 23,
+          "line": 15
+        }
+      },
+      "rangeText": "searchText",
+      "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/state/catalog-state.ts"
+    }
+  ]
+}
+```

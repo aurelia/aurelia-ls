@@ -305,7 +305,7 @@ diff --git a/src/expression-resources.ts b/src/expression-resources.ts
 diff --git a/src/resource-combinator-gallery.html b/src/resource-combinator-gallery.html
 --- a/src/resource-combinator-gallery.html
 +++ b/src/resource-combinator-gallery.html
-@@ -1,23 +1,23 @@
+@@ -1,27 +1,27 @@
  <template>
    <p class="converter-chain-valid">${count | numberText:prefix | textLength}</p>
    <p class="converter-input-invalid">${count | textLength}</p>
@@ -331,5 +331,9 @@ diff --git a/src/resource-combinator-gallery.html b/src/resource-combinator-gall
    <p class="converter-inner-behind-missing-outer">${count | numberText:prefix | missingConverter}</p>
    <p class="converter-phase-error-blocked-by-inner-missing">${count | missingConverter | sanitize}</p>
    <p class="missing-behavior">${item.label & missingBehavior}</p>
+   <p
+   title="before-${item.label | identityValue}-middle-${count | missingInterpolationConverter}-after-${item.label | identityValue}-plain-${item.id}-literal-${42}"
+     data-case="attribute-interpolation-later-part-failure"
+   ></p>
  </template>
 ```

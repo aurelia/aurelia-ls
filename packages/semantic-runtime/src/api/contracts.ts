@@ -4270,6 +4270,7 @@ export enum SemanticTemplateResourceUsageKind {
 export enum SemanticTemplateResourceDeclarationKind {
   PrimaryName = 'primary-name',
   AliasName = 'alias-name',
+  PatternName = 'pattern-name',
 }
 
 export enum SemanticTemplateBindableAttributeSourceKind {

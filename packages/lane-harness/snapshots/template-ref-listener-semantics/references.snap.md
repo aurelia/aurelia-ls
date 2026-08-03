@@ -47,6 +47,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     {
       "range": {
         "end": {
+          "character": 18,
+          "line": 8
+        },
+        "start": {
+          "character": 13,
+          "line": 8
+        }
+      },
+      "uri": "fixtures://pressure/template-ref-listener-semantics/src/focus-ring.ts"
+    },
+    {
+      "range": {
+        "end": {
           "character": 12,
           "line": 7
         },
@@ -113,7 +126,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "locationCount": 5,
+  "locationCount": 6,
   "locations": [
     {
       "anomaly": null,
@@ -129,6 +142,22 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         }
       },
       "rangeText": "focus-ring",
+      "uri": "fixtures://pressure/template-ref-listener-semantics/src/focus-ring.ts"
+    },
+    {
+      "anomaly": null,
+      "file": "src/focus-ring.ts",
+      "range": {
+        "end": {
+          "character": 18,
+          "line": 8
+        },
+        "start": {
+          "character": 13,
+          "line": 8
+        }
+      },
+      "rangeText": "focus",
       "uri": "fixtures://pressure/template-ref-listener-semantics/src/focus-ring.ts"
     },
     {

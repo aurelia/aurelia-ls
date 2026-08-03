@@ -223,6 +223,42 @@
         "verdict": "correct",
         "reason": "",
         "note": "FLIPPED wrong->correct 2026-07-07. templateReferences falls back to the TypeScript-origin reference context (templateReferenceContextFromTypeScript), so Find All References on the TS declaration returns the declaration plus every state.* template root - 10 locations across both files. Reference providers merge client-side, so answering is safe."
+      },
+      {
+        "id": "resource-class-item-card",
+        "file": "src/components/item-card.ts",
+        "anchor": "export class ItemCard",
+        "at": "ItemCard",
+        "verdict": "correct",
+        "reason": "The TypeScript custom-element declaration reaches its authored public name and both opening and closing template tag usages.",
+        "note": "Stage 1 definition-origin resource-reference witness; ordinary TypeScript symbol references remain client-merged from the TypeScript provider."
+      },
+      {
+        "id": "resource-name-item-card",
+        "file": "src/components/item-card.ts",
+        "anchor": "name: 'item-card'",
+        "at": "item-card",
+        "verdict": "correct",
+        "reason": "The exact authored public resource-name token dispatches the same resource identity relation as the template tag.",
+        "note": "No identifier-spelling heuristic is involved; dispatch spends nameSourceAddressHandle."
+      },
+      {
+        "id": "resource-ts-use-item-card",
+        "file": "src/routes/item-list-route.ts",
+        "anchor": "dependencies: [ItemCard]",
+        "at": "ItemCard",
+        "verdict": "correct",
+        "reason": "A TypeScript usage of the resource class activates resource references through its alias-normalized declaration identity.",
+        "note": "Regression witness for the independent reference-context activation locus."
+      },
+      {
+        "id": "ts-member-use-searchText",
+        "file": "src/state/catalog-state.ts",
+        "anchor": "const query = this.searchText.trim()",
+        "at": "searchText",
+        "verdict": "correct",
+        "reason": "A non-declaration TypeScript member usage reaches the declaration, sibling TypeScript usage family, and template usage just like the declaration origin.",
+        "note": "Regression witness for retaining the exact TypeScript cursor source as reference-context activation evidence rather than requiring a renameable output row."
       }
     ],
     "definition": [

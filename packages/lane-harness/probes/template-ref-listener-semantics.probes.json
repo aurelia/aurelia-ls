@@ -20,8 +20,8 @@
         "anchor": "focus-ring.ref=\"focusRingController\"",
         "at": "focus-ring",
         "verdict": "correct",
-        "reason": "References include the custom-attribute name declaration, ordinary same-node attribute use, and named ref target with exact token spans.",
-        "note": "NEW 2026-07-13. Confirms the IDE spends the controller-bind ref target relation instead of rescanning attribute spelling."
+        "reason": "References include the custom-attribute primary and alias declarations, ordinary same-node attribute use, and named ref target with exact token spans.",
+        "note": "NEW 2026-07-13; strengthened 2026-08-03. Confirms the IDE spends resource identity, including every authored public-name declaration, instead of rescanning attribute spelling."
       }
     ],
     "hover": [

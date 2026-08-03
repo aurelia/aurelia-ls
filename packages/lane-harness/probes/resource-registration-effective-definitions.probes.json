@@ -1,0 +1,70 @@
+{
+  "fixture": "packages/semantic-runtime/fixtures/pressure/resource-registration-effective-definitions",
+  "lanes": {
+    "references": [
+      {
+        "id": "binding-command-class-origin",
+        "file": "src/resources.ts",
+        "anchor": "export class SharedBindingCommand",
+        "at": "SharedBindingCommand",
+        "verdict": "correct",
+        "reason": "A binding-command implementation declaration reaches its authored name and every compiled command-name occurrence.",
+        "note": "Definition-origin dispatch reuses the command executable/definition relation already consumed by template-origin references."
+      },
+      {
+        "id": "binding-command-static-class-origin",
+        "file": "src/resources.ts",
+        "anchor": "export class StaticBindingCommand",
+        "at": "StaticBindingCommand",
+        "verdict": "correct",
+        "reason": "A static-$au binding-command declaration reaches primary and alias metadata plus both command usages.",
+        "note": "Covers syntax-resource aliases and static definition recognition."
+      },
+      {
+        "id": "binding-command-alias-origin",
+        "file": "src/resources.ts",
+        "anchor": "aliases: ['static-cmd']",
+        "at": "static-cmd",
+        "verdict": "correct",
+        "reason": "A binding-command alias declaration dispatches the same syntax-resource identity as its primary name.",
+        "note": "References follow resource identity while binding-command rename remains explicitly unsupported."
+      },
+      {
+        "id": "attribute-pattern-class-origin",
+        "file": "src/resources.ts",
+        "anchor": "export class DataAttributePattern",
+        "at": "DataAttributePattern",
+        "verdict": "correct",
+        "reason": "An attribute-pattern implementation declaration reaches its authored pattern metadata and every literal occurrence produced by that pattern.",
+        "note": "Attribute patterns are app-global compiler resources; the public declaration is the authored pattern rather than a fabricated resource name."
+      },
+      {
+        "id": "attribute-pattern-metadata-origin",
+        "file": "src/resources.ts",
+        "anchor": "pattern: 'PART.data'",
+        "at": "PART.data",
+        "verdict": "correct",
+        "reason": "The exact authored attribute-pattern metadata token is a first-class reference origin for compiled pattern literal usages.",
+        "note": "Exercises the pattern-name declaration vocabulary and exact pattern provenance."
+      },
+      {
+        "id": "factory-attribute-pattern-class-origin",
+        "file": "src/resources.ts",
+        "anchor": "export class CreatedAttributePattern",
+        "at": "CreatedAttributePattern",
+        "verdict": "correct",
+        "reason": "A class passed through AttributePattern.create resolves through its converged resource target and reaches the factory pattern declaration and usage.",
+        "note": "Covers factory-call syntax-resource recognition without local AST reconstruction in the query layer."
+      },
+      {
+        "id": "factory-attribute-pattern-metadata-origin",
+        "file": "src/resources.ts",
+        "anchor": "pattern: 'PART::created'",
+        "at": "PART::created",
+        "verdict": "correct",
+        "reason": "Factory-created pattern metadata dispatches the same converged syntax-resource identity as its implementation class.",
+        "note": "The exact metadata source activates references independently of TypeScript identifier lookup."
+      }
+    ]
+  }
+}

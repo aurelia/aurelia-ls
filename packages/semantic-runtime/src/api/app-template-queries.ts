@@ -148,6 +148,10 @@ import {
   ResourceDefinitionKind,
   resourceKindsShareRegistrationIdentity,
 } from '../resources/resource-kind.js';
+import {
+  taxonomyResourceKindForDefinition,
+  type FullResourceDefinition,
+} from '../resources/resource-definition.js';
 import { ResourceProductDetails } from '../resources/product-details.js';
 import { TypeSystemHotDetails } from '../type-system/product-details.js';
 import { checkerTypeMemberValueSourceAddressHandle } from '../type-system/checker-type-member-source.js';
@@ -328,7 +332,7 @@ export class SemanticAppTemplateQueries {
     const detail = query.detail ?? SemanticRuntimeDetail.Compact;
     const handles = includeHandles(detail);
     const contexts = this.templateReferenceContexts({ ...query, includeDeclaration: true }, detail, handles);
-    const selected = activeTemplateReferenceContext(contexts, query.cursor);
+    const selected = activeTemplateRenameContext(contexts, query.cursor);
     if (selected == null) {
       const context = contexts[0] ?? null;
       const reason = context == null
@@ -883,6 +887,7 @@ export class SemanticAppTemplateQueries {
       this.templateBindableAliasReferenceContext(query, detail, handles),
       this.templateBindableReferenceContext(query, detail, handles),
       this.templateResourceReferenceContext(query, handles),
+      this.templateResourceReferenceContextFromTypeScript(query, handles),
       this.templateReferenceContextFromTypeScript(query, handles),
     ].filter((context): context is TemplateReferenceContext => context != null);
   }
@@ -949,7 +954,7 @@ export class SemanticAppTemplateQueries {
     handles: boolean,
   ): TemplateReferenceContext | null {
     const contexts = this.templateReferenceContexts(query, detail, handles);
-    return activeTemplateReferenceContext(contexts, query.cursor)?.context
+    return activeTemplateReferenceContext(contexts, query.cursor)
       ?? this.templateOpenMemberReferenceContext(query, detail, handles)
       ?? null;
   }
@@ -1036,6 +1041,7 @@ export class SemanticAppTemplateQueries {
       templateUsageRows: [activeRow],
       candidateRows,
       rows: [activeRow],
+      activeSources: [activeSource],
     };
   }
 
@@ -1175,19 +1181,102 @@ export class SemanticAppTemplateQueries {
       return null;
     }
 
-    const renameSurface = templateRenameSurfaceForResourceKind(selectedDefinition.resourceKind);
     const sourceAddressHandle = matchedAlias
       ? selectedDefinition.handles?.matchedNameSourceAddressHandle ?? null
       : selectedDefinition.handles?.nameSourceAddressHandle
         ?? selectedDefinition.handles?.targetAddressHandle
         ?? selectedDefinition.handles?.sourceAddressHandle
         ?? null;
-    const target: ResourceReferenceTarget = {
+    const indexedDefinition = this.emission.resourceIndex.lookupByProduct(
+      selectedDefinition.handles?.definitionProductHandle ?? null,
+    );
+    let declarations: readonly ResourceReferenceDeclarationSelection[];
+    if (indexedDefinition != null) {
+      declarations = authoredResourceReferenceDeclarations(this.store, indexedDefinition);
+    } else if (declarationTargetSource != null) {
+      declarations = [{
+        name: selectedName,
+        source: declarationTargetSource,
+        sourceAddressHandle,
+        declarationKind: matchedAlias
+          ? SemanticTemplateResourceDeclarationKind.AliasName
+          : SemanticTemplateResourceDeclarationKind.PrimaryName,
+      }];
+    } else {
+      declarations = [];
+    }
+    return this.templateResourceReferenceContextForSelection({
       resourceKind: selectedDefinition.resourceKind,
       selectedName,
       targetSource,
       definitionProductHandle: selectedDefinition.handles?.definitionProductHandle ?? null,
       sourceAddressHandle,
+      declarations,
+      activeSources: [],
+    }, handles);
+  }
+
+  private templateResourceReferenceContextFromTypeScript(
+    query: SemanticAppQuery,
+    handles: boolean,
+  ): TemplateReferenceContext | null {
+    const selection = this.typeScriptResourceReferenceSelection(query);
+    return selection == null
+      ? null
+      : this.templateResourceReferenceContextForSelection(selection, handles);
+  }
+
+  private typeScriptResourceReferenceSelection(
+    query: SemanticAppQuery,
+  ): ResourceReferenceContextSelection | null {
+    const cursor = query.cursor;
+    if (cursor == null || cursor.offset == null) {
+      return null;
+    }
+
+    const authoredSelections = this.emission.resourceIndex.entries.flatMap((entry) =>
+      resourceReferenceSelectionsAtCursor(this.store, entry.definition, cursor)
+    );
+    if (authoredSelections.length === 1) {
+      return authoredSelections[0]!;
+    }
+    if (authoredSelections.length > 1) {
+      return null;
+    }
+
+    const symbolCursor = this.typeScriptSymbolCursor(query);
+    if (symbolCursor == null) {
+      return null;
+    }
+    const definitions = new Set<FullResourceDefinition>();
+    for (const declaration of symbolCursor.targetSymbol.declarations ?? []) {
+      for (const definition of this.emission.resourceIndex.lookupAllByTypeScriptDeclaration(
+        this.emission.typeSystem,
+        declaration,
+      )) {
+        definitions.add(definition);
+      }
+    }
+    if (definitions.size !== 1) {
+      return null;
+    }
+    return resourceReferenceSelectionForTypeScriptTarget(
+      this.store,
+      definitions.values().next().value!,
+      symbolCursor.activeSource,
+    );
+  }
+
+  private templateResourceReferenceContextForSelection(
+    selection: ResourceReferenceContextSelection,
+    handles: boolean,
+  ): TemplateReferenceContext {
+    const target: ResourceReferenceTarget = {
+      resourceKind: selection.resourceKind,
+      selectedName: selection.selectedName,
+      targetSource: selection.targetSource,
+      definitionProductHandle: selection.definitionProductHandle,
+      sourceAddressHandle: selection.sourceAddressHandle,
     };
     const templateUsageRows = resourceReferenceRows(
       this.store,
@@ -1196,27 +1285,26 @@ export class SemanticAppTemplateQueries {
       handles,
     );
     return templateReferenceContextFromRows({
-      selectedMemberName: selectedName,
-      targetSource,
-      renameSurface,
+      selectedMemberName: selection.selectedName,
+      targetSource: selection.targetSource,
+      renameSurface: templateRenameSurfaceForResourceKind(selection.resourceKind),
       includeTypeScriptReferences: false,
-      hasAuthoredDeclarationSource: matchedAlias
-        ? selectedDefinition.matchedNameSource != null
-        : selectedDefinition.nameSource != null,
-      declarationRows: declarationTargetSource == null ? [] : [
+      hasAuthoredDeclarationSource: selection.declarations.length > 0,
+      declarationRows: selection.declarations.map((declaration) =>
         templateReferenceDeclarationRow(
-          declarationSource,
-          selectedName,
-          declarationTargetSource,
-          target.sourceAddressHandle,
+          declaration.source,
+          declaration.name,
+          selection.targetSource,
+          declaration.sourceAddressHandle,
           handles,
-          matchedAlias
-            ? SemanticTemplateResourceDeclarationKind.AliasName
-            : SemanticTemplateResourceDeclarationKind.PrimaryName,
-        ),
-      ],
+          declaration.declarationKind,
+          null,
+          selection.sourceAddressHandle,
+        )
+      ),
       templateUsageRows,
       candidateRows: [],
+      activeSources: selection.activeSources,
     });
   }
 
@@ -1461,6 +1549,7 @@ export class SemanticAppTemplateQueries {
       ],
       templateUsageRows: tsContext.templateUsageRows,
       candidateRows: tsContext.candidateRows,
+      activeSources: tsContext.activeSource == null ? [] : [tsContext.activeSource],
     });
   }
 
@@ -1468,24 +1557,11 @@ export class SemanticAppTemplateQueries {
     query: SemanticAppQuery,
     handles: boolean,
   ): TypeScriptReferenceContext | null {
-    const cursor = query.cursor;
-    if (cursor == null) {
+    const symbolCursor = this.typeScriptSymbolCursor(query);
+    if (symbolCursor == null) {
       return null;
     }
-    const sourceFile = this.emission.typeSystem.readProgramSourceFileByPath(cursor.filePath);
-    if (sourceFile == null) {
-      return null;
-    }
-    const offset = cursor.offset ?? offsetForLineAndCharacter(sourceFile, cursor.line, cursor.character);
-    const activeIdentifier = identifierAtOffset(sourceFile, offset);
-    if (activeIdentifier == null) {
-      return null;
-    }
-    const targetSymbol = this.emission.typeSystem.readProgramAliasedSymbolAtLocation(activeIdentifier);
-    if (targetSymbol == null) {
-      return null;
-    }
-    const activeSource = semanticExactSourceReference(sourceReferenceForTsNode(activeIdentifier));
+    const { activeIdentifier, activeSource, targetSymbol } = symbolCursor;
     const targetSources = declarationSourcesForSymbol(targetSymbol);
     const effectiveTargetSources = targetSources.length === 0 && activeSource != null
       ? [activeSource]
@@ -1494,7 +1570,7 @@ export class SemanticAppTemplateQueries {
     if (targetSource == null) {
       return null;
     }
-    const selectedMemberName = activeIdentifier.getText(sourceFile);
+    const selectedMemberName = activeIdentifier.text;
     const references = this.referenceRowsForTarget(
       selectedMemberName,
       targetSource,
@@ -1535,6 +1611,30 @@ export class SemanticAppTemplateQueries {
       candidateRows: references.candidateRows,
     };
   }
+
+  private typeScriptSymbolCursor(
+    query: SemanticAppQuery,
+  ): TypeScriptSymbolCursor | null {
+    const cursor = query.cursor;
+    if (cursor == null) {
+      return null;
+    }
+    const sourceFile = this.emission.typeSystem.readProgramSourceFileByPath(cursor.filePath);
+    if (sourceFile == null) {
+      return null;
+    }
+    const offset = cursor.offset ?? offsetForLineAndCharacter(sourceFile, cursor.line, cursor.character);
+    const activeIdentifier = identifierAtOffset(sourceFile, offset);
+    if (activeIdentifier == null) {
+      return null;
+    }
+    const targetSymbol = this.emission.typeSystem.readProgramAliasedSymbolAtLocation(activeIdentifier);
+    if (targetSymbol == null) {
+      return null;
+    }
+    const activeSource = semanticExactSourceReference(sourceReferenceForTsNode(activeIdentifier));
+    return activeSource == null ? null : { activeIdentifier, activeSource, targetSymbol };
+  }
 }
 
 const enum TemplateRenameSurface {
@@ -1559,6 +1659,8 @@ interface TemplateReferenceContext {
   /** Same-name template usages with unproven provenance; never mixed into proven rows. */
   readonly candidateRows: readonly SemanticTemplateReferenceRow[];
   readonly rows: readonly SemanticTemplateReferenceRow[];
+  /** Exact authored loci that select this context; this is intentionally broader than renameable output rows. */
+  readonly activeSources: readonly SemanticSourceReference[];
 }
 
 interface TemplateReferenceTarget {
@@ -1631,6 +1733,114 @@ interface ResourceReferenceTarget {
   readonly sourceAddressHandle: NonNullable<SemanticTemplateReferenceRow['handles']>['sourceAddressHandle'];
 }
 
+function resourceReferenceSelectionsAtCursor(
+  store: KernelStore,
+  definition: FullResourceDefinition,
+  cursor: NonNullable<SemanticAppQuery['cursor']>,
+): readonly ResourceReferenceContextSelection[] {
+  const declarations = authoredResourceReferenceDeclarations(store, definition);
+  return declarations
+    .filter((declaration) =>
+      semanticSourceReferenceContainsFileOffset(declaration.source, cursor.filePath, cursor.offset)
+    )
+    .map((declaration) => ({
+      resourceKind: taxonomyResourceKindForDefinition(definition),
+      selectedName: declaration.name,
+      targetSource: declaration.source,
+      definitionProductHandle: definition.productHandle,
+      sourceAddressHandle: declaration.sourceAddressHandle,
+      declarations,
+      activeSources: [declaration.source],
+    }));
+}
+
+function resourceReferenceSelectionForTypeScriptTarget(
+  store: KernelStore,
+  definition: FullResourceDefinition,
+  activeSource: SemanticSourceReference,
+): ResourceReferenceContextSelection | null {
+  const declarations = authoredResourceReferenceDeclarations(store, definition);
+  const targetDeclaration = declarations.find((declaration) =>
+    declaration.declarationKind === SemanticTemplateResourceDeclarationKind.PrimaryName
+  ) ?? declarations[0] ?? null;
+  const targetSource = targetDeclaration?.source
+    ?? semanticExactSourceReference(describeAddress(store, definition.target.addressHandle));
+  const selectedName = resourceReferenceDisplayName(definition);
+  if (targetSource == null || selectedName == null) {
+    return null;
+  }
+  return {
+    resourceKind: taxonomyResourceKindForDefinition(definition),
+    selectedName,
+    targetSource,
+    definitionProductHandle: definition.productHandle,
+    sourceAddressHandle: targetDeclaration?.sourceAddressHandle ?? definition.target.addressHandle,
+    declarations,
+    activeSources: [activeSource],
+  };
+}
+
+function authoredResourceReferenceDeclarations(
+  store: KernelStore,
+  definition: FullResourceDefinition,
+): readonly ResourceReferenceDeclarationSelection[] {
+  const declarations: ResourceReferenceDeclarationSelection[] = [];
+  if (definition.type === ResourceDefinitionKind.AttributePattern) {
+    for (const pattern of definition.patterns) {
+      const source = semanticExactSourceReference(describeAddress(store, pattern.addressHandle));
+      if (source != null) {
+        declarations.push({
+          name: pattern.pattern,
+          source,
+          sourceAddressHandle: pattern.addressHandle,
+          declarationKind: SemanticTemplateResourceDeclarationKind.PatternName,
+        });
+      }
+    }
+    return declarations.sort(resourceReferenceDeclarationOrder);
+  }
+  if (definition.nameSourceAddressHandle != null) {
+    const source = semanticExactSourceReference(describeAddress(store, definition.nameSourceAddressHandle));
+    if (source != null) {
+      declarations.push({
+        name: definition.name,
+        source,
+        sourceAddressHandle: definition.nameSourceAddressHandle,
+        declarationKind: SemanticTemplateResourceDeclarationKind.PrimaryName,
+      });
+    }
+  }
+  for (const alias of definition.aliases) {
+    const source = semanticExactSourceReference(describeAddress(store, alias.addressHandle));
+    if (source != null) {
+      declarations.push({
+        name: alias.name,
+        source,
+        sourceAddressHandle: alias.addressHandle,
+        declarationKind: SemanticTemplateResourceDeclarationKind.AliasName,
+      });
+    }
+  }
+  return declarations.sort(resourceReferenceDeclarationOrder);
+}
+
+function resourceReferenceDisplayName(
+  definition: FullResourceDefinition,
+): string | null {
+  return definition.type === ResourceDefinitionKind.AttributePattern
+    ? definition.patterns[0]?.pattern ?? definition.target.localName
+    : definition.name;
+}
+
+function resourceReferenceDeclarationOrder(
+  left: ResourceReferenceDeclarationSelection,
+  right: ResourceReferenceDeclarationSelection,
+): number {
+  return (left.source.path ?? '').localeCompare(right.source.path ?? '')
+    || (left.source.start ?? -1) - (right.source.start ?? -1)
+    || left.name.localeCompare(right.name);
+}
+
 interface ReferenceRowsForTarget {
   readonly templateUsageRows: readonly SemanticTemplateReferenceRow[];
   readonly candidateRows: readonly SemanticTemplateReferenceRow[];
@@ -1652,6 +1862,29 @@ interface TypeScriptReferenceContext {
   readonly bindableConventionCallbackTargetSources: readonly SemanticSourceReference[];
   /** Same-name template usages with unproven provenance; never mixed into proven rows. */
   readonly candidateRows: readonly SemanticTemplateReferenceRow[];
+}
+
+interface TypeScriptSymbolCursor {
+  readonly activeIdentifier: ts.Identifier;
+  readonly activeSource: SemanticSourceReference;
+  readonly targetSymbol: ts.Symbol;
+}
+
+interface ResourceReferenceDeclarationSelection {
+  readonly name: string;
+  readonly source: SemanticSourceReference;
+  readonly sourceAddressHandle: AddressHandle | null;
+  readonly declarationKind: SemanticTemplateResourceDeclarationKind;
+}
+
+interface ResourceReferenceContextSelection {
+  readonly resourceKind: ResourceDefinitionKind | `${ResourceDefinitionKind}`;
+  readonly selectedName: string;
+  readonly targetSource: SemanticSourceReference;
+  readonly definitionProductHandle: ProductHandle | null;
+  readonly sourceAddressHandle: AddressHandle | null;
+  readonly declarations: readonly ResourceReferenceDeclarationSelection[];
+  readonly activeSources: readonly SemanticSourceReference[];
 }
 
 interface ActiveTemplateReferenceContext {
@@ -2184,6 +2417,20 @@ function templateRenameUnavailable(
 function activeTemplateReferenceContext(
   contexts: readonly TemplateReferenceContext[],
   cursor: SemanticAppQuery['cursor'],
+): TemplateReferenceContext | null {
+  for (const context of contexts) {
+    if (context.activeSources.some((source) =>
+      semanticSourceReferenceContainsFileOffset(source, cursor?.filePath, cursor?.offset)
+    )) {
+      return context;
+    }
+  }
+  return null;
+}
+
+function activeTemplateRenameContext(
+  contexts: readonly TemplateReferenceContext[],
+  cursor: SemanticAppQuery['cursor'],
 ): ActiveTemplateReferenceContext | null {
   for (const context of contexts) {
     const activeRow = activeRenameRow(context.rows, cursor);
@@ -2231,7 +2478,10 @@ function referenceRowNeedsTemplateRenameEdit(
     return false;
   }
   if (
-    row.referenceKind === SemanticTemplateReferenceKind.ResourceUsage
+    (
+      row.referenceKind === SemanticTemplateReferenceKind.ResourceUsage
+      || row.referenceKind === SemanticTemplateReferenceKind.Declaration
+    )
     && isResourceRenameSurface(surface)
     && row.name.toLowerCase() !== selectedMemberName.toLowerCase()
   ) {
@@ -2655,7 +2905,9 @@ function templateReferenceContextFromRows(input: {
   readonly declarationRows: readonly SemanticTemplateReferenceRow[];
   readonly templateUsageRows: readonly SemanticTemplateReferenceRow[];
   readonly candidateRows: readonly SemanticTemplateReferenceRow[];
+  readonly activeSources?: readonly SemanticSourceReference[];
 }): TemplateReferenceContext {
+  const rows = uniqueSortedTemplateReferenceRows([...input.declarationRows, ...input.templateUsageRows]);
   return {
     selectedMemberName: input.selectedMemberName,
     targetSource: input.targetSource,
@@ -2666,7 +2918,13 @@ function templateReferenceContextFromRows(input: {
     forceOpen: input.forceOpen ?? false,
     templateUsageRows: input.templateUsageRows,
     candidateRows: input.candidateRows,
-    rows: uniqueSortedTemplateReferenceRows([...input.declarationRows, ...input.templateUsageRows]),
+    rows,
+    activeSources: uniqueSourceReferences([
+      ...rows
+        .map((row) => semanticExactSourceReference(row.source))
+        .filter((source): source is SemanticSourceReference => source != null),
+      ...(input.activeSources ?? []),
+    ]),
   };
 }
 

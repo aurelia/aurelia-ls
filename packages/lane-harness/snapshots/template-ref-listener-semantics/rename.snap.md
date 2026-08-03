@@ -60,12 +60,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "newText": "focus-halo",
             "range": {
               "end": {
-                "character": 28,
-                "line": 6
+                "character": 19,
+                "line": 7
               },
               "start": {
-                "character": 18,
-                "line": 6
+                "character": 9,
+                "line": 7
               }
             }
           }
@@ -102,6 +102,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "line": 8
               }
             }
+          },
+          {
+            "newText": "focus-halo",
+            "range": {
+              "end": {
+                "character": 27,
+                "line": 12
+              },
+              "start": {
+                "character": 17,
+                "line": 12
+              }
+            }
           }
         ],
         "textDocument": {
@@ -128,7 +141,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 ```json
 {
   "anomalies": [],
-  "editCount": 3,
+  "editCount": 4,
   "expectedOldTexts": [
     "focus-ring",
     "focus"
@@ -145,12 +158,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "oldText": "focus-ring",
       "range": {
         "end": {
-          "character": 28,
-          "line": 6
+          "character": 19,
+          "line": 7
         },
         "start": {
-          "character": 18,
-          "line": 6
+          "character": 9,
+          "line": 7
         }
       },
       "source": "documentChanges",
@@ -185,6 +198,23 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "start": {
           "character": 2,
           "line": 8
+        }
+      },
+      "source": "documentChanges",
+      "status": "ok"
+    },
+    {
+      "file": "src/template-ref-listener-semantics-app.html",
+      "newText": "focus-halo",
+      "oldText": "focus-ring",
+      "range": {
+        "end": {
+          "character": 27,
+          "line": 12
+        },
+        "start": {
+          "character": 17,
+          "line": 12
         }
       },
       "source": "documentChanges",
@@ -200,15 +230,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 diff --git a/src/focus-ring.ts b/src/focus-ring.ts
 --- a/src/focus-ring.ts
 +++ b/src/focus-ring.ts
-@@ -1,18 +1,18 @@
+@@ -1,21 +1,21 @@
  import {
    customAttribute,
    INode,
  } from '@aurelia/runtime-html';
  import { resolve } from '@aurelia/kernel';
 
--@customAttribute('focus-ring')
-+@customAttribute('focus-halo')
+ @customAttribute({
+-  name: 'focus-ring',
++  name: 'focus-halo',
+   aliases: ['focus'],
+ })
  export class FocusRing {
    private readonly element = resolve(INode) as HTMLElement;
 
@@ -223,7 +256,7 @@ diff --git a/src/focus-ring.ts b/src/focus-ring.ts
 diff --git a/src/template-ref-listener-semantics-app.html b/src/template-ref-listener-semantics-app.html
 --- a/src/template-ref-listener-semantics-app.html
 +++ b/src/template-ref-listener-semantics-app.html
-@@ -1,27 +1,27 @@
+@@ -1,29 +1,29 @@
  <input ref="plainElement">
  <input element.ref="explicitElement">
 
@@ -238,6 +271,8 @@ diff --git a/src/template-ref-listener-semantics-app.html b/src/template-ref-lis
    ref-panel.ref="namedPanel"
    saved.trigger="handleCustom($event)">
  </ref-panel>
+-<ref-panel focus focus-ring.ref="aliasFocusRingController"></ref-panel>
++<ref-panel focus focus-halo.ref="aliasFocusRingController"></ref-panel>
 
  <div view.ref="unsupportedView"></div>
  <div component.ref="missingComponent"></div>
@@ -247,6 +282,7 @@ diff --git a/src/template-ref-listener-semantics-app.html b/src/template-ref-lis
 
  <button type="button" click.trigger:prevent="handleMouse($event)">Mouse</button>
  <input keydown.trigger:ctrl+enter="handleKeyboard($event)">
+ <input keydown.trigger:upper_k="handleKeyboard($event)">
  <div pointerdown.capture:stop="handlePointer($event)"></div>
  <button type="button" click.trigger="handlerReference">Reference</button>
  <button type="button" click.trigger="handleMouse($event) & self">Self</button>

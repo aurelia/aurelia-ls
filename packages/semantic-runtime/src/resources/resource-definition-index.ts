@@ -73,7 +73,7 @@ export class ResourceDefinitionIndex {
     return new ResourceDefinitionIndex(entries);
   }
 
-  private readonly byModuleLocal = new Map<string, ResourceDefinitionIndexEntry>();
+  private readonly byModuleLocal = new Map<string, readonly ResourceDefinitionIndexEntry[]>();
   private readonly byProduct = new Map<ProductHandle, FullResourceDefinition>();
   private readonly byTargetIdentity = new Map<IdentityHandle, FullResourceDefinition>();
   private readonly byLocalName = new Map<string, readonly FullResourceDefinition[]>();
@@ -86,7 +86,11 @@ export class ResourceDefinitionIndex {
   ) {
     for (const entry of entries) {
       if (entry.localName != null) {
-        this.byModuleLocal.set(resourceDefinitionIndexKey(entry.moduleKey, entry.localName), entry);
+        const moduleLocalKey = resourceDefinitionIndexKey(entry.moduleKey, entry.localName);
+        this.byModuleLocal.set(moduleLocalKey, [
+          ...(this.byModuleLocal.get(moduleLocalKey) ?? []),
+          entry,
+        ]);
         this.byLocalName.set(entry.localName, [
           ...(this.byLocalName.get(entry.localName) ?? []),
           entry.definition,
@@ -116,7 +120,13 @@ export class ResourceDefinitionIndex {
   }
 
   lookupByModuleLocal(moduleKey: string, localName: string): FullResourceDefinition | null {
-    return this.byModuleLocal.get(resourceDefinitionIndexKey(moduleKey, localName))?.definition ?? null;
+    const definitions = this.lookupAllByModuleLocal(moduleKey, localName);
+    return definitions.length === 1 ? definitions[0]! : null;
+  }
+
+  lookupAllByModuleLocal(moduleKey: string, localName: string): readonly FullResourceDefinition[] {
+    return (this.byModuleLocal.get(resourceDefinitionIndexKey(moduleKey, localName)) ?? [])
+      .map((entry) => entry.definition);
   }
 
   /** Resolve an authored TS expression through its alias-normalized declaration identity. */
@@ -130,8 +140,7 @@ export class ResourceDefinitionIndex {
     }
     const matching = new Set<FullResourceDefinition>();
     for (const declaration of symbol.declarations ?? []) {
-      const definition = this.lookupByTypeScriptDeclaration(typeSystem, declaration);
-      if (definition != null) {
+      for (const definition of this.lookupAllByTypeScriptDeclaration(typeSystem, declaration)) {
         matching.add(definition);
       }
     }
@@ -143,12 +152,20 @@ export class ResourceDefinitionIndex {
     typeSystem: TypeSystemProject,
     declaration: ts.Declaration,
   ): FullResourceDefinition | null {
+    const definitions = this.lookupAllByTypeScriptDeclaration(typeSystem, declaration);
+    return definitions.length === 1 ? definitions[0]! : null;
+  }
+
+  lookupAllByTypeScriptDeclaration(
+    typeSystem: TypeSystemProject,
+    declaration: ts.Declaration,
+  ): readonly FullResourceDefinition[] {
     const localName = readDeclarationLocalName(declaration);
     if (localName == null) {
-      return null;
+      return [];
     }
     const moduleKey = typeSystem.readModuleKeyForSourceFile(declaration.getSourceFile());
-    return moduleKey == null ? null : this.lookupByModuleLocal(moduleKey, localName);
+    return moduleKey == null ? [] : this.lookupAllByModuleLocal(moduleKey, localName);
   }
 
   lookupByProduct(productHandle: ProductHandle | null): FullResourceDefinition | null {
