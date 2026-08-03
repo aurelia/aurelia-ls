@@ -33,7 +33,7 @@ import {
   authoredSourcePositionForOffset,
   type AuthoredSourceText,
 } from '../kernel/authored-source-text.js';
-import type { SourceSpan } from '../expression/source-span.js';
+import { SourceSpan } from '../expression/source-span.js';
 import { isAureliaExpressionGlobalName } from '../expression/global-names.js';
 import { ExpressionParseResultKind } from '../expression/parse-result-algebra.js';
 import {
@@ -142,6 +142,7 @@ import {
 } from './bindable-projection.js';
 import {
   describeAddress,
+  semanticExactSourceReference,
   semanticSourceReferenceContainsOffset,
   semanticSourceReferenceMatchesFilePath,
   sourceReferenceForParserSpan,
@@ -2251,7 +2252,10 @@ function templateCompletionReadResult(
   includeHandles: boolean,
   pageInput?: SemanticRuntimePageInput,
 ): TemplateCompletionReadResult {
-  const rows = answer.value.candidates.map((candidate) => templateCompletionCandidateRow(candidate, includeHandles));
+  const replacementSource = templateCompletionReplacementSource(store, context);
+  const rows = answer.value.candidates.map((candidate) =>
+    templateCompletionCandidateRow(candidate, replacementSource, includeHandles)
+  );
   const paged = pageRows(rows, pageInput);
   const missingInputs = [...new Set([...context.cursorContext.missingInputs, ...answer.value.missingInputs])];
   const selection = answer.selection;
@@ -2286,6 +2290,35 @@ function templateCompletionReadResult(
     },
     page: paged.page,
   };
+}
+
+function templateCompletionReplacementSource(
+  store: KernelStore,
+  context: TemplateCompletionAnswerContext,
+): SemanticTemplateCompletionCandidateRow['edit']['source'] {
+  const cursorContext = context.cursorContext;
+  const locus = cursorContext.query.locus;
+  if (locus.kind !== InquiryLocusKind.SourceCursor || locus.cursor.offset == null) {
+    throw new Error('Template completion candidates require an authored source cursor with an offset.');
+  }
+  const carrier = describeAddress(store, context.selection.sourceAddressHandle);
+  if (cursorContext.activeExpressionSpan != null) {
+    return sourceReferenceForParserSpan(
+      locus.cursor.filePath,
+      cursorContext.activeExpressionSpan,
+      'completion-replacement',
+      carrier,
+    );
+  }
+  const activeSource = semanticExactSourceReference(
+    describeAddress(store, cursorContext.activeSourceAddressHandle),
+  );
+  return activeSource ?? sourceReferenceForParserSpan(
+    locus.cursor.filePath,
+    new SourceSpan(locus.cursor.offset, locus.cursor.offset),
+    'completion-insertion',
+    carrier,
+  );
 }
 
 function missingTemplateCompletion(
@@ -2921,6 +2954,7 @@ function templateSourceSpan(
 
 function templateCompletionCandidateRow(
   candidate: TemplateCompletionCandidate,
+  replacementSource: SemanticTemplateCompletionCandidateRow['edit']['source'],
   includeHandles: boolean,
 ): SemanticTemplateCompletionCandidateRow {
   const memberFacts = candidate.typeMemberFacts;
@@ -2935,6 +2969,10 @@ function templateCompletionCandidateRow(
     memberIsOptional: memberFacts?.isOptional ?? null,
     memberIsReadonly: memberFacts?.isReadonly ?? null,
     aureliaHookKind: memberFacts?.aureliaHookKind ?? null,
+    edit: {
+      source: replacementSource,
+      newText: candidate.insertionText,
+    },
     ...(includeHandles ? {
       handles: {
         productHandle: candidate.productHandle,

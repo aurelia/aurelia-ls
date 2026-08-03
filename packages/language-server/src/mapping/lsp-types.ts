@@ -348,19 +348,51 @@ const COMPLETION_KIND_BY_SEMANTIC_RUNTIME_CANDIDATE: Readonly<Record<string, Com
 
 export function mapSemanticRuntimeTemplateCompletions(
   answer: SemanticRuntimeAnswer<SemanticTemplateCompletionResult>,
-): CompletionList {
-  const items = answer.value.candidates.map(mapSemanticRuntimeTemplateCompletionCandidate);
+  options: {
+    readonly documentUris: WorkspaceDocumentUris;
+    readonly originDocument: TextDocument;
+  },
+): SemanticRuntimeReadMapping<CompletionList | null> {
+  const items: CompletionItem[] = [];
+  const failures: string[] = [];
+  for (const candidate of answer.value.candidates) {
+    const source = semanticExactSourceReference(candidate.edit.source);
+    const sourceUri = source == null
+      ? null
+      : semanticSourceReferenceUri(source, options.documentUris);
+    if (source == null) {
+      failures.push(`Completion '${candidate.name}' has no exact authored edit span.`);
+      continue;
+    }
+    if (sourceUri == null || !options.documentUris.sameDocument(sourceUri, options.originDocument.uri)) {
+      failures.push(`Completion '${candidate.name}' does not edit the requesting document.`);
+      continue;
+    }
+    const range = semanticSourceRangeForDocument(source, options.originDocument);
+    if (range == null) {
+      failures.push(`Completion '${candidate.name}' has an edit span outside the current document text.`);
+      continue;
+    }
+    items.push(mapSemanticRuntimeTemplateCompletionCandidate(candidate, range));
+  }
   // LSP's isIncomplete flag asks the client to requery an intentionally narrowed list after further typing.
   // The session drains transport pages, and semantic coverage is an independent epistemic axis.
-  return { isIncomplete: false, items };
+  return failures.length > 0
+    ? { value: null, failures }
+    : { value: { isIncomplete: false, items }, failures: [] };
 }
 
 function mapSemanticRuntimeTemplateCompletionCandidate(
   candidate: SemanticTemplateCompletionCandidateRow,
+  range: Range,
 ): CompletionItem {
   const completion: CompletionItem = {
     label: candidate.name,
     kind: semanticRuntimeCompletionKind(candidate),
+    textEdit: {
+      range,
+      newText: candidate.edit.newText,
+    },
     data: {
       semanticRuntime: {
         candidateKind: candidate.candidateKind,

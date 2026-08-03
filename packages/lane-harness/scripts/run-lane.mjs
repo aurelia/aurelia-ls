@@ -570,13 +570,13 @@ async function runCompletionsProbe(client, fixtureRoot, probe, readFixtureText) 
     relativeFile,
     anchor,
     completionResponse,
-    completionSummary: summarizeCompletionResponse(completionResponse, probe),
+    completionSummary: summarizeCompletionResponse(completionResponse, probe, sourceText),
   };
 }
 
 // Completions are snapshotted as membership assertions plus aggregates, never as full item
 // lists: the candidate set is large and order/detail churn would drown the review signal.
-function summarizeCompletionResponse(response, probe) {
+function summarizeCompletionResponse(response, probe, sourceText) {
   if (response.error) {
     return {
       outcome: "error",
@@ -590,6 +590,10 @@ function summarizeCompletionResponse(response, probe) {
   const items = Array.isArray(result) ? result : Array.isArray(result?.items) ? result.items : [];
   const isIncomplete = Array.isArray(result) ? false : Boolean(result?.isIncomplete);
   const gapMarker = items.some((item) => item?.label === COMPLETION_GAP_MARKER_LABEL);
+  const editSummaries = items.map((item) => summarizeCompletionTextEdit(item, sourceText));
+  const textEditCount = editSummaries.filter((edit) => edit?.status === "ok").length;
+  const invalidTextEditCount = editSummaries.filter((edit) => edit?.status === "invalid-range").length;
+  const labelFallbackCount = editSummaries.filter((edit) => edit == null).length;
 
   const kindCounts = {};
   for (const item of items) {
@@ -605,12 +609,18 @@ function summarizeCompletionResponse(response, probe) {
   for (const [expectation, labels] of [["present", watched.present ?? []], ["absent", watched.absent ?? []]]) {
     for (const label of [...labels].sort()) {
       const matches = items.filter((item) => item?.label === label);
+      const edits = matches
+        .map((item) => summarizeCompletionTextEdit(item, sourceText))
+        .filter(Boolean)
+        .map(formatCompletionTextEditSummary)
+        .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
       membership.push({
         label,
         expectation,
         found: matches.length > 0,
         kinds: [...new Set(matches.map((item) => COMPLETION_ITEM_KIND_NAMES[item?.kind] ?? `kind-${String(item?.kind)}`))].sort(),
         details: [...new Set(matches.map((item) => typeof item?.detail === "string" ? item.detail.slice(0, 120) : null).filter(Boolean))].sort().slice(0, 3),
+        ...(edits.length === 0 ? {} : { edits }),
       });
     }
   }
@@ -624,10 +634,51 @@ function summarizeCompletionResponse(response, probe) {
     isIncomplete,
     totalItems: items.length,
     gapMarker,
+    textEditCount,
+    labelFallbackCount,
+    invalidTextEditCount,
     kindCounts: sortedKindCounts,
     membership,
     mismatches,
   };
+}
+
+function summarizeCompletionTextEdit(item, sourceText) {
+  const textEdit = item?.textEdit;
+  if (
+    textEdit == null
+    || typeof textEdit?.newText !== "string"
+    || textEdit?.range == null
+  ) {
+    return null;
+  }
+  try {
+    const offsets = rangeToOffsets(sourceText, textEdit.range);
+    return {
+      status: "ok",
+      range: normalizeRangeForSnapshot(textEdit.range),
+      oldText: sourceText.slice(offsets.start, offsets.end),
+      newText: textEdit.newText,
+    };
+  } catch (error) {
+    return {
+      status: "invalid-range",
+      range: normalizeRangeForSnapshot(textEdit.range),
+      newText: textEdit.newText,
+      message: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+function formatCompletionTextEditSummary(edit) {
+  const start = edit.range?.start;
+  const end = edit.range?.end;
+  const range = start == null || end == null
+    ? "unknown-range"
+    : `${start.line}:${start.character}..${end.line}:${end.character}`;
+  return edit.status === "ok"
+    ? `${range} ${JSON.stringify(edit.oldText)} -> ${JSON.stringify(edit.newText)}`
+    : `${range} ${JSON.stringify(edit.newText)} (${edit.status}: ${edit.message})`;
 }
 
 async function runRenameProbe(client, fixtureRoot, probe, readFixtureText) {

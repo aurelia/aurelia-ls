@@ -302,6 +302,7 @@ export class TemplateCompletionTypeMemberFacts {
 
 export class TemplateCompletionCandidate {
   readonly key: string;
+  readonly insertionText: string;
 
   constructor(
     /** Candidate lane; consumers decide ranking and display. */
@@ -322,11 +323,15 @@ export class TemplateCompletionCandidate {
     readonly typeReference: CheckerTypeReference | null = null,
     /** Checker member facts for type-member candidates, when the candidate came from a projected member. */
     readonly typeMemberFacts: TemplateCompletionTypeMemberFacts | null = null,
+    /** Authored text this candidate inserts; distinct from the display name for composed syntax. */
+    insertionText: string | null = null,
   ) {
+    this.insertionText = insertionText ?? name;
     this.key = [
       candidateKind,
       sourceKind,
       name,
+      this.insertionText,
       productHandle ?? '',
       identityHandle ?? '',
     ].join('|');

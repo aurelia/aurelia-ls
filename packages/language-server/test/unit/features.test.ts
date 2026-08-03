@@ -1,5 +1,6 @@
 import { describe, test, expect, vi } from "vitest";
 import { CompletionItemKind, ResponseError } from "vscode-languageserver/node";
+import { TextDocument } from "vscode-languageserver-textdocument";
 import {
   handleCodeAction,
   handleCodeActionResolve,
@@ -151,13 +152,12 @@ function createMockCompletionContext(input: {
   }>;
   isIncomplete?: boolean;
 }) {
+  const document = TextDocument.create(templateUri, "html", 1, testText);
   return {
+    workspaceRoot: documentUris.workspaceRoot,
+    documentUris,
     logger: { log: vi.fn(), info: vi.fn(), error: vi.fn(), warn: vi.fn() },
-    ensureProgramDocument: vi.fn(() => ({
-      uri: templateUri,
-      languageId: "html",
-      offsetAt: vi.fn(() => 0),
-    })),
+    ensureProgramDocument: vi.fn(() => document),
     semanticRuntime: {
       templateCompletions: vi.fn(() =>
         Promise.resolve({
@@ -180,6 +180,16 @@ function createMockCompletionContext(input: {
               memberIsOptional: false,
               memberIsReadonly: false,
               aureliaHookKind: null,
+              edit: {
+                source: {
+                  kind: "source-span-address",
+                  label: `${templateUri}@5..5`,
+                  path: templateUri,
+                  start: 5,
+                  end: 5,
+                },
+                newText: completion.name,
+              },
             })),
             expressionFrontier: null,
             missingInputs: input.isIncomplete ? ["mock-gap"] : [],
@@ -1016,6 +1026,13 @@ describe("handleCompletion", () => {
         label: "message",
         kind: CompletionItemKind.Property,
         detail: "binding-context-slot | string | public",
+        textEdit: {
+          range: {
+            start: { line: 0, character: 5 },
+            end: { line: 0, character: 5 },
+          },
+          newText: "message",
+        },
       }),
     );
     expect(result.items[1]).toEqual(

@@ -483,6 +483,25 @@ describe("source-backed edit mapping", () => {
 });
 
 describe("mapSemanticRuntimeTemplateCompletions", () => {
+  const completionText = "<template>${m}</template>";
+  const completionStart = completionText.indexOf("m");
+  const completionUri = appDocumentUris.uriForWorkspaceRelativePath("src/component.html")!;
+  const completionDocument = TextDocument.create(completionUri, "html", 1, completionText);
+  const completionOptions = {
+    documentUris: appDocumentUris,
+    originDocument: completionDocument,
+  };
+  const edit = (newText: string, start = completionStart, end = completionStart + 1) => ({
+    source: {
+      kind: "source-span-address",
+      label: `src/component.html@${start}..${end}`,
+      path: "src/component.html",
+      start,
+      end,
+    },
+    newText,
+  });
+
   test("preserves authorable template-domain roles as specific LSP kinds", () => {
     const mapped = mapSemanticRuntimeTemplateCompletions({
       result: "answered",
@@ -492,30 +511,41 @@ describe("mapSemanticRuntimeTemplateCompletions", () => {
             name: "component",
             candidateKind: "ref-target",
             sourceKind: "framework",
+            edit: edit("component"),
           },
-          { name: "click", candidateKind: "event", sourceKind: "type-system" },
+          { name: "click", candidateKind: "event", sourceKind: "type-system", edit: edit("click") },
           {
             name: "prevent",
             candidateKind: "event-modifier",
             sourceKind: "framework",
+            edit: edit("prevent"),
           },
           {
             name: "twoWay",
             candidateKind: "bindable-mode",
             sourceKind: "framework",
+            edit: edit("twoWay"),
           },
         ],
         missingInputs: [],
       },
       page: null,
-    } as never);
+    } as never, completionOptions);
 
-    expect(mapped.items.map((item) => [item.label, item.kind])).toEqual([
+    expect(mapped.failures).toEqual([]);
+    expect(mapped.value?.items.map((item) => [item.label, item.kind])).toEqual([
       ["component", CompletionItemKind.Reference],
       ["click", CompletionItemKind.Event],
       ["prevent", CompletionItemKind.Keyword],
       ["twoWay", CompletionItemKind.EnumMember],
     ]);
+    expect(mapped.value?.items[0]?.textEdit).toEqual({
+      range: {
+        start: completionDocument.positionAt(completionStart),
+        end: completionDocument.positionAt(completionStart + 1),
+      },
+      newText: "component",
+    });
   });
 
   test("does not collapse semantic coverage into the transport paging flag", () => {
@@ -528,15 +558,16 @@ describe("mapSemanticRuntimeTemplateCompletions", () => {
             name: "component",
             candidateKind: "ref-target",
             sourceKind: "framework",
+            edit: edit("component"),
           },
         ],
         missingInputs: [],
       },
       page: null,
-    } as never);
+    } as never, completionOptions);
 
-    expect(mapped.isIncomplete).toBe(false);
-    expect(mapped.items.map((item) => item.label)).toEqual(["component"]);
+    expect(mapped.value?.isIncomplete).toBe(false);
+    expect(mapped.value?.items.map((item) => item.label)).toEqual(["component"]);
   });
 
   test("does not expose an undisposed transport page as LSP completion narrowing", () => {
@@ -549,15 +580,56 @@ describe("mapSemanticRuntimeTemplateCompletions", () => {
             name: "component",
             candidateKind: "ref-target",
             sourceKind: "framework",
+            edit: edit("component"),
           },
         ],
         missingInputs: [],
       },
       page: { nextCursor: "next" },
-    } as never);
+    } as never, completionOptions);
 
-    expect(mapped.isIncomplete).toBe(false);
-    expect(mapped.items.map((item) => item.label)).toEqual(["component"]);
+    expect(mapped.value?.isIncomplete).toBe(false);
+    expect(mapped.value?.items.map((item) => item.label)).toEqual(["component"]);
+  });
+
+  test("maps zero-width semantic insertion plans without widening them", () => {
+    const mapped = mapSemanticRuntimeTemplateCompletions({
+      value: {
+        candidates: [{
+          name: "message",
+          candidateKind: "type-member",
+          sourceKind: "type-system",
+          edit: edit("message", completionStart, completionStart),
+        }],
+      },
+    } as never, completionOptions);
+
+    expect(mapped.value?.items[0]?.textEdit).toEqual({
+      range: {
+        start: completionDocument.positionAt(completionStart),
+        end: completionDocument.positionAt(completionStart),
+      },
+      newText: "message",
+    });
+  });
+
+  test("refuses the whole completion list when an edit plan targets another document", () => {
+    const mapped = mapSemanticRuntimeTemplateCompletions({
+      value: {
+        candidates: [{
+          name: "message",
+          candidateKind: "type-member",
+          sourceKind: "type-system",
+          edit: {
+            ...edit("message"),
+            source: { ...edit("message").source, path: "src/other.html" },
+          },
+        }],
+      },
+    } as never, completionOptions);
+
+    expect(mapped.value).toBeNull();
+    expect(mapped.failures).toEqual([expect.stringContaining("does not edit the requesting document")]);
   });
 });
 

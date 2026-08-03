@@ -30,13 +30,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 ```json
 {
   "gapMarker": false,
+  "invalidTextEditCount": 0,
   "isIncomplete": false,
   "kindCounts": {
     "keyword": 1,
     "method": 1,
     "property": 9
   },
+  "labelFallbackCount": 0,
   "outcome": "result",
+  "textEditCount": 11,
   "totalItems": 11
 }
 ```
@@ -51,6 +54,9 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "details": [
         "binding-context-slot | string | public"
       ],
+      "edits": [
+        "5:27..5:31 \"item\" -> \"fallbackName\""
+      ],
       "expectation": "present",
       "found": true,
       "kinds": [
@@ -61,6 +67,9 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     {
       "details": [
         "binding-context-slot | { name: string; } | public | readonly"
+      ],
+      "edits": [
+        "5:27..5:31 \"item\" -> \"form\""
       ],
       "expectation": "present",
       "found": true,
@@ -73,6 +82,9 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "details": [
         "binding-context-slot | AccessUseItem"
       ],
+      "edits": [
+        "5:27..5:31 \"item\" -> \"item\""
+      ],
       "expectation": "present",
       "found": true,
       "kinds": [
@@ -83,6 +95,9 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     {
       "details": [
         "binding-context-slot | readonly AccessUseItem[] | public | readonly"
+      ],
+      "edits": [
+        "5:27..5:31 \"item\" -> \"items\""
       ],
       "expectation": "present",
       "found": true,

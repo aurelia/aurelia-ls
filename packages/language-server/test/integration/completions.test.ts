@@ -4,6 +4,7 @@
 import { describe, expect, test } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
+import { TextDocument } from "vscode-languageserver-textdocument";
 import {
   createAureliaAppFixture,
   createFixture,
@@ -20,6 +21,13 @@ type CompletionListItem = {
   label?: string;
   insertText?: string;
   detail?: string;
+  textEdit?: {
+    range: {
+      start: { line: number; character: number };
+      end: { line: number; character: number };
+    };
+    newText: string;
+  };
 };
 
 type CompletionListResponse = {
@@ -67,6 +75,18 @@ describe("Completions", () => {
       const completionList = expectCompletionList(completions);
       expect(completionList.isIncomplete).toBe(false);
       expect(completionList.items.map((item) => item.label)).toContain("message");
+      const message = completionList.items.find((item) => item.label === "message");
+      expect(message?.textEdit).toBeDefined();
+      const document = TextDocument.create(htmlUri, "html", 1, htmlText);
+      const edit = message?.textEdit;
+      if (edit == null) {
+        throw new Error("Expected message completion to carry an authored text edit.");
+      }
+      expect(document.getText(edit.range)).toBe("m");
+      const edited = htmlText.slice(0, document.offsetAt(edit.range.start))
+        + edit.newText
+        + htmlText.slice(document.offsetAt(edit.range.end));
+      expect(edited).toBe("<main>${message}</main>");
     } finally {
       dispose();
       child.kill("SIGKILL");

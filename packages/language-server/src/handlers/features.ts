@@ -78,7 +78,17 @@ export async function handleCompletion(
       `[completion] semantic coverage is ${response.coverage}; missing inputs: ${response.value.missingInputs.join(", ") || "none"}`,
     );
   }
-  return mapSemanticRuntimeTemplateCompletions(response);
+  const mapping = mapSemanticRuntimeTemplateCompletions(response, {
+    documentUris: ctx.documentUris,
+    originDocument: doc,
+  });
+  if (mapping.value == null) {
+    throw new ResponseError(
+      LSPErrorCodes.RequestFailed,
+      `Aurelia completion edit mapping was blocked: ${mapping.failures.join(" ")}`,
+    );
+  }
+  return mapping.value;
 }
 
 // ============================================================================

@@ -30,11 +30,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 ```json
 {
   "gapMarker": false,
+  "invalidTextEditCount": 0,
   "isIncomplete": false,
   "kindCounts": {
     "property": 8
   },
+  "labelFallbackCount": 0,
   "outcome": "result",
+  "textEditCount": 8,
   "totalItems": 8
 }
 ```
@@ -49,6 +52,9 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "details": [
         "binding-context-slot | string | number"
       ],
+      "edits": [
+        "33:12..33:24 \"oneTimeValue\" -> \"mixedValue\""
+      ],
       "expectation": "present",
       "found": true,
       "kinds": [
@@ -60,6 +66,9 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "details": [
         "binding-context-slot | string"
       ],
+      "edits": [
+        "33:12..33:24 \"oneTimeValue\" -> \"oneTimeValue\""
+      ],
       "expectation": "present",
       "found": true,
       "kinds": [
@@ -70,6 +79,9 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     {
       "details": [
         "binding-context-slot"
+      ],
+      "edits": [
+        "33:12..33:24 \"oneTimeValue\" -> \"unusedValue\""
       ],
       "expectation": "present",
       "found": true,
@@ -120,13 +132,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 ```json
 {
   "gapMarker": false,
+  "invalidTextEditCount": 0,
   "isIncomplete": false,
   "kindCounts": {
     "field": 8,
     "property": 2,
     "struct": 12
   },
+  "labelFallbackCount": 0,
   "outcome": "result",
+  "textEditCount": 22,
   "totalItems": 22
 }
 ```
@@ -141,6 +156,9 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "details": [
         "bindable-attribute"
       ],
+      "edits": [
+        "2:4..2:18 \"one-time-value\" -> \"camel-case-value\""
+      ],
       "expectation": "present",
       "found": true,
       "kinds": [
@@ -152,6 +170,9 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "details": [
         "bindable-attribute"
       ],
+      "edits": [
+        "2:4..2:18 \"one-time-value\" -> \"mixed-value\""
+      ],
       "expectation": "present",
       "found": true,
       "kinds": [
@@ -162,6 +183,9 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     {
       "details": [
         "bindable-attribute"
+      ],
+      "edits": [
+        "2:4..2:18 \"one-time-value\" -> \"one-time-value\""
       ],
       "expectation": "present",
       "found": true,
@@ -212,11 +236,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 ```json
 {
   "gapMarker": false,
+  "invalidTextEditCount": 0,
   "isIncomplete": false,
   "kindCounts": {
     "enum-member": 5
   },
+  "labelFallbackCount": 0,
   "outcome": "result",
+  "textEditCount": 5,
   "totalItems": 5
 }
 ```
@@ -231,6 +258,9 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "details": [
         "bindable-mode"
       ],
+      "edits": [
+        "23:67..23:74 \"oneTime\" -> \"default\""
+      ],
       "expectation": "present",
       "found": true,
       "kinds": [
@@ -241,6 +271,9 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     {
       "details": [
         "bindable-mode"
+      ],
+      "edits": [
+        "23:67..23:74 \"oneTime\" -> \"fromView\""
       ],
       "expectation": "present",
       "found": true,
@@ -253,6 +286,9 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "details": [
         "bindable-mode"
       ],
+      "edits": [
+        "23:67..23:74 \"oneTime\" -> \"oneTime\""
+      ],
       "expectation": "present",
       "found": true,
       "kinds": [
@@ -264,6 +300,9 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "details": [
         "bindable-mode"
       ],
+      "edits": [
+        "23:67..23:74 \"oneTime\" -> \"toView\""
+      ],
       "expectation": "present",
       "found": true,
       "kinds": [
@@ -274,6 +313,9 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     {
       "details": [
         "bindable-mode"
+      ],
+      "edits": [
+        "23:67..23:74 \"oneTime\" -> \"twoWay\""
       ],
       "expectation": "present",
       "found": true,

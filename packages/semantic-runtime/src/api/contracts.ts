@@ -3968,11 +3968,20 @@ export interface SemanticTemplateCompletionCandidateRow {
   readonly memberIsOptional: boolean | null;
   readonly memberIsReadonly: boolean | null;
   readonly aureliaHookKind: SemanticTemplateCompletionAureliaHookKind | `${SemanticTemplateCompletionAureliaHookKind}` | null;
+  /** Complete authored edit plan; consumers must not substitute label insertion when this cannot be mapped. */
+  readonly edit: SemanticTemplateCompletionEditRow;
   readonly handles?: {
     readonly productHandle: ProductHandle | null;
     readonly identityHandle: IdentityHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;
   };
+}
+
+export interface SemanticTemplateCompletionEditRow {
+  /** Exact authored token to replace, or a zero-width authored cursor for insertion. */
+  readonly source: SemanticSourceReference;
+  /** Candidate-specific text to insert; it may intentionally differ from the display name. */
+  readonly newText: string;
 }
 
 export const enum SemanticTemplateCompletionAureliaHookKind {
