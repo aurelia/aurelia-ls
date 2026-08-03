@@ -308,6 +308,33 @@
         "note": "NEW 2026-07-07. Resource tag cursor. FLIPPED wrong->correct 2026-07-07: definition originally targeted the whole `@customElement({ name, template })` carrier because cursor-info dropped the existing resource `targetSource`. Cursor-info now exposes `targetSource`, and F12 lands on the component class target `ItemCard`."
       },
       {
+        "id": "router-path-items",
+        "file": "src/app.html",
+        "anchor": "load=\"items\"",
+        "at": "items",
+        "verdict": "correct",
+        "reason": "",
+        "note": "NEW 2026-08-03. F12 on a plain load value resolves through the recognized route to the exact authored `path: 'items'` token. CursorInfo owns the selected route target; the language server no longer scans the broad RouteNodes inventory."
+      },
+      {
+        "id": "router-path-item-detail",
+        "file": "src/app.html",
+        "anchor": "load=\"items/item-1?ref=featured#details\"",
+        "at": "item-1",
+        "verdict": "correct",
+        "reason": "",
+        "note": "NEW 2026-08-03. F12 on the matched path portion of a compound URL resolves to the final configured `path: 'items/:itemId'` token rather than the root route or an instruction carrier."
+      },
+      {
+        "id": "router-query-no-definition",
+        "file": "src/app.html",
+        "anchor": "load=\"items/item-1?ref=featured#details\"",
+        "at": "ref",
+        "verdict": "correct",
+        "reason": "",
+        "note": "NEW 2026-08-03. Query text is not a route-definition surface. Null is the honest answer and guards against the deleted RouteNodes fallback, whose broad instruction spans could navigate from unrelated parts of the value."
+      },
+      {
         "id": "ts-property-state",
         "file": "src/routes/item-list-route.ts",
         "anchor": "readonly state = resolve(CatalogState)",

@@ -667,6 +667,199 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 }
 ```
 
+## router-path-items
+
+### Probe
+
+```json
+{
+  "anchor": "load=\"items\"",
+  "at": "items",
+  "atOccurrence": 1,
+  "displayPosition": "src/app.html:14:16",
+  "file": "src/app.html",
+  "lspPosition": {
+    "character": 15,
+    "line": 13
+  },
+  "occurrence": 1
+}
+```
+
+### definition
+
+```json
+{
+  "outcome": "result",
+  "result": [
+    {
+      "targetRange": {
+        "end": {
+          "character": 5,
+          "line": 22
+        },
+        "start": {
+          "character": 4,
+          "line": 16
+        }
+      },
+      "targetSelectionRange": {
+        "end": {
+          "character": 19,
+          "line": 18
+        },
+        "start": {
+          "character": 12,
+          "line": 18
+        }
+      },
+      "targetUri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/app.ts"
+    }
+  ]
+}
+```
+
+### Resolved locations
+
+```json
+{
+  "locationCount": 1,
+  "locations": [
+    {
+      "anomaly": null,
+      "file": "src/app.ts",
+      "range": {
+        "end": {
+          "character": 19,
+          "line": 18
+        },
+        "start": {
+          "character": 12,
+          "line": 18
+        }
+      },
+      "rangeText": "'items'",
+      "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/app.ts"
+    }
+  ]
+}
+```
+
+## router-path-item-detail
+
+### Probe
+
+```json
+{
+  "anchor": "load=\"items/item-1?ref=featured#details\"",
+  "at": "item-1",
+  "atOccurrence": 1,
+  "displayPosition": "src/app.html:15:22",
+  "file": "src/app.html",
+  "lspPosition": {
+    "character": 21,
+    "line": 14
+  },
+  "occurrence": 1
+}
+```
+
+### definition
+
+```json
+{
+  "outcome": "result",
+  "result": [
+    {
+      "targetRange": {
+        "end": {
+          "character": 5,
+          "line": 29
+        },
+        "start": {
+          "character": 4,
+          "line": 23
+        }
+      },
+      "targetSelectionRange": {
+        "end": {
+          "character": 27,
+          "line": 25
+        },
+        "start": {
+          "character": 12,
+          "line": 25
+        }
+      },
+      "targetUri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/app.ts"
+    }
+  ]
+}
+```
+
+### Resolved locations
+
+```json
+{
+  "locationCount": 1,
+  "locations": [
+    {
+      "anomaly": null,
+      "file": "src/app.ts",
+      "range": {
+        "end": {
+          "character": 27,
+          "line": 25
+        },
+        "start": {
+          "character": 12,
+          "line": 25
+        }
+      },
+      "rangeText": "'items/:itemId'",
+      "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/app.ts"
+    }
+  ]
+}
+```
+
+## router-query-no-definition
+
+### Probe
+
+```json
+{
+  "anchor": "load=\"items/item-1?ref=featured#details\"",
+  "at": "ref",
+  "atOccurrence": 1,
+  "displayPosition": "src/app.html:15:29",
+  "file": "src/app.html",
+  "lspPosition": {
+    "character": 28,
+    "line": 14
+  },
+  "occurrence": 1
+}
+```
+
+### definition
+
+```json
+{
+  "outcome": "result",
+  "result": null
+}
+```
+
+### Resolved locations
+
+```json
+{
+  "locationCount": 0,
+  "locations": []
+}
+```
+
 ## ts-property-state
 
 ### Probe

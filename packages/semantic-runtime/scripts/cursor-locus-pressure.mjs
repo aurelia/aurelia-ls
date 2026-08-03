@@ -353,7 +353,12 @@ async function readCursorPressureForRoot(root) {
           typeSystem: app.emission.typeSystem,
           frameworkCapabilityDemands: app.emission.capabilityDemands.readDemands(),
           page: new InquiryPageRequest(pageSize, null),
-          routeConfigProductHandles: app.emission.routes.readRouteConfigs().map((routeConfig) => routeConfig.productHandle),
+          router: {
+            routeConfigProductHandles: app.emission.routes.readRouteConfigs().map((routeConfig) => routeConfig.productHandle),
+            routeParameterEndpointPlans: app.emission.routeInstructions.readRouteParameterEndpointPlans(),
+            configurableRoutes: app.emission.routeRecognizer.readConfigurableRoutes(),
+            recognizedRoutes: app.emission.routeRecognition.readRecognizedRoutes(),
+          },
           i18nTranslationKeyProductHandles: app.emission.i18n.readTranslationKeys().map((translationKey) => translationKey.productHandle),
         });
         const answer = answerTemplateCompletion(runtime.workspace.store, context);
@@ -524,6 +529,10 @@ function recordCursorInfoSourceCoverage(aggregate, value) {
   increment(aggregate.apiCursorInfoSourceCoverage, `value-site:${rowSourceState(value.valueSite)}`);
   increment(aggregate.apiCursorInfoSourceCoverage, `definition:${rowSourceState(value.selectedDefinition)}`);
   increment(aggregate.apiCursorInfoSourceCoverage, `bindable:${rowSourceState(value.selectedBindable)}`);
+  increment(
+    aggregate.apiCursorInfoSourceCoverage,
+    `route-target:${value.selectedRouteTarget == null ? 'none' : sourceReferenceState(value.selectedRouteTarget.targetSource)}`,
+  );
   increment(aggregate.apiCursorInfoSourceCoverage, `selected-member:${selectedMemberSourceState(value)}`);
   increment(aggregate.apiCursorInfoSourceCoverage, `member-owner:${rowSourceState(value.memberOwnerType)}`);
   increment(aggregate.apiCursorInfoSourceCoverage, `member-owner-declaration:${memberOwnerDeclarationSourceState(value)}`);
@@ -649,6 +658,9 @@ function cursorInfoNavigationTargets(value) {
   }
   if (value.selectedDefinition != null) {
     targets.push(`definition:${value.selectedDefinition.resourceKind}:${sourceReferenceState(value.selectedDefinition.source)}`);
+  }
+  if (value.selectedRouteTarget != null) {
+    targets.push(`route-target:${value.selectedRouteTarget.targetKind}:${sourceReferenceState(value.selectedRouteTarget.targetSource)}`);
   }
   if (value.selectedMember?.source != null) {
     targets.push(`selected-member:${sourceReferenceState(value.selectedMember.source)}`);

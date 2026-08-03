@@ -261,8 +261,10 @@ function createMockHoverContext() {
 }
 
 function createMockDefinitionContext(
-  routeRows: unknown[] = [],
-  options: { readonly selectedMemberSource?: unknown } = {},
+  options: {
+    readonly selectedMemberSource?: unknown;
+    readonly selectedRouteTarget?: unknown;
+  } = {},
 ) {
   const messageStart = definitionText.indexOf("message");
   const selectedMemberSource =
@@ -290,17 +292,6 @@ function createMockDefinitionContext(
     logger: { log: vi.fn(), info: vi.fn(), error: vi.fn(), warn: vi.fn() },
     ensureProgramDocument: vi.fn(() => document),
     semanticRuntime: {
-      routeNodes: vi.fn(() =>
-        Promise.resolve({
-          schemaVersion: "0.2",
-          result: "answered",
-          selection: "not-applicable",
-          coverage: "complete",
-          summary: "mock semantic-runtime route-node answer",
-          value: { rows: routeRows },
-          page: null,
-        }),
-      ),
       templateCursorInfo: vi.fn(() =>
         Promise.resolve({
           schemaVersion: "0.2",
@@ -325,6 +316,7 @@ function createMockDefinitionContext(
             valueSite: null,
             selectedDefinition: null,
             selectedBindable: null,
+            selectedRouteTarget: options.selectedRouteTarget ?? null,
             selectedMemberName: "message",
             selectedMember: {
               name: "message",
@@ -1128,7 +1120,6 @@ describe("handleDefinition", () => {
       testRequestGuard,
     );
 
-    expect(ctx.semanticRuntime.routeNodes).not.toHaveBeenCalled();
     expect(ctx.semanticRuntime.templateCursorInfo).toHaveBeenCalledWith(
       expect.objectContaining({ uri: templateUri }),
       params.position,
@@ -1143,39 +1134,32 @@ describe("handleDefinition", () => {
     expect(link.targetRange.start).toEqual({ line: 1, character: 2 });
   });
 
-  test("prefers route-node targets for router instruction definitions", async () => {
-    const routeSource = {
-      kind: "source-span-address",
-      label: "src/my-app.html@12..18",
-      path: templateUri,
-      start: 12,
-      end: 18,
-      role: "value",
-    };
-    const routeTargetSource = {
-      kind: "source-span-address",
-      label: "src/my-app.ts@0..6",
+  test("maps semantic-runtime route targets without loading a route inventory", async () => {
+    const messageStart = definitionText.indexOf("message");
+    const routeConfigSource = {
+      kind: "typescript-node",
+      label: `${definitionLspUri}@0..${definitionText.length}`,
       path: definitionLspUri,
       start: 0,
-      end: 6,
-      role: "range",
+      end: definitionText.length,
     };
-    const ctx = createMockDefinitionContext(
-      [
-        {
-          instruction: { source: routeSource },
-          originalInstruction: null,
-          routeConfig: {
-            routeKind: "child-route",
-            id: "tasks",
-            source: routeTargetSource,
-          },
-          routeContext: { label: "MyApp/Tasks", source: null },
-          source: routeSource,
-        },
-      ],
-      { selectedMemberSource: null },
-    );
+    const routeTargetSource = {
+      kind: "typescript-node",
+      label: `${definitionLspUri}@${messageStart}..${messageStart + "message".length}`,
+      path: definitionLspUri,
+      start: messageStart,
+      end: messageStart + "message".length,
+    };
+    const ctx = createMockDefinitionContext({
+      selectedMemberSource: null,
+      selectedRouteTarget: {
+        targetKind: "route-path",
+        matchedName: "tasks",
+        routeConfigId: "tasks",
+        source: routeConfigSource,
+        targetSource: routeTargetSource,
+      },
+    });
 
     const result = await handleDefinition(
       ctx as never,
@@ -1183,7 +1167,6 @@ describe("handleDefinition", () => {
       testRequestGuard,
     );
 
-    expect(ctx.semanticRuntime.routeNodes).toHaveBeenCalled();
     expect(ctx.semanticRuntime.templateCursorInfo).toHaveBeenCalled();
     expect(Array.isArray(result)).toBe(true);
     const [link] = result as Array<{
@@ -1192,7 +1175,7 @@ describe("handleDefinition", () => {
         start: { line: number; character: number };
         end: { line: number; character: number };
       };
-      originSelectionRange?: {
+      targetSelectionRange: {
         start: { line: number; character: number };
         end: { line: number; character: number };
       };
@@ -1200,11 +1183,11 @@ describe("handleDefinition", () => {
     expect(link.targetUri).toBe(definitionLspUri);
     expect(link.targetRange).toEqual({
       start: { line: 0, character: 0 },
-      end: { line: 0, character: 6 },
+      end: { line: 2, character: 1 },
     });
-    expect(link.originSelectionRange).toEqual({
-      start: { line: 0, character: 12 },
-      end: { line: 0, character: 18 },
+    expect(link.targetSelectionRange).toEqual({
+      start: { line: 1, character: 2 },
+      end: { line: 1, character: 9 },
     });
   });
 });

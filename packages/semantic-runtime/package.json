@@ -50,6 +50,7 @@
     "contract:proxy-observable-escapes": "pnpm build && node scripts/contract-proxy-observable-escapes.mjs",
     "contract:router-active-link-state": "pnpm build && node scripts/contract-router-active-link-state.mjs",
     "contract:router-dynamic-pattern": "pnpm build && node scripts/contract-router-dynamic-pattern.mjs",
+    "contract:template-route-definition": "pnpm build && node scripts/contract-template-route-definition.mjs",
     "contract:binding-data-flow-summary": "pnpm build && node scripts/contract-binding-data-flow-summary.mjs",
     "contract:binding-observed-dependency-summary": "pnpm build && node scripts/contract-binding-observed-dependency-summary.mjs",
     "contract:control-use-inventory": "pnpm build && node scripts/contract-control-use-inventory.mjs",

@@ -298,7 +298,10 @@ export function createFixture(files: Record<string, string>): string {
 }
 
 /** Create a boot-admitted Aurelia app instead of relying on filename conventions in adapter tests. */
-export function createAureliaAppFixture(files: Record<string, string>): string {
+export function createAureliaAppFixture(
+  files: Record<string, string>,
+  additionalDependencies: Readonly<Record<string, string>> = {},
+): string {
   return createFixture({
     "package.json": JSON.stringify({
       name: "aurelia-lsp-integration-fixture",
@@ -306,6 +309,7 @@ export function createAureliaAppFixture(files: Record<string, string>): string {
       type: "module",
       dependencies: {
         aurelia: "^2.0.0-rc.1",
+        ...additionalDependencies,
       },
       devDependencies: {
         typescript: "^6.0.3",

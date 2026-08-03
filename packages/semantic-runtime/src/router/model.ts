@@ -138,6 +138,14 @@ export const enum NavigationInstructionKind {
   Unknown = 'unknown',
 }
 
+/** Authored router vocabulary used to resolve one template navigation value to its declaration. */
+export const enum RouterNavigationTargetKind {
+  /** RouteExpression navigation resolves through an authored RouteConfig path. */
+  RoutePath = 'route-path',
+  /** Eager load.route navigation resolves through an authored RouteConfig id. */
+  RouteId = 'route-id',
+}
+
 export const enum RouteableComponentKind {
   CustomElementName = 'custom-element-name',
   ClassReference = 'class-reference',
@@ -1380,6 +1388,8 @@ export class RouteConfigContributionModel {
     readonly nav: boolean | null,
     readonly fieldStates: readonly RouteConfigFieldState[],
     readonly sourceAddressHandle: AddressHandle | null,
+    /** Exact authored id field, or the path field from which the framework derives the id. */
+    readonly idSourceAddressHandle: AddressHandle | null,
     readonly pathSourceAddressHandles: readonly (AddressHandle | null)[],
     readonly redirectToSourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<RouteConfigField>[] = [],
@@ -1433,6 +1443,8 @@ export class RouteConfigModel {
     readonly openFields: readonly RouteConfigValueField[],
     readonly sourceContribution: RouteConfigContributionReference | null,
     readonly sourceAddressHandle: AddressHandle | null,
+    /** Exact source of the effective id, including convention and path-derived ids. */
+    readonly idSourceAddressHandle: AddressHandle | null,
     readonly pathSourceAddressHandles: readonly (AddressHandle | null)[],
     readonly redirectToSourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<RouteConfigField>[] = [],

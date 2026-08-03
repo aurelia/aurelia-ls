@@ -11,7 +11,6 @@ import {
   SemanticRuntimeProjectInputAuthority,
   SemanticAppQueryKind,
   type SemanticApplicationTopologyResult,
-  type SemanticRouteNodesResult,
   type SemanticRuntime,
   type SemanticAppDiagnosticsResult,
   type SemanticResourceDefinitionsResult,
@@ -617,13 +616,6 @@ export class SemanticRuntimeLspSession {
     }) as SemanticRuntimeAnswer<SemanticApplicationTopologyResult>;
     this.assertRequestActive(guard);
     return answer;
-  }
-
-  async routeNodes(
-    guard: SemanticRuntimeLspRequestGuard,
-  ): Promise<SemanticRuntimeAnswer<SemanticRouteNodesResult>> {
-    const runtime = await this.openRuntime(guard);
-    return this.collectRows(runtime, SemanticAppQueryKind.RouteNodes, 500, {}, guard);
   }
 
   async templateInlayHints(

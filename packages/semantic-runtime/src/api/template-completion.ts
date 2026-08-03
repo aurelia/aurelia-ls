@@ -6,6 +6,7 @@ import {
   templateCompletionQueryForCursor,
   type TemplateCompletionCandidate,
   type TemplateCompletionCursorContext,
+  type TemplateCompletionRouterContext,
 } from '../inquiry/template-completion.js';
 import {
   InquiryLocusKind,
@@ -57,7 +58,6 @@ import type { RuntimeControllerIssue } from '../template/runtime-controller-issu
 import type { RuntimeRendererIssue } from '../template/runtime-renderer-issue.js';
 import { RefBindingInstruction } from '../template/instruction-ir.js';
 import type { RouterIssueModel } from '../router/model.js';
-import type { RouteParameterEndpointPlan } from '../router/route-instruction-materialization.js';
 import {
   FrameworkCapabilityAdmissionState,
   FrameworkCapabilityDemandSiteKind,
@@ -123,6 +123,7 @@ import type {
   SemanticTemplateCursorHtmlRow,
   SemanticTemplateCursorInfoResult,
   SemanticTemplateCursorMemberRow,
+  SemanticTemplateCursorRouteTargetRow,
   SemanticTemplateCursorValueSiteRow,
   SemanticTemplateCompletionResult,
   SemanticTemplateCursorSuggestionValueTypeSource,
@@ -240,12 +241,22 @@ interface TemplateDiagnosticsScanContext {
   readonly store: KernelStore;
   readonly includeHandles: boolean;
   readonly capabilityDemands: readonly FrameworkCapabilityDemand[];
-  readonly routeConfigProductHandles: readonly ProductHandle[];
-  readonly routeParameterEndpointPlans: ReadonlyMap<ProductHandle, RouteParameterEndpointPlan>;
+  readonly router: TemplateCompletionRouterContext;
   readonly i18nTranslationKeyProductHandles: readonly ProductHandle[];
   readonly sourceTextCache: AuthoredSourceTextCache;
   readonly diagnosticRelationsByResource: WeakMap<TemplateResourceRuntimeAnalysisEmission, TemplateDiagnosticRelations>;
   readonly seenRows: Set<string>;
+}
+
+function templateCompletionRouterContext(
+  emission: AureliaAppWorldProjectEmission,
+): TemplateCompletionRouterContext {
+  return {
+    routeConfigProductHandles: emission.routes.readRouteConfigs().map((routeConfig) => routeConfig.productHandle),
+    routeParameterEndpointPlans: emission.routeInstructions.readRouteParameterEndpointPlans(),
+    configurableRoutes: emission.routeRecognizer.readConfigurableRoutes(),
+    recognizedRoutes: emission.routeRecognition.readRecognizedRoutes(),
+  };
 }
 
 interface TemplateDiagnosticOrigin {
@@ -342,8 +353,7 @@ function readTemplateCursorInfoValue(
     typeSystem: emission.typeSystem,
     frameworkCapabilityDemands: emission.capabilityDemands.readDemands(),
     page: new InquiryPageRequest(1, null),
-    routeConfigProductHandles: emission.routes.readRouteConfigs().map((routeConfig) => routeConfig.productHandle),
-    routeParameterEndpointPlans: emission.routeInstructions.readRouteParameterEndpointPlans(),
+    router: templateCompletionRouterContext(emission),
     i18nTranslationKeyProductHandles: emission.i18n.readTranslationKeys().map((translationKey) => translationKey.productHandle),
   });
   const missingInputs = [...new Set(cursorContext.missingInputs)];
@@ -534,6 +544,9 @@ function semanticTemplateCursorInfoDisplayText(
   if (value.selectedBindable != null) {
     lines.push(`Selected bindable: ${value.selectedBindable.attribute} (${value.selectedBindable.mode}).`);
   }
+  if (value.selectedRouteTarget != null) {
+    lines.push(`Selected route target: ${value.selectedRouteTarget.targetKind} ${value.selectedRouteTarget.matchedName}.`);
+  }
   if (value.selectedMember != null || value.memberOwnerType != null || value.selectedMemberName != null) {
     lines.push(`Selected member: ${value.selectedMemberName ?? value.selectedMember?.name ?? 'none'}; owner=${value.memberOwnerType?.display ?? 'unknown'}; memberType=${value.selectedMember?.typeDisplay ?? 'unknown'}.`);
   }
@@ -628,8 +641,7 @@ function readTemplateCompletion(
     typeSystem: emission.typeSystem,
     frameworkCapabilityDemands: emission.capabilityDemands.readDemands(),
     page: new InquiryPageRequest(Number.MAX_SAFE_INTEGER, null),
-    routeConfigProductHandles: emission.routes.readRouteConfigs().map((routeConfig) => routeConfig.productHandle),
-    routeParameterEndpointPlans: emission.routeInstructions.readRouteParameterEndpointPlans(),
+    router: templateCompletionRouterContext(emission),
     i18nTranslationKeyProductHandles: emission.i18n.readTranslationKeys().map((translationKey) => translationKey.productHandle),
   });
   const answer = answerTemplateCompletion(store, cursorContext);
@@ -1110,8 +1122,7 @@ function templateDiagnosticsScanContext(
     store,
     includeHandles,
     capabilityDemands: emission.capabilityDemands.readDemands(),
-    routeConfigProductHandles: emission.routes.readRouteConfigs().map((routeConfig) => routeConfig.productHandle),
-    routeParameterEndpointPlans: emission.routeInstructions.readRouteParameterEndpointPlans(),
+    router: templateCompletionRouterContext(emission),
     i18nTranslationKeyProductHandles: emission.i18n.readTranslationKeys().map((translationKey) => translationKey.productHandle),
     sourceTextCache: new AuthoredSourceTextCache(workspaceRootDir, emission.project.inputGeneration.host),
     diagnosticRelationsByResource: new WeakMap(),
@@ -1199,8 +1210,7 @@ function templateDiagnosticRowsForMemberSite(
     typeSystem: emission.typeSystem,
     frameworkCapabilityDemands: emission.capabilityDemands.readDemands(),
     page: new InquiryPageRequest(1, null),
-    routeConfigProductHandles: context.routeConfigProductHandles,
-    routeParameterEndpointPlans: context.routeParameterEndpointPlans,
+    router: context.router,
     i18nTranslationKeyProductHandles: context.i18nTranslationKeyProductHandles,
   });
   const cursorInfo = templateCursorInfoResult(store, selection, cursorContext, context.includeHandles, [...new Set(cursorContext.missingInputs)]);
@@ -1351,8 +1361,7 @@ function expressionRootDiagnosticRowsForSelection(
       typeSystem: emission.typeSystem,
       frameworkCapabilityDemands: emission.capabilityDemands.readDemands(),
       page: new InquiryPageRequest(1, null),
-      routeConfigProductHandles: context.routeConfigProductHandles,
-      routeParameterEndpointPlans: context.routeParameterEndpointPlans,
+      router: context.router,
       i18nTranslationKeyProductHandles: context.i18nTranslationKeyProductHandles,
     });
     const cursorInfo = templateCursorInfoResult(
@@ -2329,6 +2338,7 @@ function missingTemplateCursorInfo(
     valueSite: null,
     selectedDefinition: null,
     selectedBindable: null,
+    selectedRouteTarget: null,
     selectedMemberName: null,
     selectedMember: null,
     memberOwnerType: null,
@@ -2403,6 +2413,7 @@ function templateCursorInfoResult(
       cursorContext.selectedBindable,
       includeHandles,
     ),
+    selectedRouteTarget: cursorRouteTargetRow(store, cursorContext, includeHandles),
     selectedMemberName: cursorContext.selectedMemberName,
     selectedMember,
     memberOwnerType,
@@ -2429,6 +2440,35 @@ function templateCursorInfoResult(
   return {
     displayText: semanticTemplateCursorInfoDisplayText(value),
     ...value,
+  };
+}
+
+function cursorRouteTargetRow(
+  store: KernelStore,
+  cursorContext: TemplateCompletionCursorContext,
+  includeHandles: boolean,
+): SemanticTemplateCursorRouteTargetRow | null {
+  const target = cursorContext.selectedRouteTarget;
+  if (target == null) {
+    return null;
+  }
+  return {
+    targetKind: target.targetKind,
+    matchedName: target.matchedName,
+    routeConfigId: target.routeConfig.id,
+    source: describeAddress(store, target.routeConfig.sourceAddressHandle),
+    targetSource: describeAddress(store, target.targetSourceAddressHandle),
+    ...(includeHandles ? {
+      handles: {
+        routeConfigProductHandle: target.routeConfig.productHandle,
+        routeConfigIdentityHandle: target.routeConfig.identityHandle,
+        configurableRouteProductHandle: target.configurableRouteProductHandle,
+        endpointProductHandle: target.endpointProductHandle,
+        recognizedRouteProductHandle: target.recognizedRouteProductHandle,
+        sourceAddressHandle: target.routeConfig.sourceAddressHandle,
+        targetSourceAddressHandle: target.targetSourceAddressHandle,
+      },
+    } : {}),
   };
 }
 

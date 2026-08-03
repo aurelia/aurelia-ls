@@ -419,7 +419,9 @@ function routeConfigRow(
     stage: routeConfig.stage,
     closure: routeConfig.closure,
     id: routeConfig.id,
+    idSource: describeAddress(store, routeConfig.idSourceAddressHandle),
     paths: routeConfig.paths,
+    pathSources: routeConfig.pathSourceAddressHandles.map((handle) => describeAddress(store, handle)),
     title: routeConfig.title,
     component: routeableComponentRow(store, routeConfig.component, handles),
     redirectTo: routeConfig.redirectTo,
@@ -444,6 +446,8 @@ function routeConfigRow(
         contributionProductHandle: contribution.productHandle,
         contributionIdentityHandle: contribution.identityHandle,
         sourceAddressHandle: contribution.sourceAddressHandle,
+        idSourceAddressHandle: routeConfig.idSourceAddressHandle,
+        pathSourceAddressHandles: routeConfig.pathSourceAddressHandles,
       },
     } : {}),
   };

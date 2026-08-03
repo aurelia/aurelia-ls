@@ -57,6 +57,9 @@ export {
   OpenSeamReasonKind,
   openSeamBoundaryKindForReason,
 } from '../kernel/open-seam.js';
+export {
+  RouterNavigationTargetKind,
+} from '../router/model.js';
 export type {
   OpenSeamReasonSource,
 } from '../kernel/open-seam.js';

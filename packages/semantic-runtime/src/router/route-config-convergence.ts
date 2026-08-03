@@ -130,6 +130,7 @@ interface RouteConfigSeed {
   readonly openFields: Set<RouteConfigValueField>;
   readonly sourceContribution: RouteConfigContributionModel | null;
   readonly sourceAddressHandle: RouteConfigContributionModel['sourceAddressHandle'];
+  readonly idSourceAddressHandle: RouteConfigContributionModel['idSourceAddressHandle'];
   readonly pathSourceAddressHandles: RouteConfigContributionModel['pathSourceAddressHandles'];
   readonly redirectToSourceAddressHandle: RouteConfigContributionModel['redirectToSourceAddressHandle'];
   readonly fieldProvenance: ReadonlyMap<RouteConfigValueField, readonly ProvenanceHandle[]>;
@@ -376,6 +377,7 @@ class RouteConfigConvergenceFrame {
       }
     }
     const sourceContribution = explicit ?? statics;
+    const idContribution = fieldContribution(explicit, statics, 'id');
     const pathContribution = fieldContribution(explicit, statics, 'path');
     const redirectContribution = fieldContribution(explicit, statics, 'redirectTo');
     const openReasonKinds = [
@@ -410,6 +412,9 @@ class RouteConfigConvergenceFrame {
       openFields,
       sourceContribution,
       sourceAddressHandle: sourceContribution?.sourceAddressHandle ?? definition.sourceAddressHandle,
+      idSourceAddressHandle: idContribution?.idSourceAddressHandle
+        ?? definition.nameSourceAddressHandle
+        ?? definition.sourceAddressHandle,
       pathSourceAddressHandles: pathContribution?.pathSourceAddressHandles
         ?? [
           definition.nameSourceAddressHandle ?? definition.sourceAddressHandle,
@@ -532,6 +537,12 @@ class RouteConfigConvergenceFrame {
       openFields,
       sourceContribution: contribution,
       sourceAddressHandle: contribution.sourceAddressHandle,
+      idSourceAddressHandle: contributionProvidesField(contribution, 'id')
+        ? contribution.idSourceAddressHandle
+        : base?.idSourceAddressHandle
+          ?? (contributionProvidesField(contribution, 'path')
+            ? contribution.pathSourceAddressHandles[0] ?? contribution.sourceAddressHandle
+            : null),
       pathSourceAddressHandles: contributionProvidesField(contribution, 'path')
         ? contribution.pathSourceAddressHandles
         : base?.pathSourceAddressHandles ?? paths.map(() => contribution.sourceAddressHandle),
@@ -610,6 +621,7 @@ class RouteConfigConvergenceFrame {
       [...seed.openFields],
       seed.sourceContribution?.toReference() ?? null,
       seed.sourceAddressHandle,
+      seed.idSourceAddressHandle,
       seed.pathSourceAddressHandles,
       seed.redirectToSourceAddressHandle,
       fieldProvenance,

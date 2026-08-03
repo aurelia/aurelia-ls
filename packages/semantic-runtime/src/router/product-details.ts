@@ -87,6 +87,7 @@ function routeConfigContributionReferences(
     contribution.childRoutes.flatMap(contributionReferenceReferences),
     routeableComponentReferences(contribution.fallback),
     kernelRecordReferences(
+      contribution.idSourceAddressHandle,
       ...contribution.pathSourceAddressHandles,
       contribution.redirectToSourceAddressHandle,
     ),
@@ -105,6 +106,7 @@ function routeConfigReferences(
       ? []
       : contributionReferenceReferences(route.sourceContribution),
     kernelRecordReferences(
+      route.idSourceAddressHandle,
       ...route.pathSourceAddressHandles,
       route.redirectToSourceAddressHandle,
     ),

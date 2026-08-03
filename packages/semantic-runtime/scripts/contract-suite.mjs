@@ -517,6 +517,12 @@ const contractSuites = [
     'binding',
     'observation',
   ], 'contract-router-active-link-state.mjs', 'Router activeClass and load.active from-view state semantics.'),
+  contract('router', 'fast', [
+    'router',
+    'template',
+    'definition',
+    'source',
+  ], 'contract-template-route-definition.mjs', 'Template route paths and eager route ids retain exact RouteConfig definition targets.'),
   contract('app-pattern.policy', 'fast', [
     'app-pattern',
     'observation',

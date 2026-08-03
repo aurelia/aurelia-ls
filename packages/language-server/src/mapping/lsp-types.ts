@@ -23,7 +23,6 @@ import type {
   SemanticAppDiagnosticRow,
   SemanticAppDiagnosticsResult,
   SemanticDiagnosticRelatedInformation,
-  SemanticRouteNodesResult,
   SemanticRuntimeAnswer,
   SemanticSourceReference,
   SemanticTemplateCompletionCandidateRow,
@@ -37,7 +36,6 @@ import type {
 import {
   diagnosticRepairAffordanceForSuggestion,
   semanticExactSourceReference,
-  semanticSourceReferenceContainsOffset,
 } from "@aurelia-ls/semantic-runtime";
 import type { DocumentUri, WorkspaceDocumentUris } from "../utils/document-uri.js";
 import { languageIdForSource } from "../utils/document-kind.js";
@@ -584,54 +582,6 @@ export function mapSemanticRuntimeTemplateDefinition(
   }];
 }
 
-export function mapSemanticRuntimeRouteNodeDefinition(
-  answer: SemanticRuntimeAnswer<SemanticRouteNodesResult>,
-  lookupText: LookupTextFn,
-  options: {
-    readonly documentUris: WorkspaceDocumentUris;
-    readonly originDocument: TextDocument;
-    readonly position: { readonly line: number; readonly character: number };
-  },
-): LocationLink[] | null {
-  const cursorOffset = options.originDocument.offsetAt(options.position);
-  const originCanonical = options.documentUris.resolve(options.originDocument.uri).uri;
-
-  for (const row of answer.value.rows) {
-    const originSource = firstSemanticRuntimeExactSourceReference([
-      row.instruction?.source ?? null,
-      row.originalInstruction?.source ?? null,
-      row.source,
-    ]);
-    const targetSource = firstSemanticRuntimeExactSourceReference([
-      row.routeConfig?.source ?? null,
-      row.routeContext.source,
-    ]);
-    if (originSource == null || targetSource == null) {
-      continue;
-    }
-    if (!semanticSourceReferenceContainsOffset(originSource, cursorOffset)) {
-      continue;
-    }
-    const originUri = semanticSourceReferenceUri(originSource, options.documentUris);
-    if (originUri == null || !options.documentUris.sameDocument(originUri, originCanonical)) {
-      continue;
-    }
-
-    const link = locationLinkForSemanticSource(
-      targetSource,
-      lookupText,
-      options.documentUris,
-      options.originDocument,
-      originSource,
-    );
-    if (link != null) {
-      return [link];
-    }
-  }
-
-  return null;
-}
-
 interface SemanticRuntimeDefinitionTarget {
   readonly rangeSource: SemanticSourceReference;
   readonly selectionSource: SemanticSourceReference;
@@ -667,6 +617,22 @@ function semanticRuntimeDefinitionTarget(
     if (selectionSource != null) {
       return {
         rangeSource: firstSemanticRuntimeExactSourceReference([bindable.source, selectionSource]) ?? selectionSource,
+        selectionSource,
+      };
+    }
+  }
+
+  const routeTarget = value.selectedRouteTarget;
+  if (routeTarget != null) {
+    const selectionSource = firstSemanticRuntimeExactSourceReference([
+      routeTarget.targetSource,
+    ]);
+    if (selectionSource != null) {
+      return {
+        rangeSource: firstSemanticRuntimeExactSourceReference([
+          routeTarget.source,
+          selectionSource,
+        ]) ?? selectionSource,
         selectionSource,
       };
     }
@@ -746,50 +712,6 @@ function firstSemanticRuntimeExactSourceReference(
     }
   }
   return null;
-}
-
-function locationLinkForSemanticSource(
-  target: SemanticSourceReference,
-  lookupText: LookupTextFn,
-  documentUris: WorkspaceDocumentUris,
-  originDocument: TextDocument,
-  originSource?: SemanticSourceReference | null,
-): LocationLink | null {
-  const targetUri = semanticSourceReferenceUri(target, documentUris);
-  if (targetUri == null) {
-    return null;
-  }
-
-  const targetCanonical = documentUris.resolve(targetUri).uri;
-  const originCanonical = documentUris.resolve(originDocument.uri).uri;
-  const targetText = targetCanonical === originCanonical
-    ? originDocument.getText()
-    : lookupText(targetCanonical);
-  if (targetText == null) {
-    return null;
-  }
-
-  const targetDocument = TextDocument.create(
-    targetUri,
-    languageIdForSource(targetCanonical),
-    0,
-    targetText,
-  );
-  const targetRange = semanticSourceRangeForDocument(target, targetDocument);
-  if (targetRange == null) {
-    return null;
-  }
-
-  const originSelectionRange = originSource == null
-    ? null
-    : semanticSourceRangeForDocument(originSource, originDocument);
-
-  return {
-    targetUri,
-    targetRange,
-    targetSelectionRange: targetRange,
-    ...(originSelectionRange == null ? {} : { originSelectionRange }),
-  };
 }
 
 export function mapSemanticRuntimeTemplateReferences(

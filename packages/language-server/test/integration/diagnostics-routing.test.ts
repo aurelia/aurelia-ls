@@ -14,7 +14,7 @@ import {
   startServer,
   waitForExit,
 } from "./helpers/lsp-harness.js";
-import type { Location, LocationLink } from "vscode-languageserver/node";
+import type { Location, LocationLink, MessageConnection } from "vscode-languageserver/node";
 import type { LspDiagnostic } from "../helpers/test-factories.js";
 
 function createComponentFixture(classMembers: readonly string[], template: string): string {
@@ -42,6 +42,41 @@ function definitionTarget(
     normalizedUriPath("targetUri" in definition ? definition.targetUri : definition.uri)
       === normalizedUriPath(targetUri)
   ) ?? null;
+}
+
+async function expectDefinitionTarget(options: {
+  readonly connection: MessageConnection;
+  readonly htmlUri: string;
+  readonly htmlText: string;
+  readonly appUri: string;
+  readonly appText: string;
+  readonly cursorMarker: string;
+  readonly cursorNeedle: string;
+  readonly targetMarker: string;
+  readonly targetNeedle: string;
+}): Promise<void> {
+  const cursorMarkerOffset = options.htmlText.indexOf(options.cursorMarker);
+  const cursorOffset = options.htmlText.indexOf(options.cursorNeedle, cursorMarkerOffset) + 1;
+  const definitions = await options.connection.sendRequest("textDocument/definition", {
+    textDocument: { uri: options.htmlUri },
+    position: positionAt(options.htmlText, cursorOffset),
+  });
+  const target = definitionTarget(definitions, options.appUri);
+  expect(
+    target,
+    `definition should target app.ts: ${JSON.stringify(definitions)}`,
+  ).toBeTruthy();
+  const selectionRange = target == null
+    ? null
+    : "targetSelectionRange" in target
+      ? target.targetSelectionRange
+      : target.range;
+  const targetMarkerOffset = options.appText.indexOf(options.targetMarker);
+  const targetStart = options.appText.indexOf(options.targetNeedle, targetMarkerOffset);
+  expect(selectionRange).toEqual({
+    start: positionAt(options.appText, targetStart),
+    end: positionAt(options.appText, targetStart + options.targetNeedle.length),
+  });
 }
 
 test("maps template diagnostics to exact authored member spans", async () => {
@@ -107,6 +142,122 @@ test("routes definitions to the view-model via provenance", async () => {
         ? vmDefinition.targetSelectionRange
         : vmDefinition.range;
     expect(targetRange?.start).toEqual({ line: 4, character: 2 });
+  } finally {
+    diagnosticsRecorder.dispose();
+    dispose();
+    child.kill("SIGKILL");
+    await waitForExit(child);
+    fs.rmSync(fixture, { recursive: true, force: true });
+  }
+});
+
+test("routes template navigation definitions to exact path and id declarations", async () => {
+  const fixture = createAureliaAppFixture({
+    "src/main.ts": [
+      "import Aurelia from 'aurelia';",
+      "import { RouterConfiguration } from '@aurelia/router';",
+      "import { AppRoot } from './app';",
+      "Aurelia.register(RouterConfiguration).app(AppRoot).start();",
+    ].join("\n"),
+    "src/app.ts": [
+      "import { customElement } from 'aurelia';",
+      "import { route } from '@aurelia/router';",
+      "import { ItemDetailRoute, ItemListRoute } from './routes';",
+      "import template from './app.html';",
+      "@route({ routes: [",
+      "  { id: 'items', path: 'items', component: ItemListRoute },",
+      "  { id: 'item-detail', path: 'items/:itemId', component: ItemDetailRoute },",
+      "] })",
+      "@customElement({ name: 'app-root', template, dependencies: [ItemListRoute, ItemDetailRoute] })",
+      "export class AppRoot {}",
+    ].join("\n"),
+    "src/app.html": [
+      "<template>",
+      "  <a load=\"items\">Items</a>",
+      "  <a load=\"./items\">Relative items</a>",
+      "  <a load=\"items/item-1?ref=featured#details\">Detail path</a>",
+      "  <a load=\"route: item-detail; params.bind: { itemId: 'item-1' }\">Detail id</a>",
+      "  <au-viewport></au-viewport>",
+      "</template>",
+    ].join("\n"),
+    "src/routes.ts": [
+      "import { customElement } from 'aurelia';",
+      "@customElement({ name: 'item-list-route', template: '<template>Items</template>' })",
+      "export class ItemListRoute {}",
+      "@customElement({ name: 'item-detail-route', template: '<template>Detail</template>' })",
+      "export class ItemDetailRoute {}",
+    ].join("\n"),
+  }, {
+    "@aurelia/router": "^2.0.0-rc.1",
+  });
+
+  const htmlUri = fileUri(fixture, "src/app.html");
+  const appUri = fileUri(fixture, "src/app.ts");
+  const htmlText = fs.readFileSync(path.join(fixture, "src/app.html"), "utf8");
+  const appText = fs.readFileSync(path.join(fixture, "src/app.ts"), "utf8");
+  const { connection, child, dispose, getStderr } = startServer(fixture);
+  const diagnosticsRecorder = createDiagnosticsRecorder(connection, child, getStderr);
+
+  try {
+    await initialize(connection, child, getStderr, fixture);
+    await openDocument(connection, htmlUri, "html", htmlText);
+    await diagnosticsRecorder.wait(htmlUri, 5000);
+
+    await expectDefinitionTarget({
+      connection,
+      htmlUri,
+      htmlText,
+      appUri,
+      appText,
+      cursorMarker: 'load="items"',
+      cursorNeedle: "items",
+      targetMarker: "path: 'items'",
+      targetNeedle: "'items'",
+    });
+    await expectDefinitionTarget({
+      connection,
+      htmlUri,
+      htmlText,
+      appUri,
+      appText,
+      cursorMarker: 'load="./items"',
+      cursorNeedle: "items",
+      targetMarker: "path: 'items'",
+      targetNeedle: "'items'",
+    });
+    await expectDefinitionTarget({
+      connection,
+      htmlUri,
+      htmlText,
+      appUri,
+      appText,
+      cursorMarker: "items/item-1?ref=featured#details",
+      cursorNeedle: "item-1",
+      targetMarker: "path: 'items/:itemId'",
+      targetNeedle: "'items/:itemId'",
+    });
+    await expectDefinitionTarget({
+      connection,
+      htmlUri,
+      htmlText,
+      appUri,
+      appText,
+      cursorMarker: "route: item-detail; params.bind",
+      cursorNeedle: "item-detail",
+      targetMarker: "id: 'item-detail'",
+      targetNeedle: "'item-detail'",
+    });
+
+    const queryDefinitions = await connection.sendRequest("textDocument/definition", {
+      textDocument: { uri: htmlUri },
+      position: positionAt(htmlText, htmlText.indexOf("ref=featured") + 1),
+    });
+    expect(queryDefinitions).toBeNull();
+    const relativePrefixDefinitions = await connection.sendRequest("textDocument/definition", {
+      textDocument: { uri: htmlUri },
+      position: positionAt(htmlText, htmlText.indexOf('./items') + 1),
+    });
+    expect(relativePrefixDefinitions).toBeNull();
   } finally {
     diagnosticsRecorder.dispose();
     dispose();

@@ -646,6 +646,11 @@ keeps the owner type available for completion and diagnostics, and distinguishes
 from the TypeScript `declarationSource` reached by its identity. The owner type row likewise exposes both the template/expression projection source and the TypeScript
 declaration source. Hover/explanation can point at the projection source when answering "why this type here?", while
 definition and owner-type repair planning should prefer the declaration source when the checker can name one.
+A cursor on router navigation syntax can additionally expose one `selectedRouteTarget`. Plain `load`/`href` route
+expressions resolve through the recognized route to an exact authored RouteConfig path, while eager `route:` forms
+resolve through their endpoint plan to the exact authored RouteConfig id. Query and fragment text, open navigation
+values, and multiple distinct endpoint targets do not produce a selected target. Definition adapters must spend this
+cursor-owned fact instead of scanning RouteNodes or matching broad instruction spans.
 A resolved scope slot proves a root symbol independently; member-owner projection is optional enrichment in that case,
 so an unavailable owner context must not turn otherwise complete scope completions into an open answer.
 Cursor answers also expose `activeSource` as the narrowest authored token locus proven by the owning parser or
@@ -1527,8 +1532,11 @@ state, effect kind, and source describe that contribution, while stage, closure,
 open fields come from its associated definition or per-use applied `RouteConfig`. `effectiveUseCount`,
 `effectiveVariantCount`, and `effectiveFieldsStable` disclose when one authored contribution participates in several
 effective uses instead of duplicating the authoring row or selecting a use silently. Rows also retain routeable component
-and fallback resolution plus optional handles. Dynamic `import(...)` route components stay in the promise routeable lane
-even when their fulfilled custom-element definition is already known.
+and fallback resolution plus optional handles. `idSource` identifies the exact authored id token, or the path token from
+which Aurelia derived the id; `pathSources` retains one exact token per normalized path. These addresses are distinct
+from the broad contribution carrier and are the declaration loci used by route completions and navigation. Dynamic
+`import(...)` route components stay in the promise routeable lane even when their fulfilled custom-element definition
+is already known.
 
 `RoutePatterns` is the next lower route-recognizer layer. It parses closed route-config paths into
 `ConfigurableRoute`-shaped rows with `Parameter`, `StaticSegment`, `DynamicSegment`, and `StarSegment` facts,

@@ -349,6 +349,7 @@ import type {
   RouterIssuePhase,
   RouterIssueSeverity,
   RouterModelKind,
+  RouterNavigationTargetKind,
   RouterRealizationStageKind,
   ViewportAgentCandidateResolutionKind,
   ViewportFieldStateKind,
@@ -3164,7 +3165,11 @@ export interface SemanticRouteConfigRow {
   readonly stage: RouteConfigStageKind | `${RouteConfigStageKind}`;
   readonly closure: RouterClosureKind | `${RouterClosureKind}`;
   readonly id: string | null;
+  /** Exact authored id token, or the path token from which the framework derives the id. */
+  readonly idSource: SemanticSourceReference | null;
   readonly paths: readonly string[];
+  /** Exact authored path tokens in `paths` order. */
+  readonly pathSources: readonly (SemanticSourceReference | null)[];
   readonly title: string | null;
   readonly component: SemanticRouteConfigComponentRow | null;
   readonly redirectTo: string | null;
@@ -3189,6 +3194,8 @@ export interface SemanticRouteConfigRow {
     readonly contributionProductHandle: ProductHandle;
     readonly contributionIdentityHandle: IdentityHandle;
     readonly sourceAddressHandle: AddressHandle | null;
+    readonly idSourceAddressHandle: AddressHandle | null;
+    readonly pathSourceAddressHandles: readonly (AddressHandle | null)[];
   };
 }
 
@@ -4495,6 +4502,26 @@ export interface SemanticTemplateFoldingRangesResult {
   readonly rows: readonly SemanticTemplateFoldingRangeRow[];
 }
 
+export interface SemanticTemplateCursorRouteTargetRow {
+  readonly targetKind: RouterNavigationTargetKind | `${RouterNavigationTargetKind}`;
+  /** Authored route id or configured path selected by the navigation syntax. */
+  readonly matchedName: string;
+  readonly routeConfigId: string | null;
+  /** Enclosing RouteConfig declaration carrier. */
+  readonly source: SemanticSourceReference | null;
+  /** Exact authored route id/path token selected by go-to-definition. */
+  readonly targetSource: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly routeConfigProductHandle: ProductHandle;
+    readonly routeConfigIdentityHandle: IdentityHandle;
+    readonly configurableRouteProductHandle: ProductHandle | null;
+    readonly endpointProductHandle: ProductHandle | null;
+    readonly recognizedRouteProductHandle: ProductHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+    readonly targetSourceAddressHandle: AddressHandle;
+  };
+}
+
 export interface SemanticTemplateCursorInfoResult {
   readonly displayText: string;
   readonly siteKind: TemplateCompletionSiteKind | `${TemplateCompletionSiteKind}`;
@@ -4510,6 +4537,7 @@ export interface SemanticTemplateCursorInfoResult {
   readonly valueSite: SemanticTemplateCursorValueSiteRow | null;
   readonly selectedDefinition: SemanticTemplateCursorDefinitionRow | null;
   readonly selectedBindable: SemanticTemplateCursorBindableRow | null;
+  readonly selectedRouteTarget: SemanticTemplateCursorRouteTargetRow | null;
   readonly selectedMemberName: string | null;
   readonly selectedMember: SemanticTemplateCursorMemberRow | null;
   readonly memberOwnerType: {

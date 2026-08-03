@@ -84,12 +84,17 @@ import type { TypeSystemProject } from '../type-system/project.js';
 import type { FrameworkCapabilityDemand } from '../framework/capability-demand.js';
 import { projectCheckerDomEventMapTypes } from '../type-system/dom-node-type.js';
 import {
+  type ConfigurableRouteModel,
+  type RecognizedRouteModel,
   RouteConfigKind,
   type EndpointModel,
   type RouteConfigModel,
+  RouterNavigationTargetKind,
 } from '../router/model.js';
 import { RouterProductDetails } from '../router/product-details.js';
 import type { RouteParameterEndpointPlan } from '../router/route-instruction-materialization.js';
+import { RouteExpressionParseFailure } from '../router/route-expression-parser.js';
+import { parseRouterStringNavigationInstruction } from '../router/router-string-navigation-instruction.js';
 import {
   checkerTypeDeclaresRouteViewModel,
   routerViewModelHookKindForName,
@@ -438,14 +443,33 @@ export interface TemplateCompletionCursorContextRequest {
   readonly page?: InquiryPageRequest;
   /** Projection copied into the resulting completion query. */
   readonly projection?: InquiryProjection;
-  /** Router route configs visible to the app/template context. */
-  readonly routeConfigProductHandles?: readonly ProductHandle[];
-  /** Endpoint plans keyed by the exact authored router-resource attribute product. */
-  readonly routeParameterEndpointPlans: ReadonlyMap<ProductHandle, RouteParameterEndpointPlan>;
+  /** Router facts used by completion and cursor-selected navigation targets. */
+  readonly router: TemplateCompletionRouterContext;
   /** Static i18n translation keys visible to the app/template context. */
   readonly i18nTranslationKeyProductHandles?: readonly ProductHandle[];
   /** Hot expression-evaluation world shared by broader cursor/file scans. */
   readonly expressionWorld?: CheckerExpressionTypeWorld;
+}
+
+/** Existing router products required to answer one template cursor inquiry without reconstructing route semantics. */
+export interface TemplateCompletionRouterContext {
+  readonly routeConfigProductHandles: readonly ProductHandle[];
+  readonly routeParameterEndpointPlans: ReadonlyMap<ProductHandle, RouteParameterEndpointPlan>;
+  readonly configurableRoutes: readonly ConfigurableRouteModel[];
+  readonly recognizedRoutes: readonly RecognizedRouteModel[];
+}
+
+/** One exact RouteConfig declaration selected through authored router navigation syntax. */
+export class TemplateCompletionRouteTargetSelection {
+  constructor(
+    readonly targetKind: RouterNavigationTargetKind,
+    readonly matchedName: string,
+    readonly routeConfig: RouteConfigModel,
+    readonly targetSourceAddressHandle: AddressHandle,
+    readonly configurableRouteProductHandle: ProductHandle | null,
+    readonly endpointProductHandle: ProductHandle | null,
+    readonly recognizedRouteProductHandle: ProductHandle | null,
+  ) {}
 }
 
 export class TemplateCompletionCursorContext {
@@ -480,6 +504,8 @@ export class TemplateCompletionCursorContext {
     readonly activeExpressionSpan: SourceSpan | null,
     /** Why no single rendered binding-source environment could be selected, when the expression is reused ambiguously. */
     readonly bindingSourceContextOpenReason: string | null,
+    /** Exact route id/path declaration selected through a router-resource value, when closed and unambiguous. */
+    readonly selectedRouteTarget: TemplateCompletionRouteTargetSelection | null,
     /** Extra context gaps found while turning a cursor into product handles. */
     readonly missingInputs: readonly string[] = [],
   ) {}
@@ -584,11 +610,12 @@ class TemplateCompletionCursorContextBuilder {
         null,
         null,
         this.projection,
-        this.input.routeConfigProductHandles ?? [],
+        this.input.router.routeConfigProductHandles,
         [],
         this.input.i18nTranslationKeyProductHandles ?? [],
       ),
       this.expressionWorld,
+      null,
       null,
       null,
       null,
@@ -715,6 +742,15 @@ class TemplateCompletionCursorContextBuilder {
       offset,
       missingInputs,
     );
+    const selectedRouteTarget = semanticContextOpen
+      ? null
+      : this.selectedRouteTargetForCursor(
+          offset,
+          htmlAttribute,
+          semanticValueSite,
+          semanticMultiBindingSegment,
+          missingInputs,
+        );
     const memberOwnerType = bindingEnvironment?.openReason == null
       ? this.memberOwnerType(
           offset,
@@ -771,7 +807,7 @@ class TemplateCompletionCursorContextBuilder {
         memberOwnerType.productHandle,
         semanticValueSite?.productHandle ?? null,
         this.projection,
-        this.input.routeConfigProductHandles ?? [],
+        this.input.router.routeConfigProductHandles,
         routeParameterEndpointProductHandles,
         this.input.i18nTranslationKeyProductHandles ?? [],
         completionDomain,
@@ -790,6 +826,7 @@ class TemplateCompletionCursorContextBuilder {
       activeSourceAddressHandle,
       activeExpressionSpan,
       bindingEnvironment?.openReason ?? null,
+      selectedRouteTarget,
       uniqueValues(missingInputs),
     );
   }
@@ -892,7 +929,7 @@ class TemplateCompletionCursorContextBuilder {
     const attributeProductHandle = segment.attribute.productHandle;
     const plan = attributeProductHandle == null
       ? null
-      : this.input.routeParameterEndpointPlans.get(attributeProductHandle) ?? null;
+      : this.input.router.routeParameterEndpointPlans.get(attributeProductHandle) ?? null;
     if (plan == null) {
       missingInputs.push('router-route-parameter-endpoints');
       return [];
@@ -901,6 +938,69 @@ class TemplateCompletionCursorContextBuilder {
       missingInputs.push('router-route-parameter-endpoints-open');
     }
     return plan.endpointProductHandles;
+  }
+
+  private selectedRouteTargetForCursor(
+    offset: number,
+    attribute: HtmlAttribute | null,
+    valueSite: TemplateValueSite | null,
+    segment: MultiBindingSegment | null,
+    missingInputs: string[],
+  ): TemplateCompletionRouteTargetSelection | null {
+    if (
+      attribute?.productHandle == null
+      || valueSite == null
+      || !isRouterResourceValueSite(this.store, valueSite)
+    ) {
+      return null;
+    }
+    if (segment != null) {
+      return this.eagerRouteIdTarget(attribute.productHandle, segment, offset, missingInputs);
+    }
+    const valueSourceAddressHandle = valueSite.sourceAddressHandle;
+    if (
+      valueSourceAddressHandle == null
+      || !cursorTouchesRouteExpressionPath(this.store, valueSite, offset)
+    ) {
+      return null;
+    }
+    return recognizedRoutePathTarget(
+      this.store,
+      this.input.router,
+      valueSourceAddressHandle,
+      missingInputs,
+    );
+  }
+
+  private eagerRouteIdTarget(
+    attributeProductHandle: ProductHandle,
+    segment: MultiBindingSegment,
+    offset: number,
+    missingInputs: string[],
+  ): TemplateCompletionRouteTargetSelection | null {
+    if (
+      segment.bindable?.reference.name !== 'route'
+      || !cursorTouchesSpan(sourceSpanFor(this.store, segment.sourceAddressHandle), offset)
+    ) {
+      return null;
+    }
+    const plan = this.input.router.routeParameterEndpointPlans.get(attributeProductHandle) ?? null;
+    if (plan == null) {
+      missingInputs.push('router-navigation-target');
+      return null;
+    }
+    if (plan.isOpen) {
+      missingInputs.push('router-navigation-target-open');
+      return null;
+    }
+    return routeTargetForEndpoints(
+      this.store,
+      this.input.router,
+      plan.endpointProductHandles,
+      RouterNavigationTargetKind.RouteId,
+      null,
+      missingInputs,
+    );
   }
 
   private htmlNodeForOffset(offset: number): HtmlIrNode | null {
@@ -2250,15 +2350,181 @@ function routerResourcePrimaryValueHasOpenEndedDomain(
 }
 
 function isRouterResourcePrimaryValueSite(store: KernelStore, site: TemplateValueSite): boolean {
-  if (site.siteKind !== TemplateValueSiteKind.CustomAttributeValue) {
-    return false;
-  }
+  return site.siteKind === TemplateValueSiteKind.CustomAttributeValue
+    && isRouterResourceValueSite(store, site);
+}
+
+function isRouterResourceValueSite(store: KernelStore, site: TemplateValueSite): boolean {
   const definition = valueSiteResourceDefinition(store, site);
   return definition?.type === ResourceDefinitionKind.CustomAttribute
     && (
       (definition.name === 'load' && definition.target.localName === 'LoadCustomAttribute')
       || (definition.name === 'href' && definition.target.localName === 'HrefCustomAttribute')
     );
+}
+
+function cursorTouchesRouteExpressionPath(
+  store: KernelStore,
+  site: TemplateValueSite,
+  offset: number,
+): boolean {
+  if (site.siteKind !== TemplateValueSiteKind.CustomAttributeValue) {
+    return false;
+  }
+  const span = sourceSpanFor(store, site.sourceAddressHandle);
+  if (span == null) {
+    return false;
+  }
+  try {
+    const parsed = parseRouterStringNavigationInstruction(site.rawValue);
+    const pathStart = site.rawValue.length - parsed.routeExpressionInput.length;
+    const relativeOffset = offset - span.start;
+    return parsed.routeExpression.pathLength > 0
+      && relativeOffset >= pathStart
+      && relativeOffset < pathStart + parsed.routeExpression.pathLength;
+  } catch (error) {
+    if (error instanceof RouteExpressionParseFailure) {
+      return false;
+    }
+    throw error;
+  }
+}
+
+function recognizedRoutePathTarget(
+  store: KernelStore,
+  router: TemplateCompletionRouterContext,
+  valueSourceAddressHandle: AddressHandle,
+  missingInputs: string[],
+): TemplateCompletionRouteTargetSelection | null {
+  const routesByInstructionTree = new Map<IdentityHandle, RecognizedRouteModel[]>();
+  for (const route of router.recognizedRoutes) {
+    if (
+      route.redirectDepth !== 0
+      || route.sourceAddressHandle !== valueSourceAddressHandle
+    ) {
+      continue;
+    }
+    const key = route.viewportInstructionTree.identityHandle;
+    if (key == null) {
+      missingInputs.push('router-navigation-target-products');
+      continue;
+    }
+    const routes = routesByInstructionTree.get(key);
+    if (routes == null) {
+      routesByInstructionTree.set(key, [route]);
+    } else {
+      routes.push(route);
+    }
+  }
+
+  const targets = [...routesByInstructionTree.values()].flatMap((routes) => {
+    // RecognizeResult publishes each instruction tree's route chain root-to-leaf; definition follows the final match.
+    const leaf = routes.at(-1);
+    if (leaf == null) {
+      return [];
+    }
+    const endpointProductHandle = leaf.endpoint.productHandle;
+    if (endpointProductHandle == null) {
+      missingInputs.push('router-navigation-target-products');
+      return [];
+    }
+    const target = routeTargetForEndpoint(
+      store,
+      router,
+      endpointProductHandle,
+      RouterNavigationTargetKind.RoutePath,
+      leaf.productHandle,
+      missingInputs,
+    );
+    return target == null ? [] : [target];
+  });
+  return soleRouteTarget(targets, missingInputs);
+}
+
+function routeTargetForEndpoints(
+  store: KernelStore,
+  router: TemplateCompletionRouterContext,
+  endpointProductHandles: readonly ProductHandle[],
+  targetKind: RouterNavigationTargetKind,
+  recognizedRouteProductHandle: ProductHandle | null,
+  missingInputs: string[],
+): TemplateCompletionRouteTargetSelection | null {
+  const targets = endpointProductHandles.flatMap((endpointProductHandle) => {
+    const target = routeTargetForEndpoint(
+      store,
+      router,
+      endpointProductHandle,
+      targetKind,
+      recognizedRouteProductHandle,
+      missingInputs,
+    );
+    return target == null ? [] : [target];
+  });
+  return soleRouteTarget(targets, missingInputs);
+}
+
+function routeTargetForEndpoint(
+  store: KernelStore,
+  router: TemplateCompletionRouterContext,
+  endpointProductHandle: ProductHandle,
+  targetKind: RouterNavigationTargetKind,
+  recognizedRouteProductHandle: ProductHandle | null,
+  missingInputs: string[],
+): TemplateCompletionRouteTargetSelection | null {
+  const endpoint = store.productDetails.read(RouterProductDetails.Endpoint, endpointProductHandle);
+  const configurableRouteIdentityHandle = endpoint?.configurableRoute.identityHandle ?? null;
+  const configurableRoute = configurableRouteIdentityHandle == null
+    ? null
+    : router.configurableRoutes.find((candidate) => candidate.identityHandle === configurableRouteIdentityHandle) ?? null;
+  const routeConfigProductHandle = configurableRoute?.routeConfig.productHandle ?? null;
+  const routeConfig = routeConfigProductHandle == null
+    ? null
+    : store.productDetails.read(RouterProductDetails.RouteConfig, routeConfigProductHandle);
+  if (endpoint == null || configurableRoute == null || routeConfig == null) {
+    missingInputs.push('router-navigation-target-products');
+    return null;
+  }
+
+  const targetSourceAddressHandle = targetKind === RouterNavigationTargetKind.RouteId
+    ? routeConfig.idSourceAddressHandle
+    : configurableRoute.sourceAddressHandle;
+  const matchedName = targetKind === RouterNavigationTargetKind.RouteId
+    ? routeConfig.id
+    : configurableRoute.path;
+  if (targetSourceAddressHandle == null || matchedName == null || matchedName.length === 0) {
+    missingInputs.push('router-navigation-target-source');
+    return null;
+  }
+  return new TemplateCompletionRouteTargetSelection(
+    targetKind,
+    matchedName,
+    routeConfig,
+    targetSourceAddressHandle,
+    configurableRoute.productHandle,
+    endpoint.productHandle,
+    recognizedRouteProductHandle,
+  );
+}
+
+function soleRouteTarget(
+  candidates: readonly TemplateCompletionRouteTargetSelection[],
+  missingInputs: string[],
+): TemplateCompletionRouteTargetSelection | null {
+  const targets = new Map<string, TemplateCompletionRouteTargetSelection>();
+  for (const candidate of candidates) {
+    targets.set([
+      candidate.targetKind,
+      candidate.routeConfig.identityHandle,
+      candidate.targetSourceAddressHandle,
+    ].join(':'), candidate);
+  }
+  if (targets.size === 1) {
+    return targets.values().next().value ?? null;
+  }
+  if (targets.size > 1) {
+    missingInputs.push('router-navigation-target-ambiguous');
+  }
+  return null;
 }
 
 function routeConfigRouteCandidates(
@@ -2270,7 +2536,7 @@ function routeConfigRouteCandidates(
   const entries = [
     ...(routeConfig.id == null || routeConfig.id.length === 0
       ? []
-      : [{ value: routeConfig.id, sourceAddressHandle: routeConfig.sourceAddressHandle }]),
+      : [{ value: routeConfig.id, sourceAddressHandle: routeConfig.idSourceAddressHandle }]),
     ...routeConfig.paths.flatMap((value, index) => value.length === 0
       ? []
       : [{ value, sourceAddressHandle: routeConfig.pathSourceAddressHandles[index] ?? routeConfig.sourceAddressHandle }]),

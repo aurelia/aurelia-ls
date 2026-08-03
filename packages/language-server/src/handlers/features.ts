@@ -44,7 +44,6 @@ import {
   mapSemanticRuntimeTemplateReferences,
   mapSemanticRuntimeTemplatePrepareRename,
   mapSemanticRuntimeTemplateRenameEdit,
-  mapSemanticRuntimeRouteNodeDefinition,
   semanticRuntimeTemplateCodeActionIdentityFromData,
   semanticRuntimeTemplateCodeActionResolveData,
   type LookupTextFn,
@@ -122,19 +121,9 @@ export async function handleDefinition(
     params.position,
     guard,
   );
-  const templateDefinition = mapSemanticRuntimeTemplateDefinition(response, lookupText, {
+  return mapSemanticRuntimeTemplateDefinition(response, lookupText, {
     documentUris: ctx.documentUris,
     originDocument: doc,
-  });
-  if (templateDefinition != null) {
-    return templateDefinition;
-  }
-
-  const routeNodes = await ctx.semanticRuntime.routeNodes(guard);
-  return mapSemanticRuntimeRouteNodeDefinition(routeNodes, lookupText, {
-    documentUris: ctx.documentUris,
-    originDocument: doc,
-    position: params.position,
   });
 }
 

@@ -1,0 +1,25 @@
+{
+  "fixture": "packages/semantic-runtime/fixtures/pressure/router-parameter-completion",
+  "lanes": {
+    "definition": [
+      {
+        "id": "router-inline-route-id",
+        "file": "src/routes/parameter-workspace.html",
+        "anchor": "route: product-detail; params.bind: { productId: 'coffee' }",
+        "at": "product-detail",
+        "verdict": "correct",
+        "reason": "",
+        "note": "NEW 2026-08-03. F12 on an inline load.route value follows the closed endpoint plan to the exact authored `id: 'product-detail'` token. Route ids are distinct from plain RouteExpression path targets."
+      },
+      {
+        "id": "router-bound-literal-route-id",
+        "file": "src/routes/parameter-workspace.html",
+        "anchor": "route.bind: 'product-detail'; params.bind: { }",
+        "at": "product-detail",
+        "verdict": "correct",
+        "reason": "",
+        "note": "NEW 2026-08-03. A statically reduced bound route segment uses the same eager route-id target and lands on the exact id literal rather than the RouteConfig carrier."
+      }
+    ]
+  }
+}

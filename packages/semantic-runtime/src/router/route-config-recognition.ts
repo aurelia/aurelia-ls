@@ -604,6 +604,7 @@ class RouteConfigKernelEmitter {
       observation.nav,
       routeConfigFieldStates(context, observation, component, fallback),
       sources.source.addressHandle,
+      sources.fieldSources.get('id')?.addressHandle ?? null,
       sources.pathSources.map((source) => source.addressHandle),
       sources.fieldSources.get('redirectTo')?.addressHandle ?? null,
       routeConfigFieldProvenance(sources, observation, component, fallback),
