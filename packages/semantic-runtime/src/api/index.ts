@@ -37,6 +37,7 @@ export {
 export {
   NodeSemanticRuntimeProjectInputHost,
   SemanticRuntimeProjectInputAuthority,
+  SemanticRuntimeProjectInputChangeDetection,
   SemanticRuntimeProjectInputGeneration,
   SemanticRuntimeProjectInputReadKind,
 } from '../kernel/project-input.js';

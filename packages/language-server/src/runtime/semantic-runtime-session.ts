@@ -8,6 +8,7 @@ import {
   canonicalTypeSystemPath,
   InquiryContinuationKind,
   SemanticRuntimeProjectInputAuthority,
+  SemanticRuntimeProjectInputChangeDetection,
   SemanticAppQueryKind,
   type SemanticApplicationTopologyResult,
   type SemanticRuntime,
@@ -234,7 +235,11 @@ export class SemanticRuntimeLspSession {
     this.documentUris = options.documentUris;
     this.workspaceRoot = options.documentUris.workspaceRoot;
     this.workspaceBoundaryKey = semanticWorkspaceBoundaryKey(options.documentUris);
-    this.projectInputAuthority = new SemanticRuntimeProjectInputAuthority(options.projectInputHost);
+    // Document synchronization and workspace watchers are the source authority; warm requests must not poll every read.
+    this.projectInputAuthority = new SemanticRuntimeProjectInputAuthority(
+      options.projectInputHost,
+      SemanticRuntimeProjectInputChangeDetection.ExplicitEvents,
+    );
   }
 
   configureWorkspace(): void {

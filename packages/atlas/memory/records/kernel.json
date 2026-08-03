@@ -1041,6 +1041,63 @@
       ],
       "createdAt": "2026-07-21",
       "updatedAt": "2026-07-22"
+    },
+    {
+      "id": "decision:project-input-change-detection",
+      "kind": "decision",
+      "domains": [
+        "semantic-runtime",
+        "kernel",
+        "incrementality",
+        "lsp"
+      ],
+      "summary": "Project-input currentness distinguishes ambient pull validation from complete push-synchronized event authority.",
+      "rationale": "Exact project-input reads remain the semantic dependency closure, but replaying every filesystem read on each editor request made warm diagnostics and cursor queries perform tens of thousands of host operations. An LSP session already owns synchronized document changes and workspace file watchers, so its event sequence can prove same-generation currentness without weakening the default library contract. Across an event advance, evaluator and checker consumers still re-capture and compare exact values before carrying semantic work.",
+      "guidance": [
+        "Keep SemanticRuntimeProjectInputChangeDetection.PullValidation as the default for ambient filesystem, library, and MCP consumers that cannot prove complete change notification.",
+        "Use ExplicitEvents only when the adapter calls advance() for every admitted source and configuration change; same-generation validation then uses the generation witness and performs no host I/O.",
+        "Do not replace exact project-input reads with event identities. Exact values still decide semantic carry across event generations, while the event witness only proves that a current push-synchronized generation was not revoked.",
+        "The VS Code session watcher must cover every admitted authored source language. Open-document synchronization owns unsaved text; closed-file watcher events own filesystem changes."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/project-input.ts",
+          "symbolName": "SemanticRuntimeProjectInputChangeDetection",
+          "summary": "Currentness policy and exact-read validation boundary."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/language-server/src/runtime/semantic-runtime-session.ts",
+          "symbolName": "SemanticRuntimeLspSession",
+          "summary": "Push-synchronized adapter that selects explicit event change detection."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/vscode/src/client-core.ts",
+          "symbolName": "AureliaLanguageClient",
+          "summary": "Workspace watcher ownership for closed admitted source changes."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/kernel/README.md",
+          "summary": "Project-input generation, exact-read, and change-detection doctrine."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/kernel/project-input.ts",
+          "symbolName": "SemanticRuntimeProjectInputChangeDetection"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/language-server/src/runtime/semantic-runtime-session.ts",
+          "symbolName": "SemanticRuntimeLspSession"
+        }
+      ],
+      "createdAt": "2026-08-03",
+      "updatedAt": "2026-08-03"
     }
   ]
 }

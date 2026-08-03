@@ -221,6 +221,10 @@ One runtime instance memoizes opened app-worlds by project-input revision and se
 source/config edits should advance the shared `SemanticRuntimeProjectInputAuthority`; the next request captures one
 immutable host generation, rejects stale retained facades, and replaces only that project's app generation. Rebuild the
 runtime only when project discovery or source-admission membership changes.
+Long-lived push-synchronized adapters may construct that authority with
+`SemanticRuntimeProjectInputChangeDetection.ExplicitEvents` only when they advance it for every admitted host change.
+This removes same-generation filesystem polling while preserving exact value comparison across event generations. The
+default remains pull validation for library and MCP callers that do not own a complete change stream.
 `runtime.summary()` is the cheap project-selection answer: it returns project shape/analysis rollups, the default app
 candidate key, app candidates with root directories, and opt-in paged project rows. It defaults to no project rows so
 large monorepos stay summary-first. Use it before `openApp(...)` in monorepos so callers can open a specific app project

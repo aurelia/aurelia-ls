@@ -134,6 +134,13 @@ export const enum SemanticRuntimeProjectInputReadKind {
   MatchedFiles = 'matched-files',
 }
 
+export const enum SemanticRuntimeProjectInputChangeDetection {
+  /** Host values may change without notification, so every currentness proof rereads exact inputs. */
+  PullValidation = 0,
+  /** The owner calls `advance()` for every admitted host change, so one event sequence proves currentness. */
+  ExplicitEvents = 1,
+}
+
 type ProjectInputReadValue = string | boolean | readonly string[] | undefined;
 
 /** Exact positive or negative host read retained by one project-input generation. */
@@ -147,11 +154,22 @@ export class SemanticRuntimeProjectInputRead implements ComputationRead {
     readonly readKey: string,
     private readonly readCurrent: () => ProjectInputReadValue,
     readonly value: ProjectInputReadValue,
+    private readonly currentnessWitness: GenerationCurrentnessWitness,
   ) {
     this.observedRevision = projectInputValueRevision(value);
   }
 
   validate(): ComputationReadValidation {
+    if (this.authority.changeDetection === SemanticRuntimeProjectInputChangeDetection.ExplicitEvents) {
+      const isCurrent = this.currentnessWitness.isCurrent();
+      return {
+        isCurrent,
+        currentRevision: isCurrent
+          ? this.observedRevision
+          : `event:${this.authority.currentEventSequence}`,
+        changedFacets: isCurrent ? [] : [this.kind],
+      };
+    }
     const currentValue = freezeProjectInputReadValue(this.readCurrent());
     const isCurrent = sameProjectInputReadValue(this.value, currentValue);
     const currentRevision = isCurrent ? this.observedRevision : projectInputValueRevision(currentValue);
@@ -163,8 +181,28 @@ export class SemanticRuntimeProjectInputRead implements ComputationRead {
   }
 
   tryRebaseCurrent(): SemanticRuntimeProjectInputRead | null {
+    if (this.authority.changeDetection === SemanticRuntimeProjectInputChangeDetection.ExplicitEvents) {
+      return this.currentnessWitness.isCurrent() ? this : null;
+    }
     const currentValue = freezeProjectInputReadValue(this.readCurrent());
     return sameProjectInputReadValue(this.value, currentValue) ? this : null;
+  }
+
+  /** Re-capture this exact input under a specific current project generation. */
+  tryRebaseForGeneration(
+    currentnessWitness: GenerationCurrentnessWitness,
+  ): SemanticRuntimeProjectInputRead | null {
+    const currentValue = freezeProjectInputReadValue(this.readCurrent());
+    return sameProjectInputReadValue(this.value, currentValue)
+      ? new SemanticRuntimeProjectInputRead(
+          this.authority,
+          this.kind,
+          this.readKey,
+          this.readCurrent,
+          currentValue,
+          currentnessWitness,
+        )
+      : null;
   }
 
   /** Owning authority, exposed only for generation-coherence assertions. */
@@ -389,7 +427,7 @@ class CapturedSemanticRuntimeProjectInputHost implements SemanticRuntimeProjectI
     }
     let current = this.readsByKey.get(read.readKey);
     if (current == null) {
-      const rebased = read.tryRebaseCurrent();
+      const rebased = read.tryRebaseForGeneration(this.generation.currentnessWitness);
       if (rebased == null) {
         return null;
       }
@@ -415,7 +453,14 @@ class CapturedSemanticRuntimeProjectInputHost implements SemanticRuntimeProjectI
     if (read == null) {
       const value = freezeProjectInputReadValue(readCurrent());
       this.valuesByReadKey.set(readKey, value);
-      read = new SemanticRuntimeProjectInputRead(this.authority, kind, readKey, readCurrent, value);
+      read = new SemanticRuntimeProjectInputRead(
+        this.authority,
+        kind,
+        readKey,
+        readCurrent,
+        value,
+        this.generation.currentnessWitness,
+      );
       this.readsByKey.set(readKey, read);
     }
     this.generation.observeScopedRead(read);
@@ -555,6 +600,9 @@ export class SemanticRuntimeProjectInputAuthority {
   constructor(
     /** Uncaptured host used for workspace topology before project generations exist. */
     readonly host: SemanticRuntimeProjectInputHost = nodeSemanticRuntimeProjectInputHost,
+    /** Whether host changes are discovered by exact polling or declared through `advance()`. */
+    readonly changeDetection: SemanticRuntimeProjectInputChangeDetection =
+      SemanticRuntimeProjectInputChangeDetection.PullValidation,
   ) {}
 
   /** Synchronously revoke captured generations after an editor/host source event. */

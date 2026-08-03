@@ -622,12 +622,7 @@ export class AureliaLanguageClient {
 
   #createSessionWatchers(folder: WorkspaceFolder): FileSystemWatcher[] {
     return [
-      "**/tsconfig.json",
-      "**/tsconfig.*.json",
-      "**/jsconfig.json",
-      "**/*.html",
-      "**/*.css",
-      "**/*.{ts,tsx,js,jsx,mts,cts,mjs,cjs}",
+      "**/*.{html,css,json,ts,tsx,js,jsx,mts,cts,mjs,cjs}",
     ].map((glob) => this.#vscode.workspace.createFileSystemWatcher(
       new this.#vscode.RelativePattern(folder, glob),
     ));

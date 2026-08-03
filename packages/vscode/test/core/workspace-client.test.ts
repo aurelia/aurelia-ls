@@ -144,6 +144,13 @@ describe("AureliaLanguageClient workspace ownership", () => {
         scheme: "file",
         pattern: expect.objectContaining({ baseUri: client.workspaceUri, pattern: "**/*" }),
       }));
+      expect(client.options.synchronize?.fileEvents).toEqual([
+        expect.objectContaining({
+          globPattern: expect.objectContaining({
+            pattern: "**/*.{html,css,json,ts,tsx,js,jsx,mts,cts,mjs,cjs}",
+          }),
+        }),
+      ]);
     }
     expect(manager.clientForUri("file:///work/app/src/main.ts")).toBe(harness.clients[0]?.raw);
     expect(manager.clientForUri("file:///work/library/src/card.html")).toBe(harness.clients[1]?.raw);

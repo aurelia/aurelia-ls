@@ -415,6 +415,12 @@ final atomic commit remain separate proofs. The default host is still pull-valid
 itself prove that unannounced file-system values stayed unchanged. Exact pull validation compares the newly read value
 with the retained immutable value and computes a new content revision only when they differ; hashing every unchanged
 file would discard the stronger witness already owned by the read.
+`SemanticRuntimeProjectInputChangeDetection.ExplicitEvents` is the deliberate exception for a host whose owner reports
+every admitted source/configuration change through `advance()`, such as an LSP session synchronized by document events
+and workspace file watchers. Within one event sequence, exact reads validate through the generation witness without
+host I/O. After an advance, consumer scopes still re-capture and compare their exact values through the new generation,
+so semantic carry remains value-based rather than event-based. Do not select this policy for an ambient filesystem
+consumer that cannot prove complete change notification.
 
 The store indexes normalized kernel records first. A `MaterializedProduct` is an envelope that names kind, identity,
 address, and provenance. Claims are indexed by subject/object handles in the store instead of being duplicated on the

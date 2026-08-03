@@ -6,7 +6,6 @@ import type { WorkspaceDocumentUris } from "../utils/document-uri.js";
 
 export interface OpenTextDocumentStore {
   get(uri: string): TextDocument | undefined;
-  all(): TextDocument[];
 }
 
 export class OpenDocumentSourceTextOverlay implements SemanticRuntimeSourceTextOverlay {
@@ -24,14 +23,9 @@ export class OpenDocumentSourceTextOverlay implements SemanticRuntimeSourceTextO
   }
 
   private openDocumentForFileName(fileName: string): TextDocument | null {
-    for (const document of this.documents.all()) {
-      if (
-        this.documentUris.ownsDocument(document.uri)
-        && this.documentUris.sameDocument(document.uri, fileName)
-      ) {
-        return document;
-      }
-    }
-    return null;
+    const document = this.documents.get(this.documentUris.uriForHostPath(fileName));
+    return document != null && this.documentUris.ownsDocument(document.uri)
+      ? document
+      : null;
   }
 }

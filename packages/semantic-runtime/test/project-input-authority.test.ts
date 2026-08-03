@@ -9,6 +9,7 @@ import { ComputationReadValidationScope } from '../src/kernel/computation-lifecy
 import {
   NodeSemanticRuntimeProjectInputHost,
   SemanticRuntimeProjectInputAuthority,
+  SemanticRuntimeProjectInputChangeDetection,
   type SemanticRuntimeProjectInputHost,
   SemanticRuntimeProjectInputReadKind,
 } from '../src/kernel/project-input.js';
@@ -133,6 +134,35 @@ describe('SemanticRuntimeProjectInputAuthority', () => {
     const second = authority.capture({ projectKey: 'app', rootDir });
     expect(second.eventSequence).toBe(1);
     expect(second.isCurrent()).toBe(true);
+  });
+
+  test('uses explicit events as currentness proof without polling unchanged editor input', () => {
+    const rootDir = normalize('C:/workspace/app');
+    const sourceFile = normalize(`${rootDir}/src/app.ts`);
+    const host = new MutableProjectInputHost();
+    host.write(sourceFile, 'export const value = 1;');
+    const authority = new SemanticRuntimeProjectInputAuthority(
+      host,
+      SemanticRuntimeProjectInputChangeDetection.ExplicitEvents,
+    );
+    const first = authority.capture({ projectKey: 'app', rootDir });
+
+    expect(first.host.readFile(sourceFile)).toContain('1');
+    host.resetFileReadCounts();
+    expect(first.validate().isCurrent).toBe(true);
+    expect(authority.capture({ projectKey: 'app', rootDir })).toBe(first);
+    expect(host.fileReadCount(sourceFile)).toBe(0);
+
+    host.write(sourceFile, 'export const value = 2;');
+    expect(first.validate().isCurrent).toBe(true);
+    expect(host.fileReadCount(sourceFile)).toBe(0);
+
+    authority.advance();
+    expect(first.validate().isCurrent).toBe(false);
+    const second = authority.capture({ projectKey: 'app', rootDir });
+    expect(second).not.toBe(first);
+    expect(second.host.readFile(sourceFile)).toContain('2');
+    expect(host.fileReadCount(sourceFile)).toBe(1);
   });
 
   test('retains narrow product reads inside one synchronous owner scope', () => {
