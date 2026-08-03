@@ -1,5 +1,6 @@
 import type { CancellationToken, CodeAction } from "vscode";
-import type { CodeAction as ProtocolCodeAction, Middleware } from "vscode-languageclient/node";
+import type { Middleware } from "vscode-languageclient/node";
+import type * as LanguageClientProtocol from "vscode-languageclient/node";
 import { AURELIA_TEMPLATE_CODE_ACTION_RESOLVE_SCHEMA } from "@aurelia-ls/language-server/protocol";
 import type { ClientLogger } from "./log.js";
 import type { VscodeApi } from "./vscode-api.js";
@@ -9,10 +10,10 @@ type MiddlewareLanguageClient = {
   readonly client: {
     sendRequest<T>(method: string, params?: unknown, token?: CancellationToken): Promise<T>;
     code2ProtocolConverter: {
-      asCodeActionSync(action: CodeAction): ProtocolCodeAction;
+      asCodeActionSync(action: CodeAction): LanguageClientProtocol.CodeAction;
     };
     protocol2CodeConverter: {
-      asCodeAction(action: ProtocolCodeAction, token: CancellationToken): Promise<CodeAction | undefined>;
+      asCodeAction(action: LanguageClientProtocol.CodeAction, token: CancellationToken): Promise<CodeAction | undefined>;
     };
   } | undefined;
 };
@@ -34,7 +35,7 @@ export function createMiddleware(
       // VS Code resolves a lazy action immediately before applying it. Own the
       // raw request so document versions remain available until after the final
       // asynchronous protocol conversion.
-      const resolved = await rawClient.sendRequest<ProtocolCodeAction>(
+      const resolved = await rawClient.sendRequest<LanguageClientProtocol.CodeAction>(
         "codeAction/resolve",
         rawClient.code2ProtocolConverter.asCodeActionSync(action),
         token,

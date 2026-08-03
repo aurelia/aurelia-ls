@@ -2,7 +2,6 @@ import type { LanguageClient, LanguageClientOptions } from "vscode-languageclien
 import {
   DidChangeWatchedFilesNotification,
   FileChangeType,
-  type FileChangeType as ProtocolFileChangeType,
 } from "vscode-languageserver-protocol";
 import type {
   Disposable,
@@ -69,7 +68,7 @@ interface LifecycleIntent {
 
 interface PendingPackageChange {
   readonly uri: Uri;
-  readonly type: ProtocolFileChangeType;
+  readonly type: FileChangeType;
 }
 
 type LifecycleAwaitResult<T> =
@@ -302,7 +301,7 @@ export class AureliaLanguageClient {
     }));
   }
 
-  #handlePackageChange(uri: Uri, changeType: ProtocolFileChangeType): void {
+  #handlePackageChange(uri: Uri, changeType: FileChangeType): void {
     if (
       !isWorkspaceProjectManifestUri(uri)
       || !this.#acceptingLifecycleRequests

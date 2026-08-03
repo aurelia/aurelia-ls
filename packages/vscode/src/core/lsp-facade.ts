@@ -2,8 +2,8 @@ import type { CancellationToken, Disposable, WorkspaceEdit } from "vscode";
 import {
   AureliaProtocolNotification,
   AureliaProtocolRequest,
-  type ResourceInventoryResponse as ProtocolResourceInventoryResponse,
-  type TemplateResourceAvailabilityResponse as ProtocolTemplateResourceAvailabilityResponse,
+  type ResourceInventoryResponse,
+  type TemplateResourceAvailabilityResponse,
 } from "@aurelia-ls/language-server/protocol";
 import type { AureliaLanguageClient, AureliaLanguageClientSession } from "../client-core.js";
 import type { ClientLogger } from "../log.js";
@@ -12,7 +12,7 @@ import type {
   RelatedFilesResponse,
   RenameFromTsResponse,
   ResourceInventorySnapshot,
-  TemplateResourceAvailabilityResponse,
+  TemplateResourceAvailabilitySnapshot,
   AnalysisChangedPayload,
   WorkspaceNotificationPayload,
 } from "../types.js";
@@ -79,7 +79,7 @@ export class LspFacade implements Disposable {
     if (sessions.length === 0) return null;
     const rows = await Promise.all(sessions.map(async (session) => {
       try {
-        const response = await this.#sendRequest<ProtocolResourceInventoryResponse>(
+        const response = await this.#sendRequest<ResourceInventoryResponse>(
           session,
           AureliaProtocolRequest.ResourceInventory,
           undefined,
@@ -99,10 +99,10 @@ export class LspFacade implements Disposable {
     projectKey?: string,
     templateResourceScopeIdentityKey?: string,
     token?: CancellationToken,
-  ): Promise<TemplateResourceAvailabilityResponse | null> {
+  ): Promise<TemplateResourceAvailabilitySnapshot | null> {
     const session = this.#sessionForUri(uri);
     if (session == null) return null;
-    const response = await this.#sendRequest<ProtocolTemplateResourceAvailabilityResponse>(
+    const response = await this.#sendRequest<TemplateResourceAvailabilityResponse>(
       session,
       AureliaProtocolRequest.TemplateResourceAvailability,
       {

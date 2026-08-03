@@ -310,7 +310,7 @@ export async function handleGetRelatedFiles(
   const filePath = ctx.documentUris.authoredHostPath(uri);
   if (filePath == null) return [];
   const topology = await ctx.semanticRuntime.appTopology(filePath, guard);
-  const requested = normalizedFilePath(filePath);
+  const requested = canonicalTypeSystemPath(filePath);
   const candidates: RelatedFileCandidate[] = [];
   for (const component of topology.value.components) {
     const componentFile = semanticSourceReferenceFilePath(component.source, ctx.documentUris);
@@ -318,10 +318,10 @@ export async function handleGetRelatedFiles(
     if (componentFile == null || templateFile == null) {
       continue;
     }
-    if (normalizedFilePath(componentFile) === normalizedFilePath(templateFile)) {
+    if (canonicalTypeSystemPath(componentFile) === canonicalTypeSystemPath(templateFile)) {
       continue;
     }
-    if (normalizedFilePath(templateFile) === requested) {
+    if (canonicalTypeSystemPath(templateFile) === requested) {
       candidates.push({
         uri: ctx.documentUris.uriForHostPath(componentFile),
         role: "component-source",
@@ -329,7 +329,7 @@ export async function handleGetRelatedFiles(
         className: component.className,
       });
     }
-    if (normalizedFilePath(componentFile) === requested) {
+    if (canonicalTypeSystemPath(componentFile) === requested) {
       candidates.push({
         uri: ctx.documentUris.uriForHostPath(templateFile),
         role: "component-template",
@@ -343,10 +343,6 @@ export async function handleGetRelatedFiles(
     || left.elementName.localeCompare(right.elementName)
     || (left.className ?? "").localeCompare(right.className ?? "")
   );
-}
-
-function normalizedFilePath(filePath: string): string {
-  return canonicalTypeSystemPath(filePath);
 }
 
 /**

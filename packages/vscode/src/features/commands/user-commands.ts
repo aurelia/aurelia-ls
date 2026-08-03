@@ -12,7 +12,7 @@ import type {
   RelatedFileCandidate,
   ResourceInventorySnapshot,
   ResourceNavigationRequest,
-  TemplateResourceAvailabilityResponse,
+  TemplateResourceAvailabilitySnapshot,
 } from "../../types.js";
 import type { VscodeApi } from "../../vscode-api.js";
 import { openResourceNavigation } from "../resource-discovery/navigation.js";
@@ -251,7 +251,7 @@ function inventoryQuickPickItem(
 }
 
 function availabilityQuickPickModel(
-  response: TemplateResourceAvailabilityResponse | null,
+  response: TemplateResourceAvailabilitySnapshot | null,
 ): ResourceQuickPickModel<AvailabilityQuickPickItem> {
   if (response == null) {
     return {
@@ -351,7 +351,7 @@ function availabilityQuickPickModel(
 }
 
 function exactAvailabilityRows(
-  response: TemplateResourceAvailabilityResponse,
+  response: TemplateResourceAvailabilitySnapshot,
 ): readonly TemplateResourceAvailabilityItem[] {
   const selection = response.projectSelection;
   return selection.status === "exact"

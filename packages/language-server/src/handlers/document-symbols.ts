@@ -56,7 +56,7 @@ export async function handleDocumentSymbols(
 
   const requestedPath = ctx.documentUris.authoredHostPath(uri);
   if (requestedPath == null) return null;
-  const requested = normalizedFilePath(requestedPath);
+  const requested = canonicalTypeSystemPath(requestedPath);
   const definitions = await ctx.semanticRuntime.resourceDefinitions(guard);
   const symbols: DocumentSymbol[] = [];
 
@@ -150,7 +150,7 @@ function sourceMatches(
   source: SemanticSourceReference | null,
 ): boolean {
   const filePath = semanticSourceReferenceFilePath(source, documentUris);
-  return filePath != null && normalizedFilePath(filePath) === requested;
+  return filePath != null && canonicalTypeSystemPath(filePath) === requested;
 }
 
 function compareRanges(left: Range, right: Range): number {
@@ -162,8 +162,4 @@ function comparePositions(
   right: { line: number; character: number },
 ): number {
   return left.line - right.line || left.character - right.character;
-}
-
-function normalizedFilePath(filePath: string): string {
-  return canonicalTypeSystemPath(filePath);
 }

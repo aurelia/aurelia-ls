@@ -1,5 +1,5 @@
 import type { VscodeApi } from "./vscode-api.js";
-import type { WorkspaceEdit as ProtocolWorkspaceEdit } from "vscode-languageclient/node";
+import type { WorkspaceEdit } from "vscode-languageclient/node";
 
 /**
  * LSP `TextDocumentEdit` carries `textDocument.version`; VS Code's public
@@ -22,7 +22,7 @@ import type { WorkspaceEdit as ProtocolWorkspaceEdit } from "vscode-languageclie
  */
 export function workspaceEditVersionMismatches(
   vscode: Pick<VscodeApi, "workspace" | "Uri">,
-  workspaceEdit: ProtocolWorkspaceEdit,
+  workspaceEdit: WorkspaceEdit,
 ): string[] {
   const openDocuments = new Map(vscode.workspace.textDocuments.map((document) => [document.uri.toString(), document]));
   const mismatches: string[] = [];
@@ -45,7 +45,7 @@ export function workspaceEditVersionMismatches(
 
 export function assertWorkspaceEditVersionsCurrent(
   vscode: Pick<VscodeApi, "workspace" | "Uri">,
-  workspaceEdit: ProtocolWorkspaceEdit,
+  workspaceEdit: WorkspaceEdit,
   messagePrefix: string,
 ): void {
   const mismatches = workspaceEditVersionMismatches(vscode, workspaceEdit);

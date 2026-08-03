@@ -1,5 +1,5 @@
 import path from "node:path";
-import type { ExtensionContext, Disposable as VscodeDisposable, Uri as VscodeUri, TextDocumentContentProvider } from "vscode";
+import type { Disposable, ExtensionContext, TextDocumentContentProvider, Uri } from "vscode";
 
 // =============================================================================
 // Types
@@ -52,9 +52,9 @@ interface StubStatusBarItem {
 interface StubFileWatcher {
   globPattern: unknown;
   disposed: boolean;
-  onDidCreate(listener: (uri: StubUri) => void): VscodeDisposable;
-  onDidChange(listener: (uri: StubUri) => void): VscodeDisposable;
-  onDidDelete(listener: (uri: StubUri) => void): VscodeDisposable;
+  onDidCreate(listener: (uri: StubUri) => void): Disposable;
+  onDidChange(listener: (uri: StubUri) => void): Disposable;
+  onDidDelete(listener: (uri: StubUri) => void): Disposable;
   fireCreate(uri: StubUri): void;
   fireChange(uri: StubUri): void;
   fireDelete(uri: StubUri): void;
@@ -123,7 +123,7 @@ interface RecordedActions {
 
 export interface StubVscodeApi {
   commands: {
-    registerCommand: (command: string, handler: (...args: unknown[]) => unknown) => VscodeDisposable;
+    registerCommand: (command: string, handler: (...args: unknown[]) => unknown) => Disposable;
     executeCommand: (command: string, ...args: unknown[]) => Promise<unknown>;
   };
   workspace: {
@@ -135,13 +135,13 @@ export interface StubVscodeApi {
     };
     findFiles: (include: unknown, exclude?: unknown) => Promise<StubUri[]>;
     getConfiguration: (section: string, uri?: StubUri) => { get<T>(key: string, defaultValue: T): T };
-    onDidChangeWorkspaceFolders: (listener: () => void) => VscodeDisposable;
-    onDidChangeConfiguration: (listener: (event: { affectsConfiguration: (section: string) => boolean }) => void) => VscodeDisposable;
-    onDidOpenTextDocument: (listener: (document: StubDocument) => void) => VscodeDisposable;
-    onDidChangeTextDocument: (listener: (event: { document: StubDocument }) => void) => VscodeDisposable;
-    onDidSaveTextDocument: (listener: (document: StubDocument) => void) => VscodeDisposable;
-    onDidCloseTextDocument: (listener: (document: StubDocument) => void) => VscodeDisposable;
-    registerTextDocumentContentProvider: (scheme: string, provider: TextDocumentContentProvider) => VscodeDisposable;
+    onDidChangeWorkspaceFolders: (listener: () => void) => Disposable;
+    onDidChangeConfiguration: (listener: (event: { affectsConfiguration: (section: string) => boolean }) => void) => Disposable;
+    onDidOpenTextDocument: (listener: (document: StubDocument) => void) => Disposable;
+    onDidChangeTextDocument: (listener: (event: { document: StubDocument }) => void) => Disposable;
+    onDidSaveTextDocument: (listener: (document: StubDocument) => void) => Disposable;
+    onDidCloseTextDocument: (listener: (document: StubDocument) => void) => Disposable;
+    registerTextDocumentContentProvider: (scheme: string, provider: TextDocumentContentProvider) => Disposable;
     openTextDocument: (target: unknown) => Promise<StubDocument>;
     createFileSystemWatcher: (globPattern: unknown) => StubFileWatcher;
   };
@@ -154,7 +154,7 @@ export interface StubVscodeApi {
     createOutputChannel: (name: string, options?: { log: true }) => StubOutputChannel;
     createStatusBarItem: (alignment: number, priority: number) => StubStatusBarItem;
     createQuickPick: () => StubQuickPick;
-    onDidChangeActiveTextEditor: (listener: (editor: unknown) => void) => VscodeDisposable;
+    onDidChangeActiveTextEditor: (listener: (editor: unknown) => void) => Disposable;
   };
   Uri: {
     file: (fsPath: string) => StubUri;
@@ -163,7 +163,7 @@ export interface StubVscodeApi {
   };
   RelativePattern: new (base: unknown, pattern: string) => { base: unknown; baseUri: StubUri; pattern: string };
   EventEmitter: typeof EventEmitter;
-  Disposable: typeof Disposable;
+  Disposable: typeof StubDisposable;
   CancellationTokenSource: typeof CancellationTokenSource;
   Position: typeof Position;
   Range: typeof Range;
@@ -182,7 +182,7 @@ export interface StubVscodeApi {
  * Create a stub ExtensionContext with only the properties the extension uses.
  */
 export function stubExtensionContext(vscode: StubVscodeApi, extensionPath = "/ext"): ExtensionContext {
-  const extensionUri = vscode.Uri.parse(`file://${extensionPath}`) as unknown as VscodeUri;
+  const extensionUri = vscode.Uri.parse(`file://${extensionPath}`) as unknown as Uri;
   return {
     subscriptions: [],
     extensionUri,
@@ -209,7 +209,7 @@ export function stubExtensionContext(vscode: StubVscodeApi, extensionPath = "/ex
 // Internal Classes
 // =============================================================================
 
-class Disposable implements VscodeDisposable {
+class StubDisposable implements Disposable {
   #dispose: (() => void) | undefined;
   disposed = false;
 
@@ -217,8 +217,8 @@ class Disposable implements VscodeDisposable {
     this.#dispose = dispose;
   }
 
-  static from(...disposables: readonly VscodeDisposable[]): Disposable {
-    return new Disposable(() => {
+  static from(...disposables: readonly Disposable[]): StubDisposable {
+    return new StubDisposable(() => {
       for (const disposable of disposables) disposable.dispose();
     });
   }
@@ -232,9 +232,9 @@ class Disposable implements VscodeDisposable {
 class EventEmitter<T> {
   #listeners = new Set<(value: T) => void>();
 
-  event = (listener: (value: T) => void): VscodeDisposable => {
+  event = (listener: (value: T) => void): Disposable => {
     this.#listeners.add(listener);
-    return new Disposable(() => this.#listeners.delete(listener));
+    return new StubDisposable(() => this.#listeners.delete(listener));
   };
 
   fire(value: T): void {
@@ -257,7 +257,7 @@ class CancellationTokenSource {
   #isCancellationRequested = false;
   readonly token: {
     readonly isCancellationRequested: boolean;
-    readonly onCancellationRequested: (listener: () => void) => VscodeDisposable;
+    readonly onCancellationRequested: (listener: () => void) => Disposable;
   };
 
   constructor() {
@@ -309,15 +309,15 @@ class QuickPick implements StubQuickPick {
   #hide = new EventEmitter<void>();
   #button = new EventEmitter<unknown>();
 
-  onDidAccept(listener: () => void): VscodeDisposable {
+  onDidAccept(listener: () => void): Disposable {
     return this.#accept.event(listener);
   }
 
-  onDidHide(listener: () => void): VscodeDisposable {
+  onDidHide(listener: () => void): Disposable {
     return this.#hide.event(listener);
   }
 
-  onDidTriggerButton(listener: (button: unknown) => void): VscodeDisposable {
+  onDidTriggerButton(listener: (button: unknown) => void): Disposable {
     return this.#button.event(listener);
   }
 
@@ -369,15 +369,15 @@ class FileWatcher implements StubFileWatcher {
 
   constructor(readonly globPattern: unknown) {}
 
-  onDidCreate(listener: (uri: StubUri) => void): VscodeDisposable {
+  onDidCreate(listener: (uri: StubUri) => void): Disposable {
     return this.#create.event(listener);
   }
 
-  onDidChange(listener: (uri: StubUri) => void): VscodeDisposable {
+  onDidChange(listener: (uri: StubUri) => void): Disposable {
     return this.#change.event(listener);
   }
 
-  onDidDelete(listener: (uri: StubUri) => void): VscodeDisposable {
+  onDidDelete(listener: (uri: StubUri) => void): Disposable {
     return this.#delete.event(listener);
   }
 
@@ -483,7 +483,7 @@ export function createVscodeApi(options: CreateVscodeApiOptions = {}): { vscode:
   function registerCommand(command: string, handler: (...args: unknown[]) => unknown): Disposable {
     commandHandlers.set(command, handler);
     registeredCommands.push(command);
-    return new Disposable(() => commandHandlers.delete(command));
+    return new StubDisposable(() => commandHandlers.delete(command));
   }
 
   async function executeCommand(command: string, ...args: unknown[]): Promise<unknown> {
@@ -580,7 +580,7 @@ export function createVscodeApi(options: CreateVscodeApiOptions = {}): { vscode:
     onDidCloseTextDocument: (listener: (document: StubDocument) => void) => documentClosed.event(listener),
     registerTextDocumentContentProvider: (scheme: string, provider: TextDocumentContentProvider): Disposable => {
       contentProviders.push({ scheme, provider });
-      return new Disposable(() => {
+      return new StubDisposable(() => {
         const idx = contentProviders.findIndex((p) => p.scheme === scheme && p.provider === provider);
         if (idx >= 0) contentProviders.splice(idx, 1);
       });
@@ -650,7 +650,7 @@ export function createVscodeApi(options: CreateVscodeApiOptions = {}): { vscode:
     Uri,
     RelativePattern,
     EventEmitter,
-    Disposable,
+    Disposable: StubDisposable,
     CancellationTokenSource,
     Position,
     Range,
@@ -726,7 +726,7 @@ function makeDocument(target: unknown, providers: ContentProvider[], docId: numb
   if (isUri(target)) {
     const uri = asUri(target);
     const provider = providers.find((p) => p.scheme === uri.scheme);
-    const provided = provider?.provider?.provideTextDocumentContent?.(uri as unknown as VscodeUri, { isCancellationRequested: false, onCancellationRequested: () => ({ dispose: () => {} }) });
+    const provided = provider?.provider?.provideTextDocumentContent?.(uri as unknown as Uri, { isCancellationRequested: false, onCancellationRequested: () => ({ dispose: () => {} }) });
     const text = typeof provided === "string" ? provided : "";
     return { uri, languageId: uri.scheme, getText: () => text, text };
   }

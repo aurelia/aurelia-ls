@@ -6,8 +6,8 @@ import type {
   RelatedFilesResponse,
   RenameFromTsResponse,
   ResourceInventoryItem,
-  ResourceInventoryResponse as ProtocolResourceInventoryResponse,
-  TemplateResourceAvailabilityResponse as ProtocolTemplateResourceAvailabilityResponse,
+  ResourceInventoryResponse,
+  TemplateResourceAvailabilityResponse,
 } from "@aurelia-ls/language-server/protocol";
 
 export type {
@@ -34,7 +34,7 @@ export type WorkspaceNotificationPayload<T> = T & {
 export type ResourceInventoryWorkspaceSnapshot = AureliaWorkspaceIdentity & (
   | {
       readonly status: "ready";
-      readonly response: ProtocolResourceInventoryResponse;
+      readonly response: ResourceInventoryResponse;
     }
   | {
       readonly status: "error";
@@ -47,7 +47,7 @@ export interface ResourceInventorySnapshot {
   readonly workspaces: readonly ResourceInventoryWorkspaceSnapshot[];
 }
 
-export type TemplateResourceAvailabilityResponse = ProtocolTemplateResourceAvailabilityResponse & {
+export type TemplateResourceAvailabilitySnapshot = TemplateResourceAvailabilityResponse & {
   readonly workspace: AureliaWorkspaceIdentity;
 };
 
