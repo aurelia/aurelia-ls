@@ -61,6 +61,7 @@
         "Use SemanticRuntime for workspace boot, app opening, project selection, cursor-locus convenience methods, and app-world cache policy.",
         "Use SemanticApp for public query dispatch and compact app-level query methods. Non-router dispatch is grouped by semantic app query catalog group before calling focused family methods; move substrate-family answerers into focused modules when the facade starts owning projection logic beyond dispatch.",
         "MCP and IDE/LSP should consume the same semantic-runtime public API and catalog surfaces. Treat MCP as an IDE-for-AI adapter over semantic-runtime, not as a lower-fidelity or separate reasoning layer.",
+        "Native `aurelia.project.json` diagnostics are runtime-static shared facts, including for malformed/config-only workspaces that cannot open an app. LSP diagnostics and the MCP `aurelia_project_configurations` diagnostic view must project the same diagnostic kind, message, severity, and exact source span rather than giving MCP only an inventory count.",
         "When a capability matters to both AI and human developers, design it once in semantic-runtime as a transport-neutral affordance answer, then let MCP, IDE, CLI, or tests choose presentation and retention policy.",
         "The retired recipe-authoring catalog, guidance, orientation, and recipe-plan surfaces should not be revived as API facade methods. Future app generation belongs in app-builder after its typed menu, source-plan, and verification contracts are ready.",
         "Use `readSemanticAppQueryCatalog()` / `SemanticRuntime.appQueryCatalog()` when a public adapter needs generic app-query discovery or validation; do not rebuild a local app-query enum list in MCP or another shell.",
@@ -345,7 +346,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-07-31"
+      "updatedAt": "2026-08-03"
     },
     {
       "id": "frontier:app-diagnostics-substrate",
@@ -532,6 +533,8 @@
         "monorepo",
         "language-server",
         "vscode",
+        "mcp",
+        "project-configuration",
         "ide"
       ],
       "summary": "Project-shape triage is the formal app/resource-library/package policy for openApp, LSP project selection, and IDE workspace activation.",
@@ -541,10 +544,12 @@
         "Carry SemanticProjectAureliaDependencyOrigin and SemanticProjectShapeReasonCount through summaries when monorepo selection feels surprising; do not flatten workspace-context evidence into an unlabeled dependency count.",
         "Keep Atlas workspace.architecture aligned with this policy: it should surface workspace-manifest dependency mechanisms and bounded file-inventory source signals for package frames whose tsconfig omits app source.",
         "Default openApp() should choose only an aurelia-app project; resource-library authoring must be selected explicitly by projectKey or sourceFilePath.",
-        "Keep project-shape detection in boot/admission: source roles and manifest/workspace membership are allowed there, but do not recognize resources, routes, DI, templates, or configuration products there.",
+        "Keep project-shape detection in boot/admission: source roles and manifest/workspace membership are allowed there. Boot also owns strict native `aurelia.project.json` source-world configuration and its diagnostics before admission; do not confuse that with later app-world configuration, resource, route, DI, or template products.",
         "Pressure scripts may select aurelia-resource-library frames for authoring/LSP pressure, but missing app roots in those frames are not app-startup failures.",
-        "VS Code manifest/import preflight is candidate admission only. In auto mode, retain a workspace session only after aurelia/workspaceStatus reports a non-outside-aurelia SemanticProjectAnalysisKind; explicit on/off remain user-owned overrides.",
-        "One language-server process owns one disjoint VS Code workspace root. Let semantic-runtime discover nested package and tsconfig frames inside that root instead of duplicating its project graph in the extension."
+        "VS Code manifest/import/native-config preflight is candidate admission only. In auto mode, retain a workspace session after aurelia/workspaceStatus reports a non-outside-aurelia SemanticProjectAnalysisKind or confirms the exact native project configuration that nominated a config-only session; explicit on/off remain user-owned overrides.",
+        "One language-server process owns one disjoint VS Code workspace root. Let semantic-runtime discover the package.json/tsconfig.json/jsconfig.json/aurelia.project.json marker union inside that root. Enabled nested workspace folders are additive projectRootHints, not extension-owned project definitions.",
+        "IDE, MCP, and future AOT consumers share semantic-runtime's normalized `semantic-workspace/1` source-world descriptor. Consumer adapters may supply host root hints and exclusions or choose presentation policy, but must not redefine project markers, ownership, configuration, keys, or source admission.",
+        "Use `aurelia.project.json` for durable authored-source exclusions that every consumer can read. A live IDE-only workspace-folder hint/off boundary reaches parity with MCP only when the same host inputs are handed to both descriptors; do not claim automatic cross-process parity until a shared configuration or handoff channel exists."
       ],
       "anchors": [
         {
@@ -562,20 +567,29 @@
         {
           "kind": "source",
           "filePath": "packages/language-server/src/handlers/custom.ts",
-          "symbolName": "handleWorkspaceStatus",
           "summary": "Exact semantic-runtime summary projection used for automatic IDE workspace confirmation."
         },
         {
           "kind": "source",
           "filePath": "packages/vscode/src/workspace-activation.ts",
-          "symbolName": "readWorkspaceActivationAdmission",
           "summary": "Cheap candidate admission and explicit per-workspace override boundary; not semantic classification."
         },
         {
           "kind": "source",
           "filePath": "packages/vscode/src/client-core.ts",
-          "symbolName": "AureliaLanguageClient",
           "summary": "Disjoint workspace ownership and project-shape-confirmed session lifecycle."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/workspace-descriptor.ts",
+          "symbolName": "semanticWorkspaceDescriptorForRuntimeOptions",
+          "summary": "Normalized shared source-world boundary for IDE, MCP, and future AOT consumers."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/boot/project-configuration.ts",
+          "symbolName": "buildProjectConfigurationResult",
+          "summary": "Boot-owned native source-world configuration and exact diagnostic authority."
         },
         {
           "kind": "doc",
@@ -605,23 +619,20 @@
           "symbolName": "SemanticRuntime"
         },
         {
-          "kind": "source-declaration-exists",
-          "filePath": "packages/language-server/src/handlers/custom.ts",
-          "symbolName": "handleWorkspaceStatus"
+          "kind": "source-file-exists",
+          "filePath": "packages/language-server/src/handlers/custom.ts"
         },
         {
-          "kind": "source-declaration-exists",
-          "filePath": "packages/vscode/src/workspace-activation.ts",
-          "symbolName": "readWorkspaceActivationAdmission"
+          "kind": "source-file-exists",
+          "filePath": "packages/vscode/src/workspace-activation.ts"
         },
         {
-          "kind": "source-declaration-exists",
-          "filePath": "packages/vscode/src/client-core.ts",
-          "symbolName": "AureliaLanguageClient"
+          "kind": "source-file-exists",
+          "filePath": "packages/vscode/src/client-core.ts"
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-08-01"
+      "updatedAt": "2026-08-04"
     },
     {
       "id": "frontier:mcp-app-world-heap-budget",
@@ -637,7 +648,7 @@
       "rationale": "Workspace/project discovery can cheaply identify app-shaped projects in larger monorepos, but opening a selected app-world can exceed Node's default heap before MCP can return a shaped error. The MCP launch can use a larger heap for local preview, but the durable product answer is app-world profiling and inquiry-depth control so app-developer tools pay only for the substrate needed by the question. The app pressure lane can now narrow deep opening by project key or project root while preserving broad workspace discovery.",
       "guidance": [
         "Use this frontier when MCP app overview, semantic-runtime app opening, or large-app hand-testing shows heap, latency, or app-world construction pressure.",
-        "Prefer project-scoped opening after workspace overview has selected a project; do not make broad package-tsconfig discovery the default path for every app-world query in a monorepo.",
+        "Prefer project-scoped opening after workspace overview has selected a project; do not make broad project-marker discovery the default path for every app-world query in a monorepo.",
         "Use an analysis-depth ladder for MCP first reads: runtime-topology can surface useful route/resource pressure when full binding-observation is too expensive.",
         "Rely on semantic-runtime's default `openApp()` runtime-topology tier and query-catalog minimum-depth rows before asking for binding-observation.",
         "When topology-depth selected app opening is still slow, inspect template compilation/runtime-analysis timings first; runtime rendering and scope construction can dominate before binding-observation products are even requested.",

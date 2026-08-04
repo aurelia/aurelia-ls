@@ -160,7 +160,7 @@ function readScopeApiCallSites(
 ): readonly ScopeApiCallSite[] {
   const sourcePathByFileName = typeSystemSourcePathIndex(project, typeSystem);
   return project.sourceFiles.flatMap((source) => {
-    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
+    const sourceFile = typeSystem.readProgramSourceFileByProjectPath(source.path);
     return sourceFile == null
       ? []
       : readSourceFileScopeApiCallSites(

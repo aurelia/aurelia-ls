@@ -15,7 +15,6 @@ const adapter = new AureliaMcpSemanticRuntimeAdapter(new SemanticRuntimeSessionR
 
 const single = await adapter.appQuery({
   workspaceRoot: fixtureRoot,
-  storeKey: 'mcp-contract-continuation-pass-through-single',
   queryKind: 'open-seams',
   page: { size: 1 },
 });
@@ -145,7 +144,6 @@ expect(
 
 const diagnosticFiltered = await adapter.appQuery({
   workspaceRoot: fixtureRoot,
-  storeKey: 'mcp-contract-continuation-pass-through-filtered',
   queryKind: 'app-diagnostic-summary',
   page: { size: 50 },
   continuationIntents: ['diagnose'],
@@ -169,7 +167,6 @@ expect(
 
 const curatedFiltered = await adapter.appOverview({
   workspaceRoot: fixtureRoot,
-  storeKey: 'mcp-contract-continuation-pass-through-curated',
   continuationIntents: ['diagnose'],
 });
 
@@ -186,7 +183,6 @@ expect(
 
 const batch = await adapter.appQueryBatch({
   workspaceRoot: fixtureRoot,
-  storeKey: 'mcp-contract-continuation-pass-through-batch',
   continuationIntents: ['inspect'],
   queries: [
     { kind: 'summary' },

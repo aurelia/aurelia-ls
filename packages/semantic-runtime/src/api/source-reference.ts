@@ -22,11 +22,11 @@ import type {
   GeneratedAddress,
   SemanticAddress,
   SourceFileAddress,
-  SourceFileRole,
   SourceSpanAddress,
   TemplateAddress,
   TemplateNodeAddress,
 } from '../kernel/address.js';
+import { SourceFileRole } from '../kernel/address.js';
 import type { KernelStore } from '../kernel/store.js';
 import type { TemplateCompilerWorldEmission } from '../template/compiler-world-materializer.js';
 
@@ -161,10 +161,17 @@ export function semanticSourceFacetsForReference(
     return [InquirySourceFacet.Unavailable];
   }
   const facets = new Set<InquirySourceFacet>();
-  if (source.kind === 'generated-address' || source.scheme === 'generated') {
+  const generated = source.kind === 'generated-address'
+    || source.scheme === 'generated'
+    || source.sourceFileRole === SourceFileRole.Generated;
+  if (generated) {
     facets.add(InquirySourceFacet.Generated);
   }
-  if (source.kind === 'external-address' || isExternalDependencySourceReference(source)) {
+  if (
+    source.kind === 'external-address'
+    || source.sourceFileRole === SourceFileRole.ExternalSource
+    || isExternalDependencySourceReference(source)
+  ) {
     facets.add(InquirySourceFacet.External);
     return [...facets].sort();
   }
@@ -176,7 +183,7 @@ export function semanticSourceFacetsForReference(
       facets.add(facet);
     }
   }
-  if (source.path != null) {
+  if (source.path != null && !generated) {
     facets.add(InquirySourceFacet.AuthoredSource);
     facets.add(
       source.start != null && source.end != null

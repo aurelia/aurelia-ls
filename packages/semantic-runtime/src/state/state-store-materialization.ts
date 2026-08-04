@@ -446,7 +446,7 @@ function stateStoreInitialStateType(
   const sourceSpan = sourceSpanAddressForAddress(publication, contribution.value.addressHandle);
   const sourceFileAddress = sourceSpan == null ? null : publication.read(sourceSpan.fileHandle);
   const sourceFile = sourceFileAddress?.kind === 'source-file-address'
-    ? typeSystem.readProgramSourceFileByPath(sourceFileAddress.path)
+    ? typeSystem.readProgramSourceFileForAddress(sourceFileAddress)
     : null;
   const node = sourceFile == null || sourceSpan == null
     ? null

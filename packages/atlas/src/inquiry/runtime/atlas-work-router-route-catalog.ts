@@ -9152,8 +9152,8 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "readProgramSymbolAtLocation",
       "readProgramAliasedSymbolAtLocation",
       "readProgramTypeOfSymbolAtLocation",
-      "readProgramSourceFileByPath",
-      "readProgramSourceFileRole",
+      "readProgramSourceFileByHostPath",
+      "readProgramSourceFileRoleByHostPath",
       "checkerPropertySymbol",
       "checkerSymbolValueType",
       "checker getTypeAtLocation remap",
@@ -9317,7 +9317,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       {
         kind: "source",
         filePath: "packages/semantic-runtime/src/type-system/project.ts",
-        symbolName: "TypeSystemProject.readProgramSourceFileRole",
+        symbolName: "TypeSystemProject.readProgramSourceFileRoleByHostPath",
         role: "supporting",
         summary:
           "Program-owned source-role classifier for TypeScript diagnostics and future repair/edit planning.",

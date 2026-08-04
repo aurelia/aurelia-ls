@@ -12,6 +12,8 @@ const serverPath = path.join(repoRoot, 'packages/mcp/out/server.js');
 const fixtureRoot = path.join(repoRoot, 'packages/semantic-runtime/fixtures/pressure/app-pattern-state-backed-form');
 const openSeamSitesFixtureRoot = path.join(repoRoot, 'packages/semantic-runtime/fixtures/pressure/evaluation-open-seam-sites');
 const typescriptDiagnosticsFixtureRoot = path.join(repoRoot, 'packages/semantic-runtime/fixtures/pressure/typescript-project-diagnostics');
+const projectConfigurationFixtureRoot = path.join(repoRoot, 'playground/issue-tracker');
+const projectConfigurationDiagnosticsFixtureRoot = path.join(repoRoot, 'packages/mcp/fixtures/project-configuration-diagnostics');
 
 const child = spawn(process.execPath, [serverPath], {
   cwd: repoRoot,
@@ -52,6 +54,7 @@ try {
   await verifyOrientationResource();
   await verifyToolSurfaceBudget();
   await verifyToolInputSchemaDescriptions();
+  await verifyNativeProjectConfigurations();
   await verifyPatternFollowUpHints();
   await verifyBundledDocsTools();
   await verifyStrictTopLevelEnvelope();
@@ -63,6 +66,7 @@ try {
   await verifyProfileDrivenRetention();
   await verifySourceFilePathUnsupportedPreflight();
   await verifyAnalysisCacheClearVocabulary();
+  await verifyCacheWorkspaceDescriptorIdentity();
   await verifyDiagnosticTextPreviewIdentity();
   await verifyOpenSeamSitesPreview();
   await verifyCursorVocabulary();
@@ -93,6 +97,7 @@ async function initialize() {
 function verifyServerInstructions(response) {
   const instructions = response.result?.instructions;
   expect(typeof instructions === 'string' && instructions.includes('aurelia_workspace_overview'), 'Initialize response should include Aurelia MCP orientation instructions.');
+  expect(instructions.includes('aurelia_project_configurations'), 'Initialize response should expose the native project-configuration query when configuration state matters.');
   expect(instructions.includes('aurelia_pattern_menu'), 'Initialize response should mention the Aurelia pattern menu for app-building examples.');
   expect(instructions.includes('support.followUp'), 'Initialize response should mention pattern follow-up hints.');
   expect(instructions.includes('aurelia_docs_search'), 'Initialize response should mention bundled docs search.');
@@ -111,6 +116,7 @@ async function verifyOrientationResource() {
   const read = await call('resources/read', { uri: 'aurelia://semantic-runtime/orientation' });
   const text = read.result?.contents?.[0]?.text;
   expect(typeof text === 'string' && text.includes('## Golden Path'), 'Orientation resource should provide the full golden path.');
+  expect(text.includes('aurelia_project_configurations'), 'Orientation resource should expose the native project-configuration query when configuration state matters.');
   expect(text.includes('aurelia_app_query_catalog'), 'Orientation resource should teach catalog-first query selection.');
   expect(text.includes('aurelia_pattern_example'), 'Orientation resource should teach pattern example fetch for source guidance.');
   expect(text.includes('support.followUp'), 'Orientation resource should teach semantic-runtime follow-up hints from pattern examples.');
@@ -124,13 +130,24 @@ async function verifyOrientationResource() {
 async function verifyToolSurfaceBudget() {
   const response = await call('tools/list', {});
   const text = JSON.stringify(response.result);
-  expect(Buffer.byteLength(text, 'utf8') < 80_000, 'tools/list should stay below the described-schema budget.');
-  expect(response.result?.tools?.length === 18, 'tools/list should advertise the expected public tool count.');
+  const surfaceBytes = Buffer.byteLength(text, 'utf8');
+  const largestTools = [...(response.result?.tools ?? [])]
+    .map((tool) => ({ name: tool.name, bytes: Buffer.byteLength(JSON.stringify(tool), 'utf8') }))
+    .sort((left, right) => right.bytes - left.bytes)
+    .slice(0, 4)
+    .map((tool) => `${tool.name}=${tool.bytes}`)
+    .join(', ');
+  expect(
+    surfaceBytes < 68_000,
+    `tools/list should stay below the fixed 19-tool schema budget; observed ${surfaceBytes} bytes; largest tools: ${largestTools}.`,
+  );
+  expect(response.result?.tools?.length === 19, 'tools/list should advertise the expected public tool count.');
   const toolNames = new Set((response.result?.tools ?? []).map((tool) => tool.name));
   expect(toolNames.has('aurelia_pattern_menu'), 'tools/list should advertise aurelia_pattern_menu.');
   expect(toolNames.has('aurelia_pattern_example'), 'tools/list should advertise aurelia_pattern_example.');
   expect(toolNames.has('aurelia_docs_search'), 'tools/list should advertise aurelia_docs_search.');
   expect(toolNames.has('aurelia_docs_fetch'), 'tools/list should advertise aurelia_docs_fetch.');
+  expect(toolNames.has('aurelia_project_configurations'), 'tools/list should advertise aurelia_project_configurations.');
   expect(!toolNames.has('aurelia_app_builder_catalog'), 'tools/list should not advertise retired app-builder catalog.');
   expect(!toolNames.has('aurelia_app_builder_query'), 'tools/list should not advertise retired app-builder query.');
   expect(!text.includes('sourceLowering') && !text.includes('targetCatalog') && !text.includes('inputReadiness'), 'tools/list should not expose old app-builder request vocabulary.');
@@ -144,6 +161,12 @@ async function verifyToolInputSchemaDescriptions() {
     expect(missing.length === 0, `Tool ${tool.name} has undescribed input schema field(s): ${missing.join(', ')}`);
   }
   const appQuery = tools.find((tool) => tool.name === 'aurelia_app_query');
+  const workspaceProperties = appQuery?.inputSchema?.properties ?? {};
+  expect('projectRootHints' in workspaceProperties, 'Workspace tools should expose shared semantic project-root hints.');
+  expect('excludedWorkspaceRoots' in workspaceProperties, 'Workspace tools should expose shared authored-source exclusions.');
+  expect(!('projects' in workspaceProperties), 'Ordinary MCP tools should not repeat synthetic explicit-project boot inputs.');
+  expect(!('storeKey' in workspaceProperties), 'Ordinary MCP tools should not expose runtime-only store namespaces.');
+  expect(!('projectDiscovery' in workspaceProperties), 'Ordinary MCP tools should use shared project-marker discovery rather than consumer policy switches.');
   expect(JSON.stringify(appQuery?.inputSchema).includes('Check supportsSourceFile'), 'sourceFile schema description should point callers to supportsSourceFile.');
   expect(JSON.stringify(appQuery?.inputSchema).includes('result=unsupported'), 'sourceFilePath schema description should promise honest unsupported answers.');
   expect(JSON.stringify(appQuery?.inputSchema).includes('observedDependencyLocus'), 'Generic app-query schema should expose family-owned observed-dependency loci.');
@@ -157,6 +180,71 @@ async function verifyToolInputSchemaDescriptions() {
   const completions = tools.find((tool) => tool.name === 'aurelia_template_completions');
   expect('page' in (completions?.inputSchema?.properties ?? {}), 'Template completions should retain its supported page selector.');
   expect('detail' in (completions?.inputSchema?.properties ?? {}), 'Template completions should retain its supported detail selector.');
+  const projectConfigurations = tools.find((tool) => tool.name === 'aurelia_project_configurations');
+  const configurationProperties = projectConfigurations?.inputSchema?.properties ?? {};
+  expect('projectKey' in configurationProperties, 'Project configurations should expose the exact projectKey selector.');
+  expect('sourceFilePaths' in configurationProperties, 'Project configurations should expose exact sourceFilePaths selection.');
+  expect(!('sourceFilePath' in configurationProperties), 'Project configurations should not collapse its exact path set into a singular selector.');
+  expect('page' in configurationProperties, 'Project configurations should expose runtime paging.');
+  const cacheOverview = tools.find((tool) => tool.name === 'aurelia_analysis_cache_overview');
+  const cacheProperties = cacheOverview?.inputSchema?.properties ?? {};
+  expect('workspace' in cacheProperties, 'Cache overview should expose one exact nested semantic workspace selector.');
+  expect(!('workspaceRoot' in cacheProperties) && !('projectRootHints' in cacheProperties), 'Cache overview should not expose a partial top-level workspace selector.');
+  const appQueryCatalog = tools.find((tool) => tool.name === 'aurelia_app_query_catalog');
+  expect(!('workspaceRoot' in (appQueryCatalog?.inputSchema?.properties ?? {})), 'Static app-query catalog should not open or label a workspace session.');
+  expect(!('telemetry' in workspaceProperties), 'Ordinary MCP app queries should not expose runtime profiling controls.');
+}
+
+async function verifyNativeProjectConfigurations() {
+  const all = await callTool('aurelia_project_configurations', {
+    workspaceRoot: projectConfigurationFixtureRoot,
+  });
+  const allAnswer = all.result?.structuredContent?.value;
+  const rows = allAnswer?.value?.rows;
+  expect(allAnswer?.result === 'answered', 'Native project configurations should return an answered semantic-runtime result.');
+  expect(Array.isArray(rows) && rows.length === 1, 'Omitted sourceFilePaths should select the fixture native configuration.');
+  expect(path.resolve(rows[0]?.filePath ?? '') === path.resolve(projectConfigurationFixtureRoot, 'aurelia.project.json'), 'Native project configurations should preserve the exact runtime-owned config path.');
+  expect(rows[0]?.appliedExcludedSourceRootDirs?.some((rootDir) => path.basename(rootDir) === 'golden'), 'Native project configurations should pass through the runtime-owned applied exclusion.');
+  expect(rows[0]?.diagnosticCount === 0, 'Native project configurations should pass through the runtime-owned diagnostic count.');
+
+  const exact = await callTool('aurelia_project_configurations', {
+    workspaceRoot: projectConfigurationFixtureRoot,
+    projectKey: rows[0]?.projectKey,
+    sourceFilePaths: ['aurelia.project.json'],
+    page: { size: 1_000 },
+  });
+  expect(exact.result?.structuredContent?.value?.value?.rows?.length === 1, 'Exact project/path selectors should preserve the matching native configuration.');
+  expect(exact.result?.structuredContent?.value?.page?.size === 200, 'Project configuration paging should honor the MCP transport clamp.');
+
+  const none = await callTool('aurelia_project_configurations', {
+    workspaceRoot: projectConfigurationFixtureRoot,
+    sourceFilePaths: [],
+  });
+  expect(none.result?.structuredContent?.value?.value?.rows?.length === 0, 'An explicit empty sourceFilePaths list should select no configurations.');
+
+  const diagnostics = await callTool('aurelia_project_configurations', {
+    workspaceRoot: projectConfigurationDiagnosticsFixtureRoot,
+    view: 'diagnostics',
+    sourceFilePaths: ['aurelia.project.json'],
+    page: { size: 10 },
+  });
+  const diagnosticAnswer = diagnostics.result?.structuredContent?.value;
+  const diagnosticRows = diagnosticAnswer?.value?.rows;
+  expect(diagnosticAnswer?.result === 'answered', 'Native configuration diagnostics should remain app-world-free in a config-only workspace.');
+  expect(diagnosticRows?.length === 1, 'Diagnostic view should expose the exact native configuration diagnostic row rather than only its count.');
+  expect(diagnosticRows?.[0]?.diagnosticKind === 'aurelia-project-config-unknown-property', 'Diagnostic view should preserve semantic-runtime diagnostic vocabulary.');
+  expect(diagnosticRows?.[0]?.message?.includes("property 'unexpected'"), 'Diagnostic view should preserve the actionable semantic-runtime message.');
+  expect(path.resolve(diagnosticRows?.[0]?.source?.filePath ?? '') === path.resolve(projectConfigurationDiagnosticsFixtureRoot, 'aurelia.project.json'), 'Diagnostic view should preserve the exact config source path.');
+  expect(typeof diagnosticRows?.[0]?.source?.start === 'number' && diagnosticRows[0].source.end > diagnosticRows[0].source.start, 'Diagnostic view should preserve the exact repair span.');
+  expect(resultText(diagnostics).includes('aurelia-project-config-unknown-property'), 'Diagnostic text preview should make the exact diagnostic kind visible without inspecting raw JSON.');
+  expect(!resultText(diagnostics).includes("property 'unexpected'.."), 'Diagnostic text preview should not duplicate terminal punctuation from runtime-owned messages.');
+
+  const noDiagnostics = await callTool('aurelia_project_configurations', {
+    workspaceRoot: projectConfigurationDiagnosticsFixtureRoot,
+    view: 'diagnostics',
+    sourceFilePaths: [],
+  });
+  expect(noDiagnostics.result?.structuredContent?.value?.value?.rows?.length === 0, 'Diagnostic view should preserve explicit empty path selection.');
 }
 
 async function verifyPatternFollowUpHints() {
@@ -402,14 +490,14 @@ async function verifyAnalysisCacheClearVocabulary() {
     appRetention: 'retain-app',
   });
   const overviewBefore = await callTool('aurelia_analysis_cache_overview', {
-    workspaceRoot: fixtureRoot,
+    workspace: { workspaceRoot: fixtureRoot },
   });
   const beforeValue = overviewBefore.result?.structuredContent?.value;
-  const beforeSession = beforeValue?.sessions?.find((session) => session.workspaceRoot === fixtureRoot);
+  const beforeSession = beforeValue?.sessions?.find((session) => session.workspaceDescriptor?.workspaceRoot === fixtureRoot);
   expect(beforeSession?.analysisCache?.value?.cachedAppCount >= 1, 'Retained app overview should create at least one cached app epoch for cache-clear testing.');
 
   const cleared = await callTool('aurelia_clear_analysis_cache', {
-    workspaceRoot: fixtureRoot,
+    workspace: { workspaceRoot: fixtureRoot },
   });
   const clearValue = cleared.result?.structuredContent?.value;
   expect(clearValue?.remainingCachedApps === 0, 'Cache clear should report zero remaining app epochs for the selected fixture session.');
@@ -420,11 +508,70 @@ async function verifyAnalysisCacheClearVocabulary() {
   expect(clearText.includes('preserve policy keeps warm TypeScript dependency/lib source files'), 'Cache-clear text should explain the default dependency cache policy.');
 
   const overviewAfter = await callTool('aurelia_analysis_cache_overview', {
-    workspaceRoot: fixtureRoot,
+    workspace: { workspaceRoot: fixtureRoot },
   });
   const afterValue = overviewAfter.result?.structuredContent?.value;
-  const afterSession = afterValue?.sessions?.find((session) => session.workspaceRoot === fixtureRoot);
+  const afterSession = afterValue?.sessions?.find((session) => session.workspaceDescriptor?.workspaceRoot === fixtureRoot);
   expect(afterSession?.analysisCache?.value?.cachedAppCount === 0, 'Analysis-cache overview should agree that selected app epochs were cleared.');
+}
+
+async function verifyCacheWorkspaceDescriptorIdentity() {
+  const invalidSelector = await callTool('aurelia_analysis_cache_overview', {
+    workspace: { projectRootHints: [fixtureRoot] },
+  });
+  expect(invalidSelector.result?.isError === true, 'A cache boundary selector without workspaceRoot should be rejected rather than interpreted against process cwd.');
+
+  await callTool('aurelia_app_overview', {
+    workspaceRoot: fixtureRoot,
+    appRetention: 'retain-app',
+  });
+  const hintedApp = await callTool('aurelia_app_overview', {
+    workspaceRoot: fixtureRoot,
+    projectRootHints: [fixtureRoot],
+    appRetention: 'retain-app',
+  });
+  const hintedAppDescriptor = hintedApp.result?.structuredContent?.workspaceDescriptor;
+  expect(hintedAppDescriptor?.workspaceRoot === fixtureRoot, 'Workspace-scoped responses should return the exact normalized shared descriptor.');
+  expect(hintedAppDescriptor?.projectTopology?.kind === 'discover', 'Ordinary MCP responses should identify shared discovery topology.');
+  expect(hintedAppDescriptor?.projectTopology?.projectRootHints?.length === 1, 'Workspace responses should preserve root hints so callers can reuse the exact source-world boundary.');
+
+  const allBeforeCatalog = await callTool('aurelia_analysis_cache_overview', {});
+  const beforeCatalogValue = allBeforeCatalog.result?.structuredContent?.value;
+  const catalog = await callTool('aurelia_app_query_catalog', { group: 'template' });
+  expect(catalog.result?.isError !== true, 'Static app-query catalog should answer without a workspace session.');
+  expect(catalog.result?.structuredContent?.workspaceRoot == null, 'Static app-query catalog should not claim a workspace label.');
+  expect(catalog.result?.structuredContent?.workspaceDescriptor == null, 'Static app-query catalog should not claim a semantic workspace descriptor.');
+  const allAfterCatalog = await callTool('aurelia_analysis_cache_overview', {});
+  expect(
+    allAfterCatalog.result?.structuredContent?.value?.totalSessions === beforeCatalogValue?.totalSessions,
+    'Static app-query catalog should not create a hidden default-descriptor runtime session.',
+  );
+
+  const defaultOverview = await callTool('aurelia_analysis_cache_overview', {
+    workspace: { workspaceRoot: fixtureRoot },
+  });
+  const defaultValue = defaultOverview.result?.structuredContent?.value;
+  expect(defaultOverview.result?.structuredContent?.workspaceDescriptor?.projectTopology?.projectRootHints?.length === 0, 'Exact cache selectors should return their shared descriptor at the response boundary.');
+  expect(defaultValue?.matchingSessions === 1, 'Default cache selector should identify one exact semantic workspace descriptor.');
+  expect(defaultValue?.sessions?.[0]?.workspaceDescriptor?.projectTopology?.projectRootHints?.length === 0, 'Default cache session summary should expose its empty hint set through the shared descriptor.');
+
+  const hintedOverview = await callTool('aurelia_analysis_cache_overview', {
+    workspace: { workspaceRoot: fixtureRoot, projectRootHints: [fixtureRoot] },
+  });
+  const hintedValue = hintedOverview.result?.structuredContent?.value;
+  expect(hintedValue?.matchingSessions === 1, 'Hinted cache selector should identify one exact semantic workspace descriptor.');
+  expect(hintedValue?.sessions?.[0]?.workspaceDescriptor?.projectTopology?.projectRootHints?.length === 1, 'Hinted cache session summary should preserve its shared root-hint fact.');
+
+  await callTool('aurelia_clear_analysis_cache', {
+    workspace: { workspaceRoot: fixtureRoot },
+  });
+  const hintedAfterDefaultClear = await callTool('aurelia_analysis_cache_overview', {
+    workspace: { workspaceRoot: fixtureRoot, projectRootHints: [fixtureRoot] },
+  });
+  expect(
+    hintedAfterDefaultClear.result?.structuredContent?.value?.sessions?.[0]?.analysisCache?.value?.cachedAppCount >= 1,
+    'Clearing one descriptor must not cross-clear a session whose shared root-hint boundary differs.',
+  );
 }
 
 async function verifyDiagnosticTextPreviewIdentity() {

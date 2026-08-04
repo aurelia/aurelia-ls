@@ -6,7 +6,7 @@ import {
   handleResourceInventory,
   handleTemplateResourceAvailability,
 } from "../../src/handlers/custom.js";
-import { testRequestGuard } from "./test-request-guard.js";
+import { testAnalysisGeneration, testRequestGuard } from "./test-request-guard.js";
 import { testWorkspaceDocumentUris } from "./test-document-uris.js";
 
 const workspaceRoot = path.resolve("resource-discovery-workspace");
@@ -30,7 +30,7 @@ describe("resource discovery protocol boundary", () => {
     const result = await handleResourceInventory(ctx as never, testRequestGuard);
 
     expect(resourceInventory.mock.calls.map(([projectKey]) => projectKey)).toEqual(["first", "second"]);
-    expect(result.fingerprint).toBe(testRequestGuard.generation.fingerprint);
+    expect(result.fingerprint).toBe(testAnalysisGeneration.fingerprint);
     expect(result.projects).toHaveLength(2);
     expect(result.projects[0]).toMatchObject({
       status: "ready",
@@ -138,7 +138,10 @@ function context(semanticRuntime: Record<string, unknown>) {
     ensureProgramDocument: (uri: string) => uri === componentUri
       ? TextDocument.create(uri, "html", 1, "<product-card></product-card>")
       : null,
-    semanticRuntime,
+    semanticRuntime: {
+      preflight: vi.fn(async () => testAnalysisGeneration),
+      ...semanticRuntime,
+    },
   };
 }
 

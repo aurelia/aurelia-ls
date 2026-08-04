@@ -114,6 +114,7 @@ Invoke the adapter directly without an MCP client restart:
 
 ```powershell
 pnpm --filter @aurelia-ls/mcp dev:invoke -- workspace-overview --workspaceRoot packages/semantic-runtime/fixtures/pressure/app-pattern-minimal-app
+pnpm --filter @aurelia-ls/mcp dev:invoke -- project-configurations --workspaceRoot playground/issue-tracker
 pnpm --filter @aurelia-ls/mcp dev:invoke -- app-query-catalog --group router
 pnpm --filter @aurelia-ls/mcp dev:invoke -- app-overview --workspaceRoot packages/semantic-runtime/fixtures/pressure/app-pattern-routed-state-backed-form --analysisDepth runtime-topology
 pnpm --filter @aurelia-ls/mcp dev:invoke -- router-overview --workspaceRoot packages/semantic-runtime/fixtures/pressure/app-pattern-routed-state-backed-form --rowPageSize 3
@@ -139,6 +140,7 @@ pnpm --filter @aurelia-ls/mcp dev:prompt -- aurelia_build_app_feature --workspac
 The MCP exposes read-only semantic-runtime queries:
 
 - `aurelia_workspace_overview`
+- `aurelia_project_configurations`
 - `aurelia_analysis_cache_overview`
 - `aurelia_clear_analysis_cache`
 - `aurelia_app_query_catalog`
@@ -206,7 +208,8 @@ And small workflow prompts:
 - `aurelia_build_app_feature`
 
 Tool responses return short human text plus machine-readable `structuredContent` that conforms to the shared MCP output
-schema `{ tool, generatedAt, workspaceRoot, value }`. Use the direct invoker when you want the full JSON envelope printed
+schema `{ tool, generatedAt, workspaceRoot, workspaceDescriptor, value }`. `workspaceDescriptor` is the exact normalized
+shared source-world input for workspace-scoped calls and is `null` for static/all-session calls. Use the direct invoker when you want the full JSON envelope printed
 in a terminal. Pass `--text` or `--output text` when the question is whether public MCP content is terse enough.
 Compact text omits the ordinary `answered` / `exact`-or-`not-applicable` / `complete` answer state, but always names
 exceptional result, selection, or semantic-coverage states such as `unsupported`, `ambiguous`, `open`, or `truncated`.
@@ -218,12 +221,40 @@ generation they need; an explicit `appRetention=dispose-app` remains incompatibl
 
 Use `aurelia_workspace_overview` first on monorepos. It returns shape/analysis rollups, `defaultAppProjectKey`, and app
 candidates; project rows are opt-in and paged so large workspaces stay reviewable. Pass a selected `projectKey` or
-explicit `projects` array to deeper app tools when the workspace has multiple app-like packages.
+source-file locus to deeper app tools when the workspace has multiple app-like packages. Ordinary MCP tools deliberately
+do not expose synthetic explicit-project boot inputs or runtime store namespaces.
+
+`projectRootHints` and `excludedWorkspaceRoots` are the shared semantic workspace-boundary inputs used by IDE, MCP, and
+future AOT hosts. Hints add known existing project roots to semantic-runtime's project-marker discovery; exclusions are
+hard authored-source boundaries and win over hints. Pass the same normalized boundary inputs on related calls so the
+MCP session and editor describe the same source world. The direct invoker exposes them as repeatable
+`--projectRootHint` and `--excludedWorkspaceRoot` flags. Each workspace response returns the exact descriptor used;
+copy discover-mode `workspaceDescriptor.projectTopology.projectRootHints` and
+`workspaceDescriptor.excludedWorkspaceRoots` back to those flat inputs on follow-up calls.
+
+Descriptor reuse guarantees MCP-to-MCP continuity; it does not discover live VS Code-only workspace-folder or
+`activationMode=off` inputs. Exact editor parity currently requires seeding the first MCP call with those same host
+facts. Durable `aurelia.project.json` authored-source exclusions are shared automatically because semantic-runtime reads
+them for every consumer; a live IDE-to-MCP descriptor handoff remains an explicit integration seam.
+
+Cache-control tools use an explicit two-state selector. Omit `workspace` to inspect or clear every cached session; pass
+`workspace: { workspaceRoot, projectRootHints?, excludedWorkspaceRoots? }` to select one exact shared semantic workspace
+descriptor. Boundary fields without `workspaceRoot` are rejected, and descriptor-distinct sessions never cross-clear.
+Session rows project that shared descriptor and do not expose runtime store namespaces or synthetic project inputs.
+
+Use `aurelia_project_configurations` when native `aurelia.project.json` state or applied authored-source exclusions
+matter. It returns exact, paged semantic-runtime rows without opening an app world; omit `sourceFilePaths` for all
+existing configurations, pass an empty list for none, or pass exact absolute/workspace-relative paths to select them.
+The default `view=configurations` returns inventory/applied exclusions; `view=diagnostics` returns the runtime-owned
+diagnostic kind, message, severity, and exact source span. The diagnostic view remains available in config-only or
+malformed workspaces where no app world can open, matching the IDE diagnostic authority rather than exposing only a
+count.
 
 For large dependency-heavy apps, keep first reads at `analysisDepth=runtime-topology` and opt into `binding-targets` or
 `binding-observation` only when binding/type details are needed. Use `aurelia_app_query_catalog` before
 `aurelia_app_query` when the needed query kind is not obvious. The catalog names valid `queryKind` values, result roles,
 minimum depth, paging expectations, and batch/summary-first hints.
+The catalog is static semantic-runtime vocabulary: it does not accept a workspace root or create an MCP runtime session.
 
 Diagnostic tools and the generic app query accept `diagnosticProjection` for query-catalog rows that advertise it.
 Explicit diagnostics include ordinary TypeScript project diagnostics from semantic-runtime's Program/tsconfig epoch as

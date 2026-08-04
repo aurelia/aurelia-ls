@@ -26,12 +26,17 @@ import {
   computationProductDetailReadKey,
   ComputationRecordReadView,
   computationRecordReadKey,
+  type ComputationGenerationAuthority,
   type ComputationRun,
   type ComputationChildCarry,
   type ComputationLocus,
   type ComputationRead,
   type ComputationReadValidation,
 } from "../src/kernel/computation-lifecycle.js";
+import {
+  SemanticRuntimeProjectInputAuthority,
+  SemanticRuntimeProjectInputRead,
+} from "../src/kernel/project-input.js";
 import { FrameworkIdentity, ObservationIdentity } from "../src/kernel/identity.js";
 import type {
   AddressHandle,
@@ -7767,6 +7772,116 @@ describe("computation lifecycle", () => {
     expect(restored.computationId).toBe(initial.computationId);
     expect(restored.commit().state).toBe(ComputationCommitState.Committed);
     expect(store.readAddress(outputHandle)).toEqual(expect.objectContaining({ path: "src/restored.html" }));
+  });
+
+  test("projects original typed leaves through committed child and upstream generation closures", () => {
+    const store = new KernelStore("computation-typed-read-closure");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const testFile = fileURLToPath(import.meta.url);
+    const inputGeneration = new SemanticRuntimeProjectInputAuthority().capture({
+      projectKey: "computation-typed-read-closure",
+      rootDir: path.dirname(testFile),
+    });
+    const inputScope = inputGeneration.createReadScope("typed-read-closure-source");
+    expect(inputScope.host.readFile(testFile)).toContain("computation-typed-read-closure");
+    const inputRead = inputScope.readRegisteredInputs()[0];
+    if (inputRead == null) {
+      throw new Error("Expected the source scope to register one project-input read.");
+    }
+    expect(inputRead).toBeInstanceOf(SemanticRuntimeProjectInputRead);
+
+    const sourceRun = lifecycle.begin(locus("typed-read-closure-source"));
+    sourceRun.observe(inputRead);
+    expect(sourceRun.commit().state).toBe(ComputationCommitState.Committed);
+    const sourceGeneration = lifecycle.admitCommittedGeneration(
+      sourceRun.computationId,
+      sourceRun.runSequence,
+      "test-source-generation",
+    );
+
+    const derivedRead = (
+      readKey: string,
+      dependency: ComputationGenerationAuthority,
+    ): ComputationRead => {
+      const read: ComputationRead = {
+        domain: "test-derived-generation",
+        readKey,
+        observedRevision: dependency.key,
+        validate: () => ({
+          isCurrent: dependency.isCurrent(),
+          currentRevision: dependency.key,
+          changedFacets: dependency.isCurrent() ? [] : ["generation"],
+        }),
+        tryRebaseCurrent: () => dependency.isCurrent() ? read : null,
+        readComputationDependencies: () => [dependency],
+      };
+      return read;
+    };
+
+    const middleRun = lifecycle.begin(locus("typed-read-closure-middle"));
+    middleRun.observe(derivedRead("middle-generation", sourceGeneration));
+    expect(middleRun.commit().state).toBe(ComputationCommitState.Committed);
+    const middleGeneration = lifecycle.admitCommittedGeneration(
+      middleRun.computationId,
+      middleRun.runSequence,
+      "test-middle-generation",
+    );
+
+    const rootRun = lifecycle.begin(locus("typed-read-closure-root"));
+    rootRun.withChildPartition(() => rootRun.withChild(childLocus("typed-read-closure-child"), () => {
+      rootRun.observe(derivedRead("root-child-generation", middleGeneration));
+    }));
+    expect(rootRun.commit().state).toBe(ComputationCommitState.Committed);
+    const rootGeneration = lifecycle.admitCommittedGeneration(
+      rootRun.computationId,
+      rootRun.runSequence,
+      "test-root-generation",
+    );
+
+    const selected = lifecycle.readCommittedGenerationReadClosure(
+      rootGeneration,
+      (read): read is SemanticRuntimeProjectInputRead => read instanceof SemanticRuntimeProjectInputRead,
+    );
+    expect(selected).toEqual([inputRead]);
+    expect(selected[0]).toBe(inputRead);
+    expect(Object.isFrozen(selected)).toBe(true);
+
+    const openRun = lifecycle.begin(locus("typed-read-closure-open"));
+    openRun.readAllRecords();
+    expect(openRun.commit().state).toBe(ComputationCommitState.Committed);
+    const openGeneration = lifecycle.admitCommittedGeneration(
+      openRun.computationId,
+      openRun.runSequence,
+      "test-open-generation",
+    );
+    expect(() => lifecycle.readCommittedGenerationReadClosure(
+      openGeneration,
+      (read): read is SemanticRuntimeProjectInputRead => read instanceof SemanticRuntimeProjectInputRead,
+    )).toThrow(/unresolved aggregate reads/);
+
+    const unadmittedRun = lifecycle.begin(locus("typed-read-closure-unadmitted"));
+    unadmittedRun.observe(inputRead);
+    expect(unadmittedRun.commit().state).toBe(ComputationCommitState.Committed);
+    expect(() => lifecycle.readCommittedGenerationReadClosure(
+      {
+        computationId: unadmittedRun.computationId,
+        runSequence: unadmittedRun.runSequence,
+      },
+      (read): read is SemanticRuntimeProjectInputRead => read instanceof SemanticRuntimeProjectInputRead,
+    )).toThrow(/uncommitted or unadmitted computation generation/);
+
+    const replacement = lifecycle.begin(locus("typed-read-closure-root"));
+    replacement.observe(derivedRead("root-child-generation", middleGeneration));
+    expect(replacement.commit().state).toBe(ComputationCommitState.Committed);
+    lifecycle.admitCommittedGeneration(
+      replacement.computationId,
+      replacement.runSequence,
+      "test-root-generation",
+    );
+    expect(() => lifecycle.readCommittedGenerationReadClosure(
+      rootGeneration,
+      (read): read is SemanticRuntimeProjectInputRead => read instanceof SemanticRuntimeProjectInputRead,
+    )).toThrow(/uncommitted or unadmitted computation generation/);
   });
 
   test("supersedes an unpublished first generation across a lifetime disposal boundary", () => {

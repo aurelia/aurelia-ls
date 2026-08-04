@@ -30,6 +30,10 @@ class StubLanguageClient {
     this.reconcileCalls += 1;
   }
 
+  async reconfirmSessionTopology() {
+    return true;
+  }
+
   onDidChangeSessions(listener: () => void) {
     this.#listeners.add(listener);
     return { dispose: () => this.#listeners.delete(listener) };
@@ -152,6 +156,12 @@ test("scopes editor context to the active document's owning session", async () =
   expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(true);
 
   recorded.fireActiveTextEditorChanged({
+    document: { uri: stubVscode.Uri.parse("file:///workspace/golden/generated.ts") },
+  });
+  await settleAsyncWork();
+  expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(false);
+
+  recorded.fireActiveTextEditorChanged({
     document: { uri: stubVscode.Uri.parse("file:///plain/src/plain.ts") },
   });
   await settleAsyncWork();
@@ -171,6 +181,108 @@ test("scopes editor context to the active document's owning session", async () =
   await settleAsyncWork();
   expect(recorded.contextValues.get("aurelia.active")).toBe(false);
   expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(false);
+  await app.deactivate();
+});
+
+test("treats canonical server and encoded editor URI spellings as one owned document", async () => {
+  const { vscode: stubVscode, recorded } = createVscodeApi();
+  const editorUri = "file:///workspace/c%3A/Projects/App/src/app.ts";
+  stubVscode.window.activeTextEditor = {
+    document: { uri: stubVscode.Uri.parse(editorUri) },
+  };
+  const lsp = stubProtocolClient({
+    sourceOwnership: (uri) => sourceOwnershipResponse(
+      uri.includes("100%25done.ts")
+        ? uri
+        : uri.includes("a%2520b.ts")
+          ? "file:///workspace/a%20b.ts"
+          : "file:///workspace/c:/Projects/App/src/app.ts",
+      true,
+      "canonical-uri",
+    ),
+  });
+  const languageClient = new StubLanguageClient(lsp);
+  const app = createApp(stubVscode, languageClient, []);
+
+  await app.activate();
+  expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(true);
+
+  recorded.fireActiveTextEditorChanged({
+    document: { uri: stubVscode.Uri.parse("file:///workspace/100%25done.ts") },
+  });
+  await vi.waitFor(() => expect(lsp.sendRequestMock).toHaveBeenCalledTimes(2));
+  await settleAsyncWork();
+  expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(true);
+
+  recorded.fireActiveTextEditorChanged({
+    document: { uri: stubVscode.Uri.parse("file:///workspace/a%2520b.ts") },
+  });
+  await vi.waitFor(() => expect(lsp.sendRequestMock).toHaveBeenCalledTimes(3));
+  await settleAsyncWork();
+  expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(false);
+
+  await app.deactivate();
+});
+
+test("rechecks exact ownership after topology settles and ignores an older topology answer", async () => {
+  const staleOwnership = deferred<ReturnType<typeof sourceOwnershipResponse>>();
+  const { vscode: stubVscode, recorded } = createVscodeApi();
+  stubVscode.window.activeTextEditor = {
+    document: { uri: stubVscode.Uri.parse("file:///workspace/src/app.ts") },
+  };
+  const lsp = stubProtocolClient({
+    sourceOwnership: (uri, requestIndex) => {
+      if (requestIndex === 0) return sourceOwnershipResponse(uri, true, "topology-1");
+      if (requestIndex === 1) return staleOwnership.promise;
+      return sourceOwnershipResponse(uri, false, "topology-3");
+    },
+  });
+  const languageClient = new StubLanguageClient(lsp);
+  const app = createApp(stubVscode, languageClient, []);
+
+  await app.activate();
+  expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(true);
+
+  lsp.emit("aurelia/analysisChanged", { fingerprint: "topology-2", changeKind: "topology" });
+  await vi.waitFor(() => expect(lsp.sendRequestMock).toHaveBeenCalledTimes(2));
+  lsp.emit("aurelia/analysisChanged", { fingerprint: "topology-3", changeKind: "topology" });
+  await vi.waitFor(() => expect(lsp.sendRequestMock).toHaveBeenCalledTimes(3));
+  await vi.waitFor(() => expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(false));
+
+  staleOwnership.resolve(sourceOwnershipResponse("file:///workspace/src/app.ts", true, "topology-2"));
+  await settleAsyncWork();
+  expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(false);
+
+  await app.deactivate();
+});
+
+test("ignores a late ownership answer after the active editor changes", async () => {
+  const firstOwnership = deferred<ReturnType<typeof sourceOwnershipResponse>>();
+  const { vscode: stubVscode, recorded } = createVscodeApi();
+  stubVscode.window.activeTextEditor = {
+    document: { uri: stubVscode.Uri.parse("file:///workspace/src/first.ts") },
+  };
+  const lsp = stubProtocolClient({
+    sourceOwnership: (uri) => uri.endsWith("/first.ts")
+      ? firstOwnership.promise
+      : sourceOwnershipResponse(uri, true, "second"),
+  });
+  const languageClient = new StubLanguageClient(lsp);
+  const app = createApp(stubVscode, languageClient, []);
+
+  const activation = app.activate();
+  await vi.waitFor(() => expect(lsp.sendRequestMock).toHaveBeenCalledTimes(1));
+  recorded.fireActiveTextEditorChanged({
+    document: { uri: stubVscode.Uri.parse("file:///workspace/src/second.ts") },
+  });
+  await vi.waitFor(() => expect(lsp.sendRequestMock).toHaveBeenCalledTimes(2));
+  await vi.waitFor(() => expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(true));
+
+  firstOwnership.resolve(sourceOwnershipResponse("file:///workspace/src/first.ts", false, "first"));
+  await activation;
+  await settleAsyncWork();
+  expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(true);
+
   await app.deactivate();
 });
 
@@ -228,11 +340,58 @@ function createApp(
   });
 }
 
-function stubProtocolClient(): LanguageClient {
+type StubProtocolClient = LanguageClient & {
+  readonly sendRequestMock: ReturnType<typeof vi.fn>;
+  emit(method: string, payload: unknown): void;
+};
+
+function stubProtocolClient(options: {
+  readonly sourceOwnership?: (
+    uri: string,
+    requestIndex: number,
+  ) => unknown | Promise<unknown>;
+} = {}): StubProtocolClient {
+  const notifications = new Map<string, (payload: unknown) => void>();
+  let ownershipRequest = 0;
+  const sendRequest = vi.fn(async (method: string, params?: unknown) => {
+    if (method !== "aurelia/sourceOwnership") return null;
+    const uri = (params as { uri: string }).uri;
+    const requestIndex = ownershipRequest++;
+    return await (options.sourceOwnership?.(uri, requestIndex)
+      ?? sourceOwnershipResponse(uri, !uri.includes("/golden/"), `ownership-${requestIndex}`));
+  });
   return {
-    onNotification: vi.fn(() => ({ dispose: () => {} })),
-    sendRequest: vi.fn(async () => null),
-  } as unknown as LanguageClient;
+    onNotification: vi.fn((method: string, handler: (payload: unknown) => void) => {
+      notifications.set(method, handler);
+      return { dispose: () => notifications.delete(method) };
+    }),
+    sendRequest,
+    sendRequestMock: sendRequest,
+    emit(method: string, payload: unknown) {
+      notifications.get(method)?.(payload);
+    },
+  } as unknown as StubProtocolClient;
+}
+
+function sourceOwnershipResponse(uri: string, owned: boolean, fingerprint: string) {
+  return {
+    fingerprint,
+    sourceUri: uri,
+    answer: {
+      schemaVersion: "0.2",
+      result: "answered",
+      selection: "not-applicable",
+      coverage: "complete",
+      summary: owned ? "owned" : "unowned",
+      page: null,
+    },
+    owners: owned ? [{
+      projectKey: "app",
+      rootUri: "file:///workspace",
+      projectPath: uri.slice("file:///workspace/".length),
+      role: "app-source",
+    }] : [],
+  };
 }
 
 function workspaceSession(client: LanguageClient) {
@@ -245,4 +404,12 @@ function workspaceSession(client: LanguageClient) {
 async function settleAsyncWork(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0));
   await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
 }

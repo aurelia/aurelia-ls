@@ -1,0 +1,7 @@
+{
+  "$schema": "../../packages/semantic-runtime/schema/aurelia.project.schema.json",
+  "version": 1,
+  "authoredSources": {
+    "excludedRoots": ["golden"]
+  }
+}

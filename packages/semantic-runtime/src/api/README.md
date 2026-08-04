@@ -5,6 +5,15 @@ See [../README.md](../README.md) for the folder-wide rebuild map and Atlas and a
 This folder owns the in-process API boundary for opening an Aurelia app with the semantic runtime. It is a library
 surface, not a daemon, CLI, or snapshot format.
 
+`semanticWorkspaceDescriptorForRuntimeOptions(...)` is the shared, serializable source-world boundary used by IDE,
+MCP, and future AOT adapters. It normalizes workspace exclusions and either automatic marker discovery plus host root
+hints or a complete explicit-project topology; store namespaces and live input-authority objects are deliberately not
+semantic facts. `parseSemanticWorkspaceDescriptor(...)` is the strict untrusted JSON entry point for
+`semantic-workspace/1`: it rejects unknown versions/properties, invented source vocabularies, and non-normalized paths
+or set-like arrays. `semanticRuntimeOptionsForWorkspaceDescriptor(...)` reconstructs boot options only after that
+validation. Ordinary consumers should use shared discovery and select an admitted `projectKey`; explicit projects are
+for hosts that own the complete project/source topology, not a shortcut for choosing one app.
+
 The API should stay close to the typed substrate. It may compose boot, evaluation, configuration, DI, resource,
 compiler, rendering, and TypeChecker-backed products, but it should not recreate those layers as private summary tables.
 When an answer becomes awkward, prefer improving the underlying product records or adding a narrow query projection over
@@ -90,8 +99,21 @@ paging, and query-claim retention. Intent should not become a shadow query polic
 
 ## Shape
 
-Use `createSemanticRuntime(...)` to boot a workspace, then `runtime.openApp(...)` to materialize the current app-world
-view for one project. `SemanticApp.ask(...)` accepts a small query envelope for app facts; direct cursor-locus
+`SemanticRuntime` is one resolved source-world snapshot. `createSemanticRuntime(...)` is appropriate for bounded
+one-shot and snapshot/AOT work, but its answer receipts are current only relative to that admitted snapshot; they do
+not repeatedly rediscover whether the live host now has a different project/source topology. Long-lived IDE, MCP, and
+build-daemon consumers must own a `ManagedSemanticWorkspaceSession`. That shared boundary validates source-world
+admission at operation ingress and egress, coalesces re-resolution, keeps the warm runtime for an equivalent portable
+plan, and atomically replaces the private store/runtime incarnation when the plan changes. Its callback must include
+all paging and consumer projection work, and `absorb(...)` must see every semantic answer used by the returned result.
+Reconciliation may coalesce or retry before admission, but an admitted callback runs at most once: a stale egress is a
+typed operation failure for the protocol/client to reissue, never an implicit replay of consumer mapping or side effects.
+Descriptor parity means IDE, MCP, and AOT apply the same semantic rules to the same admitted input snapshot. Independent
+MCP disk authority cannot literally share unsaved IDE buffers until a future IDE-session proxy or immutable overlay
+handoff supplies that same source snapshot and its revisions.
+
+Use a runtime snapshot to open one project app with `runtime.openApp(...)`. `SemanticApp.ask(...)` accepts a small query
+envelope for app facts; direct cursor-locus
 convenience methods such as `runtime.templateCompletions(...)`, `runtime.templateCursorInfo(...)`, and
 `runtime.templateDiagnostics(...)` live on the runtime facade because they may need to select or reopen an app before
 answering.
@@ -170,6 +192,22 @@ Small retained DTO values are bounded twice: profiles choose which materializati
 query-claim graph enforces both a per-answer byte limit and a total retained-answer byte budget. When the value budget
 is exceeded, claim rows remain available for reuse diagnostics and invalidation, but old public DTO objects are dropped
 so a long MCP-style orientation session does not turn the graph into an unbounded answer cache.
+Every retained answer value is guarded by an exact executable receipt. Its public `analysisBasis` contains only the
+portable semantic-workspace/source-world stamp and value revisions; the process-private lease retains exact input and
+semantic-environment reads plus this runtime's answer-lifetime witness. Lease checks never rerun source-world discovery:
+that is the managed session's ingress/egress responsibility. Equivalent source-world plans keep the witness, while a
+fresh runtime replacement or `clearAnalysisCache()` invalidates old detached capabilities. This distinction lets IDE,
+MCP, and AOT compare the same semantic basis without treating store keys, handles, event ordinals, or currentness policy
+as portable semantics.
+Nested answer materialization uses one optimistic synchronous transaction across runtime and app query-claim graphs.
+Fresh child leases are observed into the root builder and may delegate their scan only when that builder exactly subsumes
+them; the root receipt validates once before any provisional answer becomes externally committed. Retained reuse first
+composes invocation-local planning reads with the historical graph lease. A committed aggregate validates before it may
+taint the root; a same-token aggregate is observed before delegation so the current invocation's reads cannot disappear.
+The temporary aggregate is released after use and never replaces the historical graph-owned lease.
+Project-input, source-world, analysis-receipt, and app-generation validators resample their relevant authority after
+fallible/reentrant callbacks. A callback that publishes a relevant input event or revokes a combined generation cannot
+return a receipt or cache generation that was current only at the start of validation.
 Transport page policy is not semantic query identity, but it is retained-answer response-policy identity. A bounded
 caller and an unbounded caller may share semantic materialization while never replaying each other's clamped DTO.
 App-world-free app-query answers stay at the runtime boundary. `SourceFiles` can answer from the booted project frame,
@@ -221,10 +259,13 @@ One runtime instance memoizes opened app-worlds by project-input revision and se
 source/config edits should advance the shared `SemanticRuntimeProjectInputAuthority`; the next request captures one
 immutable host generation, rejects stale retained facades, and replaces only that project's app generation. Rebuild the
 runtime only when project discovery or source-admission membership changes.
-Long-lived push-synchronized adapters may construct that authority with
-`SemanticRuntimeProjectInputChangeDetection.ExplicitEvents` only when they advance it for every admitted host change.
-This removes same-generation filesystem polling while preserving exact value comparison across event generations. The
-default remains pull validation for library and MCP callers that do not own a complete change stream.
+Long-lived adapters may attach a `SemanticRuntimeProjectInputCurrentnessPolicy` to that authority. The policy receives
+one frozen exact-read descriptor at a time. It may return `PushObserved` only for a request whose every mutation calls
+`advance()`, or `SessionSnapshot` with a non-empty immutable snapshot identity. Every unclassified read remains
+`PullValidated`, so editor-owned text can avoid same-generation polling without granting that trust to imported
+dependencies, directory membership, package data, or MCP filesystem input. Exact values still decide carry across
+event generations. Classifier and snapshot-identity transitions must be synchronized with an event advance so no proof
+can enter before revocation. Snapshot identity must name immutable input output, not merely a mutable session UUID.
 `runtime.summary()` is the cheap project-selection answer: it returns project shape/analysis rollups, the default app
 candidate key, app candidates with root directories, and opt-in paged project rows. It defaults to no project rows so
 large monorepos stay summary-first. Use it before `openApp(...)` in monorepos so callers can open a specific app project
@@ -234,6 +275,11 @@ distort the query graph they are inspecting or pruning. Pass `inquiryProfile` wh
 first project-selection answer counted with the same consumer lane as later routed app answers. Scripts or adapters that
 need to iterate project rows must request `projectPage.size`; otherwise they should rely on the rollups and
 `appCandidates` only.
+Each project row also exposes the boot-owned `admissionOrigins` that explain why that exact frame exists. Marker origins
+name their exact source file and, when relevant, the host hint that reopened discovery below a prune/depth boundary.
+Consumers should keep this project-topology provenance separate from `shapeKind`, `analysisKind`, and native
+configuration diagnostics: admission cause is not evidence that a project is an Aurelia app or that its configuration
+is valid.
 `runtime.analysisCacheOverview(...)` is the session-retention x-ray for long-lived adapters such as MCP. It reports
 runtime-level static and routed-app query claims, cached app epochs, their construction inquiry profile/top phases,
 per-consumer query-claim graph telemetry, current process memory, and
@@ -1334,8 +1380,10 @@ cover `AUR4101`, `AUR4102`, `AUR4105`, `AUR4106`, and `AUR4108` only when the fr
 serialized validation payloads and live custom-rule execution remain unclaimed until semantic-runtime admits those
 product surfaces.
 
-When `createSemanticRuntime` is opened without explicit projects, boot discovers package/tsconfig project frames for
-monorepo-shaped workspaces. Default `openApp()` chooses an `aurelia-app` project from import/receiver-grounded bootstrap
+When `createSemanticRuntime` is opened without explicit projects, boot discovers the union of package, tsconfig,
+jsconfig, and native Aurelia configuration marker roots for monorepo-shaped workspaces. Hosts with additional workspace
+topology knowledge can supply `projectRootHints`; semantic-runtime merges those boundaries into the same discovery and
+configuration authority. Default `openApp()` chooses an `aurelia-app` project from import/receiver-grounded bootstrap
 signals without constructing and
 emitting rejected candidates into the shared kernel store; callers with a known app package should still pass
 `projectKey` explicitly. If no app-shaped project exists, `openApp()` now fails closed instead of treating an arbitrary

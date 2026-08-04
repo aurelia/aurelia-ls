@@ -18,7 +18,10 @@ import {
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import { normalizeHostPath } from '../kernel/source-address.js';
-import { inferSourceFileRole } from '../kernel/source-classification.js';
+import {
+  externalizeSourceFileRole,
+  inferSourceFileRole,
+} from '../kernel/source-classification.js';
 import {
   projectTypeSystemProgramSources,
   type TypeSystemProgramSourceCatalog,
@@ -329,10 +332,7 @@ function checkerDeclarationSourceContext(checker: ts.TypeChecker): CheckerDeclar
 }
 
 function programSourceFileRole(path: string): SourceFileRole {
-  const inferred = inferSourceFileRole(path);
-  return inferred === SourceFileRole.Declaration || inferred === SourceFileRole.Generated
-    ? inferred
-    : SourceFileRole.ExternalSource;
+  return externalizeSourceFileRole(inferSourceFileRole(path));
 }
 
 function declarationAddressNode(declaration: ts.Declaration): ts.Node {

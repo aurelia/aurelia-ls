@@ -4,6 +4,10 @@ import type * as LanguageClientProtocol from "vscode-languageclient/node";
 import { AURELIA_TEMPLATE_CODE_ACTION_RESOLVE_SCHEMA } from "@aurelia-ls/language-server/protocol";
 import type { ClientLogger } from "./log.js";
 import type { VscodeApi } from "./vscode-api.js";
+import {
+  globalActivationTopologyOwner,
+  readWorkspaceActivationTopology,
+} from "./workspace-activation.js";
 import { workspaceEditVersionMismatches } from "./workspace-edit-versions.js";
 
 type MiddlewareLanguageClient = {
@@ -24,6 +28,16 @@ export function createMiddleware(
   client: MiddlewareLanguageClient,
 ): Middleware {
   return {
+    workspace: {
+      didChangeWatchedFile: async (event, next) => {
+        const uri = vscode.Uri.parse(event.uri);
+        const topology = readWorkspaceActivationTopology(vscode);
+        if (globalActivationTopologyOwner(topology, uri) != null) {
+          return;
+        }
+        await next(event);
+      },
+    },
     resolveCodeAction: async (action, token, next) => {
       if (!isAureliaTemplateCodeAction(action)) {
         return next(action, token);

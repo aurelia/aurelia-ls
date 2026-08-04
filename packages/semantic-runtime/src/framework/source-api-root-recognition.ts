@@ -461,7 +461,7 @@ function readSourceContainerRootSets(
   const resolveCallSitesBySpan = callSiteSpanIndex(resolveCallSites);
   const callbackRootsBySourcePath = groupAppTaskCallbackRootsBySourcePath(appTaskCallbackRoots);
   return project.sourceFiles.flatMap((source) => {
-    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
+    const sourceFile = typeSystem.readProgramSourceFileByProjectPath(source.path);
     if (sourceFile == null) {
       return [];
     }

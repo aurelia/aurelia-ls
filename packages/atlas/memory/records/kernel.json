@@ -1051,31 +1051,30 @@
         "incrementality",
         "lsp"
       ],
-      "summary": "Project-input currentness distinguishes ambient pull validation from complete push-synchronized event authority.",
-      "rationale": "Exact project-input reads remain the semantic dependency closure, but replaying every filesystem read on each editor request made warm diagnostics and cursor queries perform tens of thousands of host operations. An LSP session already owns synchronized document changes and workspace file watchers, so its event sequence can prove same-generation currentness without weakening the default library contract. Across an event advance, evaluator and checker consumers still re-capture and compare exact values before carrying semantic work.",
+      "summary": "Each exact project-input read carries its own pull-validated, push-observed, or immutable-snapshot currentness authority.",
+      "rationale": "Exact project-input reads remain the semantic dependency closure, but replaying every filesystem read on each editor request made warm diagnostics and cursor queries perform tens of thousands of host operations. Currentness evidence is heterogeneous inside one generation: an IDE can prove its synchronized open-document values from events while imported dependencies, directory membership, package manifests, and other unproved host inputs still require exact pull validation. Immutable consumer snapshots form a third authority only when their identity names stable input output. Across every revocation or policy transition, evaluator and checker consumers still re-capture exact values before carrying semantic work.",
       "guidance": [
-        "Keep SemanticRuntimeProjectInputChangeDetection.PullValidation as the default for ambient filesystem, library, and MCP consumers that cannot prove complete change notification.",
-        "Use ExplicitEvents only when the adapter calls advance() for every admitted source and configuration change; same-generation validation then uses the generation witness and performs no host I/O.",
-        "Do not replace exact project-input reads with event identities. Exact values still decide semantic carry across event generations, while the event witness only proves that a current push-synchronized generation was not revoked.",
-        "The VS Code session watcher must cover every admitted authored source language. Open-document synchronization owns unsaved text; closed-file watcher events own filesystem changes."
+        "Keep PullValidated as the default for every mutable host read whose owner cannot prove complete notification for that exact descriptor.",
+        "Classify a descriptor as PushObserved only when every mutation affecting it calls advance(); the LSP policy currently applies that proof only to open-document content and existence, not to the surrounding filesystem.",
+        "Use SessionSnapshot only when snapshotIdentity names immutable input output, not merely a mutable host session.",
+        "Do not replace exact project-input values with event or snapshot identities. Those witnesses avoid redundant validation; exact values still decide semantic carry when a generation is recaptured.",
+        "Synchronize policy-mode and snapshot-identity transitions with advance() so a generation cannot observe changed authority before revocation."
       ],
       "anchors": [
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/kernel/project-input.ts",
-          "symbolName": "SemanticRuntimeProjectInputChangeDetection",
-          "summary": "Currentness policy and exact-read validation boundary."
+          "symbolName": "SemanticRuntimeProjectInputCurrentnessPolicy",
+          "summary": "Per-read currentness policy and exact-read validation boundary."
         },
         {
           "kind": "source",
-          "filePath": "packages/language-server/src/runtime/semantic-runtime-session.ts",
-          "symbolName": "SemanticRuntimeLspSession",
-          "summary": "Push-synchronized adapter that selects explicit event change detection."
+          "filePath": "packages/language-server/src/runtime/open-document-source-text-overlay.ts",
+          "summary": "Push-observed authority for synchronized open-document content and existence only."
         },
         {
           "kind": "source",
           "filePath": "packages/vscode/src/client-core.ts",
-          "symbolName": "AureliaLanguageClient",
           "summary": "Workspace watcher ownership for closed admitted source changes."
         },
         {
@@ -1088,16 +1087,19 @@
         {
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/kernel/project-input.ts",
-          "symbolName": "SemanticRuntimeProjectInputChangeDetection"
+          "symbolName": "SemanticRuntimeProjectInputCurrentnessPolicy"
         },
         {
-          "kind": "source-declaration-exists",
-          "filePath": "packages/language-server/src/runtime/semantic-runtime-session.ts",
-          "symbolName": "SemanticRuntimeLspSession"
+          "kind": "source-file-exists",
+          "filePath": "packages/language-server/src/runtime/open-document-source-text-overlay.ts"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/vscode/src/client-core.ts"
         }
       ],
       "createdAt": "2026-08-03",
-      "updatedAt": "2026-08-03"
+      "updatedAt": "2026-08-04"
     }
   ]
 }

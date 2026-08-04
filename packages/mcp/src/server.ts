@@ -20,7 +20,7 @@ const server = new McpServer({
 const adapter = new AureliaMcpSemanticRuntimeAdapter();
 
 registerAureliaSemanticRuntimePrompts(server);
-registerAureliaSemanticRuntimeResources(server, adapter);
+registerAureliaSemanticRuntimeResources(server);
 registerAureliaSemanticRuntimeTools(server, adapter);
 
 await server.connect(new StdioServerTransport());

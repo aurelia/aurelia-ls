@@ -4,7 +4,6 @@ import {
   SEMANTIC_APP_ANALYSIS_DEPTHS,
   SEMANTIC_DIAGNOSTIC_PROJECTION_POLICIES,
   INQUIRY_CONTINUATION_INTENTS,
-  SEMANTIC_PROJECT_DISCOVERY_MODES,
   SEMANTIC_RUNTIME_DETAIL_VALUES,
   SEMANTIC_TYPE_SYSTEM_DEPENDENCY_CACHE_CLEAR_POLICIES,
   SemanticObservedDependencyLocusKind,
@@ -20,51 +19,14 @@ const pageSchema = z.object({
     .describe('Opaque cursor from the prior page; omit first, pass back unchanged.'),
 }).strict().describe('Paging envelope for row and summary-row queries.');
 
-const sourceFileInputSchema = z.object({
-  path: z.string()
-    .describe('Project-relative or absolute source path for explicit project input.'),
-  language: z.string().optional()
-    .describe('Optional language hint; omit to infer from path.'),
-  role: z.string().optional()
-    .describe('Optional source-role override; omit for normal discovery.'),
-  note: z.string().nullable().optional()
-    .describe('Optional note; does not affect analysis.'),
-}).strict().describe('Explicit source file for custom project input, not app-query sourceFile.');
-
-const projectSchema = z.object({
-  rootDir: z.string()
-    .describe('Project root; absolute or under workspaceRoot. Omit projects for discovery.'),
-  projectKey: z.string().optional()
-    .describe('Optional stable project key; omit to derive from root.'),
-  sourceFiles: z.array(sourceFileInputSchema).optional()
-    .describe('Optional explicit source files for clean-room/synthetic projects.'),
-  sourceDiscoveryOptions: z.unknown().optional()
-    .describe('Optional advanced source-discovery options.'),
-}).passthrough().describe('Explicit project boot input; omit for normal discovery.');
-
 const workspaceRootSchema = z.string()
   .describe('Absolute workspace root to boot.');
 
-const optionalWorkspaceRootSchema = z.string().nullable().optional()
-  .describe('Optional workspace root; omit to use the MCP process cwd.');
+const projectRootHintsSchema = z.array(z.string()).nullable().optional()
+  .describe('Existing project-root paths known by the host; semantic-runtime merges them into project-marker discovery.');
 
-const storeKeySchema = z.string().optional()
-  .describe('Optional cache key; omit to derive from workspaceRoot.');
-
-const optionalStoreKeySchema = z.string().nullable().optional()
-  .describe('Optional cache key; omit to derive from workspaceRoot.');
-
-const projectsSchema = z.array(projectSchema).optional()
-  .describe('Optional explicit projects; omit for discovery.');
-
-const optionalProjectsSchema = z.array(projectSchema).nullable().optional()
-  .describe('Optional explicit projects; omit for discovery.');
-
-const projectDiscoverySchema = z.enum(SEMANTIC_PROJECT_DISCOVERY_MODES).optional()
-  .describe('Discovery mode; omit for default, use package-tsconfig for monorepos.');
-
-const optionalProjectDiscoverySchema = z.enum(SEMANTIC_PROJECT_DISCOVERY_MODES).nullable().optional()
-  .describe('Optional discovery mode; omit for default.');
+const excludedWorkspaceRootsSchema = z.array(z.string()).nullable().optional()
+  .describe('Hard descendant workspace roots excluded from authored project and source ownership.');
 
 const projectKeySchema = z.string().nullable().optional()
   .describe('Optional key from aurelia_workspace_overview; omit for default app.');
@@ -142,17 +104,12 @@ const observedDependencyLocusSchema = z.discriminatedUnion('kind', [
 
 const workspaceShape = {
   workspaceRoot: workspaceRootSchema,
-  storeKey: storeKeySchema,
-  projects: projectsSchema,
-  projectDiscovery: projectDiscoverySchema,
+  projectRootHints: projectRootHintsSchema,
+  excludedWorkspaceRoots: excludedWorkspaceRootsSchema,
 } as const;
 
-const optionalRuntimeSelectorShape = {
-  workspaceRoot: optionalWorkspaceRootSchema,
-  storeKey: optionalStoreKeySchema,
-  projects: optionalProjectsSchema,
-  projectDiscovery: optionalProjectDiscoverySchema,
-} as const;
+const cacheWorkspaceSelectorSchema = z.object(workspaceShape).strict()
+  .describe('Exact shared semantic workspace descriptor selector; omit the whole object to address every cached session.');
 
 const appRetentionShape = {
   appRetention: appRetentionSchema,
@@ -229,8 +186,20 @@ export const workspaceOverviewInputSchema = {
     .describe('Optional project-row page; omit for counts/app candidates only.'),
 } as const;
 
+export const projectConfigurationsInputSchema = {
+  ...workspaceShape,
+  view: z.enum(['configurations', 'diagnostics']).nullable().optional()
+    .describe('Return configuration inventory (default) or exact runtime-static diagnostic rows with source spans.'),
+  projectKey: z.string().nullable().optional()
+    .describe('Optional exact semantic project key; omit to select configurations from all projects.'),
+  sourceFilePaths: z.array(z.string()).nullable().optional()
+    .describe('Exact absolute or workspace-relative aurelia.project.json paths. Omit for all existing configurations; an empty list selects none.'),
+  ...pageShape,
+} as const;
+
 export const analysisCacheOverviewInputSchema = {
-  ...optionalRuntimeSelectorShape,
+  workspace: cacheWorkspaceSelectorSchema.nullable().optional()
+    .describe('Exact workspace session to inspect; omit to inspect every cached session.'),
   includeKernelBreakdowns: z.boolean().nullable().optional()
     .describe('Include kernel-density breakdowns; omit for low-token checks.'),
   includeDetailDensity: z.boolean().nullable().optional()
@@ -242,13 +211,13 @@ export const analysisCacheOverviewInputSchema = {
 } as const;
 
 export const clearAnalysisCacheInputSchema = {
-  ...optionalRuntimeSelectorShape,
+  workspace: cacheWorkspaceSelectorSchema.nullable().optional()
+    .describe('Exact workspace session to clear; omit to clear every cached session.'),
   typeSystemDependencyCacheClearPolicy: z.enum(SEMANTIC_TYPE_SYSTEM_DEPENDENCY_CACHE_CLEAR_POLICIES).nullable().optional()
     .describe('Dependency SourceFile cache policy; omit to keep warm libs.'),
 } as const;
 
 export const appQueryCatalogInputSchema = {
-  workspaceRoot: optionalWorkspaceRootSchema,
   group: z.string().nullable().optional()
     .describe('Optional catalog group filter; omit for all groups.'),
   queryKind: appQueryKindSchema.nullable().optional()
@@ -412,12 +381,10 @@ export const templateDiagnosticsInputSchema = {
 } as const;
 
 export const aureliaMcpResponseOutputSchema = {
-  tool: z.string()
-    .describe('MCP tool name.'),
-  generatedAt: z.string()
-    .describe('ISO response timestamp.'),
-  workspaceRoot: z.string().nullable()
-    .describe('Normalized workspace root or null.'),
-  value: z.unknown()
-    .describe('Semantic-runtime answer or structured value.'),
+  tool: z.string(),
+  generatedAt: z.string(),
+  workspaceRoot: z.string().nullable(),
+  workspaceDescriptor: z.unknown().nullable()
+    .describe('Shared workspace descriptor; null when not workspace-scoped.'),
+  value: z.unknown(),
 } as const;

@@ -34,6 +34,39 @@ export async function runSemanticRuntimeRequest<T>(
 }
 
 /**
+ * Run an incoming document request only when the current semantic-runtime boot
+ * admits that exact source as authored by at least one project.
+ *
+ * URI/workspace ownership remains the coarse transport boundary. The runtime
+ * answer is the project-specific authority and deliberately uses the same
+ * request guard as the feature work, so a topology change cannot race the gate.
+ */
+export async function runSemanticRuntimeDocumentRequest<T>(
+  ctx: ServerContext,
+  feature: string,
+  token: CancellationToken,
+  uri: string,
+  whenNotAuthored: (guard: SemanticRuntimeLspRequestGuard) => T | Promise<T>,
+  request: (guard: SemanticRuntimeLspRequestGuard) => T | Promise<T>,
+): Promise<T> {
+  try {
+    return await runServerOperation(ctx, async () => {
+      const guard = semanticRuntimeRequestGuard(ctx, token);
+      if (!ctx.ownsDocument(uri)) {
+        return await whenNotAuthored(guard);
+      }
+      const ownership = await ctx.semanticRuntime.authoredSourceOwnership(uri, guard);
+      if (ownership.value.owners.length === 0) {
+        return await whenNotAuthored(guard);
+      }
+      return await request(guard);
+    });
+  } catch (error) {
+    throw requestFailure(ctx, feature, error, uri);
+  }
+}
+
+/**
  * Run a diagnostic pull without laundering server-side invalidation into an empty report.
  *
  * LSP 3.17 gives diagnostics a dedicated cancellation contract: a server that invalidates

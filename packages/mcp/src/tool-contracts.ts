@@ -5,10 +5,11 @@ import type {
   SemanticRuntimeAppQueryRequest,
   SemanticRuntimeAnalysisCacheClearRequest,
   SemanticRuntimeAnalysisCacheOverviewRequest,
-  SemanticRuntimeOptions,
+  SemanticNativeProjectConfigurationsRequest,
   SemanticRuntimePageInput,
   SemanticRuntimeSourceCursorInput,
   SemanticRuntimeSourceFileInput,
+  SemanticWorkspaceDescriptor,
 } from '@aurelia-ls/semantic-runtime';
 
 declare const __AURELIA_MCP_SERVER_VERSION__: string | undefined;
@@ -20,6 +21,7 @@ export const AURELIA_MCP_SERVER_VERSION = typeof __AURELIA_MCP_SERVER_VERSION__ 
 
 export const aureliaMcpToolNames = {
   workspaceOverview: 'aurelia_workspace_overview',
+  projectConfigurations: 'aurelia_project_configurations',
   analysisCacheOverview: 'aurelia_analysis_cache_overview',
   clearAnalysisCache: 'aurelia_clear_analysis_cache',
   appQueryCatalog: 'aurelia_app_query_catalog',
@@ -39,11 +41,16 @@ export const aureliaMcpToolNames = {
   templateDiagnostics: 'aurelia_template_diagnostics',
 } as const;
 
-export interface AureliaMcpWorkspaceInput extends SemanticRuntimeOptions {
+export interface AureliaMcpWorkspaceInput {
   readonly workspaceRoot: string;
+  /** Existing project roots known by the caller and interpreted by shared semantic-runtime discovery. */
+  readonly projectRootHints?: readonly string[] | null;
+  /** Hard authored-source/workspace boundaries shared with IDE and future AOT consumers. */
+  readonly excludedWorkspaceRoots?: readonly string[] | null;
 }
 
-export interface AureliaMcpOpenAppInput extends AureliaMcpWorkspaceInput, OpenSemanticAppOptions {
+export interface AureliaMcpOpenAppInput
+  extends AureliaMcpWorkspaceInput, Omit<OpenSemanticAppOptions, 'telemetry'> {
   readonly appRetention?: SemanticRuntimeAppQueryRequest['appRetention'];
   readonly continuationIntents?: SemanticRuntimeAppQueryRequest['continuationIntents'];
 }
@@ -60,11 +67,19 @@ export interface AureliaMcpWorkspaceOverviewInput extends AureliaMcpWorkspaceInp
   readonly projectPage?: SemanticRuntimePageInput | null;
 }
 
+export interface AureliaMcpProjectConfigurationsInput extends AureliaMcpWorkspaceInput {
+  /** Select configuration inventory (default) or exact runtime-static diagnostic rows. */
+  readonly view?: 'configurations' | 'diagnostics' | null;
+  readonly projectKey?: SemanticNativeProjectConfigurationsRequest['projectKey'];
+  readonly sourceFilePaths?: SemanticNativeProjectConfigurationsRequest['sourceFilePaths'];
+  readonly page?: SemanticNativeProjectConfigurationsRequest['page'];
+}
+
+/** Exact semantic workspace selector for cache-control tools; omit the whole selector to address every session. */
+export type AureliaMcpCacheWorkspaceSelector = AureliaMcpWorkspaceInput;
+
 export interface AureliaMcpAnalysisCacheOverviewInput {
-  readonly workspaceRoot?: string | null;
-  readonly storeKey?: string | null;
-  readonly projectDiscovery?: SemanticRuntimeOptions['projectDiscovery'] | null;
-  readonly projects?: SemanticRuntimeOptions['projects'] | null;
+  readonly workspace?: AureliaMcpCacheWorkspaceSelector | null;
   readonly includeKernelBreakdowns?: SemanticRuntimeAnalysisCacheOverviewRequest['includeKernelBreakdowns'];
   readonly includeDetailDensity?: SemanticRuntimeAnalysisCacheOverviewRequest['includeDetailDensity'];
   readonly includeQueryClaimRows?: SemanticRuntimeAnalysisCacheOverviewRequest['includeQueryClaimRows'];
@@ -72,16 +87,11 @@ export interface AureliaMcpAnalysisCacheOverviewInput {
 }
 
 export interface AureliaMcpClearAnalysisCacheInput {
-  readonly workspaceRoot?: string | null;
-  readonly storeKey?: string | null;
-  readonly projectDiscovery?: SemanticRuntimeOptions['projectDiscovery'] | null;
-  readonly projects?: SemanticRuntimeOptions['projects'] | null;
+  readonly workspace?: AureliaMcpCacheWorkspaceSelector | null;
   readonly typeSystemDependencyCacheClearPolicy?: SemanticRuntimeAnalysisCacheClearRequest['typeSystemDependencyCacheClearPolicy'];
 }
 
 export interface AureliaMcpAppQueryCatalogInput {
-  /** Optional host cwd hint for local clients that want all responses to carry a workspace label. */
-  readonly workspaceRoot?: string | null;
   /** Optional query group filter such as `router`, `template`, or `binding`. */
   readonly group?: string | null;
   /** Optional exact query kind filter. */
@@ -194,5 +204,7 @@ export interface AureliaMcpResponse<TValue> {
   readonly tool: string;
   readonly generatedAt: string;
   readonly workspaceRoot: string | null;
+  /** Exact shared semantic source-world input used by this call; null for static or all-session tools. */
+  readonly workspaceDescriptor: SemanticWorkspaceDescriptor | null;
   readonly value: TValue;
 }

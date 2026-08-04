@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aurelia.io/schemas/aurelia.project.schema.json",
+  "title": "Aurelia Project Configuration",
+  "description": "Static semantic project configuration consumed by Aurelia tooling.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version"],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "version": {
+      "const": 1
+    },
+    "authoredSources": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "excludedRoots": {
+          "description": "Project-relative descendant directory roots that remain readable as dependencies but are not authored project sources.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!\\s)(?!.*\\s$)(?![!\\\\/])(?![A-Za-z][A-Za-z0-9+.-]*:)(?!.*[?*\\[\\]{}])(?!(?:.*[\\\\/])?\\.{1,2}(?:[\\\\/]|$))(?!.*[\\u0000-\\u001F\\u007F])[^\\\\/]+(?:[\\\\/][^\\\\/]+)*$"
+          }
+        }
+      }
+    }
+  }
+}

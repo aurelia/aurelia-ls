@@ -1,3 +1,4 @@
+import path from 'node:path';
 import ts from 'typescript';
 import type { TypeSystemProject } from './project.js';
 import type { TypeSystemOverlaySourceSegment } from './overlay.js';
@@ -108,13 +109,16 @@ export function readTypeSystemProjectSourceDiagnostics(
   typeSystem: TypeSystemProject,
   fileName: string,
 ): readonly TypeSystemDiagnostic[] {
-  const sourceFile = typeSystem.readProgramSourceFileByPath(fileName);
+  const hostFileName = path.isAbsolute(fileName)
+    ? path.resolve(fileName)
+    : path.resolve(typeSystem.project.rootDir, fileName);
+  const sourceFile = typeSystem.readProgramSourceFileByHostPath(hostFileName);
   let diagnosticsBySource = diagnosticsByProjectAndSource.get(typeSystem);
   if (diagnosticsBySource == null) {
     diagnosticsBySource = new Map();
     diagnosticsByProjectAndSource.set(typeSystem, diagnosticsBySource);
   }
-  const cacheKey = typeSystemDiagnosticSourceCacheKey(typeSystem, fileName, sourceFile);
+  const cacheKey = typeSystemDiagnosticSourceCacheKey(typeSystem, hostFileName, sourceFile);
   const cached = diagnosticsBySource.get(cacheKey);
   if (cached != null) {
     return cached;
@@ -122,7 +126,7 @@ export function readTypeSystemProjectSourceDiagnostics(
   const cachedProjectDiagnostics = diagnosticsByProject.get(typeSystem);
   if (cachedProjectDiagnostics != null) {
     const result = cachedProjectDiagnostics.filter((diagnostic) =>
-      typeSystemDiagnosticMatchesSource(diagnostic, fileName)
+      typeSystemDiagnosticMatchesSource(diagnostic, hostFileName)
     );
     diagnosticsBySource.set(cacheKey, result);
     return result;
@@ -130,7 +134,7 @@ export function readTypeSystemProjectSourceDiagnostics(
 
   const diagnostics: TypeSystemDiagnostic[] = typeSystem.configDiagnostics
     .map((diagnostic) => typeSystemDiagnostic('config', diagnostic, typeSystem.configFilePath))
-    .filter((diagnostic) => typeSystemDiagnosticMatchesSource(diagnostic, fileName));
+    .filter((diagnostic) => typeSystemDiagnosticMatchesSource(diagnostic, hostFileName));
 
   if (sourceFile != null) {
     diagnostics.push(
@@ -160,7 +164,7 @@ export function readTypeSystemOverlayDiagnostics(
     return cached;
   }
   const rows = typeSystem.readOverlaySources().flatMap((overlaySource) => {
-    const sourceFile = typeSystem.readProgramSourceFileByPath(overlaySource.fileName);
+    const sourceFile = typeSystem.readProgramSourceFileByHostPath(overlaySource.fileName);
     if (sourceFile == null) {
       return [];
     }

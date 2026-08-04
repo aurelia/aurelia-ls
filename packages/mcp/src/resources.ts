@@ -1,16 +1,14 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import process from 'node:process';
 import { listAureliaPatternMenuItems } from '@aurelia-ls/patterns';
+import { readSemanticAppQueryCatalog } from '@aurelia-ls/semantic-runtime';
 import { aureliaDocsIndexResourceValue } from './docs-runtime.js';
 import {
   AURELIA_MCP_ORIENTATION_RESOURCE_TEXT,
   AURELIA_MCP_ORIENTATION_RESOURCE_URI,
 } from './orientation.js';
-import { AureliaMcpSemanticRuntimeAdapter } from './runtime-adapter.js';
 
 export function registerAureliaSemanticRuntimeResources(
   server: McpServer,
-  adapter: AureliaMcpSemanticRuntimeAdapter = new AureliaMcpSemanticRuntimeAdapter(),
 ): void {
   registerStaticTextResource(
     server,
@@ -42,7 +40,7 @@ export function registerAureliaSemanticRuntimeResources(
     'aurelia://semantic-runtime/app-queries',
     'Aurelia App Query Catalog',
     'Supported semantic-runtime app query kinds and their locus, paging, detail, and router-product affordances.',
-    async () => (await adapter.appQueryCatalog({ workspaceRoot: process.cwd() })).value,
+    async () => readSemanticAppQueryCatalog().value,
   );
 }
 

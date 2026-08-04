@@ -93,7 +93,7 @@ export function readInvalidFromStateDecoratorSites(
   typeSystem: TypeSystemProject,
 ): readonly FromStateDecoratorSite[] {
   return project.sourceFiles.flatMap((source) => {
-    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
+    const sourceFile = typeSystem.readProgramSourceFileByProjectPath(source.path);
     return sourceFile == null
       ? []
       : readSourceFileInvalidFromStateDecoratorSites(source.path, source.addressHandle, sourceFile);
@@ -127,7 +127,7 @@ export function readFromStateDecoratorBindingSites(
   typeSystem: TypeSystemProject,
 ): readonly FromStateDecoratorBindingSite[] {
   return project.sourceFiles.flatMap((source) => {
-    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
+    const sourceFile = typeSystem.readProgramSourceFileByProjectPath(source.path);
     return sourceFile == null
       ? []
       : readSourceFileFromStateDecoratorBindingSites(source.path, source.addressHandle, sourceFile);

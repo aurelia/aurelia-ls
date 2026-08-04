@@ -56,6 +56,12 @@ function createLifecycleHarness() {
       generation = createGeneration(generation.sourceGeneration + 1, generation.workspaceGeneration);
       return generation;
     }),
+    recordProjectConfigurationChanged: vi.fn(() => {
+      generation = createGeneration(generation.sourceGeneration + 1, generation.workspaceGeneration);
+      return generation;
+    }),
+    requestGuard: vi.fn(() => ({ requestEpoch: generation.sourceGeneration, isCancellationRequested: null })),
+    preflight: vi.fn(async () => generation),
     currentGeneration: vi.fn(() => generation),
     invalidateRequests: vi.fn(() => {
       generation = createGeneration(generation.sourceGeneration + 1, generation.workspaceGeneration);
@@ -107,11 +113,18 @@ function createLifecycleHarness() {
     logger,
     clientSupportsCodeActionResolveEdit: false,
     get workspaceRoot() { return documentUris.workspaceRoot; },
-    configureWorkspace: vi.fn((rootUri: string, excludedRootUris: readonly string[] = []) => {
+    configureWorkspace: vi.fn((
+      rootUri: string,
+      excludedRootUris: readonly string[] = [],
+      _projectRootHintUris: readonly string[] = [],
+    ) => {
       documentUris.configure(rootUri, excludedRootUris);
       semanticRuntime.configureWorkspace();
     }),
     ownsDocument: (uri: string) => documentUris.ownsDocument(uri),
+    openWorkspaceDocument: (uri: string) => documentUris.workspaceHostPath(uri) == null
+      ? null
+      : openDocuments.get(documentUris.key(uri)) ?? null,
     openDocument: (uri: string) => documentUris.ownsDocument(uri)
       ? openDocuments.get(documentUris.key(uri)) ?? null
       : null,
@@ -149,7 +162,9 @@ function document(
   version = 1,
   text = "<template></template>",
 ): TextDocument {
-  const languageId = uri.endsWith(".html") ? "html" : "typescript";
+  const languageId = uri.endsWith(".html")
+    ? "html"
+    : uri.endsWith(".json") ? "json" : "typescript";
   return TextDocument.create(uri, languageId, version, text);
 }
 
@@ -172,7 +187,7 @@ describe("initialization", () => {
       },
     } as never);
 
-    expect(harness.ctx.configureWorkspace).toHaveBeenCalledWith(fallbackRootUri, []);
+    expect(harness.ctx.configureWorkspace).toHaveBeenCalledWith(fallbackRootUri, [], []);
     expect(harness.clientSupport).toEqual({
       configurationPull: true,
       configurationChangeRegistration: true,
@@ -199,24 +214,38 @@ describe("initialization", () => {
   test("configures typed nested workspace exclusions and rejects malformed topology", () => {
     const harness = createLifecycleHarness();
     const excludedUri = workspaceFileUri("packages/disabled");
+    const projectRootHintUri = workspaceFileUri("packages/app");
 
     handleInitialize(harness.ctx as never, {
       rootUri: workspaceUri,
-      initializationOptions: { excludedWorkspaceRootUris: [excludedUri] },
+      initializationOptions: {
+        excludedWorkspaceRootUris: [excludedUri],
+        projectRootHintUris: [projectRootHintUri],
+      },
       capabilities: {},
     } as never);
-    expect(harness.ctx.configureWorkspace).toHaveBeenCalledWith(workspaceUri, [excludedUri]);
+    expect(harness.ctx.configureWorkspace).toHaveBeenCalledWith(
+      workspaceUri,
+      [excludedUri],
+      [projectRootHintUri],
+    );
 
     expect(() => handleInitialize(harness.ctx as never, {
       rootUri: workspaceUri,
       initializationOptions: { excludedWorkspaceRootUris: "not-an-array" },
       capabilities: {},
     } as never)).toThrowError(expect.objectContaining({ code: ErrorCodes.InvalidParams }));
+
+    expect(() => handleInitialize(harness.ctx as never, {
+      rootUri: workspaceUri,
+      initializationOptions: { projectRootHintUris: [42] },
+      capabilities: {},
+    } as never)).toThrowError(expect.objectContaining({ code: ErrorCodes.InvalidParams }));
   });
 });
 
 describe("document source authority", () => {
-  test("ignores synchronized documents inside an excluded workspace subtree", async () => {
+  test("advances synchronized dependency inputs inside an excluded workspace subtree", async () => {
     const harness = createLifecycleHarness();
     harness.ctx.configureWorkspace(workspaceUri, [workspaceFileUri("packages/disabled")]);
     const doc = document(workspaceFileUri("packages/disabled/src/my-app.html"));
@@ -227,8 +256,39 @@ describe("document source authority", () => {
     harness.watch([{ uri: doc.uri, type: FileChangeType.Changed }]);
     await settleAsyncWork();
 
-    expect(harness.semanticRuntime.recordSourceTextChanged).not.toHaveBeenCalled();
+    expect(harness.ctx.ownsDocument(doc.uri)).toBe(false);
+    expect(harness.semanticRuntime.recordSourceTextChanged).toHaveBeenCalledTimes(3);
+    expect(harness.semanticRuntime.recordSourceTextChanged).toHaveBeenNthCalledWith(
+      1,
+      [path.resolve(workspaceRoot, "packages/disabled/src/my-app.html")],
+    );
     expect(harness.semanticRuntime.recordProjectTopologyChanged).not.toHaveBeenCalled();
+  });
+
+  test("forwards excluded structural watcher events without granting authored ownership", () => {
+    vi.useFakeTimers();
+    try {
+      const harness = createLifecycleHarness();
+      const excludedRoot = workspaceFileUri("packages/disabled");
+      const markerUri = workspaceFileUri("packages/disabled/package.json");
+      const sourceUri = workspaceFileUri("packages/disabled/src/dependency.ts");
+      harness.ctx.configureWorkspace(workspaceUri, [excludedRoot]);
+
+      harness.watch([
+        { uri: markerUri, type: FileChangeType.Created },
+        { uri: sourceUri, type: FileChangeType.Deleted },
+      ]);
+
+      expect(harness.ctx.ownsDocument(markerUri)).toBe(false);
+      expect(harness.ctx.ownsDocument(sourceUri)).toBe(false);
+      expect(harness.semanticRuntime.recordProjectTopologyChanged).toHaveBeenCalledWith([
+        path.resolve(workspaceRoot, "packages/disabled/package.json"),
+        path.resolve(workspaceRoot, "packages/disabled/src/dependency.ts"),
+      ]);
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
   });
 
   test("ignores events outside semantic-runtime source admission", async () => {
@@ -281,7 +341,10 @@ describe("document source authority", () => {
       expect(harness.connection.sendNotification).toHaveBeenCalledOnce();
       expect(harness.connection.sendNotification).toHaveBeenCalledWith(
         "aurelia/analysisChanged",
-        { fingerprint: "semantic-runtime:test:workspace-0:source-2" },
+        {
+          fingerprint: "semantic-runtime:test:workspace-0:source-2",
+          changeKind: "source-text",
+        },
       );
       expect(harness.connection.languages.semanticTokens.refresh).toHaveBeenCalledOnce();
       expect(harness.connection.languages.diagnostics.refresh).toHaveBeenCalledOnce();
@@ -307,6 +370,34 @@ describe("document source authority", () => {
       expect(harness.semanticRuntime.recordSourceTextChanged).toHaveBeenCalledTimes(2);
       expect(harness.connection.sendNotification).toHaveBeenCalledOnce();
       expect(harness.connection.languages.diagnostics.refresh).toHaveBeenCalledOnce();
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  test.each([
+    "package.json",
+    "jsconfig.json",
+    "tsconfig.json",
+    "tsconfig.app.json",
+    "aurelia.project.json",
+  ])("advances synchronized and closed %s as exact configuration values", (configurationFile) => {
+    vi.useFakeTimers();
+    try {
+      const harness = createLifecycleHarness();
+      const uri = workspaceFileUri(configurationFile);
+      const first = document(uri, 1, "{}");
+      const second = document(uri, 2, '{"version":1}');
+
+      harness.emitOpen(first);
+      harness.synchronize(first);
+      harness.synchronize(second);
+      harness.close(second);
+
+      expect(harness.semanticRuntime.recordProjectConfigurationChanged).toHaveBeenCalledTimes(3);
+      expect(harness.semanticRuntime.recordProjectTopologyChanged).not.toHaveBeenCalled();
+      expect(harness.semanticRuntime.recordSourceTextChanged).not.toHaveBeenCalled();
     } finally {
       vi.clearAllTimers();
       vi.useRealTimers();
@@ -365,22 +456,31 @@ describe("workspace source events", () => {
     }
   });
 
-  test("treats admitted source creation as one project-topology event", async () => {
+  test.each([
+    FileChangeType.Created,
+    FileChangeType.Deleted,
+  ])("treats source %s as one structural-membership event", async (changeType) => {
     vi.useFakeTimers();
     try {
       const harness = createLifecycleHarness();
       harness.clientSupport.diagnosticRefresh = true;
 
       harness.watch([
-        { uri: workspaceFileUri("src/feature.mts"), type: FileChangeType.Created },
-        { uri: workspaceFileUri("src/feature.html"), type: FileChangeType.Created },
-        { uri: workspaceFileUri("src/feature.css"), type: FileChangeType.Created },
-        { uri: workspaceFileUri("src/feature.json"), type: FileChangeType.Created },
+        { uri: workspaceFileUri("src/feature.mts"), type: changeType as FileChangeType },
+        { uri: workspaceFileUri("src/feature.html"), type: changeType as FileChangeType },
+        { uri: workspaceFileUri("src/feature.css"), type: changeType as FileChangeType },
+        { uri: workspaceFileUri("src/feature.json"), type: changeType as FileChangeType },
       ]);
       await vi.advanceTimersByTimeAsync(300);
       await settleAsyncWork();
 
       expect(harness.semanticRuntime.recordProjectTopologyChanged).toHaveBeenCalledOnce();
+      expect(harness.semanticRuntime.recordProjectTopologyChanged).toHaveBeenCalledWith([
+        path.resolve(workspaceRoot, "src/feature.mts"),
+        path.resolve(workspaceRoot, "src/feature.html"),
+        path.resolve(workspaceRoot, "src/feature.css"),
+        path.resolve(workspaceRoot, "src/feature.json"),
+      ]);
       expect(harness.semanticRuntime.recordSourceTextChanged).not.toHaveBeenCalled();
       expect(harness.connection.sendNotification).toHaveBeenCalledOnce();
       expect(harness.connection.languages.diagnostics.refresh).toHaveBeenCalledOnce();
@@ -390,17 +490,108 @@ describe("workspace source events", () => {
     }
   });
 
-  test("treats project configuration edits as topology changes", async () => {
+  test.each([
+    "package.json",
+    "jsconfig.json",
+    "tsconfig.json",
+    "tsconfig.app.json",
+    "aurelia.project.json",
+  ])("advances watched %s edits as exact configuration values", async (configurationFile) => {
     vi.useFakeTimers();
     try {
       const harness = createLifecycleHarness();
 
-      harness.watch([{ uri: workspaceFileUri("tsconfig.app.json"), type: FileChangeType.Changed }]);
+      harness.watch([{ uri: workspaceFileUri(configurationFile), type: FileChangeType.Changed }]);
+      await vi.advanceTimersByTimeAsync(300);
+      await settleAsyncWork();
+
+      expect(harness.semanticRuntime.recordProjectConfigurationChanged).toHaveBeenCalledOnce();
+      expect(harness.semanticRuntime.recordProjectConfigurationChanged).toHaveBeenCalledWith([
+        path.resolve(workspaceRoot, configurationFile),
+      ]);
+      expect(harness.semanticRuntime.recordProjectTopologyChanged).not.toHaveBeenCalled();
+      expect(harness.semanticRuntime.recordSourceTextChanged).not.toHaveBeenCalled();
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  test.each([
+    ...[
+      "package.json",
+      "jsconfig.json",
+      "tsconfig.json",
+      "aurelia.project.json",
+    ].flatMap((configurationFile) => [
+      [configurationFile, FileChangeType.Created] as const,
+      [configurationFile, FileChangeType.Deleted] as const,
+    ]),
+  ])("treats structural %s %s as topology", async (configurationFile, changeType) => {
+    vi.useFakeTimers();
+    try {
+      const harness = createLifecycleHarness();
+
+      harness.watch([{
+        uri: workspaceFileUri(configurationFile),
+        type: changeType as FileChangeType,
+      }]);
       await vi.advanceTimersByTimeAsync(300);
       await settleAsyncWork();
 
       expect(harness.semanticRuntime.recordProjectTopologyChanged).toHaveBeenCalledOnce();
+      expect(harness.semanticRuntime.recordProjectTopologyChanged).toHaveBeenCalledWith([
+        path.resolve(workspaceRoot, configurationFile),
+      ]);
+      expect(harness.semanticRuntime.recordProjectConfigurationChanged).not.toHaveBeenCalled();
       expect(harness.semanticRuntime.recordSourceTextChanged).not.toHaveBeenCalled();
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  test("does not replay a watched save for an open project configuration", async () => {
+    const harness = createLifecycleHarness();
+    const config = document(workspaceFileUri("aurelia.project.json"), 1, '{"version":1}');
+    harness.emitOpen(config);
+
+    harness.watch([{ uri: config.uri, type: FileChangeType.Changed }]);
+    await settleAsyncWork();
+
+    expect(harness.semanticRuntime.recordProjectTopologyChanged).not.toHaveBeenCalled();
+    expect(harness.semanticRuntime.recordProjectConfigurationChanged).not.toHaveBeenCalled();
+    expect(harness.semanticRuntime.recordSourceTextChanged).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    "source-then-topology",
+    "topology-then-source",
+  ] as const)("preserves topology dominance for %s debounce order", async (order) => {
+    vi.useFakeTimers();
+    try {
+      const harness = createLifecycleHarness();
+      const recordSource = () => harness.synchronize(document());
+      const recordTopology = () => harness.watch([{
+        uri: workspaceFileUri("aurelia.project.json"),
+        type: FileChangeType.Changed,
+      }]);
+
+      if (order === "source-then-topology") {
+        recordSource();
+        recordTopology();
+      } else {
+        recordTopology();
+        recordSource();
+      }
+      await vi.advanceTimersByTimeAsync(300);
+      await settleAsyncWork();
+
+      expect(harness.connection.sendNotification).toHaveBeenCalledOnce();
+      expect(harness.connection.sendNotification).toHaveBeenCalledWith(
+        "aurelia/analysisChanged",
+        expect.objectContaining({ changeKind: "topology" }),
+      );
     } finally {
       vi.clearAllTimers();
       vi.useRealTimers();

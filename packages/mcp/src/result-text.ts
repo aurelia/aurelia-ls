@@ -215,7 +215,8 @@ function semanticAnswerRowPreview(value: unknown): string | null {
     return null;
   }
   const remaining = value.rows.length - rows.length;
-  return `Rows: ${rows.join(' | ')}${remaining > 0 ? ` | +${remaining} more in structuredContent` : ''}.`;
+  const preview = `${rows.join(' | ')}${remaining > 0 ? ` | +${remaining} more in structuredContent` : ''}`;
+  return `Rows: ${preview}${/[.!?]$/u.test(preview) ? '' : '.'}`;
 }
 
 const ROW_PREVIEW_KEYS = [
@@ -224,6 +225,7 @@ const ROW_PREVIEW_KEYS = [
   'label',
   'queryKind',
   'kind',
+  'diagnosticKind',
   'siteKind',
   'demandKind',
   'requiredCapability',
@@ -367,6 +369,10 @@ function compactRowFieldValue(value: unknown): string | null {
   if (typeof value.path === 'string') {
     const start = typeof value.start === 'number' ? `@${value.start}` : '';
     return `${value.path}${start}`;
+  }
+  if (typeof value.filePath === 'string') {
+    const start = typeof value.start === 'number' ? `@${value.start}` : '';
+    return `${value.filePath}${start}`;
   }
   return null;
 }

@@ -128,6 +128,21 @@
     "typescript": "6.0.3"
   },
   "devDependencies": {
-    "@types/node": "^22.5.4"
+    "@aurelia/dialog": "link:../../aurelia/packages/dialog",
+    "@aurelia/fetch-client": "link:../../aurelia/packages/fetch-client",
+    "@aurelia/i18n": "link:../../aurelia/packages/i18n",
+    "@aurelia/kernel": "link:../../aurelia/packages/kernel",
+    "@aurelia/router": "link:../../aurelia/packages/router",
+    "@aurelia/runtime": "link:../../aurelia/packages/runtime",
+    "@aurelia/runtime-html": "link:../../aurelia/packages/runtime-html",
+    "@aurelia/state": "link:../../aurelia/packages/state",
+    "@aurelia/template-compiler": "link:../../aurelia/packages/template-compiler",
+    "@aurelia/ui-virtualization": "link:../../aurelia/packages/ui-virtualization",
+    "@aurelia/validation": "link:../../aurelia/packages/validation",
+    "@aurelia/validation-html": "link:../../aurelia/packages/validation-html",
+    "@aurelia/validation-i18n": "link:../../aurelia/packages/validation-i18n",
+    "@aurelia/vite-plugin": "link:../../aurelia/packages-tooling/vite-plugin",
+    "@types/node": "^22.5.4",
+    "aurelia": "link:../../aurelia/packages/aurelia"
   }
 }

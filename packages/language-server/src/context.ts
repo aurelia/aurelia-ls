@@ -27,9 +27,15 @@ export interface ServerContext {
   /** Client can preserve CodeAction.data and lazily resolve the edit property. */
   clientSupportsCodeActionResolveEdit: boolean;
 
-  configureWorkspace(rootUri: DocumentUri, excludedRootUris?: readonly DocumentUri[]): void;
+  configureWorkspace(
+    rootUri: DocumentUri,
+    excludedRootUris?: readonly DocumentUri[],
+    projectRootHintUris?: readonly DocumentUri[],
+  ): void;
 
   ownsDocument(uri: DocumentUri): boolean;
+  /** Synchronized open text anywhere in the coarse workspace, including hard-excluded dependency roots. */
+  openWorkspaceDocument(uri: DocumentUri): TextDocument | null;
   openDocument(uri: DocumentUri): TextDocument | null;
   ensureProgramDocument(uri: string): TextDocument | null;
   lookupDocumentSnapshot(uri: DocumentUri): DocumentSnapshot | null;
@@ -61,11 +67,13 @@ export function createServerContext(init: ServerContextInit): ServerContext {
   const { connection, documents, logger } = init;
 
   const documentUris = new WorkspaceDocumentUris();
+  const sourceTextOverlay = new OpenDocumentSourceTextOverlay(documents, documentUris);
   const semanticRuntime = new SemanticRuntimeLspSession({
     documentUris,
     projectInputHost: new NodeSemanticRuntimeProjectInputHost(
-      new OpenDocumentSourceTextOverlay(documents, documentUris),
+      sourceTextOverlay,
     ),
+    projectInputCurrentnessPolicy: sourceTextOverlay,
   });
   const clientSupport: ServerClientSupport = {
     configurationPull: false,
@@ -90,7 +98,14 @@ export function createServerContext(init: ServerContextInit): ServerContext {
     if (!documentUris.ownsDocument(uri)) {
       return null;
     }
-    const live = openDocument(uri);
+    return lookupWorkspaceDocumentSnapshot(uri);
+  }
+
+  function lookupWorkspaceDocumentSnapshot(uri: DocumentUri): DocumentSnapshot | null {
+    if (documentUris.workspaceHostPath(uri) == null) {
+      return null;
+    }
+    const live = openWorkspaceDocument(uri);
     if (live) {
       return {
         uri: live.uri,
@@ -113,11 +128,18 @@ export function createServerContext(init: ServerContextInit): ServerContext {
   }
 
   function lookupText(uri: DocumentUri): string | null {
-    return lookupDocumentSnapshot(uri)?.text ?? null;
+    return lookupWorkspaceDocumentSnapshot(uri)?.text ?? null;
   }
 
   function openDocument(uri: DocumentUri): TextDocument | null {
     if (!documentUris.ownsDocument(uri)) {
+      return null;
+    }
+    return openWorkspaceDocument(uri);
+  }
+
+  function openWorkspaceDocument(uri: DocumentUri): TextDocument | null {
+    if (documentUris.workspaceHostPath(uri) == null) {
       return null;
     }
     const direct = documents.get(uri);
@@ -137,13 +159,21 @@ export function createServerContext(init: ServerContextInit): ServerContext {
     documentUris,
 
     get workspaceRoot() { return documentUris.workspaceRoot; },
-    configureWorkspace(rootUri, excludedRootUris = []) {
+    configureWorkspace(rootUri, excludedRootUris = [], projectRootHintUris = []) {
       documentUris.configure(rootUri, excludedRootUris);
-      semanticRuntime.configureWorkspace();
+      const projectRootHints = projectRootHintUris.map((uri) => {
+        const hostPath = documentUris.workspaceHostPath(uri);
+        if (hostPath == null) {
+          throw new Error(`Project root hint '${uri}' is not inside workspace '${rootUri}'.`);
+        }
+        return hostPath;
+      });
+      semanticRuntime.configureWorkspace(projectRootHints);
     },
     clientSupportsCodeActionResolveEdit: false,
 
     ownsDocument: (uri) => documentUris.ownsDocument(uri),
+    openWorkspaceDocument,
     openDocument,
     ensureProgramDocument,
     lookupDocumentSnapshot,

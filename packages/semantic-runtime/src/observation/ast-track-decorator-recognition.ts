@@ -47,7 +47,7 @@ export function readInvalidAstTrackDecoratorSites(
   typeSystem: TypeSystemProject,
 ): readonly AstTrackDecoratorSite[] {
   return project.sourceFiles.flatMap((source) => {
-    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
+    const sourceFile = typeSystem.readProgramSourceFileByProjectPath(source.path);
     return sourceFile == null
       ? []
       : readSourceFileInvalidAstTrackDecoratorSites(source.path, source.addressHandle, sourceFile);

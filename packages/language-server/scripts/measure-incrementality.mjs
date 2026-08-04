@@ -226,13 +226,18 @@ async function main() {
   const cursorPositions = cursorPositionsForDocument(targetHtml);
   const documentUris = new WorkspaceDocumentUris();
   documentUris.configure(pathToFileURL(fixtureRoot).toString());
+  const sourceTextOverlay = new OpenDocumentSourceTextOverlay(documents, documentUris);
   const projectInputHost = new MeasuredProjectInputHost(
     new NodeSemanticRuntimeProjectInputHost(
-      new OpenDocumentSourceTextOverlay(documents, documentUris),
+      sourceTextOverlay,
     ),
   );
   const measurement = new MeasurementProbe(projectInputHost, documents);
-  const session = new SemanticRuntimeLspSession({ documentUris, projectInputHost });
+  const session = new SemanticRuntimeLspSession({
+    documentUris,
+    projectInputHost,
+    projectInputCurrentnessPolicy: sourceTextOverlay,
+  });
   const report = {
     fixture: {
       name: fixtureName,

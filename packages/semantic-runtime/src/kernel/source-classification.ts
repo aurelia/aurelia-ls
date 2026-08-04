@@ -78,6 +78,25 @@ export function inferSourceFileRole(path: string): SourceFileRole {
   }
 }
 
+/**
+ * Reclassify a physical source reached outside authored project ownership.
+ *
+ * Declaration and generated provenance remain meaningful across that boundary. Every other role describes how a
+ * source participates inside an authored project and therefore collapses to the external-source role once the file is
+ * reached only as a dependency.
+ */
+export function externalizeSourceFileRole(
+  role: SourceFileRole | `${SourceFileRole}`,
+): SourceFileRole {
+  if (role === SourceFileRole.Declaration) {
+    return SourceFileRole.Declaration;
+  }
+  if (role === SourceFileRole.Generated) {
+    return SourceFileRole.Generated;
+  }
+  return SourceFileRole.ExternalSource;
+}
+
 function isRootDocumentPath(segments: readonly string[], baseName: string): boolean {
   return baseName === 'index.html' && segments.length === 1;
 }

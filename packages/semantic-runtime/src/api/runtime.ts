@@ -1,14 +1,23 @@
 import path from 'node:path';
 import type { BootProjectInput, ProjectBootFrame, WorkspaceBootFrame } from '../boot/frames.js';
-import { bootWorkspace } from '../boot/boot-workspace.js';
+import { bootWorkspace, bootWorkspaceFromSourceWorld } from '../boot/boot-workspace.js';
+import type { ResolvedSemanticSourceWorld } from '../boot/source-world.js';
 import {
   readSemanticProjectShape,
   SemanticProjectShapeKind,
   type SemanticProjectShape,
 } from '../boot/project-shape.js';
 import { safeIsDirectory } from '../boot/host-files.js';
-import { SemanticRuntimeProjectInputAuthority } from '../kernel/project-input.js';
+import {
+  SemanticRuntimeProjectInputAuthority,
+  SemanticRuntimeProjectInputRead,
+  type SemanticRuntimeProjectInputGeneration,
+  type SemanticRuntimeProjectInputReadScope,
+} from '../kernel/project-input.js';
 import { SourceFileRole } from '../kernel/address.js';
+import { externalizeSourceFileRole } from '../kernel/source-classification.js';
+import { canonicalTypeSystemPath } from '../type-system/source-file-path.js';
+import { normalizeSemanticRuntimeOptions } from './workspace-descriptor.js';
 import {
   KernelStore,
   type KernelStoreDisposalSummary,
@@ -17,6 +26,7 @@ import {
 import {
   ComputationCommitState,
   ComputationLifecycleRegistry,
+  type ComputationGenerationReference,
 } from '../kernel/computation-lifecycle.js';
 import { FrameworkSupportAuthority } from '../framework/framework-support-authority.js';
 import { AureliaAppWorldProjectEmission } from '../configuration/app-world-project-pass.js';
@@ -104,6 +114,10 @@ import {
   semanticAppProjectEpochKey,
   semanticAppProjectInputEpochKey,
   semanticAppSourceEpochKey,
+  semanticAuthoredSourceOwnershipKey,
+  semanticNativeProjectConfigurationsKey,
+  semanticProjectConfigurationEpochKey,
+  semanticProjectConfigurationDiagnosticsKey,
   semanticRuntimeAppWorldFreeQueryBatchKey,
   semanticRuntimeAppWorldFreeQueryKey,
   semanticRuntimeAppQueryCatalogKey,
@@ -140,6 +154,7 @@ import {
 import {
   QueryClaimGraph,
   type QueryClaimAnswerDisposalSummary,
+  type QueryClaimAnswerLease,
 } from '../inquiry/query-claim-graph.js';
 import {
   InquiryContinuationKind,
@@ -379,6 +394,12 @@ import {
   type SemanticRuntimeSourceFileInput,
   type SemanticRuntimeSummary,
   type SemanticRuntimeSummaryRequest,
+  type SemanticAuthoredSourceOwnershipRequest,
+  type SemanticAuthoredSourceOwnershipResult,
+  type SemanticNativeProjectConfigurationsRequest,
+  type SemanticNativeProjectConfigurationsResult,
+  type SemanticProjectConfigurationDiagnosticsRequest,
+  type SemanticProjectConfigurationDiagnosticsResult,
   type SemanticSourceFilesResult,
   type SemanticStateIssuesResult,
   type SemanticStateGetterBindingsResult,
@@ -395,6 +416,14 @@ import {
   type SemanticTypeScriptDiagnosticsResult,
   type SemanticTypeScriptDiagnosticSummaryResult,
 } from './contracts.js';
+import {
+  SEMANTIC_RUNTIME_ANALYSIS_RECEIPT_KIND,
+  SemanticRuntimeAnalysisLifetimeAuthority,
+  SemanticRuntimeAnalysisReceipt,
+  SemanticRuntimeAnalysisReceiptBuilder,
+  withSemanticRuntimeAnalysisReceipt,
+} from './analysis-receipt.js';
+import { SemanticAnswerTransaction } from './analysis-answer-transaction.js';
 import type {
   ApplicationFileRole,
 } from '../application/topology.js';
@@ -435,6 +464,8 @@ export async function createSemanticRuntime(
 
 interface SemanticAppOpenPlan {
   readonly project: ProjectBootFrame;
+  /** Exact shape/selection reads consumed before the reusable query-claim boundary opens. */
+  readonly planningReads: readonly SemanticRuntimeProjectInputRead[];
   readonly analysisDepth: SemanticAppAnalysisDepth;
   readonly includeAuthoringTemplates: boolean;
   readonly authoringTemplateSourceFiles: readonly string[];
@@ -450,13 +481,23 @@ interface SemanticRuntimeQueryClaimInput {
   readonly locusKey?: string;
   readonly epochKeys?: readonly string[];
   readonly materializationPolicy: SemanticQueryMaterializationPolicy;
+  readonly projectInputGenerations?: readonly SemanticRuntimeProjectInputGeneration[];
+  readonly planningReads?: readonly SemanticRuntimeProjectInputRead[];
+  readonly readComputationGenerations?: () => readonly ComputationGenerationReference[];
   readonly kernelBoundary?: 'dispose-answer-local' | 'observe-only';
   readonly shouldReuseRetainedAnswer?: () => boolean;
-  readonly disposeAnswerSideEffects?: () => QueryClaimAnswerDisposalSummary | null;
+  readonly disposeAnswerSideEffects?: (transaction: SemanticAnswerTransaction) => QueryClaimAnswerDisposalSummary | null;
 }
 
 interface SemanticRuntimeStaticCatalogRequest {
   readonly inquiryProfile?: SemanticRuntimeInquiryProfile | `${SemanticRuntimeInquiryProfile}` | null;
+}
+
+interface SemanticProjectShapeCacheEntry {
+  readonly projectKey: string;
+  readonly shape: SemanticProjectShape;
+  readonly readScope: SemanticRuntimeProjectInputReadScope;
+  readonly reads: readonly SemanticRuntimeProjectInputRead[];
 }
 
 /** Wrap a public app-query materializer in the active query-claim and continuation envelope. */
@@ -500,8 +541,17 @@ function answerUnsupportedSemanticAppQuerySelectors(
 /** Booted workspace facade. It owns source admission and app-world opening. */
 export class SemanticRuntime {
   private readonly appsByCacheKey = new Map<string, SemanticApp>();
-  private readonly projectShapesByGenerationKey = new Map<string, SemanticProjectShape>();
+  private readonly projectShapesByGenerationKey = new Map<string, SemanticProjectShapeCacheEntry>();
   private readonly queryClaimsByProfile = new Map<SemanticRuntimeInquiryProfile, QueryClaimGraph>();
+  private readonly analysisLifetime = new SemanticRuntimeAnalysisLifetimeAuthority();
+  private readonly analysisTransactionsByBuilder = new WeakMap<
+    SemanticRuntimeAnalysisReceiptBuilder,
+    SemanticAnswerTransaction
+  >();
+  private readonly activeAnalysisTransactions: SemanticAnswerTransaction[] = [];
+  private readonly activePlanningReadCollectors: Map<string, SemanticRuntimeProjectInputRead>[] = [];
+  private nextAnalysisReadScopeOrdinal = 1;
+  private workspaceFrame: WorkspaceBootFrame;
   readonly computationLifecycle: ComputationLifecycleRegistry;
   readonly frameworkSupport: FrameworkSupportAuthority;
   readonly projectEvaluations: StaticProjectEvaluationComputationService;
@@ -509,13 +559,14 @@ export class SemanticRuntime {
   readonly appAnalysisComputations: AureliaAppWorldProjectComputationService;
 
   private constructor(
-    readonly workspace: WorkspaceBootFrame,
+    workspace: WorkspaceBootFrame,
   ) {
+    this.workspaceFrame = workspace;
     this.computationLifecycle = new ComputationLifecycleRegistry(workspace.store);
     this.frameworkSupport = new FrameworkSupportAuthority(
       workspace.store,
       this.computationLifecycle,
-      workspace.workspaceKey,
+      workspace.semanticWorkspaceKey,
     );
     this.frameworkSupport.initializeKnownSupport();
     this.projectEvaluations = new StaticProjectEvaluationComputationService(
@@ -536,13 +587,18 @@ export class SemanticRuntime {
     );
   }
 
+  get workspace(): WorkspaceBootFrame {
+    return this.workspaceFrame;
+  }
+
   static async open(options: SemanticRuntimeOptions): Promise<SemanticRuntime> {
-    const workspaceRoot = path.resolve(options.workspaceRoot);
-    const projectInputAuthority = options.projectInputAuthority ?? new SemanticRuntimeProjectInputAuthority();
+    const normalizedOptions = normalizeSemanticRuntimeOptions(options);
+    const workspaceRoot = normalizedOptions.workspaceRoot;
+    const projectInputAuthority = normalizedOptions.projectInputAuthority ?? new SemanticRuntimeProjectInputAuthority();
     if (!safeIsDirectory(projectInputAuthority.host, workspaceRoot)) {
       throw new Error(`Cannot open semantic-runtime workspace: workspaceRoot '${workspaceRoot}' does not exist or is not a directory.`);
     }
-    const projects = options.projects?.map((project): BootProjectInput => ({
+    const projects = normalizedOptions.projects?.map((project): BootProjectInput => ({
       ...project,
       rootDir: path.resolve(workspaceRoot, project.rootDir),
     }));
@@ -555,13 +611,68 @@ export class SemanticRuntime {
     }
     const workspace = bootWorkspace({
       rootDir: workspaceRoot,
-      storeKey: options.storeKey,
+      storeKey: normalizedOptions.storeKey,
       projects,
-      projectDiscovery: options.projectDiscovery,
-      excludedWorkspaceRoots: options.excludedWorkspaceRoots,
+      projectDiscovery: normalizedOptions.projectDiscovery,
+      projectRootHints: normalizedOptions.projectRootHints,
+      excludedWorkspaceRoots: normalizedOptions.excludedWorkspaceRoots,
       projectInputAuthority,
     });
     return new SemanticRuntime(workspace);
+  }
+
+  /** Open one already-resolved source world without repeating discovery or configuration reads. */
+  static async openResolvedSourceWorld(
+    sourceWorld: ResolvedSemanticSourceWorld,
+    storeKey?: string,
+  ): Promise<SemanticRuntime> {
+    const { descriptor, projectInputAuthority } = sourceWorld;
+    if (!safeIsDirectory(projectInputAuthority.host, descriptor.workspaceRoot)) {
+      throw new Error(
+        `Cannot open semantic-runtime workspace: workspaceRoot '${descriptor.workspaceRoot}' does not exist or is not a directory.`,
+      );
+    }
+    for (const project of sourceWorld.projects) {
+      if (!safeIsDirectory(projectInputAuthority.host, project.rootDir)) {
+        throw new Error(
+          `Cannot open semantic-runtime workspace: project rootDir '${project.rootDir}' does not exist or is not a directory.`,
+        );
+      }
+    }
+    return new SemanticRuntime(bootWorkspaceFromSourceWorld(sourceWorld, storeKey));
+  }
+
+  /** Refresh boot-static frames after an equivalent source-world observation without replacing the warm store. */
+  rebindEquivalentSourceWorld(sourceWorld: ResolvedSemanticSourceWorld): void {
+    const workspace = this.workspaceFrame.forEquivalentSourceWorld(sourceWorld);
+    this.rebindProjectShapeCache(workspace);
+    this.workspaceFrame = workspace;
+  }
+
+  /** @internal Permanently revoke executable answer receipts before this runtime incarnation is retired. */
+  retireWorkspaceIncarnation(): void {
+    this.analysisLifetime.close();
+  }
+
+  private rebindProjectShapeCache(workspace: WorkspaceBootFrame): void {
+    const rebound = new Map<string, SemanticProjectShapeCacheEntry>();
+    for (const project of workspace.projects) {
+      const candidates = [...this.projectShapesByGenerationKey.values()]
+        .filter((entry) => entry.projectKey === project.projectKey)
+        .reverse();
+      for (const candidate of candidates) {
+        const entry = this.tryRebindProjectShapeCacheEntry(candidate, project);
+        if (entry == null) {
+          continue;
+        }
+        rebound.set(projectShapeGenerationKey(project), entry);
+        break;
+      }
+    }
+    this.projectShapesByGenerationKey.clear();
+    for (const [key, entry] of rebound) {
+      this.projectShapesByGenerationKey.set(key, entry);
+    }
   }
 
   summary(request: SemanticRuntimeSummaryRequest = {}): SemanticRuntimeAnswer<SemanticRuntimeSummary> {
@@ -581,8 +692,178 @@ export class SemanticRuntime {
           ]),
         ],
         materializationPolicy: 'projection-only',
+        projectInputGenerations: projects.map((project) => project.inputGeneration),
       },
       () => this.readSummary(request, projects),
+    );
+  }
+
+  authoredSourceOwnership(
+    request: SemanticAuthoredSourceOwnershipRequest,
+  ): SemanticRuntimeAnswer<SemanticAuthoredSourceOwnershipResult> {
+    const sourceFilePath = path.isAbsolute(request.sourceFilePath)
+      ? path.resolve(request.sourceFilePath)
+      : path.resolve(this.workspace.rootDir, request.sourceFilePath);
+    const canonicalSourceFilePath = canonicalTypeSystemPath(sourceFilePath);
+    return this.answerRuntimeQuery(
+      {
+        inquiryProfile: normalizeSemanticRuntimeInquiryProfile(request.inquiryProfile),
+        queryKind: 'authored-source-ownership',
+        queryKey: semanticAuthoredSourceOwnershipKey(canonicalSourceFilePath),
+        responsePolicyKey: semanticRuntimePagePolicyReuseKey(null),
+        locusKey: `${semanticRuntimeWorkspaceLocusKey(this.workspace.workspaceKey)}:source:${canonicalSourceFilePath}`,
+        epochKeys: [semanticRuntimeWorkspaceEpochKey(this.workspace.workspaceKey)],
+        materializationPolicy: 'projection-only',
+      },
+      () => {
+        const owners = this.workspace.projects
+          .flatMap((project) => {
+            const admission = project.sourceOwnership.admissionForCanonicalHostPath(canonicalSourceFilePath);
+            return admission == null
+              ? []
+              : [{
+                  projectKey: project.projectKey,
+                  projectRootDir: project.rootDir,
+                  projectPath: admission.path,
+                  role: admission.role,
+                }];
+          })
+          .sort((left, right) =>
+            left.projectKey.localeCompare(right.projectKey)
+            || left.projectRootDir.localeCompare(right.projectRootDir)
+            || left.projectPath.localeCompare(right.projectPath)
+          );
+        return answer(
+          SemanticRuntimeAnswerResult.Answered,
+          owners.length === 0
+            ? `Source '${sourceFilePath}' is not boot-authored by any semantic project.`
+            : `Source '${sourceFilePath}' is boot-authored by ${owners.length} semantic project(s).`,
+          { sourceFilePath, owners },
+          COMPLETE_COLLECTION_ANSWER_OPTIONS,
+        );
+      },
+    );
+  }
+
+  nativeProjectConfigurations(
+    request: SemanticNativeProjectConfigurationsRequest = {},
+  ): SemanticRuntimeAnswer<SemanticNativeProjectConfigurationsResult> {
+    const requestedSourceFilePaths = normalizeExactWorkspacePaths(this.workspace.rootDir, request.sourceFilePaths);
+    const projects = this.workspace.projects
+      .filter((project) => request.projectKey == null || project.projectKey === request.projectKey)
+      .filter((project) => requestedSourceFilePaths == null
+        || requestedSourceFilePaths.includes(canonicalTypeSystemPath(project.projectConfiguration.filePath)))
+      .map((project) => this.captureProject(project));
+    const projectKey = request.projectKey ?? null;
+    const queryKey = semanticNativeProjectConfigurationsKey(
+      projectKey,
+      requestedSourceFilePaths,
+      request.page,
+    );
+    const pageScopeKey = semanticNativeProjectConfigurationsKey(projectKey, requestedSourceFilePaths, null);
+    const epochKey = projectConfigurationPageEpochKey(this.workspace.workspaceKey, projects);
+    return this.answerRuntimeQuery(
+      {
+        inquiryProfile: normalizeSemanticRuntimeInquiryProfile(request.inquiryProfile),
+        queryKind: 'native-project-configurations',
+        queryKey,
+        responsePolicyKey: semanticRuntimePagePolicyReuseKey(request.pagePolicy),
+        locusKey: semanticRuntimeWorkspaceLocusKey(this.workspace.workspaceKey),
+        epochKeys: projectConfigurationClaimEpochKeys(this.workspace.workspaceKey, projects),
+        materializationPolicy: 'projection-only',
+        projectInputGenerations: projects.map((project) => project.inputGeneration),
+      },
+      () => {
+        const rows = projects
+          .filter((project) => project.projectConfiguration.exists)
+          .map((project) => ({
+            projectKey: project.projectKey,
+            projectRootDir: project.rootDir,
+            filePath: project.projectConfiguration.filePath,
+            appliedExcludedSourceRootDirs: project.projectConfiguration.excludedSourceRootDirs,
+            diagnosticCount: project.projectConfiguration.diagnostics.length,
+          }))
+          .sort((left, right) =>
+            canonicalTypeSystemPath(left.filePath).localeCompare(canonicalTypeSystemPath(right.filePath))
+            || left.projectKey.localeCompare(right.projectKey)
+          );
+        const paged = pageRows(
+          rows,
+          bindSemanticRuntimePageInput(
+            request.page ?? undefined,
+            {
+              queryKey: pageScopeKey,
+              epochKey,
+              orderingKey: 'native-project-configurations:file-path-project-key',
+            },
+            request.pagePolicy,
+          ),
+        );
+        return answer(
+          SemanticRuntimeAnswerResult.Answered,
+          `Returned ${paged.page.returnedRows} of ${rows.length} existing native project configuration(s).`,
+          {
+            displayText: `${rows.length} existing native project configuration(s); ${rows.reduce((count, row) => count + row.diagnosticCount, 0)} diagnostic(s).`,
+            rows: paged.rows,
+          },
+          { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
+        );
+      },
+    );
+  }
+
+  projectConfigurationDiagnostics(
+    request: SemanticProjectConfigurationDiagnosticsRequest = {},
+  ): SemanticRuntimeAnswer<SemanticProjectConfigurationDiagnosticsResult> {
+    const requestedSourceFilePaths = normalizeExactWorkspacePaths(this.workspace.rootDir, request.sourceFilePaths);
+    const projects = this.workspace.projects
+      .filter((project) => request.projectKey == null || project.projectKey === request.projectKey)
+      .map((project) => this.captureProject(project))
+      .filter((project) => requestedSourceFilePaths == null
+        || requestedSourceFilePaths.includes(canonicalTypeSystemPath(project.projectConfiguration.filePath)));
+    const projectKey = request.projectKey ?? null;
+    const queryKey = semanticProjectConfigurationDiagnosticsKey(projectKey, requestedSourceFilePaths, request.page);
+    const pageScopeKey = semanticProjectConfigurationDiagnosticsKey(projectKey, requestedSourceFilePaths, null);
+    const epochKey = projectConfigurationPageEpochKey(this.workspace.workspaceKey, projects);
+    return this.answerRuntimeQuery(
+      {
+        inquiryProfile: normalizeSemanticRuntimeInquiryProfile(request.inquiryProfile),
+        queryKind: 'project-configuration-diagnostics',
+        queryKey,
+        responsePolicyKey: semanticRuntimePagePolicyReuseKey(request.pagePolicy),
+        locusKey: semanticRuntimeWorkspaceLocusKey(this.workspace.workspaceKey),
+        epochKeys: projectConfigurationClaimEpochKeys(this.workspace.workspaceKey, projects),
+        materializationPolicy: 'projection-only',
+        projectInputGenerations: projects.map((project) => project.inputGeneration),
+      },
+      () => {
+        const rows = projects
+          .flatMap((project) => project.projectConfiguration.diagnostics)
+          .sort((left, right) =>
+            canonicalTypeSystemPath(left.source.filePath).localeCompare(canonicalTypeSystemPath(right.source.filePath))
+            || left.source.start - right.source.start
+            || left.diagnosticKind.localeCompare(right.diagnosticKind)
+            || left.projectKey.localeCompare(right.projectKey)
+          );
+        const paged = pageRows(
+          rows,
+          bindSemanticRuntimePageInput(
+            request.page ?? undefined,
+            {
+              queryKey: pageScopeKey,
+              epochKey,
+              orderingKey: 'project-configuration-diagnostics:file-path-start-kind-project-key',
+            },
+            request.pagePolicy,
+          ),
+        );
+        return answer(
+          SemanticRuntimeAnswerResult.Answered,
+          `Returned ${paged.page.returnedRows} of ${rows.length} native project-configuration diagnostic row(s) from ${projects.length} project(s).`,
+          { rows: paged.rows },
+          { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
+        );
+      },
     );
   }
 
@@ -595,8 +876,15 @@ export class SemanticRuntime {
       return {
         projectKey: project.projectKey,
         rootDir: project.rootDir,
+        admissionOrigins: project.admissionOrigins,
         sourceFiles: project.sourceFiles.length,
         sourceRoles: sourceRoleCounts(project),
+        nativeProjectConfiguration: project.projectConfiguration.exists
+          ? {
+              filePath: project.projectConfiguration.filePath,
+              diagnosticCount: project.projectConfiguration.diagnostics.length,
+            }
+          : null,
         hasAureliaAppEntrypointSignal: shape.shapeKind === SemanticProjectShapeKind.AureliaApp,
         shapeKind: shape.shapeKind,
         analysisKind: shape.analysisKind,
@@ -614,6 +902,12 @@ export class SemanticRuntime {
         shapeKind: project.shapeKind,
         analysisKind: project.analysisKind,
       }));
+    const configuredProjects = capturedProjects.filter((project) => project.projectConfiguration.exists);
+    const nativeProjectConfigurationCount = configuredProjects.length;
+    const nativeProjectConfigurationDiagnosticCount = configuredProjects.reduce(
+      (count, project) => count + project.projectConfiguration.diagnostics.length,
+      0,
+    );
     const summaryPage = summaryProjectPage(request.projectPage ?? undefined);
     const summaryEpoch = capturedProjects
       .map((project) => `${project.projectKey}:${project.inputGeneration.revision}`)
@@ -636,7 +930,7 @@ export class SemanticRuntime {
     const defaultAppProjectKey = appCandidates[0]?.projectKey ?? null;
     const value: SemanticRuntimeSummary = {
       workspaceRoot: this.workspace.rootDir,
-      workspaceKey: this.workspace.workspaceKey,
+      workspaceKey: this.workspace.semanticWorkspaceKey,
       displayText: semanticRuntimeSummaryDisplayText({
         workspaceRoot: this.workspace.rootDir,
         projectCount: projects.length,
@@ -644,9 +938,13 @@ export class SemanticRuntime {
         hasMoreProjectRows: pagedProjects.page.nextCursor != null,
         projectShapeCounts,
         projectAnalysisCounts,
+        nativeProjectConfigurationCount,
+        nativeProjectConfigurationDiagnosticCount,
         defaultAppProjectKey,
         appCandidates,
       }),
+      nativeProjectConfigurationCount,
+      nativeProjectConfigurationDiagnosticCount,
       projectShapeCounts,
       projectAnalysisCounts,
       defaultAppProjectKey,
@@ -739,6 +1037,9 @@ export class SemanticRuntime {
     const typeSystemDependencyCacheClearPolicy = normalizeTypeSystemDependencyCacheClearPolicy(
       request.typeSystemDependencyCacheClearPolicy,
     );
+    // Detached receipt capabilities may carry process-local handles into app/query/type-system state reclaimed below.
+    // Advance before the first mutation; a partial clear must not leave a pre-clear capability looking usable.
+    this.analysisLifetime.advance();
     const clearedTypeSystemDependencyCache = clearTypeSystemCompilerHostSourceFileCache(typeSystemDependencyCacheClearPolicy);
     const kernelBefore = this.workspace.store.readTelemetrySnapshot({ includeBreakdowns: false });
     const disposed = this.disposeCachedAppEpochs(QueryClaimDisposalReason.AppEpochDisposed);
@@ -985,9 +1286,12 @@ export class SemanticRuntime {
     ) as SemanticRuntimeAppQueryRequest;
     const query = semanticAppQueryCatalogShape(canonicalRequest);
     let evaluationAccess: StaticProjectEvaluationAccess<null> | null = null;
+    let evaluationResult: StaticProjectEvaluationResult | null = null;
+    let evaluationProfile: SemanticRuntimeAppWorldFreeProfileSummary | null = null;
     const readEvaluation = (): StaticProjectEvaluationResult => {
       evaluationAccess ??= this.projectEvaluations.acquire(plan.project, aureliaAppProjectEvaluationProfile);
-      return evaluationAccess.readBaseline();
+      evaluationResult = evaluationAccess.readBaseline();
+      return evaluationResult;
     };
     const result = this.answerRuntimeQuery(
       {
@@ -1005,19 +1309,32 @@ export class SemanticRuntime {
           query,
         ),
         materializationPolicy: semanticAppQueryMaterializationPolicy(query, catalogRow.materializationPolicy),
+        planningReads: plan.planningReads,
+        projectInputGenerations: [plan.project.inputGeneration],
+        readComputationGenerations: () => evaluationAccess == null
+          ? []
+          : [evaluationAccess.generation.computationAuthority],
         kernelBoundary: 'observe-only',
       },
-      () => withSemanticAppQueryContinuations(
-        query,
-        answerAppWorldFreeQuery(
-          plan.project,
+      () => {
+        const queryAnswer = withSemanticAppQueryContinuations(
           query,
-          readEvaluation,
-        ),
-        catalogRow,
-      ),
+          answerAppWorldFreeQuery(
+            plan.project,
+            query,
+            readEvaluation,
+          ),
+          catalogRow,
+        );
+        evaluationProfile = appWorldFreeEvaluationProfileSummary(
+          evaluationAccess,
+          evaluationResult,
+          request.telemetry,
+        );
+        return queryAnswer;
+      },
     );
-    return withAppWorldFreeEvaluationProfile(result, evaluationAccess, request.telemetry);
+    return withAppWorldFreeEvaluationProfile(result, evaluationProfile);
   }
 
   private answerAppWorldQuery(
@@ -1055,6 +1372,7 @@ export class SemanticRuntime {
       request.pagePolicy,
     ) as SemanticRuntimeAppQueryRequest;
     let appOpened = false;
+    let openedApp: SemanticApp | null = null;
     return this.answerRuntimeQuery(
       {
         inquiryProfile,
@@ -1071,26 +1389,33 @@ export class SemanticRuntime {
           canonicalRequest,
         ),
         materializationPolicy: semanticAppQueryMaterializationPolicy(canonicalRequest, catalogRow.materializationPolicy),
+        planningReads: plan.planningReads,
+        projectInputGenerations: [plan.project.inputGeneration],
+        readComputationGenerations: () => openedApp == null
+          ? []
+          : [openedApp.analysisGenerationReference],
         kernelBoundary: 'observe-only',
         shouldReuseRetainedAnswer: () =>
           shouldDisposeAppAfterRoutedQuery(request, inquiryProfile) || cachedBefore != null,
-        disposeAnswerSideEffects: () => {
+        disposeAnswerSideEffects: (transaction) => {
           const forceCachedAppDisposal = cachedBefore != null && request.appRetention === 'dispose-app';
           return this.disposeRoutedAppAnswerSideEffects(
             shouldDisposeAppAfterRoutedQuery(request, inquiryProfile)
               && (appOpened || forceCachedAppDisposal)
               && (cachedBefore == null || request.appRetention === 'dispose-app'),
             typeSystemDependencyCacheClearPolicy,
+            transaction.token,
           );
         },
       },
-      () => {
-        const app = this.openPlannedApp(plan);
+      (transaction) => {
+        const app = this.openPlannedApp(plan, transaction);
+        openedApp = app;
         appOpened = true;
         return app.answerRoutedQuery({
           ...canonicalRequest,
           inquiryProfile,
-        }, request.pagePolicy ?? null);
+        }, request.pagePolicy ?? null, transaction);
       },
     );
   }
@@ -1147,6 +1472,7 @@ export class SemanticRuntime {
           canonicalQueries,
           inquiryProfile,
           request.pagePolicy ?? null,
+          request.telemetry,
         ),
       );
     }
@@ -1187,9 +1513,9 @@ export class SemanticRuntime {
         materializationPolicy: semanticAppQueryBatchMaterializationPolicy(queries),
         kernelBoundary: 'observe-only',
       },
-      () => {
+      (transaction) => {
         const rows = queries.map((query, index) =>
-          this.preAppWorldBatchRow(query, index, inquiryProfile, pagePolicy)
+          this.preAppWorldBatchRow(query, index, inquiryProfile, pagePolicy, transaction)
         );
         const value: SemanticRuntimeAppQueryBatchResult = {
           projectKey: null,
@@ -1228,6 +1554,7 @@ export class SemanticRuntime {
     index: number,
     inquiryProfile: SemanticRuntimeInquiryProfile,
     pagePolicy: SemanticRuntimePagePolicy | null,
+    transaction: SemanticAnswerTransaction,
   ): SemanticRuntimeAppQueryBatchResult['rows'][number] {
     const childQuery = {
       ...query,
@@ -1262,6 +1589,7 @@ export class SemanticRuntime {
           answerRuntimeStaticAppQuery(shapedChildQuery),
           catalogRow,
         ),
+        transaction,
       ),
     };
   }
@@ -1271,8 +1599,11 @@ export class SemanticRuntime {
     canonicalQueries: readonly SemanticAppQuery[],
     inquiryProfile: SemanticRuntimeInquiryProfile,
     pagePolicy: SemanticRuntimePagePolicy | null,
+    telemetry: OpenSemanticAppOptions['telemetry'],
   ): SemanticRuntimeAnswer<SemanticRuntimeAppQueryBatchResult> {
     let evaluationAccess: StaticProjectEvaluationAccess<null> | null = null;
+    let evaluationResult: StaticProjectEvaluationResult | null = null;
+    let evaluationProfile: SemanticRuntimeAppWorldFreeProfileSummary | null = null;
     const result = this.answerRuntimeQuery(
       {
         inquiryProfile,
@@ -1287,15 +1618,30 @@ export class SemanticRuntime {
           canonicalQueries,
         ),
         materializationPolicy: semanticAppQueryBatchMaterializationPolicy(canonicalQueries),
+        planningReads: plan.planningReads,
+        projectInputGenerations: [plan.project.inputGeneration],
+        readComputationGenerations: () => evaluationAccess == null
+          ? []
+          : [evaluationAccess.generation.computationAuthority],
         kernelBoundary: 'observe-only',
       },
-      () => {
+      (transaction) => {
         const readEvaluation = (): StaticProjectEvaluationResult => {
           evaluationAccess ??= this.projectEvaluations.acquire(plan.project, aureliaAppProjectEvaluationProfile);
-          return evaluationAccess.readBaseline();
+          evaluationResult = evaluationAccess.readBaseline();
+          return evaluationResult;
         };
         const rows = canonicalQueries.map((query, index) =>
-          this.appWorldFreeBatchRow(plan, query, index, inquiryProfile, readEvaluation, pagePolicy)
+          this.appWorldFreeBatchRow(
+            plan,
+            query,
+            index,
+            inquiryProfile,
+            readEvaluation,
+            () => evaluationAccess == null ? [] : [evaluationAccess.generation.computationAuthority],
+            pagePolicy,
+            transaction,
+          )
         );
         const value: SemanticRuntimeAppQueryBatchResult = {
           projectKey: plan.project.projectKey,
@@ -1319,15 +1665,21 @@ export class SemanticRuntime {
           appProfile: null,
           appQueryClaimProfiles: [],
         };
-        return answer(
+        const batchAnswer = answer(
           SemanticRuntimeAnswerResult.Answered,
           `Answered ${rows.length} app-world-free query claim(s) for '${plan.project.projectKey}' without opening an app epoch.`,
           value,
           COMPLETE_COLLECTION_ANSWER_OPTIONS,
         );
+        evaluationProfile = appWorldFreeEvaluationProfileSummary(
+          evaluationAccess,
+          evaluationResult,
+          telemetry,
+        );
+        return batchAnswer;
       },
     );
-    return withAppWorldFreeEvaluationProfile(result, evaluationAccess, plan.telemetry);
+    return withAppWorldFreeEvaluationProfile(result, evaluationProfile);
   }
 
   private appWorldFreeBatchRow(
@@ -1336,7 +1688,9 @@ export class SemanticRuntime {
     index: number,
     inquiryProfile: SemanticRuntimeInquiryProfile,
     readEvaluation: () => StaticProjectEvaluationResult,
+    readEvaluationGenerations: () => readonly ComputationGenerationReference[],
     pagePolicy: SemanticRuntimePagePolicy | null,
+    transaction: SemanticAnswerTransaction,
   ): SemanticRuntimeAppQueryBatchResult['rows'][number] {
     const childQuery = {
       ...query,
@@ -1369,6 +1723,9 @@ export class SemanticRuntime {
             shapedChildQuery,
           ),
           materializationPolicy,
+          planningReads: plan.planningReads,
+          projectInputGenerations: [plan.project.inputGeneration],
+          readComputationGenerations: readEvaluationGenerations,
           kernelBoundary: 'observe-only',
         },
         () => unsupportedSelectorAnswer ?? withSemanticAppQueryContinuations(
@@ -1376,6 +1733,7 @@ export class SemanticRuntime {
           answerAppWorldFreeQuery(plan.project, shapedChildQuery, readEvaluation),
           catalogRow,
         ),
+        transaction,
       ),
     };
   }
@@ -1390,6 +1748,7 @@ export class SemanticRuntime {
   ): SemanticRuntimeAnswer<SemanticRuntimeAppQueryBatchResult> {
     assertCompatibleRoutedAppRetention({ ...request, queries: canonicalQueries });
     let appOpened = false;
+    let openedApp: SemanticApp | null = null;
     return this.answerRuntimeQuery(
       {
         inquiryProfile,
@@ -1404,31 +1763,38 @@ export class SemanticRuntime {
           canonicalQueries,
         ),
         materializationPolicy: semanticAppQueryBatchMaterializationPolicy(canonicalQueries),
+        planningReads: plan.planningReads,
+        projectInputGenerations: [plan.project.inputGeneration],
+        readComputationGenerations: () => openedApp == null
+          ? []
+          : [openedApp.analysisGenerationReference],
         kernelBoundary: 'observe-only',
         shouldReuseRetainedAnswer: () =>
           request.includeAppProfile !== true
           && request.includeAppQueryClaimProfiles !== true
           && (shouldDisposeAppAfterRoutedQuery(request, inquiryProfile) || cachedBefore != null),
-        disposeAnswerSideEffects: () => {
+        disposeAnswerSideEffects: (transaction) => {
           const forceCachedAppDisposal = cachedBefore != null && request.appRetention === 'dispose-app';
           return this.disposeRoutedAppAnswerSideEffects(
             shouldDisposeAppAfterRoutedQuery(request, inquiryProfile)
               && (appOpened || forceCachedAppDisposal)
               && (cachedBefore == null || request.appRetention === 'dispose-app'),
             typeSystemDependencyCacheClearPolicy,
+            transaction.token,
           );
         },
       },
-      () => {
-        const app = this.openPlannedApp(plan);
+      (transaction) => {
+        const app = this.openPlannedApp(plan, transaction);
+        openedApp = app;
         appOpened = true;
         const rows = canonicalQueries.map((query, index) =>
-          this.appWorldBatchRow(app, query, index, inquiryProfile, request.pagePolicy ?? null)
+          this.appWorldBatchRow(app, query, index, inquiryProfile, request.pagePolicy ?? null, transaction)
         );
         const includeAppProfile = request.includeAppProfile === true;
         const includeAppQueryClaimProfiles = request.includeAppQueryClaimProfiles === true;
         const appSummary = includeAppProfile || includeAppQueryClaimProfiles
-          ? app.cacheSummary(8, false)
+          ? app.cacheSummary(8, false, transaction.token)
           : null;
         const value: SemanticRuntimeAppQueryBatchResult = {
           projectKey: plan.project.projectKey,
@@ -1471,6 +1837,7 @@ export class SemanticRuntime {
     index: number,
     inquiryProfile: SemanticRuntimeInquiryProfile,
     pagePolicy: SemanticRuntimePagePolicy | null,
+    transaction: SemanticAnswerTransaction,
   ): SemanticRuntimeAppQueryBatchResult['rows'][number] {
     const childQuery = {
       ...query,
@@ -1481,7 +1848,7 @@ export class SemanticRuntime {
       index,
       queryKind: childQuery.kind,
       materializationPolicy: semanticAppQueryMaterializationPolicy(childQuery, catalogRow.materializationPolicy),
-      answer: app.answerRoutedQuery(childQuery, pagePolicy),
+      answer: app.answerRoutedQuery(childQuery, pagePolicy, transaction),
     };
   }
 
@@ -1491,31 +1858,205 @@ export class SemanticRuntime {
 
   private answerRuntimeQuery<TValue>(
     input: SemanticRuntimeQueryClaimInput,
-    materialize: () => SemanticRuntimeAnswer<TValue>,
+    materialize: (transaction: SemanticAnswerTransaction) => SemanticRuntimeAnswer<TValue>,
+    enclosingTransaction: SemanticAnswerTransaction | null = null,
   ): SemanticRuntimeAnswer<TValue> {
+    const transaction = enclosingTransaction ?? new SemanticAnswerTransaction();
+    const ownsTransaction = enclosingTransaction == null;
+    const savepoint = transaction.savepoint();
     const queryClaims = this.runtimeQueryClaimsForProfile(input.inquiryProfile);
+    const receiptBuilder = this.createAnalysisReceiptBuilder(transaction);
+    receiptBuilder.observeProjectInputReads(input.planningReads ?? []);
+    let observedReceipt: SemanticRuntimeAnalysisReceipt | null = null;
     const kernelBoundary = input.kernelBoundary ?? 'dispose-answer-local';
+    const answerTransaction = transaction.boundaryFor(receiptBuilder);
+    const disposeAnswerSideEffects = input.disposeAnswerSideEffects == null
+      ? undefined
+      : () => input.disposeAnswerSideEffects?.(transaction) ?? null;
     const boundary = kernelBoundary === 'observe-only'
       ? {
         shouldReuseRetainedAnswer: input.shouldReuseRetainedAnswer,
+        requiredAnswerLeaseKind: SEMANTIC_RUNTIME_ANALYSIS_RECEIPT_KIND,
+        answerTransaction,
+        composeRetainedAnswerLease: (lease: QueryClaimAnswerLease) =>
+          this.composeRetainedAnalysisReceipt(receiptBuilder, lease),
+        sealAnswerLease: () => this.sealAnalysisReceipt(
+          receiptBuilder,
+          input.readComputationGenerations?.() ?? [],
+        ),
+        observeAnswerLease: (lease: QueryClaimAnswerLease) => {
+          observedReceipt = this.observeAnalysisReceipt(receiptBuilder, lease);
+        },
         readKernelSnapshot: () => this.workspace.store.readTelemetrySnapshot(),
-        disposeAnswerSideEffects: input.disposeAnswerSideEffects,
+        disposeAnswerSideEffects,
       }
       : {
         shouldReuseRetainedAnswer: input.shouldReuseRetainedAnswer,
+        requiredAnswerLeaseKind: SEMANTIC_RUNTIME_ANALYSIS_RECEIPT_KIND,
+        answerTransaction,
+        composeRetainedAnswerLease: (lease: QueryClaimAnswerLease) =>
+          this.composeRetainedAnalysisReceipt(receiptBuilder, lease),
+        sealAnswerLease: () => this.sealAnalysisReceipt(
+          receiptBuilder,
+          input.readComputationGenerations?.() ?? [],
+        ),
+        observeAnswerLease: (lease: QueryClaimAnswerLease) => {
+          observedReceipt = this.observeAnalysisReceipt(receiptBuilder, lease);
+        },
         readKernelMarker: () => this.workspace.store.markLifetime(),
         readKernelSnapshot: () => this.workspace.store.readTelemetrySnapshot(),
         disposeKernelSince: (marker: KernelStoreLifetimeMarker) => this.workspace.store.disposeSince(marker),
-        disposeAnswerSideEffects: input.disposeAnswerSideEffects,
+        disposeAnswerSideEffects,
       };
-    return queryClaims.answer({
-      queryKind: input.queryKind,
-      queryKey: input.queryKey,
-      responsePolicyKey: input.responsePolicyKey,
-      locusKey: input.locusKey ?? semanticRuntimeWorkspaceLocusKey(this.workspace.workspaceKey),
-      epochKeys: input.epochKeys ?? [semanticRuntimeWorkspaceEpochKey(this.workspace.workspaceKey)],
-      materializationPolicy: input.materializationPolicy,
-    }, materialize, boundary);
+    try {
+      const claimed = queryClaims.answer({
+        queryKind: input.queryKind,
+        queryKey: input.queryKey,
+        responsePolicyKey: input.responsePolicyKey,
+        locusKey: input.locusKey ?? semanticRuntimeWorkspaceLocusKey(this.workspace.workspaceKey),
+        epochKeys: input.epochKeys ?? [semanticRuntimeWorkspaceEpochKey(this.workspace.workspaceKey)],
+        materializationPolicy: input.materializationPolicy,
+      }, () => this.materializeAnalysisAnswer(
+        transaction,
+        receiptBuilder,
+        input.projectInputGenerations ?? [],
+        () => materialize(transaction),
+      ), boundary);
+      if (observedReceipt == null) {
+        throw new Error(`Semantic runtime query '${input.queryKind}' returned without an exact analysis receipt.`);
+      }
+      const projected = withSemanticRuntimeAnalysisReceipt(claimed, observedReceipt);
+      if (ownsTransaction) {
+        transaction.commit();
+      }
+      return projected;
+    } catch (error) {
+      let failure: unknown = error;
+      try {
+        const failureReceipt = this.sealAnalysisReceipt(
+          receiptBuilder,
+          input.readComputationGenerations?.() ?? [],
+        );
+        failureReceipt.dispose();
+        transaction.tryObserveFailedBuilder(receiptBuilder);
+      } catch (receiptError) {
+        failure = new AggregateError(
+          [error, receiptError],
+          `Semantic runtime query '${input.queryKind}' failed and its exact failure-path proof could not be composed.`,
+        );
+      }
+      transaction.rollbackTo(savepoint);
+      if (ownsTransaction) {
+        transaction.rollback();
+      }
+      throw failure;
+    } finally {
+      (observedReceipt as SemanticRuntimeAnalysisReceipt | null)?.dispose();
+      this.releaseAnalysisReceiptBuilder(receiptBuilder);
+    }
+  }
+
+  /** @internal Create one exact answer-basis builder rooted in this runtime's resolved source world. */
+  createAnalysisReceiptBuilder(
+    transaction: SemanticAnswerTransaction | null = null,
+  ): SemanticRuntimeAnalysisReceiptBuilder {
+    const builder = new SemanticRuntimeAnalysisReceiptBuilder(this.workspace.sourceWorld, this.analysisLifetime);
+    if (transaction != null) {
+      this.analysisTransactionsByBuilder.set(builder, transaction);
+    }
+    return builder;
+  }
+
+  /** @internal Release the explicit owner association after one answer frame closes. */
+  releaseAnalysisReceiptBuilder(builder: SemanticRuntimeAnalysisReceiptBuilder): void {
+    this.analysisTransactionsByBuilder.delete(builder);
+  }
+
+  /** @internal Capture synchronous lazy host reads while one answer is materialized. */
+  materializeAnalysisAnswer<TValue>(
+    transaction: SemanticAnswerTransaction,
+    builder: SemanticRuntimeAnalysisReceiptBuilder,
+    generations: readonly SemanticRuntimeProjectInputGeneration[],
+    materialize: () => TValue,
+  ): TValue {
+    const uniqueGenerations = [...new Set(generations)];
+    const scopes = uniqueGenerations.map((generation) => ({
+      generation,
+      scope: generation.createReadScope(
+        `semantic-answer:${this.nextAnalysisReadScopeOrdinal++}`,
+      ),
+    }));
+    transaction.enterBuilder(builder);
+    this.activeAnalysisTransactions.push(transaction);
+    try {
+      const run = (index: number): TValue => {
+        const entry = scopes[index];
+        return entry == null
+          ? materialize()
+          : entry.generation.withReadScope(entry.scope, () => run(index + 1));
+      };
+      return run(0);
+    } finally {
+      for (const { scope } of scopes) {
+        builder.observeProjectInputReads(scope.readRegisteredInputs());
+      }
+      const activeTransaction = this.activeAnalysisTransactions.pop();
+      if (activeTransaction !== transaction) {
+        throw new Error('Semantic runtime answer transactions closed out of order.');
+      }
+      transaction.leaveBuilder(builder);
+    }
+  }
+
+  /** @internal Whether an opaque graph token belongs to a currently materializing answer in this runtime. */
+  isAnalysisTransactionTokenActive(token: object): boolean {
+    return this.activeAnalysisTransactions.some((transaction) => transaction.token === token);
+  }
+
+  /** @internal Seal committed computation leaves only while their owning answer is still admitted. */
+  sealAnalysisReceipt(
+    builder: SemanticRuntimeAnalysisReceiptBuilder,
+    generations: readonly ComputationGenerationReference[],
+    additionalReads: readonly SemanticRuntimeProjectInputRead[] = [],
+  ): SemanticRuntimeAnalysisReceipt {
+    builder.observeProjectInputReads(additionalReads);
+    for (const generation of generations) {
+      builder.observeCommittedGeneration(this.computationLifecycle, generation);
+    }
+    return builder.seal();
+  }
+
+  /** @internal Fork a graph-owned lease and compose it into every enclosing runtime answer. */
+  observeAnalysisReceipt(
+    owner: SemanticRuntimeAnalysisReceiptBuilder,
+    lease: QueryClaimAnswerLease,
+  ): SemanticRuntimeAnalysisReceipt {
+    if (!(lease instanceof SemanticRuntimeAnalysisReceipt)) {
+      throw new Error(
+        `Semantic answer lease '${lease.kind}' is not a semantic-runtime analysis receipt.`,
+      );
+    }
+    const transaction = this.analysisTransactionsByBuilder.get(owner);
+    if (transaction == null) {
+      throw new Error('Semantic analysis receipt owner is not registered with an answer transaction.');
+    }
+    return transaction.observeReceipt(owner, lease);
+  }
+
+  /** @internal Compose a retained historical proof with this invocation's reads without mutating the live owner. */
+  composeRetainedAnalysisReceipt(
+    owner: SemanticRuntimeAnalysisReceiptBuilder,
+    lease: QueryClaimAnswerLease,
+  ): SemanticRuntimeAnalysisReceipt {
+    if (!(lease instanceof SemanticRuntimeAnalysisReceipt)) {
+      throw new Error(
+        `Semantic answer lease '${lease.kind}' is not a semantic-runtime analysis receipt.`,
+      );
+    }
+    const aggregate = this.createAnalysisReceiptBuilder();
+    aggregate.observeBuilder(owner);
+    aggregate.observeReceipt(lease);
+    return aggregate.seal();
   }
 
   private runtimeQueryClaimsForProfile(
@@ -1556,10 +2097,11 @@ export class SemanticRuntime {
   private disposeRoutedAppAnswerSideEffects(
     shouldDisposeAppEpoch: boolean,
     typeSystemDependencyCacheClearPolicy: SemanticTypeSystemDependencyCacheClearPolicy,
+    transactionToken?: object,
   ): QueryClaimAnswerDisposalSummary | null {
     let disposal: QueryClaimAnswerDisposalSummary | null = null;
     if (shouldDisposeAppEpoch) {
-      const disposed = this.disposeCachedAppEpochs(QueryClaimDisposalReason.AppEpochDisposed);
+      const disposed = this.disposeCachedAppEpochs(QueryClaimDisposalReason.AppEpochDisposed, transactionToken);
       disposal = {
         queryClaims: disposed.queryClaimRecords,
         kernel: disposed.kernel,
@@ -1667,33 +2209,50 @@ export class SemanticRuntime {
   }
 
   private planOpenApp(options: OpenSemanticAppOptions): SemanticAppOpenPlan {
-    const analysisDepth = normalizeSemanticAppAnalysisDepth(options.analysisDepth);
-    const includeAuthoringTemplates = options.includeAuthoringTemplates === true;
-    const sourceFilePath = normalizeSourceFilePathOption(options.sourceFilePath);
-    const requestedAuthoringSourceFiles = normalizeAuthoringTemplateSourceFiles(options.authoringTemplateSourceFiles);
-    const bootProject = options.projectKey == null
-      ? this.selectProjectForOpen(sourceFilePath)
-      : selectProject(this.workspace.projects, options.projectKey);
-    const project = this.captureProject(bootProject);
-    const projectSourceFilePath = sourceFilePath == null
-      ? null
-      : canonicalProjectSourceFilePath(project, sourceFilePath);
-    const projectAuthoringSourceFiles = canonicalProjectSourceFilePaths(project, requestedAuthoringSourceFiles);
-    const authoringTemplateSourceFiles = includeAuthoringTemplates
-      ? authoringTemplateSourceFilesForOpen(projectSourceFilePath, projectAuthoringSourceFiles)
-      : [];
-    const authoringTemplateLimit = includeAuthoringTemplates ? normalizeAuthoringTemplateLimit(options.authoringTemplateLimit) : 0;
-    return {
-      project,
-      analysisDepth,
-      includeAuthoringTemplates,
-      authoringTemplateSourceFiles,
-      authoringTemplateLimit,
-      telemetry: options.telemetry ?? null,
-    };
+    const planningReads = new Map<string, SemanticRuntimeProjectInputRead>();
+    this.activePlanningReadCollectors.push(planningReads);
+    try {
+      const analysisDepth = normalizeSemanticAppAnalysisDepth(options.analysisDepth);
+      const includeAuthoringTemplates = options.includeAuthoringTemplates === true;
+      const sourceFilePath = normalizeSourceFilePathOption(options.sourceFilePath);
+      const requestedAuthoringSourceFiles = normalizeAuthoringTemplateSourceFiles(options.authoringTemplateSourceFiles);
+      const bootProject = options.projectKey == null
+        ? this.selectProjectForOpen(sourceFilePath)
+        : selectProject(this.workspace.projects, options.projectKey);
+      const project = this.captureProject(bootProject);
+      const projectSourceFilePath = sourceFilePath == null
+        ? null
+        : canonicalProjectSourceFilePath(project, sourceFilePath);
+      const projectAuthoringSourceFiles = canonicalProjectSourceFilePaths(project, requestedAuthoringSourceFiles);
+      const authoringTemplateSourceFiles = includeAuthoringTemplates
+        ? authoringTemplateSourceFilesForOpen(projectSourceFilePath, projectAuthoringSourceFiles)
+        : [];
+      const authoringTemplateLimit = includeAuthoringTemplates
+        ? normalizeAuthoringTemplateLimit(options.authoringTemplateLimit)
+        : 0;
+      return {
+        project,
+        planningReads: Object.freeze(
+          [...planningReads.values()].sort((left, right) => left.readKey.localeCompare(right.readKey)),
+        ),
+        analysisDepth,
+        includeAuthoringTemplates,
+        authoringTemplateSourceFiles,
+        authoringTemplateLimit,
+        telemetry: options.telemetry ?? null,
+      };
+    } finally {
+      const active = this.activePlanningReadCollectors.pop();
+      if (active !== planningReads) {
+        throw new Error('Semantic app-open planning read collectors closed out of order.');
+      }
+    }
   }
 
-  private openPlannedApp(plan: SemanticAppOpenPlan): SemanticApp {
+  private openPlannedApp(
+    plan: SemanticAppOpenPlan,
+    transaction: SemanticAnswerTransaction | null = null,
+  ): SemanticApp {
     return this.openProjectApp(
       plan.project,
       plan.analysisDepth,
@@ -1701,47 +2260,63 @@ export class SemanticRuntime {
       plan.authoringTemplateSourceFiles,
       plan.authoringTemplateLimit,
       plan.telemetry,
+      transaction?.token,
     );
   }
 
   async templateCompletions(
     query: SemanticTemplateCursorQuery,
   ): Promise<SemanticRuntimeAnswer<SemanticTemplateCompletionResult>> {
-    const app = await this.openTemplateCursorApp(query);
-    return app.ask({
+    return this.answerAppQuery({
       kind: SemanticAppQueryKind.TemplateCompletions,
+      projectKey: query.projectKey,
+      analysisDepth: query.analysisDepth ?? SemanticAppAnalysisDepth.BindingObservation,
+      includeAuthoringTemplates: query.includeAuthoringTemplates ?? true,
+      authoringTemplateSourceFiles: query.authoringTemplateSourceFiles,
+      authoringTemplateLimit: query.authoringTemplateLimit,
       inquiryProfile: 'lsp-cursor',
-      cursor: canonicalizeSourceCursorInput(app.project, query.cursor),
+      appRetention: 'retain-app',
+      cursor: query.cursor,
       page: query.page,
       detail: query.detail,
-    }) as SemanticRuntimeAnswer<SemanticTemplateCompletionResult>;
+    }) as Promise<SemanticRuntimeAnswer<SemanticTemplateCompletionResult>>;
   }
 
   async templateCursorInfo(
     query: SemanticTemplateCursorQuery,
   ): Promise<SemanticRuntimeAnswer<SemanticTemplateCursorInfoResult>> {
-    const app = await this.openTemplateCursorApp(query);
-    return app.ask({
+    return this.answerAppQuery({
       kind: SemanticAppQueryKind.TemplateCursorInfo,
+      projectKey: query.projectKey,
+      analysisDepth: query.analysisDepth ?? SemanticAppAnalysisDepth.BindingObservation,
+      includeAuthoringTemplates: query.includeAuthoringTemplates ?? true,
+      authoringTemplateSourceFiles: query.authoringTemplateSourceFiles,
+      authoringTemplateLimit: query.authoringTemplateLimit,
       inquiryProfile: 'lsp-cursor',
-      cursor: canonicalizeSourceCursorInput(app.project, query.cursor),
+      appRetention: 'retain-app',
+      cursor: query.cursor,
       detail: query.detail,
       diagnosticProjection: query.diagnosticProjection,
-    }) as SemanticRuntimeAnswer<SemanticTemplateCursorInfoResult>;
+    }) as Promise<SemanticRuntimeAnswer<SemanticTemplateCursorInfoResult>>;
   }
 
   async templateDiagnostics(
     query: SemanticTemplateDiagnosticsQuery = {},
   ): Promise<SemanticRuntimeAnswer<SemanticTemplateDiagnosticsResult>> {
-    const app = await this.openTemplateDiagnosticsApp(query);
-    return app.ask({
+    return this.answerAppQuery({
       kind: SemanticAppQueryKind.TemplateDiagnostics,
+      projectKey: query.projectKey,
+      analysisDepth: query.analysisDepth ?? SemanticAppAnalysisDepth.BindingObservation,
+      includeAuthoringTemplates: query.includeAuthoringTemplates ?? query.sourceFile != null,
+      authoringTemplateSourceFiles: query.authoringTemplateSourceFiles,
+      authoringTemplateLimit: query.authoringTemplateLimit,
       inquiryProfile: 'lsp-diagnostics',
-      sourceFile: query.sourceFile == null ? query.sourceFile : canonicalizeSourceFileInput(app.project, query.sourceFile),
+      appRetention: 'retain-app',
+      sourceFile: query.sourceFile,
       page: query.page,
       detail: query.detail,
       diagnosticProjection: query.diagnosticProjection,
-    }) as SemanticRuntimeAnswer<SemanticTemplateDiagnosticsResult>;
+    }) as Promise<SemanticRuntimeAnswer<SemanticTemplateDiagnosticsResult>>;
   }
 
   private openProjectApp(
@@ -1751,6 +2326,7 @@ export class SemanticRuntime {
     authoringTemplateSourceFiles: readonly string[],
     authoringTemplateLimit: number | null,
     telemetry: OpenSemanticAppOptions['telemetry'] = null,
+    transactionToken?: object,
   ): SemanticApp {
     const existing = this.readCachedApp(
       project.projectKey,
@@ -1764,7 +2340,7 @@ export class SemanticRuntime {
       return existing;
     }
     if (this.appsByCacheKey.size > 0) {
-      this.disposeCachedAppAnswerState(QueryClaimDisposalReason.AppEpochDisposed);
+      this.disposeCachedAppAnswerState(QueryClaimDisposalReason.AppEpochDisposed, transactionToken);
     }
     const result = this.appAnalysisComputations.prepare(project, {
         analysisDepth,
@@ -1803,46 +2379,6 @@ export class SemanticRuntime {
       app,
     );
     return app;
-  }
-
-  private async openTemplateCursorApp(
-    query: SemanticTemplateCursorQuery,
-  ): Promise<SemanticApp> {
-    const analysisDepth = normalizeSemanticAppAnalysisDepth(query.analysisDepth ?? SemanticAppAnalysisDepth.BindingObservation);
-    const sourceFilePath = normalizeSourceFilePathOption(query.cursor.filePath);
-    const requestedProject = query.projectKey == null
-      ? null
-      : selectProject(this.workspace.projects, query.projectKey);
-    const project = requestedProject ?? this.selectProjectForOpen(sourceFilePath);
-    return this.openApp({
-      projectKey: project.projectKey,
-      sourceFilePath,
-      analysisDepth,
-      includeAuthoringTemplates: query.includeAuthoringTemplates ?? true,
-      authoringTemplateSourceFiles: query.authoringTemplateSourceFiles,
-      authoringTemplateLimit: query.authoringTemplateLimit,
-      telemetry: { inquiryProfile: 'lsp-cursor' },
-    });
-  }
-
-  private async openTemplateDiagnosticsApp(
-    query: SemanticTemplateDiagnosticsQuery,
-  ): Promise<SemanticApp> {
-    const analysisDepth = normalizeSemanticAppAnalysisDepth(query.analysisDepth ?? SemanticAppAnalysisDepth.BindingObservation);
-    const sourceFilePath = normalizeSourceFilePathOption(query.sourceFile?.filePath);
-    const requestedProject = query.projectKey == null
-      ? null
-      : selectProject(this.workspace.projects, query.projectKey);
-    const project = requestedProject ?? this.selectProjectForOpen(sourceFilePath);
-    return this.openApp({
-      projectKey: project.projectKey,
-      sourceFilePath,
-      analysisDepth,
-      includeAuthoringTemplates: query.includeAuthoringTemplates ?? sourceFilePath != null,
-      authoringTemplateSourceFiles: query.authoringTemplateSourceFiles,
-      authoringTemplateLimit: query.authoringTemplateLimit,
-      telemetry: { inquiryProfile: 'lsp-diagnostics' },
-    });
   }
 
   private readCachedApp(
@@ -1905,10 +2441,11 @@ export class SemanticRuntime {
   /** Reclaim answer-local publications while preserving the incumbent semantic generation during replacement. */
   private disposeCachedAppAnswerState(
     reason: QueryClaimDisposalReason,
+    transactionToken?: object,
   ): { readonly queryClaimRecords: number; readonly kernel: KernelStoreDisposalSummary } {
     const apps = [...new Set(this.appsByCacheKey.values())];
     const queryClaimRecords = apps.reduce(
-      (total, app) => total + app.disposeQueryClaims(reason),
+      (total, app) => total + app.disposeQueryClaims(reason, transactionToken),
       0,
     );
     const kernel = apps.length === 0
@@ -1919,6 +2456,7 @@ export class SemanticRuntime {
 
   private disposeCachedAppEpochs(
     reason: QueryClaimDisposalReason,
+    transactionToken?: object,
   ): {
     readonly apps: number;
     readonly typeSystemProjects: number;
@@ -1942,7 +2480,7 @@ export class SemanticRuntime {
     const kernelBefore = this.workspace.store.readTelemetrySnapshot({ includeBreakdowns: false });
     const earliestMarker = earliestKernelMarker(apps.map((app) => app.kernelMarker));
     const queryClaimRecords = apps.reduce(
-      (total, app) => total + app.disposeQueryClaims(reason),
+      (total, app) => total + app.disposeQueryClaims(reason, transactionToken),
       0,
     );
     this.workspace.store.disposeUnownedSince(earliestMarker);
@@ -1965,14 +2503,88 @@ export class SemanticRuntime {
   }
 
   private readProjectShape(project: ProjectBootFrame): SemanticProjectShape {
-    const generationKey = `${project.projectKey}\0${project.inputGeneration.revision}`;
-    const existing = this.projectShapesByGenerationKey.get(generationKey);
-    if (existing != null) {
-      return existing;
+    const generationKey = projectShapeGenerationKey(project);
+    let existing = this.projectShapesByGenerationKey.get(generationKey);
+    if (existing == null) {
+      const candidates = [...this.projectShapesByGenerationKey.values()]
+        .filter((entry) => entry.projectKey === project.projectKey)
+        .reverse();
+      for (const candidate of candidates) {
+        existing = this.tryRebindProjectShapeCacheEntry(candidate, project) ?? undefined;
+        if (existing != null) {
+          this.replaceProjectShapeCacheEntry(generationKey, existing);
+          break;
+        }
+      }
     }
-    const shape = readSemanticProjectShape(project);
-    this.projectShapesByGenerationKey.set(generationKey, shape);
+    if (existing != null) {
+      this.observePlanningReads(existing.reads);
+      return existing.shape;
+    }
+    const scope = project.inputGeneration.createReadScope(
+      `semantic-project-shape:${this.nextAnalysisReadScopeOrdinal++}`,
+    );
+    const shape = project.inputGeneration.withReadScope(
+      scope,
+      () => readSemanticProjectShape(project),
+    );
+    const entry: SemanticProjectShapeCacheEntry = Object.freeze({
+      projectKey: project.projectKey,
+      shape,
+      readScope: scope,
+      reads: Object.freeze([...scope.readRegisteredInputs()]),
+    });
+    this.replaceProjectShapeCacheEntry(generationKey, entry);
+    this.observePlanningReads(entry.reads);
     return shape;
+  }
+
+  private tryRebindProjectShapeCacheEntry(
+    entry: SemanticProjectShapeCacheEntry,
+    project: ProjectBootFrame,
+  ): SemanticProjectShapeCacheEntry | null {
+    const readScope = project.inputGeneration.createReadScope(entry.readScope.key);
+    for (const read of entry.reads) {
+      const reboundRead = project.inputGeneration.tryRebaseRead(read);
+      if (reboundRead == null) {
+        return null;
+      }
+      readScope.observe(reboundRead);
+    }
+    return Object.freeze({
+      ...entry,
+      readScope,
+      reads: Object.freeze([...readScope.readRegisteredInputs()]),
+    });
+  }
+
+  private replaceProjectShapeCacheEntry(
+    generationKey: string,
+    entry: SemanticProjectShapeCacheEntry,
+  ): void {
+    for (const [key, candidate] of this.projectShapesByGenerationKey) {
+      if (candidate.projectKey === entry.projectKey) {
+        this.projectShapesByGenerationKey.delete(key);
+      }
+    }
+    this.projectShapesByGenerationKey.set(generationKey, entry);
+  }
+
+  private observePlanningReads(reads: readonly SemanticRuntimeProjectInputRead[]): void {
+    for (const collector of this.activePlanningReadCollectors) {
+      for (const read of reads) {
+        const existing = collector.get(read.readKey);
+        if (existing != null && existing.observedRevision !== read.observedRevision) {
+          throw new Error(
+            `Semantic app-open planning observed conflicting revisions for '${read.readKey}'.`,
+          );
+        }
+        collector.set(read.readKey, read);
+      }
+    }
+    for (const transaction of new Set(this.activeAnalysisTransactions)) {
+      transaction.observeProjectInputReads(reads);
+    }
   }
 
   private selectDefaultProject(): ProjectBootFrame {
@@ -2025,6 +2637,43 @@ export class SemanticRuntime {
   }
 }
 
+function projectShapeGenerationKey(project: ProjectBootFrame): string {
+  return `${project.projectKey}\0${project.inputGeneration.revision}`;
+}
+
+function normalizeExactWorkspacePaths(
+  workspaceRoot: string,
+  sourceFilePaths: readonly string[] | null | undefined,
+): readonly string[] | null {
+  if (sourceFilePaths == null) {
+    return null;
+  }
+  return [...new Set(sourceFilePaths.map((sourceFilePath) =>
+    canonicalTypeSystemPath(path.isAbsolute(sourceFilePath)
+      ? path.resolve(sourceFilePath)
+      : path.resolve(workspaceRoot, sourceFilePath))
+  ))].sort();
+}
+
+function projectConfigurationClaimEpochKeys(
+  workspaceKey: string,
+  projects: readonly ProjectBootFrame[],
+): readonly string[] {
+  return [
+    semanticRuntimeWorkspaceEpochKey(workspaceKey),
+    ...projects.map((project) =>
+      semanticProjectConfigurationEpochKey(project.projectKey, project.projectConfiguration.revision)
+    ),
+  ].sort();
+}
+
+function projectConfigurationPageEpochKey(
+  workspaceKey: string,
+  projects: readonly ProjectBootFrame[],
+): string {
+  return JSON.stringify(projectConfigurationClaimEpochKeys(workspaceKey, projects));
+}
+
 function countProjectShapes(
   projects: SemanticRuntimeSummary['projects'],
 ): SemanticRuntimeSummary['projectShapeCounts'] {
@@ -2067,6 +2716,8 @@ interface SemanticRuntimeSummaryDisplayInput {
   readonly hasMoreProjectRows: boolean;
   readonly projectShapeCounts: SemanticRuntimeSummary['projectShapeCounts'];
   readonly projectAnalysisCounts: SemanticRuntimeSummary['projectAnalysisCounts'];
+  readonly nativeProjectConfigurationCount: number;
+  readonly nativeProjectConfigurationDiagnosticCount: number;
   readonly defaultAppProjectKey: string | null;
   readonly appCandidates: SemanticRuntimeSummary['appCandidates'];
 }
@@ -2095,8 +2746,9 @@ function semanticRuntimeSummaryDisplayText(input: SemanticRuntimeSummaryDisplayI
   const lines = [
     `Workspace: ${input.workspaceRoot}`,
     `Projects: ${input.projectCount}; shapes ${countRowsDisplay(input.projectShapeCounts, 'shapeKind')}; analysis ${countRowsDisplay(input.projectAnalysisCounts, 'analysisKind')}.`,
+    `Native project configurations: ${input.nativeProjectConfigurationCount}; diagnostics ${input.nativeProjectConfigurationDiagnosticCount}.`,
     input.defaultAppProjectKey == null
-      ? 'Default app: none discovered; pass projectKey or an explicit projects array before opening an app.'
+      ? 'Default app: none discovered; inspect project admission/configuration, or select a projectKey for intentional resource-library authoring.'
       : `Default app: ${input.defaultAppProjectKey}.`,
   ];
   if (input.appCandidates.length > 0) {
@@ -2117,7 +2769,7 @@ function semanticRuntimeSummaryContinuations(
   value: SemanticRuntimeSummary,
 ): readonly SemanticRuntimeContinuationRow[] {
   const noAppBlockers = value.defaultAppProjectKey == null
-    ? ['No default Aurelia app candidate was discovered; select a projectKey or pass explicit projects before following this app query.']
+    ? ['No default Aurelia app candidate was discovered; select an admitted projectKey for intentional resource-library authoring, or correct the shared project topology/configuration.']
     : [];
   return [
     semanticRuntimeSummaryAppContinuation(
@@ -2453,17 +3105,21 @@ function sourceRoleForAppSourceReference(
   if (source == null) {
     return null;
   }
+  if (source.sourceWorkspaceKey != null && source.sourceWorkspaceKey !== projectKey) {
+    return externalizeSourceFileRole(source.sourceFileRole ?? SourceFileRole.Unknown);
+  }
+  if (
+    source.sourceFileRole === SourceFileRole.ExternalSource
+    || source.sourceFileRole === SourceFileRole.Generated
+  ) {
+    return source.sourceFileRole;
+  }
   const sourcePath = source.path;
   if (sourcePath != null) {
     const admission = sources.find((candidate) => sourcePathMatchesFileName(candidate.path, sourcePath)) ?? null;
     if (admission != null) {
       return admission.role;
     }
-  }
-  if (source.sourceWorkspaceKey != null && source.sourceWorkspaceKey !== projectKey) {
-    return source.sourceFileRole === SourceFileRole.Declaration || source.sourceFileRole === SourceFileRole.Generated
-      ? source.sourceFileRole
-      : SourceFileRole.ExternalSource;
   }
   if (source.sourceFileRole != null) {
     return source.sourceFileRole;
@@ -2681,15 +3337,14 @@ function runtimeListDisplay(values: readonly unknown[]): string {
 
 function withAppWorldFreeEvaluationProfile<TValue>(
   result: SemanticRuntimeAnswer<TValue>,
-  access: StaticProjectEvaluationAccess<null> | null,
-  telemetry: OpenSemanticAppOptions['telemetry'],
+  appWorldFreeProfile: SemanticRuntimeAppWorldFreeProfileSummary | null,
 ): SemanticRuntimeAnswer<TValue> {
-  if (access == null || telemetry == null) {
+  if (appWorldFreeProfile == null) {
     return result;
   }
   const profile: SemanticRuntimeAnswerProfile = {
     ...(result.profile ?? {}),
-    appWorldFreeProfile: semanticRuntimeAppWorldFreeProfileSummary(access, normalizeCacheOverviewRowLimit(null)),
+    appWorldFreeProfile,
   };
   return {
     ...result,
@@ -2697,11 +3352,21 @@ function withAppWorldFreeEvaluationProfile<TValue>(
   };
 }
 
+function appWorldFreeEvaluationProfileSummary(
+  access: StaticProjectEvaluationAccess<null> | null,
+  evaluation: StaticProjectEvaluationResult | null,
+  telemetry: OpenSemanticAppOptions['telemetry'],
+): SemanticRuntimeAppWorldFreeProfileSummary | null {
+  return access == null || evaluation == null || telemetry == null
+    ? null
+    : semanticRuntimeAppWorldFreeProfileSummary(access, evaluation, normalizeCacheOverviewRowLimit(null));
+}
+
 function semanticRuntimeAppWorldFreeProfileSummary(
   access: StaticProjectEvaluationAccess<null>,
+  evaluation: StaticProjectEvaluationResult,
   rowLimit: number,
 ): SemanticRuntimeAppWorldFreeProfileSummary {
-  const evaluation = access.readBaseline();
   return {
     acquisitionKind: access.kind,
     acquisitionMilliseconds: roundMilliseconds(access.milliseconds),
@@ -2719,9 +3384,11 @@ export class SemanticApp {
   private readonly queryClaimsByProfile = new Map<SemanticRuntimeInquiryProfile, QueryClaimGraph>();
   private readonly activeInquiryProfileStack: SemanticRuntimeInquiryProfile[] = [];
   private readonly activePagePolicyStack: (SemanticRuntimePagePolicy | null)[] = [];
+  private readonly activeAnswerTransactionStack: SemanticAnswerTransaction[] = [];
   private applicationFileRolesByPathCache: ReadonlyMap<string, readonly ApplicationFileRole[]> | null = null;
   private staticEvaluationOriginsByPathCache: ReadonlyMap<string, SemanticOpenSeamSiteRow['staticEvaluationOrigins']> | null = null;
   private readonly currentTemplateQueries: SemanticAppTemplateQueries;
+  private readonly committedEmission: AureliaAppWorldProjectEmission;
 
   constructor(
     readonly runtime: SemanticRuntime,
@@ -2730,11 +3397,12 @@ export class SemanticApp {
     appEmission: AureliaAppWorldProjectEmission,
     private readonly cacheRequest: SemanticAppCacheRequest,
   ) {
+    this.committedEmission = appEmission;
     this.defaultQueryClaims = this.queryClaimsForProfile(appEmission.profile.inquiryProfile);
     this.routeQueries = new SemanticAppRouteQueries(appEmission, runtime.workspace.store);
     this.currentTemplateQueries = new SemanticAppTemplateQueries(
       appEmission,
-      appGeneration,
+      () => this.requireTemplateQueryGenerationCurrent(),
       runtime.workspace.store,
       runtime.workspace.rootDir,
       project.rootDir,
@@ -2745,9 +3413,16 @@ export class SemanticApp {
     return this.cacheRequest.kernelMarker;
   }
 
+  /** Exact committed app computation used to seal detached answer provenance before app-epoch disposal. */
+  get analysisGenerationReference(): ComputationGenerationReference {
+    return this.appGeneration;
+  }
+
   /** Complete app fan-in guarded by the exact app-analysis generation that produced it. */
   get emission(): AureliaAppWorldProjectEmission {
-    return this.appGeneration.emission;
+    return this.activeAnswerTransactionStack.length === 0
+      ? this.appGeneration.emission
+      : this.appGeneration.readCommittedEmission();
   }
 
   /** Default retained-answer graph guarded by the app generation whose answers it contains. */
@@ -2758,8 +3433,19 @@ export class SemanticApp {
 
   /** Internal template projection surface; public callers enter through `ask()` so query lifetime policy applies. */
   private get templateQueries(): SemanticAppTemplateQueries {
-    this.appGeneration.emission;
     return this.currentTemplateQueries;
+  }
+
+  /**
+   * Query bodies may inspect the immutable committed app snapshot optimistically. The enclosing answer transaction
+   * seals and validates its exact generation proof before any answer or claim becomes externally visible.
+   */
+  private requireTemplateQueryGenerationCurrent(): void {
+    if (this.activeAnswerTransactionStack.length > 0) {
+      this.appGeneration.readCommittedEmission();
+      return;
+    }
+    this.appGeneration.requireCurrent();
   }
 
   isCurrent(): boolean {
@@ -2776,19 +3462,28 @@ export class SemanticApp {
     authoringTemplateSourceFiles: readonly string[],
     authoringTemplateLimit: number | null,
   ): boolean {
-    return !includeAuthoringTemplates
-      || (
-        this.cacheRequest.includeAuthoringTemplates
-        && authoringTemplateSourceFileRequestSatisfied(
-          this.emission.templates.authoringTemplateSourceFiles,
-          authoringTemplateSourceFiles,
-          this.emission.templates.authoringTemplateLimit,
-        )
-        && authoringTemplateLimitSatisfied(this.emission.templates.authoringTemplateLimit, authoringTemplateLimit)
-      );
+    if (!includeAuthoringTemplates) {
+      return true;
+    }
+    const emission = this.emission;
+    return this.cacheRequest.includeAuthoringTemplates
+      && authoringTemplateSourceFileRequestSatisfied(
+        emission.templates.authoringTemplateSourceFiles,
+        authoringTemplateSourceFiles,
+        emission.templates.authoringTemplateLimit,
+      )
+      && authoringTemplateLimitSatisfied(emission.templates.authoringTemplateLimit, authoringTemplateLimit);
   }
 
-  cacheSummary(rowLimit: number, includeQueryClaimRows: boolean): SemanticRuntimeCachedAppSummary {
+  cacheSummary(
+    rowLimit: number,
+    includeQueryClaimRows: boolean,
+    transactionToken?: object,
+  ): SemanticRuntimeCachedAppSummary {
+    const emission = transactionToken != null
+      && this.runtime.isAnalysisTransactionTokenActive(transactionToken)
+      ? this.appGeneration.readCommittedEmission()
+      : this.emission;
     return {
       projectKey: this.project.projectKey,
       analysisDepth: this.cacheRequest.analysisDepth,
@@ -2796,48 +3491,48 @@ export class SemanticApp {
       authoringTemplateSourceFileCount: this.cacheRequest.authoringTemplateSourceFileCount,
       authoringTemplateLimit: this.cacheRequest.authoringTemplateLimit,
       profile: {
-        inquiryProfile: this.emission.profile.inquiryProfile,
-        totalMilliseconds: roundMilliseconds(this.emission.profile.totalMilliseconds),
-        phaseCount: this.emission.profile.phases.length,
-        topPhases: semanticRuntimePhaseTimingSummaries(this.emission.profile.phases, rowLimit),
-        staticEvaluationAcquisitions: this.emission.profile.evaluationAcquisitions.map((acquisition) => ({
+        inquiryProfile: emission.profile.inquiryProfile,
+        totalMilliseconds: roundMilliseconds(emission.profile.totalMilliseconds),
+        phaseCount: emission.profile.phases.length,
+        topPhases: semanticRuntimePhaseTimingSummaries(emission.profile.phases, rowLimit),
+        staticEvaluationAcquisitions: emission.profile.evaluationAcquisitions.map((acquisition) => ({
           profileKey: acquisition.profileKey,
           acquisitionKind: acquisition.kind,
           acquisitionMilliseconds: roundMilliseconds(acquisition.milliseconds),
           constructionMilliseconds: roundMilliseconds(acquisition.constructionMilliseconds),
         })),
         typeSystemAcquisition: {
-          acquisitionKind: this.emission.profile.typeSystemAcquisition.kind,
-          acquisitionMilliseconds: roundMilliseconds(this.emission.profile.typeSystemAcquisition.milliseconds),
+          acquisitionKind: emission.profile.typeSystemAcquisition.kind,
+          acquisitionMilliseconds: roundMilliseconds(emission.profile.typeSystemAcquisition.milliseconds),
           constructionMilliseconds: roundMilliseconds(
-            this.emission.profile.typeSystemAcquisition.constructionMilliseconds,
+            emission.profile.typeSystemAcquisition.constructionMilliseconds,
           ),
         },
-        staticEvaluationPhases: semanticRuntimeAggregatedPhaseTimingSummaries(this.emission.evaluation.profile.phases, rowLimit),
-        staticEvaluationHost: this.emission.evaluation.profile.sourceHost,
-        staticEvaluationSources: this.emission.evaluation.profile.sourceFiles,
-        typeSystemPhases: semanticRuntimeAggregatedPhaseTimingSummaries(this.emission.typeSystem.profile.phases, rowLimit),
-        resourceRecognitionPhases: semanticRuntimeAggregatedPhaseTimingSummaries(this.emission.resources.profile.phases, rowLimit),
-        templatePhases: semanticRuntimeAggregatedPhaseTimingSummaries(this.emission.templates.profile.phases, rowLimit),
-        templateRuntimePhases: semanticRuntimeTemplateRuntimePhaseTimingSummaries(this.emission, rowLimit),
-        templateExpressionTypeCache: semanticRuntimeTemplateExpressionTypeCacheSummary(this.emission),
-        typeScript: semanticTypeScriptEnvironmentFromProfile(this.emission.typeSystem.profile.typeScript),
-        compilerOptions: this.emission.typeSystem.profile.compilerOptions,
-        hostSourceFileCache: this.emission.typeSystem.profile.hostSourceFileCache,
-        programRootFiles: this.emission.typeSystem.profile.programRootFiles,
-        programSourceFiles: this.emission.typeSystem.profile.programSourceFiles,
+        staticEvaluationPhases: semanticRuntimeAggregatedPhaseTimingSummaries(emission.evaluation.profile.phases, rowLimit),
+        staticEvaluationHost: emission.evaluation.profile.sourceHost,
+        staticEvaluationSources: emission.evaluation.profile.sourceFiles,
+        typeSystemPhases: semanticRuntimeAggregatedPhaseTimingSummaries(emission.typeSystem.profile.phases, rowLimit),
+        resourceRecognitionPhases: semanticRuntimeAggregatedPhaseTimingSummaries(emission.resources.profile.phases, rowLimit),
+        templatePhases: semanticRuntimeAggregatedPhaseTimingSummaries(emission.templates.profile.phases, rowLimit),
+        templateRuntimePhases: semanticRuntimeTemplateRuntimePhaseTimingSummaries(emission, rowLimit),
+        templateExpressionTypeCache: semanticRuntimeTemplateExpressionTypeCacheSummary(emission),
+        typeScript: semanticTypeScriptEnvironmentFromProfile(emission.typeSystem.profile.typeScript),
+        compilerOptions: emission.typeSystem.profile.compilerOptions,
+        hostSourceFileCache: emission.typeSystem.profile.hostSourceFileCache,
+        programRootFiles: emission.typeSystem.profile.programRootFiles,
+        programSourceFiles: emission.typeSystem.profile.programSourceFiles,
         programRootFileGroups: trimTypeSystemProgramSourceFileGroups(
-          this.emission.typeSystem.profile.programRootFileGroups,
+          emission.typeSystem.profile.programRootFileGroups,
           rowLimit,
         ),
         programSourceFileGroups: trimTypeSystemProgramSourceFileGroups(
-          this.emission.typeSystem.profile.programSourceFileGroups,
+          emission.typeSystem.profile.programSourceFileGroups,
           rowLimit,
         ),
-        programNodeRemaps: this.emission.typeSystem.readProgramNodeRemapStats(),
+        programNodeRemaps: emission.typeSystem.readProgramNodeRemapStats(),
       },
-      queryClaims: this.queryClaims.snapshot(),
-      queryClaimProfiles: this.queryClaimProfileSummaries(rowLimit, includeQueryClaimRows),
+      queryClaims: this.defaultQueryClaims.snapshot(transactionToken),
+      queryClaimProfiles: this.queryClaimProfileSummaries(rowLimit, includeQueryClaimRows, transactionToken),
     };
   }
 
@@ -2858,7 +3553,10 @@ export class SemanticApp {
   answerRoutedQuery(
     query: SemanticAppQuery,
     pagePolicy: SemanticRuntimePagePolicy | null = this.activePagePolicyStack[this.activePagePolicyStack.length - 1] ?? null,
+    transaction: SemanticAnswerTransaction | null =
+      this.activeAnswerTransactionStack[this.activeAnswerTransactionStack.length - 1] ?? null,
   ): SemanticRuntimeAnswer<unknown> {
+    this.appGeneration.readCommittedEmission();
     this.project.inputGeneration.requireCurrent();
     const unsupportedFilterAnswer = answerUnsupportedSemanticAppQuerySelectors(query);
     if (unsupportedFilterAnswer != null) {
@@ -2868,6 +3566,7 @@ export class SemanticApp {
         `selector-preflight|${requestKey}`,
         () => unsupportedFilterAnswer,
         pagePolicy,
+        transaction,
       );
     }
     query = semanticAppQueryCatalogShape(query);
@@ -2896,6 +3595,7 @@ export class SemanticApp {
         semanticAppQueryCatalogRow(query.kind),
       ),
       pagePolicy,
+      transaction,
     );
     if (semanticRouteQueryDescriptorFor(query.kind) != null) {
       return answerCurrentQuery(() => {
@@ -3159,13 +3859,26 @@ export class SemanticApp {
     queryKey: string,
     materialize: () => SemanticRuntimeAnswer<TValue>,
     pagePolicy: SemanticRuntimePagePolicy | null = null,
+    enclosingTransaction: SemanticAnswerTransaction | null = null,
   ): SemanticRuntimeAnswer<TValue> {
+    const transaction = enclosingTransaction ?? new SemanticAnswerTransaction();
+    const ownsTransaction = enclosingTransaction == null;
+    const savepoint = transaction.savepoint();
     const catalogRow = semanticAppQueryCatalogRow(query.kind as SemanticAppQueryKind);
     const inquiryProfile = this.inquiryProfileForQuery(query);
     const queryClaims = this.queryClaimsForProfile(inquiryProfile);
     const retainNavigableHandles = query.detail === SemanticRuntimeDetail.Handles;
-    return withAnswerAnalysisDepth(
-      queryClaims.answer({
+    const receiptBuilder = this.runtime.createAnalysisReceiptBuilder(transaction);
+    let observedReceipt: SemanticRuntimeAnalysisReceipt | null = null;
+    const additionalReads = (): readonly SemanticRuntimeProjectInputRead[] => [
+      ...this.project.readRegisteredInputs().filter(
+        (read): read is SemanticRuntimeProjectInputRead =>
+          read instanceof SemanticRuntimeProjectInputRead,
+      ),
+      ...this.committedEmission.typeSystem.readRegisteredInputs(),
+    ];
+    try {
+      const claimed = queryClaims.answer({
         queryKind: query.kind,
         queryKey,
         responsePolicyKey: semanticRuntimePagePolicyReuseKey(
@@ -3178,16 +3891,38 @@ export class SemanticApp {
           query,
         ),
         materializationPolicy: semanticAppQueryMaterializationPolicy(query, catalogRow.materializationPolicy),
-      }, () => {
-        this.activeInquiryProfileStack.push(inquiryProfile);
-        this.activePagePolicyStack.push(pagePolicy);
-        try {
-          return materialize();
-        } finally {
-          this.activePagePolicyStack.pop();
-          this.activeInquiryProfileStack.pop();
-        }
-      }, {
+      }, () => this.runtime.materializeAnalysisAnswer(
+        transaction,
+        receiptBuilder,
+        [this.project.inputGeneration],
+        () => {
+          this.activeAnswerTransactionStack.push(transaction);
+          this.activeInquiryProfileStack.push(inquiryProfile);
+          this.activePagePolicyStack.push(pagePolicy);
+          try {
+            return materialize();
+          } finally {
+            this.activePagePolicyStack.pop();
+            this.activeInquiryProfileStack.pop();
+            const activeTransaction = this.activeAnswerTransactionStack.pop();
+            if (activeTransaction !== transaction) {
+              throw new Error('Semantic app answer transactions closed out of order.');
+            }
+          }
+        },
+      ), {
+        requiredAnswerLeaseKind: SEMANTIC_RUNTIME_ANALYSIS_RECEIPT_KIND,
+        answerTransaction: transaction.boundaryFor(receiptBuilder),
+        composeRetainedAnswerLease: (lease) =>
+          this.runtime.composeRetainedAnalysisReceipt(receiptBuilder, lease),
+        sealAnswerLease: () => this.runtime.sealAnalysisReceipt(
+          receiptBuilder,
+          [this.appGeneration],
+          additionalReads(),
+        ),
+        observeAnswerLease: (lease) => {
+          observedReceipt = this.runtime.observeAnalysisReceipt(receiptBuilder, lease);
+        },
         readKernelMarker: () => this.runtime.workspace.store.markLifetime(),
         readKernelSnapshot: () => this.runtime.workspace.store.readTelemetrySnapshot(),
         // Handle-detail answers promise exact in-process follow-up navigation, so any lazily projected targets must
@@ -3195,9 +3930,43 @@ export class SemanticApp {
         disposeKernelSince: retainNavigableHandles
           ? undefined
           : (marker) => this.runtime.workspace.store.disposeSince(marker),
-      }),
-      this.emission.analysisDepth,
-    );
+      });
+      if (observedReceipt == null) {
+        throw new Error(`Semantic app query '${query.kind}' returned without an exact analysis receipt.`);
+      }
+      const projected = withAnswerAnalysisDepth(
+        withSemanticRuntimeAnalysisReceipt(claimed, observedReceipt),
+        this.cacheRequest.analysisDepth,
+      );
+      if (ownsTransaction) {
+        transaction.commit();
+      }
+      return projected;
+    } catch (error) {
+      let failure: unknown = error;
+      try {
+        const failureReceipt = this.runtime.sealAnalysisReceipt(
+          receiptBuilder,
+          [this.appGeneration],
+          additionalReads(),
+        );
+        failureReceipt.dispose();
+        transaction.tryObserveFailedBuilder(receiptBuilder);
+      } catch (receiptError) {
+        failure = new AggregateError(
+          [error, receiptError],
+          `Semantic app query '${query.kind}' failed and its exact failure-path proof could not be composed.`,
+        );
+      }
+      transaction.rollbackTo(savepoint);
+      if (ownsTransaction) {
+        transaction.rollback();
+      }
+      throw failure;
+    } finally {
+      (observedReceipt as SemanticRuntimeAnalysisReceipt | null)?.dispose();
+      this.runtime.releaseAnalysisReceiptBuilder(receiptBuilder);
+    }
   }
 
   private answerPublicQueryIfNeeded<TValue>(
@@ -3213,7 +3982,7 @@ export class SemanticApp {
     return normalizeSemanticRuntimeInquiryProfile(
       query.inquiryProfile
         ?? this.activeInquiryProfileStack[this.activeInquiryProfileStack.length - 1]
-        ?? this.emission.profile.inquiryProfile,
+        ?? this.committedEmission.profile.inquiryProfile,
     );
   }
 
@@ -3233,23 +4002,25 @@ export class SemanticApp {
   private queryClaimProfileSummaries(
     rowLimit: number,
     includeRows: boolean,
+    transactionToken?: object,
   ): readonly SemanticRuntimeCachedAppQueryClaimProfileSummary[] {
     return [...this.queryClaimsByProfile.entries()]
       .map(([inquiryProfile, queryClaims]) => ({
         inquiryProfile,
-        queryClaims: queryClaims.snapshot(),
-        ...queryClaimRowsForCacheOverview(queryClaims, rowLimit, includeRows),
+        queryClaims: queryClaims.snapshot(transactionToken),
+        ...queryClaimRowsForCacheOverview(queryClaims, rowLimit, includeRows, transactionToken),
       }))
       .sort((left, right) => left.inquiryProfile.localeCompare(right.inquiryProfile));
   }
 
   disposeQueryClaims(
     reason: QueryClaimDisposalReason,
+    transactionToken?: object,
   ): number {
     let disposed = 0;
     const policy = queryClaimDisposalPolicy(reason);
     for (const graph of this.queryClaimsByProfile.values()) {
-      disposed += graph.dispose(policy);
+      disposed += graph.dispose(policy, transactionToken);
     }
     return disposed;
   }
@@ -5224,6 +5995,7 @@ function queryClaimRowsForCacheOverview(
   queryClaims: QueryClaimGraph,
   rowLimit: number,
   includeRows: boolean,
+  transactionToken?: object,
 ): Pick<SemanticRuntimeCachedAppQueryClaimProfileSummary, 'queryClaimRows'> | {} {
   if (!includeRows) {
     return {};
@@ -5232,7 +6004,7 @@ function queryClaimRowsForCacheOverview(
     return { queryClaimRows: [] };
   }
   return {
-    queryClaimRows: queryClaims.readRecentRecords(rowLimit),
+    queryClaimRows: queryClaims.readRecentRecords(rowLimit, transactionToken),
   };
 }
 

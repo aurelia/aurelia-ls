@@ -1984,7 +1984,7 @@ function stateSourceClassDeclarations(
       .map((service) => `${service.sourcePath}\0${service.className}`),
   );
   return emission.project.sourceFiles.flatMap((source) => {
-    const sourceFile = emission.typeSystem.readProgramSourceFileByPath(source.path);
+    const sourceFile = emission.typeSystem.readProgramSourceFileByProjectPath(source.path);
     return sourceFile == null
       ? []
       : topLevelNamedClasses(source, sourceFile)

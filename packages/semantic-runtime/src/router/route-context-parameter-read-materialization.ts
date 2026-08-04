@@ -183,7 +183,7 @@ function readRouteContextParameterReadSites(
 ): readonly RouteContextParameterReadSite[] {
   const sourcePathByFileName = typeSystemSourcePathIndex(project, typeSystem);
   return project.sourceFiles.flatMap((source) => {
-    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
+    const sourceFile = typeSystem.readProgramSourceFileByProjectPath(source.path);
     return sourceFile == null
       ? []
       : readSourceFileRouteContextParameterReadSites(
@@ -243,7 +243,7 @@ function routeParameterOwnersByClass(
 ): ReadonlyMap<ts.ClassDeclaration, readonly ComponentRouteContextParameterOwner[]> {
   const ownersByClass = new Map<ts.ClassDeclaration, ComponentRouteContextParameterOwner[]>();
   for (const source of project.sourceFiles) {
-    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
+    const sourceFile = typeSystem.readProgramSourceFileByProjectPath(source.path);
     if (sourceFile == null) {
       continue;
     }

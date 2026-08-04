@@ -6,6 +6,7 @@ import type {
   SourceFileAdmission,
 } from '../boot/frames.js';
 import type { AuthoredSourceBoundary } from '../boot/source-boundary.js';
+import { sourceFileAddressHostPath } from '../boot/source-ownership.js';
 import {
   normalizeModuleKey,
 } from '../evaluation/module-graph.js';
@@ -15,6 +16,7 @@ import {
 } from '../evaluation/project-evaluation.js';
 import {
   SourceFileRole,
+  type SourceFileAddress,
 } from '../kernel/address.js';
 import type { ComputationReadValidationScope } from '../kernel/computation-lifecycle.js';
 import type {
@@ -54,7 +56,10 @@ import {
   registerCheckerDeclarationSourceContext,
 } from './declaration-source.js';
 import type { TypeSystemProgramSourceCatalog } from './program-source-authority.js';
-import { typeSystemSourceAdmissionIndex } from './source-path-index.js';
+import {
+  typeSystemBootSourceAdmissionIndex,
+  typeSystemEvaluationSourceAdmissionIndex,
+} from './source-path-index.js';
 import {
   readTypeSystemRelatedMemberFamily,
   TypeSystemRelatedMemberFamilyReadState,
@@ -217,7 +222,10 @@ export class TypeSystemProject {
   private programNodeRemapSpanHits = 0;
   private programNodeRemapSourceFileMisses = 0;
   private programNodeRemapSpanMisses = 0;
+  /** Evaluator-known admissions used only for checker source identity and source-role projection. */
   private readonly sourceAdmissionsByPath: ReadonlyMap<string, SourceFileAdmission>;
+  /** Exact boot admissions used as the narrower authored mutation authority. */
+  private readonly bootSourceAdmissionsByPath: ReadonlyMap<string, SourceFileAdmission>;
 
   constructor(
     /** Technical identity of the Program/checker objects retained by this project. */
@@ -249,7 +257,8 @@ export class TypeSystemProject {
     private readonly diagnosticSourcePaths: ReadonlySet<string> | null,
     private readonly inputReadScope: SemanticRuntimeProjectInputReadScope,
   ) {
-    this.sourceAdmissionsByPath = typeSystemSourceAdmissionIndex(project);
+    this.bootSourceAdmissionsByPath = typeSystemBootSourceAdmissionIndex(project);
+    this.sourceAdmissionsByPath = typeSystemEvaluationSourceAdmissionIndex(project, evaluation);
     registerCheckerDeclarationSourceContext(
       checker,
       new CheckerDeclarationSourceContext(
@@ -281,21 +290,26 @@ export class TypeSystemProject {
   /** Read the Program-owned source file associated with an evaluator module key. */
   readProgramSourceFileByModuleKey(moduleKey: string): ts.SourceFile | null {
     const evaluatedSourceFile = this.readEvaluatedSourceFileByModuleKey(moduleKey);
-    return evaluatedSourceFile == null ? null : this.readProgramSourceFileByPath(evaluatedSourceFile.fileName);
+    return evaluatedSourceFile == null ? null : this.readProgramSourceFileByHostPath(evaluatedSourceFile.fileName);
   }
 
-  /** Read an evaluator-owned source file by absolute, project-relative, or workspace-relative path. */
-  readEvaluatedSourceFileByPath(fileName: string): ts.SourceFile | null {
-    return this.sourceFilesByPath.get(canonicalTypeSystemPath(resolveProjectPath(this.project.rootDir, fileName)))
-      ?? this.sourceFilesByPath.get(canonicalTypeSystemPath(resolveWorkspacePath(this.project.workspaceRootDir, fileName)))
-      ?? null;
+  /** Read one Program source by exact absolute host identity. */
+  readProgramSourceFileByHostPath(fileName: string): ts.SourceFile | null {
+    return this.programSourceFilesByPath.get(strictCanonicalHostPath(fileName, 'Program source')) ?? null;
   }
 
-  /** Read the Program-owned source file by absolute, project-relative, or workspace-relative path. */
-  readProgramSourceFileByPath(fileName: string): ts.SourceFile | null {
-    return this.programSourceFilesByPath.get(canonicalTypeSystemPath(resolveProjectPath(this.project.rootDir, fileName)))
-      ?? this.programSourceFilesByPath.get(canonicalTypeSystemPath(resolveWorkspacePath(this.project.workspaceRootDir, fileName)))
-      ?? null;
+  /** Read one Program source from an explicitly project-relative admission/query path. */
+  readProgramSourceFileByProjectPath(projectPath: string): ts.SourceFile | null {
+    return this.readProgramSourceFileByHostPath(
+      resolveStrictRelativePath(this.project.rootDir, projectPath, 'project-relative Program source'),
+    );
+  }
+
+  /** Read one Program source from a workspace-relative or checker-canonical source-file address. */
+  readProgramSourceFileForAddress(address: Pick<SourceFileAddress, 'path'>): ts.SourceFile | null {
+    return this.readProgramSourceFileByHostPath(
+      sourceFileAddressHostPath(this.project.workspaceRootDir, address),
+    );
   }
 
   /** Read all semantic-runtime overlay sources admitted into this checker epoch. */
@@ -304,11 +318,9 @@ export class TypeSystemProject {
       .sort((left, right) => left.fileName.localeCompare(right.fileName));
   }
 
-  /** Read overlay metadata by absolute, project-relative, or workspace-relative generated source path. */
-  readOverlaySourceByPath(fileName: string): TypeSystemOverlaySource | null {
-    return this.overlaySourcesByPath.get(canonicalTypeSystemPath(resolveProjectPath(this.project.rootDir, fileName)))
-      ?? this.overlaySourcesByPath.get(canonicalTypeSystemPath(resolveWorkspacePath(this.project.workspaceRootDir, fileName)))
-      ?? null;
+  /** Read overlay metadata by exact absolute generated-source host identity. */
+  readOverlaySourceByHostPath(fileName: string): TypeSystemOverlaySource | null {
+    return this.overlaySourcesByPath.get(strictCanonicalHostPath(fileName, 'overlay source')) ?? null;
   }
 
   /** Read the overlay source metadata for a Program SourceFile, when the file is synthetic. */
@@ -324,7 +336,7 @@ export class TypeSystemProject {
     const overlay = [...this.overlaySourcesByPath.values()].find((source) =>
       source.originKey === originKey
     ) ?? null;
-    const sourceFile = overlay == null ? null : this.readProgramSourceFileByPath(overlay.fileName);
+    const sourceFile = overlay == null ? null : this.readProgramSourceFileByHostPath(overlay.fileName);
     const declaration = sourceFile?.statements.find((statement): statement is ts.TypeAliasDeclaration =>
       ts.isTypeAliasDeclaration(statement) && statement.name.text === aliasName
     ) ?? null;
@@ -336,13 +348,13 @@ export class TypeSystemProject {
     fileName: string,
     position: number,
   ): TypeSystemOverlaySourceSegment | null {
-    const source = this.readOverlaySourceByPath(fileName);
+    const source = this.readOverlaySourceByHostPath(fileName);
     return source == null ? null : typeSystemOverlaySegmentAt(source, position);
   }
 
   /** Classify a Program source file through boot admission first, then checker-owned dependency/source buckets. */
-  readProgramSourceFileRole(fileName: string): SourceFileRole | null {
-    const sourceFile = this.readProgramSourceFileByPath(fileName);
+  readProgramSourceFileRoleByHostPath(fileName: string): SourceFileRole | null {
+    const sourceFile = this.readProgramSourceFileByHostPath(fileName);
     if (sourceFile == null) {
       return null;
     }
@@ -373,11 +385,28 @@ export class TypeSystemProject {
   /** Read authored app source that this project owns and may safely edit. */
   readProjectEditableProgramSourceFiles(): readonly ts.SourceFile[] {
     return [...this.programSourceFilesByPath.values()]
-      .filter((sourceFile) =>
-        !this.overlaySourcePaths.has(canonicalTypeSystemPath(sourceFile.fileName))
-        && this.sourceAdmissionsByPath.get(canonicalTypeSystemPath(sourceFile.fileName))?.role === SourceFileRole.AppSource
-      )
+      .filter((sourceFile) => this.isProjectEditableProgramSourceFileByHostPath(sourceFile.fileName))
       .sort((left, right) => left.fileName.localeCompare(right.fileName));
+  }
+
+  /** Whether one Program source is an exact boot-owned authored AppSource and therefore a safe mutation target. */
+  isProjectEditableProgramSourceFileByHostPath(fileName: string): boolean {
+    const sourceFile = this.readProgramSourceFileByHostPath(fileName);
+    if (sourceFile == null) {
+      return false;
+    }
+    const normalized = canonicalTypeSystemPath(sourceFile.fileName);
+    return !this.overlaySourcePaths.has(normalized)
+      && this.project.authoredSources.contains(sourceFile.fileName)
+      && this.bootSourceAdmissionsByPath.get(normalized)?.role === SourceFileRole.AppSource;
+  }
+
+  /** Read one Program source only when exact boot ownership makes it a safe mutation target. */
+  readProjectEditableProgramSourceFileByHostPath(fileName: string): ts.SourceFile | null {
+    const sourceFile = this.readProgramSourceFileByHostPath(fileName);
+    return sourceFile != null && this.isProjectEditableProgramSourceFileByHostPath(sourceFile.fileName)
+      ? sourceFile
+      : null;
   }
 
   /**
@@ -395,7 +424,7 @@ export class TypeSystemProject {
     }
     this.programNodeRemapCacheMisses += 1;
     const sourceFile = node.getSourceFile();
-    const programSourceFile = this.readProgramSourceFileByPath(sourceFile.fileName);
+    const programSourceFile = this.readProgramSourceFileByHostPath(sourceFile.fileName);
     if (programSourceFile == null) {
       this.programNodeRemapSourceFileMisses += 1;
       this.programNodeRemapCache.set(node, null);
@@ -454,12 +483,12 @@ export class TypeSystemProject {
   }
 
   /** Read TypeScript's complete related-member relation in this exact Program epoch. */
-  readProgramRelatedMemberFamily(
+  readProgramRelatedMemberFamilyByHostPath(
     fileName: string,
     start: number,
     end: number,
   ): TypeSystemRelatedMemberFamilyRead {
-    const sourceFile = this.readProgramSourceFileByPath(fileName);
+    const sourceFile = this.readProgramSourceFileByHostPath(fileName);
     if (sourceFile == null) {
       return {
         state: TypeSystemRelatedMemberFamilyReadState.TargetUnavailable,
@@ -473,7 +502,7 @@ export class TypeSystemProject {
       start,
       end,
       editableSourceFiles: this.readProjectEditableProgramSourceFiles(),
-      sourceFileRole: (path) => this.readProgramSourceFileRole(path),
+      sourceFileRole: (hostPath) => this.readProgramSourceFileRoleByHostPath(hostPath),
     });
   }
 
@@ -1296,6 +1325,9 @@ function typeSystemProgramRootNames(
     }
   }
   for (const source of evaluatedSources) {
+    if (!isTypeSystemProgramRootAdmission(source.admission)) {
+      continue;
+    }
     if (!project.authoredSources.contains(source.sourceFile.fileName)) {
       continue;
     }
@@ -1490,8 +1522,18 @@ function resolveProjectPath(rootDir: string, fileName: string): string {
   return path.isAbsolute(fileName) ? fileName : path.join(rootDir, fileName);
 }
 
-function resolveWorkspacePath(workspaceRootDir: string, fileName: string): string {
-  return path.isAbsolute(fileName) ? fileName : path.join(workspaceRootDir, fileName);
+function strictCanonicalHostPath(fileName: string, label: string): string {
+  if (!path.isAbsolute(fileName)) {
+    throw new Error(`${label} lookup requires an absolute host path; received '${fileName}'.`);
+  }
+  return canonicalTypeSystemPath(path.resolve(fileName));
+}
+
+function resolveStrictRelativePath(rootDir: string, relativePath: string, label: string): string {
+  if (path.isAbsolute(relativePath)) {
+    throw new Error(`${label} lookup requires a relative path; received '${relativePath}'.`);
+  }
+  return path.resolve(rootDir, relativePath);
 }
 
 function isTypeSystemProgramRootSourceFile(fileName: string): boolean {

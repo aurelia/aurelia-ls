@@ -28,17 +28,24 @@ const ANALYSIS_REFRESH_DEBOUNCE_MS = 300;
 interface LifecycleRefreshState {
   readonly tasks: Set<Promise<unknown>>;
   pendingAnalysisRefresh: ReturnType<typeof setTimeout> | null;
+  pendingAnalysisChangeKind: AnalysisChangedPayload["changeKind"] | null;
   shutdown: Promise<void> | null;
 }
 
 const lifecycleRefreshStates = new WeakMap<ServerContext, LifecycleRefreshState>();
 
-function hasSourceFileStructuralChange(changes: readonly FileEvent[]): boolean {
+function sourceFileStructuralChangePaths(
+  ctx: ServerContext,
+  changes: readonly FileEvent[],
+): readonly string[] {
+  const filePaths: string[] = [];
   for (const change of changes) {
     if (change.type !== FileChangeType.Created && change.type !== FileChangeType.Deleted) continue;
-    if (isAnalyzedSourceDocumentUri(change.uri)) return true;
+    if (!isAnalyzedSourceDocumentUri(change.uri)) continue;
+    const filePath = ctx.documentUris.workspaceHostPath(change.uri);
+    if (filePath != null) filePaths.push(filePath);
   }
-  return false;
+  return filePaths;
 }
 
 function closedAnalyzedSourceContentPaths(
@@ -52,35 +59,66 @@ function closedAnalyzedSourceContentPaths(
     // Open-document text is already authoritative through didChange. Replaying
     // the ensuing filesystem save would invalidate the same source generation
     // twice and enqueue a second all-document diagnostics wave.
-    if (ctx.openDocument(change.uri) != null) continue;
-    const filePath = ctx.documentUris.authoredHostPath(change.uri);
-    if (filePath != null) filePaths.push(filePath);
+    if (ctx.openWorkspaceDocument(change.uri) != null) continue;
+    const filePath = ctx.documentUris.workspaceHostPath(change.uri);
+    if (filePath == null || isProjectTopologyConfigurationPath(filePath)) continue;
+    filePaths.push(filePath);
   }
   return filePaths;
 }
 
-function shouldReloadForFileChange(
+function projectTopologyConfigurationChangePaths(
   ctx: ServerContext,
   changes: readonly FileEvent[],
-): boolean {
+): readonly string[] {
+  const filePaths: string[] = [];
   for (const change of changes) {
-    const hostPath = ctx.documentUris.authoredHostPath(change.uri);
+    if (change.type !== FileChangeType.Created && change.type !== FileChangeType.Deleted) continue;
+    const hostPath = ctx.documentUris.workspaceHostPath(change.uri);
     if (hostPath == null) continue;
-    const base = path.basename(hostPath).toLowerCase();
-    // Project-shape authority reads dependency scope and workspace membership
-    // from package manifests, so manifest edits are topology changes too.
-    if (base === "package.json") return true;
-    if (base === "tsconfig.json") return true;
-    if (base === "jsconfig.json") return true;
-    if (base.startsWith("tsconfig.") && base.endsWith(".json")) return true;
+    if (!isProjectTopologyConfigurationPath(hostPath)) continue;
+    filePaths.push(hostPath);
   }
-  return false;
+  return filePaths;
 }
 
-function recordProjectTopologyChanged(ctx: ServerContext, reason: string): void {
-  ctx.semanticRuntime.recordProjectTopologyChanged();
+function projectConfigurationValueChangePaths(
+  ctx: ServerContext,
+  changes: readonly FileEvent[],
+): readonly string[] {
+  const filePaths: string[] = [];
+  for (const change of changes) {
+    if (change.type !== FileChangeType.Changed) continue;
+    const hostPath = ctx.documentUris.workspaceHostPath(change.uri);
+    if (hostPath == null || !isProjectTopologyConfigurationPath(hostPath)) continue;
+    // Synchronized open text is already the project-input authority. Replaying
+    // the filesystem save would invalidate the same exact value twice.
+    if (ctx.openWorkspaceDocument(change.uri) != null) continue;
+    filePaths.push(hostPath);
+  }
+  return filePaths;
+}
+
+function isProjectTopologyConfigurationPath(filePath: string): boolean {
+  const base = path.basename(filePath).toLowerCase();
+  // Project shape reads dependency scope and workspace membership from package
+  // and TypeScript manifests. Native Aurelia configuration contributes authored
+  // membership directly, so every authority transition for these files is topology.
+  return base === "package.json"
+    || base === "jsconfig.json"
+    || base === "tsconfig.json"
+    || (base.startsWith("tsconfig.") && base.endsWith(".json"))
+    || base === "aurelia.project.json";
+}
+
+function recordProjectTopologyChanged(
+  ctx: ServerContext,
+  reason: string,
+  filePaths: readonly string[],
+): void {
+  ctx.semanticRuntime.recordProjectTopologyChanged(filePaths);
   ctx.logger.info(`[workspace] semantic-runtime invalidated (${reason})`);
-  scheduleAnalysisRefresh(ctx, reason);
+  scheduleAnalysisRefresh(ctx, reason, "topology");
 }
 
 function recordSourceTextChanged(
@@ -90,28 +128,61 @@ function recordSourceTextChanged(
 ): void {
   ctx.semanticRuntime.recordSourceTextChanged(filePaths);
   ctx.logger.log(`${reason}: semantic-runtime source generation advanced for ${filePaths.length} file(s)`);
-  scheduleAnalysisRefresh(ctx, reason);
+  scheduleAnalysisRefresh(ctx, reason, "source-text");
 }
 
-function scheduleAnalysisRefresh(ctx: ServerContext, reason: string): void {
+function recordProjectConfigurationChanged(
+  ctx: ServerContext,
+  reason: string,
+  filePaths: readonly string[],
+): void {
+  ctx.semanticRuntime.recordProjectConfigurationChanged(filePaths);
+  ctx.logger.log(`${reason}: semantic-runtime configuration value advanced for ${filePaths.length} file(s)`);
+  // Configuration remains topology-significant to host presentation (ownership/context may change), while the shared
+  // source-world receipt—not the LSP ingress classifier—decides whether this exact value changed source membership.
+  scheduleAnalysisRefresh(ctx, reason, "topology");
+}
+
+function scheduleAnalysisRefresh(
+  ctx: ServerContext,
+  reason: string,
+  changeKind: AnalysisChangedPayload["changeKind"],
+): void {
   const state = lifecycleRefreshState(ctx);
   if (state.shutdown != null) return;
+  state.pendingAnalysisChangeKind = dominantAnalysisChangeKind(
+    state.pendingAnalysisChangeKind,
+    changeKind,
+  );
   if (state.pendingAnalysisRefresh != null) {
     clearTimeout(state.pendingAnalysisRefresh);
   }
   state.pendingAnalysisRefresh = setTimeout(() => {
     state.pendingAnalysisRefresh = null;
+    const settledChangeKind = state.pendingAnalysisChangeKind ?? changeKind;
+    state.pendingAnalysisChangeKind = null;
     ctx.logger.log(`[workspace] processing settled analysis (${reason})`);
     runLifecycleTask(ctx, "workspace analysis refresh", () =>
-      notifyAnalysisChanged(ctx));
+      notifyAnalysisChanged(ctx, settledChangeKind));
   }, ANALYSIS_REFRESH_DEBOUNCE_MS);
+}
+
+function dominantAnalysisChangeKind(
+  current: AnalysisChangedPayload["changeKind"] | null,
+  incoming: AnalysisChangedPayload["changeKind"],
+): AnalysisChangedPayload["changeKind"] {
+  return current === "topology" || incoming === "topology" ? "topology" : "source-text";
 }
 
 export function handleInitialize(ctx: ServerContext, params: InitializeParams): InitializeResult {
   const rootUri = initializeRootUri(ctx, params);
   const options = initializeOptions(params.initializationOptions);
   try {
-    ctx.configureWorkspace(rootUri, options.excludedWorkspaceRootUris);
+    ctx.configureWorkspace(
+      rootUri,
+      options.excludedWorkspaceRootUris,
+      options.projectRootHintUris,
+    );
   } catch (error) {
     throw new ResponseError(
       ErrorCodes.InvalidParams,
@@ -159,25 +230,31 @@ export function handleInitialize(ctx: ServerContext, params: InitializeParams): 
 
 function initializeOptions(value: unknown): AureliaInitializeOptions {
   if (value == null) {
-    return { excludedWorkspaceRootUris: [] };
+    return { excludedWorkspaceRootUris: [], projectRootHintUris: [] };
   }
   if (typeof value !== "object" || Array.isArray(value)) {
     throw new ResponseError(ErrorCodes.InvalidParams, "Aurelia initialization options must be an object.");
   }
-  const excludedWorkspaceRootUris = (value as Record<string, unknown>).excludedWorkspaceRootUris;
-  if (excludedWorkspaceRootUris == null) {
-    return { excludedWorkspaceRootUris: [] };
-  }
-  if (
-    !Array.isArray(excludedWorkspaceRootUris)
-    || !excludedWorkspaceRootUris.every((entry): entry is string => typeof entry === "string")
-  ) {
+  const options = value as Record<string, unknown>;
+  return {
+    excludedWorkspaceRootUris: initializeUriArrayOption(options, "excludedWorkspaceRootUris"),
+    projectRootHintUris: initializeUriArrayOption(options, "projectRootHintUris"),
+  };
+}
+
+function initializeUriArrayOption(
+  options: Readonly<Record<string, unknown>>,
+  key: "excludedWorkspaceRootUris" | "projectRootHintUris",
+): readonly string[] {
+  const value = options[key];
+  if (value == null) return [];
+  if (!Array.isArray(value) || !value.every((entry): entry is string => typeof entry === "string")) {
     throw new ResponseError(
       ErrorCodes.InvalidParams,
-      "Aurelia excludedWorkspaceRootUris must be an array of document URI strings.",
+      `Aurelia ${key} must be an array of document URI strings.`,
     );
   }
-  return { excludedWorkspaceRootUris };
+  return value;
 }
 
 function initializeRootUri(ctx: ServerContext, params: InitializeParams): string {
@@ -205,7 +282,7 @@ export function registerLifecycleHandlers(ctx: ServerContext): void {
   });
 
   ctx.documents.onDidOpen((e) => {
-    if (!ctx.ownsDocument(e.document.uri) || !isAnalyzedSourceDocumentUri(e.document.uri)) return;
+    if (ctx.documentUris.workspaceHostPath(e.document.uri) == null || !isAnalyzedSourceDocumentUri(e.document.uri)) return;
     const state = lifecycleRefreshState(ctx);
     if (state.shutdown != null) return;
     ctx.logger.log(`didOpen ${e.document.uri}`);
@@ -219,20 +296,25 @@ export function registerLifecycleHandlers(ctx: ServerContext): void {
 
   ctx.connection.onDidChangeWatchedFiles((e: DidChangeWatchedFilesParams) => {
     if (!e.changes?.length) return;
-    const changes = e.changes.filter((change) => ctx.ownsDocument(change.uri));
+    const changes = e.changes.filter((change) => ctx.documentUris.workspaceHostPath(change.uri) != null);
     if (changes.length === 0) return;
 
-    if (shouldReloadForFileChange(ctx, changes)) {
-      ctx.logger.log("didChangeWatchedFiles: tsconfig/jsconfig changed, reloading project");
-      recordProjectTopologyChanged(ctx, "watched files");
+    const structuralPaths = [...new Set([
+      ...projectTopologyConfigurationChangePaths(ctx, changes),
+      // Source create/delete is deliberately a broad structural event. Semantic-runtime owns whether the refreshed
+      // source world admits it; coarse watcher eligibility never grants authored ownership by itself.
+      ...sourceFileStructuralChangePaths(ctx, changes),
+    ])];
+    if (structuralPaths.length > 0) {
+      ctx.logger.log("didChangeWatchedFiles: structural workspace input changed, reloading project");
+      recordProjectTopologyChanged(ctx, "watched files", structuralPaths);
       return;
     }
 
-    // Any admitted source can change project membership or semantic topology.
-    if (hasSourceFileStructuralChange(changes)) {
-      ctx.logger.log("didChangeWatchedFiles: source file created/deleted, reloading project");
-      recordProjectTopologyChanged(ctx, "watched files");
-      return;
+    const configurationFilePaths = projectConfigurationValueChangePaths(ctx, changes);
+    if (configurationFilePaths.length > 0) {
+      ctx.logger.log("didChangeWatchedFiles: project configuration value changed");
+      recordProjectConfigurationChanged(ctx, "watched files", configurationFilePaths);
     }
 
     const changedFilePaths = closedAnalyzedSourceContentPaths(ctx, changes);
@@ -244,30 +326,37 @@ export function registerLifecycleHandlers(ctx: ServerContext): void {
 
   ctx.documents.onDidChangeContent((e) => {
     const uri = e.document.uri;
-    if (!ctx.ownsDocument(uri) || !isAnalyzedSourceDocumentUri(uri)) return;
+    const filePath = ctx.documentUris.workspaceHostPath(uri);
+    if (filePath == null) return;
     const state = lifecycleRefreshState(ctx);
     if (state.shutdown != null) return;
     // TextDocuments emits this event for both didOpen and didChange. It is the
     // single point where the synchronized client text becomes authoritative.
     ctx.logger.log(`document text synchronized ${uri}@${e.document.version}`);
-    const filePath = ctx.documentUris.authoredHostPath(uri);
-    if (filePath != null) {
-      recordSourceTextChanged(ctx, "document text synchronization", [filePath]);
+    if (isProjectTopologyConfigurationPath(filePath)) {
+      recordProjectConfigurationChanged(ctx, "project configuration text synchronization", [filePath]);
+      return;
     }
+    if (!isAnalyzedSourceDocumentUri(uri)) return;
+    recordSourceTextChanged(ctx, "document text synchronization", [filePath]);
   });
 
   ctx.documents.onDidClose((e) => {
-    if (!ctx.ownsDocument(e.document.uri) || !isAnalyzedSourceDocumentUri(e.document.uri)) return;
-    ctx.logger.log(`didClose ${e.document.uri}`);
+    const uri = e.document.uri;
+    const filePath = ctx.documentUris.workspaceHostPath(uri);
+    if (filePath == null) return;
+    ctx.logger.log(`didClose ${uri}`);
 
     const state = lifecycleRefreshState(ctx);
     if (state.shutdown != null) return;
     // Closing returns source-text authority to the workspace host. Diagnostic
     // pull owns editor collection cleanup; the server only invalidates meaning.
-    const filePath = ctx.documentUris.authoredHostPath(e.document.uri);
-    if (filePath != null) {
-      recordSourceTextChanged(ctx, "document close", [filePath]);
+    if (isProjectTopologyConfigurationPath(filePath)) {
+      recordProjectConfigurationChanged(ctx, "project configuration close", [filePath]);
+      return;
     }
+    if (!isAnalyzedSourceDocumentUri(uri)) return;
+    recordSourceTextChanged(ctx, "document close", [filePath]);
   });
 }
 
@@ -280,11 +369,16 @@ async function registerInlayHintConfigurationChanges(ctx: ServerContext): Promis
   });
 }
 
-async function notifyAnalysisChanged(ctx: ServerContext): Promise<void> {
+async function notifyAnalysisChanged(
+  ctx: ServerContext,
+  changeKind: AnalysisChangedPayload["changeKind"],
+): Promise<void> {
   if (lifecycleRefreshState(ctx).shutdown != null) return;
-  const generation = ctx.semanticRuntime.currentGeneration();
+  const guard = ctx.semanticRuntime.requestGuard(null);
+  const generation = await ctx.semanticRuntime.preflight(guard);
   const analysisChanged: AnalysisChangedPayload = {
     fingerprint: generation.fingerprint,
+    changeKind,
   };
   await ctx.connection.sendNotification(AureliaProtocolNotification.AnalysisChanged, analysisChanged);
   // This is the single post-change diagnostic scheduler. The client deliberately
@@ -330,6 +424,7 @@ export function shutdownLifecycle(ctx: ServerContext): Promise<void> {
       clearTimeout(state.pendingAnalysisRefresh);
       state.pendingAnalysisRefresh = null;
     }
+    state.pendingAnalysisChangeKind = null;
     ctx.semanticRuntime.invalidateRequests();
 
     // LSP shutdown retires this dedicated server process. Waiting for obsolete
@@ -390,6 +485,7 @@ function lifecycleRefreshState(ctx: ServerContext): LifecycleRefreshState {
   const state: LifecycleRefreshState = {
     tasks: new Set(),
     pendingAnalysisRefresh: null,
+    pendingAnalysisChangeKind: null,
     shutdown: null,
   };
   lifecycleRefreshStates.set(ctx, state);

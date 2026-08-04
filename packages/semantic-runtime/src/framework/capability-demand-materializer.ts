@@ -4,6 +4,7 @@ import ts from 'typescript';
 import type { ProjectBootFrame } from '../boot/frames.js';
 import {
   sourceSpanContains,
+  type SourceFileAddress,
   type SourceSpanAddress,
 } from '../kernel/address.js';
 import {
@@ -659,10 +660,10 @@ function resourceDefinitionContainsSpan(
   if (targetName == null) {
     return false;
   }
-  const sourceFilePath = sourceFilePathForSpan(store, rootSpan);
-  const sourceFile = sourceFilePath == null
+  const sourceFileAddress = sourceFileAddressForSpan(store, rootSpan);
+  const sourceFile = sourceFileAddress == null
     ? null
-    : typeSystem.readProgramSourceFileByPath(sourceFilePath);
+    : typeSystem.readProgramSourceFileForAddress(sourceFileAddress);
   return sourceFile == null
     ? false
     : classDeclarationNamedContainsSpan(sourceFile, targetName, rootSpan);
@@ -675,12 +676,12 @@ function spanContains(
   return outer != null && sourceSpanContains(outer, inner);
 }
 
-function sourceFilePathForSpan(
+function sourceFileAddressForSpan(
   store: KernelStoreReadView,
   span: SourceSpanAddress,
-): string | null {
+): SourceFileAddress | null {
   const file = store.read(span.fileHandle);
-  return file?.kind === 'source-file-address' ? file.path : null;
+  return file?.kind === 'source-file-address' ? file : null;
 }
 
 function classDeclarationNamedContainsSpan(
@@ -1785,7 +1786,7 @@ function sourceImportEvidence(
   typeSystem: TypeSystemProject,
 ): readonly FrameworkCapabilityPackageEvidence[] {
   return project.sourceFiles.flatMap((source) => {
-    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
+    const sourceFile = typeSystem.readProgramSourceFileByProjectPath(source.path);
     if (sourceFile == null) {
       return [];
     }

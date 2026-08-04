@@ -1,5 +1,6 @@
 import type {
   ApplicationFileRole,
+  SemanticProjectAnalysisCount,
   SemanticResourceDeclarationMode,
   SemanticProjectCandidateSummary,
   SemanticResourceInventoryCompleteness,
@@ -9,13 +10,14 @@ import type {
   SemanticResourceInventoryOrigin,
   SemanticResourceNavigationUnavailableReason,
   SemanticRuntimeAnswer,
-  SemanticRuntimeSummary,
+  SourceFileRole,
   SemanticTemplateResourceAvailabilityState,
   SemanticTemplateResourceAvailabilityRow,
 } from "@aurelia-ls/semantic-runtime";
 import type { Position, Range, WorkspaceEdit } from "vscode-languageserver/node";
 
 export const AureliaProtocolRequest = {
+  SourceOwnership: "aurelia/sourceOwnership",
   ResourceInventory: "aurelia/resourceInventory",
   TemplateResourceAvailability: "aurelia/templateResourceAvailability",
   RelatedFiles: "aurelia/getRelatedFiles",
@@ -32,14 +34,38 @@ export const AURELIA_TEMPLATE_CODE_ACTION_RESOLVE_SCHEMA = "aurelia.template-cod
 /** Client-owned workspace topology supplied before the server admits documents or projects. */
 export interface AureliaInitializeOptions {
   readonly excludedWorkspaceRootUris: readonly string[];
+  /** Existing workspace project roots offered to semantic-runtime discovery as host evidence. */
+  readonly projectRootHintUris: readonly string[];
 }
 
-/** Exact semantic-runtime project-shape answer used to confirm one LSP workspace ownership root. */
-export type WorkspaceStatusResponse = SemanticRuntimeAnswer<SemanticRuntimeSummary>;
+export interface WorkspaceNativeProjectConfiguration {
+  readonly projectKey: string;
+  readonly projectRootUri: string;
+  readonly sourceUri: string;
+  readonly appliedExcludedSourceRootUris: readonly string[];
+  readonly diagnosticCount: number;
+}
+
+/** Candidate native configurations whose exact semantic recognition should be projected into workspace status. */
+export interface WorkspaceStatusParams {
+  readonly nativeProjectConfigurationUris?: readonly string[];
+}
+
+/** URI-safe projection of the shared semantic workspace/configuration authority. */
+export interface WorkspaceStatusResponse {
+  readonly fingerprint: string;
+  readonly answer: RuntimeAnswerTransport;
+  readonly projectAnalysisCounts: readonly SemanticProjectAnalysisCount[];
+  readonly nativeProjectConfigurations: {
+    readonly answer: RuntimeAnswerTransport;
+    readonly rows: readonly WorkspaceNativeProjectConfiguration[];
+  };
+}
 
 /** A newer semantic-runtime generation has settled and should replace cached client views. */
 export interface AnalysisChangedPayload {
   readonly fingerprint: string;
+  readonly changeKind: "source-text" | "topology";
 }
 
 export type TemplateCodeActionResolveData = {
@@ -69,6 +95,25 @@ export type ProtocolWorkspaceEdit = WorkspaceEdit;
 export type ProtocolRange = Range;
 
 export type DocumentUriParams = { uri: string };
+
+export interface SourceOwnershipParams {
+  readonly uri: string;
+}
+
+/** One exact boot-authored project admission, expressed only in URI-safe transport vocabulary. */
+export interface SourceOwnershipOwner {
+  readonly projectKey: string;
+  readonly rootUri: string;
+  readonly projectPath: string;
+  readonly role: `${SourceFileRole}`;
+}
+
+export interface SourceOwnershipResponse {
+  readonly fingerprint: string;
+  readonly sourceUri: string;
+  readonly answer: RuntimeAnswerTransport;
+  readonly owners: readonly SourceOwnershipOwner[];
+}
 
 /** JSON transport form of semantic-runtime's author-facing resource taxonomy. */
 export type ResourceInventoryKind = `${SemanticResourceInventoryKind}`;

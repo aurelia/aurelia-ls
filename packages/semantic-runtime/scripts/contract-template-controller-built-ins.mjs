@@ -363,7 +363,7 @@ function readOverlayVariableExpressionTypes(
   overlayFileName,
   expressionProbes = [],
 ) {
-  const sourceFile = typeSystem.readProgramSourceFileByPath(overlayFileName);
+  const sourceFile = typeSystem.readProgramSourceFileByHostPath(overlayFileName);
   const rows = new Map();
   const authoredExpressionByLocal = new Map(expressionProbes.flatMap((probe) =>
     probe.authoredExpressionText == null ? [] : [[probe.localName, probe.authoredExpressionText]]

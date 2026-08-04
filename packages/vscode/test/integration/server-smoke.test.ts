@@ -129,10 +129,10 @@ test("bundled server initializes and confirms semantic workspace shape", async (
 
   sendRequest(serverProcess, 2, "aurelia/workspaceStatus", null);
   const statusResponse = await waitForResponse<{
-    value?: { projectAnalysisCounts?: Array<{ analysisKind: string; count: number }> };
+    projectAnalysisCounts?: Array<{ analysisKind: string; count: number }>;
   }>(2, output, errors);
   expect(statusResponse.error, "workspace status should not return an error").toBeUndefined();
-  expect(statusResponse.result?.value?.projectAnalysisCounts).toContainEqual(
+  expect(statusResponse.result?.projectAnalysisCounts).toContainEqual(
     expect.objectContaining({ analysisKind: "app-world", count: 1 }),
   );
 

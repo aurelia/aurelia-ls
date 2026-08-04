@@ -56,6 +56,16 @@ export class WorkspaceDocumentUris {
     return this.ownsDocument(input) ? this.hostPath(input) : null;
   }
 
+  /** Map a URI inside the configured workspace without applying authored-source exclusions. */
+  workspaceHostPath(input: DocumentUri): string | null {
+    if (this.root == null) return null;
+    if (!looksLikeHostPath(input) && !sameUriSpace(this.root, URI.parse(input))) return null;
+    const hostPath = this.hostPath(input);
+    return hostPath != null && this.workspaceRelativePath(hostPath) != null
+      ? hostPath
+      : null;
+  }
+
   resolve(input: DocumentUri): WorkspaceDocumentLocation {
     const file = this.hostPath(input);
     if (file == null) {

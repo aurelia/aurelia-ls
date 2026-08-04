@@ -58,6 +58,47 @@ export interface QueryClaimRequestInput {
   readonly materializationPolicy: SemanticQueryMaterializationPolicy;
 }
 
+/** Opaque currentness and lifetime capability sealed for one materialized or retained public answer. */
+export interface QueryClaimAnswerLease {
+  /** Stable protocol kind used to prevent consumers from reusing an answer under the wrong validation contract. */
+  readonly kind: string;
+  isCurrent(): boolean;
+  /** Release resources retained solely for answer reuse. The graph invokes this at most once. */
+  dispose(): void;
+}
+
+/** One graph-owned provisional answer enlisted in a wider synchronous answer transaction. */
+export interface QueryClaimProvisionalAnswerHandle {
+  /** Stable per-graph identity used to settle retention budgets once after every sibling publishes. */
+  readonly commitGroup: object;
+  /** Make this answer visible in committed graph indexes. Reversible until {@link settleCommit}. */
+  publish(): void;
+  /** Withdraw this exact answer without cascading through committed ancestor dependencies. Idempotent. */
+  rollback(deferDisposal?: QueryClaimAnswerDisposalCollector): void;
+  /**
+   * Infallibly seal every published answer in this token/group and apply graph retention budgets once.
+   * Caller-owned release callbacks may be deferred until the coordinating transaction is observably closed.
+   */
+  settleCommit(deferDisposal?: QueryClaimAnswerDisposalCollector): void;
+}
+
+/** Collect a best-effort caller-owned release until a multi-graph mutation reaches an observable terminal state. */
+export type QueryClaimAnswerDisposalCollector = (disposal: () => void) => void;
+
+/** Runtime-owned coordination boundary for one synchronous nested answer transaction. */
+export interface QueryClaimAnswerTransactionBoundary {
+  /** Opaque transaction identity used for provisional visibility, reuse, and policy disposal. */
+  readonly token: object;
+  /** Refuse answer or lazy-claim work after the transaction closes semantic admission. */
+  assertAnswerAdmissionOpen(): void;
+  /** Transfer one graph-owned provisional answer handle to the transaction coordinator. */
+  enlistProvisionalAnswer(handle: QueryClaimProvisionalAnswerHandle): void;
+  /** Whether this fresh/provisional lease is covered by a later aggregate root proof. */
+  shouldDeferAnswerLeaseCurrentness(lease: QueryClaimAnswerLease): boolean;
+  /** Observe each lease whose currentness the graph validated immediately. */
+  didValidateAnswerLease(lease: QueryClaimAnswerLease): void;
+}
+
 export interface QueryClaimAnswerBoundary {
   /**
    * Optional gate for retained public answer reuse.
@@ -66,6 +107,29 @@ export interface QueryClaimAnswerBoundary {
    * is available, such as `retain-app` routed queries that need to warm an app epoch for later tools.
    */
   readonly shouldReuseRetainedAnswer?: () => boolean;
+  /** Optional wider synchronous transaction that keeps fresh nested answers provisional until one root proof commits. */
+  readonly answerTransaction?: QueryClaimAnswerTransactionBoundary;
+  /** Require retained reuse to carry a current lease of this exact kind. Unleased legacy answers are not reused. */
+  readonly requiredAnswerLeaseKind?: string;
+  /**
+   * Compose a retained lease with request-local planning reads before reuse validation or same-token delegation.
+   *
+   * The graph owns and releases a distinct returned lease after validation and observation; the retained node continues
+   * to own its historical lease. The callback must leave its request-local proof owner unchanged when composition fails
+   * so the graph can discard the stale candidate and materialize a replacement.
+   */
+  readonly composeRetainedAnswerLease?: (lease: QueryClaimAnswerLease) => QueryClaimAnswerLease;
+  /**
+   * Seal a detached lease after answer materialization and before either kernel-local or answer-side disposal runs.
+   * The graph owns a returned lease: it retains it with a retained answer value or releases it after observation.
+   * A thrown error or a returned stale lease fails the claim; `null` is accepted only when no lease kind is required.
+   */
+  readonly sealAnswerLease?: (answer: QueryClaimAnswerShape) => QueryClaimAnswerLease | null;
+  /**
+   * Observe a successfully validated lease so an enclosing operation can compose its own private currentness proof.
+   * This does not transfer ownership of the lease itself; a thrown observation error fails a fresh claim.
+   */
+  readonly observeAnswerLease?: (lease: QueryClaimAnswerLease) => void;
   /** Optional store marker for reclaiming answer-local kernel records after the public answer has been shaped. */
   readonly readKernelMarker?: () => KernelStoreLifetimeMarker;
   /**
@@ -148,10 +212,12 @@ export interface QueryClaimRecord {
   readonly id: number;
   /** App/query-session sequence id; useful for seeing nested answers such as app overview -> diagnostics. */
   readonly sequence: number;
-  /** Parent query claim id when this answer was materialized inside another query answer. */
+  /** Active parent query claim id when this claim was created; creation provenance, not semantic ownership. */
   readonly parentId: number | null;
-  /** Nesting depth inside the answer graph; root public queries are depth 0. */
+  /** Creation depth inside the answer graph; root-created public queries are depth 0. */
   readonly depth: number;
+  /** Direct query-claim dependencies consumed by this answer, including materialized children and retained reuse. */
+  readonly dependencyIds: readonly number[];
   /** Query kind or route-query kind that produced the answer. */
   readonly queryKind: string;
   /** Stable key of the query shape and locus within this app session. */
@@ -342,8 +408,9 @@ export class QueryAnswerClaim<TAnswer extends QueryClaimAnswerShape> {
   ) {}
 
   readAnswer(): TAnswer {
+    this.boundary.answerTransaction?.assertAnswerAdmissionOpen();
     if (this.resolved) {
-      return this.graph.readRetainedClaimAnswer<TAnswer>(this.node);
+      return this.graph.readRetainedClaimAnswer<TAnswer>(this.node, this.boundary);
     }
     const answer = this.graph.materializeNode(this.node, this.materialize, this.boundary);
     this.resolved = true;
@@ -364,6 +431,11 @@ export class QueryClaimGraph {
   private readonly storage = new QueryClaimGraphStorage();
   private readonly activeStack: QueryClaimNode[] = [];
   private readonly counters = new QueryClaimGraphCounters();
+  private readonly provisionalCommitGroup = Object.freeze({});
+  private readonly provisionalEntriesByNode = new Map<QueryClaimNode, QueryClaimProvisionalAnswerEntry>();
+  private readonly provisionalNodesByToken = new Map<object, Set<QueryClaimNode>>();
+  private readonly answerDependencyIdsByDependentId = new Map<number, Set<number>>();
+  private readonly answerDependentIdsByDependencyId = new Map<number, Set<number>>();
 
   constructor(
     readonly profile: SemanticRuntimeInquiryProfile,
@@ -375,7 +447,9 @@ export class QueryClaimGraph {
     materialize: () => TAnswer,
     boundary: QueryClaimAnswerBoundary = {},
   ): QueryAnswerClaim<TAnswer> {
-    const node = this.createNode(input);
+    boundary.answerTransaction?.assertAnswerAdmissionOpen();
+    this.assertNestedAnswerTransaction(boundary.answerTransaction);
+    const node = this.createNode(input, boundary.answerTransaction);
     return new QueryAnswerClaim(this, node, materialize, boundary);
   }
 
@@ -384,36 +458,62 @@ export class QueryClaimGraph {
     materialize: () => TAnswer,
     boundary: QueryClaimAnswerBoundary = {},
   ): TAnswer {
+    boundary.answerTransaction?.assertAnswerAdmissionOpen();
+    this.assertNestedAnswerTransaction(boundary.answerTransaction);
     if (boundary.shouldReuseRetainedAnswer?.() !== false) {
-      const retained = this.readReusableRetainedAnswer<TAnswer>(input);
+      const retained = this.readReusableRetainedAnswer<TAnswer>(input, boundary);
       if (retained != null) {
         this.counters.recordRetainedAnswerHit();
-        this.applyAnswerSideEffectDisposal(retained.node, boundary);
+        try {
+          this.applyAnswerSideEffectDisposal(retained.node, boundary);
+        } catch (error) {
+          if (retained.provisional) {
+            this.rollbackProvisionalNode(
+              retained.node,
+              QueryClaimDisposalReason.AnswerTransactionRolledBack,
+            );
+          }
+          throw error;
+        }
+        this.recordActiveAnswerDependency(retained.node);
         return retained.answer;
       }
     }
     return this.claim(input, materialize, boundary).readAnswer();
   }
 
-  readRecords(): readonly QueryClaimRecord[] {
-    return this.storage.readRecords();
+  readRecords(transactionToken?: object): readonly QueryClaimRecord[] {
+    const visibleNodes = this.visibleNodes(transactionToken);
+    const dependencies = this.dependencyView(visibleNodes);
+    return visibleNodes.map((node) => node.toRecord(
+      dependencies.dependencyIdsByDependentId.get(node.id) ?? [],
+    ));
   }
 
-  readRecentRecords(limit: number): readonly QueryClaimRecord[] {
-    return this.storage.readRecentRecords(limit);
+  readRecentRecords(limit: number, transactionToken?: object): readonly QueryClaimRecord[] {
+    if (limit <= 0) {
+      return [];
+    }
+    const records = this.readRecords(transactionToken);
+    return records.slice(Math.max(0, records.length - limit));
   }
 
-  dispose(policy: QueryClaimDisposalPolicy = queryClaimDisposalPolicy(QueryClaimDisposalReason.Manual)): number {
-    return this.disposeWithSummary(policy).disposedRecords;
+  dispose(
+    policy: QueryClaimDisposalPolicy = queryClaimDisposalPolicy(QueryClaimDisposalReason.Manual),
+    transactionToken?: object,
+  ): number {
+    return this.disposeWithSummary(policy, transactionToken).disposedRecords;
   }
 
   disposeWithSummary(
     policy: QueryClaimDisposalPolicy = queryClaimDisposalPolicy(QueryClaimDisposalReason.Manual),
+    transactionToken?: object,
   ): QueryClaimGraphDisposalSummary {
     let disposed = 0;
     let matched = 0;
     const counters = emptyQueryClaimDisposalCounters();
-    const candidates = this.storage.candidateNodesForDisposalPolicy(policy);
+    const candidates = this.candidateNodesForDisposalPolicy(policy, transactionToken);
+    const traversal = this.createDisposalTraversal(transactionToken);
     for (const node of candidates) {
       if (this.activeStack.includes(node)) {
         continue;
@@ -421,11 +521,19 @@ export class QueryClaimGraph {
       if (!node.matches(policy, this.retentionPolicy.retentionKind)) {
         continue;
       }
-      if (!this.storage.hasNode(node)) {
+      if (
+        !traversal.visibleById.has(node.id)
+        || !this.hasVisibleNode(node, transactionToken)
+      ) {
         continue;
       }
       matched += 1;
-      const disposedRecords = this.disposeRetainedNodeWithRecords(node, policy.reason);
+      const disposedRecords = this.disposeVisibleNodeWithRecords(
+        node,
+        policy.reason,
+        transactionToken,
+        traversal,
+      );
       for (const record of disposedRecords) {
         recordQueryClaimDisposalShape(counters, record);
       }
@@ -447,35 +555,40 @@ export class QueryClaimGraph {
     };
   }
 
-  disposeForSessionEnd(): number {
-    return this.dispose(queryClaimSessionEndDisposalPolicy());
+  disposeForSessionEnd(transactionToken?: object): number {
+    return this.dispose(queryClaimSessionEndDisposalPolicy(), transactionToken);
   }
 
-  disposeForAppEpoch(): number {
-    return this.dispose(queryClaimAppEpochDisposalPolicy());
+  disposeForAppEpoch(transactionToken?: object): number {
+    return this.dispose(queryClaimAppEpochDisposalPolicy(), transactionToken);
   }
 
-  disposeForSourceEpoch(epochKeys?: readonly string[]): number {
-    return this.dispose(queryClaimSourceEpochDisposalPolicy(epochKeys));
+  disposeForSourceEpoch(epochKeys?: readonly string[], transactionToken?: object): number {
+    return this.dispose(queryClaimSourceEpochDisposalPolicy(epochKeys), transactionToken);
   }
 
-  disposeQueryTypeProjectionClaims(reason: QueryClaimDisposalReason = QueryClaimDisposalReason.Manual): number {
-    return this.dispose(queryClaimQueryTypeProjectionDisposalPolicy(reason));
+  disposeQueryTypeProjectionClaims(
+    reason: QueryClaimDisposalReason = QueryClaimDisposalReason.Manual,
+    transactionToken?: object,
+  ): number {
+    return this.dispose(queryClaimQueryTypeProjectionDisposalPolicy(reason), transactionToken);
   }
 
-  snapshot(): QueryClaimGraphSnapshot {
-    const indexes = this.storage.readIndexCardinality();
-    const keyCharacters = this.storage.readKeyCharacters();
-    const retainedShape = this.storage.readRetainedShape();
+  snapshot(transactionToken?: object): QueryClaimGraphSnapshot {
+    const visibleNodes = this.visibleNodes(transactionToken);
+    const dependencies = this.dependencyView(visibleNodes);
+    const indexes = queryClaimGraphIndexCardinality(visibleNodes);
+    const keyCharacters = queryClaimGraphKeyCharacters(visibleNodes);
+    const retainedShape = queryClaimGraphRetainedShape(visibleNodes, dependencies);
     return {
       profile: this.profile,
       retentionKind: this.retentionPolicy.retentionKind,
       answerLocalKernelPolicy: this.retentionPolicy.answerLocalKernelPolicy,
       createdRecords: this.counters.createdRecords,
-      retainedRecords: this.storage.retainedCount,
-      records: this.storage.retainedCount,
+      retainedRecords: visibleNodes.length,
+      records: visibleNodes.length,
       rootRecords: retainedShape.rootRecords,
-      childRecords: this.storage.retainedCount - retainedShape.rootRecords,
+      childRecords: visibleNodes.length - retainedShape.rootRecords,
       maxDepth: retainedShape.maxDepth,
       retainedDependencyEdges: retainedShape.dependencyEdges,
       distinctParentClaimIds: retainedShape.parentClaimIds,
@@ -543,67 +656,117 @@ export class QueryClaimGraph {
     materialize: () => TAnswer,
     boundary: QueryClaimAnswerBoundary,
   ): TAnswer {
+    boundary.answerTransaction?.assertAnswerAdmissionOpen();
+    this.assertNestedAnswerTransaction(boundary.answerTransaction);
     if (node.isDisposed()) {
       throw new Error(
         `Cannot materialize disposed query claim '${node.queryKind}' at locus '${node.locusKey}'.`,
       );
     }
+    this.recordActiveAnswerDependency(node);
     const marker = boundary.readKernelMarker?.() ?? null;
     const before = boundary.readKernelSnapshot?.() ?? null;
     this.activeStack.push(node);
-    let answer: TAnswer | null = null;
-    let failed = false;
-    let failure: unknown = null;
     try {
-      answer = materialize();
-    } catch (error) {
-      const after = boundary.readKernelSnapshot?.() ?? null;
-      this.failNode(node, error, kernelDelta(before, after));
-      this.applyAnswerLocalKernelPolicy(node, marker, boundary);
-      this.applyAnswerSideEffectDisposal(node, boundary);
-      failed = true;
-      failure = error;
+      try {
+        const resolvedAnswer = materialize();
+        const after = boundary.readKernelSnapshot?.() ?? null;
+        const approximatePayloadBytes = approximateQueryAnswerPayloadBytes(resolvedAnswer);
+        const returnedRowCount = queryAnswerRowCount(resolvedAnswer.value);
+        const pageState = queryClaimPageState(resolvedAnswer.page);
+        const delta = kernelDelta(before, after);
+        let answerLease: QueryClaimAnswerLease | null = null;
+        let answerLeaseFailure: Error | null = null;
+        if (boundary.sealAnswerLease != null) {
+          try {
+            answerLease = boundary.sealAnswerLease(resolvedAnswer);
+          } catch (error) {
+            answerLeaseFailure = queryClaimAnswerLeaseError(error);
+          }
+        }
+        if (answerLeaseFailure == null) {
+          answerLeaseFailure = finalizeFreshOrProvisionalQueryClaimAnswerLease(
+            answerLease,
+            boundary.requiredAnswerLeaseKind,
+            boundary,
+          );
+        }
+        if (answerLeaseFailure != null) {
+          disposeQueryClaimAnswerLease(answerLease);
+          this.failNode(node, answerLeaseFailure, delta);
+          this.applyAnswerLocalKernelPolicy(node, marker, boundary);
+          this.applyAnswerSideEffectDisposal(node, boundary);
+          throw answerLeaseFailure;
+        }
+        const retainAnswerValue = this.shouldRetainAnswerValue(node, approximatePayloadBytes);
+        node.resolve({
+          result: resolvedAnswer.result,
+          selection: resolvedAnswer.selection,
+          coverage: resolvedAnswer.coverage,
+          pageState,
+          summary: this.retentionPolicy.retainAnswerSummary ? resolvedAnswer.summary : null,
+          approximatePayloadBytes: this.retentionPolicy.retainPayloadShape ? approximatePayloadBytes : 0,
+          returnedRowCount: this.retentionPolicy.retainPayloadShape ? returnedRowCount : 0,
+          retainedAnswerValue: retainAnswerValue,
+          kernelDelta: delta,
+        });
+        if (node.retainedAnswerValue) {
+          if (this.isProvisionalNode(node)) {
+            node.retainAnswer(resolvedAnswer, answerLease);
+          } else {
+            this.storage.retainAnswerValue(node, resolvedAnswer, answerLease);
+          }
+        } else {
+          disposeQueryClaimAnswerLease(answerLease);
+        }
+        this.counters.recordAnswered(node);
+        this.applyAnswerLocalKernelPolicy(node, marker, boundary);
+        this.applyAnswerSideEffectDisposal(node, boundary);
+        return resolvedAnswer;
+      } catch (error) {
+        try {
+          if (node.isPending()) {
+            const after = boundary.readKernelSnapshot?.() ?? null;
+            this.failNode(node, error, kernelDelta(before, after));
+            this.applyAnswerLocalKernelPolicy(node, marker, boundary);
+            this.applyAnswerSideEffectDisposal(node, boundary);
+          }
+        } finally {
+          if (this.isProvisionalNode(node)) {
+            this.rollbackProvisionalNode(node, QueryClaimDisposalReason.AnswerTransactionRolledBack);
+          } else if (node.isAnswered()) {
+            this.disposeSingleRetainedNode(node, QueryClaimDisposalReason.AnswerFinalizationFailed);
+          }
+        }
+        throw error;
+      }
     } finally {
-      this.activeStack.pop();
+      const active = this.activeStack.pop();
+      if (active !== node) {
+        if (this.isProvisionalNode(node)) {
+          this.rollbackProvisionalNode(node, QueryClaimDisposalReason.AnswerTransactionRolledBack);
+        }
+        throw new Error('Query-claim materialization frames closed out of order.');
+      }
+      if (!this.isProvisionalNode(node)) {
+        if (
+          node.isAnswered()
+          && this.retentionPolicy.retentionKind === QueryClaimRetentionKind.DiscardAfterAnswer
+        ) {
+          this.disposeRetainedNode(node, QueryClaimDisposalReason.AnswerDiscarded);
+        }
+        this.enforceRetainedRecordLimit();
+        this.enforceRetainedAnswerValueByteLimit();
+      }
     }
-    if (failed) {
-      this.enforceRetainedRecordLimit();
-      throw failure;
-    }
-    const resolvedAnswer = answer as TAnswer;
-    const after = boundary.readKernelSnapshot?.() ?? null;
-    const approximatePayloadBytes = approximateQueryAnswerPayloadBytes(resolvedAnswer);
-    const returnedRowCount = queryAnswerRowCount(resolvedAnswer.value);
-    const pageState = queryClaimPageState(resolvedAnswer.page);
-    const delta = kernelDelta(before, after);
-    node.resolve({
-      result: resolvedAnswer.result,
-      selection: resolvedAnswer.selection,
-      coverage: resolvedAnswer.coverage,
-      pageState,
-      summary: this.retentionPolicy.retainAnswerSummary ? resolvedAnswer.summary : null,
-      approximatePayloadBytes: this.retentionPolicy.retainPayloadShape ? approximatePayloadBytes : 0,
-      returnedRowCount: this.retentionPolicy.retainPayloadShape ? returnedRowCount : 0,
-      retainedAnswerValue: this.shouldRetainAnswerValue(node, approximatePayloadBytes),
-      kernelDelta: delta,
-    });
-    this.counters.recordAnswered(node);
-    this.applyAnswerLocalKernelPolicy(node, marker, boundary);
-    this.applyAnswerSideEffectDisposal(node, boundary);
-    if (node.retainedAnswerValue) {
-      this.storage.retainAnswerValue(node, resolvedAnswer);
-    }
-    if (this.retentionPolicy.retentionKind === QueryClaimRetentionKind.DiscardAfterAnswer) {
-      this.disposeRetainedNode(node, QueryClaimDisposalReason.AnswerDiscarded);
-    }
-    this.enforceRetainedRecordLimit();
-    this.enforceRetainedAnswerValueByteLimit();
-    return resolvedAnswer;
   }
 
   readRetainedClaimAnswer<TAnswer extends QueryClaimAnswerShape>(
     node: QueryClaimNode,
+    boundary: QueryClaimAnswerBoundary = {},
   ): TAnswer {
+    boundary.answerTransaction?.assertAnswerAdmissionOpen();
+    this.assertNestedAnswerTransaction(boundary.answerTransaction);
     if (node.isDisposed()) {
       throw new Error(
         `Cannot read disposed query claim '${node.queryKind}' at locus '${node.locusKey}'.`,
@@ -615,7 +778,51 @@ export class QueryClaimGraph {
         `Cannot reread query claim '${node.queryKind}' at locus '${node.locusKey}' because this inquiry profile does not retain answer values.`,
       );
     }
-    return answer;
+    const provisional = this.provisionalNodeBelongsTo(node, boundary.answerTransaction?.token);
+    const retainedLease = node.readAnswerLease();
+    const prepared = prepareRetainedQueryClaimAnswerLease(
+      retainedLease,
+      boundary.requiredAnswerLeaseKind,
+      boundary,
+    );
+    try {
+      const leaseFailure = prepared.failure ?? (provisional
+        ? finalizeFreshOrProvisionalQueryClaimAnswerLease(
+          prepared.lease,
+          boundary.requiredAnswerLeaseKind,
+          boundary,
+        )
+        : validateCommittedQueryClaimAnswerLease(
+          prepared.lease,
+          boundary.requiredAnswerLeaseKind,
+        ));
+      if (leaseFailure != null) {
+        if (provisional) {
+          this.rollbackProvisionalNode(node, QueryClaimDisposalReason.AnswerLeaseInvalidated);
+        } else {
+          this.disposeRetainedNode(node, QueryClaimDisposalReason.AnswerLeaseInvalidated);
+        }
+        throw new Error(
+          `Cannot reread query claim '${node.queryKind}' at locus '${node.locusKey}' because its answer lease is no longer current.`,
+          { cause: leaseFailure },
+        );
+      }
+      if (!provisional) {
+        const finalizationFailure = finalizeValidatedCommittedQueryClaimAnswerLease(prepared.lease, boundary);
+        if (finalizationFailure != null) {
+          throw new Error(
+            `Cannot finalize retained query claim '${node.queryKind}' at locus '${node.locusKey}'.`,
+            { cause: finalizationFailure },
+          );
+        }
+      }
+      this.recordActiveAnswerDependency(node);
+      return answer;
+    } finally {
+      if (prepared.releaseAfterUse) {
+        disposeQueryClaimAnswerLease(prepared.lease);
+      }
+    }
   }
 
   private applyAnswerLocalKernelPolicy(
@@ -669,7 +876,10 @@ export class QueryClaimGraph {
     }
   }
 
-  private createNode(input: QueryClaimRequestInput): QueryClaimNode {
+  private createNode(
+    input: QueryClaimRequestInput,
+    transaction: QueryClaimAnswerTransactionBoundary | undefined,
+  ): QueryClaimNode {
     const parent = this.activeStack[this.activeStack.length - 1] ?? null;
     const node = new QueryClaimNode(
       this.nextId,
@@ -686,17 +896,439 @@ export class QueryClaimGraph {
     this.nextId += 1;
     this.nextSequence += 1;
     this.counters.recordCreated(node);
-    this.retainNode(node);
+    if (transaction == null) {
+      this.retainNode(node);
+    } else {
+      const handle = this.stageProvisionalNode(transaction.token, node);
+      try {
+        transaction.enlistProvisionalAnswer(handle);
+      } catch (error) {
+        handle.rollback();
+        throw error;
+      }
+    }
     return node;
   }
 
   private readReusableRetainedAnswer<TAnswer extends QueryClaimAnswerShape>(
     input: QueryClaimRequestInput,
-  ): { readonly node: QueryClaimNode; readonly answer: TAnswer } | null {
+    boundary: QueryClaimAnswerBoundary,
+  ): { readonly node: QueryClaimNode; readonly answer: TAnswer; readonly provisional: boolean } | null {
     if (!this.canRetainAnswerValueForPolicy(input.materializationPolicy)) {
       return null;
     }
-    return this.storage.readReusableRetainedAnswer(input);
+    const transaction = boundary.answerTransaction;
+    const provisionalCandidates = transaction == null
+      ? []
+      : this.provisionalNodesForToken(transaction.token)
+        .filter((node) => node.canReuseAnswer(input))
+        .reverse();
+    const candidates = [
+      ...provisionalCandidates.map((node) => ({ node, provisional: true })),
+      ...this.storage.readReusableRetainedAnswerCandidates(input)
+        .filter((node) => !this.isProvisionalNode(node))
+        .map((node) => ({ node, provisional: false })),
+    ];
+    for (const { node, provisional } of candidates) {
+      const prepared = prepareRetainedQueryClaimAnswerLease(
+        node.readAnswerLease(),
+        boundary.requiredAnswerLeaseKind,
+        boundary,
+      );
+      try {
+        const leaseFailure = prepared.failure ?? (provisional
+          ? finalizeFreshOrProvisionalQueryClaimAnswerLease(
+            prepared.lease,
+            boundary.requiredAnswerLeaseKind,
+            boundary,
+          )
+          : validateCommittedQueryClaimAnswerLease(
+            prepared.lease,
+            boundary.requiredAnswerLeaseKind,
+          ));
+        if (leaseFailure != null) {
+          if (provisional) {
+            this.rollbackProvisionalNode(node, QueryClaimDisposalReason.AnswerLeaseInvalidated);
+            throw new Error(
+              `Cannot reuse provisional query claim '${node.queryKind}' at locus '${node.locusKey}'.`,
+              { cause: leaseFailure },
+            );
+          } else {
+            this.disposeRetainedNode(node, QueryClaimDisposalReason.AnswerLeaseInvalidated);
+          }
+          continue;
+        }
+        const answer = node.readRetainedAnswer<TAnswer>();
+        if (answer != null) {
+          if (!provisional) {
+            const finalizationFailure = finalizeValidatedCommittedQueryClaimAnswerLease(prepared.lease, boundary);
+            if (finalizationFailure != null) {
+              throw new Error(
+                `Cannot finalize retained query claim '${node.queryKind}' at locus '${node.locusKey}'.`,
+                { cause: finalizationFailure },
+              );
+            }
+          }
+          return { node, answer, provisional };
+        }
+      } finally {
+        if (prepared.releaseAfterUse) {
+          disposeQueryClaimAnswerLease(prepared.lease);
+        }
+      }
+    }
+    return null;
+  }
+
+  private stageProvisionalNode(
+    token: object,
+    node: QueryClaimNode,
+  ): QueryClaimProvisionalAnswerHandle {
+    const handle = new QueryClaimGraphProvisionalAnswer(
+      this.provisionalCommitGroup,
+      () => this.publishProvisionalNode(node),
+      (deferDisposal) => {
+        this.rollbackProvisionalNode(
+          node,
+          QueryClaimDisposalReason.AnswerTransactionRolledBack,
+          deferDisposal,
+        );
+      },
+      (deferDisposal) => this.settleProvisionalCommit(token, deferDisposal),
+    );
+    const entry: QueryClaimProvisionalAnswerEntry = {
+      token,
+      node,
+      state: 'staged',
+    };
+    this.provisionalEntriesByNode.set(node, entry);
+    let nodes = this.provisionalNodesByToken.get(token);
+    if (nodes == null) {
+      nodes = new Set<QueryClaimNode>();
+      this.provisionalNodesByToken.set(token, nodes);
+    }
+    nodes.add(node);
+    return handle;
+  }
+
+  private publishProvisionalNode(node: QueryClaimNode): void {
+    const entry = this.provisionalEntriesByNode.get(node);
+    if (entry == null || entry.state === 'published') {
+      return;
+    }
+    if (!node.isAnswered()) {
+      const state = node.toRecord().evaluationState;
+      this.rollbackProvisionalNode(node, QueryClaimDisposalReason.AnswerTransactionRolledBack);
+      throw new Error(
+        `Cannot publish provisional query claim '${node.queryKind}' at locus '${node.locusKey}' while its state is '${state}'.`,
+      );
+    }
+    this.storage.publishNode(node);
+    entry.state = 'published';
+  }
+
+  private settleProvisionalCommit(
+    token: object,
+    deferDisposal?: QueryClaimAnswerDisposalCollector,
+  ): void {
+    const entries = this.provisionalNodesForToken(token)
+      .map((node) => this.provisionalEntriesByNode.get(node))
+      .filter((entry): entry is QueryClaimProvisionalAnswerEntry => entry != null && entry.token === token);
+    if (entries.length === 0) {
+      return;
+    }
+    // Publication preflights every node before any graph is settled. From here through detachment and budget
+    // application, settlement is deliberately callback-free and has no readiness branch that can partially commit.
+    const publishedNodes = entries.map((entry) => entry.node);
+    for (const entry of entries) {
+      this.detachProvisionalEntry(entry);
+    }
+    if (this.retentionPolicy.retentionKind === QueryClaimRetentionKind.DiscardAfterAnswer) {
+      const traversal = this.createDisposalTraversal(undefined);
+      for (const node of publishedNodes) {
+        this.disposeRetainedNode(
+          node,
+          QueryClaimDisposalReason.AnswerDiscarded,
+          traversal,
+          deferDisposal,
+        );
+      }
+      return;
+    }
+    this.enforceRetainedRecordLimit(deferDisposal);
+    this.enforceRetainedAnswerValueByteLimit(deferDisposal);
+  }
+
+  private rollbackProvisionalNode(
+    node: QueryClaimNode,
+    reason: QueryClaimDisposalReason,
+    deferDisposal?: QueryClaimAnswerDisposalCollector,
+  ): boolean {
+    const entry = this.provisionalEntriesByNode.get(node);
+    if (entry == null) {
+      return false;
+    }
+    this.detachProvisionalEntry(entry);
+    this.removeDependencyEdgesFor(node);
+    const detached = entry.state === 'published'
+      ? this.storage.removeNode(node)
+      : null;
+    const residual = node.dispose(reason);
+    this.counters.recordDisposed(node, reason);
+    releaseQueryClaimAnswerLease(detached?.lease ?? null, deferDisposal);
+    releaseQueryClaimAnswerLease(residual.lease, deferDisposal);
+    return true;
+  }
+
+  private detachProvisionalEntry(entry: QueryClaimProvisionalAnswerEntry): void {
+    if (this.provisionalEntriesByNode.get(entry.node) !== entry) {
+      return;
+    }
+    this.provisionalEntriesByNode.delete(entry.node);
+    const nodes = this.provisionalNodesByToken.get(entry.token);
+    if (nodes == null) {
+      return;
+    }
+    nodes.delete(entry.node);
+    if (nodes.size === 0) {
+      this.provisionalNodesByToken.delete(entry.token);
+    }
+  }
+
+  private provisionalNodesForToken(token: object): QueryClaimNode[] {
+    return [...(this.provisionalNodesByToken.get(token) ?? [])].filter((node) =>
+      this.provisionalEntriesByNode.get(node)?.token === token
+    );
+  }
+
+  private isProvisionalNode(node: QueryClaimNode): boolean {
+    return this.provisionalEntriesByNode.has(node);
+  }
+
+  private provisionalNodeBelongsTo(node: QueryClaimNode, token: object | undefined): boolean {
+    return token != null && this.provisionalEntriesByNode.get(node)?.token === token;
+  }
+
+  private visibleNodes(transactionToken: object | undefined): QueryClaimNode[] {
+    const nodes = this.storage.readNodes().filter((node) => !this.isProvisionalNode(node));
+    if (transactionToken != null) {
+      nodes.push(...this.provisionalNodesForToken(transactionToken));
+    }
+    return [...new Set(nodes)].sort((left, right) => left.sequence - right.sequence);
+  }
+
+  /** A nested answer belongs to the same publication transaction as the active parent, including retained hits. */
+  private assertNestedAnswerTransaction(
+    transaction: QueryClaimAnswerTransactionBoundary | undefined,
+  ): void {
+    const parent = this.activeStack[this.activeStack.length - 1];
+    if (parent == null) {
+      return;
+    }
+    const parentToken = this.provisionalEntriesByNode.get(parent)?.token ?? null;
+    const nestedToken = transaction?.token ?? null;
+    if (parentToken !== nestedToken) {
+      throw new Error(
+        `Nested query claim '${parent.queryKind}' cannot cross answer transaction ownership.`,
+      );
+    }
+  }
+
+  private recordActiveAnswerDependency(dependency: QueryClaimNode): void {
+    const dependent = this.activeStack[this.activeStack.length - 1];
+    if (
+      dependent == null
+      || dependent === dependency
+      || dependent.isDisposed()
+      || dependency.isDisposed()
+      || (!this.storage.hasNode(dependent) && !this.isProvisionalNode(dependent))
+      || (!this.storage.hasNode(dependency) && !this.isProvisionalNode(dependency))
+    ) {
+      return;
+    }
+    let dependencyIds = this.answerDependencyIdsByDependentId.get(dependent.id);
+    if (dependencyIds == null) {
+      dependencyIds = new Set<number>();
+      this.answerDependencyIdsByDependentId.set(dependent.id, dependencyIds);
+    }
+    if (dependencyIds.has(dependency.id)) {
+      return;
+    }
+    dependencyIds.add(dependency.id);
+    let dependentIds = this.answerDependentIdsByDependencyId.get(dependency.id);
+    if (dependentIds == null) {
+      dependentIds = new Set<number>();
+      this.answerDependentIdsByDependencyId.set(dependency.id, dependentIds);
+    }
+    dependentIds.add(dependent.id);
+  }
+
+  private removeDependencyEdgesFor(node: QueryClaimNode): void {
+    const dependencyIds = this.answerDependencyIdsByDependentId.get(node.id);
+    if (dependencyIds != null) {
+      for (const dependencyId of dependencyIds) {
+        removeQueryClaimDependencyIndex(
+          this.answerDependentIdsByDependencyId,
+          dependencyId,
+          node.id,
+        );
+      }
+      this.answerDependencyIdsByDependentId.delete(node.id);
+    }
+    const dependentIds = this.answerDependentIdsByDependencyId.get(node.id);
+    if (dependentIds != null) {
+      for (const dependentId of dependentIds) {
+        removeQueryClaimDependencyIndex(
+          this.answerDependencyIdsByDependentId,
+          dependentId,
+          node.id,
+        );
+      }
+      this.answerDependentIdsByDependencyId.delete(node.id);
+    }
+  }
+
+  private dependencyView(visibleNodes: readonly QueryClaimNode[]): QueryClaimDependencyView {
+    const visibleNodeIds = new Set(visibleNodes.map((node) => node.id));
+    const dependencyIdsByDependentId = new Map<number, Set<number>>();
+    const dependentIdsByDependencyId = new Map<number, Set<number>>();
+    const addVisibleDependency = (dependentId: number, dependencyId: number): void => {
+      if (
+        dependentId === dependencyId
+        || !visibleNodeIds.has(dependentId)
+        || !visibleNodeIds.has(dependencyId)
+      ) {
+        return;
+      }
+      addQueryClaimDependencyIndex(dependencyIdsByDependentId, dependentId, dependencyId);
+      addQueryClaimDependencyIndex(dependentIdsByDependencyId, dependencyId, dependentId);
+    };
+
+    for (const [dependentId, dependencyIds] of this.answerDependencyIdsByDependentId) {
+      for (const dependencyId of dependencyIds) {
+        addVisibleDependency(dependentId, dependencyId);
+      }
+    }
+
+    return {
+      dependencyIdsByDependentId: sortedQueryClaimDependencyIndex(dependencyIdsByDependentId),
+      dependentIdsByDependencyId: sortedQueryClaimDependencyIndex(dependentIdsByDependencyId),
+      dependencyEdges: [...dependencyIdsByDependentId.values()]
+        .reduce((count, dependencyIds) => count + dependencyIds.size, 0),
+      parentClaimIds: dependencyIdsByDependentId.size,
+    };
+  }
+
+  private visibleDependentAncestorsFor(
+    node: QueryClaimNode,
+    visibleById: ReadonlyMap<number, QueryClaimNode>,
+    dependencies: QueryClaimDependencyView,
+  ): readonly QueryClaimNode[] {
+    const dependents: QueryClaimNode[] = [];
+    const seen = new Set<number>([node.id]);
+    const queue = [...(dependencies.dependentIdsByDependencyId.get(node.id) ?? [])];
+    for (let index = 0; index < queue.length; index += 1) {
+      const dependentId = queue[index];
+      if (dependentId == null || seen.has(dependentId)) {
+        continue;
+      }
+      seen.add(dependentId);
+      const dependent = visibleById.get(dependentId);
+      if (dependent == null) {
+        continue;
+      }
+      dependents.push(dependent);
+      queue.push(...(dependencies.dependentIdsByDependencyId.get(dependentId) ?? []));
+    }
+    return dependents;
+  }
+
+  private hasVisibleNode(node: QueryClaimNode, transactionToken: object | undefined): boolean {
+    return (this.storage.hasNode(node) && !this.isProvisionalNode(node))
+      || this.provisionalNodeBelongsTo(node, transactionToken);
+  }
+
+  private createDisposalTraversal(
+    transactionToken: object | undefined,
+  ): QueryClaimDisposalTraversal {
+    const visibleNodes = this.visibleNodes(transactionToken);
+    return {
+      visibleById: new Map(visibleNodes.map((node) => [node.id, node])),
+      dependencies: this.dependencyView(visibleNodes),
+    };
+  }
+
+  private candidateNodesForDisposalPolicy(
+    policy: QueryClaimDisposalPolicy,
+    transactionToken: object | undefined,
+  ): readonly QueryClaimNode[] {
+    const committed = this.storage.candidateNodesForDisposalPolicy(policy)
+      .filter((node) => !this.isProvisionalNode(node));
+    const provisional = transactionToken == null
+      ? []
+      : this.provisionalNodesForToken(transactionToken).filter((node) =>
+        node.matches(policy, this.retentionPolicy.retentionKind)
+      );
+    return [...new Set([...committed, ...provisional])]
+      .sort((left, right) => right.sequence - left.sequence);
+  }
+
+  private disposeVisibleNodeWithRecords(
+    node: QueryClaimNode,
+    reason: QueryClaimDisposalReason,
+    transactionToken: object | undefined,
+    traversal: QueryClaimDisposalTraversal = this.createDisposalTraversal(transactionToken),
+    deferDisposal?: QueryClaimAnswerDisposalCollector,
+  ): readonly QueryClaimRecord[] {
+    const dependentAncestors = this.visibleDependentAncestorsFor(
+      node,
+      traversal.visibleById,
+      traversal.dependencies,
+    );
+
+    const records: QueryClaimRecord[] = [];
+    for (const dependent of dependentAncestors) {
+      if (this.activeStack.includes(dependent)) {
+        continue;
+      }
+      const record = this.disposeSingleVisibleNode(
+        dependent,
+        reason,
+        transactionToken,
+        traversal.dependencies.dependencyIdsByDependentId.get(dependent.id) ?? [],
+        deferDisposal,
+      );
+      if (record != null) {
+        traversal.visibleById.delete(dependent.id);
+        records.push(record);
+      }
+    }
+    const record = this.disposeSingleVisibleNode(
+      node,
+      reason,
+      transactionToken,
+      traversal.dependencies.dependencyIdsByDependentId.get(node.id) ?? [],
+      deferDisposal,
+    );
+    if (record != null) {
+      traversal.visibleById.delete(node.id);
+      records.push(record);
+    }
+    return records;
+  }
+
+  private disposeSingleVisibleNode(
+    node: QueryClaimNode,
+    reason: QueryClaimDisposalReason,
+    transactionToken: object | undefined,
+    dependencyIds: readonly number[],
+    deferDisposal?: QueryClaimAnswerDisposalCollector,
+  ): QueryClaimRecord | null {
+    if (this.provisionalNodeBelongsTo(node, transactionToken)) {
+      const record = node.toRecord(dependencyIds);
+      return this.rollbackProvisionalNode(node, reason, deferDisposal) ? record : null;
+    }
+    return this.disposeSingleRetainedNode(node, reason, dependencyIds, deferDisposal);
   }
 
   private canRetainAnswerValueForPolicy(
@@ -710,67 +1342,188 @@ export class QueryClaimGraph {
     this.storage.retainNode(node);
   }
 
-  private enforceRetainedRecordLimit(): void {
+  private enforceRetainedRecordLimit(
+    deferDisposal?: QueryClaimAnswerDisposalCollector,
+  ): void {
     const limit = this.retentionPolicy.retainedRecordLimit;
     if (limit == null || limit < 0) {
       return;
     }
-    while (this.storage.retainedCount > limit) {
-      const node = this.storage.findFirstRetainBudgetDisposable(this.activeStack);
+    const traversal = this.createDisposalTraversal(undefined);
+    const activeNodes = new Set(this.activeStack);
+    const visibleDependentCountById = new Map<number, number>();
+    const leafCandidates = new QueryClaimNodeSequenceHeap();
+    for (const node of traversal.visibleById.values()) {
+      const dependentCount = (
+        traversal.dependencies.dependentIdsByDependencyId.get(node.id) ?? []
+      ).filter((dependentId) => traversal.visibleById.has(dependentId)).length;
+      visibleDependentCountById.set(node.id, dependentCount);
+      if (dependentCount === 0 && this.isRetainBudgetCandidate(node, activeNodes)) {
+        leafCandidates.push(node);
+      }
+    }
+    while (this.committedRetainedCount() > limit) {
+      let node: QueryClaimNode | null = null;
+      while (node == null) {
+        const candidate = leafCandidates.pop();
+        if (candidate == null) {
+          break;
+        }
+        if (
+          traversal.visibleById.has(candidate.id)
+          && visibleDependentCountById.get(candidate.id) === 0
+          && this.isRetainBudgetCandidate(candidate, activeNodes)
+        ) {
+          node = candidate;
+        }
+      }
+      // Active ancestors are temporary: let the enclosing materializer retry after it closes instead of deleting one
+      // of its dependencies. With no active frame, an absent leaf means a genuine cycle and deterministic cascade is
+      // the only way to make progress.
+      if (node == null && activeNodes.size === 0) {
+        node = this.oldestRetainBudgetCandidate(traversal, activeNodes);
+      }
       if (node == null) {
         return;
       }
-      this.disposeRetainedNode(node, QueryClaimDisposalReason.RetentionBudgetExceeded);
+      const disposedRecords = this.disposeRetainedNodeWithRecords(
+        node,
+        QueryClaimDisposalReason.RetentionBudgetExceeded,
+        traversal,
+        deferDisposal,
+      );
+      if (disposedRecords.length === 0) {
+        return;
+      }
+      for (const disposed of disposedRecords) {
+        for (const dependencyId of traversal.dependencies.dependencyIdsByDependentId.get(disposed.id) ?? []) {
+          const remainingDependents = Math.max(
+            0,
+            (visibleDependentCountById.get(dependencyId) ?? 0) - 1,
+          );
+          visibleDependentCountById.set(dependencyId, remainingDependents);
+          const dependency = traversal.visibleById.get(dependencyId);
+          if (
+            dependency != null
+            && remainingDependents === 0
+            && this.isRetainBudgetCandidate(dependency, activeNodes)
+          ) {
+            leafCandidates.push(dependency);
+          }
+        }
+      }
     }
   }
 
-  private enforceRetainedAnswerValueByteLimit(): void {
+  private oldestRetainBudgetCandidate(
+    traversal: QueryClaimDisposalTraversal,
+    activeNodes: ReadonlySet<QueryClaimNode>,
+  ): QueryClaimNode | null {
+    for (const node of this.storage.retentionOrderedNodes()) {
+      if (traversal.visibleById.has(node.id) && this.isRetainBudgetCandidate(node, activeNodes)) {
+        return node;
+      }
+    }
+    return null;
+  }
+
+  private isRetainBudgetCandidate(
+    node: QueryClaimNode,
+    activeNodes: ReadonlySet<QueryClaimNode>,
+  ): boolean {
+    return !this.isProvisionalNode(node)
+      && node.isRetainBudgetDisposable()
+      && !activeNodes.has(node);
+  }
+
+  private enforceRetainedAnswerValueByteLimit(
+    deferDisposal?: QueryClaimAnswerDisposalCollector,
+  ): void {
     const limit = this.retentionPolicy.retainedAnswerTotalByteLimit;
     if (limit == null || limit < 0) {
       return;
     }
-    while (this.storage.retainedAnswerBytes > limit) {
-      const node = this.storage.findFirstRetainedAnswerValueDisposable(this.activeStack);
-      if (node == null) {
-        return;
+    const activeNodes = new Set(this.activeStack);
+    for (const node of this.storage.retentionOrderedNodes()) {
+      if (this.committedRetainedAnswerBytes() <= limit) {
+        break;
       }
-      const disposedBytes = this.storage.disposeRetainedAnswerValue(node);
-      this.counters.recordBudgetDisposedAnswerValue(disposedBytes);
-    }
-  }
-
-  private disposeRetainedNode(node: QueryClaimNode, reason: QueryClaimDisposalReason): number {
-    return this.disposeRetainedNodeWithRecords(node, reason).length;
-  }
-
-  private disposeRetainedNodeWithRecords(node: QueryClaimNode, reason: QueryClaimDisposalReason): readonly QueryClaimRecord[] {
-    const records: QueryClaimRecord[] = [];
-    for (const dependent of this.storage.retainedDependentAncestorsFor(node)) {
-      if (this.activeStack.includes(dependent)) {
+      if (this.isProvisionalNode(node) || !node.retainedAnswerValue || activeNodes.has(node)) {
         continue;
       }
-      const record = this.disposeSingleRetainedNode(dependent, reason);
-      if (record != null) {
-        records.push(record);
-      }
+      const detached = this.storage.detachRetainedAnswerValue(node);
+      this.counters.recordBudgetDisposedAnswerValue(detached.bytes);
+      releaseQueryClaimAnswerLease(detached.lease, deferDisposal);
     }
-    const record = this.disposeSingleRetainedNode(node, reason);
-    if (record != null) {
-      records.push(record);
-    }
-    return records;
   }
 
-  private disposeSingleRetainedNode(node: QueryClaimNode, reason: QueryClaimDisposalReason): QueryClaimRecord | null {
-    if (!this.storage.hasNode(node)) {
+  private committedRetainedCount(): number {
+    let count = this.storage.retainedCount;
+    for (const node of this.provisionalEntriesByNode.keys()) {
+      if (this.storage.hasNode(node)) {
+        count -= 1;
+      }
+    }
+    return count;
+  }
+
+  private committedRetainedAnswerBytes(): number {
+    let bytes = this.storage.retainedAnswerBytes;
+    for (const node of this.provisionalEntriesByNode.keys()) {
+      if (this.storage.hasNode(node)) {
+        bytes -= node.approximateRetainedAnswerBytes;
+      }
+    }
+    return Math.max(0, bytes);
+  }
+
+  private disposeRetainedNode(
+    node: QueryClaimNode,
+    reason: QueryClaimDisposalReason,
+    traversal?: QueryClaimDisposalTraversal,
+    deferDisposal?: QueryClaimAnswerDisposalCollector,
+  ): number {
+    return this.disposeRetainedNodeWithRecords(node, reason, traversal, deferDisposal).length;
+  }
+
+  private disposeRetainedNodeWithRecords(
+    node: QueryClaimNode,
+    reason: QueryClaimDisposalReason,
+    traversal?: QueryClaimDisposalTraversal,
+    deferDisposal?: QueryClaimAnswerDisposalCollector,
+  ): readonly QueryClaimRecord[] {
+    return this.disposeVisibleNodeWithRecords(
+      node,
+      reason,
+      undefined,
+      traversal,
+      deferDisposal,
+    );
+  }
+
+  private disposeSingleRetainedNode(
+    node: QueryClaimNode,
+    reason: QueryClaimDisposalReason,
+    dependencyIds?: readonly number[],
+    deferDisposal?: QueryClaimAnswerDisposalCollector,
+  ): QueryClaimRecord | null {
+    if (!this.storage.hasNode(node) || this.isProvisionalNode(node)) {
       return null;
     }
-    const record = node.toRecord();
-    if (!this.storage.removeNode(node)) {
+    const record = node.toRecord(
+      dependencyIds
+        ?? this.dependencyView(this.visibleNodes(undefined)).dependencyIdsByDependentId.get(node.id)
+        ?? [],
+    );
+    const detached = this.storage.removeNode(node);
+    if (detached == null) {
       return null;
     }
-    node.dispose(reason);
+    this.removeDependencyEdgesFor(node);
+    const residual = node.dispose(reason);
     this.counters.recordDisposed(node, reason);
+    releaseQueryClaimAnswerLease(detached.lease, deferDisposal);
+    releaseQueryClaimAnswerLease(residual.lease, deferDisposal);
     return record;
   }
 
@@ -781,6 +1534,110 @@ export class QueryClaimGraph {
     return this.canRetainAnswerValueForPolicy(node.materializationPolicy)
       && approximatePayloadBytes <= this.retentionPolicy.retainedAnswerByteLimit;
   }
+}
+
+type QueryClaimProvisionalAnswerState = 'staged' | 'published';
+
+interface QueryClaimProvisionalAnswerEntry {
+  readonly token: object;
+  readonly node: QueryClaimNode;
+  state: QueryClaimProvisionalAnswerState;
+}
+
+class QueryClaimGraphProvisionalAnswer implements QueryClaimProvisionalAnswerHandle {
+  constructor(
+    readonly commitGroup: object,
+    private readonly publishAnswer: () => void,
+    private readonly rollbackAnswer: (deferDisposal?: QueryClaimAnswerDisposalCollector) => void,
+    private readonly settleCommitGroup: (deferDisposal?: QueryClaimAnswerDisposalCollector) => void,
+  ) {}
+
+  publish(): void {
+    this.publishAnswer();
+  }
+
+  rollback(deferDisposal?: QueryClaimAnswerDisposalCollector): void {
+    this.rollbackAnswer(deferDisposal);
+  }
+
+  settleCommit(deferDisposal?: QueryClaimAnswerDisposalCollector): void {
+    this.settleCommitGroup(deferDisposal);
+  }
+}
+
+interface QueryClaimDependencyView {
+  readonly dependencyIdsByDependentId: ReadonlyMap<number, readonly number[]>;
+  readonly dependentIdsByDependencyId: ReadonlyMap<number, readonly number[]>;
+  readonly dependencyEdges: number;
+  readonly parentClaimIds: number;
+}
+
+interface QueryClaimDisposalTraversal {
+  /** Mutable membership view; successful disposal removes a row without rebuilding the immutable topology. */
+  readonly visibleById: Map<number, QueryClaimNode>;
+  /** Exact dependency topology at the start of one public disposal or retention-budget drain. */
+  readonly dependencies: QueryClaimDependencyView;
+}
+
+interface DetachedQueryClaimAnswerValue {
+  readonly bytes: number;
+  readonly lease: QueryClaimAnswerLease | null;
+}
+
+/** Deterministic oldest-first frontier for topology-aware retention pruning. */
+class QueryClaimNodeSequenceHeap {
+  private readonly nodes: QueryClaimNode[] = [];
+
+  push(node: QueryClaimNode): void {
+    let index = this.nodes.length;
+    this.nodes.push(node);
+    while (index > 0) {
+      const parentIndex = Math.floor((index - 1) / 2);
+      const parent = this.nodes[parentIndex];
+      if (parent == null || compareQueryClaimNodeSequence(parent, node) <= 0) {
+        break;
+      }
+      this.nodes[index] = parent;
+      index = parentIndex;
+    }
+    this.nodes[index] = node;
+  }
+
+  pop(): QueryClaimNode | null {
+    const first = this.nodes[0];
+    const last = this.nodes.pop();
+    if (first == null) {
+      return null;
+    }
+    if (last == null || this.nodes.length === 0) {
+      return first;
+    }
+    let index = 0;
+    while (true) {
+      const leftIndex = index * 2 + 1;
+      const rightIndex = leftIndex + 1;
+      const left = this.nodes[leftIndex];
+      const right = this.nodes[rightIndex];
+      if (left == null) {
+        break;
+      }
+      const nextIndex = right != null && compareQueryClaimNodeSequence(right, left) < 0
+        ? rightIndex
+        : leftIndex;
+      const next = this.nodes[nextIndex]!;
+      if (compareQueryClaimNodeSequence(last, next) <= 0) {
+        break;
+      }
+      this.nodes[index] = next;
+      index = nextIndex;
+    }
+    this.nodes[index] = last;
+    return first;
+  }
+}
+
+function compareQueryClaimNodeSequence(left: QueryClaimNode, right: QueryClaimNode): number {
+  return left.sequence - right.sequence || left.id - right.id;
 }
 
 interface QueryClaimGraphIndexCardinality {
@@ -808,6 +1665,88 @@ interface QueryClaimGraphRetainedShape {
   readonly retainedAnswerBytes: number;
 }
 
+function queryClaimGraphIndexCardinality(
+  nodes: readonly QueryClaimNode[],
+): QueryClaimGraphIndexCardinality {
+  const reuseKeys = new Set<string>();
+  const queryKinds = new Set<string>();
+  const locusKeys = new Set<string>();
+  const epochKeys = new Set<string>();
+  const materializationPolicies = new Set<SemanticQueryMaterializationPolicy>();
+  for (const node of nodes) {
+    reuseKeys.add(node.reuseKey);
+    queryKinds.add(node.queryKind);
+    locusKeys.add(node.locusKey);
+    materializationPolicies.add(node.materializationPolicy);
+    for (const epochKey of node.epochKeys) {
+      epochKeys.add(epochKey);
+    }
+  }
+  return {
+    reuseKeys: reuseKeys.size,
+    queryKinds: queryKinds.size,
+    locusKeys: locusKeys.size,
+    epochKeys: epochKeys.size,
+    materializationPolicies: materializationPolicies.size,
+  };
+}
+
+function queryClaimGraphKeyCharacters(
+  nodes: readonly QueryClaimNode[],
+): QueryClaimGraphKeyCharacters {
+  let queryKeyCharacters = 0;
+  let locusKeyCharacters = 0;
+  let epochKeyCharacters = 0;
+  let reuseKeyCharacters = 0;
+  for (const node of nodes) {
+    queryKeyCharacters += node.queryKey.length;
+    locusKeyCharacters += node.locusKey.length;
+    reuseKeyCharacters += node.reuseKey.length;
+    for (const epochKey of node.epochKeys) {
+      epochKeyCharacters += epochKey.length;
+    }
+  }
+  return {
+    queryKeyCharacters,
+    locusKeyCharacters,
+    epochKeyCharacters,
+    reuseKeyCharacters,
+  };
+}
+
+function queryClaimGraphRetainedShape(
+  nodes: readonly QueryClaimNode[],
+  dependencies: QueryClaimDependencyView,
+): QueryClaimGraphRetainedShape {
+  let pending = 0;
+  let rootRecords = 0;
+  let maxDepth = 0;
+  let retainedAnswerValues = 0;
+  let retainedAnswerBytes = 0;
+  for (const node of nodes) {
+    if (node.isPending()) {
+      pending += 1;
+    }
+    if (node.depth === 0) {
+      rootRecords += 1;
+    }
+    if (node.retainedAnswerValue) {
+      retainedAnswerValues += 1;
+      retainedAnswerBytes += node.approximateRetainedAnswerBytes;
+    }
+    maxDepth = Math.max(maxDepth, node.depth);
+  }
+  return {
+    pending,
+    rootRecords,
+    maxDepth,
+    dependencyEdges: dependencies.dependencyEdges,
+    parentClaimIds: dependencies.parentClaimIds,
+    retainedAnswerValues,
+    retainedAnswerBytes,
+  };
+}
+
 /**
  * Retained query-answer storage plus invalidation indexes.
  *
@@ -815,102 +1754,35 @@ interface QueryClaimGraphRetainedShape {
  * reuse, source invalidation, query-family disposal, and retention-budget pruning graph-owned instead of adapter scans.
  */
 class QueryClaimGraphStorage {
-  private readonly nodes: QueryClaimNode[] = [];
+  private readonly nodes = new Set<QueryClaimNode>();
   private readonly nodesById = new Map<number, QueryClaimNode>();
-  private readonly childNodesByParentId = new Map<number, QueryClaimNode[]>();
-  private readonly nodesByReuseKey = new Map<string, QueryClaimNode[]>();
-  private readonly nodesByQueryKind = new Map<string, QueryClaimNode[]>();
-  private readonly nodesByLocusKey = new Map<string, QueryClaimNode[]>();
-  private readonly nodesByEpochKey = new Map<string, QueryClaimNode[]>();
-  private readonly nodesByMaterializationPolicy = new Map<SemanticQueryMaterializationPolicy, QueryClaimNode[]>();
+  private readonly nodesByReuseKey = new Map<string, Set<QueryClaimNode>>();
+  private readonly nodesByQueryKind = new Map<string, Set<QueryClaimNode>>();
+  private readonly nodesByLocusKey = new Map<string, Set<QueryClaimNode>>();
+  private readonly nodesByEpochKey = new Map<string, Set<QueryClaimNode>>();
+  private readonly nodesByMaterializationPolicy = new Map<SemanticQueryMaterializationPolicy, Set<QueryClaimNode>>();
   private retainedAnswerByteTotal = 0;
 
   get retainedCount(): number {
-    return this.nodes.length;
+    return this.nodes.size;
   }
 
   get retainedAnswerBytes(): number {
     return this.retainedAnswerByteTotal;
   }
 
-  readRecords(): readonly QueryClaimRecord[] {
-    return this.nodes.map((node) => node.toRecord());
+  readNodes(): readonly QueryClaimNode[] {
+    return [...this.nodes];
   }
 
-  readRecentRecords(limit: number): readonly QueryClaimRecord[] {
-    if (limit <= 0) {
-      return [];
-    }
-    return this.nodes
-      .slice(Math.max(0, this.nodes.length - limit))
-      .map((node) => node.toRecord());
-  }
-
-  readIndexCardinality(): QueryClaimGraphIndexCardinality {
-    return {
-      reuseKeys: this.nodesByReuseKey.size,
-      queryKinds: this.nodesByQueryKind.size,
-      locusKeys: this.nodesByLocusKey.size,
-      epochKeys: this.nodesByEpochKey.size,
-      materializationPolicies: this.nodesByMaterializationPolicy.size,
-    };
-  }
-
-  readKeyCharacters(): QueryClaimGraphKeyCharacters {
-    let queryKeyCharacters = 0;
-    let locusKeyCharacters = 0;
-    let epochKeyCharacters = 0;
-    let reuseKeyCharacters = 0;
-    for (const node of this.nodes) {
-      queryKeyCharacters += node.queryKey.length;
-      locusKeyCharacters += node.locusKey.length;
-      reuseKeyCharacters += node.reuseKey.length;
-      for (const epochKey of node.epochKeys) {
-        epochKeyCharacters += epochKey.length;
-      }
-    }
-    return {
-      queryKeyCharacters,
-      locusKeyCharacters,
-      epochKeyCharacters,
-      reuseKeyCharacters,
-    };
-  }
-
-  readRetainedShape(): QueryClaimGraphRetainedShape {
-    let pending = 0;
-    let rootRecords = 0;
-    let maxDepth = 0;
-    let retainedAnswerValues = 0;
-    for (const node of this.nodes) {
-      if (node.isPending()) {
-        pending += 1;
-      }
-      if (node.depth === 0) {
-        rootRecords += 1;
-      }
-      maxDepth = Math.max(maxDepth, node.depth);
-      if (node.retainedAnswerValue) {
-        retainedAnswerValues += 1;
-      }
-    }
-    return {
-      pending,
-      rootRecords,
-      maxDepth,
-      dependencyEdges: this.readDependencyEdgeCount(),
-      parentClaimIds: this.childNodesByParentId.size,
-      retainedAnswerValues,
-      retainedAnswerBytes: this.retainedAnswerByteTotal,
-    };
+  /** Stable oldest-first iteration without copying the retained set during a multi-victim budget drain. */
+  retentionOrderedNodes(): Iterable<QueryClaimNode> {
+    return this.nodes.values();
   }
 
   retainNode(node: QueryClaimNode): void {
-    this.nodes.push(node);
+    this.nodes.add(node);
     this.nodesById.set(node.id, node);
-    if (node.parentId != null) {
-      addNodeToIndex(this.childNodesByParentId, node.parentId, node);
-    }
     addNodeToIndex(this.nodesByReuseKey, node.reuseKey, node);
     addNodeToIndex(this.nodesByQueryKind, node.queryKind, node);
     addNodeToIndex(this.nodesByLocusKey, node.locusKey, node);
@@ -920,85 +1792,61 @@ class QueryClaimGraphStorage {
     }
   }
 
-  removeNode(node: QueryClaimNode): boolean {
-    const index = this.nodes.indexOf(node);
-    if (index < 0) {
-      return false;
+  publishNode(node: QueryClaimNode): void {
+    if (this.hasNode(node)) {
+      return;
     }
-    this.disposeRetainedAnswerValue(node);
-    this.nodes.splice(index, 1);
+    this.retainNode(node);
+    this.retainedAnswerByteTotal += node.approximateRetainedAnswerBytes;
+  }
+
+  /** Atomically hide a node and detach its lease before any caller-owned disposal callback can run. */
+  removeNode(node: QueryClaimNode): DetachedQueryClaimAnswerValue | null {
+    if (!this.nodes.delete(node)) {
+      return null;
+    }
     this.removeNodeFromIndexes(node);
-    return true;
+    const detached = node.detachRetainedAnswerValue();
+    this.retainedAnswerByteTotal = Math.max(0, this.retainedAnswerByteTotal - detached.bytes);
+    return detached;
   }
 
   hasNode(node: QueryClaimNode): boolean {
     return this.nodesById.get(node.id) === node;
   }
 
-  retainedDependentAncestorsFor(node: QueryClaimNode): readonly QueryClaimNode[] {
-    const dependents: QueryClaimNode[] = [];
-    const seen = new Set<number>([node.id]);
-    let parentId = node.parentId;
-    while (parentId != null) {
-      const parent = this.nodesById.get(parentId);
-      if (parent == null || seen.has(parent.id)) {
-        break;
-      }
-      dependents.push(parent);
-      seen.add(parent.id);
-      parentId = parent.parentId;
-    }
-    return dependents;
-  }
-
   retainAnswerValue<TAnswer extends QueryClaimAnswerShape>(
     node: QueryClaimNode,
     answer: TAnswer,
+    lease: QueryClaimAnswerLease | null,
   ): void {
-    node.retainAnswer(answer);
+    node.retainAnswer(answer, lease);
     this.retainedAnswerByteTotal += node.approximateRetainedAnswerBytes;
   }
 
-  disposeRetainedAnswerValue(node: QueryClaimNode): number {
-    const disposedBytes = node.disposeRetainedAnswerValue();
-    this.retainedAnswerByteTotal = Math.max(0, this.retainedAnswerByteTotal - disposedBytes);
-    return disposedBytes;
+  detachRetainedAnswerValue(node: QueryClaimNode): DetachedQueryClaimAnswerValue {
+    const detached = node.detachRetainedAnswerValue();
+    this.retainedAnswerByteTotal = Math.max(0, this.retainedAnswerByteTotal - detached.bytes);
+    return detached;
   }
 
-  readReusableRetainedAnswer<TAnswer extends QueryClaimAnswerShape>(
+  readReusableRetainedAnswerCandidates(
     input: QueryClaimRequestInput,
-  ): { readonly node: QueryClaimNode; readonly answer: TAnswer } | null {
-    const candidates = this.nodesByReuseKey.get(queryClaimReuseKey(input)) ?? [];
+  ): readonly QueryClaimNode[] {
+    const candidates = [...(this.nodesByReuseKey.get(queryClaimReuseKey(input)) ?? [])];
+    const reusable: QueryClaimNode[] = [];
     for (let index = candidates.length - 1; index >= 0; index -= 1) {
       const node = candidates[index];
       if (node?.canReuseAnswer(input) !== true) {
         continue;
       }
-      const answer = node.readRetainedAnswer<TAnswer>();
-      if (answer != null) {
-        return {
-          node,
-          answer,
-        };
-      }
+      reusable.push(node);
     }
-    return null;
-  }
-
-  findFirstRetainBudgetDisposable(activeStack: readonly QueryClaimNode[]): QueryClaimNode | null {
-    return this.nodes.find((node) =>
-      node.isRetainBudgetDisposable() && !activeStack.includes(node)
-    ) ?? null;
-  }
-
-  findFirstRetainedAnswerValueDisposable(activeStack: readonly QueryClaimNode[]): QueryClaimNode | null {
-    return this.nodes.find((node) =>
-      node.retainedAnswerValue && !activeStack.includes(node)
-    ) ?? null;
+    return reusable;
   }
 
   candidateNodesForDisposalPolicy(policy: QueryClaimDisposalPolicy): readonly QueryClaimNode[] {
-    const buckets: QueryClaimNode[][] = [];
+    const buckets: Set<QueryClaimNode>[] = [];
     this.collectIndexedBuckets(buckets, this.nodesByMaterializationPolicy, policy.materializationPolicies);
     this.collectIndexedBuckets(buckets, this.nodesByQueryKind, policy.queryKinds);
     this.collectIndexedBuckets(buckets, this.nodesByLocusKey, policy.locusKeys);
@@ -1007,31 +1855,30 @@ class QueryClaimGraphStorage {
       return [...this.nodes].reverse();
     }
     const smallestBucket = buckets.reduce((smallest, bucket) =>
-      bucket.length < smallest.length ? bucket : smallest
+      bucket.size < smallest.size ? bucket : smallest
     );
-    return [...new Set(smallestBucket)].reverse();
+    return [...smallestBucket].reverse();
   }
 
   private collectIndexedBuckets<TKey extends string>(
-    target: QueryClaimNode[][],
-    index: ReadonlyMap<TKey, QueryClaimNode[]>,
+    target: Set<QueryClaimNode>[],
+    index: ReadonlyMap<TKey, ReadonlySet<QueryClaimNode>>,
     keys: readonly TKey[] | undefined,
   ): void {
     if (keys == null) {
       return;
     }
-    const combined: QueryClaimNode[] = [];
+    const combined = new Set<QueryClaimNode>();
     for (const key of keys) {
-      combined.push(...(index.get(key) ?? []));
+      for (const node of index.get(key) ?? []) {
+        combined.add(node);
+      }
     }
     target.push(combined);
   }
 
   private removeNodeFromIndexes(node: QueryClaimNode): void {
     this.nodesById.delete(node.id);
-    if (node.parentId != null) {
-      removeNodeFromIndex(this.childNodesByParentId, node.parentId, node);
-    }
     removeNodeFromIndex(this.nodesByReuseKey, node.reuseKey, node);
     removeNodeFromIndex(this.nodesByQueryKind, node.queryKind, node);
     removeNodeFromIndex(this.nodesByLocusKey, node.locusKey, node);
@@ -1041,13 +1888,6 @@ class QueryClaimGraphStorage {
     }
   }
 
-  private readDependencyEdgeCount(): number {
-    let edges = 0;
-    for (const bucket of this.childNodesByParentId.values()) {
-      edges += bucket.length;
-    }
-    return edges;
-  }
 }
 
 class QueryClaimNode {
@@ -1060,6 +1900,7 @@ class QueryClaimNode {
   private approximatePayloadBytes = 0;
   private returnedRowCount = 0;
   private retainedAnswer: QueryClaimAnswerShape | null = null;
+  private retainedAnswerLease: QueryClaimAnswerLease | null = null;
   private disposalReason: QueryClaimDisposalReason | null = null;
   private kernelDelta = emptyKernelDelta();
   private kernelDisposal = emptyKernelDisposal();
@@ -1140,8 +1981,12 @@ class QueryClaimNode {
     this.kernelDelta = kernelDelta;
   }
 
-  retainAnswer<TAnswer extends QueryClaimAnswerShape>(answer: TAnswer): TAnswer {
+  retainAnswer<TAnswer extends QueryClaimAnswerShape>(
+    answer: TAnswer,
+    lease: QueryClaimAnswerLease | null,
+  ): TAnswer {
     this.retainedAnswer = answer;
+    this.retainedAnswerLease = lease;
     return answer;
   }
 
@@ -1149,21 +1994,23 @@ class QueryClaimNode {
     return this.retainedAnswerValue ? this.retainedAnswer as TAnswer | null : null;
   }
 
-  disposeRetainedAnswerValue(): number {
-    if (!this.retainedAnswerValue) {
-      return 0;
-    }
-    const bytes = this.approximatePayloadBytes;
-    this.retainedAnswer = null;
-    this.retainedAnswerValue = false;
-    return bytes;
+  readAnswerLease(): QueryClaimAnswerLease | null {
+    return this.retainedAnswerLease;
   }
 
-  dispose(reason: QueryClaimDisposalReason): void {
-    this.evaluationState = QueryClaimEvaluationState.Disposed;
+  detachRetainedAnswerValue(): DetachedQueryClaimAnswerValue {
+    const bytes = this.retainedAnswerValue ? this.approximatePayloadBytes : 0;
     this.retainedAnswer = null;
     this.retainedAnswerValue = false;
+    const lease = this.retainedAnswerLease;
+    this.retainedAnswerLease = null;
+    return { bytes, lease };
+  }
+
+  dispose(reason: QueryClaimDisposalReason): DetachedQueryClaimAnswerValue {
+    this.evaluationState = QueryClaimEvaluationState.Disposed;
     this.disposalReason = reason;
+    return this.detachRetainedAnswerValue();
   }
 
   isDisposed(): boolean {
@@ -1172,6 +2019,10 @@ class QueryClaimNode {
 
   isPending(): boolean {
     return this.evaluationState === QueryClaimEvaluationState.Pending;
+  }
+
+  isAnswered(): boolean {
+    return this.evaluationState === QueryClaimEvaluationState.Answered;
   }
 
   recordKernelDisposal(disposal: KernelStoreDisposalSummary): void {
@@ -1229,12 +2080,13 @@ class QueryClaimNode {
       || this.evaluationState === QueryClaimEvaluationState.Failed;
   }
 
-  toRecord(): QueryClaimRecord {
+  toRecord(dependencyIds: readonly number[] = []): QueryClaimRecord {
     return {
       id: this.id,
       sequence: this.sequence,
       parentId: this.parentId,
       depth: this.depth,
+      dependencyIds,
       queryKind: this.queryKind,
       queryKey: this.queryKey,
       responsePolicyKey: this.responsePolicyKey,
@@ -1314,21 +2166,58 @@ function sameQueryClaimEpochKeys(
     && left.every((key, index) => key === right[index]);
 }
 
+function addQueryClaimDependencyIndex(
+  index: Map<number, Set<number>>,
+  key: number,
+  value: number,
+): void {
+  let values = index.get(key);
+  if (values == null) {
+    values = new Set<number>();
+    index.set(key, values);
+  }
+  values.add(value);
+}
+
+function removeQueryClaimDependencyIndex(
+  index: Map<number, Set<number>>,
+  key: number,
+  value: number,
+): void {
+  const values = index.get(key);
+  if (values == null) {
+    return;
+  }
+  values.delete(value);
+  if (values.size === 0) {
+    index.delete(key);
+  }
+}
+
+function sortedQueryClaimDependencyIndex(
+  index: ReadonlyMap<number, ReadonlySet<number>>,
+): ReadonlyMap<number, readonly number[]> {
+  return new Map([...index].map(([key, values]) => [
+    key,
+    [...values].sort((left, right) => left - right),
+  ]));
+}
+
 function addNodeToIndex<TKey extends string | number>(
-  index: Map<TKey, QueryClaimNode[]>,
+  index: Map<TKey, Set<QueryClaimNode>>,
   key: TKey,
   node: QueryClaimNode,
 ): void {
   let bucket = index.get(key);
   if (bucket === undefined) {
-    bucket = [];
+    bucket = new Set<QueryClaimNode>();
     index.set(key, bucket);
   }
-  bucket.push(node);
+  bucket.add(node);
 }
 
 function removeNodeFromIndex<TKey extends string | number>(
-  index: Map<TKey, QueryClaimNode[]>,
+  index: Map<TKey, Set<QueryClaimNode>>,
   key: TKey,
   node: QueryClaimNode,
 ): void {
@@ -1336,11 +2225,8 @@ function removeNodeFromIndex<TKey extends string | number>(
   if (bucket == null) {
     return;
   }
-  const nodeIndex = bucket.indexOf(node);
-  if (nodeIndex >= 0) {
-    bucket.splice(nodeIndex, 1);
-  }
-  if (bucket.length === 0) {
+  bucket.delete(node);
+  if (bucket.size === 0) {
     index.delete(key);
   }
 }
@@ -1536,6 +2422,185 @@ class QueryClaimGraphCounters {
       this.rootKernelHotDetailDelta += input.kernelDelta.hotDetails;
       this.rootKernelHandleCharacterDelta += input.kernelDelta.handleCharacters;
     }
+  }
+}
+
+function queryClaimAnswerLeaseStructuralFailure(
+  lease: QueryClaimAnswerLease | null,
+  requiredKind: string | undefined,
+): Error | null {
+  if (lease == null) {
+    return requiredKind == null
+      ? null
+      : new Error(`Required query answer lease '${requiredKind}' was not sealed.`);
+  }
+  return requiredKind != null && lease.kind !== requiredKind
+    ? new Error(
+      `Query answer lease '${lease.kind}' does not satisfy required lease kind '${requiredKind}'.`,
+    )
+    : null;
+}
+
+interface PreparedRetainedQueryClaimAnswerLease {
+  readonly lease: QueryClaimAnswerLease | null;
+  readonly releaseAfterUse: boolean;
+  readonly failure: Error | null;
+}
+
+/**
+ * Compose the historical graph-owned lease with invocation-local proof without transferring either ownership.
+ *
+ * Structural validation happens on both the historical capability and the composed result. A distinct composed lease
+ * belongs to this invocation and must be released after validation/observation; the node keeps its historical lease.
+ */
+function prepareRetainedQueryClaimAnswerLease(
+  retainedLease: QueryClaimAnswerLease | null,
+  requiredKind: string | undefined,
+  boundary: QueryClaimAnswerBoundary,
+): PreparedRetainedQueryClaimAnswerLease {
+  let failure = queryClaimAnswerLeaseStructuralFailure(retainedLease, requiredKind);
+  let lease = retainedLease;
+  let releaseAfterUse = false;
+  if (failure == null && retainedLease != null && boundary.composeRetainedAnswerLease != null) {
+    try {
+      lease = boundary.composeRetainedAnswerLease(retainedLease);
+      releaseAfterUse = lease !== retainedLease;
+    } catch (error) {
+      failure = queryClaimAnswerLeaseError(error);
+    }
+  }
+  if (failure == null) {
+    failure = queryClaimAnswerLeaseStructuralFailure(lease, requiredKind);
+  }
+  return { lease, releaseAfterUse, failure };
+}
+
+function queryClaimAnswerLeaseCurrentnessFailure(
+  lease: QueryClaimAnswerLease,
+): Error | null {
+  try {
+    return lease.isCurrent()
+      ? null
+      : new Error(`Query answer lease '${lease.kind}' is no longer current.`);
+  } catch (error) {
+    return new Error('Query answer lease currentness validation failed.', { cause: error });
+  }
+}
+
+/**
+ * Finalize a fresh or same-token provisional lease.
+ *
+ * Observation deliberately precedes the transaction's defer/currentness decision: nested receipt observation composes
+ * the child proof into the active root builder, which is what makes a subsequent subsumption/delegation check lawful.
+ * A failed fresh/provisional finalization aborts that transaction branch, so observing before currentness cannot pollute
+ * a successful replacement candidate.
+ */
+function finalizeFreshOrProvisionalQueryClaimAnswerLease(
+  lease: QueryClaimAnswerLease | null,
+  requiredKind: string | undefined,
+  boundary: QueryClaimAnswerBoundary,
+): Error | null {
+  const structuralFailure = queryClaimAnswerLeaseStructuralFailure(lease, requiredKind);
+  if (structuralFailure != null || lease == null) {
+    return structuralFailure;
+  }
+  const transaction = boundary.answerTransaction;
+  if (transaction == null) {
+    const currentnessFailure = queryClaimAnswerLeaseCurrentnessFailure(lease);
+    if (currentnessFailure != null) {
+      return currentnessFailure;
+    }
+    try {
+      boundary.observeAnswerLease?.(lease);
+      return null;
+    } catch (error) {
+      return queryClaimAnswerLeaseError(error);
+    }
+  }
+  try {
+    boundary.observeAnswerLease?.(lease);
+  } catch (error) {
+    return queryClaimAnswerLeaseError(error);
+  }
+
+  try {
+    if (transaction.shouldDeferAnswerLeaseCurrentness(lease)) {
+      return null;
+    }
+  } catch (error) {
+    return queryClaimAnswerLeaseError(error);
+  }
+
+  const currentnessFailure = queryClaimAnswerLeaseCurrentnessFailure(lease);
+  if (currentnessFailure != null) {
+    return currentnessFailure;
+  }
+  try {
+    transaction.didValidateAnswerLease(lease);
+    return null;
+  } catch (error) {
+    return queryClaimAnswerLeaseError(error);
+  }
+}
+
+/** Validate a committed candidate before observing it, so a stale historical receipt cannot taint a replacement. */
+function validateCommittedQueryClaimAnswerLease(
+  lease: QueryClaimAnswerLease | null,
+  requiredKind: string | undefined,
+): Error | null {
+  const structuralFailure = queryClaimAnswerLeaseStructuralFailure(lease, requiredKind);
+  if (structuralFailure != null || lease == null) {
+    return structuralFailure;
+  }
+  return queryClaimAnswerLeaseCurrentnessFailure(lease);
+}
+
+/** Observe a committed lease only after full currentness validation, then notify the transaction's proof boundary. */
+function finalizeValidatedCommittedQueryClaimAnswerLease(
+  lease: QueryClaimAnswerLease | null,
+  boundary: QueryClaimAnswerBoundary,
+): Error | null {
+  if (lease == null) {
+    return null;
+  }
+  try {
+    boundary.observeAnswerLease?.(lease);
+    boundary.answerTransaction?.didValidateAnswerLease(lease);
+    return null;
+  } catch (error) {
+    return queryClaimAnswerLeaseError(error);
+  }
+}
+
+function queryClaimAnswerLeaseError(error: unknown): Error {
+  return error instanceof Error
+    ? error
+    : new Error(errorSummary(error));
+}
+
+function disposeQueryClaimAnswerLease(lease: QueryClaimAnswerLease | null): void {
+  if (lease == null) {
+    return;
+  }
+  try {
+    lease.dispose();
+  } catch {
+    // Disposal is best-effort, but ownership is still released and the graph never invokes this lease again.
+  }
+}
+
+function releaseQueryClaimAnswerLease(
+  lease: QueryClaimAnswerLease | null,
+  deferDisposal?: QueryClaimAnswerDisposalCollector,
+): void {
+  if (lease == null) {
+    return;
+  }
+  const disposal = (): void => disposeQueryClaimAnswerLease(lease);
+  if (deferDisposal == null) {
+    disposal();
+  } else {
+    deferDisposal(disposal);
   }
 }
 

@@ -3,6 +3,7 @@ import {
   ComputationReadValidationScope,
   type ComputationCommitResult,
   type ComputationGenerationAuthority,
+  type ComputationGenerationReference,
   type ComputationId,
   type ComputationLifecycleRegistry,
   type ComputationLocus,
@@ -44,7 +45,7 @@ export class AureliaAppAnalysisLocus implements ComputationLocus {
 }
 
 /** One committed app object graph guarded by the computation that owns all of its kernel publications. */
-export class AureliaAppWorldProjectGeneration implements GenerationAuthority {
+export class AureliaAppWorldProjectGeneration implements GenerationAuthority, ComputationGenerationReference {
   readonly key: string;
   readonly currentnessWitness: GenerationCurrentnessWitness;
 
@@ -76,7 +77,10 @@ export class AureliaAppWorldProjectGeneration implements GenerationAuthority {
       && this.currentEmission.project.inputGeneration.isCurrent()
       && validationScope.validate(this.currentEmission.preTemplate.evaluationGeneration).isCurrent
       && validationScope.validate(this.currentEmission.preTemplate.conventionToolingEvaluationGeneration).isCurrent
-      && validationScope.validate(this.currentEmission.preTemplate.typeSystemGeneration).isCurrent;
+      && validationScope.validate(this.currentEmission.preTemplate.typeSystemGeneration).isCurrent
+      // Dependency validation may reenter project input or computation publication. Close the callback window by
+      // resampling the combined app-generation witness after every validation has returned.
+      && this.currentnessWitness.isCurrent();
   }
 
   /** Whether the atomic app publication remains the private committed incumbent. */

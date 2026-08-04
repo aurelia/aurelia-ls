@@ -8,6 +8,8 @@ export const AURELIA_MCP_ORIENTATION_RESOURCE_URI = 'aurelia://semantic-runtime/
 
 export const AURELIA_MCP_SERVER_INSTRUCTIONS = [
   'Use aurelia_workspace_overview first for a cheap project/app map.',
+  'Every workspace response returns the normalized semantic-workspace descriptor; preserve its projectRootHints and excludedWorkspaceRoots on related calls. Matching the editor additionally requires seeding the first call with the same host inputs.',
+  'When native project configuration or authored-source exclusions matter, use aurelia_project_configurations for exact app-world-free rows; use view=diagnostics to inspect exact config errors and source spans.',
   AURELIA_PATTERN_WORKFLOW_INSTRUCTION,
   'For framework docs grounding, use aurelia_docs_search and then aurelia_docs_fetch; docs are bundled and require no web requests.',
   'Open the selected app with aurelia_app_overview; pass appRetention=retain-app when several app calls will share the session, and keep diagnosticPageSize/openSeamPageSize small on first reads.',
@@ -26,7 +28,8 @@ export const AURELIA_MCP_ORIENTATION_RESOURCE_TEXT = [
   '',
   '## Golden Path',
   '',
-  '1. Call `aurelia_workspace_overview` first. It is cheap and deterministic, and returns discovered project frames plus the default app candidate.',
+  '1. Call `aurelia_workspace_overview` first. It is cheap and deterministic, and returns discovered project frames plus the default app candidate. When native configuration or authored-source exclusions matter, call `aurelia_project_configurations`; use `view=diagnostics` for exact app-world-free config errors and source spans.',
+  '   Preserve the returned `workspaceDescriptor.projectTopology.projectRootHints` (for `kind=discover`) and `workspaceDescriptor.excludedWorkspaceRoots` as the flat `projectRootHints` and `excludedWorkspaceRoots` inputs on every related workspace/app call. Those fields prevent MCP calls from drifting between source worlds. MCP matches an editor session only when the first call was seeded with that editor host\'s same hints and exclusions.',
   '2. Call `aurelia_app_overview` next. Use `appRetention=retain-app` when several follow-up app calls should share one app epoch; otherwise omit it. Keep `diagnosticPageSize` and `openSeamPageSize` small on first reads.',
   '3. Call `aurelia_app_query_catalog` before improvising generic `aurelia_app_query` calls. Catalog rows are the authority for `queryKind`, `minimumAnalysisDepth`, paging, detail, source-file support, and continuation behavior.',
   '4. Use `aurelia_app_query_batch` when several related app summaries belong to one inspection move, especially with `page.size=0` rollup queries.',
@@ -57,6 +60,7 @@ export function aureliaOrientWorkspacePromptText(input: {
   return [
     `Orient to the Aurelia workspace at ${input.workspaceRoot}.`,
     'Follow the Aurelia MCP golden path: workspace overview first, app overview second, catalog before generic app-query calls, then summary clusters before row pages.',
+    'After workspace overview, preserve its returned semantic workspace descriptor boundary by passing the same projectRootHints and excludedWorkspaceRoots on every related call. If editor parity matters, first seed those fields from the same host topology.',
     input.projectKey == null || input.projectKey.length === 0
       ? 'If multiple app candidates are present, select the project from aurelia_workspace_overview before deeper app calls.'
       : `Use projectKey ${input.projectKey} for deeper app calls unless aurelia_workspace_overview disproves it.`,
@@ -81,6 +85,7 @@ export function aureliaInspectAppFeaturePromptText(input: {
   return [
     `Inspect the Aurelia app at ${input.workspaceRoot} for this feature or issue: ${input.featureGoal}.`,
     'Start with aurelia_workspace_overview and aurelia_app_overview. Then use aurelia_app_query_catalog to choose focused query families instead of guessing.',
+    'Preserve the workspace overview response descriptor by passing its projectRootHints and excludedWorkspaceRoots on every related call. Matching an editor additionally requires the same initial host-topology inputs.',
     input.includeDiagnostics === 'true'
       ? 'Because diagnostics are in scope, use aurelia_diagnostic_overview or aurelia_app_diagnostics early; these include ordinary TypeScript diagnostics as well as modeled Aurelia/template diagnostics.'
       : 'Use diagnostics when the overview, source edits, lint/formatter follow-up, or template work suggests weak typing, invalid commands, binding assignment pressure, or stale TypeScript facts.',
@@ -106,6 +111,7 @@ export function aureliaBuildAppFeaturePromptText(input: {
     input.workspaceRoot == null || input.workspaceRoot.length === 0
       ? 'For a new app or fresh feature shape, start with aurelia_pattern_menu and fetch a relevant pattern with aurelia_pattern_example. For an existing app, first obtain the absolute workspaceRoot.'
       : `Use workspaceRoot ${input.workspaceRoot}; start with aurelia_workspace_overview and aurelia_app_overview before editing.`,
+    'For an existing workspace, preserve the overview response descriptor by passing its projectRootHints and excludedWorkspaceRoots on every related semantic call.',
     AURELIA_PATTERN_WORKFLOW_PROMPT_TEXT,
     'When you need framework docs context, use aurelia_docs_search and aurelia_docs_fetch; fetched docs are local bundled docs, not runtime web requests.',
     input.focus == null || input.focus.length === 0

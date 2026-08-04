@@ -1,16 +1,21 @@
 import process from 'node:process';
 import {
+  readSemanticAppQueryCatalog,
+  semanticWorkspaceDescriptorForRuntimeOptions,
   semanticAppQueryCatalogRow,
+  normalizeSemanticRuntimeOptions,
   SemanticAppQueryKind,
   type SemanticAppQuery,
   type SemanticRuntimeAppQueryRequest,
   type SemanticRuntimeAnalysisCacheClearRequest,
   type SemanticRuntimeAnalysisCacheOverviewRequest,
   type SemanticRuntimeAnswer,
+  type SemanticNativeProjectConfigurationsResult,
+  type SemanticProjectConfigurationDiagnosticsResult,
   type SemanticRuntimeOptions,
   type SemanticRuntimePagePolicy,
 } from '@aurelia-ls/semantic-runtime';
-import { SemanticRuntimeSessionRegistry, normalizeRuntimeOptions } from './session-registry.js';
+import { SemanticRuntimeSessionRegistry } from './session-registry.js';
 import {
   aureliaMcpToolNames,
   type AureliaMcpAnalysisCacheOverviewInput,
@@ -23,6 +28,7 @@ import {
   type AureliaMcpDiagnosticOverviewInput,
   type AureliaMcpOpenAppInput,
   type AureliaMcpOpenSeamOverviewInput,
+  type AureliaMcpProjectConfigurationsInput,
   type AureliaMcpResponse,
   type AureliaMcpRouterOverviewInput,
   type AureliaMcpTemplateCompletionsInput,
@@ -49,42 +55,52 @@ export class AureliaMcpSemanticRuntimeAdapter {
     }));
   }
 
+  async projectConfigurations(
+    input: AureliaMcpProjectConfigurationsInput,
+  ): Promise<AureliaMcpResponse<SemanticRuntimeAnswer<
+    SemanticNativeProjectConfigurationsResult | SemanticProjectConfigurationDiagnosticsResult
+  >>> {
+    const runtime = await this.sessions.runtime(runtimeOptions(input));
+    const request = {
+      projectKey: input.projectKey ?? undefined,
+      sourceFilePaths: input.sourceFilePaths ?? undefined,
+      page: input.page ?? undefined,
+      pagePolicy: MCP_PAGE_POLICY,
+      inquiryProfile: 'mcp-orientation' as const,
+    };
+    return toolResponse(
+      aureliaMcpToolNames.projectConfigurations,
+      input,
+      input.view === 'diagnostics'
+        ? runtime.projectConfigurationDiagnostics(request)
+        : runtime.nativeProjectConfigurations(request),
+    );
+  }
+
   async analysisCacheOverview(input: AureliaMcpAnalysisCacheOverviewInput): Promise<AureliaMcpResponse<unknown>> {
     return toolResponse(
       aureliaMcpToolNames.analysisCacheOverview,
       input,
-      input.workspaceRoot == null
+      input.workspace == null
         ? await this.sessions.overview(undefined, cacheOverviewRequest(input))
-        : await this.sessions.overview({
-          workspaceRoot: input.workspaceRoot,
-          storeKey: input.storeKey ?? undefined,
-          projects: input.projects ?? undefined,
-          projectDiscovery: input.projectDiscovery ?? undefined,
-        }, cacheOverviewRequest(input)),
+        : await this.sessions.overview(runtimeOptions(input.workspace), cacheOverviewRequest(input)),
     );
   }
 
   async clearAnalysisCache(input: AureliaMcpClearAnalysisCacheInput): Promise<AureliaMcpResponse<unknown>> {
-    const cleared = input.workspaceRoot == null
+    const cleared = input.workspace == null
       ? await this.sessions.clearAnalysisCache(undefined, cacheClearRequest(input))
-      : await this.sessions.clearAnalysisCache({
-        workspaceRoot: input.workspaceRoot,
-        storeKey: input.storeKey ?? undefined,
-        projects: input.projects ?? undefined,
-        projectDiscovery: input.projectDiscovery ?? undefined,
-      }, cacheClearRequest(input));
+      : await this.sessions.clearAnalysisCache(runtimeOptions(input.workspace), cacheClearRequest(input));
     return toolResponse(aureliaMcpToolNames.clearAnalysisCache, input, cleared);
   }
 
   async appQueryCatalog(input: AureliaMcpAppQueryCatalogInput): Promise<AureliaMcpResponse<SemanticRuntimeAnswer<unknown>>> {
-    const runtime = await this.sessions.runtime(runtimeOptions(input));
     return toolResponse(
       aureliaMcpToolNames.appQueryCatalog,
       input,
-      runtime.appQueryCatalog({
+      readSemanticAppQueryCatalog({
         group: input.group,
         queryKind: input.queryKind,
-        inquiryProfile: 'mcp-orientation',
       }),
     );
   }
@@ -121,7 +137,6 @@ export class AureliaMcpSemanticRuntimeAdapter {
       includeAuthoringTemplates: input.includeAuthoringTemplates ?? undefined,
       authoringTemplateSourceFiles: input.authoringTemplateSourceFiles ?? undefined,
       authoringTemplateLimit: input.authoringTemplateLimit ?? undefined,
-      telemetry: input.telemetry ?? undefined,
       ...(input.appRetention == null ? {} : { appRetention: input.appRetention }),
       includeAppProfile: input.includeAppProfile ?? undefined,
       includeAppQueryClaimProfiles: input.includeAppQueryClaimProfiles ?? undefined,
@@ -277,17 +292,15 @@ function queryWithSourceFilePathSelector<TQuery extends SemanticAppQuery>(
 
 interface RuntimeOptionsInput {
   readonly workspaceRoot?: string | null;
-  readonly storeKey?: string | null;
-  readonly projects?: SemanticRuntimeOptions['projects'] | null;
-  readonly projectDiscovery?: SemanticRuntimeOptions['projectDiscovery'] | null;
+  readonly projectRootHints?: readonly string[] | null;
+  readonly excludedWorkspaceRoots?: readonly string[] | null;
 }
 
 function runtimeOptions(input: RuntimeOptionsInput): SemanticRuntimeOptions {
-  return normalizeRuntimeOptions({
+  return normalizeSemanticRuntimeOptions({
     workspaceRoot: input.workspaceRoot ?? process.cwd(),
-    storeKey: input.storeKey ?? undefined,
-    projects: input.projects ?? undefined,
-    projectDiscovery: input.projectDiscovery ?? undefined,
+    projectRootHints: input.projectRootHints ?? undefined,
+    excludedWorkspaceRoots: input.excludedWorkspaceRoots ?? undefined,
   });
 }
 
@@ -339,13 +352,28 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
 
 function toolResponse<TValue>(
   tool: string,
-  input: { readonly workspaceRoot?: string | null },
+  input: unknown,
   value: TValue,
 ): AureliaMcpResponse<TValue> {
+  const workspaceInput = responseWorkspaceInput(input);
+  const workspaceDescriptor = workspaceInput == null
+    ? null
+    : semanticWorkspaceDescriptorForRuntimeOptions(runtimeOptions(workspaceInput));
   return {
     tool,
     generatedAt: new Date().toISOString(),
-    workspaceRoot: input.workspaceRoot == null ? null : normalizeRuntimeOptions({ workspaceRoot: input.workspaceRoot }).workspaceRoot,
+    workspaceRoot: workspaceDescriptor?.workspaceRoot ?? null,
+    workspaceDescriptor,
     value,
   };
+}
+
+function responseWorkspaceInput(
+  input: unknown,
+): RuntimeOptionsInput | null {
+  if (!isPlainRecord(input)) return null;
+  if (typeof input.workspaceRoot === 'string') return input as RuntimeOptionsInput;
+  return isPlainRecord(input.workspace) && typeof input.workspace.workspaceRoot === 'string'
+    ? input.workspace as RuntimeOptionsInput
+    : null;
 }

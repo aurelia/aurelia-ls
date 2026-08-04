@@ -2,6 +2,7 @@ import {
   sourcePathMatchesFileName,
 } from '../kernel/source-address.js';
 import { SourceFileRole } from '../kernel/address.js';
+import { externalizeSourceFileRole } from '../kernel/source-classification.js';
 import type { SourceFileAdmission } from '../boot/frames.js';
 import { DiIssueSubjectKind } from '../di/di-issue.js';
 import type {
@@ -245,17 +246,21 @@ function sourceRoleForDiagnosticReference(
   if (source == null) {
     return null;
   }
+  if (source.sourceWorkspaceKey != null && source.sourceWorkspaceKey !== projectKey) {
+    return externalizeSourceFileRole(source.sourceFileRole ?? SourceFileRole.Unknown);
+  }
+  if (
+    source.sourceFileRole === SourceFileRole.ExternalSource
+    || source.sourceFileRole === SourceFileRole.Generated
+  ) {
+    return source.sourceFileRole;
+  }
   if (source.path != null) {
     const path = source.path;
     const admission = sources.find((candidate) => sourcePathMatchesFileName(candidate.path, path)) ?? null;
     if (admission != null) {
       return admission.role;
     }
-  }
-  if (source.sourceWorkspaceKey != null && source.sourceWorkspaceKey !== projectKey) {
-    return source.sourceFileRole === SourceFileRole.Declaration || source.sourceFileRole === SourceFileRole.Generated
-      ? source.sourceFileRole
-      : SourceFileRole.ExternalSource;
   }
   if (source.sourceFileRole != null) {
     return source.sourceFileRole;

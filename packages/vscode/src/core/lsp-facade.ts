@@ -3,6 +3,7 @@ import {
   AureliaProtocolNotification,
   AureliaProtocolRequest,
   type ResourceInventoryResponse,
+  type SourceOwnershipResponse,
   type TemplateResourceAvailabilityResponse,
 } from "@aurelia-ls/language-server/protocol";
 import type { AureliaLanguageClient, AureliaLanguageClientSession } from "../client-core.js";
@@ -12,6 +13,7 @@ import type {
   RelatedFilesResponse,
   RenameFromTsResponse,
   ResourceInventorySnapshot,
+  SourceOwnershipSnapshot,
   TemplateResourceAvailabilitySnapshot,
   AnalysisChangedPayload,
   WorkspaceNotificationPayload,
@@ -122,6 +124,21 @@ export class LspFacade implements Disposable {
     return this.#sendRequest<RelatedFilesResponse>(session, AureliaProtocolRequest.RelatedFiles, { uri });
   }
 
+  async getSourceOwnership(
+    uri: string,
+    token?: CancellationToken,
+  ): Promise<SourceOwnershipSnapshot | null> {
+    const session = this.#sessionForUri(uri);
+    if (session == null) return null;
+    const response = await this.#sendRequest<SourceOwnershipResponse>(
+      session,
+      AureliaProtocolRequest.SourceOwnership,
+      { uri },
+      token,
+    );
+    return { ...response, workspace: session.workspace };
+  }
+
   async renameFromTs(
     uri: string,
     position: { line: number; character: number },
@@ -214,12 +231,45 @@ export class LspFacade implements Disposable {
       for (const [method, handlers] of this.#notificationHandlers) {
         if (handlers.size === 0) continue;
         this.#rawNotificationSubscriptions.push(session.client.onNotification(method, (payload: unknown) => {
+          if (
+            method === AureliaProtocolNotification.AnalysisChanged
+            && isAnalysisChangedPayload(payload)
+            && payload.changeKind === "topology"
+          ) {
+            void this.#dispatchSettledTopologyNotification(method, payload, session);
+            return;
+          }
           const enriched = workspaceNotificationPayload(payload, session);
           for (const handler of [...(this.#notificationHandlers.get(method) ?? [])]) {
             handler(enriched);
           }
         }));
       }
+    }
+  }
+
+  async #dispatchSettledTopologyNotification(
+    method: string,
+    payload: AnalysisChangedPayload,
+    observedSession: AureliaLanguageClientSession,
+  ): Promise<void> {
+    try {
+      const retained = await this.#clients.reconfirmSessionTopology(observedSession, payload);
+      if (!retained || this.#disposed) return;
+      const current = this.#clients.sessions.find((session) =>
+        session.workspace.key === observedSession.workspace.key
+        && session.client === observedSession.client
+      );
+      if (current == null) return;
+      const enriched = workspaceNotificationPayload(payload, current);
+      for (const handler of [...(this.#notificationHandlers.get(method) ?? [])]) {
+        handler(enriched);
+      }
+    } catch (error) {
+      this.#logger.warn("topology-reconfirmation.failed", {
+        workspace: observedSession.workspace.uri,
+        fingerprint: payload.fingerprint,
+      }, error);
     }
   }
 
@@ -232,6 +282,13 @@ export class LspFacade implements Disposable {
       }
     }
   }
+}
+
+function isAnalysisChangedPayload(value: unknown): value is AnalysisChangedPayload {
+  if (value == null || typeof value !== "object" || Array.isArray(value)) return false;
+  const payload = value as Record<string, unknown>;
+  return typeof payload["fingerprint"] === "string"
+    && (payload["changeKind"] === "source-text" || payload["changeKind"] === "topology");
 }
 
 function workspaceNotificationPayload(

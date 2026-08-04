@@ -173,7 +173,7 @@ const overlayTypeSystem = new TypeSystemProjectBuilder(projectTypeSystemProgramS
   },
 );
 
-const overlaySourceFile = overlayTypeSystem.readProgramSourceFileByPath(overlayFileName);
+const overlaySourceFile = overlayTypeSystem.readProgramSourceFileByHostPath(overlayFileName);
 const moduleSymbol = overlaySourceFile == null
   ? null
   : overlayTypeSystem.checker.getSymbolAtLocation(overlaySourceFile) ?? null;
@@ -186,7 +186,7 @@ const overlayExportType = overlayExport == null
   : overlayTypeSystem.checker.typeToString(
     overlayTypeSystem.checker.getTypeOfSymbolAtLocation(overlayExport, overlayDeclaration),
   );
-const overlayMetadata = overlayTypeSystem.readOverlaySourceByPath(overlayFileName);
+const overlayMetadata = overlayTypeSystem.readOverlaySourceByHostPath(overlayFileName);
 const overlayProgramMetadata = overlaySourceFile == null
   ? null
   : overlayTypeSystem.readOverlaySourceForProgramSourceFile(overlaySourceFile);
@@ -200,7 +200,7 @@ const projectDiagnostics = readTypeSystemProjectDiagnostics(overlayTypeSystem);
 const overlayDiagnostics = projectDiagnostics.filter((diagnostic) =>
   diagnostic.source?.fileName.replace(/\\/g, '/') === overlayFileName.replace(/\\/g, '/')
 );
-const clonedProgramRemap = readClonedProgramNodeRemap(overlayTypeSystem);
+const clonedProgramRemap = readClonedProgramNodeRemap(overlayTypeSystem, overlayFileName);
 const templateOverlay = await readTemplateOverlayProbe();
 const repeatOverlay = await readRepeatScopeOverlayProbe();
 const generatedTemplateOverlay = await readGeneratedTemplateScopeOverlayProbe();
@@ -1084,9 +1084,8 @@ if (failures.length > 0) {
   }, null, 2));
 }
 
-function readClonedProgramNodeRemap(typeSystem) {
-  const source = typeSystem.readProjectProgramSourceFiles()
-    .find((sourceFile) => sourceFile.statements.length > 0);
+function readClonedProgramNodeRemap(typeSystem, sourceFileName) {
+  const source = typeSystem.readProgramSourceFileByHostPath(sourceFileName);
   if (source == null) {
     return {
       remapped: false,
@@ -1168,7 +1167,7 @@ async function readTemplateOverlayProbe() {
       overlaySources: [source],
     },
   );
-  const sourceFile = typeSystem.readProgramSourceFileByPath(overlayFileName);
+  const sourceFile = typeSystem.readProgramSourceFileByHostPath(overlayFileName);
   const moduleSymbol = sourceFile == null
     ? null
     : typeSystem.checker.getSymbolAtLocation(sourceFile) ?? null;
@@ -2531,7 +2530,7 @@ function readOverlayVariableExpressionTypes(
   overlayFileName,
   expressionProbes = [],
 ) {
-  const sourceFile = typeSystem.readProgramSourceFileByPath(overlayFileName);
+  const sourceFile = typeSystem.readProgramSourceFileByHostPath(overlayFileName);
   const rows = new Map();
   const authoredExpressionByLocal = new Map(expressionProbes.flatMap((probe) =>
     probe.authoredExpressionText == null ? [] : [[probe.localName, probe.authoredExpressionText]]
@@ -2570,7 +2569,7 @@ function readOverlayVariableTypesByName(
   typeSystem,
   overlayFileName,
 ) {
-  const sourceFile = typeSystem.readProgramSourceFileByPath(overlayFileName);
+  const sourceFile = typeSystem.readProgramSourceFileByHostPath(overlayFileName);
   const rows = new Map();
   if (sourceFile == null) {
     return rows;
@@ -2630,7 +2629,7 @@ function readOverlayExportType(
   overlayFileName,
   exportName,
 ) {
-  const sourceFile = typeSystem.readProgramSourceFileByPath(overlayFileName);
+  const sourceFile = typeSystem.readProgramSourceFileByHostPath(overlayFileName);
   const moduleSymbol = sourceFile == null
     ? null
     : typeSystem.checker.getSymbolAtLocation(sourceFile) ?? null;

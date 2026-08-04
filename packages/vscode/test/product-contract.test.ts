@@ -4,10 +4,15 @@ import { AureliaCommand, AureliaView } from "../out/product-contract.js";
 
 interface ExtensionManifest {
   readonly api?: string;
+  readonly activationEvents?: readonly string[];
   readonly contributes?: {
     readonly commands?: readonly { readonly command: string }[];
     readonly keybindings?: readonly unknown[];
     readonly snippets?: readonly unknown[];
+    readonly jsonValidation?: readonly {
+      readonly fileMatch: string;
+      readonly url: string;
+    }[];
     readonly menus?: Readonly<Record<string, readonly {
       readonly command: string;
       readonly when?: string;
@@ -57,6 +62,14 @@ describe("VS Code product contract", () => {
 
   test("does not contribute passive source generators outside semantic completion", () => {
     expect(manifest.contributes?.snippets).toBeUndefined();
+  });
+
+  test("associates native project configuration with the bundled semantic-runtime schema", () => {
+    expect(manifest.activationEvents).toContain("workspaceContains:**/aurelia.project.json");
+    expect(manifest.contributes?.jsonValidation).toEqual([{
+      fileMatch: "**/aurelia.project.json",
+      url: "./dist/schemas/aurelia.project.schema.json",
+    }]);
   });
 
   test("offers related-file navigation for every supported script language", () => {

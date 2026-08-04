@@ -86,7 +86,7 @@ export function readApplicationServiceClassSites(
 ): readonly ApplicationServiceClassSite[] {
   const resolveCallCountsByDeclarationPath = diResolveCallCountsByDeclarationSourcePath(injections);
   return project.sourceFiles.flatMap((source) => {
-    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
+    const sourceFile = typeSystem.readProgramSourceFileByProjectPath(source.path);
     const classes = sourceFile == null ? [] : topLevelClasses(sourceFile);
     return classes.flatMap((entry) => {
       const role = supportRoles.roleForDeclaration(source.path, entry.className);

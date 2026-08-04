@@ -310,9 +310,54 @@ importers:
         specifier: 6.0.3
         version: 6.0.3
     devDependencies:
+      '@aurelia/dialog':
+        specifier: link:../../aurelia/packages/dialog
+        version: link:../../aurelia/packages/dialog
+      '@aurelia/fetch-client':
+        specifier: link:../../aurelia/packages/fetch-client
+        version: link:../../aurelia/packages/fetch-client
+      '@aurelia/i18n':
+        specifier: link:../../aurelia/packages/i18n
+        version: link:../../aurelia/packages/i18n
+      '@aurelia/kernel':
+        specifier: link:../../aurelia/packages/kernel
+        version: link:../../aurelia/packages/kernel
+      '@aurelia/router':
+        specifier: link:../../aurelia/packages/router
+        version: link:../../aurelia/packages/router
+      '@aurelia/runtime':
+        specifier: link:../../aurelia/packages/runtime
+        version: link:../../aurelia/packages/runtime
+      '@aurelia/runtime-html':
+        specifier: link:../../aurelia/packages/runtime-html
+        version: link:../../aurelia/packages/runtime-html
+      '@aurelia/state':
+        specifier: link:../../aurelia/packages/state
+        version: link:../../aurelia/packages/state
+      '@aurelia/template-compiler':
+        specifier: link:../../aurelia/packages/template-compiler
+        version: link:../../aurelia/packages/template-compiler
+      '@aurelia/ui-virtualization':
+        specifier: link:../../aurelia/packages/ui-virtualization
+        version: link:../../aurelia/packages/ui-virtualization
+      '@aurelia/validation':
+        specifier: link:../../aurelia/packages/validation
+        version: link:../../aurelia/packages/validation
+      '@aurelia/validation-html':
+        specifier: link:../../aurelia/packages/validation-html
+        version: link:../../aurelia/packages/validation-html
+      '@aurelia/validation-i18n':
+        specifier: link:../../aurelia/packages/validation-i18n
+        version: link:../../aurelia/packages/validation-i18n
+      '@aurelia/vite-plugin':
+        specifier: link:../../aurelia/packages-tooling/vite-plugin
+        version: link:../../aurelia/packages-tooling/vite-plugin
       '@types/node':
         specifier: ^22.5.4
         version: 22.19.1
+      aurelia:
+        specifier: link:../../aurelia/packages/aurelia
+        version: link:../../aurelia/packages/aurelia
 
   packages/semantic-workspace:
     dependencies:

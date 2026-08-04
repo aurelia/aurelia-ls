@@ -7,6 +7,8 @@ import type {
   RenameFromTsResponse,
   ResourceInventoryItem,
   ResourceInventoryResponse,
+  SourceOwnershipOwner,
+  SourceOwnershipResponse,
   TemplateResourceAvailabilityResponse,
 } from "@aurelia-ls/language-server/protocol";
 
@@ -18,6 +20,8 @@ export type {
   RelatedFilesResponse,
   RenameFromTsResponse,
   ResourceInventoryItem,
+  SourceOwnershipOwner,
+  SourceOwnershipResponse,
 };
 
 export interface AureliaWorkspaceIdentity {
@@ -48,6 +52,10 @@ export interface ResourceInventorySnapshot {
 }
 
 export type TemplateResourceAvailabilitySnapshot = TemplateResourceAvailabilityResponse & {
+  readonly workspace: AureliaWorkspaceIdentity;
+};
+
+export type SourceOwnershipSnapshot = SourceOwnershipResponse & {
   readonly workspace: AureliaWorkspaceIdentity;
 };
 

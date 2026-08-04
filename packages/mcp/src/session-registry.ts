@@ -1,6 +1,8 @@
-import path from 'node:path';
 import {
   createSemanticRuntime,
+  normalizeSemanticRuntimeOptions,
+  semanticWorkspaceDescriptorForRuntimeOptions,
+  semanticRuntimeWorkspaceDescriptorKey,
   type SemanticRuntimeAnalysisCacheClearRequest,
   type SemanticRuntimeAnalysisCacheOverviewRequest,
   type SemanticRuntimeAnalysisCacheClearResult,
@@ -8,13 +10,14 @@ import {
   type SemanticRuntimeAnswer,
   type SemanticRuntime,
   type SemanticRuntimeOptions,
+  type SemanticWorkspaceDescriptor,
 } from '@aurelia-ls/semantic-runtime';
 
 export class SemanticRuntimeSessionRegistry {
   private readonly sessions = new Map<string, SemanticRuntimeSessionEntry>();
 
   async runtime(options: SemanticRuntimeOptions): Promise<SemanticRuntime> {
-    const normalized = normalizeRuntimeOptions(options);
+    const normalized = normalizeSemanticRuntimeOptions(options);
     const key = runtimeSessionKey(normalized);
     const existing = this.sessions.get(key);
     if (existing != null) {
@@ -41,14 +44,14 @@ export class SemanticRuntimeSessionRegistry {
       this.sessions.clear();
       return count;
     }
-    return this.sessions.delete(runtimeSessionKey(normalizeRuntimeOptions(options))) ? 1 : 0;
+    return this.sessions.delete(runtimeSessionKey(normalizeSemanticRuntimeOptions(options))) ? 1 : 0;
   }
 
   async clearAnalysisCache(
     options?: SemanticRuntimeOptions,
     request: SemanticRuntimeAnalysisCacheClearRequest = {},
   ): Promise<SemanticRuntimeSessionRegistryClearResult> {
-    const selectedKey = options == null ? null : runtimeSessionKey(normalizeRuntimeOptions(options));
+    const selectedKey = options == null ? null : runtimeSessionKey(normalizeSemanticRuntimeOptions(options));
     const entries = [...this.sessions.values()]
       .filter((entry) => selectedKey == null || entry.key === selectedKey);
     const sessions = await Promise.all(entries.map((entry) => sessionClearResult(entry, request)));
@@ -105,7 +108,7 @@ export class SemanticRuntimeSessionRegistry {
     options?: SemanticRuntimeOptions,
     cacheRequest: SemanticRuntimeAnalysisCacheOverviewRequest = {},
   ): Promise<SemanticRuntimeSessionRegistryOverview> {
-    const selectedKey = options == null ? null : runtimeSessionKey(normalizeRuntimeOptions(options));
+    const selectedKey = options == null ? null : runtimeSessionKey(normalizeSemanticRuntimeOptions(options));
     const entries = [...this.sessions.values()]
       .filter((entry) => selectedKey == null || entry.key === selectedKey);
     const sessions = await Promise.all(entries.map((entry) => sessionSummary(entry, cacheRequest)));
@@ -129,11 +132,7 @@ interface SemanticRuntimeSessionEntry {
 }
 
 export interface SemanticRuntimeSessionSummary {
-  readonly workspaceRoot: string;
-  readonly storeKey: string | null;
-  readonly projectDiscovery: SemanticRuntimeOptions['projectDiscovery'] | null;
-  readonly projectCount: number | null;
-  readonly projectKeys: readonly (string | null)[] | null;
+  readonly workspaceDescriptor: SemanticWorkspaceDescriptor;
   readonly runtimeState: 'ready' | 'failed';
   readonly analysisCache: SemanticRuntimeAnswer<SemanticRuntimeAnalysisCacheOverviewResult> | null;
   readonly failureSummary: string | null;
@@ -148,11 +147,7 @@ export interface SemanticRuntimeSessionRegistryOverview {
 }
 
 export interface SemanticRuntimeSessionClearSummary {
-  readonly workspaceRoot: string;
-  readonly storeKey: string | null;
-  readonly projectDiscovery: SemanticRuntimeOptions['projectDiscovery'] | null;
-  readonly projectCount: number | null;
-  readonly projectKeys: readonly (string | null)[] | null;
+  readonly workspaceDescriptor: SemanticWorkspaceDescriptor;
   readonly runtimeState: 'ready' | 'failed';
   readonly analysisCacheClear: SemanticRuntimeAnswer<SemanticRuntimeAnalysisCacheClearResult> | null;
   readonly failureSummary: string | null;
@@ -183,7 +178,7 @@ function semanticRuntimeSessionRegistryOverviewDisplayText(
     lines.push('Sessions: none. Open a workspace/app tool first; pass appRetention=retain-app only when several app calls should share one app epoch.');
   } else {
     lines.push(`Sessions: ${value.sessions.slice(0, SESSION_REGISTRY_DISPLAY_LIMIT).map((session, index) =>
-      `${index + 1}. ${session.runtimeState} ${session.workspaceRoot} (${session.projectDiscovery ?? 'default discovery'}): ${session.analysisCache?.summary ?? session.failureSummary ?? 'not inspected'}`
+      `${index + 1}. ${session.runtimeState} ${session.workspaceDescriptor.workspaceRoot} (${workspaceTopologyLabel(session.workspaceDescriptor)}): ${session.analysisCache?.summary ?? session.failureSummary ?? 'not inspected'}`
     ).join(' | ')}${value.sessions.length > SESSION_REGISTRY_DISPLAY_LIMIT ? ` | +${value.sessions.length - SESSION_REGISTRY_DISPLAY_LIMIT} more` : ''}.`);
     const cacheLines = value.sessions
       .map((session) => firstSessionAnswerDisplayLine(session.analysisCache))
@@ -239,26 +234,16 @@ function trimSessionDisplayLine(line: string): string {
 
 const SESSION_REGISTRY_DISPLAY_LIMIT = 4;
 
-export function normalizeRuntimeOptions(options: SemanticRuntimeOptions): SemanticRuntimeOptions {
-  const workspaceRoot = path.resolve(options.workspaceRoot);
-  return {
-    ...options,
-    workspaceRoot,
-    projects: options.projects?.map((project) => ({
-      ...project,
-      rootDir: path.isAbsolute(project.rootDir)
-        ? path.resolve(project.rootDir)
-        : path.resolve(workspaceRoot, project.rootDir),
-    })),
-  };
+function workspaceTopologyLabel(descriptor: SemanticWorkspaceDescriptor): string {
+  return descriptor.projectTopology.kind === 'discover'
+    ? `${descriptor.projectTopology.strategy}, hints=${descriptor.projectTopology.projectRootHints.length}, exclusions=${descriptor.excludedWorkspaceRoots.length}`
+    : `explicit projects=${descriptor.projectTopology.projects.length}, exclusions=${descriptor.excludedWorkspaceRoots.length}`;
 }
 
 function runtimeSessionKey(options: SemanticRuntimeOptions): string {
   return JSON.stringify({
-    workspaceRoot: options.workspaceRoot,
+    descriptor: semanticRuntimeWorkspaceDescriptorKey(options),
     storeKey: options.storeKey ?? null,
-    projectDiscovery: options.projectDiscovery ?? null,
-    projects: options.projects ?? null,
   });
 }
 
@@ -269,22 +254,14 @@ async function sessionSummary(
   try {
     const runtime = await entry.runtime;
     return {
-      workspaceRoot: entry.options.workspaceRoot,
-      storeKey: entry.options.storeKey ?? null,
-      projectDiscovery: entry.options.projectDiscovery ?? null,
-      projectCount: entry.options.projects?.length ?? null,
-      projectKeys: entry.options.projects?.map((project) => project.projectKey ?? null) ?? null,
+      workspaceDescriptor: semanticWorkspaceDescriptorForRuntimeOptions(entry.options),
       runtimeState: 'ready',
       analysisCache: runtime.analysisCacheOverview(cacheRequest),
       failureSummary: null,
     };
   } catch (error) {
     return {
-      workspaceRoot: entry.options.workspaceRoot,
-      storeKey: entry.options.storeKey ?? null,
-      projectDiscovery: entry.options.projectDiscovery ?? null,
-      projectCount: entry.options.projects?.length ?? null,
-      projectKeys: entry.options.projects?.map((project) => project.projectKey ?? null) ?? null,
+      workspaceDescriptor: semanticWorkspaceDescriptorForRuntimeOptions(entry.options),
       runtimeState: 'failed',
       analysisCache: null,
       failureSummary: error instanceof Error ? error.message : String(error),
@@ -299,22 +276,14 @@ async function sessionClearResult(
   try {
     const runtime = await entry.runtime;
     return {
-      workspaceRoot: entry.options.workspaceRoot,
-      storeKey: entry.options.storeKey ?? null,
-      projectDiscovery: entry.options.projectDiscovery ?? null,
-      projectCount: entry.options.projects?.length ?? null,
-      projectKeys: entry.options.projects?.map((project) => project.projectKey ?? null) ?? null,
+      workspaceDescriptor: semanticWorkspaceDescriptorForRuntimeOptions(entry.options),
       runtimeState: 'ready',
       analysisCacheClear: runtime.clearAnalysisCache(request),
       failureSummary: null,
     };
   } catch (error) {
     return {
-      workspaceRoot: entry.options.workspaceRoot,
-      storeKey: entry.options.storeKey ?? null,
-      projectDiscovery: entry.options.projectDiscovery ?? null,
-      projectCount: entry.options.projects?.length ?? null,
-      projectKeys: entry.options.projects?.map((project) => project.projectKey ?? null) ?? null,
+      workspaceDescriptor: semanticWorkspaceDescriptorForRuntimeOptions(entry.options),
       runtimeState: 'failed',
       analysisCacheClear: null,
       failureSummary: error instanceof Error ? error.message : String(error),

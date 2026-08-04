@@ -60,7 +60,10 @@ primitive rather than a misleading claim-graph switch.
 `QueryClaimGraph` exposes named disposal methods for the common lifecycle boundaries, plus a query-type-projection
 cleanup lane for the current TypeChecker-heavy diagnostic/completion pressure. Session profiles also carry explicit
 retained-record budgets so long-lived cursor/diagnostic/MCP adapters do not turn answer-shape telemetry into an
-unbounded cache. The budget prunes only answered or failed claim nodes; pending lazy claims remain materializable by
+unbounded cache. Record pruning follows an oldest-first topology frontier: it removes disposable dependent leaves before
+shared dependencies, updates dependent counts incrementally, and waits for an active parent to close when no lawful leaf
+exists. A callback-free transaction settle can therefore drain thousands of claims in log-linear rather than repeated-
+scan quadratic work. The budget prunes only answered or failed claim nodes; pending lazy claims remain materializable by
 the caller that created them.
 Discard-after-answer profiles still admit pending claims into the graph while the lazy answer closure is outstanding;
 the node is removed only after it resolves or fails. That keeps the graph as the actual storage owner for lazy answer
@@ -74,7 +77,7 @@ reuse before relying on broader app-query continuation contracts.
 answer-boundary graph, with retained-node storage kept inside `QueryClaimGraphStorage`. Keep new consumer trade-offs in
 the policy module so the graph does not become a bag of profile-specific cases.
 `QueryClaimGraphStorage` is the retained-node/index owner below `QueryClaimGraph`: it owns outcome, query-kind, locus,
-epoch, and materialization-policy buckets plus retention-budget candidate selection. The graph should keep answer
+epoch, and materialization-policy buckets plus exact retained-answer byte totals. The graph should keep answer
 materialization, profile policy, and disposal accounting, while storage should keep indexed outcome history. If a new
 transport or adapter wants to scan retained answers, add the needed graph-owned index or disposal policy there instead.
 Storage also owns retained-answer byte accounting and cheap retained-shape snapshots, so cache overview and telemetry
@@ -97,6 +100,11 @@ the batch is a root runtime claim and each child answer is a nested runtime clai
 materialization policy, and epoch keys, but no app-owned child claims are created. This is the preferred shape when a
 public client needs an orientation bundle, because the claim graph stores the answer outcome and disposal effect without
 making the transport layer decide whether to cache, reopen, or scan previous answers.
+Nested runtime/app answers publish through one synchronous `SemanticAnswerTransaction`. Fresh claims remain token-
+visible but externally hidden until the root exact receipt validates. Commit publishes every graph provisionally,
+settles each graph once in a callback-free apply phase, enters a terminal transaction state, and only then releases
+caller-owned leases. A failed publish withdraws every graph before release callbacks can observe or reenter it. No-token
+reads, reuse, disposal, snapshots, and retention budgets exclude indexed nodes whose provisional entry has not settled.
 Routed app disposal now runs inside the answer boundary via `disposeAnswerSideEffects`, so the runtime-level claim can
 record both the app-world kernel delta and the records reclaimed by app-cache policy. Keep future one-off transport
 cleanup in that boundary rather than in adapter-local `finally` blocks; otherwise telemetry will see materialization
@@ -119,7 +127,10 @@ answer policy, and the approximate payload is below the per-answer profile budge
 graph-level byte budget: when the budget is exceeded, the graph drops old DTO values but keeps the claim records,
 payload shape, nested composition, and disposal telemetry. Larger or semantic-stateful answers should keep their
 durable facts in the kernel and use claims for shape/effect telemetry rather than duplicating public DTOs.
-Nested query claims are dependency edges, not only trace rows. If a retained child query outcome is disposed by a
+Nested query claims are dependency edges, not only trace rows. `parentId` and `depth` preserve where a claim was created;
+they do not imply semantic ownership. `dependencyIds` record actual answer consumption when an active materializer reads
+a fresh, retained, provisional, or deferred lazy claim. A lazy claim may therefore retain creator provenance while its
+later reader owns the dependency edge. If a retained child query outcome is disposed by a
 source/project epoch, query-kind cleanup, materialization-policy cleanup, or retention budget, the graph also disposes
 retained ancestor answers that were composed from that child. This keeps summary, overview, batch, and orientation
 answers from outliving a nested answer they depended on while still allowing independent child answers to remain
@@ -136,6 +147,11 @@ bulk before deciding whether a small-answer cache hit is honest.
 Retained-answer hits still run answer-side disposal hooks. Reuse should avoid recomputation, not bypass explicit
 transport policy such as a later `dispose-app` routed query that must reclaim a currently cached app epoch before
 returning a previously shaped answer.
+Every retained hit also proves the current invocation, not only the historical DTO. The runtime composes request-local
+planning reads with the graph-owned historical lease in a temporary lease, validates or delegates that aggregate, and
+releases it without replacing the node's historical capability. This applies equally to committed hits, same-token
+provisional reuse, and rereads through an already-resolved lazy handle; otherwise a second invocation could silently lose
+the reads that selected its retained value.
 The answer boundary can also veto retained-answer reuse when materialization is itself the requested side effect. A
 `retain-app` routed query with no compatible cached app must reopen the app world even if a small previous answer DTO is
 available in the claim graph.
@@ -338,7 +354,7 @@ resource lookup, API wrapping, or domain-specific value completion. `SEMANTIC_RU
 path-delimited list of absolute or workspace-relative roots, so a single fixture or transient external checkout can be
 sampled without changing the script. The known `fixtures/pressure` collection root expands to
 their child fixture projects; `SEMANTIC_RUNTIME_CURSOR_PRESSURE_PROJECT_DISCOVERY` mirrors
-`SEMANTIC_RUNTIME_PRESSURE_PROJECT_DISCOVERY` for monorepo/package-tsconfig roots. The script requests paged runtime
+`SEMANTIC_RUNTIME_PRESSURE_PROJECT_DISCOVERY` for monorepo/project-marker roots. The script requests paged runtime
 summary rows explicitly, because `runtime.summary()` defaults to no project rows for large workspaces. Use
 `SEMANTIC_RUNTIME_CURSOR_PRESSURE_OUTPUT=aggregate` for broad collection pressure and
 `SEMANTIC_RUNTIME_CURSOR_PRESSURE_INPUT_LIMIT` for a cheap first canary. Diagnostic probes are scoped back to the

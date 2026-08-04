@@ -468,7 +468,7 @@ function sourceFileForTarget(
   const sourceFileAddress = sourceFileAddressForAddress(publication, target.addressHandle);
   return sourceFileAddress == null
     ? null
-    : typeSystem.readProgramSourceFileByPath(sourceFileAddress.path);
+    : typeSystem.readProgramSourceFileForAddress(sourceFileAddress);
 }
 
 function sourceModuleKeyCandidates(

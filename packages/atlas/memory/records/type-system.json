@@ -23,7 +23,7 @@
         "Keep the reusable checker generation, the current authored-input frame, and the process-local dependency SourceFile cache as three distinct lifetimes. Template overlays read authored HTML through the current app frame, explicit app disposal retires the complete Program/checker, and dependency-cache preserve only warms later reconstruction.",
         "Keep ordinary TypeScript and tsconfig diagnostics on this Program/tsconfig epoch. MCP and public API calls should use semantic-runtime's typescript-diagnostics surfaces instead of shelling out to tsc or rebuilding a separate Program.",
         "Do not conflate Program/tsconfig correctness diagnostics with Atlas's LanguageService suggestion/code-action lane. Semantic-runtime's current TypeScript diagnostic surface is tsc/noEmit-shaped repair pressure; suggestions, quick fixes, refactors, and organize-imports belong in a later LSP/code-action surface over the same epoch.",
-        "Keep TypeScript diagnostic source roles separate from TypeScript's optional diagnostic `source` label. Diagnostic rows should ask TypeSystemProject.readProgramSourceFileRole so boot-admitted project/config files keep their SourceFileRole and checker-owned dependency or overlay files classify through Program source buckets rather than API-local filename heuristics.",
+        "Keep TypeScript diagnostic source roles separate from TypeScript's optional diagnostic `source` label. Diagnostic rows should ask TypeSystemProject.readProgramSourceFileRoleByHostPath with an exact absolute host identity so boot-admitted project/config files keep their SourceFileRole and checker-owned dependency or overlay files classify through Program source buckets rather than API-local filename heuristics.",
         "Keep checker-observed dependency sources distinct from opened-app source roles. Program-owned default-library and external declaration files classify as declaration, generated overlays classify as generated, and non-declaration implementation files under node_modules classify as external-source so unified diagnostics and repair planning do not route dependency/plugin template overlay errors as editable app source.",
         "Preserve diagnostic inquiry cost by locus. Project-wide diagnostics may spend and cache the full Program diagnostic set, but source-file diagnostics should use readTypeSystemProjectSourceDiagnostics so one file or tsconfig inquiry does not force every app source diagnostic.",
         "If app loading is slow, inspect TypeSystemProject phase timings and phase item counts before guessing at semantic-runtime bulk cost.",
@@ -84,7 +84,7 @@
         "TemplateCursorInfo honors the same type-projection overlay diagnostic lane at the active authored cursor span. Reuse template overlay diagnostic rows and duplicate suppression there; do not create a separate hover/checker diagnostic path for TS2345, TS2554, nullish access, TS2322/TS2588 assignment-shaped rows, or future admitted overlay TypeScript evidence. Binding-assignment cursor rows must be available before overlay cursor rows so duplicate suppression matches file/app diagnostics.",
         "Treat TypeSystem Program-node source-file misses as app-graph alignment pressure before adding local checker fallbacks. If a resource target node came from a project-local evaluated TS/JS module, that module should be a semantic Program root even when it is not eligible for ordinary tsconfig diagnostics; external/dependency misses need a separate admission policy.",
         "Use the compiler-host source-file cache for node_modules files and external declaration files before adding a second checker host path. App pressure reports host source-cache hits, misses, writes, bypasses, cacheable-read lanes, bypass lanes, Program source-file composition, and source-text density by dependency class; current-project authored files should continue to bypass or come from evaluated sources so edits do not get hidden behind global cache state.",
-        "Use TypeSystemProject.readProgramSourceFileByPath or readProgramSourceFileByModuleKey when scanning source for checker-backed materialization. Evaluator-owned AST access is deliberately named readEvaluatedSourceFileByPath/readEvaluatedSourceFileByModuleKey so call sites do not accidentally pair evaluation SourceFiles with the checker.",
+        "Use TypeSystemProject.readProgramSourceFileByHostPath for exact absolute host identity, readProgramSourceFileByProjectPath for explicit project-relative input, or readProgramSourceFileByModuleKey when scanning source for checker-backed materialization. Evaluator-owned AST access is deliberately named readEvaluatedSourceFileByPath/readEvaluatedSourceFileByModuleKey so call sites do not accidentally pair evaluation SourceFiles with the checker.",
         "Use source-address-expression.ts for the shared source-span address to exact TypeScript expression read. State initial-state type projection and binding-source value reduction both spend it; do not copy local smallestExpressionForSpan walks into evaluator, state, router, or template code.",
         "Use TypeSystemProject.readProgramNode, readProgramTypeAtLocation, readProgramTypeFromTypeNode, readProgramSymbolAtLocation, readProgramAliasedSymbolAtLocation, readProgramTypeOfSymbolAtLocation, or readRuntimeTargetType before asking the TypeChecker about nodes that originated in evaluation, resource convergence, or source discovery. Checker APIs expect Program-owned nodes; alien AST identities can crash or return misleading symbols even when file/span text matches.",
         "Use readTypeScriptSourceSyntaxDiagnostics when a source generator, slot validator, or fixture/source-plan lowerer only needs isolated TypeScript syntax diagnostics. That helper is the no-Program source-syntax boundary; do not call ts.transpileModule directly from app-builder or future source-generation surfaces.",
@@ -144,7 +144,7 @@
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/type-system/project.ts",
-          "symbolName": "TypeSystemProject.readProgramSourceFileRole",
+          "symbolName": "TypeSystemProject.readProgramSourceFileRoleByHostPath",
           "summary": "Shared role classifier for Program-owned diagnostic and repair sources."
         },
         {
@@ -1039,7 +1039,7 @@
       "summary": "TypeScript owns cross-symbol member reference and rename closure inside the existing Program epoch.",
       "rationale": "TypeScript member families can cross distinct checker symbols through interface implementation, inheritance and overrides, accessor pairs, overloads, contextual object properties, destructuring, and inferred shorthand. A semantic-runtime whole-Program equal-symbol scan therefore produced partial reference and rename answers. The TypeSystemProject epoch now delegates related-symbol closure to TypeScript's own reference and rename engine without constructing a second Program or LanguageService.",
       "guidance": [
-        "Use TypeSystemProject.readProgramRelatedMemberFamily when a template or TypeScript-origin operation needs cross-file member references or rename edits; do not restore a Program-wide checker-symbol equality scan.",
+        "Use TypeSystemProject.readProgramRelatedMemberFamilyByHostPath with an exact absolute host identity when a template or TypeScript-origin operation needs cross-file member references or rename edits; do not restore a Program-wide checker-symbol equality scan.",
         "Preserve every TypeScript-authored declaration and reference returned by the family, including prefix/suffix rewrites for shorthand forms. References may report external sources, but rename must refuse the complete operation when any related site is native, dependency-owned, generated, or otherwise non-editable.",
         "The adapter consumes an undeclared TypeScript runtime API from the existing Program epoch. Keep TypeScript pinned exactly, retain the runtime shape guard, and treat the current-version plus TypeScript 5 compatibility contracts as the upgrade gate; do not add a lossy fallback scanner.",
         "When TypeScript's related-symbol engine is unavailable, references remain explicitly open and rename refuses. Unavailability must not masquerade as a complete declaration-only family.",
@@ -1056,7 +1056,7 @@
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/type-system/project.ts",
-          "symbolName": "TypeSystemProject.readProgramRelatedMemberFamily",
+          "symbolName": "TypeSystemProject.readProgramRelatedMemberFamilyByHostPath",
           "summary": "Existing Program-epoch entry point for related member closure."
         },
         {
@@ -1085,7 +1085,7 @@
         {
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/type-system/project.ts",
-          "symbolName": "TypeSystemProject.readProgramRelatedMemberFamily"
+          "symbolName": "TypeSystemProject.readProgramRelatedMemberFamilyByHostPath"
         },
         {
           "kind": "source-declaration-exists",
@@ -1094,7 +1094,7 @@
         }
       ],
       "createdAt": "2026-08-01",
-      "updatedAt": "2026-08-01"
+      "updatedAt": "2026-08-04"
     }
   ]
 }

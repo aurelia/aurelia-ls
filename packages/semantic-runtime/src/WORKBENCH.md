@@ -616,7 +616,7 @@ answer mismatches, cursor-info source coverage, focused selected-member coverage
 signals, compact LSP envelopes, value-domain gaps, and bucketed missing-input reasons without paths, source text, or candidate names. Use it with
 `SEMANTIC_RUNTIME_CURSOR_PRESSURE_ROOTS` for external roots when a question is about hovers/completion/navigation
 pressure rather than whole app topology. It now mirrors app pressure's project-discovery override and requests paged
-runtime-summary project rows explicitly, so package-tsconfig monorepo roots do not accidentally report zero cursor
+runtime-summary project rows explicitly, so project-marker monorepo roots do not accidentally report zero cursor
 pressure. Current sampled behavior is: generic expression scopes, binding-command names,
 resource names, bindable names, expression member owners, and parent repeat scopes are reachable; plain static platform
 attribute values are classified directly from HTML/syntax products and do not publish durable value-site products or

@@ -15,6 +15,15 @@ export const enum SourceLanguage {
   Json = 'json',
 }
 
+export const SOURCE_LANGUAGE_VALUES = [
+  SourceLanguage.Unknown,
+  SourceLanguage.TypeScript,
+  SourceLanguage.JavaScript,
+  SourceLanguage.Html,
+  SourceLanguage.Css,
+  SourceLanguage.Json,
+] as const;
+
 export const enum SourceFileRole {
   /** Source that can participate in the application semantic world. */
   AppSource = 'app-source',
@@ -43,6 +52,22 @@ export const enum SourceFileRole {
   /** Use when the host or discovery cannot classify the source role yet. */
   Unknown = 'unknown',
 }
+
+export const SOURCE_FILE_ROLE_VALUES = [
+  SourceFileRole.AppSource,
+  SourceFileRole.RootDocument,
+  SourceFileRole.Template,
+  SourceFileRole.Style,
+  SourceFileRole.PackageManifest,
+  SourceFileRole.TestSource,
+  SourceFileRole.ExampleSource,
+  SourceFileRole.ToolingConfig,
+  SourceFileRole.ToolingScript,
+  SourceFileRole.Declaration,
+  SourceFileRole.ExternalSource,
+  SourceFileRole.Generated,
+  SourceFileRole.Unknown,
+] as const;
 
 export const enum SourceSpanRole {
   /** The best default jump target for a fact or record. */

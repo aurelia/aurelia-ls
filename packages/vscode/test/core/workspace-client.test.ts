@@ -4,6 +4,8 @@ import { AureliaLanguageClient } from "../../out/client-core.js";
 import { LspFacade } from "../../out/core/lsp-facade.js";
 import {
   AureliaActivationMode,
+  isWorkspaceNativeProjectConfigurationUri,
+  isWorkspaceProjectManifestUri,
   readWorkspaceActivationAdmission,
 } from "../../out/workspace-activation.js";
 import type { WorkspaceStatusResponse } from "@aurelia-ls/language-server/protocol";
@@ -56,12 +58,14 @@ describe("workspace activation admission", () => {
         { name: "manifest", uri: "file:///work/manifest" },
         { name: "source", uri: "file:///work/source" },
         { name: "side-effect", uri: "file:///work/side-effect" },
+        { name: "configured", uri: "file:///work/configured" },
         { name: "forced", uri: "file:///work/forced" },
         { name: "disabled", uri: "file:///work/disabled" },
       ],
       files: {
         "file:///work/plain/src/view.html": "<template></template>",
         "file:///work/manifest/package.json": JSON.stringify({ devDependencies: { "@aurelia/runtime-html": "latest" } }),
+        "file:///work/configured/aurelia.project.json": JSON.stringify({ version: 1 }),
       },
       openDocuments: [{
         uri: "file:///work/source/src/main.ts",
@@ -86,13 +90,83 @@ describe("workspace activation admission", () => {
       .toBe("open-source-document");
     expect((await readWorkspaceActivationAdmission(vscode as unknown as VscodeApi, folders[3] as never))?.evidence)
       .toBe("open-source-document");
-    expect((await readWorkspaceActivationAdmission(vscode as unknown as VscodeApi, folders[4] as never))?.mode)
+    expect((await readWorkspaceActivationAdmission(vscode as unknown as VscodeApi, folders[4] as never))?.evidence)
+      .toBe("native-project-configuration");
+    expect((await readWorkspaceActivationAdmission(vscode as unknown as VscodeApi, folders[5] as never))?.mode)
       .toBe(AureliaActivationMode.On);
-    expect(await readWorkspaceActivationAdmission(vscode as unknown as VscodeApi, folders[5] as never)).toBeNull();
+    expect(await readWorkspaceActivationAdmission(vscode as unknown as VscodeApi, folders[6] as never)).toBeNull();
+  });
+
+  test("evaluates ignored topology directories relative to the workspace root", () => {
+    const { vscode } = createVscodeApi({
+      workspaceFolders: [{ name: "app", uri: "file:///work/dist/app" }],
+    });
+    const folder = vscode.workspace.workspaceFolders![0]!;
+
+    expect(isWorkspaceProjectManifestUri(folder as never, vscode.Uri.parse("file:///work/dist/app/package.json") as never))
+      .toBe(true);
+    expect(isWorkspaceNativeProjectConfigurationUri(
+      folder as never,
+      vscode.Uri.parse("file:///work/dist/app/aurelia.project.json") as never,
+    )).toBe(true);
+    expect(isWorkspaceProjectManifestUri(
+      folder as never,
+      vscode.Uri.parse("file:///work/dist/app/generated/dist/package.json") as never,
+    )).toBe(false);
+    expect(isWorkspaceNativeProjectConfigurationUri(
+      folder as never,
+      vscode.Uri.parse("file:///work/dist/app/node_modules/pkg/aurelia.project.json") as never,
+    )).toBe(false);
   });
 });
 
 describe("AureliaLanguageClient workspace ownership", () => {
+  test("uses native config to recover and retain a session without an app world", async () => {
+    const { vscode, recorded } = createVscodeApi({
+      workspaceFolders: [{ name: "candidate", uri: "file:///work/candidate" }],
+      files: {
+        "file:///work/candidate/src/main.ts": "export class App {}",
+      },
+    });
+    const statusByWorkspace = new Map([
+      ["file:///work/candidate", workspaceStatus("outside-aurelia")],
+    ]);
+    const harness = createClientHarness(statusByWorkspace);
+    const manager = createManager(vscode, harness);
+
+    await manager.start(stubExtensionContext(vscode));
+    expect(manager.sessions).toEqual([]);
+    expect(harness.clients).toEqual([]);
+    const configWatcher = recorded.fileWatchers.find((watcher) => watcher.globPattern === "**/aurelia.project.json")!;
+
+    const configUri = vscode.Uri.parse("file:///work/candidate/aurelia.project.json");
+    recorded.setFile(configUri.toString(), JSON.stringify({ version: 1 }));
+    statusByWorkspace.set("file:///work/candidate", workspaceStatus("outside-aurelia", {
+      nativeProjectConfigurationUris: [configUri.toString()],
+    }));
+    configWatcher.fireCreate(configUri);
+    await vi.waitFor(() => expect(manager.sessions).toHaveLength(1));
+    expect(manager.sessions[0]?.activationEvidence).toBe("native-project-configuration");
+
+    configWatcher.fireChange(configUri);
+    await vi.waitFor(() => expect(harness.clients[0]?.sendNotification).toHaveBeenCalledWith(
+      "workspace/didChangeWatchedFiles",
+      { changes: [{ uri: configUri.toString(), type: 2 }] },
+    ));
+
+    statusByWorkspace.set("file:///work/candidate", workspaceStatus("outside-aurelia"));
+    recorded.deleteFile(configUri.toString());
+    configWatcher.fireDelete(configUri);
+    await vi.waitFor(() => expect(manager.sessions).toHaveLength(0));
+    expect(harness.clients[0]?.sendNotification).toHaveBeenCalledWith(
+      "workspace/didChangeWatchedFiles",
+      { changes: [{ uri: configUri.toString(), type: 3 }] },
+    );
+
+    await manager.stop();
+    expect(configWatcher.disposed).toBe(true);
+  });
+
   test("does not retain an automatic candidate without semantic confirmation", async () => {
     const { vscode } = createVscodeApi({
       workspaceFolders: [{ name: "candidate", uri: "file:///work/candidate" }],
@@ -190,6 +264,7 @@ describe("AureliaLanguageClient workspace ownership", () => {
     expect(manager.sessions[0]?.excludedFolders.map((folder) => folder.name)).toEqual(["disabled"]);
     expect(harness.clients[0]?.options.initializationOptions).toEqual({
       excludedWorkspaceRootUris: ["file:///work/repo/packages/disabled"],
+      projectRootHintUris: ["file:///work/repo"],
     });
     expect(manager.clientForUri("file:///work/repo/src/main.ts")).toBe(harness.clients[0]?.raw);
     expect(manager.clientForUri("file:///work/repo/packages/disabled/src/main.ts")).toBeUndefined();
@@ -205,8 +280,43 @@ describe("AureliaLanguageClient workspace ownership", () => {
     );
     expect(manager.sessions).toHaveLength(1);
     expect(manager.sessions[0]?.excludedFolders).toEqual([]);
-    expect(harness.clients[1]?.options.initializationOptions).toEqual({ excludedWorkspaceRootUris: [] });
+    expect(harness.clients[1]?.options.initializationOptions).toEqual({
+      excludedWorkspaceRootUris: [],
+      projectRootHintUris: [
+        "file:///work/repo",
+        "file:///work/repo/packages/disabled",
+        "file:///work/repo/packages/disabled/examples/reentry",
+      ],
+    });
     expect(manager.clientForUri("file:///work/repo/packages/disabled/src/main.ts")).toBe(harness.clients[1]?.raw);
+    await manager.stop();
+  });
+
+  test("does not offer a missing or non-directory workspace folder as live semantic root evidence", async () => {
+    const { vscode, recorded } = createVscodeApi({
+      workspaceFolders: [
+        { name: "outer", uri: "file:///work/repo" },
+        { name: "stale", uri: "file:///work/repo/packages/stale" },
+        { name: "file", uri: "file:///work/repo/packages/replaced-by-file" },
+      ],
+      files: {
+        "file:///work/repo/package.json": JSON.stringify({ dependencies: { aurelia: "latest" } }),
+        "file:///work/repo/packages/replaced-by-file": "not a directory",
+      },
+    });
+    recorded.deleteFile("file:///work/repo/packages/stale");
+    const harness = createClientHarness(new Map([
+      ["file:///work/repo", workspaceStatus("app-world")],
+    ]));
+    const manager = createManager(vscode, harness);
+
+    await manager.start(stubExtensionContext(vscode));
+
+    expect(manager.sessions).toHaveLength(1);
+    expect(harness.clients[0]?.options.initializationOptions).toEqual({
+      excludedWorkspaceRootUris: [],
+      projectRootHintUris: ["file:///work/repo"],
+    });
     await manager.stop();
   });
 
@@ -264,6 +374,95 @@ describe("AureliaLanguageClient workspace ownership", () => {
     expect(harness.clients[0]?.stop).toHaveBeenCalledTimes(1);
     expect(manager.sessions.map((session) => session.workspace.name)).toEqual(["inner"]);
     expect(manager.clientForUri("file:///work/repo/packages/app/src/main.ts")).toBe(harness.clients[1]?.raw);
+    await manager.stop();
+  });
+
+  test("hands a rejected outer topology to its nested workspace without reconfirming a disjoint session", async () => {
+    const { vscode } = createVscodeApi({
+      workspaceFolders: [
+        { name: "repo", uri: "file:///work/repo" },
+        { name: "app", uri: "file:///work/repo/packages/app" },
+        { name: "other", uri: "file:///work/other" },
+      ],
+      files: {
+        "file:///work/repo/package.json": JSON.stringify({ dependencies: { aurelia: "latest" } }),
+        "file:///work/repo/packages/app/package.json": JSON.stringify({ dependencies: { aurelia: "latest" } }),
+        "file:///work/other/package.json": JSON.stringify({ dependencies: { aurelia: "latest" } }),
+      },
+    });
+    const statusByWorkspace = new Map([
+      ["file:///work/repo", workspaceStatus("app-world", { fingerprint: "repo:g1" })],
+      ["file:///work/repo/packages/app", workspaceStatus("app-world", { fingerprint: "app:g1" })],
+      ["file:///work/other", workspaceStatus("app-world", { fingerprint: "other:g1" })],
+    ]);
+    const harness = createClientHarness(statusByWorkspace);
+    const manager = createManager(vscode, harness);
+    await manager.start(stubExtensionContext(vscode));
+    const { logger } = createTestServices(vscode as unknown as VscodeApi);
+    const facade = new LspFacade(manager, logger);
+    const topology = vi.fn();
+    facade.onAnalysisChanged(topology);
+    const outer = harness.clients.find((client) => client.workspaceUri === "file:///work/repo")!;
+    const disjoint = harness.clients.find((client) => client.workspaceUri === "file:///work/other")!;
+
+    statusByWorkspace.set("file:///work/repo", workspaceStatus("outside-aurelia", { fingerprint: "repo:g2" }));
+    outer.emit("aurelia/analysisChanged", { fingerprint: "repo:g2", changeKind: "topology" });
+
+    await vi.waitFor(() => expect(manager.sessions.map((session) => session.workspace.name).sort())
+      .toEqual(["app", "other"]));
+    expect(topology).not.toHaveBeenCalled();
+    expect(disjoint.sendRequest).toHaveBeenCalledTimes(1);
+    expect(disjoint.stop).not.toHaveBeenCalled();
+    expect(outer.stop).toHaveBeenCalledTimes(1);
+
+    facade.dispose();
+    await manager.stop();
+  });
+
+  test("retains an open deleted native config and retires after close returns authority to the missing file", async () => {
+    const configUri = "file:///work/configured/aurelia.project.json";
+    const { vscode, recorded } = createVscodeApi({
+      workspaceFolders: [{ name: "configured", uri: "file:///work/configured" }],
+      files: { [configUri]: JSON.stringify({ version: 1 }) },
+      openDocuments: [{ uri: configUri, languageId: "json", text: JSON.stringify({ version: 1 }) }],
+    });
+    const statusByWorkspace = new Map([
+      ["file:///work/configured", workspaceStatus("outside-aurelia", {
+        fingerprint: "config:g1",
+        nativeProjectConfigurationUris: [configUri],
+      })],
+    ]);
+    const harness = createClientHarness(statusByWorkspace);
+    const manager = createManager(vscode, harness);
+    await manager.start(stubExtensionContext(vscode));
+    const { logger } = createTestServices(vscode as unknown as VscodeApi);
+    const facade = new LspFacade(manager, logger);
+    facade.onAnalysisChanged(() => {});
+    const client = harness.clients[0]!;
+
+    recorded.deleteFile(configUri);
+    statusByWorkspace.set("file:///work/configured", workspaceStatus("outside-aurelia", {
+      fingerprint: "config:g2",
+      nativeProjectConfigurationUris: [configUri],
+    }));
+    client.emit("aurelia/analysisChanged", { fingerprint: "config:g2", changeKind: "topology" });
+    await vi.waitFor(() => expect(client.sendRequest).toHaveBeenCalledTimes(2));
+    expect(manager.sessions).toHaveLength(1);
+    expect(client.sendRequest).toHaveBeenLastCalledWith("aurelia/workspaceStatus", {
+      nativeProjectConfigurationUris: [configUri],
+    });
+
+    recorded.fireDocumentClosed(vscode.workspace.textDocuments[0]!);
+    statusByWorkspace.set("file:///work/configured", workspaceStatus("outside-aurelia", {
+      fingerprint: "config:g3",
+    }));
+    client.emit("aurelia/analysisChanged", { fingerprint: "config:g3", changeKind: "topology" });
+    await vi.waitFor(() => expect(manager.sessions).toHaveLength(0));
+    expect(client.sendRequest).toHaveBeenLastCalledWith("aurelia/workspaceStatus", {
+      nativeProjectConfigurationUris: [],
+    });
+
+    facade.dispose();
     await manager.stop();
   });
 
@@ -467,7 +666,10 @@ describe("AureliaLanguageClient workspace ownership", () => {
     });
 
     const starting = manager.start(stubExtensionContext(vscode));
-    await vi.waitFor(() => expect(harness.clients[0]?.sendRequest).toHaveBeenCalledWith("aurelia/workspaceStatus"));
+    await vi.waitFor(() => expect(harness.clients[0]?.sendRequest).toHaveBeenCalledWith(
+      "aurelia/workspaceStatus",
+      { nativeProjectConfigurationUris: [] },
+    ));
     const stopping = manager.stop();
     statusGate.resolve(workspaceStatus("app-world"));
     await Promise.all([starting, stopping]);
@@ -492,7 +694,10 @@ describe("AureliaLanguageClient workspace ownership", () => {
     const manager = createManager(vscode, harness);
 
     const starting = manager.start(stubExtensionContext(vscode));
-    await vi.waitFor(() => expect(harness.clients[0]?.sendRequest).toHaveBeenCalledWith("aurelia/workspaceStatus"));
+    await vi.waitFor(() => expect(harness.clients[0]?.sendRequest).toHaveBeenCalledWith(
+      "aurelia/workspaceStatus",
+      { nativeProjectConfigurationUris: [] },
+    ));
     const stopping = manager.stop();
     const stopped = await Promise.race([
       stopping.then(() => true),
@@ -599,6 +804,19 @@ describe("LspFacade workspace routing", () => {
       undefined,
     );
 
+    const ownership = await facade.getSourceOwnership("file:///work/b/src/card.ts");
+    expect(ownership).toEqual(expect.objectContaining({
+      fingerprint: "file:///work/b:ownership",
+      sourceUri: "file:///work/b/src/card.ts",
+      workspace: expect.objectContaining({ name: "b" }),
+      owners: [expect.objectContaining({ projectKey: "file:///work/b:app" })],
+    }));
+    expect(harness.clients[1]?.sendRequest).toHaveBeenCalledWith(
+      "aurelia/sourceOwnership",
+      { uri: "file:///work/b/src/card.ts" },
+      undefined,
+    );
+
     const inventory = await facade.getResourceInventory();
     expect(inventory?.workspaces.map((workspace) => workspace.name)).toEqual(["a", "b"]);
     expect(inventory?.workspaces.map((workspace) =>
@@ -687,6 +905,42 @@ describe("LspFacade workspace routing", () => {
     facade.dispose();
     await manager.stop();
   });
+
+  test("gates settled topology by semantic fingerprint and does not publish status-only session changes", async () => {
+    const { vscode } = createVscodeApi({
+      workspaceFolders: [{ name: "app", uri: "file:///work/app" }],
+      files: {
+        "file:///work/app/package.json": JSON.stringify({ dependencies: { aurelia: "latest" } }),
+      },
+    });
+    const statusByWorkspace = new Map([
+      ["file:///work/app", workspaceStatus("app-world", { fingerprint: "app:g1" })],
+    ]);
+    const harness = createClientHarness(statusByWorkspace);
+    const manager = createManager(vscode, harness);
+    await manager.start(stubExtensionContext(vscode));
+    const sessionChanges = vi.fn();
+    manager.onDidChangeSessions(sessionChanges);
+    const { logger } = createTestServices(vscode as unknown as VscodeApi);
+    const facade = new LspFacade(manager, logger);
+    const topology = vi.fn();
+    facade.onAnalysisChanged(topology);
+    const client = harness.clients[0]!;
+
+    client.emit("aurelia/analysisChanged", { fingerprint: "app:g1", changeKind: "topology" });
+    await vi.waitFor(() => expect(topology).toHaveBeenCalledTimes(1));
+    expect(client.sendRequest).toHaveBeenCalledTimes(1);
+
+    statusByWorkspace.set("file:///work/app", workspaceStatus("app-world", { fingerprint: "app:g2" }));
+    client.emit("aurelia/analysisChanged", { fingerprint: "app:g2", changeKind: "topology" });
+    await vi.waitFor(() => expect(topology).toHaveBeenCalledTimes(2));
+    expect(client.sendRequest).toHaveBeenCalledTimes(2);
+    expect(manager.sessions[0]?.status?.fingerprint).toBe("app:g2");
+    expect(sessionChanges).not.toHaveBeenCalled();
+
+    facade.dispose();
+    await manager.stop();
+  });
 });
 
 function twoWorkspaceApi() {
@@ -745,6 +999,8 @@ function createClientHarness(
         }
         case "aurelia/resourceInventory":
           return harnessOptions.resourceResponse?.(workspaceUri) ?? resourceResponse(workspaceUri);
+        case "aurelia/sourceOwnership":
+          return sourceOwnershipResponse(workspaceUri, (params as { uri: string }).uri);
         case "aurelia/getRelatedFiles":
           return [{
             uri: `${workspaceUri}/related.html`,
@@ -856,25 +1112,64 @@ function resourceResponse(workspaceUri: string) {
   };
 }
 
-function workspaceStatus(analysisKind: ProjectAnalysisKind): WorkspaceStatusResponse {
+function sourceOwnershipResponse(workspaceUri: string, sourceUri: string) {
   return {
-    schemaVersion: "0.2",
-    result: "answered",
-    selection: "not-applicable",
-    coverage: "complete",
-    summary: analysisKind,
-    value: {
-      workspaceRoot: "/work",
-      workspaceKey: "work",
-      displayText: analysisKind,
-      projectShapeCounts: [],
-      projectAnalysisCounts: [{ analysisKind, count: 1 }],
-      defaultAppProjectKey: analysisKind === "app-world" ? "app" : null,
-      appCandidates: [],
-      projects: [],
+    fingerprint: `${workspaceUri}:ownership`,
+    sourceUri,
+    answer: {
+      schemaVersion: "0.2",
+      result: "answered",
+      selection: "not-applicable",
+      coverage: "complete",
+      summary: "owned",
+      page: null,
     },
-    page: null,
-  } as WorkspaceStatusResponse;
+    owners: [{
+      projectKey: `${workspaceUri}:app`,
+      rootUri: workspaceUri,
+      projectPath: sourceUri.slice(`${workspaceUri}/`.length),
+      role: "app-source",
+    }],
+  };
+}
+
+function workspaceStatus(
+  analysisKind: ProjectAnalysisKind,
+  options: {
+    readonly fingerprint?: string;
+    readonly nativeProjectConfigurationUris?: readonly string[];
+  } = {},
+): WorkspaceStatusResponse {
+  const nativeProjectConfigurationUris = options.nativeProjectConfigurationUris ?? [];
+  return {
+    fingerprint: options.fingerprint ?? `${analysisKind}:fingerprint`,
+    answer: {
+      schemaVersion: "0.2",
+      result: "answered",
+      selection: "not-applicable",
+      coverage: "complete",
+      summary: analysisKind,
+      page: null,
+    },
+    projectAnalysisCounts: [{ analysisKind, count: 1 }],
+    nativeProjectConfigurations: {
+      answer: {
+        schemaVersion: "0.2",
+        result: "answered",
+        selection: "not-applicable",
+        coverage: "complete",
+        summary: `${nativeProjectConfigurationUris.length} native project configuration(s)`,
+        page: null,
+      },
+      rows: nativeProjectConfigurationUris.map((sourceUri, index) => ({
+        projectKey: `configured-${index}`,
+        projectRootUri: sourceUri.replace(/\/aurelia\.project\.json$/u, ""),
+        sourceUri,
+        appliedExcludedSourceRootUris: [],
+        diagnosticCount: 0,
+      })),
+    },
+  };
 }
 
 function sessionWatchers(client: FakeRawClient): Array<{ disposed: boolean }> {

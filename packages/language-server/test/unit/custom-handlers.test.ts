@@ -4,9 +4,10 @@ import { test, expect, describe, vi } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import {
   handleRenameFromTs,
+  handleSourceOwnership,
   handleWorkspaceStatus,
 } from "../../src/handlers/custom.js";
-import { testRequestGuard } from "./test-request-guard.js";
+import { testAnalysisGeneration, testRequestGuard } from "./test-request-guard.js";
 import { testWorkspaceDocumentUris } from "./test-document-uris.js";
 
 const defaultWorkspaceRoot = "/test/workspace";
@@ -52,6 +53,42 @@ function createMockContext(overrides: Record<string, unknown> = {}) {
       all: vi.fn(() => []),
     },
     semanticRuntime: {
+      preflight: vi.fn(() => Promise.resolve(testAnalysisGeneration)),
+      authoredSourceOwnership: vi.fn(() => Promise.resolve({
+        schemaVersion: "0.2",
+        result: "answered",
+        selection: "exact",
+        coverage: "complete",
+        summary: "one exact owner",
+        value: {
+          sourceFilePath: path.join(workspaceRoot, "src/app.ts"),
+          owners: [{
+            projectKey: "app",
+            projectRootDir: workspaceRoot,
+            projectPath: "src/app.ts",
+            role: "app-source",
+          }],
+        },
+        page: null,
+      })),
+      nativeProjectConfigurations: vi.fn(() => Promise.resolve({
+        schemaVersion: "0.2",
+        result: "answered",
+        selection: "not-applicable",
+        coverage: "complete",
+        summary: "one exact native configuration",
+        value: {
+          displayText: "one exact native configuration",
+          rows: [{
+            projectKey: "app",
+            projectRootDir: "/test/workspace",
+            filePath: "/test/workspace/aurelia.project.json",
+            appliedExcludedSourceRootDirs: ["/test/workspace/golden"],
+            diagnosticCount: 0,
+          }],
+        },
+        page: null,
+      })),
       appDiagnostics: vi.fn(() =>
         Promise.resolve({
           schemaVersion: "0.2",
@@ -107,6 +144,8 @@ function createMockContext(overrides: Record<string, unknown> = {}) {
           workspaceRoot: "/test/workspace",
           workspaceKey: "workspace",
           displayText: "one app",
+          nativeProjectConfigurationCount: 1,
+          nativeProjectConfigurationDiagnosticCount: 0,
           projectShapeCounts: [{ shapeKind: "aurelia-app", count: 1 }],
           projectAnalysisCounts: [{ analysisKind: "app-world", count: 1 }],
           defaultAppProjectKey: "app",
@@ -120,16 +159,55 @@ function createMockContext(overrides: Record<string, unknown> = {}) {
   };
 }
 
+describe("handleSourceOwnership", () => {
+  test("maps exact runtime owners without exposing host paths", async () => {
+    const ctx = createMockContext();
+    const uri = ctx.documentUris.uriForWorkspaceRelativePath("src/app.ts")!;
+
+    const response = await handleSourceOwnership(ctx as never, { uri }, testRequestGuard);
+
+    expect(response).toEqual({
+      fingerprint: testAnalysisGeneration.fingerprint,
+      sourceUri: ctx.documentUris.resolve(uri).uri,
+      answer: expect.objectContaining({
+        result: "answered",
+        selection: "exact",
+        coverage: "complete",
+      }),
+      owners: [{
+        projectKey: "app",
+        rootUri: ctx.documentUris.uriForHostPath(defaultWorkspaceRoot),
+        projectPath: "src/app.ts",
+        role: "app-source",
+      }],
+    });
+    expect(response).not.toHaveProperty("sourceFilePath");
+  });
+});
+
 describe("handleWorkspaceStatus", () => {
   test("returns the semantic-runtime summary envelope without reclassifying project shape", async () => {
     const ctx = createMockContext();
     const guard = testRequestGuard;
 
-    const response = await handleWorkspaceStatus(ctx as never, guard);
+    const configUri = defaultDocumentUris.uriForHostPath("/test/workspace/aurelia.project.json");
+    const response = await handleWorkspaceStatus(ctx as never, {
+      nativeProjectConfigurationUris: [configUri],
+    }, guard);
 
     expect(ctx.semanticRuntime.workspaceSummary).toHaveBeenCalledWith(guard);
-    expect(response?.value.projectAnalysisCounts).toEqual([{ analysisKind: "app-world", count: 1 }]);
-    expect(response?.coverage).toBe("complete");
+    expect(ctx.semanticRuntime.nativeProjectConfigurations).toHaveBeenCalledWith([configUri], guard);
+    expect(response?.fingerprint).toBe(testAnalysisGeneration.fingerprint);
+    expect(response?.projectAnalysisCounts).toEqual([{ analysisKind: "app-world", count: 1 }]);
+    expect(response?.nativeProjectConfigurations.rows).toEqual([{
+      projectKey: "app",
+      projectRootUri: defaultDocumentUris.uriForHostPath("/test/workspace"),
+      sourceUri: defaultDocumentUris.uriForHostPath("/test/workspace/aurelia.project.json"),
+      appliedExcludedSourceRootUris: [defaultDocumentUris.uriForHostPath("/test/workspace/golden")],
+      diagnosticCount: 0,
+    }]);
+    expect(response?.answer.coverage).toBe("complete");
+    expect(response).not.toHaveProperty("value");
   });
 });
 

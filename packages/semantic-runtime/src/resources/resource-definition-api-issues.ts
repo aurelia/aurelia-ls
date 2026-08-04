@@ -194,7 +194,7 @@ function readResourceDefinitionApiCallSites(
 ): readonly ResourceDefinitionApiCallSite[] {
   const sourcePathByFileName = typeSystemSourcePathIndex(project, typeSystem);
   return project.sourceFiles.flatMap((source) => {
-    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
+    const sourceFile = typeSystem.readProgramSourceFileByProjectPath(source.path);
     return sourceFile == null
       ? []
       : readSourceFileResourceDefinitionApiCallSites(

@@ -24,6 +24,7 @@ import type {
   SemanticAppDiagnosticsResult,
   SemanticDiagnosticRelatedInformation,
   SemanticRuntimeAnswer,
+  SemanticProjectConfigurationDiagnosticsResult,
   SemanticSourceReference,
   SemanticTemplateCompletionCandidateRow,
   SemanticTemplateCompletionResult,
@@ -34,6 +35,7 @@ import type {
   SemanticTemplateRenameResult,
 } from "@aurelia-ls/semantic-runtime";
 import {
+  canonicalTypeSystemPath,
   diagnosticRepairAffordanceForSuggestion,
   semanticExactSourceReference,
 } from "@aurelia-ls/semantic-runtime";
@@ -63,6 +65,62 @@ export type LookupDocumentSnapshotFn = (uri: DocumentUri) => LspDocumentSnapshot
 export interface SemanticRuntimeReadMapping<TValue> {
   readonly value: TValue;
   readonly failures: readonly string[];
+}
+
+/** Map native Aurelia project-configuration issues only when their exact source spans match this document. */
+export function mapSemanticProjectConfigurationDiagnostics(
+  answer: SemanticRuntimeAnswer<SemanticProjectConfigurationDiagnosticsResult>,
+  document: TextDocument,
+  documentUris: WorkspaceDocumentUris,
+): SemanticRuntimeReadMapping<Diagnostic[]> {
+  const value: Diagnostic[] = [];
+  const failures: string[] = [];
+  const documentLength = document.getText().length;
+  const documentHostPath = documentUris.hostPath(document.uri);
+
+  for (const row of answer.value.rows) {
+    if (documentHostPath == null) {
+      failures.push(
+        `Project configuration diagnostic ${row.diagnosticKind} cannot project the current document URI ${document.uri} into the workspace host.`,
+      );
+      continue;
+    }
+    if (
+      canonicalTypeSystemPath(row.source.filePath)
+      !== canonicalTypeSystemPath(documentHostPath)
+    ) {
+      failures.push(
+        `Project configuration diagnostic ${row.diagnosticKind} targets ${row.source.filePath}, not the current document.`,
+      );
+      continue;
+    }
+    if (
+      !Number.isInteger(row.source.start)
+      || !Number.isInteger(row.source.end)
+      || row.source.start < 0
+      || row.source.end < row.source.start
+      || row.source.end > documentLength
+    ) {
+      failures.push(
+        `Project configuration diagnostic ${row.diagnosticKind} has invalid source offsets `
+        + `${row.source.start}..${row.source.end} for a ${documentLength}-character document.`,
+      );
+      continue;
+    }
+
+    value.push({
+      range: {
+        start: document.positionAt(row.source.start),
+        end: document.positionAt(row.source.end),
+      },
+      message: row.message,
+      severity: DiagnosticSeverity.Error,
+      code: row.diagnosticKind,
+      source: "aurelia",
+    });
+  }
+
+  return { value, failures };
 }
 
 // ============================================================================
@@ -891,6 +949,10 @@ function mapSemanticRuntimeWorkspaceEditRows(
     const uri = semanticSourceReferenceUri(source, options.documentUris);
     if (uri == null) {
       failures.push(`Edit ${rowLabel} cannot be resolved to a workspace document.`);
+      continue;
+    }
+    if (!options.documentUris.ownsDocument(uri)) {
+      failures.push(`Edit ${rowLabel} targets a document outside this workspace's authored URI boundary.`);
       continue;
     }
     const canonical = options.documentUris.resolve(uri).uri;

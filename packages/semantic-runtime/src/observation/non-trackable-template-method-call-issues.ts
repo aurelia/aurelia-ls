@@ -156,7 +156,7 @@ export class NonTrackableTemplateMethodCallIssueMaterializer {
     if (sourceSpan == null || sourceFileAddress == null) {
       return null;
     }
-    const sourceFile = typeSystem.readProgramSourceFileByPath(sourceFileAddress.path);
+    const sourceFile = typeSystem.readProgramSourceFileForAddress(sourceFileAddress);
     if (sourceFile == null) {
       return null;
     }

@@ -21,7 +21,7 @@ source, value, expression, or template-local slot.
 - Remap evaluator/source-discovery AST nodes to their Program-owned counterparts before calling TypeScript checker APIs.
 - Use `TypeSystemProject.readProgramTypeAtLocation(...)`, `readProgramTypeFromTypeNode(...)`,
   `readProgramSymbolAtLocation(...)`, `readProgramAliasedSymbolAtLocation(...)`,
-  `readProgramRelatedMemberFamily(...)`, or
+  `readProgramRelatedMemberFamilyByHostPath(...)`, or
   `readProgramTypeOfSymbolAtLocation(...)` when a caller needs TypeChecker facts for a node that may have come from
   evaluation, source discovery, or semantic materialization rather than the Program AST.
 - Keep the checker epoch project-local: use the booted project root's `tsconfig.json` when present, otherwise fall back
@@ -215,22 +215,21 @@ class/object methods, initialized fields, accessors, and auto-accessors can prov
 ambient, declaration-only, and structurally open surfaces remain open. Consumers must ask the predicate their framework
 operation actually performs rather than turn a TypeScript-visible member into a generic runtime-present boolean.
 
-Fixture and ad hoc app roots are allowed to start without package-manager scaffolding. The default checker options
-therefore use bundler-style module resolution, a small `*.html` module declaration, and an optional local Aurelia
-checkout type-path map when this repository's `aurelia/packages/*/dist/types` tree is present. Roots without a
-`tsconfig.json` also get an explicit modern web library profile (`es2024`, `dom`, and `dom.iterable`) so TypeScript
-does not silently load the full `Latest` library universe just because semantic-runtime wants current syntax parsing.
+Fixture and ad hoc app roots are allowed to start without a `tsconfig.json`. The default checker options therefore use
+bundler-style module resolution, a small `*.html` module declaration, and an explicit modern web library profile
+(`es2024`, `dom`, and `dom.iterable`) so TypeScript does not silently load the full `Latest` library universe just
+because semantic-runtime wants current syntax parsing. Bare package imports still require ordinary package-manager
+topology or authored compiler configuration; semantic-runtime does not search ancestor workspaces or a nearby Aurelia
+checkout and turn them into implicit aliases.
 Real app `tsconfig.json` files remain authoritative: when a project supplies config but omits `lib`, semantic-runtime
 lets TypeScript choose the normal library set for that config instead of injecting the fallback fixture profile.
 The same authority applies to decorator mode. The local Aurelia declarations currently use standard decorator shapes,
 so a fixture tsconfig that opts into legacy `experimentalDecorators` can legitimately produce TS1238/TS1240 rows. Fix
 the fixture config or keep it as explicit pressure; do not make ordinary diagnostics disappear in semantic-runtime.
-Out-of-tree temporary fixtures still need the analysis workspace as a discovery root. A generated project under the
-host temp directory may not contain the local Aurelia checkout or workspace package paths, but its TypeChecker epoch
-must still resolve those declarations relative to the semantic-runtime workspace that opened it. `ProjectBootFrame`
-therefore builds compiler options from both `project.rootDir` and `project.workspaceRootDir`; `TypeSystemProject`
-consumes that captured result. Otherwise DI state and framework imports degrade to `any`, which can look like a
-scope/observer bug even when template semantics are correct.
+Out-of-tree temporary fixtures must carry or install the dependency topology they intend to model. Test adapters may
+construct that topology, but production compiler options remain independent of the semantic-runtime repository's own
+checkout layout. This keeps the same project resolvable by IDE, MCP, and future AOT without a hidden consumer-local
+fallback.
 
 Type-system profiles should keep time, item volume, and source-text mass visible. App-level pressure can make TypeScript Program
 construction look like undifferentiated semantic-runtime cost, but the useful question is often whether the epoch is
@@ -267,7 +266,7 @@ Program sources. Local ambient module declarations are checker roots in that fal
 files can satisfy imports without being static-evaluation entrypoints. External static-evaluation dependencies still
 enter the source-file indexes and the compiler host can serve their parsed SourceFiles when the Program reaches them
 through imports, but external dependency modules are dependencies rather than semantic root files.
-`TypeSystemProject.readProgramSourceFileRole(...)` is the shared diagnostic/repair role classifier for Program-owned
+`TypeSystemProject.readProgramSourceFileRoleByHostPath(...)` is the shared diagnostic/repair role classifier for Program-owned
 sources. It uses boot-admitted source roles for authored project/config files, then falls back to checker-owned Program
 source buckets: generated overlays, TypeScript/default-library declarations, external declarations, and non-declaration
 external source. Public TypeScript diagnostic rows should call this boundary instead of reimplementing file-name role
@@ -438,14 +437,20 @@ user-facing issue should spend the app diagnostic presentation instead of depend
 `available-products` cursor reads remain available when TypeChecker overlay diagnostics are not needed.
 Checker-facing code should not assume every AST node that reaches semantic-runtime is owned by the TypeScript Program.
 Static evaluation, source discovery, and resource convergence can carry parsed nodes with the same file/span but a
-different AST identity from the Program epoch. Prefer `TypeSystemProject.readProgramSourceFileByPath(...)` or
-`readProgramSourceFileByModuleKey(...)` when scanning source for checker-backed materialization. Use
+different AST identity from the Program epoch. Choose the lookup whose name matches the carrier:
+`TypeSystemProject.readProgramSourceFileByHostPath(...)` for absolute host paths,
+`readProgramSourceFileByProjectPath(...)` for project-relative admissions and queries,
+`readProgramSourceFileForAddress(...)` for stored workspace-relative (or checker-canonical absolute)
+`SourceFileAddress` carriers, or
+`readProgramSourceFileByModuleKey(...)` for evaluator module keys. The path-specific reads reject the wrong domain rather
+than probing multiple roots. Use
 `TypeSystemProject.readProgramNode(...)`, `readProgramTypeAtLocation(...)`, `readProgramSymbolAtLocation(...)`,
 `readProgramTypeFromTypeNode(...)`, `readProgramAliasedSymbolAtLocation(...)`,
-`readProgramRelatedMemberFamily(...)`,
+`readProgramRelatedMemberFamilyByHostPath(...)`,
 `readProgramTypeOfSymbolAtLocation(...)`, or higher-level helpers such as `readRuntimeTargetType(...)` before asking the
 checker about a node that originated outside the Program SourceFile.
-Cross-file member references and rename must use `readProgramRelatedMemberFamily(...)`, not raw symbol equality or a
+Cross-file member references and rename must resolve their public source carrier to an absolute host path, then use
+`readProgramRelatedMemberFamilyByHostPath(...)`, not raw symbol equality or a
 Program-wide identifier scan. Interface implementations, base/override members, getter/setter pairs, overloads,
 contextual object members, and destructuring property intent can be distinct checker symbols while TypeScript treats
 them as one authoring relation. `related-member-symbols.ts` delegates that relation to TypeScript's own related-symbol
@@ -464,14 +469,18 @@ open coverage and rename refuses. Never revive the equal-symbol scanner as a fal
 Returning unknown/open is better than asking the checker about an alien node and crashing the public API. Do not
 manufacture empty SourceFiles as fallback checker locations; a checker location must be a Program-owned source, a
 checker-owned declaration, or a missing overlay/source admission signal.
-Source addresses may carry host-facing workspace-relative paths, while project admissions carry project-relative paths.
-`TypeSystemProject.readProgramSourceFileByPath(...)` accepts absolute, project-relative, and workspace-relative paths so
-a materializer can start from a `SourceSpanAddress` without rebuilding path heuristics beside the checker epoch.
+Source-file addresses carry workspace-relative paths, or canonical absolute paths for checker-only sources, while
+project admissions carry project-relative paths. Preserve
+that distinction through `readProgramSourceFileForAddress(...)` and `readProgramSourceFileByProjectPath(...)`; callers
+that already own absolute identity use `readProgramSourceFileByHostPath(...)`. A public `SemanticSourceReference` must
+first pass through `semanticSourceReferenceHostPath(...)`. Never restore a lookup that guesses between project and
+workspace roots: nested projects can contain both candidate files, and a guess can silently move diagnostics or edits
+to the wrong source.
 `source-address-expression.ts` owns the shared "source-span address to exact TypeScript expression" read used by
 state-store initial-state type projection and binding-source value reduction. Add to that helper instead of copying
 local `smallestExpressionForSpan(...)` walks into evaluator, state, router, or template code.
-Evaluator-owned AST access is deliberately named `readEvaluatedSourceFileByPath(...)` / `readEvaluatedSourceFileByModuleKey(...)`
-so call sites do not accidentally use an evaluation SourceFile with the checker.
+Evaluator-owned AST access is deliberately named `readEvaluatedSourceFileByModuleKey(...)` so call sites do not
+accidentally use an evaluation SourceFile with the checker.
 Checker-observed source-file addresses keep their file-role metadata in public `SemanticSourceReference.sourceFileRole`
 and owner key in `sourceWorkspaceKey`. Dependency implementation files admitted through `node_modules` classify as
 `external-source`, even when the package is source-backed, so unified diagnostics and repair planning do not route

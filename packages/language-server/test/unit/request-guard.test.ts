@@ -5,21 +5,30 @@ import {
 import { describe, expect, test, vi } from "vitest";
 import {
   requestFailure,
+  runSemanticRuntimeDocumentRequest,
   runSemanticRuntimeDiagnosticRequest,
   runSemanticRuntimeRequest,
 } from "../../src/handlers/request-guard.js";
 import { SemanticRuntimeLspRequestAbortedError } from "../../src/runtime/semantic-runtime-session.js";
 
 function context() {
+  const generation = {
+    workspaceGeneration: 1,
+    sourceGeneration: 2,
+    fingerprint: "test-generation",
+  };
   return {
+    ownsDocument: vi.fn(() => true),
     semanticRuntime: {
       requestGuard: vi.fn((isCancellationRequested) => ({
-        generation: {
-          workspaceGeneration: 1,
-          sourceGeneration: 2,
-          fingerprint: "test-generation",
-        },
+        generation,
         isCancellationRequested,
+      })),
+      authoredSourceOwnership: vi.fn(async (_uri: string, _guard: unknown) => ({
+        value: {
+          sourceFilePath: "/app/src/app.html",
+          owners: [{ projectKey: "app" }],
+        },
       })),
     },
     logger: {
@@ -96,6 +105,63 @@ describe("semantic-runtime request boundary", () => {
         expect(guard.isCancellationRequested?.()).toBe(true);
       },
     );
+  });
+
+  test("uses one captured guard for exact ownership and document feature work", async () => {
+    const ctx = context();
+    const handler = vi.fn(async (_guard: unknown) => "owned");
+
+    const result = await runSemanticRuntimeDocumentRequest(
+      ctx as never,
+      "hover",
+      token as never,
+      "file:///app/src/app.html",
+      () => "not-authored",
+      handler,
+    );
+
+    expect(result).toBe("owned");
+    expect(ctx.semanticRuntime.requestGuard).toHaveBeenCalledOnce();
+    const ownershipGuard = ctx.semanticRuntime.authoredSourceOwnership.mock.calls[0]?.[1];
+    const handlerGuard = handler.mock.calls[0]?.[0];
+    expect(handlerGuard).toBe(ownershipGuard);
+  });
+
+  test("returns the neutral result without running semantic feature work for an unowned source", async () => {
+    const ctx = context();
+    ctx.semanticRuntime.authoredSourceOwnership.mockResolvedValue({
+      value: { sourceFilePath: "/app/golden/app.html", owners: [] },
+    });
+    const handler = vi.fn(async () => "owned");
+
+    const result = await runSemanticRuntimeDocumentRequest(
+      ctx as never,
+      "completion",
+      token as never,
+      "file:///app/golden/app.html",
+      () => "not-authored",
+      handler,
+    );
+
+    expect(result).toBe("not-authored");
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  test("does not open semantic ownership for a URI outside the coarse workspace boundary", async () => {
+    const ctx = context();
+    ctx.ownsDocument.mockReturnValue(false);
+
+    const result = await runSemanticRuntimeDocumentRequest(
+      ctx as never,
+      "definition",
+      token as never,
+      "file:///elsewhere/external.html",
+      () => null,
+      () => ({ uri: "unexpected" }),
+    );
+
+    expect(result).toBeNull();
+    expect(ctx.semanticRuntime.authoredSourceOwnership).not.toHaveBeenCalled();
   });
 
   test("asks diagnostic clients to retrigger work invalidated by a newer source generation", async () => {

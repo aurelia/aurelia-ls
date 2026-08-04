@@ -217,7 +217,7 @@ function readDialogIssueSourceSites(
 ): readonly DialogIssueSourceSite[] {
   const sourcePathByFileName = typeSystemSourcePathIndex(project, typeSystem);
   const reads = project.sourceFiles.flatMap((source): DialogSourceRead[] => {
-    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
+    const sourceFile = typeSystem.readProgramSourceFileByProjectPath(source.path);
     if (sourceFile == null) {
       return [];
     }

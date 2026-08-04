@@ -1,8 +1,10 @@
+import path from "node:path";
 import { describe, test, expect } from "vitest";
-import { CompletionItemKind } from "vscode-languageserver/node";
+import { CompletionItemKind, DiagnosticSeverity } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import {
   mapSemanticRuntimeAppDiagnostics,
+  mapSemanticProjectConfigurationDiagnostics,
   mapSemanticRuntimeTemplateCodeActions,
   mapSemanticRuntimeTemplateDefinition,
   mapSemanticRuntimeTemplateHover,
@@ -36,6 +38,122 @@ describe("languageIdForSource", () => {
     expect(languageIdForSource("file:///app/package.json")).toBe("json");
     expect(languageIdForSource("file:///app/src/component.html")).toBe("html");
     expect(languageIdForSource("file:///app/src/view.au")).toBe("plaintext");
+  });
+});
+
+describe("mapSemanticProjectConfigurationDiagnostics", () => {
+  test("maps exact config offsets from the current document", () => {
+    const text = '{\n  "version": 2\n}';
+    const uri = "file:///C:/projects/app/aurelia.project.json";
+    const document = TextDocument.create(uri, "json", 4, text);
+    const start = text.indexOf("2");
+    const mapped = mapSemanticProjectConfigurationDiagnostics({
+      value: {
+        rows: [{
+          projectKey: "app",
+          diagnosticKind: "aurelia-project-config-unsupported-version",
+          severity: "error",
+          message: "Unsupported project configuration version.",
+          source: {
+            filePath: "C:/projects/app/aurelia.project.json",
+            start,
+            end: start + 1,
+            startPosition: { line: 1, character: 13 },
+            endPosition: { line: 1, character: 14 },
+          },
+        }],
+      },
+    } as never, document, appDocumentUris);
+
+    expect(mapped).toEqual({
+      value: [{
+        range: {
+          start: document.positionAt(start),
+          end: document.positionAt(start + 1),
+        },
+        message: "Unsupported project configuration version.",
+        severity: DiagnosticSeverity.Error,
+        code: "aurelia-project-config-unsupported-version",
+        source: "aurelia",
+      }],
+      failures: [],
+    });
+  });
+
+  test("reports source and range failures without inventing config locations", () => {
+    const uri = "file:///C:/projects/app/aurelia.project.json";
+    const document = TextDocument.create(uri, "json", 1, '{"version":1}');
+    const row = {
+      projectKey: "app",
+      diagnosticKind: "aurelia-project-config-syntax",
+      severity: "error",
+      message: "Invalid configuration.",
+      source: {
+        filePath: "C:/projects/app/aurelia.project.json",
+        start: 0,
+        end: 1,
+        startPosition: { line: 0, character: 0 },
+        endPosition: { line: 0, character: 1 },
+      },
+    };
+    const mapped = mapSemanticProjectConfigurationDiagnostics({
+      value: {
+        rows: [
+          {
+            ...row,
+            source: { ...row.source, filePath: "C:/projects/app/other.json" },
+          },
+          {
+            ...row,
+            source: { ...row.source, start: 0, end: document.getText().length + 1 },
+          },
+        ],
+      },
+    } as never, document, appDocumentUris);
+
+    expect(mapped.value).toEqual([]);
+    expect(mapped.failures).toEqual([
+      expect.stringContaining("not the current document"),
+      expect.stringContaining("invalid source offsets"),
+    ]);
+  });
+
+  test("uses workspace URI projection for remote configuration documents", () => {
+    const documentUris = new WorkspaceDocumentUris();
+    documentUris.configure("vscode-remote://ssh-remote+dev/home/user/my%20app");
+    const uri = "vscode-remote://ssh-remote%2Bdev/home/user/my%20app/aurelia.project.json";
+    const text = '{"version":2}';
+    const document = TextDocument.create(uri, "json", 2, text);
+    const start = text.indexOf("2");
+
+    const mapped = mapSemanticProjectConfigurationDiagnostics({
+      value: {
+        rows: [{
+          projectKey: "app",
+          diagnosticKind: "aurelia-project-config-unsupported-version",
+          severity: "error",
+          message: "Unsupported project configuration version.",
+          source: {
+            filePath: path.normalize("/home/user/my app/aurelia.project.json"),
+            start,
+            end: start + 1,
+            startPosition: { line: 0, character: start },
+            endPosition: { line: 0, character: start + 1 },
+          },
+        }],
+      },
+    } as never, document, documentUris);
+
+    expect(mapped.value).toEqual([
+      expect.objectContaining({
+        range: {
+          start: document.positionAt(start),
+          end: document.positionAt(start + 1),
+        },
+        code: "aurelia-project-config-unsupported-version",
+      }),
+    ]);
+    expect(mapped.failures).toEqual([]);
   });
 });
 
@@ -438,6 +556,47 @@ describe("mapSemanticRuntimeTemplateCodeActions", () => {
 });
 
 describe("source-backed edit mapping", () => {
+  test("rejects edits outside the workspace URI boundary before reading target text", () => {
+    const doc = TextDocument.create(
+      "file:///C:/projects/app/src/component.ts",
+      "typescript",
+      7,
+      "export class Component {}",
+    );
+    const lookup = expect.unreachable;
+
+    const mapping = mapSemanticRuntimeTemplateRenameEdit(
+      {
+        value: {
+          status: "available",
+          edits: [{
+            editKind: "typescript-reference",
+            source: {
+              kind: "source-span-address",
+              label: "external declaration",
+              path: "C:/projects/external/dependency.ts",
+              start: 0,
+              end: 4,
+              role: "declaration",
+            },
+            oldText: "name",
+            newText: "renamed",
+          }],
+        },
+      } as never,
+      lookup,
+      {
+        documentUris: appDocumentUris,
+        originDocument: doc,
+      },
+    );
+
+    expect(mapping.edit).toBeNull();
+    expect(mapping.failures).toEqual([
+      expect.stringContaining("outside this workspace's authored URI boundary"),
+    ]);
+  });
+
   test("rejects zero-width insertions beyond the current document", () => {
     const doc = TextDocument.create(
       "file:///C:/projects/app/src/component.ts",

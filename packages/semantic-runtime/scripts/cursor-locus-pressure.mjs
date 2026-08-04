@@ -1496,7 +1496,7 @@ function pressureProjectDiscovery() {
     return undefined;
   }
   const value = raw.trim();
-  if (value === 'single-root' || value === 'package-tsconfig') {
+  if (value === 'single-root' || value === 'project-markers') {
     return value;
   }
   throw new Error(`Unsupported SEMANTIC_RUNTIME_CURSOR_PRESSURE_PROJECT_DISCOVERY '${raw}'.`);

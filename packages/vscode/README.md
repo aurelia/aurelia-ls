@@ -85,15 +85,18 @@ The goal is that you can trust what the extension tells you.
 
 ## Requirements
 
-- Aurelia 2 project with `aurelia` or `@aurelia/*` in dependencies
+- An Aurelia 2 project identifiable from framework dependencies, source evidence, explicit activation, or native
+  `aurelia.project.json` configuration
 - A workspace filesystem accessible to the VS Code extension host
 
 ## Workspace Activation
 
-By default, the extension uses dependency manifests or an already-open Aurelia entry source only as a cheap candidate
-signal. The language server then asks semantic-runtime for the workspace's project shape and keeps the session only when
-that workspace contains an Aurelia app, resource-library authoring project, or Aurelia package-inspection project.
-Unrelated HTML and TypeScript workspaces remain inactive.
+By default, the extension uses dependency manifests, an already-open Aurelia entry source, or exact
+`aurelia.project.json` presence only as cheap candidate evidence. Parsing that native configuration, reporting its
+validity, and applying its authored-source exclusions remain semantic-runtime responsibilities. The language server
+then asks semantic-runtime for the workspace's project shape; it keeps shape-confirmed Aurelia app,
+resource-library-authoring, and package-inspection sessions, and may also retain a config-only session when
+semantic-runtime confirms the exact native configuration. Unrelated HTML and TypeScript workspaces remain inactive.
 
 Set `aurelia.activationMode` per workspace folder when automatic admission is not appropriate:
 
@@ -104,7 +107,8 @@ Set `aurelia.activationMode` per workspace folder when automatic admission is no
 An `off` subtree cannot be re-enabled by a nested `on` folder. An admitted outer project may still read code under an
 excluded subtree when ordinary imports make it a dependency, but the extension will not directly own its documents,
 publish its diagnostics, or include it as authored project source. Disjoint multi-root folders receive independent
-language-server sessions. Semantic-runtime owns admitted nested projects inside each root, while untitled and
+language-server sessions. Enabled nested workspace folders are supplied as project-root hints to the same shared
+semantic-runtime discovery; the extension does not reinterpret them as projects. Semantic-runtime owns admitted nested projects inside each root, while untitled and
 out-of-workspace documents remain unclaimed. Remote folders are supported when the extension host can access their
 filesystem; virtual workspaces are not currently supported.
 

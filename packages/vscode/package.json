@@ -41,10 +41,17 @@
     "onLanguage:typescriptreact",
     "onLanguage:javascript",
     "onLanguage:javascriptreact",
+    "workspaceContains:**/aurelia.project.json",
     "workspaceContains:node_modules/@aurelia/runtime-html/package.json",
     "workspaceContains:node_modules/aurelia/package.json"
   ],
   "contributes": {
+    "jsonValidation": [
+      {
+        "fileMatch": "**/aurelia.project.json",
+        "url": "./dist/schemas/aurelia.project.schema.json"
+      }
+    ],
     "views": {
       "explorer": [
         {

@@ -4,24 +4,29 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import {
   createSemanticRuntime,
+  semanticWorkspaceDescriptorForRuntimeOptions,
+  semanticWorkspaceDescriptorKey,
   appDiagnosticPresentation,
   canonicalTypeSystemPath,
   InquiryContinuationKind,
   SemanticRuntimeProjectInputAuthority,
   SemanticRuntimeProjectInputChange,
-  SemanticRuntimeProjectInputChangeDetection,
   SemanticRuntimeProjectInputChangeKind,
   SemanticAppQueryKind,
   type SemanticApplicationTopologyResult,
   type SemanticRuntime,
   type SemanticRuntimeProjectInputHost,
+  type SemanticRuntimeProjectInputCurrentnessPolicy,
   type SemanticAppDiagnosticsResult,
   type SemanticResourceDefinitionsResult,
   type SemanticResourceInventoryResult,
   type SemanticRuntimeAnswer,
   type SemanticRuntimeContinuationRow,
   type SemanticRuntimeSummary,
+  type SemanticNativeProjectConfigurationsResult,
+  type SemanticAuthoredSourceOwnershipResult,
   type SemanticProjectCandidateSummary,
+  type SemanticProjectConfigurationDiagnosticsResult,
   type SemanticSourceFilesResult,
   type SemanticTemplateResourceAvailabilityResult,
   type SemanticTemplateInlayHintsResult,
@@ -33,21 +38,24 @@ import {
   type SemanticTemplateRenameResult,
   type SemanticTemplateSemanticTokensResult,
 } from "@aurelia-ls/semantic-runtime";
-import type { WorkspaceDocumentUris } from "../utils/document-uri.js";
+import type { DocumentUri, WorkspaceDocumentUris } from "../utils/document-uri.js";
 
 export interface SemanticRuntimeLspSessionOptions {
   readonly documentUris: WorkspaceDocumentUris;
   readonly projectInputHost: SemanticRuntimeProjectInputHost;
+  /** Exact host reads whose mutations are completely covered by this LSP session's event stream. */
+  readonly projectInputCurrentnessPolicy?: SemanticRuntimeProjectInputCurrentnessPolicy | null;
 }
 
 export interface SemanticRuntimeLspGeneration {
+  readonly requestEpoch: number;
   readonly workspaceGeneration: number;
-  readonly sourceGeneration: number;
+  readonly sourceWorldRevision: string;
   readonly fingerprint: string;
 }
 
 export interface SemanticRuntimeLspRequestGuard {
-  readonly generation: SemanticRuntimeLspGeneration;
+  readonly requestEpoch: number;
   readonly isCancellationRequested: (() => boolean) | null;
 }
 
@@ -226,58 +234,85 @@ export class SemanticRuntimeLspSession {
   private readonly sessionIdentity = randomUUID();
   private readonly projectInputAuthority: SemanticRuntimeProjectInputAuthority;
   private readonly documentUris: WorkspaceDocumentUris;
+  private readonly analysisGenerationByGuard = new WeakMap<SemanticRuntimeLspRequestGuard, SemanticRuntimeLspGeneration>();
   private runtime: Promise<SemanticRuntime> | null = null;
   private workspaceRoot: string | null;
+  private projectRootHints: readonly string[] = [];
   private workspaceBoundaryKey: string;
   private workspaceGeneration = 0;
+  private requestEpoch = 0;
 
   constructor(
     options: SemanticRuntimeLspSessionOptions,
   ) {
     this.documentUris = options.documentUris;
     this.workspaceRoot = options.documentUris.workspaceRoot;
-    this.workspaceBoundaryKey = semanticWorkspaceBoundaryKey(options.documentUris);
-    // Document synchronization and workspace watchers are the source authority; warm requests must not poll every read.
+    const boundary = semanticWorkspaceBoundary(options.documentUris, this.projectRootHints);
+    this.projectRootHints = boundary.projectRootHints;
+    this.workspaceBoundaryKey = boundary.key;
+    // Only reads explicitly proved by the host policy may trust document/event push. Every other mutable input remains
+    // pull-validated, including dependencies and filesystem structure outside complete watcher coverage.
     this.projectInputAuthority = new SemanticRuntimeProjectInputAuthority(
       options.projectInputHost,
-      SemanticRuntimeProjectInputChangeDetection.ExplicitEvents,
+      options.projectInputCurrentnessPolicy,
     );
   }
 
-  configureWorkspace(): void {
+  configureWorkspace(projectRootHints: readonly string[] = []): void {
     const workspaceRoot = this.documentUris.workspaceRoot;
-    const workspaceBoundaryKey = semanticWorkspaceBoundaryKey(this.documentUris);
-    if (this.workspaceRoot === workspaceRoot && this.workspaceBoundaryKey === workspaceBoundaryKey) {
+    const boundary = semanticWorkspaceBoundary(this.documentUris, projectRootHints);
+    if (this.workspaceRoot === workspaceRoot && this.workspaceBoundaryKey === boundary.key) {
       return;
     }
     this.workspaceRoot = workspaceRoot;
-    this.workspaceBoundaryKey = workspaceBoundaryKey;
+    this.projectRootHints = boundary.projectRootHints;
+    this.workspaceBoundaryKey = boundary.key;
     this.recordProjectTopologyChanged();
   }
 
-  recordProjectTopologyChanged(): SemanticRuntimeLspGeneration {
+  recordProjectTopologyChanged(filePaths: readonly string[] = []): void {
+    this.requestEpoch += 1;
     this.workspaceGeneration += 1;
-    this.projectInputAuthority.advance();
+    this.projectInputAuthority.advance(filePaths.length === 0
+      ? null
+      : filePaths.map((filePath) => new SemanticRuntimeProjectInputChange(
+          SemanticRuntimeProjectInputChangeKind.StructuralMembership,
+          filePath,
+        )));
     this.runtime = null;
-    return this.currentGeneration();
   }
 
-  recordSourceTextChanged(filePaths: readonly string[]): SemanticRuntimeLspGeneration {
+  recordSourceTextChanged(filePaths: readonly string[]): void {
     if (filePaths.length === 0) {
-      throw new Error("A source-text change must identify at least one authored file.");
+      throw new Error("A source-text change must identify at least one workspace file.");
     }
+    this.recordFileValuesChanged(filePaths);
+  }
+
+  /**
+   * Revoke exact configuration values without claiming that source membership changed.
+   * The retained source-world receipt decides whether the new value changes its semantic plan.
+   */
+  recordProjectConfigurationChanged(filePaths: readonly string[]): void {
+    if (filePaths.length === 0) {
+      throw new Error("A project-configuration change must identify at least one workspace file.");
+    }
+    this.recordFileValuesChanged(filePaths);
+  }
+
+  private recordFileValuesChanged(filePaths: readonly string[]): void {
     this.projectInputAuthority.advance(filePaths.map((filePath) =>
-      new SemanticRuntimeProjectInputChange(SemanticRuntimeProjectInputChangeKind.File, filePath)));
-    return this.currentGeneration();
+      new SemanticRuntimeProjectInputChange(SemanticRuntimeProjectInputChangeKind.FileValue, filePath)));
+    this.requestEpoch += 1;
   }
 
   /** Revoke every captured request guard without inventing a source or topology change. */
   invalidateRequests(): void {
-    this.projectInputAuthority.advance();
+    this.requestEpoch += 1;
   }
 
   async dispose(): Promise<void> {
-    this.projectInputAuthority.advance();
+    this.requestEpoch += 1;
     const activeRuntime = this.runtime;
     this.runtime = null;
     if (activeRuntime != null) {
@@ -285,31 +320,90 @@ export class SemanticRuntimeLspSession {
     }
   }
 
-  currentGeneration(): SemanticRuntimeLspGeneration {
-    return {
-      workspaceGeneration: this.workspaceGeneration,
-      sourceGeneration: this.projectInputAuthority.currentEventSequence,
-      fingerprint: `semantic-runtime:${this.sessionIdentity}:workspace-${this.workspaceGeneration}:source-${this.projectInputAuthority.currentEventSequence}`,
-    };
+  /** Validate the shared source world before a consumer accepts cached or `unchanged` presentation state. */
+  async preflight(guard: SemanticRuntimeLspRequestGuard): Promise<SemanticRuntimeLspGeneration> {
+    await this.openRuntime(guard);
+    return this.analysisGeneration(guard);
+  }
+
+  /** Exact source-world generation captured for this request after `preflight()` or any runtime query. */
+  analysisGeneration(guard: SemanticRuntimeLspRequestGuard): SemanticRuntimeLspGeneration {
+    this.assertRequestActive(guard);
+    const generation = this.analysisGenerationByGuard.get(guard);
+    if (generation == null) {
+      throw new Error("Semantic-runtime LSP analysis generation was requested before source-world preflight.");
+    }
+    return generation;
   }
 
   async workspaceSummary(
     guard: SemanticRuntimeLspRequestGuard,
   ): Promise<SemanticRuntimeAnswer<SemanticRuntimeSummary>> {
     const runtime = await this.openRuntime(guard);
-    const answer = runtime.summary({ projectPage: { size: 0 } });
+    const answer = runtime.summary({ projectPage: { size: 0 }, inquiryProfile: "lsp-cursor" });
     this.assertRequestActive(guard);
     return answer;
   }
 
+  async authoredSourceOwnership(
+    uri: DocumentUri,
+    guard: SemanticRuntimeLspRequestGuard,
+  ): Promise<SemanticRuntimeAnswer<SemanticAuthoredSourceOwnershipResult>> {
+    const sourceFilePath = this.documentUriHostPath(uri);
+    const runtime = await this.openRuntime(guard);
+    const answer = runtime.authoredSourceOwnership({ sourceFilePath, inquiryProfile: "lsp-cursor" });
+    this.assertRequestActive(guard);
+    return answer;
+  }
+
+  async nativeProjectConfigurations(
+    sourceUris: readonly DocumentUri[],
+    guard: SemanticRuntimeLspRequestGuard,
+  ): Promise<SemanticRuntimeAnswer<SemanticNativeProjectConfigurationsResult>> {
+    const sourceFilePaths = sourceUris.flatMap((uri) => {
+      const filePath = this.documentUris.authoredHostPath(uri);
+      return filePath == null ? [] : [filePath];
+    });
+    const runtime = await this.openRuntime(guard);
+    return drainSemanticRuntimePages({
+      label: "native project configuration",
+      assertActive: () => this.assertRequestActive(guard),
+      readPage: async (cursor) => runtime.nativeProjectConfigurations({
+        sourceFilePaths,
+        page: { size: 200, cursor },
+        inquiryProfile: "lsp-cursor",
+      }),
+      rowsForValue: (value) => value.rows,
+      mergeValue: (terminalValue, rows) => ({ ...terminalValue, rows }),
+    });
+  }
+
+  async projectConfigurationDiagnostics(
+    uri: DocumentUri,
+    guard: SemanticRuntimeLspRequestGuard,
+  ): Promise<SemanticRuntimeAnswer<SemanticProjectConfigurationDiagnosticsResult>> {
+    const sourceFilePath = this.documentUriHostPath(uri);
+    const runtime = await this.openRuntime(guard);
+    return drainSemanticRuntimePages({
+      label: "native project-configuration diagnostic",
+      assertActive: () => this.assertRequestActive(guard),
+      readPage: async (cursor) => runtime.projectConfigurationDiagnostics({
+        sourceFilePaths: [sourceFilePath],
+        page: { size: 200, cursor },
+        inquiryProfile: "lsp-cursor",
+      }),
+      rowsForValue: (value) => value.rows,
+      mergeValue: (terminalValue, rows) => ({ ...terminalValue, rows }),
+    });
+  }
+
   isCurrentGeneration(generation: SemanticRuntimeLspGeneration): boolean {
-    return generation.workspaceGeneration === this.workspaceGeneration
-      && generation.sourceGeneration === this.projectInputAuthority.currentEventSequence;
+    return generation.requestEpoch === this.requestEpoch;
   }
 
   requestGuard(isCancellationRequested: (() => boolean) | null): SemanticRuntimeLspRequestGuard {
     return {
-      generation: this.currentGeneration(),
+      requestEpoch: this.requestEpoch,
       isCancellationRequested,
     };
   }
@@ -710,18 +804,33 @@ export class SemanticRuntimeLspSession {
     this.runtime ??= createSemanticRuntime({
       workspaceRoot: this.workspaceRoot,
       storeKey: `lsp:${this.workspaceGeneration}:${this.workspaceRoot}`,
+      projectRootHints: this.projectRootHints,
       excludedWorkspaceRoots: this.documentUris.excludedWorkspaceRoots,
       projectInputAuthority: this.projectInputAuthority,
     });
     const runtime = await this.runtime;
+    if (!this.analysisGenerationByGuard.has(guard)) {
+      this.assertRequestActive(guard);
+      const sourceWorldRevision = runtime.workspace.sourceWorld.sourceWorldRevision;
+      this.analysisGenerationByGuard.set(guard, {
+        requestEpoch: guard.requestEpoch,
+        workspaceGeneration: this.workspaceGeneration,
+        sourceWorldRevision,
+        fingerprint: `semantic-runtime:${this.sessionIdentity}:workspace-${this.workspaceGeneration}:source-world-${sourceWorldRevision}:request-${guard.requestEpoch}`,
+      });
+    }
     this.assertRequestActive(guard);
     return runtime;
   }
 
   private documentHostPath(document: TextDocument): string {
-    const filePath = this.documentUris.authoredHostPath(document.uri);
+    return this.documentUriHostPath(document.uri);
+  }
+
+  private documentUriHostPath(uri: DocumentUri): string {
+    const filePath = this.documentUris.authoredHostPath(uri);
     if (filePath == null) {
-      throw new Error(`Cannot project document URI into the workspace host: ${document.uri}`);
+      throw new Error(`Cannot project document URI into the workspace host: ${uri}`);
     }
     return filePath;
   }
@@ -757,15 +866,29 @@ export class SemanticRuntimeLspSession {
     if (guard.isCancellationRequested?.() === true) {
       throw new SemanticRuntimeLspRequestAbortedError("cancelled");
     }
-    if (!this.isCurrentGeneration(guard.generation)) {
+    if (guard.requestEpoch !== this.requestEpoch) {
       throw new SemanticRuntimeLspRequestAbortedError("stale");
     }
   }
 }
 
-function semanticWorkspaceBoundaryKey(documentUris: WorkspaceDocumentUris): string {
-  return JSON.stringify([
-    documentUris.workspaceRoot,
-    documentUris.excludedWorkspaceRoots,
-  ]);
+function semanticWorkspaceBoundary(
+  documentUris: WorkspaceDocumentUris,
+  projectRootHints: readonly string[],
+): { readonly key: string; readonly projectRootHints: readonly string[] } {
+  if (documentUris.workspaceRoot == null) {
+    return { key: 'semantic-workspace:unconfigured', projectRootHints: [] };
+  }
+  const descriptor = semanticWorkspaceDescriptorForRuntimeOptions({
+    workspaceRoot: documentUris.workspaceRoot,
+    excludedWorkspaceRoots: documentUris.excludedWorkspaceRoots,
+    projectRootHints,
+  });
+  if (descriptor.projectTopology.kind !== 'discover') {
+    throw new Error('LSP workspace topology must use semantic-runtime project discovery.');
+  }
+  return {
+    key: semanticWorkspaceDescriptorKey(descriptor),
+    projectRootHints: descriptor.projectTopology.projectRootHints,
+  };
 }

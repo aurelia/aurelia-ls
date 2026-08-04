@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { afterEach, describe, expect, test } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import { createSemanticRuntime, type SemanticRuntime } from '../src/api/runtime.js';
 import {
@@ -14,6 +14,7 @@ import {
 } from '../src/configuration/aurelia-evaluation-runtime.js';
 import {
   StaticProjectEvaluationAcquisitionKind,
+  StaticProjectEvaluationAccess,
   StaticProjectEvaluationComputationPreparation,
   StaticProjectEvaluationComputationProfile,
   StaticProjectEvaluationOptions,
@@ -34,6 +35,7 @@ import {
 const temporaryRoots: string[] = [];
 
 afterEach(() => {
+  vi.restoreAllMocks();
   for (const root of temporaryRoots.splice(0)) {
     rmSync(root, { recursive: true, force: true });
   }
@@ -42,6 +44,7 @@ afterEach(() => {
 describe('reusable project evaluation computations', () => {
   test('shares one app evaluator identity while keeping tooling semantics in a separate profile', async () => {
     const { runtime, project } = await createEvaluationRuntime();
+    const readBaseline = vi.spyOn(StaticProjectEvaluationAccess.prototype, 'readBaseline');
 
     const query = await runtime.answerAppQuery({
       kind: SemanticAppQueryKind.UnresolvedModules,
@@ -50,6 +53,8 @@ describe('reusable project evaluation computations', () => {
     });
     expect(query.profile?.appWorldFreeProfile?.acquisitionKind)
       .toBe(StaticProjectEvaluationAcquisitionKind.Computed);
+    expect(readBaseline).toHaveBeenCalledTimes(1);
+    readBaseline.mockRestore();
 
     const firstAppAccess = runtime.projectEvaluations.acquire(project, aureliaAppProjectEvaluationProfile);
     expect(firstAppAccess.kind).toBe(StaticProjectEvaluationAcquisitionKind.Reused);
@@ -259,6 +264,17 @@ describe('reusable project evaluation computations', () => {
     expect(reacquired.kind).toBe(StaticProjectEvaluationAcquisitionKind.Computed);
     expect(reacquired.generation).not.toBe(appEvaluation);
   }, 30_000);
+
+  test('keeps app-world-free batch acquisition telemetry opt-in', async () => {
+    const { runtime, project } = await createEvaluationRuntime();
+
+    const query = await runtime.answerAppQueries({
+      projectKey: project.projectKey,
+      queries: [{ kind: SemanticAppQueryKind.UnresolvedModules }],
+    });
+
+    expect(query.profile?.appWorldFreeProfile).toBeUndefined();
+  });
 });
 
 async function createEvaluationRuntime(): Promise<{
@@ -294,6 +310,7 @@ async function createEvaluationRuntime(): Promise<{
       ],
     }],
   });
+
   const project = runtime.workspace.projects[0];
   if (project == null) {
     throw new Error('Expected one booted project.');

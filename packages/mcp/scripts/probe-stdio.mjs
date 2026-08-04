@@ -30,6 +30,7 @@ try {
   const resourceUris = new Set(resources.resources.map((resource) => resource.uri));
 
   assert(toolNames.has('aurelia_workspace_overview'), 'workspace overview tool is registered');
+  assert(toolNames.has('aurelia_project_configurations'), 'project configurations tool is registered');
   assert(toolNames.has('aurelia_app_overview'), 'app overview tool is registered');
   assert(toolNames.has('aurelia_app_query_catalog'), 'app query catalog tool is registered');
   assert(toolNames.has('aurelia_pattern_menu'), 'pattern menu tool is registered');
@@ -140,6 +141,12 @@ try {
     arguments: { workspaceRoot: minimalFixtureWorkspaceRoot },
   });
   assert(structuredValue(workspaceOverview) != null, 'workspace overview returned structured content');
+
+  const projectConfigurations = await client.callTool({
+    name: 'aurelia_project_configurations',
+    arguments: { workspaceRoot: minimalFixtureWorkspaceRoot, sourceFilePaths: [] },
+  });
+  assert(Array.isArray(structuredValue(projectConfigurations)?.rows), 'project configurations returned structured rows');
 
   const appOverview = await client.callTool({
     name: 'aurelia_app_overview',

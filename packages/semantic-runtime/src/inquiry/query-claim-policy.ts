@@ -25,6 +25,11 @@ export const enum QueryClaimAnswerLocalKernelPolicy {
 
 export const enum QueryClaimDisposalReason {
   AnswerDiscarded = 'answer-discarded',
+  AnswerLeaseInvalidated = 'answer-lease-invalidated',
+  /** Answer materialization resolved, but a graph-owned finalization hook failed before the answer could return. */
+  AnswerFinalizationFailed = 'answer-finalization-failed',
+  /** A synchronous answer transaction failed before its provisionally staged claims could commit. */
+  AnswerTransactionRolledBack = 'answer-transaction-rolled-back',
   RetentionBudgetExceeded = 'retention-budget-exceeded',
   Manual = 'manual',
   SessionEnded = 'session-ended',

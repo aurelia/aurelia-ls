@@ -15,9 +15,12 @@ import type {
   RenameFromTsParams,
   RenameFromTsResponse,
   ResourceInventoryResponse,
+  SourceOwnershipParams,
+  SourceOwnershipResponse,
   TemplateResourceAvailabilityParams,
   TemplateResourceAvailabilityResponse,
   WorkspaceStatusResponse,
+  WorkspaceStatusParams,
 } from "../protocol.js";
 import { AureliaProtocolRequest } from "../protocol.js";
 import {
@@ -35,6 +38,7 @@ import {
   semanticSourceReferenceFilePath,
 } from "../mapping/source-locations.js";
 import {
+  runSemanticRuntimeDocumentRequest,
   runSemanticRuntimeRequest,
 } from "./request-guard.js";
 import {
@@ -46,14 +50,40 @@ export type {
   RenameFromTsParams,
   RenameFromTsResponse,
   ResourceInventoryResponse,
+  SourceOwnershipParams,
+  SourceOwnershipResponse,
   TemplateResourceAvailabilityParams,
   TemplateResourceAvailabilityResponse,
 } from "../protocol.js";
+
+export async function handleSourceOwnership(
+  ctx: ServerContext,
+  params: SourceOwnershipParams,
+  guard: SemanticRuntimeLspRequestGuard,
+): Promise<SourceOwnershipResponse> {
+  if (!params?.uri) {
+    throw new Error("Source ownership requires a document URI.");
+  }
+  const generation = await ctx.semanticRuntime.preflight(guard);
+  const answer = await ctx.semanticRuntime.authoredSourceOwnership(params.uri, guard);
+  return {
+    fingerprint: generation.fingerprint,
+    sourceUri: ctx.documentUris.resolve(params.uri).uri,
+    answer: mapRuntimeAnswer(answer),
+    owners: answer.value.owners.map((owner) => ({
+      projectKey: owner.projectKey,
+      rootUri: ctx.documentUris.uriForHostPath(owner.projectRootDir),
+      projectPath: owner.projectPath,
+      role: owner.role,
+    })),
+  };
+}
 
 export async function handleResourceInventory(
   ctx: ServerContext,
   guard: SemanticRuntimeLspRequestGuard,
 ): Promise<ResourceInventoryResponse> {
+  const generation = await ctx.semanticRuntime.preflight(guard);
   const summary = await ctx.semanticRuntime.workspaceSummary(guard);
   const mappingContext = {
     documentUris: ctx.documentUris,
@@ -76,7 +106,7 @@ export async function handleResourceInventory(
       projects.push({ status: "error", project, message: requestErrorMessage(error) });
     }
   }
-  return { fingerprint: guard.generation.fingerprint, projects };
+  return { fingerprint: generation.fingerprint, projects };
 }
 
 export async function handleTemplateResourceAvailability(
@@ -87,8 +117,9 @@ export async function handleTemplateResourceAvailability(
   if (!params?.uri || params.position == null) {
     throw new Error("Template resource availability requires a document URI and cursor position.");
   }
+  const generation = await ctx.semanticRuntime.preflight(guard);
   const document = ctx.ensureProgramDocument(params.uri);
-  const fingerprint = guard.generation.fingerprint;
+  const fingerprint = generation.fingerprint;
   if (document == null) {
     return { fingerprint, projectSelection: { status: "absent", candidates: [] } };
   }
@@ -139,9 +170,32 @@ export async function handleTemplateResourceAvailability(
 
 export async function handleWorkspaceStatus(
   ctx: ServerContext,
+  params: WorkspaceStatusParams | null | undefined,
   guard: SemanticRuntimeLspRequestGuard,
 ): Promise<WorkspaceStatusResponse | null> {
-  return await ctx.semanticRuntime.workspaceSummary(guard);
+  const generation = await ctx.semanticRuntime.preflight(guard);
+  const answer = await ctx.semanticRuntime.workspaceSummary(guard);
+  const nativeProjectConfigurations = await ctx.semanticRuntime.nativeProjectConfigurations(
+    params?.nativeProjectConfigurationUris ?? [],
+    guard,
+  );
+  return {
+    fingerprint: generation.fingerprint,
+    answer: mapRuntimeAnswer(answer),
+    projectAnalysisCounts: answer.value.projectAnalysisCounts,
+    nativeProjectConfigurations: {
+      answer: mapRuntimeAnswer(nativeProjectConfigurations),
+      rows: nativeProjectConfigurations.value.rows.map((configuration) => ({
+        projectKey: configuration.projectKey,
+        projectRootUri: ctx.documentUris.uriForHostPath(configuration.projectRootDir),
+        sourceUri: ctx.documentUris.uriForHostPath(configuration.filePath),
+        appliedExcludedSourceRootUris: configuration.appliedExcludedSourceRootDirs.map((rootDir) =>
+          ctx.documentUris.uriForHostPath(rootDir)
+        ),
+        diagnosticCount: configuration.diagnosticCount,
+      })),
+    },
+  };
 }
 
 // ============================================================================
@@ -349,24 +403,58 @@ export async function handleGetRelatedFiles(
  * Registers all custom Aurelia request handlers on the connection.
  */
 export function registerCustomHandlers(ctx: ServerContext): void {
+  ctx.connection.onRequest(AureliaProtocolRequest.SourceOwnership, (params: SourceOwnershipParams, token: CancellationToken) =>
+    request(ctx, "sourceOwnership", token, params?.uri,
+      (guard) => handleSourceOwnership(ctx, params, guard)));
   ctx.connection.onRequest(AureliaProtocolRequest.ResourceInventory, (_params: unknown, token: CancellationToken) =>
     request(ctx, "resourceInventory", token, undefined,
       (guard) => handleResourceInventory(ctx, guard)));
   ctx.connection.onRequest(
     AureliaProtocolRequest.TemplateResourceAvailability,
     (params: TemplateResourceAvailabilityParams, token: CancellationToken) =>
-      request(ctx, "templateResourceAvailability", token, params.uri,
+      documentRequest(ctx, "templateResourceAvailability", token, params.uri,
+        async (guard): Promise<TemplateResourceAvailabilityResponse> => ({
+          fingerprint: (await ctx.semanticRuntime.preflight(guard)).fingerprint,
+          projectSelection: { status: "absent", candidates: [] },
+        }),
         (guard) => handleTemplateResourceAvailability(ctx, params, guard)),
   );
   ctx.connection.onRequest(AureliaProtocolRequest.RelatedFiles, (params: DocumentUriParams, token: CancellationToken) =>
-    request(ctx, "getRelatedFiles", token, params.uri,
+    documentRequest(ctx, "getRelatedFiles", token, params.uri,
+      () => [],
       (guard) => handleGetRelatedFiles(ctx, params, guard)));
-  ctx.connection.onRequest(AureliaProtocolRequest.WorkspaceStatus, (_params: unknown, token: CancellationToken) =>
+  ctx.connection.onRequest(AureliaProtocolRequest.WorkspaceStatus, (params: WorkspaceStatusParams, token: CancellationToken) =>
     request(ctx, "workspaceStatus", token, undefined,
-      (guard) => handleWorkspaceStatus(ctx, guard)));
+      (guard) => handleWorkspaceStatus(ctx, params, guard)));
   ctx.connection.onRequest(AureliaProtocolRequest.RenameFromTypeScript, (params: RenameFromTsParams, token: CancellationToken) =>
-    request(ctx, "renameFromTs", token, params.uri,
+    documentRequest(ctx, "renameFromTs", token, params.uri,
+      (): RenameFromTsResponse => ({
+        status: "not-applicable",
+        reason: "source-not-authored",
+        message: "Aurelia cross-domain rename is unavailable because this source is not authored by the project.",
+        templateReferenceCount: 0,
+        typeScriptReferenceCount: 0,
+        candidateCount: 0,
+      }),
       (guard) => handleRenameFromTs(ctx, params, guard)));
+}
+
+function documentRequest<T>(
+  ctx: ServerContext,
+  feature: string,
+  token: CancellationToken,
+  uri: string,
+  whenNotAuthored: (guard: SemanticRuntimeLspRequestGuard) => T | Promise<T>,
+  handler: (guard: SemanticRuntimeLspRequestGuard) => T | Promise<T>,
+): Promise<T> {
+  return runSemanticRuntimeDocumentRequest(
+    ctx,
+    feature,
+    token,
+    uri,
+    whenNotAuthored,
+    handler,
+  );
 }
 
 function request<T>(

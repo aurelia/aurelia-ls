@@ -1,5 +1,11 @@
+import path from 'node:path';
 import ts from 'typescript';
+import {
+  projectSourceAdmissionForHostPath,
+  semanticSourceReferenceHostPath,
+} from '../boot/source-ownership.js';
 import type { KernelStore } from '../kernel/store.js';
+import { SourceFileRole } from '../kernel/address.js';
 import {
   AuthoredSourceTextCache,
   authoredSourceHostPathCandidates,
@@ -173,7 +179,6 @@ import {
   isBindingBehaviorOccurrence,
   isValueConverterOccurrence,
 } from '../template/expression-resource-occurrence.js';
-import type { GenerationAuthority } from '../kernel/generation-authority.js';
 import type { RuntimeBindingObservedDependency } from '../observation/runtime-binding-observation.js';
 import {
   RuntimeExpressionAccessForm,
@@ -193,7 +198,7 @@ export class SemanticAppTemplateQueries {
 
   constructor(
     private readonly emission: AureliaAppWorldProjectEmission,
-    private readonly generation: GenerationAuthority,
+    private readonly requireGenerationCurrent: () => void,
     private readonly store: KernelStore,
     private readonly workspaceRootDir: string,
     private readonly projectRootDir: string,
@@ -360,10 +365,29 @@ export class SemanticAppTemplateQueries {
       );
     }
 
-    if (isResourceRenameSurface(context.renameSurface) && !context.hasAuthoredDeclarationSource) {
+    if (!semanticEditSourceIsEditable(this.emission, activeSource)) {
+      return templateRenameUnavailable(
+        SemanticTemplateRenameUnavailableReason.SourceNotEditable,
+        `The selected source for '${context.selectedMemberName}' is readable but is not an editable authored project source.`,
+        context.selectedMemberName,
+        context.targetSource,
+        activeSource,
+      );
+    }
+
+    if (isResourceRenameSurface(context.renameSurface) && !context.hasDeclarationSource) {
       return templateRenameUnavailable(
         SemanticTemplateRenameUnavailableReason.ResourceNameHasNoAuthoredSource,
         `Resource name '${context.selectedMemberName}' is convention-derived or otherwise has no authored name token to rename.`,
+        context.selectedMemberName,
+        context.targetSource,
+        activeSource,
+      );
+    }
+    if (isResourceRenameSurface(context.renameSurface) && !context.hasEditableDeclarationSource) {
+      return templateRenameUnavailable(
+        SemanticTemplateRenameUnavailableReason.SourceNotEditable,
+        `Resource name '${context.selectedMemberName}' is declared in a readable source that this project may not edit.`,
         context.selectedMemberName,
         context.targetSource,
         activeSource,
@@ -410,6 +434,20 @@ export class SemanticAppTemplateQueries {
       );
     }
 
+    const renameRows = context.rows.filter((row) =>
+      referenceRowNeedsTemplateRenameEdit(row, context.renameSurface, context.selectedMemberName)
+    );
+    const nonEditableRenameRow = renameRows.find((row) => !semanticEditSourceIsEditable(this.emission, row.source));
+    if (nonEditableRenameRow != null) {
+      return templateRenameUnavailable(
+        SemanticTemplateRenameUnavailableReason.SourceNotEditable,
+        `Rename would edit readable source '${nonEditableRenameRow.source?.path ?? '(unknown)'}' that this project does not own for edits.`,
+        context.selectedMemberName,
+        context.targetSource,
+        activeSource,
+      );
+    }
+
     if (newName == null) {
       return answer(
         SemanticRuntimeAnswerResult.Answered,
@@ -443,8 +481,7 @@ export class SemanticAppTemplateQueries {
       ),
     );
     // Reference rows carry authored token sources, so each edit replaces exactly the token.
-    const templateEdits = context.rows
-      .filter((row) => referenceRowNeedsTemplateRenameEdit(row, context.renameSurface, context.selectedMemberName))
+    const templateEdits = renameRows
       .map((row) => {
         const editKind = templateRenameEditKindForReferenceRow(row, context.renameSurface);
         const oldText = this.authoredTextForSource(row.source) ?? row.name;
@@ -581,6 +618,29 @@ export class SemanticAppTemplateQueries {
       );
     }
 
+    if (!semanticEditSourceIsEditable(this.emission, context.activeSource)) {
+      return templateRenameUnavailable(
+        SemanticTemplateRenameUnavailableReason.SourceNotEditable,
+        `The selected TypeScript source for '${placeholder}' is not editable by this project.`,
+        context.selectedMemberName,
+        context.targetSource,
+        context.activeSource,
+      );
+    }
+    const propagationRows = context.templateUsageRows.filter(referenceRowNeedsTypeScriptRenamePropagationEdit);
+    const nonEditablePropagationRow = propagationRows.find((row) =>
+      !semanticEditSourceIsEditable(this.emission, row.source)
+    );
+    if (nonEditablePropagationRow != null) {
+      return templateRenameUnavailable(
+        SemanticTemplateRenameUnavailableReason.SourceNotEditable,
+        `Cross-domain rename would edit readable source '${nonEditablePropagationRow.source?.path ?? '(unknown)'}' that this project does not own for edits.`,
+        context.selectedMemberName,
+        context.targetSource,
+        context.activeSource,
+      );
+    }
+
     if (newName == null) {
       return answer(
         SemanticRuntimeAnswerResult.Answered,
@@ -605,8 +665,7 @@ export class SemanticAppTemplateQueries {
       );
     }
 
-    const aureliaEdits = context.templateUsageRows
-      .filter(referenceRowNeedsTypeScriptRenamePropagationEdit)
+    const aureliaEdits = propagationRows
       .map((row) =>
         templateRenameEditRow(
           templateRenameFromTypeScriptEditKindForReferenceRow(row),
@@ -806,7 +865,7 @@ export class SemanticAppTemplateQueries {
   }
 
   private requireCurrentGeneration(): void {
-    this.generation.requireCurrent();
+    this.requireGenerationCurrent();
   }
 
   private templateReferenceContext(
@@ -1035,7 +1094,8 @@ export class SemanticAppTemplateQueries {
       targetSource: activeSource,
       renameSurface: TemplateRenameSurface.Member,
       includeTypeScriptReferences: false,
-      hasAuthoredDeclarationSource: false,
+      hasDeclarationSource: false,
+      hasEditableDeclarationSource: false,
       bindableConventionCallbackTargetSources: [],
       forceOpen: true,
       templateUsageRows: [activeRow],
@@ -1133,7 +1193,8 @@ export class SemanticAppTemplateQueries {
       targetSource: aliasTargetSource,
       renameSurface: TemplateRenameSurface.BindableAttributeAlias,
       includeTypeScriptReferences: false,
-      hasAuthoredDeclarationSource: true,
+      hasDeclarationSource: true,
+      hasEditableDeclarationSource: semanticEditSourceIsEditable(this.emission, aliasTargetSource),
       declarationRows: [
         templateReferenceDeclarationRow(
           selectedBindable.attributeSource,
@@ -1289,7 +1350,9 @@ export class SemanticAppTemplateQueries {
       targetSource: selection.targetSource,
       renameSurface: templateRenameSurfaceForResourceKind(selection.resourceKind),
       includeTypeScriptReferences: false,
-      hasAuthoredDeclarationSource: selection.declarations.length > 0,
+      hasDeclarationSource: selection.declarations.length > 0,
+      hasEditableDeclarationSource: selection.declarations.length > 0
+        && selection.declarations.every((declaration) => semanticEditSourceIsEditable(this.emission, declaration.source)),
       declarationRows: selection.declarations.map((declaration) =>
         templateReferenceDeclarationRow(
           declaration.source,
@@ -1345,7 +1408,8 @@ export class SemanticAppTemplateQueries {
       targetSource: target.targetSource,
       renameSurface: target.renameSurface,
       includeTypeScriptReferences: target.includeTypeScriptReferences ?? true,
-      hasAuthoredDeclarationSource: true,
+      hasDeclarationSource: target.declarationSource != null,
+      hasEditableDeclarationSource: semanticEditSourceIsEditable(this.emission, target.declarationSource),
       bindableConventionCallbackTargetSources: bindableEvidence.callbackTargetSources,
       declarationRows: [
         templateReferenceDeclarationRow(
@@ -1536,7 +1600,8 @@ export class SemanticAppTemplateQueries {
       targetSource: tsContext.targetSource,
       renameSurface: TemplateRenameSurface.Member,
       includeTypeScriptReferences: true,
-      hasAuthoredDeclarationSource: true,
+      hasDeclarationSource: true,
+      hasEditableDeclarationSource: semanticEditSourceIsEditable(this.emission, tsContext.targetSource),
       bindableConventionCallbackTargetSources: tsContext.bindableConventionCallbackTargetSources,
       declarationRows: [
         templateReferenceDeclarationRow(
@@ -1619,7 +1684,11 @@ export class SemanticAppTemplateQueries {
     if (cursor == null) {
       return null;
     }
-    const sourceFile = this.emission.typeSystem.readProgramSourceFileByPath(cursor.filePath);
+    const sourceFile = this.emission.typeSystem.readProgramSourceFileByHostPath(
+      path.isAbsolute(cursor.filePath)
+        ? path.resolve(cursor.filePath)
+        : path.resolve(this.emission.project.rootDir, cursor.filePath),
+    );
     if (sourceFile == null) {
       return null;
     }
@@ -1652,7 +1721,8 @@ interface TemplateReferenceContext {
   readonly targetSource: SemanticSourceReference;
   readonly renameSurface: TemplateRenameSurface;
   readonly includeTypeScriptReferences: boolean;
-  readonly hasAuthoredDeclarationSource: boolean;
+  readonly hasDeclarationSource: boolean;
+  readonly hasEditableDeclarationSource: boolean;
   readonly bindableConventionCallbackTargetSources: readonly SemanticSourceReference[];
   readonly forceOpen: boolean;
   readonly templateUsageRows: readonly SemanticTemplateReferenceRow[];
@@ -1661,6 +1731,34 @@ interface TemplateReferenceContext {
   readonly rows: readonly SemanticTemplateReferenceRow[];
   /** Exact authored loci that select this context; this is intentionally broader than renameable output rows. */
   readonly activeSources: readonly SemanticSourceReference[];
+}
+
+function semanticEditSourceIsEditable(
+  emission: AureliaAppWorldProjectEmission,
+  source: SemanticSourceReference | null,
+): boolean {
+  const exact = semanticExactSourceReference(source);
+  const fileName = semanticSourceReferenceHostPath(emission.project.workspaceRootDir, exact);
+  if (fileName == null) {
+    return false;
+  }
+  const admission = projectSourceAdmissionForHostPath(emission.project, fileName);
+  if (admission?.role === SourceFileRole.Template) {
+    return true;
+  }
+  return admission?.role === SourceFileRole.AppSource
+    && emission.typeSystem.isProjectEditableProgramSourceFileByHostPath(fileName);
+}
+
+function semanticEditProgramSourceFile(
+  emission: AureliaAppWorldProjectEmission,
+  source: SemanticSourceReference | null,
+): ts.SourceFile | null {
+  const exact = semanticExactSourceReference(source);
+  const fileName = semanticSourceReferenceHostPath(emission.project.workspaceRootDir, exact);
+  return fileName == null
+    ? null
+    : emission.typeSystem.readProjectEditableProgramSourceFileByHostPath(fileName);
 }
 
 interface TemplateReferenceTarget {
@@ -1917,6 +2015,9 @@ function declareViewModelMemberCodeActionForDiagnostic(
   if (!diagnosticHasViewModelMemberDeclarationPlan(diagnostic)) {
     return null;
   }
+  if (!semanticEditSourceIsEditable(emission, diagnostic.source)) {
+    return null;
+  }
   const suggestion = diagnostic.suggestion;
 
   const memberName = suggestion.targetMemberName ?? suggestion.actionTarget?.memberName ?? diagnostic.selectedMemberName;
@@ -1950,6 +2051,9 @@ function registerFrameworkCapabilityCodeActionForDiagnostic(
   diagnostic: SemanticTemplateDiagnosticRow,
 ): SemanticTemplateCodeActionRow | null {
   if (!diagnosticHasFrameworkCapabilityRegistrationPlan(diagnostic)) {
+    return null;
+  }
+  if (!semanticEditSourceIsEditable(emission, diagnostic.source)) {
     return null;
   }
   const actionSource = semanticExactSourceReference(diagnostic.suggestion.actionTarget?.source ?? diagnostic.source);
@@ -2065,7 +2169,7 @@ function frameworkRegistrationAdmissionEdits(
   if (appSource?.path == null || appSource.start == null || appSource.end == null) {
     return null;
   }
-  const sourceFile = emission.typeSystem.readProgramSourceFileByPath(appSource.path);
+  const sourceFile = semanticEditProgramSourceFile(emission, appSource);
   if (sourceFile == null) {
     return null;
   }
@@ -2204,7 +2308,7 @@ function declareViewModelMemberEdit(
   if (definitionSource?.path == null) {
     return null;
   }
-  const sourceFile = emission.typeSystem.readProgramSourceFileByPath(definitionSource.path);
+  const sourceFile = semanticEditProgramSourceFile(emission, definitionSource);
   if (sourceFile == null) {
     return null;
   }
@@ -2611,7 +2715,15 @@ function typeScriptRelatedMemberFamilyRead(
       family: null,
     };
   }
-  return emission.typeSystem.readProgramRelatedMemberFamily(exact.path, exact.start, exact.end);
+  const fileName = semanticSourceReferenceHostPath(emission.project.workspaceRootDir, exact);
+  if (fileName == null) {
+    return {
+      state: TypeSystemRelatedMemberFamilyReadState.TargetUnavailable,
+      reason: 'The selected member source cannot be resolved into this workspace host.',
+      family: null,
+    };
+  }
+  return emission.typeSystem.readProgramRelatedMemberFamilyByHostPath(fileName, exact.start, exact.end);
 }
 
 function typeScriptRelatedMemberReferenceRows(
@@ -2899,7 +3011,8 @@ function templateReferenceContextFromRows(input: {
   readonly targetSource: SemanticSourceReference;
   readonly renameSurface: TemplateRenameSurface;
   readonly includeTypeScriptReferences: boolean;
-  readonly hasAuthoredDeclarationSource: boolean;
+  readonly hasDeclarationSource: boolean;
+  readonly hasEditableDeclarationSource: boolean;
   readonly bindableConventionCallbackTargetSources?: readonly SemanticSourceReference[];
   readonly forceOpen?: boolean;
   readonly declarationRows: readonly SemanticTemplateReferenceRow[];
@@ -2913,7 +3026,8 @@ function templateReferenceContextFromRows(input: {
     targetSource: input.targetSource,
     renameSurface: input.renameSurface,
     includeTypeScriptReferences: input.includeTypeScriptReferences,
-    hasAuthoredDeclarationSource: input.hasAuthoredDeclarationSource,
+    hasDeclarationSource: input.hasDeclarationSource,
+    hasEditableDeclarationSource: input.hasEditableDeclarationSource,
     bindableConventionCallbackTargetSources: input.bindableConventionCallbackTargetSources ?? [],
     forceOpen: input.forceOpen ?? false,
     templateUsageRows: input.templateUsageRows,

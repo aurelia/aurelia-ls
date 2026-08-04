@@ -6,6 +6,7 @@ import type {
   SemanticObservedDependencyLocus,
   SemanticRuntimeAppQueryBatchRequest,
   SemanticAppQueryCatalogRequest,
+  SemanticRuntimePageInput,
 } from './contracts.js';
 import { SemanticObservedDependencyLocusKind } from './contracts.js';
 import {
@@ -38,6 +39,47 @@ export function semanticRuntimeSummaryKey(
     `project-page-size:${request.projectPage?.size ?? 0}`,
     `project-page-cursor:${request.projectPage?.cursor ?? 'start'}`,
   ].map((part) => queryKeyPart(part)).join('|');
+}
+
+export function semanticAuthoredSourceOwnershipKey(sourceFilePath: string): string {
+  return [
+    'authored-source-ownership',
+    sourceFilePath,
+  ].map(queryKeyPart).join('|');
+}
+
+export function semanticNativeProjectConfigurationsKey(
+  projectKey: string | null,
+  sourceFilePaths: readonly string[] | null,
+  page: SemanticRuntimePageInput | null | undefined,
+): string {
+  return `native-project-configurations|${queryKeyPart(JSON.stringify({
+    projectKey,
+    sourceFilePaths,
+    page: {
+      size: page?.size ?? null,
+      cursor: page?.cursor ?? null,
+    },
+  }))}`;
+}
+
+export function semanticProjectConfigurationDiagnosticsKey(
+  projectKey: string | null,
+  sourceFilePaths: readonly string[] | null,
+  page: SemanticRuntimePageInput | null | undefined,
+): string {
+  return `project-configuration-diagnostics|${queryKeyPart(JSON.stringify({
+    projectKey,
+    sourceFilePaths,
+    page: {
+      size: page?.size ?? null,
+      cursor: page?.cursor ?? null,
+    },
+  }))}`;
+}
+
+export function semanticProjectConfigurationEpochKey(projectKey: string, revision: string): string {
+  return `project-configuration:${queryKeyPart(projectKey)}:${queryKeyPart(revision)}`;
 }
 
 export function semanticRuntimeRoutedAppQueryKey(

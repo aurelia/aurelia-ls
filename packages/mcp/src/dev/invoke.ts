@@ -27,6 +27,7 @@ import {
   openSeamOverviewInputSchema,
   patternExampleInputSchema,
   patternMenuInputSchema,
+  projectConfigurationsInputSchema,
   routerOverviewInputSchema,
   templateCompletionsInputSchema,
   templateCursorInfoInputSchema,
@@ -48,6 +49,7 @@ import type {
   AureliaMcpOpenSeamOverviewInput,
   AureliaMcpPatternExampleInput,
   AureliaMcpPatternMenuInput,
+  AureliaMcpProjectConfigurationsInput,
   AureliaMcpResponse,
   AureliaMcpRouterOverviewInput,
   AureliaMcpTemplateCompletionsInput,
@@ -58,6 +60,7 @@ import type {
 
 const commandInputSchemas = {
   'workspace-overview': z.object(workspaceOverviewInputSchema).strict(),
+  'project-configurations': z.object(projectConfigurationsInputSchema).strict(),
   'analysis-cache-overview': z.object(analysisCacheOverviewInputSchema).strict(),
   'clear-analysis-cache': z.object(clearAnalysisCacheInputSchema).strict(),
   'app-query-catalog': z.object(appQueryCatalogInputSchema).strict(),
@@ -79,6 +82,7 @@ const commandInputSchemas = {
 
 const publicToolCommandAliases: Record<string, keyof typeof commandInputSchemas> = {
   [aureliaMcpToolNames.workspaceOverview]: 'workspace-overview',
+  [aureliaMcpToolNames.projectConfigurations]: 'project-configurations',
   [aureliaMcpToolNames.analysisCacheOverview]: 'analysis-cache-overview',
   [aureliaMcpToolNames.clearAnalysisCache]: 'clear-analysis-cache',
   [aureliaMcpToolNames.appQueryCatalog]: 'app-query-catalog',
@@ -97,22 +101,6 @@ const publicToolCommandAliases: Record<string, keyof typeof commandInputSchemas>
   [aureliaMcpToolNames.templateCompletions]: 'template-completions',
   [aureliaMcpToolNames.templateDiagnostics]: 'template-diagnostics',
 };
-
-const projectRootProjectCommands = new Set<string>([
-  'workspace-overview',
-  'analysis-cache-overview',
-  'clear-analysis-cache',
-  'app-overview',
-  'router-overview',
-  'app-query',
-  'app-query-batch',
-  'open-seam-overview',
-  'diagnostic-overview',
-  'app-diagnostics',
-  'template-cursor-info',
-  'template-completions',
-  'template-diagnostics',
-]);
 
 const adapter = new AureliaMcpSemanticRuntimeAdapter();
 const rawArgs = process.argv.slice(2);
@@ -144,6 +132,8 @@ async function invoke(command: string, input: Record<string, unknown>): Promise<
   switch (command) {
     case 'workspace-overview':
       return adapter.workspaceOverview(input as unknown as AureliaMcpWorkspaceOverviewInput);
+    case 'project-configurations':
+      return adapter.projectConfigurations(input as unknown as AureliaMcpProjectConfigurationsInput);
     case 'analysis-cache-overview':
       return adapter.analysisCacheOverview(input as unknown as AureliaMcpAnalysisCacheOverviewInput);
     case 'clear-analysis-cache':
@@ -220,6 +210,7 @@ function localToolResponse<TValue>(tool: string, value: TValue): AureliaMcpRespo
     tool,
     generatedAt: new Date().toISOString(),
     workspaceRoot: null,
+    workspaceDescriptor: null,
     value,
   };
 }
@@ -260,7 +251,6 @@ function parseInvocation(args: readonly string[]): {
   const command = publicToolCommandAliases[rawCommand] ?? rawCommand;
   const input: Record<string, unknown> = {};
   let outputMode: DevInvokeOutputMode = 'json';
-  let projectRootDir: string | null = null;
   for (let index = 0; index < rest.length; index += 1) {
     const key = rest[index];
     if (key == null) {
@@ -286,12 +276,7 @@ function parseInvocation(args: readonly string[]): {
       continue;
     }
     if (key === '--workspaceRoot') {
-      input.workspaceRoot = requireValue(rest, index, key);
-      index += 1;
-      continue;
-    }
-    if (key === '--storeKey') {
-      input.storeKey = requireValue(rest, index, key);
+      workspaceFlagTarget(command, input).workspaceRoot = requireValue(rest, index, key);
       index += 1;
       continue;
     }
@@ -300,8 +285,26 @@ function parseInvocation(args: readonly string[]): {
       index += 1;
       continue;
     }
-    if (key === '--projectRootDir') {
-      projectRootDir = requireValue(rest, index, key);
+    if (key === '--view') {
+      input.view = requireValue(rest, index, key);
+      index += 1;
+      continue;
+    }
+    if (key === '--projectRootHint') {
+      addStringListValue(
+        workspaceFlagTarget(command, input),
+        'projectRootHints',
+        requireValue(rest, index, key),
+      );
+      index += 1;
+      continue;
+    }
+    if (key === '--excludedWorkspaceRoot') {
+      addStringListValue(
+        workspaceFlagTarget(command, input),
+        'excludedWorkspaceRoots',
+        requireValue(rest, index, key),
+      );
       index += 1;
       continue;
     }
@@ -311,7 +314,12 @@ function parseInvocation(args: readonly string[]): {
       continue;
     }
     if (key === '--sourceFilePath') {
-      input.sourceFilePath = requireValue(rest, index, key);
+      const value = requireValue(rest, index, key);
+      if (command === 'project-configurations') {
+        addStringListValue(input, 'sourceFilePaths', value);
+      } else {
+        input.sourceFilePath = value;
+      }
       index += 1;
       continue;
     }
@@ -411,11 +419,6 @@ function parseInvocation(args: readonly string[]): {
       index += 1;
       continue;
     }
-    if (key === '--projectDiscovery') {
-      input.projectDiscovery = requireValue(rest, index, key);
-      index += 1;
-      continue;
-    }
     if (key === '--detail') {
       input.detail = requireValue(rest, index, key);
       index += 1;
@@ -510,7 +513,6 @@ function parseInvocation(args: readonly string[]): {
     }
     throw new Error(`Unknown argument '${key}'. ${usage()}`);
   }
-  applyProjectRootShortcut(command, input, projectRootDir);
   validateInvocationInput(command, input);
   return { command, input, outputMode };
 }
@@ -526,26 +528,6 @@ function validateInvocationInput(command: string, input: Record<string, unknown>
   if (command === 'router-overview' && input.page != null) {
     throw new Error('router-overview uses --rowPageSize because it samples multiple row families; use app-query with a specific router query kind when you need cursor paging.');
   }
-}
-
-function applyProjectRootShortcut(command: string, input: Record<string, unknown>, projectRootDir: string | null): void {
-  if (projectRootDir == null) {
-    return;
-  }
-  const hadWorkspaceRoot = typeof input.workspaceRoot === 'string';
-  input.workspaceRoot ??= projectRootDir;
-  if (!projectRootProjectCommands.has(command)) {
-    return;
-  }
-  if (input.projects != null) {
-    throw new Error('--projectRootDir cannot be combined with projects supplied through --input.');
-  }
-  input.projects = [
-    {
-      rootDir: hadWorkspaceRoot ? projectRootDir : '.',
-      ...(typeof input.projectKey === 'string' ? { projectKey: input.projectKey } : {}),
-    },
-  ];
 }
 
 function parseCursor(raw: string): { filePath: string; line: number; character: number; offset?: number } {
@@ -578,6 +560,31 @@ function normalizeInvocationPaths(input: Record<string, unknown>): void {
   if (typeof input.workspaceRoot === 'string') {
     input.workspaceRoot = resolveFromInvocationCwd(input.workspaceRoot);
   }
+  if (
+    input.workspace != null
+    && typeof input.workspace === 'object'
+    && !Array.isArray(input.workspace)
+    && typeof (input.workspace as Record<string, unknown>).workspaceRoot === 'string'
+  ) {
+    const workspace = input.workspace as Record<string, unknown>;
+    workspace.workspaceRoot = resolveFromInvocationCwd(workspace.workspaceRoot as string);
+  }
+}
+
+function workspaceFlagTarget(command: string, input: Record<string, unknown>): Record<string, unknown> {
+  if (command !== 'analysis-cache-overview' && command !== 'clear-analysis-cache') {
+    return input;
+  }
+  const current = input.workspace;
+  if (current == null) {
+    const workspace: Record<string, unknown> = {};
+    input.workspace = workspace;
+    return workspace;
+  }
+  if (typeof current !== 'object' || Array.isArray(current)) {
+    throw new Error(`Cache workspace selector must be an object before applying workspace flags.`);
+  }
+  return current as Record<string, unknown>;
 }
 
 function resolveFromInvocationCwd(value: string): string {
@@ -609,10 +616,10 @@ function readBooleanOption(
 function usage(): string {
   return [
     'Usage: pnpm --filter @aurelia-ls/mcp dev:invoke -- <command> --workspaceRoot <path> [options]',
-    'Commands: workspace-overview, analysis-cache-overview, clear-analysis-cache, app-query-catalog, pattern-menu, pattern-example, docs-search, docs-fetch, app-overview, router-overview, app-query, app-query-batch, open-seam-overview, diagnostic-overview, app-diagnostics, template-cursor-info, template-completions, template-diagnostics',
+    'Commands: workspace-overview, project-configurations, analysis-cache-overview, clear-analysis-cache, app-query-catalog, pattern-menu, pattern-example, docs-search, docs-fetch, app-overview, router-overview, app-query, app-query-batch, open-seam-overview, diagnostic-overview, app-diagnostics, template-cursor-info, template-completions, template-diagnostics',
     'Public tool names such as aurelia_app_query and aurelia_app_diagnostics are accepted as aliases.',
     'Use --text or --output text to print the same compact text returned through MCP content; JSON remains the default for structured inspection.',
-    'Use --input <json> or a positional JSON object for full adapter input, plus common flags such as --query, --patternId, --documentPath, --documentPathPrefix, --sectionAnchor, --maxChars, --projectKey, --projectRootDir, --projectDiscovery, --analysisDepth, --includeAuthoringTemplates [true|false], --includeKernelBreakdowns [true|false], --includeDetailDensity [true|false], --includeQueryClaimRows [true|false], --includeAppProfile [true|false], --includeAppQueryClaimProfiles [true|false], --typeSystemDependencyCacheClearPolicy, --group, --queryKind, --sourceFile, --sourceFilePath, --cursor file:line:character[:offset], --diagnosticProjection, --openSeamKindKey, --openSeamReasonKind, --sourceRole, --continuationIntent, --appRetention, --pageSize/--page.size, --pageCursor/--page.cursor, --projectPageSize/--projectPage.size, --projectPageCursor/--projectPage.cursor, --rowPageSize, and --rowLimit.',
+    'Use --input <json> or a positional JSON object for full adapter input, plus common flags such as --query, --patternId, --documentPath, --documentPathPrefix, --sectionAnchor, --maxChars, --projectKey, --view, --projectRootHint, --excludedWorkspaceRoot, --analysisDepth, --includeAuthoringTemplates [true|false], --includeKernelBreakdowns [true|false], --includeDetailDensity [true|false], --includeQueryClaimRows [true|false], --includeAppProfile [true|false], --includeAppQueryClaimProfiles [true|false], --typeSystemDependencyCacheClearPolicy, --group, --queryKind, --sourceFile, --sourceFilePath (repeat for project-configurations), --cursor file:line:character[:offset], --diagnosticProjection, --openSeamKindKey, --openSeamReasonKind, --sourceRole, --continuationIntent, --appRetention, --pageSize/--page.size, --pageCursor/--page.cursor, --projectPageSize/--projectPage.size, --projectPageCursor/--projectPage.cursor, --rowPageSize, and --rowLimit.',
   ].join('\n');
 }
 
@@ -701,9 +708,6 @@ function formatZodError(error: z.ZodError): string {
       if (issue.code === 'invalid_value') {
         if (path === 'queryKind') {
           return 'queryKind: unsupported query kind; run app-query-catalog for supported values.';
-        }
-        if (path === 'projectDiscovery') {
-          return 'projectDiscovery: unsupported mode; use single-root or package-tsconfig.';
         }
         if (path === 'analysisDepth') {
           return 'analysisDepth: unsupported depth; use runtime-topology, binding-targets, or binding-observation.';

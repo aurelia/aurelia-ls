@@ -52,7 +52,7 @@ describe("createServerContext", () => {
     expect(ctx.lookupText(uri)).toBe("<template>${name}</template>");
   });
 
-  test("does not expose synchronized text from an excluded workspace subtree", () => {
+  test("keeps excluded synchronized text readable without granting authored document access", () => {
     const rootUri = pathToFileURL(path.resolve("test-workspace")).toString();
     const excludedRootUri = pathToFileURL(path.resolve("test-workspace/packages/disabled")).toString();
     const uri = pathToFileURL(path.resolve("test-workspace/packages/disabled/component.html")).toString();
@@ -69,9 +69,24 @@ describe("createServerContext", () => {
     ctx.configureWorkspace(rootUri, [excludedRootUri]);
 
     expect(ctx.ownsDocument(uri)).toBe(false);
+    expect(ctx.openWorkspaceDocument(uri)).toBe(live);
     expect(ctx.openDocument(uri)).toBeNull();
     expect(ctx.ensureProgramDocument(uri)).toBeNull();
-    expect(ctx.lookupText(uri)).toBeNull();
+    expect(ctx.lookupDocumentSnapshot(uri)).toBeNull();
+    expect(ctx.lookupText(uri)).toBe("<template>${name}</template>");
     expect(ctx.documentUris.hostPath(uri)).toBe(path.resolve("test-workspace/packages/disabled/component.html"));
+  });
+
+  test("rejects project-root hint URIs outside the configured workspace", () => {
+    const rootUri = pathToFileURL(path.resolve("test-workspace")).toString();
+    const outsideRootUri = pathToFileURL(path.resolve("other-workspace")).toString();
+    const ctx = createServerContext({
+      connection: {} as never,
+      documents: { get: vi.fn(), all: vi.fn(() => []) } as never,
+      logger: createLogger(),
+    });
+
+    expect(() => ctx.configureWorkspace(rootUri, [], [outsideRootUri]))
+      .toThrow(`Project root hint '${outsideRootUri}' is not inside workspace '${rootUri}'.`);
   });
 });

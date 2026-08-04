@@ -14,7 +14,9 @@ import type {
 } from "vscode";
 import { AureliaProtocolRequest } from "@aurelia-ls/language-server/protocol";
 import type {
+  AnalysisChangedPayload,
   AureliaInitializeOptions,
+  WorkspaceStatusParams,
   WorkspaceStatusResponse,
 } from "@aurelia-ls/language-server/protocol";
 import type { AureliaWorkspaceIdentity } from "./types.js";
@@ -23,7 +25,8 @@ import { type ClientLogger } from "./log.js";
 import type { VscodeApi } from "./vscode-api.js";
 import {
   AureliaActivationMode,
-  isWorkspaceProjectManifestUri,
+  globalActivationTopologyOwner,
+  isWorkspaceNativeProjectConfigurationUri,
   type WorkspaceActivationAdmission,
   WorkspaceActivationEvidenceKind,
   orderWorkspaceAdmissions,
@@ -31,8 +34,9 @@ import {
   readWorkspaceActivationTopology,
   workspaceFolderContainsUri,
   workspaceFolderKey,
-  workspaceStatusConfirmsAurelia,
+  workspaceStatusConfirmsSessionRetention,
 } from "./workspace-activation.js";
+import { documentUriIdentityKey } from "./core/uri-identity.js";
 
 export interface AureliaLanguageClientSession {
   readonly workspace: AureliaWorkspaceIdentity;
@@ -40,8 +44,10 @@ export interface AureliaLanguageClientSession {
   readonly client: LanguageClient;
   readonly activationMode: AureliaActivationMode;
   readonly activationEvidence: WorkspaceActivationEvidenceKind;
+  readonly nativeProjectConfigurationUris: readonly Uri[];
   readonly status: WorkspaceStatusResponse | null;
   readonly excludedFolders: readonly WorkspaceFolder[];
+  readonly projectRootHintFolders: readonly WorkspaceFolder[];
   readonly fileEvents: readonly FileSystemWatcher[];
 }
 
@@ -60,13 +66,26 @@ interface ReconcileOptions {
   readonly reconfirmExisting?: boolean;
 }
 
+interface RejectedSessionWitness {
+  readonly workspaceKey: string;
+  readonly client: LanguageClient;
+  readonly fingerprint: string;
+  readonly nativeProjectConfigurationUris: readonly Uri[];
+  readonly projectRootHintFolders: readonly WorkspaceFolder[];
+}
+
+interface ReconcileScope {
+  readonly workspaceKeys: ReadonlySet<string>;
+  readonly rejectedSession: RejectedSessionWitness;
+}
+
 interface LifecycleIntent {
   readonly generation: number;
   readonly invalidated: Promise<void>;
   invalidate(): void;
 }
 
-interface PendingPackageChange {
+interface PendingTopologyChange {
   readonly uri: Uri;
   readonly type: FileChangeType;
 }
@@ -101,6 +120,15 @@ async function fileExists(vscode: VscodeApi, p: string): Promise<boolean> {
   try {
     await vscode.workspace.fs.stat(vscode.Uri.file(p));
     return true;
+  } catch {
+    return false;
+  }
+}
+
+async function uriIsDirectory(vscode: VscodeApi, uri: Uri): Promise<boolean> {
+  try {
+    const stat = await vscode.workspace.fs.stat(uri);
+    return (stat.type & vscode.FileType.Directory) !== 0;
   } catch {
     return false;
   }
@@ -146,12 +174,13 @@ export class AureliaLanguageClient {
   #transitionTail: Promise<void> = Promise.resolve();
   readonly #retirements = new Map<LanguageClient, Promise<void>>();
   #lifecycleIntent = createLifecycleIntent(0);
-  #pendingPackageChanges = new Map<string, PendingPackageChange>();
+  #pendingTopologyChanges = new Map<string, PendingTopologyChange>();
   #acceptingLifecycleRequests = false;
   #startConsumed = false;
   #stopRequest: Promise<void> | null = null;
   #started = false;
   #sourceAdmissionTimer: ReturnType<typeof setTimeout> | null = null;
+  readonly #latestTopologyFingerprintByClient = new Map<LanguageClient, string>();
 
   constructor(
     logger: ClientLogger,
@@ -213,6 +242,78 @@ export class AureliaLanguageClient {
     });
   }
 
+  /** Reconfirm one settled semantic topology before consumers query a possibly withdrawing session. */
+  async reconfirmSessionTopology(
+    observedSession: AureliaLanguageClientSession,
+    payload: AnalysisChangedPayload,
+  ): Promise<boolean> {
+    if (payload.changeKind !== "topology") return true;
+    if (!this.#acceptingLifecycleRequests) return false;
+    this.#latestTopologyFingerprintByClient.set(observedSession.client, payload.fingerprint);
+    const intent = this.#lifecycleIntent;
+    let shouldDispatch = false;
+    await this.#enqueueTransition(async () => {
+      if (!this.#isCurrentLifecycle(intent)) return;
+      const current = this.#sessions.get(observedSession.workspace.key);
+      if (current?.client !== observedSession.client) return;
+      if (this.#latestTopologyFingerprintByClient.get(current.client) !== payload.fingerprint) return;
+      if (current.activationMode === AureliaActivationMode.On || current.status?.fingerprint === payload.fingerprint) {
+        shouldDispatch = true;
+        return;
+      }
+
+      const candidatesResult = await this.#awaitLifecycle(
+        this.#refreshNativeProjectConfigurationCandidates(current),
+        intent,
+      );
+      if (candidatesResult.status === "invalidated") return;
+      const nativeProjectConfigurationUris = candidatesResult.value;
+      if (this.#latestTopologyFingerprintByClient.get(current.client) !== payload.fingerprint) return;
+      const statusResult = await this.#awaitLifecycle(
+        readWorkspaceStatus(
+          current.client,
+          this.#logger,
+          current.workspace.uri,
+          nativeProjectConfigurationUris,
+        ),
+        intent,
+      );
+      if (statusResult.status === "invalidated" || !this.#isCurrentLifecycle(intent)) return;
+      if (this.#latestTopologyFingerprintByClient.get(current.client) !== payload.fingerprint) return;
+      const status = statusResult.value;
+      if (status == null) {
+        this.#replaceSessionMetadata(current, nativeProjectConfigurationUris, null);
+        shouldDispatch = true;
+        return;
+      }
+      if (status.fingerprint !== payload.fingerprint) {
+        return;
+      }
+      if (workspaceStatusConfirmsSessionRetention(this.#vscode, status, nativeProjectConfigurationUris)) {
+        this.#replaceSessionMetadata(current, nativeProjectConfigurationUris, status);
+        shouldDispatch = true;
+        return;
+      }
+
+      this.#replaceSessionMetadata(current, nativeProjectConfigurationUris, status);
+      const workspaceKeys = containmentConnectedWorkspaceKeys(
+        this.#vscode.workspace.workspaceFolders ?? [],
+        current.folder,
+      );
+      await this.#reconcileSessions(false, intent, {
+        workspaceKeys,
+        rejectedSession: {
+          workspaceKey: current.workspace.key,
+          client: current.client,
+          fingerprint: payload.fingerprint,
+          nativeProjectConfigurationUris,
+          projectRootHintFolders: current.projectRootHintFolders,
+        },
+      });
+    });
+    return shouldDispatch;
+  }
+
   stop(): Promise<void> {
     return this.#stopRequest ??= this.#runStop();
   }
@@ -228,7 +329,8 @@ export class AureliaLanguageClient {
     }
     this.#lifecycle?.dispose();
     this.#lifecycle = null;
-    this.#pendingPackageChanges.clear();
+    this.#pendingTopologyChanges.clear();
+    this.#latestTopologyFingerprintByClient.clear();
     const sessions = this.sessions;
     this.#publishSessions(new Map());
     for (const session of sessions) {
@@ -268,6 +370,17 @@ export class AureliaLanguageClient {
     lifecycle.push(packageWatcher.onDidDelete((uri) => {
       this.#handlePackageChange(uri, FileChangeType.Deleted);
     }));
+    const projectConfigurationWatcher = this.#vscode.workspace.createFileSystemWatcher("**/aurelia.project.json");
+    lifecycle.push(projectConfigurationWatcher);
+    lifecycle.push(projectConfigurationWatcher.onDidCreate((uri) => {
+      this.#handleProjectConfigurationChange(uri, FileChangeType.Created);
+    }));
+    lifecycle.push(projectConfigurationWatcher.onDidChange((uri) => {
+      this.#handleProjectConfigurationChange(uri, FileChangeType.Changed);
+    }));
+    lifecycle.push(projectConfigurationWatcher.onDidDelete((uri) => {
+      this.#handleProjectConfigurationChange(uri, FileChangeType.Deleted);
+    }));
     lifecycle.push(this.#vscode.workspace.onDidChangeWorkspaceFolders(() => {
       this.#requestReconcile({ reconfirmExisting: true });
     }));
@@ -302,12 +415,22 @@ export class AureliaLanguageClient {
   }
 
   #handlePackageChange(uri: Uri, changeType: FileChangeType): void {
+    const topology = readWorkspaceActivationTopology(this.#vscode);
     if (
-      !isWorkspaceProjectManifestUri(uri)
+      globalActivationTopologyOwner(topology, uri) == null
       || !this.#acceptingLifecycleRequests
-      || this.#isDisabledUri(uri)
     ) return;
-    this.#pendingPackageChanges.set(uri.toString(), { uri, type: changeType });
+    this.#pendingTopologyChanges.set(uri.toString(), { uri, type: changeType });
+    this.#requestReconcile({ reconfirmExisting: true });
+  }
+
+  #handleProjectConfigurationChange(uri: Uri, changeType: FileChangeType): void {
+    const topology = readWorkspaceActivationTopology(this.#vscode);
+    if (
+      globalActivationTopologyOwner(topology, uri) == null
+      || !this.#acceptingLifecycleRequests
+    ) return;
+    this.#pendingTopologyChanges.set(uri.toString(), { uri, type: changeType });
     this.#requestReconcile({ reconfirmExisting: true });
   }
 
@@ -326,24 +449,24 @@ export class AureliaLanguageClient {
   }
 
   async #runReconcile(reconfirmExisting: boolean, intent: LifecycleIntent): Promise<void> {
-    const packageChanges = new Map(this.#pendingPackageChanges);
-    const delivered = await this.#notifyPackageChanges(packageChanges, intent);
+    const topologyChanges = new Map(this.#pendingTopologyChanges);
+    const delivered = await this.#notifyTopologyChanges(topologyChanges, intent);
     if (!this.#isCurrentLifecycle(intent)) return;
-    await this.#reconcileSessions(reconfirmExisting || packageChanges.size > 0, intent);
+    await this.#reconcileSessions(reconfirmExisting || topologyChanges.size > 0, intent);
     if (!delivered || !this.#isCurrentLifecycle(intent)) return;
-    for (const [key, change] of packageChanges) {
-      if (this.#pendingPackageChanges.get(key) === change) {
-        this.#pendingPackageChanges.delete(key);
+    for (const [key, change] of topologyChanges) {
+      if (this.#pendingTopologyChanges.get(key) === change) {
+        this.#pendingTopologyChanges.delete(key);
       }
     }
   }
 
-  async #notifyPackageChanges(
-    packageChanges: ReadonlyMap<string, PendingPackageChange>,
+  async #notifyTopologyChanges(
+    topologyChanges: ReadonlyMap<string, PendingTopologyChange>,
     intent: LifecycleIntent,
   ): Promise<boolean> {
-    const bySession = new Map<AureliaLanguageClientSession, PendingPackageChange[]>();
-    for (const change of packageChanges.values()) {
+    const bySession = new Map<AureliaLanguageClientSession, PendingTopologyChange[]>();
+    for (const change of topologyChanges.values()) {
       const session = this.sessionForUri(change.uri);
       if (session == null) continue;
       const changes = bySession.get(session) ?? [];
@@ -365,15 +488,22 @@ export class AureliaLanguageClient {
         if (result.status === "invalidated") return false;
       } catch (error) {
         delivered = false;
-        this.#logger.warn(`[client] package topology notification failed for ${session.workspace.uri}: ${errorMessage(error)}`);
+        this.#logger.warn(`[client] project topology notification failed for ${session.workspace.uri}: ${errorMessage(error)}`);
       }
     }
     return delivered;
   }
 
-  async #reconcileSessions(reconfirmExisting: boolean, intent: LifecycleIntent): Promise<void> {
+  async #reconcileSessions(
+    reconfirmExisting: boolean,
+    intent: LifecycleIntent,
+    scope: ReconcileScope | null = null,
+  ): Promise<void> {
     const previousSessions = new Map(this.#sessions);
-    const folders = this.#vscode.workspace.workspaceFolders ?? [];
+    const allFolders = this.#vscode.workspace.workspaceFolders ?? [];
+    const folders = scope == null
+      ? allFolders
+      : allFolders.filter((folder) => scope.workspaceKeys.has(workspaceFolderKey(folder)));
     const topology = readWorkspaceActivationTopology(this.#vscode);
     const admissions: WorkspaceActivationAdmission[] = [];
 
@@ -385,7 +515,7 @@ export class AureliaLanguageClient {
       if (!topology.isDisabled(folder.uri)) {
         try {
           const result = await this.#awaitLifecycle(
-            readWorkspaceActivationAdmission(this.#vscode, folder),
+            readWorkspaceActivationAdmission(this.#vscode, folder, topology.excludedFoldersFor(folder)),
             intent,
           );
           if (result.status === "invalidated") return;
@@ -404,6 +534,7 @@ export class AureliaLanguageClient {
           folder,
           mode,
           evidence: existing.activationEvidence,
+          nativeProjectConfigurationUris: existing.nativeProjectConfigurationUris,
         });
       }
     }
@@ -420,6 +551,7 @@ export class AureliaLanguageClient {
 
     const admissionKeys = new Set(admissions.map((admission) => workspaceFolderKey(admission.folder)));
     for (const session of previousSessions.values()) {
+      if (scope != null && !scope.workspaceKeys.has(session.workspace.key)) continue;
       if (!admissionKeys.has(session.workspace.key)) {
         retireActiveSession(session);
       }
@@ -432,7 +564,32 @@ export class AureliaLanguageClient {
       }
       const key = workspaceFolderKey(admission.folder);
       const excludedFolders = topology.excludedFoldersFor(admission.folder);
-
+      const projectRootHintFoldersResult = await this.#awaitLifecycle(
+        this.#liveProjectRootHintFolders(topology, admission.folder),
+        intent,
+      );
+      if (projectRootHintFoldersResult.status === "invalidated") {
+        for (const created of createdSessions) void this.#retireSession(created);
+        return;
+      }
+      const projectRootHintFolders = projectRootHintFoldersResult.value;
+      if (
+        scope?.rejectedSession.workspaceKey === key
+        && scope.rejectedSession.client === nextSessions.get(key)?.client
+        && admission.mode === AureliaActivationMode.Auto
+        && sameUris(
+          scope.rejectedSession.nativeProjectConfigurationUris,
+          admission.nativeProjectConfigurationUris,
+        )
+        && sameWorkspaceFolders(
+          scope.rejectedSession.projectRootHintFolders,
+          projectRootHintFolders,
+        )
+      ) {
+        const rejected = nextSessions.get(key);
+        if (rejected != null) retireActiveSession(rejected);
+        continue;
+      }
       // An outer root wins disjoint ownership. Withdraw any currently active
       // descendants before the outer candidate starts; if semantic confirmation
       // rejects it, the ordered pass can admit those descendants again.
@@ -446,13 +603,24 @@ export class AureliaLanguageClient {
       }
 
       let session = nextSessions.get(key);
-      if (session != null && !sameWorkspaceFolders(session.excludedFolders, excludedFolders)) {
+      if (
+        session != null
+        && (
+          !sameWorkspaceFolders(session.excludedFolders, excludedFolders)
+          || !sameWorkspaceFolders(session.projectRootHintFolders, projectRootHintFolders)
+        )
+      ) {
         retireActiveSession(session);
         session = undefined;
       }
       if (session == null) {
         try {
-          session = await this.#createStartedSession(admission, excludedFolders, intent) ?? undefined;
+          session = await this.#createStartedSession(
+            admission,
+            excludedFolders,
+            projectRootHintFolders,
+            intent,
+          ) ?? undefined;
         } catch (error) {
           this.#logger.warn(`[client] failed to start ${key}: ${errorMessage(error)}`);
         }
@@ -464,7 +632,12 @@ export class AureliaLanguageClient {
         if (session == null) continue;
       } else if (reconfirmExisting && admission.mode === AureliaActivationMode.Auto) {
         const statusResult = await this.#awaitLifecycle(
-          readWorkspaceStatus(session.client, this.#logger, session.workspace.uri),
+          readWorkspaceStatus(
+            session.client,
+            this.#logger,
+            session.workspace.uri,
+            admission.nativeProjectConfigurationUris,
+          ),
           intent,
         );
         if (statusResult.status === "invalidated" || !this.#isCurrentLifecycle(intent)) {
@@ -472,7 +645,14 @@ export class AureliaLanguageClient {
           return;
         }
         const status = statusResult.value;
-        if (status != null && !workspaceStatusConfirmsAurelia(status)) {
+        if (
+          status != null
+          && !workspaceStatusConfirmsSessionRetention(
+            this.#vscode,
+            status,
+            admission.nativeProjectConfigurationUris,
+          )
+        ) {
           retireActiveSession(session);
           continue;
         }
@@ -483,11 +663,13 @@ export class AureliaLanguageClient {
       if (
         session.activationMode !== admission.mode
         || session.activationEvidence !== admission.evidence
+        || !sameUris(session.nativeProjectConfigurationUris, admission.nativeProjectConfigurationUris)
       ) {
         session = {
           ...session,
           activationMode: admission.mode,
           activationEvidence: admission.evidence,
+          nativeProjectConfigurationUris: admission.nativeProjectConfigurationUris,
         };
       }
       nextSessions.set(key, session);
@@ -497,6 +679,7 @@ export class AureliaLanguageClient {
 
     const acceptedKeys = new Set(accepted.map((admission) => workspaceFolderKey(admission.folder)));
     for (const session of [...nextSessions.values()]) {
+      if (scope != null && !scope.workspaceKeys.has(session.workspace.key)) continue;
       if (!acceptedKeys.has(session.workspace.key)) {
         retireActiveSession(session);
       }
@@ -506,6 +689,7 @@ export class AureliaLanguageClient {
   async #createStartedSession(
     admission: WorkspaceActivationAdmission,
     excludedFolders: readonly WorkspaceFolder[],
+    projectRootHintFolders: readonly WorkspaceFolder[],
     intent: LifecycleIntent,
   ): Promise<AureliaLanguageClientSession | null> {
     const context = this.#context;
@@ -538,6 +722,7 @@ export class AureliaLanguageClient {
       documentSelector: workspaceDocumentSelector(admission.folder),
       initializationOptions: {
         excludedWorkspaceRootUris: excludedFolders.map((folder) => folder.uri.toString()),
+        projectRootHintUris: projectRootHintFolders.map((folder) => folder.uri.toString()),
       } satisfies AureliaInitializeOptions,
       synchronize: { fileEvents },
       // The server requests one standard pull refresh after its semantic source
@@ -582,7 +767,12 @@ export class AureliaLanguageClient {
       let status: WorkspaceStatusResponse | null = null;
       if (admission.mode === AureliaActivationMode.Auto) {
         const statusResult = await this.#awaitLifecycle(
-          readWorkspaceStatus(client, this.#logger, workspace.uri),
+          readWorkspaceStatus(
+            client,
+            this.#logger,
+            workspace.uri,
+            admission.nativeProjectConfigurationUris,
+          ),
           intent,
         );
         if (statusResult.status === "invalidated") {
@@ -592,7 +782,14 @@ export class AureliaLanguageClient {
         }
         status = statusResult.value;
       }
-      if (admission.mode === AureliaActivationMode.Auto && !workspaceStatusConfirmsAurelia(status)) {
+      if (
+        admission.mode === AureliaActivationMode.Auto
+        && !workspaceStatusConfirmsSessionRetention(
+          this.#vscode,
+          status,
+          admission.nativeProjectConfigurationUris,
+        )
+      ) {
         this.#logger.log(`[client] semantic project shape did not confirm candidate workspace ${workspace.uri}`);
         disposeWatchers(fileEvents, this.#logger, workspace.uri);
         void this.#retireClient(client, workspace.uri);
@@ -607,8 +804,10 @@ export class AureliaLanguageClient {
         client,
         activationMode: admission.mode,
         activationEvidence: admission.evidence,
+        nativeProjectConfigurationUris: admission.nativeProjectConfigurationUris,
         status,
         excludedFolders,
+        projectRootHintFolders,
         fileEvents,
       };
     } catch (error) {
@@ -618,6 +817,18 @@ export class AureliaLanguageClient {
       disposeWatchers(fileEvents, this.#logger, workspace.uri);
       throw error;
     }
+  }
+
+  async #liveProjectRootHintFolders(
+    topology: ReturnType<typeof readWorkspaceActivationTopology>,
+    owner: WorkspaceFolder,
+  ): Promise<readonly WorkspaceFolder[]> {
+    const candidates = topology.projectRootHintFoldersFor(owner);
+    const existence = await Promise.all(candidates.map(async (folder) => ({
+      folder,
+      exists: await uriIsDirectory(this.#vscode, folder.uri),
+    })));
+    return existence.filter((entry) => entry.exists).map((entry) => entry.folder);
   }
 
   #createSessionWatchers(folder: WorkspaceFolder): FileSystemWatcher[] {
@@ -655,6 +866,7 @@ export class AureliaLanguageClient {
   }
 
   #retireSession(session: AureliaLanguageClientSession): Promise<void> {
+    this.#latestTopologyFingerprintByClient.delete(session.client);
     disposeWatchers(session.fileEvents, this.#logger, session.workspace.uri);
     return this.#retireClient(session.client, session.workspace.uri);
   }
@@ -710,6 +922,49 @@ export class AureliaLanguageClient {
     this.#sessions = nextSessions;
     this.#sessionsChanged.fire(this.sessions);
   }
+
+  #replaceSessionMetadata(
+    session: AureliaLanguageClientSession,
+    nativeProjectConfigurationUris: readonly Uri[],
+    status: WorkspaceStatusResponse | null,
+  ): void {
+    if (this.#sessions.get(session.workspace.key)?.client !== session.client) return;
+    this.#sessions.set(session.workspace.key, {
+      ...session,
+      nativeProjectConfigurationUris,
+      status: status ?? session.status,
+    });
+  }
+
+  async #refreshNativeProjectConfigurationCandidates(
+    session: AureliaLanguageClientSession,
+  ): Promise<readonly Uri[]> {
+    const openConfigurations = this.#vscode.workspace.textDocuments
+      .map((document) => document.uri)
+      .filter((uri) => isWorkspaceNativeProjectConfigurationUri(session.folder, uri));
+    const known = [...openConfigurations, ...session.nativeProjectConfigurationUris]
+      .filter((uri) => !session.excludedFolders.some((excluded) => workspaceFolderContainsUri(excluded, uri)));
+    const openKeys = new Set(openConfigurations
+      .map((uri) => documentUriIdentityKey(this.#vscode, uri))
+      .filter((key): key is string => key != null));
+    const retained = await Promise.all(known.map(async (uri) => {
+      const key = documentUriIdentityKey(this.#vscode, uri);
+      if (key != null && openKeys.has(key)) return uri;
+      try {
+        await this.#vscode.workspace.fs.stat(uri);
+        return uri;
+      } catch {
+        return null;
+      }
+    }));
+    const byIdentity = new Map<string, Uri>();
+    for (const uri of retained) {
+      if (uri == null) continue;
+      const key = documentUriIdentityKey(this.#vscode, uri);
+      if (key != null && !byIdentity.has(key)) byIdentity.set(key, uri);
+    }
+    return [...byIdentity.values()].sort((left, right) => left.toString().localeCompare(right.toString()));
+  }
 }
 
 function workspaceDocumentSelector(
@@ -730,9 +985,15 @@ async function readWorkspaceStatus(
   client: LanguageClient,
   logger: ClientLogger,
   workspaceUri: string,
+  nativeProjectConfigurationUris: readonly Uri[],
 ): Promise<WorkspaceStatusResponse | null> {
   try {
-    return await client.sendRequest<WorkspaceStatusResponse | null>(AureliaProtocolRequest.WorkspaceStatus);
+    return await client.sendRequest<WorkspaceStatusResponse | null>(
+      AureliaProtocolRequest.WorkspaceStatus,
+      {
+        nativeProjectConfigurationUris: nativeProjectConfigurationUris.map((uri) => uri.toString()),
+      } satisfies WorkspaceStatusParams,
+    );
   } catch (error) {
     // Initial admission fails closed on null; an established session may keep
     // running through a transient reconfirmation failure.
@@ -791,6 +1052,34 @@ function sameWorkspaceFolders(
 ): boolean {
   return left.length === right.length
     && left.every((folder, index) => workspaceFolderKey(folder) === workspaceFolderKey(right[index]!));
+}
+
+function containmentConnectedWorkspaceKeys(
+  folders: readonly WorkspaceFolder[],
+  origin: WorkspaceFolder,
+): ReadonlySet<string> {
+  const connected = new Map<string, WorkspaceFolder>([[workspaceFolderKey(origin), origin]]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const folder of folders) {
+      const key = workspaceFolderKey(folder);
+      if (connected.has(key)) continue;
+      if ([...connected.values()].some((candidate) =>
+        workspaceFolderContainsUri(candidate, folder.uri)
+        || workspaceFolderContainsUri(folder, candidate.uri)
+      )) {
+        connected.set(key, folder);
+        changed = true;
+      }
+    }
+  }
+  return new Set(connected.keys());
+}
+
+function sameUris(left: readonly Uri[], right: readonly Uri[]): boolean {
+  return left.length === right.length
+    && left.every((uri, index) => uri.toString() === right[index]!.toString());
 }
 
 function createLifecycleIntent(generation: number): LifecycleIntent {

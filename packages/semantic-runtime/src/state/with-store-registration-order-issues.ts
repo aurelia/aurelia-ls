@@ -111,7 +111,7 @@ function readWithStoreAfterRegistrationSites(
   typeSystem: TypeSystemProject,
 ): readonly WithStoreAfterRegistrationSite[] {
   return project.sourceFiles.flatMap((source) => {
-    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
+    const sourceFile = typeSystem.readProgramSourceFileByProjectPath(source.path);
     return sourceFile == null
       ? []
       : readSourceFileWithStoreAfterRegistrationSites(source.path, source.addressHandle, sourceFile);

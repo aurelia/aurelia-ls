@@ -55,6 +55,12 @@ declare const computationIdBrand: unique symbol;
 /** Opaque identity for one logical computation occurrence inside an active store. */
 export type ComputationId = string & { readonly [computationIdBrand]: true };
 
+/** Exact identity of one admitted committed computation generation. */
+export interface ComputationGenerationReference {
+  readonly computationId: ComputationId;
+  readonly runSequence: number;
+}
+
 /**
  * Domain-owned stable locus used to reconcile a logical computation across runs.
  * Committed state retains only this immutable kernel identity; domain payload must be encoded in the key.
@@ -214,6 +220,8 @@ export interface ComputationRead {
   validate(scope?: ComputationReadValidationScope): ComputationReadValidation;
   /** Re-capture the same observed value through its current authority, or refuse when that authority cannot rebase. */
   tryRebaseCurrent(): ComputationRead | null;
+  /** Exact committed computations whose read closures produced this derived read. */
+  readComputationDependencies?(): readonly ComputationGenerationReference[];
 }
 
 /**
@@ -2338,6 +2346,81 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
 
   readState(computationId: ComputationId): ComputationState | null {
     return this.entriesById.get(computationId)?.state ?? null;
+  }
+
+  /**
+   * Project selected original reads through one exact committed generation and all explicitly linked upstream
+   * computation generations.
+   *
+   * This is the safe extraction boundary for detached provenance such as source-world receipts. It deliberately does
+   * not expose `ComputationState`, sealed wrappers, currentness clocks, publications, or domain object graphs.
+   */
+  readCommittedGenerationReadClosure<TRead extends ComputationRead>(
+    generation: ComputationGenerationReference,
+    select: (read: ComputationRead) => read is TRead,
+  ): readonly TRead[] {
+    const visitedGenerations = new Set<string>();
+    const selectedByIdentity = new Map<string, TRead>();
+    const selectedRevisionByKey = new Map<string, string>();
+
+    const visit = (reference: ComputationGenerationReference): void => {
+      const generationKey = JSON.stringify([reference.computationId, reference.runSequence]);
+      if (visitedGenerations.has(generationKey)) {
+        return;
+      }
+      const entry = this.entriesById.get(reference.computationId) ?? null;
+      const state = entry?.state ?? null;
+      if (
+        entry == null
+        || state?.committedRunSequence !== reference.runSequence
+        || entry.admittedGenerationDomains.size === 0
+        || !state.currentnessWitness.isCurrent()
+      ) {
+        throw new Error(
+          `Cannot project uncommitted or unadmitted computation generation `
+          + `${reference.computationId}@${reference.runSequence}.`,
+        );
+      }
+      visitedGenerations.add(generationKey);
+
+      const openReads = [
+        ...state.openReads,
+        ...state.children.flatMap((child) => child.openReads),
+      ];
+      if (openReads.length > 0) {
+        throw new Error(
+          `Cannot project computation generation ${reference.computationId}@${reference.runSequence} `
+          + `because its committed closure contains unresolved aggregate reads.`,
+        );
+      }
+
+      const projectReads = (reads: readonly ComputationRead[]): void => {
+        for (const sealedRead of reads) {
+          const read = SealedComputationRead.sourceOf(sealedRead);
+          if (select(read)) {
+            const key = JSON.stringify([read.domain, read.readKey]);
+            const priorRevision = selectedRevisionByKey.get(key) ?? null;
+            if (priorRevision != null && priorRevision !== read.observedRevision) {
+              throw new Error(
+                `Committed computation closure contains conflicting revisions for ${read.domain}:${read.readKey}.`,
+              );
+            }
+            selectedRevisionByKey.set(key, read.observedRevision);
+            selectedByIdentity.set(computationReadValidationIdentity(read), read);
+          }
+          for (const dependency of read.readComputationDependencies?.() ?? []) {
+            visit(dependency);
+          }
+        }
+      };
+      projectReads(state.reads);
+      for (const child of state.children) {
+        projectReads(child.reads);
+      }
+    };
+
+    visit(generation);
+    return Object.freeze([...selectedByIdentity.values()]);
   }
 
   /** Admit one domain object graph exactly once for the current committed run. */

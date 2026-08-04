@@ -10,6 +10,8 @@ interface StubUri {
   authority: string;
   fsPath: string;
   path: string;
+  query: string;
+  fragment: string;
   toString(): string;
   with(change: { scheme?: string; authority?: string; path?: string }): StubUri;
 }
@@ -130,10 +132,10 @@ export interface StubVscodeApi {
     workspaceFolders: Array<{ name: string; index: number; uri: StubUri }> | undefined;
     textDocuments: StubDocument[];
     fs: {
-      stat: (uri: StubUri) => Promise<{ type: string; uri: StubUri }>;
+      stat: (uri: StubUri) => Promise<{ type: number; uri: StubUri }>;
       readFile: (uri: StubUri) => Promise<Uint8Array>;
     };
-    findFiles: (include: unknown, exclude?: unknown) => Promise<StubUri[]>;
+    findFiles: (include: unknown, exclude?: unknown, maxResults?: number) => Promise<StubUri[]>;
     getConfiguration: (section: string, uri?: StubUri) => { get<T>(key: string, defaultValue: T): T };
     onDidChangeWorkspaceFolders: (listener: () => void) => Disposable;
     onDidChangeConfiguration: (listener: (event: { affectsConfiguration: (section: string) => boolean }) => void) => Disposable;
@@ -172,6 +174,7 @@ export interface StubVscodeApi {
   TreeItemCollapsibleState: { None: number; Collapsed: number; Expanded: number };
   StatusBarAlignment: { Left: number; Right: number };
   ViewColumn: { Beside: number; One: number };
+  FileType: { Unknown: number; File: number; Directory: number; SymbolicLink: number };
 }
 
 // =============================================================================
@@ -413,7 +416,7 @@ function createUri(raw: string | StubUri): StubUri {
   if (typeof raw !== "string") return raw;
   const scheme = hasScheme(raw) ? raw.slice(0, raw.indexOf(":")) : "file";
   const remainder = raw.includes(":") ? raw.slice(raw.indexOf(":") + 1) : raw;
-  const withoutPrefix = remainder.replace(/^\/\//, "");
+  const withoutPrefix = decodeUriPath(remainder.replace(/^\/\//, ""));
   const fsPath = scheme === "file" ? path.normalize(withoutPrefix) : withoutPrefix;
   const uriPath = `/${fsPath.replaceAll("\\", "/").replace(/^\/+/, "")}`;
   return {
@@ -421,6 +424,8 @@ function createUri(raw: string | StubUri): StubUri {
     authority: "",
     fsPath,
     path: uriPath,
+    query: "",
+    fragment: "",
     toString() {
       return raw;
     },
@@ -431,6 +436,14 @@ function createUri(raw: string | StubUri): StubUri {
       return createUri(`${nextScheme}://${nextAuthority}${nextPath}`);
     },
   };
+}
+
+function decodeUriPath(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }
 
 function isUri(value: unknown): value is StubUri {
@@ -479,6 +492,7 @@ export function createVscodeApi(options: CreateVscodeApiOptions = {}): { vscode:
     path.normalize(createUri(file).fsPath),
     text,
   ]));
+  const explicitlyMissingFiles = new Set<string>();
 
   function registerCommand(command: string, handler: (...args: unknown[]) => unknown): Disposable {
     commandHandlers.set(command, handler);
@@ -532,12 +546,17 @@ export function createVscodeApi(options: CreateVscodeApiOptions = {}): { vscode:
     textDocuments,
     fs: {
       stat: async (uri: StubUri) => {
-        if (options.existingFiles === false) {
+        const filePath = path.normalize(uri.fsPath);
+        if (options.existingFiles === false || explicitlyMissingFiles.has(filePath)) {
           const err = new Error("ENOENT") as Error & { code: string };
           err.code = "ENOENT";
           throw err;
         }
-        return { type: "file", uri };
+        const isDirectory = !files.has(filePath) && (
+          workspaceFolders?.some((folder) => path.normalize(folder.uri.fsPath) === filePath) === true
+          || [...files.keys()].some((candidate) => pathIsWithin(candidate, filePath) && candidate !== filePath)
+        );
+        return { type: isDirectory ? 2 : 1, uri };
       },
       readFile: async (uri: StubUri) => {
         const text = files.get(path.normalize(uri.fsPath));
@@ -547,13 +566,17 @@ export function createVscodeApi(options: CreateVscodeApiOptions = {}): { vscode:
         return new TextEncoder().encode(text);
       },
     },
-    findFiles: async (include: unknown) => {
+    findFiles: async (include: unknown, _exclude?: unknown, maxResults?: number) => {
       const pattern = include as { baseUri?: StubUri; base?: { uri?: StubUri }; pattern?: string };
       const base = pattern.baseUri ?? pattern.base?.uri ?? null;
-      return [...files.keys()]
+      const expectedBaseName = pattern.pattern?.startsWith("**/")
+        ? pattern.pattern.slice(3)
+        : null;
+      const matches = [...files.keys()]
         .filter((file) => base == null || pathIsWithin(file, base.fsPath))
-        .filter((file) => pattern.pattern !== "**/package.json" || path.basename(file) === "package.json")
+        .filter((file) => expectedBaseName == null || path.basename(file) === expectedBaseName)
         .map((file) => createUri(`file://${file}`));
+      return maxResults == null ? matches : matches.slice(0, maxResults);
     },
     getConfiguration: (section: string, uri?: StubUri) => ({
       get<T>(key: string, defaultValue: T): T {
@@ -659,6 +682,7 @@ export function createVscodeApi(options: CreateVscodeApiOptions = {}): { vscode:
     TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
     StatusBarAlignment: { Left: 1, Right: 2 },
     ViewColumn: { Beside: 2, One: 1 },
+    FileType: { Unknown: 0, File: 1, Directory: 2, SymbolicLink: 64 },
   };
 
   return {
@@ -695,9 +719,15 @@ export function createVscodeApi(options: CreateVscodeApiOptions = {}): { vscode:
         if (index >= 0) textDocuments.splice(index, 1);
         documentClosed.fire(document);
       },
-      setFile: (uri, value) => files.set(path.normalize(createUri(uri).fsPath), value),
+      setFile: (uri, value) => {
+        const filePath = path.normalize(createUri(uri).fsPath);
+        explicitlyMissingFiles.delete(filePath);
+        files.set(filePath, value);
+      },
       deleteFile: (uri) => {
-        files.delete(path.normalize(createUri(uri).fsPath));
+        const filePath = path.normalize(createUri(uri).fsPath);
+        files.delete(filePath);
+        explicitlyMissingFiles.add(filePath);
       },
     },
   };

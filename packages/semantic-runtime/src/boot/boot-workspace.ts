@@ -2,6 +2,7 @@ import {
   join,
   isAbsolute,
   relative,
+  resolve,
 } from 'node:path';
 import {
   SourceFileAddress,
@@ -9,6 +10,7 @@ import {
 } from '../kernel/address.js';
 import { EvidenceKind, EvidenceRecord, EvidenceRole } from '../kernel/evidence.js';
 import type { AddressHandle, EvidenceHandle, ProvenanceHandle } from '../kernel/handles.js';
+import { stableKernelLocalHash } from '../kernel/handles.js';
 import { KernelPublicationPlan, type KernelPublicationContext } from '../kernel/publication.js';
 import { ProvenanceRecord } from '../kernel/provenance.js';
 import { KernelStore, KernelStoreBatch } from '../kernel/store.js';
@@ -19,34 +21,34 @@ import {
   ProjectBootFrame,
   SourceFileAdmission,
   WorkspaceBootFrame,
-  BootProjectDiscoveryMode,
   type BootProjectInput,
+  type ResolvedBootProjectInput,
   type BootSourceFileInput,
   type BootWorkspaceInput,
-  type SourceDiscoveryResult,
 } from './frames.js';
-import { discoverBootProjects } from './project-discovery.js';
 import {
   inferSourceFileRole,
   inferSourceLanguage,
 } from '../kernel/source-classification.js';
-import { discoverSourceFiles } from './source-discovery.js';
-import { isHostPathWithin } from './host-files.js';
 import {
-  AuthoredSourceBoundary,
-  authoredSourceExclusionsWithin,
-} from './source-boundary.js';
+  isProjectRootMarkerAdmissionOrigin,
+  projectRootAdmissionOriginKey,
+  ProjectRootAdmissionOriginKind,
+  type ProjectRootAdmissionOrigin,
+} from './project-root-admission.js';
+import { canonicalTypeSystemPath } from '../type-system/source-file-path.js';
+import {
+  resolveSemanticSourceWorld,
+  resolveSemanticSourceWorldProject,
+  type ResolvedSemanticSourceWorld,
+  type ResolvedSemanticSourceWorldProject,
+} from './source-world.js';
 
 function normalizePathForProject(rootDir: string, path: string): string {
   const normalized = isAbsolute(path)
     ? relative(rootDir, path)
     : path;
   return normalized.replace(/\\/g, '/');
-}
-
-function defaultProjectKey(rootDir: string): string {
-  const parts = rootDir.split(/[\\/]/);
-  return parts.at(-1) || 'project';
 }
 
 function sourceLocalKey(projectKey: string, path: string): string {
@@ -59,6 +61,21 @@ function evidenceLocalKey(projectKey: string, path: string): string {
 
 function provenanceLocalKey(projectKey: string, path: string): string {
   return `source-admission:${projectKey}:${path}`;
+}
+
+function projectAdmissionProvenanceLocalKey(projectKey: string): string {
+  return `project-root-admission:${projectKey}`;
+}
+
+function projectAdmissionEvidenceLocalKey(
+  projectRootDir: string,
+  projectKey: string,
+  origin: ProjectRootAdmissionOrigin,
+): string {
+  return `project-root-admission:${projectKey}:${stableKernelLocalHash([
+    canonicalTypeSystemPath(projectRootDir),
+    projectRootAdmissionOriginKey(origin),
+  ].join('|'))}`;
 }
 
 class SourceFileAdmissionPaths {
@@ -80,83 +97,168 @@ class SourceFileAdmissionHandles {
 
 /** Boot one workspace into a kernel store without interpreting Aurelia semantics yet. */
 export function bootWorkspace(input: BootWorkspaceInput): WorkspaceBootFrame {
-  const workspaceKey = input.storeKey ?? `workspace:${input.rootDir}`;
-  const store = input.store ?? new KernelStore(workspaceKey);
-  const projectInputAuthority = input.projectInputAuthority ?? new SemanticRuntimeProjectInputAuthority();
-  const workspaceBoundary = new AuthoredSourceBoundary(input.rootDir, input.excludedWorkspaceRoots);
-  const projectInputs = input.projects == null
-    ? discoverBootProjects(
-        input.rootDir,
-        projectInputAuthority.host,
-        input.projectDiscovery ?? BootProjectDiscoveryMode.PackageTsconfig,
-        workspaceBoundary.excludedRootDirs,
-      )
-    : input.projects.map((project) => projectInputWithinWorkspaceBoundary(project, workspaceBoundary));
-  assertUniqueProjectKeys(projectInputs);
-  const projects = projectInputs
-    .map((project) => bootProject(store, input.rootDir, project, projectInputAuthority));
-
-  return new WorkspaceBootFrame(input.rootDir, workspaceKey, store, projects, projectInputAuthority);
+  const sourceWorld = resolveSemanticSourceWorld(input);
+  return bootWorkspaceFromSourceWorld(sourceWorld, input.storeKey, input.store);
 }
 
-function assertUniqueProjectKeys(projects: readonly BootProjectInput[]): void {
-  const rootsByKey = new Map<string, string>();
-  for (const project of projects) {
-    const projectKey = project.projectKey ?? defaultProjectKey(project.rootDir);
-    const existingRoot = rootsByKey.get(projectKey) ?? null;
-    if (existingRoot != null) {
-      throw new Error(
-        `Cannot boot projects '${existingRoot}' and '${project.rootDir}' with duplicate project key '${projectKey}'.`,
-      );
-    }
-    rootsByKey.set(projectKey, project.rootDir);
-  }
+/** Publish one already-resolved semantic source world without repeating discovery or configuration reads. */
+export function bootWorkspaceFromSourceWorld(
+  sourceWorld: ResolvedSemanticSourceWorld,
+  storeKey?: string,
+  existingStore?: KernelStore,
+): WorkspaceBootFrame {
+  const workspaceKey = storeKey ?? `workspace:${sourceWorld.descriptor.workspaceRoot}`;
+  const store = existingStore ?? new KernelStore(workspaceKey);
+  const projects = sourceWorld.projects.map((project) =>
+    publishResolvedSourceWorldProject(store, sourceWorld.descriptor.workspaceRoot, project));
+  return new WorkspaceBootFrame(
+    sourceWorld.descriptor.workspaceRoot,
+    workspaceKey,
+    store,
+    projects,
+    sourceWorld.projectInputAuthority,
+    sourceWorld,
+  );
 }
 
 /** Boot one project frame and admit source files into the kernel. */
 export function bootProject(
   store: KernelStore,
   workspaceRootDir: string,
-  input: BootProjectInput,
+  input: BootProjectInput | ResolvedBootProjectInput,
   projectInputAuthority: SemanticRuntimeProjectInputAuthority = new SemanticRuntimeProjectInputAuthority(),
 ): ProjectBootFrame {
-  const projectKey = input.projectKey ?? defaultProjectKey(input.rootDir);
-  const inputGeneration = projectInputAuthority.capture({ projectKey, rootDir: input.rootDir });
-  const authoredSources = new AuthoredSourceBoundary(input.rootDir, input.excludedSourceRoots);
-  const discovery: SourceDiscoveryResult | null = input.sourceFiles == null
-    ? discoverSourceFiles(inputGeneration.host, input.rootDir, authoredSources, input.sourceDiscoveryOptions)
-    : null;
-  const sources = (input.sourceFiles ?? discovery?.sourceFiles ?? [])
-    .filter((source) => authoredSources.contains(source.path));
-  const admissions = sources.map((source) =>
-    admitSourceFile(store, workspaceRootDir, input.rootDir, projectKey, source)
+  const resolvedInput: ResolvedBootProjectInput = 'admissionOrigins' in input
+    ? input
+    : {
+        ...input,
+        admissionOrigins: [{ kind: ProjectRootAdmissionOriginKind.ExplicitProject }],
+      };
+  const project = resolveSemanticSourceWorldProject(
+    workspaceRootDir,
+    resolvedInput,
+    projectInputAuthority,
+  );
+  return publishResolvedSourceWorldProject(store, workspaceRootDir, project);
+}
+
+function publishResolvedSourceWorldProject(
+  store: KernelStore,
+  workspaceRootDir: string,
+  project: ResolvedSemanticSourceWorldProject,
+): ProjectBootFrame {
+  const admissions = project.sourceFiles.map((source) =>
+    admitSourceFile(store, workspaceRootDir, project.rootDir, project.projectKey, source)
+  );
+  const admissionProvenanceHandle = publishProjectRootAdmission(
+    store,
+    project.rootDir,
+    project.projectKey,
+    project.admissionOrigins,
+    admissions,
   );
 
   return new ProjectBootFrame(
     workspaceRootDir,
-    input.rootDir,
-    projectKey,
+    project.rootDir,
+    project.projectKey,
+    project.admissionOrigins,
+    admissionProvenanceHandle,
     admissions,
-    discovery,
-    authoredSources.excludedRootDirs,
-    inputGeneration,
+    project.sourceDiscovery,
+    project.baseExcludedSourceRootDirs,
+    project.inputGeneration,
+    project.projectConfiguration,
   );
 }
 
-function projectInputWithinWorkspaceBoundary(
-  project: BootProjectInput,
-  workspaceBoundary: AuthoredSourceBoundary,
-): BootProjectInput {
-  if (isHostPathWithin(project.rootDir, workspaceBoundary.rootDir) && !workspaceBoundary.contains(project.rootDir)) {
-    throw new Error(`Explicit project root '${project.rootDir}' is excluded from workspace '${workspaceBoundary.rootDir}'.`);
+function publishProjectRootAdmission(
+  publication: KernelPublicationContext,
+  projectRootDir: string,
+  projectKey: string,
+  origins: readonly ProjectRootAdmissionOrigin[],
+  sourceFiles: readonly SourceFileAdmission[],
+): ProvenanceHandle {
+  if (origins.length === 0) {
+    throw new Error(`Project '${projectKey}' has no project-root admission origin.`);
   }
-  return {
-    ...project,
-    excludedSourceRoots: [
-      ...(project.excludedSourceRoots ?? []),
-      ...authoredSourceExclusionsWithin(project.rootDir, workspaceBoundary.excludedRootDirs),
+  const provenanceHandle = publication.handles.provenance(projectAdmissionProvenanceLocalKey(projectKey));
+  const evidenceHandles = origins.map((origin) =>
+    publication.handles.evidence(projectAdmissionEvidenceLocalKey(projectRootDir, projectKey, origin)));
+  const existing = publication.read(provenanceHandle);
+  if (existing != null) {
+    if (
+      existing.kind === 'provenance-record'
+      && existing.evidenceHandles.length === evidenceHandles.length
+      && existing.evidenceHandles.every((handle, index) => handle === evidenceHandles[index])
+    ) {
+      return provenanceHandle;
+    }
+    throw new Error(
+      `Kernel store already contains a different project-root admission for '${projectKey}'; a fresh workspace boot is required.`,
+    );
+  }
+  const evidence = origins.map((origin, index) => new EvidenceRecord(
+    evidenceHandles[index]!,
+    projectRootAdmissionEvidenceKind(origin),
+    [EvidenceRole.Admission],
+    projectRootAdmissionEvidenceSummary(projectRootDir, origin),
+    projectRootAdmissionSourceAddress(projectRootDir, origin, sourceFiles),
+  ));
+  publication.publish(new KernelPublicationPlan(new KernelStoreBatch(
+    [
+      ...evidence,
+      new ProvenanceRecord(provenanceHandle, evidenceHandles),
     ],
-  };
+    `project-root-admission:${projectKey}`,
+  )));
+  return provenanceHandle;
+}
+
+function projectRootAdmissionEvidenceKind(origin: ProjectRootAdmissionOrigin): EvidenceKind {
+  if (isProjectRootMarkerAdmissionOrigin(origin)) {
+    return EvidenceKind.SourceObservation;
+  }
+  return origin.kind === ProjectRootAdmissionOriginKind.WorkspaceRootFallback
+    ? EvidenceKind.SemanticObservation
+    : EvidenceKind.External;
+}
+
+function projectRootAdmissionEvidenceSummary(
+  projectRootDir: string,
+  origin: ProjectRootAdmissionOrigin,
+): string {
+  switch (origin.kind) {
+    case ProjectRootAdmissionOriginKind.ExplicitProject:
+      return `Project root '${projectRootDir}' was supplied through the explicit projects input.`;
+    case ProjectRootAdmissionOriginKind.SingleRoot:
+      return `Project root '${projectRootDir}' was admitted by single-root discovery policy.`;
+    case ProjectRootAdmissionOriginKind.WorkspaceRootFallback:
+      return `Workspace root '${projectRootDir}' was retained because ordinary project-marker discovery found no roots.`;
+    case ProjectRootAdmissionOriginKind.HostProjectRootHint:
+      return `Project root '${projectRootDir}' was supplied as an existing host project-root hint.`;
+    case ProjectRootAdmissionOriginKind.PackageJsonMarker:
+    case ProjectRootAdmissionOriginKind.TsconfigJsonMarker:
+    case ProjectRootAdmissionOriginKind.JsconfigJsonMarker:
+    case ProjectRootAdmissionOriginKind.AureliaProjectJsonMarker:
+      return origin.viaProjectRootHintDir == null
+        ? `Project root '${projectRootDir}' was admitted from exact marker '${origin.sourceFilePath}'.`
+        : `Project root '${projectRootDir}' was admitted from exact marker '${origin.sourceFilePath}' after traversal restarted at host hint '${origin.viaProjectRootHintDir}'.`;
+  }
+}
+
+function projectRootAdmissionSourceAddress(
+  projectRootDir: string,
+  origin: ProjectRootAdmissionOrigin,
+  sourceFiles: readonly SourceFileAdmission[],
+): AddressHandle | null {
+  if (!isProjectRootMarkerAdmissionOrigin(origin)) {
+    return null;
+  }
+  const markerIdentity = canonicalTypeSystemPath(origin.sourceFilePath);
+  return sourceFiles.find((source) =>
+    canonicalTypeSystemPath(resolve(projectRootDir, source.path)) === markerIdentity
+  )?.addressHandle ?? null;
 }
 
 /** Admit one source file as an address plus evidence/provenance records. */

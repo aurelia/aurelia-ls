@@ -9,6 +9,7 @@ import {
   ResponseError,
   LSPErrorCodes,
   SemanticTokensRequest,
+  type SemanticTokens,
   type CompletionList,
   type Hover,
   type Definition,
@@ -50,6 +51,7 @@ import {
 } from "../mapping/lsp-types.js";
 import { handleSemanticTokensFull } from "./semantic-tokens.js";
 import {
+  runSemanticRuntimeDocumentRequest,
   runSemanticRuntimeRequest,
 } from "./request-guard.js";
 import type { SemanticRuntimeLspRequestGuard } from "../runtime/semantic-runtime-session.js";
@@ -388,43 +390,80 @@ export async function handleCodeActionResolve(
 // ============================================================================
 
 export function registerFeatureHandlers(ctx: ServerContext): void {
-  ctx.connection.onCompletion((params, token) => request(ctx, "completion", token, params.textDocument.uri,
+  ctx.connection.onCompletion((params, token) => documentRequest(ctx, "completion", token, params.textDocument.uri,
+    (): CompletionList => ({ isIncomplete: false, items: [] }),
     (guard) => handleCompletion(ctx, params, guard)));
-  ctx.connection.onHover((params, token) => request(ctx, "hover", token, params.textDocument.uri,
+  ctx.connection.onHover((params, token) => documentRequest(ctx, "hover", token, params.textDocument.uri,
+    () => null,
     (guard) => handleHover(ctx, params, guard)));
-  ctx.connection.onDefinition((params, token) => request(ctx, "definition", token, params.textDocument.uri,
+  ctx.connection.onDefinition((params, token) => documentRequest(ctx, "definition", token, params.textDocument.uri,
+    () => null,
     (guard) => handleDefinition(ctx, params, guard)));
-  ctx.connection.onReferences((params, token) => request(ctx, "references", token, params.textDocument.uri,
+  ctx.connection.onReferences((params, token) => documentRequest(ctx, "references", token, params.textDocument.uri,
+    () => null,
     (guard) => handleReferences(ctx, params, guard)));
-  ctx.connection.onDocumentHighlight((params, token) => request(ctx, "documentHighlight", token, params.textDocument.uri,
+  ctx.connection.onDocumentHighlight((params, token) => documentRequest(ctx, "documentHighlight", token, params.textDocument.uri,
+    () => null,
     (guard) => handleDocumentHighlight(ctx, params, guard)));
-  ctx.connection.onPrepareRename((params, token) => request(ctx, "prepareRename", token, params.textDocument.uri,
+  ctx.connection.onPrepareRename((params, token) => documentRequest(ctx, "prepareRename", token, params.textDocument.uri,
+    () => null,
     (guard) => handlePrepareRename(ctx, params, guard)));
-  ctx.connection.onRenameRequest((params, token) => request(ctx, "rename", token, params.textDocument.uri,
+  ctx.connection.onRenameRequest((params, token) => documentRequest(ctx, "rename", token, params.textDocument.uri,
+    () => null,
     (guard) => handleRename(ctx, params, guard)));
-  ctx.connection.onCodeAction((params, token) => request(ctx, "codeAction", token, params.textDocument.uri,
+  ctx.connection.onCodeAction((params, token) => documentRequest(ctx, "codeAction", token, params.textDocument.uri,
+    () => null,
     (guard) => handleCodeAction(ctx, params, guard)));
-  ctx.connection.onCodeActionResolve((action, token) => request(ctx, "codeAction/resolve", token, undefined,
-    (guard) => handleCodeActionResolve(ctx, action, guard)));
-  ctx.connection.onDocumentSymbol((params, token) => request(ctx, "documentSymbol", token, params.textDocument.uri,
+  ctx.connection.onCodeActionResolve((action, token) => {
+    const uri = semanticRuntimeTemplateCodeActionResolveData(action.data)?.textDocument.uri;
+    return uri == null
+      ? request(ctx, "codeAction/resolve", token, undefined, (guard) => handleCodeActionResolve(ctx, action, guard))
+      : documentRequest(ctx, "codeAction/resolve", token, uri, () => action,
+          (guard) => handleCodeActionResolve(ctx, action, guard));
+  });
+  ctx.connection.onDocumentSymbol((params, token) => documentRequest(ctx, "documentSymbol", token, params.textDocument.uri,
+    () => null,
     (guard) => handleDocumentSymbols(ctx, params, guard)));
   ctx.connection.onWorkspaceSymbol((params, token) => request(ctx, "workspaceSymbol", token, undefined,
     (guard) => handleWorkspaceSymbols(ctx, params, guard)));
-  ctx.connection.onSelectionRanges((params, token) => request(ctx, "selectionRange", token, params.textDocument.uri,
+  ctx.connection.onSelectionRanges((params, token) => documentRequest(ctx, "selectionRange", token, params.textDocument.uri,
+    () => null,
     (guard) => handleSelectionRanges(ctx, params, guard)));
-  ctx.connection.languages.onLinkedEditingRange((params, token) => request(ctx, "linkedEditingRange", token, params.textDocument.uri,
+  ctx.connection.languages.onLinkedEditingRange((params, token) => documentRequest(ctx, "linkedEditingRange", token, params.textDocument.uri,
+    () => null,
     (guard) => handleLinkedEditingRange(ctx, params, guard)));
-  ctx.connection.onFoldingRanges((params, token) => request(ctx, "foldingRange", token, params.textDocument.uri,
+  ctx.connection.onFoldingRanges((params, token) => documentRequest(ctx, "foldingRange", token, params.textDocument.uri,
+    () => null,
     (guard) => handleFoldingRanges(ctx, params, guard)));
 
   // Inlay hints — binding mode resolution
-  ctx.connection.languages.inlayHint.on((params, token) => request(ctx, "inlayHints", token, params.textDocument.uri,
+  ctx.connection.languages.inlayHint.on((params, token) => documentRequest(ctx, "inlayHints", token, params.textDocument.uri,
+    () => null,
     (guard) => handleInlayHints(ctx, params, guard)));
 
 
   ctx.connection.onRequest(SemanticTokensRequest.type, (params, token) =>
-    request(ctx, "semanticTokens", token, params.textDocument.uri,
+    documentRequest(ctx, "semanticTokens", token, params.textDocument.uri,
+      (): SemanticTokens => ({ data: [] }),
       async (guard) => await handleSemanticTokensFull(ctx, params, guard) ?? { data: [] }));
+}
+
+function documentRequest<T>(
+  ctx: ServerContext,
+  feature: string,
+  token: CancellationToken,
+  uri: string,
+  whenNotAuthored: (guard: SemanticRuntimeLspRequestGuard) => T | Promise<T>,
+  handler: (guard: SemanticRuntimeLspRequestGuard) => T | Promise<T>,
+): Promise<T> {
+  return runSemanticRuntimeDocumentRequest(
+    ctx,
+    feature,
+    token,
+    uri,
+    whenNotAuthored,
+    handler,
+  );
 }
 
 function request<T>(

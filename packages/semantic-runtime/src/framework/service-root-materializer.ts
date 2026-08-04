@@ -318,7 +318,7 @@ function readFrameworkContainerRootSites(
   sourceApiRoots: AureliaSourceApiRootFacts,
 ): readonly FrameworkServiceRootSite[] {
   return project.sourceFiles.flatMap((source) => {
-    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
+    const sourceFile = typeSystem.readProgramSourceFileByProjectPath(source.path);
     if (sourceFile == null) {
       return [];
     }
@@ -372,7 +372,7 @@ function readFrameworkServiceRootCandidateSeams(
   classDependencies: DiClassDependencyProjectView,
 ): readonly SourceOpenSeamInput[] {
   return project.sourceFiles.flatMap((source) => {
-    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
+    const sourceFile = typeSystem.readProgramSourceFileByProjectPath(source.path);
     if (sourceFile == null) {
       return [];
     }
@@ -695,7 +695,7 @@ function readFrameworkServiceRootSites(
   sourceApiRoots: AureliaSourceApiRootFacts,
 ): readonly FrameworkServiceRootSite[] {
   return project.sourceFiles.flatMap((source) => {
-    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
+    const sourceFile = typeSystem.readProgramSourceFileByProjectPath(source.path);
     if (sourceFile == null) {
       return [];
     }

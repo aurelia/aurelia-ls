@@ -15,7 +15,7 @@ export function readAppTaskCallbackRoots(
   typeSystem: TypeSystemProject,
 ): readonly AureliaSourceAppTaskCallbackRoot[] {
   return configuration.sources.flatMap((source) => {
-    const sourceFile = typeSystem.readProgramSourceFileByPath(source.admission.path);
+    const sourceFile = typeSystem.readProgramSourceFileByProjectPath(source.admission.path);
     if (sourceFile == null) {
       return [];
     }

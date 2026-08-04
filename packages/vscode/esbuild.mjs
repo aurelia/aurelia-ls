@@ -64,4 +64,10 @@ if (existsSync(tsSource)) {
   console.warn("WARNING: TypeScript not found in node_modules, language server may fail");
 }
 
+// Bundle the semantic-runtime-owned native project schema without creating a second checked-in authority.
+const projectSchemaSource = join(__dirname, "../semantic-runtime/schema/aurelia.project.schema.json");
+const projectSchemaDest = join(distDir, "schemas/aurelia.project.schema.json");
+mkdirSync(dirname(projectSchemaDest), { recursive: true });
+cpSync(projectSchemaSource, projectSchemaDest);
+
 console.log("Build complete.");

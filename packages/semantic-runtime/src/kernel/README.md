@@ -411,16 +411,23 @@ Each project-input generation also owns the memoized immutable value table used 
 consumer read scopes. Equivalent consumers must re-capture retained reads through that target generation rather than
 constructing private retained-value hosts or rereading the live host independently. One operation-local
 `ComputationReadValidationScope` may share exact validation while those scopes rebase, but candidate acquisition and
-final atomic commit remain separate proofs. The default host is still pull-validated; an event generation does not by
-itself prove that unannounced file-system values stayed unchanged. Exact pull validation compares the newly read value
-with the retained immutable value and computes a new content revision only when they differ; hashing every unchanged
-file would discard the stronger witness already owned by the read.
-`SemanticRuntimeProjectInputChangeDetection.ExplicitEvents` is the deliberate exception for a host whose owner reports
-every admitted source/configuration change through `advance()`, such as an LSP session synchronized by document events
-and workspace file watchers. Within one event sequence, exact reads validate through the generation witness without
-host I/O. After an advance, consumer scopes still re-capture and compare their exact values through the new generation,
-so semantic carry remains value-based rather than event-based. Do not select this policy for an ambient filesystem
-consumer that cannot prove complete change notification.
+final atomic commit remain separate proofs. Each read carries a frozen descriptor for its exact file, directory, or
+matched-file request and one closed currentness authority. Unclassified mutable inputs are `PullValidated`: an event
+generation does not by itself prove that an unannounced filesystem value stayed unchanged. Exact pull validation
+compares the newly read value with the retained immutable value and computes a new content revision only when they
+differ; hashing every unchanged file would discard the stronger witness already owned by the read. A pull mismatch
+replaces the affected project generation under its typed read observation without fabricating a host event.
+
+A host policy may classify one exact descriptor as `PushObserved` only when every mutation affecting that request calls
+`advance()`. It may classify a read as `SessionSnapshot` only with a non-empty identity for an immutable session
+snapshot. The policy is heterogeneous: open editor text can be push-observed while imported dependencies, directory
+membership, package manifests, and other unproved inputs remain pull-validated. Generation validation therefore checks
+the event witness once and performs live I/O only for its compact pull subset. Policy mode and snapshot-identity changes
+take effect at the next event generation and force the target generation's first canonical read to recapture the live
+value; every later consumer adopts that memoized target read. A host must synchronize a classifier or snapshot-identity
+transition with `advance()` so no capture or validation can enter between the state change and generation revocation.
+A snapshot identity names immutable input output, not merely a UUID for a mutable host session. Exact event semantics
+remain a revocation/recapture optimization and never replace the immutable values that decide semantic carry.
 
 The store indexes normalized kernel records first. A `MaterializedProduct` is an envelope that names kind, identity,
 address, and provenance. Claims are indexed by subject/object handles in the store instead of being duplicated on the

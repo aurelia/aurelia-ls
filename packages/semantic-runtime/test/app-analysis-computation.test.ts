@@ -2,7 +2,7 @@ import path from 'node:path';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 
 import { createSemanticRuntime } from '../src/api/runtime.js';
 import { SemanticAppQueryKind, SemanticRuntimeDetail } from '../src/api/contracts.js';
@@ -98,7 +98,7 @@ describe('app analysis computation', () => {
       .filter((record) => !committedRecordHandles.has(record.handle));
     expect(supportRecordsPublishedDuringCandidate.every((record) =>
       record instanceof SourceFileAddress
-        ? record.workspaceKey === runtime.workspace.workspaceKey
+        ? record.workspaceKey === runtime.workspace.semanticWorkspaceKey
         : record instanceof EvidenceRecord || record instanceof ProvenanceRecord
     )).toBe(true);
     expect(store.read(candidateDataFlow.productHandle)).toBeNull();
@@ -214,8 +214,27 @@ describe('app analysis computation', () => {
     const retainedAsk = first.ask.bind(first);
     expect(first.isCurrent()).toBe(true);
 
-    projectInputAuthority.advance();
+    const firstGeneration = runtime.appAnalysisComputations
+      .authorityFor(first.project.projectKey)
+      .committed();
+    expect(firstGeneration).not.toBeNull();
+    const typeSystemGeneration = firstGeneration?.readCommittedEmission().preTemplate.typeSystemGeneration;
+    if (typeSystemGeneration == null) {
+      throw new Error('Expected a committed app generation with a TypeScript dependency generation.');
+    }
+    const validateTypeSystemGeneration = typeSystemGeneration.validate.bind(typeSystemGeneration);
+    let advancedDuringValidation = false;
+    const validationSpy = vi.spyOn(typeSystemGeneration, 'validate').mockImplementation((scope) => {
+      const validation = validateTypeSystemGeneration(scope);
+      if (!advancedDuringValidation) {
+        advancedDuringValidation = true;
+        projectInputAuthority.advance();
+      }
+      return validation;
+    });
     expect(first.isCurrent()).toBe(false);
+    expect(advancedDuringValidation).toBe(true);
+    validationSpy.mockRestore();
     expect(() => first.emission).toThrow(/no longer current/);
     expect(() => retainedAsk({ kind: SemanticAppQueryKind.TemplateCompilations })).toThrow(/no longer current/);
 
@@ -541,7 +560,7 @@ describe('app analysis computation', () => {
     expect(resourceKeyA?.handle).not.toBe(resourceKeyB?.handle);
     const sharedProgramSources = runtime.workspace.store.readAddresses().filter(
       (address) => address instanceof SourceFileAddress
-        && address.workspaceKey === runtime.workspace.workspaceKey
+        && address.workspaceKey === runtime.workspace.semanticWorkspaceKey
         && address.path.endsWith('.d.ts'),
     );
     const cloneASources = runtime.workspace.store.readAddresses().filter(

@@ -1,5 +1,9 @@
 import { createHash } from 'node:crypto';
 import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-project-pass.js';
+import {
+  semanticSourceReferenceHostPath,
+} from '../boot/source-ownership.js';
+import { ResolvedEvaluationModuleSourceScope } from '../evaluation/package-origin.js';
 import type { AddressHandle, IdentityHandle, ProductHandle } from '../kernel/handles.js';
 import {
   AureliaResourceIdentity,
@@ -713,11 +717,31 @@ class ResourceInventoryBuilder {
     }
     const declarationIdentity = this.declarationIdentityFor(candidate, targetIdentityHandle);
     const source = sources.implementation ?? sources.declaration ?? sources.publicName;
-    if (source?.path != null && this.emission.project.authoredSources.contains(source.path)) {
+    const packageOrigin = declarationIdentity?.moduleKey == null
+      ? null
+      : this.emission.evaluation.packageOriginForModuleKey(declarationIdentity.moduleKey);
+    const sourceHostPath = semanticSourceReferenceHostPath(this.emission.project.workspaceRootDir, source);
+    const authoritativePackageOrigin = packageOrigin
+      ?? (sourceHostPath == null
+        ? null
+        : this.emission.evaluation.packageOriginForModuleKey(sourceHostPath));
+    const belongsToAuthoredProject = authoritativePackageOrigin == null
+      ? sourceHostPath != null && this.emission.project.authoredSources.contains(sourceHostPath)
+      : authoritativePackageOrigin.sourceScope === ResolvedEvaluationModuleSourceScope.AuthoredProject;
+    if (belongsToAuthoredProject) {
       return {
         kind: SemanticResourceInventoryOriginKind.Project,
         projectKey: this.emission.project.projectKey,
         packageName: null,
+        moduleKey: declarationIdentity?.moduleKey ?? null,
+        catalogGroup: null,
+      };
+    }
+    if (authoritativePackageOrigin != null) {
+      return {
+        kind: SemanticResourceInventoryOriginKind.Package,
+        projectKey: null,
+        packageName: authoritativePackageOrigin.packageInstance.name,
         moduleKey: declarationIdentity?.moduleKey ?? null,
         catalogGroup: null,
       };

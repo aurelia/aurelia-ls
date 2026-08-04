@@ -41,13 +41,13 @@ class TestDocumentStore implements OpenTextDocumentStore {
 }
 
 describe("SemanticRuntimeLspSession", () => {
-  test("uses an opaque session identity in transport fingerprints", () => {
+  test("uses an opaque session identity in transport fingerprints", async () => {
     const fixtureRoot = minimalFixtureRoot();
     const session = createSession(fixtureRoot, new TestDocumentStore());
 
-    const fingerprint = session.currentGeneration().fingerprint;
+    const fingerprint = (await session.preflight(session.requestGuard(null))).fingerprint;
 
-    expect(fingerprint).toMatch(/^semantic-runtime:[^:]+:workspace-\d+:source-\d+$/);
+    expect(fingerprint).toMatch(/^semantic-runtime:[^:]+:workspace-\d+:source-world-.+:request-\d+$/);
     expect(fingerprint).not.toContain(fixtureRoot);
   });
 
@@ -158,6 +158,81 @@ describe("SemanticRuntimeLspSession", () => {
     expect(candidateNames).toContain("headline");
     expect(candidateNames).not.toContain("title");
     expect(candidateNames).not.toContain("message");
+  });
+
+  test("projects document URIs through native authored-source ownership", async () => {
+    const fixtureRoot = minimalFixtureRoot();
+    const appPath = path.join(fixtureRoot, "src/app.ts");
+    const appUri = pathToFileURL(appPath).toString();
+    const documents = new TestDocumentStore();
+    const session = createSession(fixtureRoot, documents);
+
+    const answer = await session.authoredSourceOwnership(
+      appUri,
+      session.requestGuard(null),
+    );
+
+    expect(answer.value.sourceFilePath).toBe(path.normalize(appPath));
+    expect(answer.value.owners).toEqual([
+      expect.objectContaining({
+        projectRootDir: path.normalize(fixtureRoot),
+        projectPath: "src/app.ts",
+        role: "app-source",
+      }),
+    ]);
+  });
+
+  test("passes host project-root evidence through shared semantic discovery", async () => {
+    const fixtureRoot = minimalFixtureRoot();
+    const hintedRoot = path.join(fixtureRoot, "src");
+    const appPath = path.join(hintedRoot, "app.ts");
+    const appUri = pathToFileURL(appPath).toString();
+    const session = createSession(fixtureRoot, new TestDocumentStore());
+    const beforeHint = session.requestGuard(null);
+    const beforeHintGeneration = await session.preflight(beforeHint);
+
+    session.configureWorkspace([hintedRoot]);
+    expect(session.isCurrentGeneration(beforeHintGeneration)).toBe(false);
+    const normalizedHintGeneration = await session.preflight(session.requestGuard(null));
+    session.configureWorkspace([path.join(hintedRoot, "."), hintedRoot]);
+    expect(session.isCurrentGeneration(normalizedHintGeneration)).toBe(true);
+    const answer = await session.authoredSourceOwnership(
+      appUri,
+      session.requestGuard(null),
+    );
+
+    expect(answer.value.owners).toEqual([
+      expect.objectContaining({
+        projectRootDir: path.normalize(hintedRoot),
+        projectPath: "app.ts",
+      }),
+    ]);
+  });
+
+  test("reads open native project-configuration diagnostics by URI", async () => {
+    const fixtureRoot = minimalFixtureRoot();
+    const configPath = path.join(fixtureRoot, "aurelia.project.json");
+    const configUri = pathToFileURL(configPath).toString();
+    const configText = '{"version":1,"unknown":true}';
+    const documents = new TestDocumentStore();
+    documents.add(TextDocument.create(configUri, "json", 1, configText));
+    const session = createSession(fixtureRoot, documents);
+
+    const answer = await session.projectConfigurationDiagnostics(
+      configUri,
+      session.requestGuard(null),
+    );
+
+    expect(answer.value.rows).toEqual([
+      expect.objectContaining({
+        diagnosticKind: "aurelia-project-config-unknown-property",
+        source: expect.objectContaining({
+          filePath: configPath.replace(/\\/g, "/"),
+          start: configText.indexOf('"unknown"'),
+          end: configText.indexOf('"unknown"') + '"unknown"'.length,
+        }),
+      }),
+    ]);
   });
 
   test("drains completion candidates beyond the public first page", async () => {
@@ -535,11 +610,13 @@ function createSession(
 ): SemanticRuntimeLspSession {
   const documentUris = new WorkspaceDocumentUris();
   documentUris.configure(pathToFileURL(workspaceRoot).toString());
+  const sourceTextOverlay = new OpenDocumentSourceTextOverlay(documents, documentUris);
   return new SemanticRuntimeLspSession({
     documentUris,
     projectInputHost: new NodeSemanticRuntimeProjectInputHost(
-      new OpenDocumentSourceTextOverlay(documents, documentUris),
+      sourceTextOverlay,
     ),
+    projectInputCurrentnessPolicy: sourceTextOverlay,
   });
 }
 

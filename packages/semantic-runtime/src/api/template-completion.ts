@@ -42,6 +42,7 @@ import {
   type ExpressionScopeAccess,
 } from '../expression/parse-result-inspection.js';
 import type { KernelStore } from '../kernel/store.js';
+import { projectOwnsTemplateEditSourceFile } from '../boot/source-ownership.js';
 import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-project-pass.js';
 import { BindingContextSlotAssignmentAccessKind } from '../configuration/scope.js';
 import {
@@ -682,6 +683,14 @@ function readContextForCursor(
   }
   const offset = resolution.cursor.offset;
   const resolvedCursor = resolution.cursor;
+
+  if (!projectOwnsTemplateEditSourceFile(emission.project, resolvedCursor.filePath)) {
+    return missingTemplateCompletion(
+      page,
+      ['editable-template-source'],
+      `Template completion source '${resolvedCursor.filePath}' is not an editable authored template in this project.`,
+    );
+  }
 
   const selection = selectTemplateResourceForCursor(store, emission, resolvedCursor.filePath, offset);
   if (selection == null) {
@@ -1496,7 +1505,7 @@ function typeSystemProjectSourceFile(
   typeSystem: TypeSystemProject,
 ): ts.SourceFile | null {
   for (const source of typeSystem.project.sourceFiles) {
-    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
+    const sourceFile = typeSystem.readProgramSourceFileByProjectPath(source.path);
     if (sourceFile != null) {
       return sourceFile;
     }

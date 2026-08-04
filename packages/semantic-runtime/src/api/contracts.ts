@@ -1,5 +1,7 @@
 import type { SemanticSupportState } from '../support-state.js';
 import type { BootProjectDiscoveryMode, BootProjectInput } from '../boot/frames.js';
+import type { ProjectRootAdmissionOrigin } from '../boot/project-root-admission.js';
+import type { SemanticProjectConfigurationDiagnostic } from '../boot/project-configuration.js';
 import type { ApplicationFileRole } from '../application/topology.js';
 import type { SourceFileRole } from '../kernel/address.js';
 import type { SemanticRuntimeProjectInputAuthority } from '../kernel/project-input.js';
@@ -376,10 +378,11 @@ import type {
 } from '../app-builder/ontology/control-use-inventory.js';
 
 export const SEMANTIC_RUNTIME_API_VERSION = '0.2' as const;
+export const SEMANTIC_RUNTIME_ANALYSIS_BASIS_SCHEMA_VERSION = 'semantic-analysis-basis/1' as const;
 
 export const SEMANTIC_PROJECT_DISCOVERY_MODES = [
   'single-root',
-  'package-tsconfig',
+  'project-markers',
 ] as const;
 
 export {
@@ -630,10 +633,76 @@ export interface SemanticRuntimeOptions {
   readonly projects?: readonly SemanticRuntimeProjectInput[];
   /** Project discovery strategy used when projects are omitted. */
   readonly projectDiscovery?: BootProjectDiscoveryMode | `${BootProjectDiscoveryMode}`;
+  /**
+   * Workspace-relative or absolute existing project roots known by the host.
+   * When projects are omitted, semantic-runtime merges these roots into automatic discovery.
+   */
+  readonly projectRootHints?: readonly string[];
   /** Workspace-relative or absolute descendant roots excluded from authored project/source membership. */
   readonly excludedWorkspaceRoots?: readonly string[];
   /** Sole authority for captured project source/config generations. */
   readonly projectInputAuthority?: SemanticRuntimeProjectInputAuthority;
+}
+
+/** Exact host source whose boot-authored ownership should be projected without opening an app world. */
+export interface SemanticAuthoredSourceOwnershipRequest {
+  readonly sourceFilePath: string;
+  /** Inquiry profile that owns this runtime-static answer claim. */
+  readonly inquiryProfile?: SemanticRuntimeInquiryProfile | `${SemanticRuntimeInquiryProfile}` | null;
+}
+
+export interface SemanticAuthoredSourceOwner {
+  readonly projectKey: string;
+  readonly projectRootDir: string;
+  readonly projectPath: string;
+  readonly role: SourceFileRole | `${SourceFileRole}`;
+}
+
+export interface SemanticAuthoredSourceOwnershipResult {
+  readonly sourceFilePath: string;
+  readonly owners: readonly SemanticAuthoredSourceOwner[];
+}
+
+/** Select native project-configuration diagnostics without requiring an Aurelia app candidate. */
+export interface SemanticProjectConfigurationDiagnosticsRequest {
+  readonly projectKey?: string | null;
+  /** Exact host paths, absolute or workspace-relative. Omit for all configurations; an empty list selects none. */
+  readonly sourceFilePaths?: readonly string[] | null;
+  readonly page?: SemanticRuntimePageInput | null;
+  /** Optional transport-owned row-page ceilings; excluded from semantic query identity. */
+  readonly pagePolicy?: SemanticRuntimePagePolicy | null;
+  /** Inquiry profile that owns this runtime-static answer claim. */
+  readonly inquiryProfile?: SemanticRuntimeInquiryProfile | `${SemanticRuntimeInquiryProfile}` | null;
+}
+
+export interface SemanticProjectConfigurationDiagnosticsResult {
+  readonly rows: readonly SemanticProjectConfigurationDiagnostic[];
+}
+
+/** Select exact native project-configuration products without opening an Aurelia app world. */
+export interface SemanticNativeProjectConfigurationsRequest {
+  readonly projectKey?: string | null;
+  /** Exact host paths, absolute or workspace-relative. Omit for all existing configurations; an empty list selects none. */
+  readonly sourceFilePaths?: readonly string[] | null;
+  readonly page?: SemanticRuntimePageInput | null;
+  /** Optional transport-owned row-page ceilings; excluded from semantic query identity. */
+  readonly pagePolicy?: SemanticRuntimePagePolicy | null;
+  /** Inquiry profile that owns this runtime-static answer claim. */
+  readonly inquiryProfile?: SemanticRuntimeInquiryProfile | `${SemanticRuntimeInquiryProfile}` | null;
+}
+
+export interface SemanticNativeProjectConfigurationRow {
+  readonly projectKey: string;
+  readonly projectRootDir: string;
+  readonly filePath: string;
+  /** Native exclusions that survived validation and currently contribute to authored-source membership. */
+  readonly appliedExcludedSourceRootDirs: readonly string[];
+  readonly diagnosticCount: number;
+}
+
+export interface SemanticNativeProjectConfigurationsResult {
+  readonly displayText: string;
+  readonly rows: readonly SemanticNativeProjectConfigurationRow[];
 }
 
 export interface SemanticRuntimeSummaryRequest {
@@ -1021,6 +1090,11 @@ export interface SemanticRuntimeAnswer<TValue> {
   readonly coverage: InquiryAnswerCoverage;
   readonly summary: string;
   readonly value: TValue;
+  /**
+   * Portable semantic basis for this exact answer. Executable currentness witnesses remain process-private.
+   * Static catalog answers that consume no workspace authority may omit it.
+   */
+  readonly analysisBasis?: SemanticRuntimeAnalysisBasis;
   readonly page?: SemanticRuntimePageResult | null;
   /** App-world depth that actually answered this query; absent for runtime-static/project-frame answers. */
   readonly analysisDepth?: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}` | null;
@@ -1028,6 +1102,20 @@ export interface SemanticRuntimeAnswer<TValue> {
   readonly continuations?: readonly SemanticRuntimeContinuationRow[];
   /** Optional answer-envelope telemetry, present only when a telemetry request asks the runtime to expose it. */
   readonly profile?: SemanticRuntimeAnswerProfile | null;
+}
+
+/** Portable identity of the source world and exact semantic inputs consumed by one completed answer. */
+export interface SemanticRuntimeAnalysisBasis {
+  readonly schemaVersion: typeof SEMANTIC_RUNTIME_ANALYSIS_BASIS_SCHEMA_VERSION;
+  readonly runtimeApiVersion: typeof SEMANTIC_RUNTIME_API_VERSION;
+  /** Descriptor-derived logical workspace identity; never a kernel-store or runtime-incarnation key. */
+  readonly semanticWorkspaceKey: string;
+  /** Portable resolved project/source-admission plan revision. */
+  readonly sourceWorldRevision: string;
+  /** Portable digest of exact project-input leaves and immutable semantic environment facts. */
+  readonly semanticModelRevision: string;
+  /** Portable digest joining the source-world and semantic-model revisions. */
+  readonly revision: string;
 }
 
 export interface SemanticRuntimeAnswerProfile {
@@ -1120,8 +1208,12 @@ export type SemanticQueryClaimInvalidationKind = typeof SEMANTIC_QUERY_CLAIM_INV
 
 export interface SemanticRuntimeSummary {
   readonly workspaceRoot: string;
+  /** Descriptor-derived semantic workspace identity; never a store namespace or runtime incarnation. */
   readonly workspaceKey: string;
   readonly displayText: string;
+  /** Existing native configuration files read at exact discovered project roots. */
+  readonly nativeProjectConfigurationCount: number;
+  readonly nativeProjectConfigurationDiagnosticCount: number;
   readonly projectShapeCounts: readonly SemanticProjectShapeCount[];
   readonly projectAnalysisCounts: readonly SemanticProjectAnalysisCount[];
   readonly defaultAppProjectKey: string | null;
@@ -1546,14 +1638,22 @@ export interface SemanticProjectCandidateSummary {
 export interface SemanticProjectSummary {
   readonly projectKey: string;
   readonly rootDir: string;
+  /** Complete boot-owned cause set for why this project frame exists. */
+  readonly admissionOrigins: readonly ProjectRootAdmissionOrigin[];
   readonly sourceFiles: number;
   readonly sourceRoles: readonly SemanticSourceRoleCount[];
+  readonly nativeProjectConfiguration: SemanticProjectNativeConfigurationSummary | null;
   readonly hasAureliaAppEntrypointSignal: boolean;
   readonly shapeKind: SemanticProjectShapeKind | `${SemanticProjectShapeKind}`;
   readonly analysisKind: SemanticProjectAnalysisKind | `${SemanticProjectAnalysisKind}`;
   readonly aureliaDependencyScopes: readonly SemanticProjectAureliaDependencyScopeCount[];
   readonly aureliaSourceSignals: readonly SemanticProjectAureliaSourceSignalCount[];
   readonly shapeReasons: readonly SemanticProjectShapeReasonCount[];
+}
+
+export interface SemanticProjectNativeConfigurationSummary {
+  readonly filePath: string;
+  readonly diagnosticCount: number;
 }
 
 export interface SemanticSourceRoleCount {
@@ -4349,6 +4449,7 @@ export enum SemanticTemplateRenameUnavailableReason {
   TypeScriptSymbolUnavailable = 'typescript-symbol-unavailable',
   TypeScriptRenameNotAllowed = 'typescript-rename-not-allowed',
   TypeScriptRelatedSourceNotEditable = 'typescript-related-source-not-editable',
+  SourceNotEditable = 'source-not-editable',
   InvalidNewName = 'invalid-new-name',
   ResourceNameHasNoAuthoredSource = 'resource-name-has-no-authored-source',
   UnsupportedResourceKind = 'unsupported-resource-kind',

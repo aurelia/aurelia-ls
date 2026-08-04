@@ -93,7 +93,7 @@ export class FrameworkApiIssueMaterializer {
     typeSystem: TypeSystemProject,
   ): FrameworkApiIssueProjectResult {
     const publications = project.sourceFiles.flatMap((source) => {
-      const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
+      const sourceFile = typeSystem.readProgramSourceFileByProjectPath(source.path);
       return sourceFile == null
         ? []
         : this.publicationsForSource(project, source.path, source.addressHandle, sourceFile, typeSystem);

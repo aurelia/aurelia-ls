@@ -5,24 +5,31 @@ See [../README.md](../README.md) for the folder-wide rebuild map and Atlas and a
 Boot is the clean-room admission layer above the kernel. It creates workspace and project frames, admits source
 files, and records why those inputs are present in the hot kernel store.
 
-Boot does not materialize Aurelia semantics. It may expose cheap admission-level project shape for scope selection, but
-it must not recognize resources, configurations, registrations, templates, routes, or DI products. Those belong to
-later materializers that consume admitted sources and emit their own evidence, claims, products, and seams.
+Boot does not materialize app-world Aurelia semantics. It owns the native semantic project/source-world configuration
+that decides admission, and may expose cheap admission-level project shape for scope selection, but it must not
+recognize resources, app registrations/configuration objects, templates, routes, or DI products. Those belong to later
+materializers that consume admitted sources and emit their own evidence, claims, products, and seams.
 
 ## Responsibilities
 
 - Create a `KernelStore` or populate a supplied one.
 - Admit workspace/project/source frames in deterministic order.
-- Discover package/tsconfig project frames for monorepo workspaces when the host does not supply explicit projects,
-  while preserving a `single-root` mode for callers that need one project frame.
+- Discover project frames from the union of exact-root `package.json`, `tsconfig.json`, `jsconfig.json`, and
+  `aurelia.project.json` markers when the host does not supply explicit projects, while preserving a `single-root`
+  mode for callers that need one project frame. The default `project-markers` mode names that union directly.
+- Merge `projectRootHints` supplied by a host into that automatic topology. Hints identify existing project boundaries;
+  they do not choose project keys, imply Aurelia shape, or override configuration semantics.
+- Parse exact-root `aurelia.project.json` through the captured project-input generation before source admission. Its
+  strict, versioned `authoredSources.excludedRoots` contract is source-world policy; syntax/schema diagnostics and the
+  applied normalized roots remain first-class project-frame facts even when no app world can open.
 - Discover source files only as input admission, with conservative source roles such as `app-source`, `test-source`,
   `tooling-config`, `declaration`, `template`, `style`, and `package-manifest`.
 - Read project compiler options as host footing for later evaluation and TypeChecker epochs. This is still boot-level
   because it describes how source modules are wired, not what Aurelia semantics they contain.
-- Synthesize TypeScript path mappings for the checked-out Aurelia framework packages by reading package manifests under
-  `aurelia/packages/*` and pointing each package name at `dist/types/index.d.ts` when present. Keep this dynamic rather
-  than a hand-maintained package list: validation, i18n, state, dialog, and future framework packages all need the same
-  checker footing when generated fixtures import their public APIs.
+- Preserve authored TypeScript/JavaScript compiler configuration and ordinary package-manager resolution as the module
+  authority. Boot does not synthesize aliases from ambient ancestor workspaces, a nearby Aurelia checkout, or process
+  environment variables: those shortcuts can expose undeclared packages, bypass package exports, and give IDE, MCP,
+  and future AOT consumers different semantic worlds.
 - Expose conservative project-shape triage before app-world construction. The current policy counts local manifest
   dependencies on `aurelia` / `@aurelia/*`, inherits Aurelia dependency context from ancestor workspace manifests that
   explicitly include the project frame, and parses app-source imports for Aurelia facade/default/namespace imports,
@@ -34,19 +41,19 @@ later materializers that consume admitted sources and emit their own evidence, c
   micro-policies. Package-manifest and directory reads flow through the captured project-input host, so their
   memoization is bounded by that immutable generation rather than a process-global path cache.
 - Capture one immutable project-input host generation before an app open and build one compiler-options result on its
-  `ProjectBootFrame`. Static evaluation and TypeSystem construction spend that same result, so tsconfig/path-mapping
-  shape cannot split within a candidate generation and no process-global project-root cache can outlive changed input.
-- Admit package-source roots from local workspace manifests and, during clean-room pressure runs, from
-  `SEMANTIC_RUNTIME_EXTERNAL_SOURCE_ROOTS` / `ATLAS_EXTERNAL_SOURCE_ROOTS`. These roots supply TypeScript path
-  mappings for sibling/plugin package source; they are input wiring, not checked-in app facts.
+  `ProjectBootFrame`. Static evaluation and TypeSystem construction spend that same result, so tsconfig/jsconfig
+  path-mapping shape cannot split within a candidate generation and no process-global project-root cache can outlive
+  changed input. An exact-root `tsconfig.json` takes precedence over `jsconfig.json`, matching TypeScript project
+  selection.
 - Preserve any host-supplied discovery limit through `SourceDiscoveryResult`.
-- Emit source-file addresses, admission evidence, and direct provenance.
+- Emit source-file addresses, admission evidence, and direct provenance. Project frames likewise retain the complete,
+  deterministic cause set for their admission and one kernel provenance record joining those witnesses.
 
 ## Non-Responsibilities
 
 - TypeScript module evaluation.
 - Aurelia resource recognition.
-- Configuration or DI world formation.
+- App-world registration/configuration or DI world formation.
 - Query answer ranking or consumer policy.
 - Reconnecting to the older eager `Workspace` / `Project` constructors.
 
@@ -66,13 +73,33 @@ no-tsconfig fallback mode so ambient modules and local type support participate 
 static-evaluation entrypoints. The classifier should stay conservative: a user-authored `config.ts` or generated-looking
 app module is still app source unless it matches a known tool/artifact lane.
 
-Project discovery is also admission policy. A mixed monorepo should boot package/tsconfig roots as separate project
-frames so non-Aurelia packages do not enter one giant app-world pass. Nested project roots are excluded from their
-parent frame's filesystem source discovery. Child workspace packages may inherit Aurelia dependency context from an
+Project discovery is also admission policy. A mixed monorepo should boot every exact package, TypeScript/JavaScript
+configuration, or native Aurelia configuration marker root as a separate project frame so no nested project is either
+absorbed into a parent app world or excluded without receiving its own frame. Marker contents do not decide topology:
+invalid configuration still owns a frame and its diagnostics. Nested project roots are excluded from their parent
+frame's filesystem source discovery. Child workspace packages may inherit Aurelia dependency context from an
 ancestor `workspaces` manifest, but that only affects shape triage: a child package with HTML/CSS resource-surface
 source files becomes a resource-library authoring candidate, while activation calls are still required before the
-package is treated as an app-world. If a host already knows the intended app package, it should still pass an explicit
-`projects` entry or `projectKey`.
+package is treated as an app-world. Ordinary IDE/MCP consumers that know the intended app package should select its
+discovered `projectKey`; that does not change the shared source world. Explicit `projects` are reserved for hosts such
+as snapshot/AOT adapters that own the complete project and source topology, because supplying them replaces automatic
+discovery rather than merely selecting an app.
+
+Every admitted project frame carries typed `admissionOrigins`. Marker origins retain the exact marker source path;
+markers recovered by a restarted hinted traversal also retain the hint directory that made them observable. Explicit
+projects, `single-root`, the markerless workspace fallback, and direct host hints remain distinct policy origins. These
+origins explain why the frame exists; they do not assert Aurelia shape or configuration validity. Boot publishes a
+small evidence/provenance envelope for the same cause set, and the frame revision includes both the origins and that
+provenance handle so a shared project-input authority cannot make differently admitted frames look current-equivalent.
+
+`projectRootHints` are additive host topology facts for automatic marker-union discovery. Relative hints resolve from
+the workspace root, the workspace root itself is valid, and active hints must identify existing directories at or below
+that root. Hard workspace exclusions win before hint existence is checked. Canonical duplicates collapse
+deterministically. Each accepted hint receives its own frame and restarts marker traversal at depth zero, so a known
+root below an incidental prune or workspace-relative depth limit still discovers nested marker roots. The ordinary
+workspace scan retains its existing root fallback when it finds no markers; adding a hint cannot withdraw that fallback.
+Explicit `projects` (including an empty list) and `single-root` remain authoritative and ignore hints. Changing the
+active normalized hint set or the hinted directory topology requires a fresh workspace boot.
 
 `excludedWorkspaceRoots` is an authored-source boundary, not a filesystem read embargo. Excluded roots cannot become
 project frames, source admissions, TypeScript root files, or diagnostic owners, and an excluded parent dominates every
@@ -81,14 +108,14 @@ locations must retain that fact without promoting the dependency into authored p
 and source discovery both read through the supplied `SemanticRuntimeProjectInputAuthority`, including for non-filesystem
 hosts, so the boundary and the observed source world cannot diverge.
 
-External source roots are deliberately ephemeral. They let pressure runs resolve public or private sibling package
-source without copying those paths into fixtures or durable docs. Materializers may then recognize resources,
-configuration, and registration bodies in the linked package source if project evaluation reaches those modules through
-ordinary import edges.
+Pressure fixtures and clean-room probes must expose their declared dependencies through ordinary package topology or an
+explicit authored `tsconfig`/`jsconfig`. If unbuilt or source-linked packages eventually require a separate resolution
+plan, that plan must be a typed shared semantic-runtime input with provenance and currentness; it must not be recovered
+from an adapter-specific environment variable or folded into authored-source ownership.
 
 Project-qualified source admissions define stable physical source identities for the runtime session. Boot creates the
 initial admissions; project evaluation may intern additional imported locations through the same authority without
 making their address lifetime depend on one evaluator generation. File contents, existence, import reachability,
-tsconfig, and package wiring are read through `SemanticRuntimeProjectInputAuthority`; advancing that authority revokes
+tsconfig/jsconfig, and package wiring are read through `SemanticRuntimeProjectInputAuthority`; advancing that authority revokes
 captured hosts and lets the next app request rebuild compiler options and semantic products coherently. Project
 discovery and removed project frames are topology changes and still require a fresh booted runtime.

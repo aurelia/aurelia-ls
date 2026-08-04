@@ -11,7 +11,9 @@ export * from './app-topology.js';
 export * from './contracts.js';
 export * from './diagnostic-presentation.js';
 export * from './i18n-projections.js';
+export * from './managed-workspace-session.js';
 export * from './runtime.js';
+export * from './workspace-descriptor.js';
 export * from './router-overview.js';
 export * from './source-reference.js';
 export * from './state-projections.js';
@@ -38,12 +40,16 @@ export {
   NodeSemanticRuntimeProjectInputHost,
   SemanticRuntimeProjectInputAuthority,
   SemanticRuntimeProjectInputChange,
-  SemanticRuntimeProjectInputChangeDetection,
   SemanticRuntimeProjectInputChangeKind,
+  SemanticRuntimeProjectInputCurrentnessMode,
   SemanticRuntimeProjectInputGeneration,
+  SemanticRuntimeInputReadScope,
   SemanticRuntimeProjectInputReadKind,
+  SemanticRuntimeWorkspaceInputGeneration,
 } from '../kernel/project-input.js';
 export {
+  SOURCE_FILE_ROLE_VALUES,
+  SOURCE_LANGUAGE_VALUES,
   SourceFileRole,
   SourceLanguage,
 } from '../kernel/address.js';
@@ -67,9 +73,13 @@ export type {
   OpenSeamReasonSource,
 } from '../kernel/open-seam.js';
 export type {
+  SemanticRuntimeProjectInputCurrentnessPolicy,
   SemanticRuntimeProjectInputHost,
+  SemanticRuntimeProjectInputReadCurrentness,
+  SemanticRuntimeProjectInputReadDescriptor,
   SemanticRuntimeProjectInputScope,
   SemanticRuntimeSourceTextOverlay,
+  SemanticRuntimeWorkspaceInputScope,
 } from '../kernel/project-input.js';
 export {
   RESOURCE_DEFINITION_KINDS,
@@ -84,3 +94,38 @@ export {
 export {
   AuthoredSourceBoundary,
 } from '../boot/source-boundary.js';
+export {
+  ProjectRootAdmissionOriginKind,
+} from '../boot/project-root-admission.js';
+export type {
+  ProjectRootAdmissionOrigin,
+  ProjectRootMarkerAdmissionOrigin,
+  ProjectRootPolicyAdmissionOrigin,
+} from '../boot/project-root-admission.js';
+export {
+  AURELIA_PROJECT_CONFIGURATION_FILE_NAME,
+  AURELIA_PROJECT_CONFIGURATION_VERSION,
+  SemanticProjectConfigurationDiagnosticKind,
+} from '../boot/project-configuration.js';
+export type {
+  SemanticProjectConfigurationDiagnostic,
+  SemanticProjectConfigurationSourcePosition,
+  SemanticProjectConfigurationSourceSpan,
+} from '../boot/project-configuration.js';
+export {
+  SEMANTIC_SOURCE_WORLD_SCHEMA_VERSION,
+  ResolvedSemanticSourceWorld,
+  SemanticSourceWorldCurrentnessKind,
+  SemanticSourceWorldInputReceipt,
+  resolveSemanticSourceWorld,
+} from '../boot/source-world.js';
+export type {
+  CurrentSemanticSourceWorldResult,
+  EquivalentSemanticSourceWorldResult,
+  FreshBootRequiredSemanticSourceWorldResult,
+  ResolvedSemanticSourceWorldFile,
+  ResolvedSemanticSourceWorldProject,
+  SemanticSourceWorldCurrentnessResult,
+  SemanticSourceWorldReceiptValidation,
+  SemanticSourceWorldResolutionInput,
+} from '../boot/source-world.js';

@@ -1,4 +1,4 @@
-import type { Disposable, ExtensionContext, LogOutputChannel } from "vscode";
+import type { CancellationTokenSource, Disposable, ExtensionContext, LogOutputChannel } from "vscode";
 import type { AureliaLanguageClient } from "./client-core.js";
 import type { ClientLogger } from "./log.js";
 import type { VscodeApi } from "./vscode-api.js";
@@ -6,6 +6,8 @@ import { createClientContext, type ClientContext } from "./core/context.js";
 import { ErrorReporter } from "./core/errors.js";
 import type { ClientFeature } from "./core/feature.js";
 import { LspFacade } from "./core/lsp-facade.js";
+import type { SourceOwnershipSnapshot } from "./types.js";
+import { sameDocumentUri } from "./core/uri-identity.js";
 
 export interface ClientAppServices {
   readonly vscode: VscodeApi;
@@ -17,6 +19,11 @@ export interface ClientAppServices {
   readonly features: readonly ClientFeature[];
 }
 
+interface WorkspaceAnalysisVersion {
+  readonly sequence: number;
+  readonly fingerprint: string;
+}
+
 /** Owns the single extension-lifetime composition of client contributions. */
 export class ClientApp {
   readonly #extension: ExtensionContext;
@@ -26,7 +33,11 @@ export class ClientApp {
   #subscriptions: readonly Disposable[] = [];
   #featureActivations: readonly Disposable[] = [];
   #contextTransition: Promise<void> = Promise.resolve();
+  #contextCommit: Promise<void> = Promise.resolve();
+  #contextCancellation: CancellationTokenSource | null = null;
   #contextRequest = 0;
+  #analysisSequence = 0;
+  readonly #analysisVersions = new Map<string, WorkspaceAnalysisVersion>();
   #activationStarted = false;
   #deactivation: Promise<void> | null = null;
 
@@ -85,6 +96,19 @@ export class ClientApp {
     try {
       subscriptions.push(ctx.languageClient.onDidChangeSessions(synchronizeContext));
       subscriptions.push(ctx.vscode.window.onDidChangeActiveTextEditor(synchronizeContext));
+      subscriptions.push(ctx.lsp.onAnalysisChanged((payload) => {
+        this.#analysisVersions.set(payload.workspace.key, {
+          sequence: ++this.#analysisSequence,
+          fingerprint: payload.fingerprint,
+        });
+        if (payload.changeKind === "topology") {
+          const document = ctx.vscode.window.activeTextEditor?.document;
+          const session = document == null ? undefined : ctx.languageClient.sessionForUri(document.uri);
+          if (session?.workspace.key === payload.workspace.key) {
+            void this.#queueContextTransition(ctx);
+          }
+        }
+      }));
       subscriptions.push(ctx.vscode.workspace.onDidChangeConfiguration((event) => {
         if (!event.affectsConfiguration("aurelia.activationMode")) return;
         void ctx.errors.capture("configuration.activationMode", async () => {
@@ -101,27 +125,126 @@ export class ClientApp {
 
   #queueContextTransition(ctx: ClientContext): Promise<void> {
     const request = ++this.#contextRequest;
-    const transition = this.#contextTransition.then(async () => {
-      if (request !== this.#contextRequest || this.#ctx !== ctx) return;
-      const active = ctx.languageClient.hasSessions;
-      const document = ctx.vscode.window.activeTextEditor?.document;
-      const documentOwned = document != null && ctx.languageClient.sessionForUri(document.uri) != null;
+    this.#cancelContextRequest();
+    const cancellation = new ctx.vscode.CancellationTokenSource();
+    this.#contextCancellation = cancellation;
+    const transition = this.#resolveContextTransition(ctx, request, cancellation);
+    const settled = transition.catch((error) => {
+      ctx.logger.warn(`[client] context transition failed: ${errorMessage(error)}`);
+    }).finally(() => {
+      if (this.#contextCancellation === cancellation) {
+        this.#contextCancellation = null;
+      }
+      cancellation.dispose();
+    });
+    this.#contextTransition = Promise.all([this.#contextTransition, settled]).then(() => undefined);
+    return transition;
+  }
+
+  async #resolveContextTransition(
+    ctx: ClientContext,
+    request: number,
+    cancellation: CancellationTokenSource,
+  ): Promise<void> {
+    const active = ctx.languageClient.hasSessions;
+    const document = ctx.vscode.window.activeTextEditor?.document;
+    const uri = document?.uri.toString() ?? null;
+    const session = document == null ? undefined : ctx.languageClient.sessionForUri(document.uri);
+    const workspaceKey = session?.workspace.key ?? null;
+    const analysisVersion = workspaceKey == null
+      ? null
+      : this.#analysisVersions.get(workspaceKey) ?? null;
+    let ownership: SourceOwnershipSnapshot | null = null;
+    if (uri != null && session != null) {
+      // Never carry a positive answer from a previous editor or topology while
+      // the exact server-owned answer for this document is still in flight.
+      await this.#queueContextCommit(ctx, request, uri, session.client, active, false);
+      if (!this.#contextRequestIsCurrent(ctx, request, uri, session.client)) return;
+      try {
+        ownership = await ctx.lsp.getSourceOwnership(uri, cancellation.token);
+      } catch (error) {
+        if (!cancellation.token.isCancellationRequested) {
+          ctx.logger.warn(`[client] source ownership unavailable for ${uri}: ${errorMessage(error)}`);
+        }
+      }
+    }
+
+    if (!this.#contextRequestIsCurrent(ctx, request, uri, session?.client)) return;
+    const latestAnalysis = workspaceKey == null
+      ? null
+      : this.#analysisVersions.get(workspaceKey) ?? null;
+    if (
+      ownership != null
+      && latestAnalysis != null
+      && latestAnalysis.sequence !== analysisVersion?.sequence
+      && latestAnalysis.fingerprint !== ownership.fingerprint
+    ) {
+      void this.#queueContextTransition(ctx);
+      return;
+    }
+
+    const documentOwned = ownership != null
+      && uri != null
+      && workspaceKey != null
+      && ownership.workspace.key === workspaceKey
+      && sameDocumentUri(ctx.vscode, ownership.sourceUri, uri)
+      && ownership.owners.length > 0;
+    await this.#queueContextCommit(ctx, request, uri, session?.client, active, documentOwned);
+  }
+
+  #queueContextCommit(
+    ctx: ClientContext,
+    request: number,
+    uri: string | null,
+    sessionClient: unknown,
+    active: boolean,
+    documentOwned: boolean,
+  ): Promise<void> {
+    const commit = this.#contextCommit.then(async () => {
+      if (!this.#contextRequestIsCurrent(ctx, request, uri, sessionClient)) return;
       await setClientContextKeys(ctx.vscode, active, documentOwned);
     });
-    this.#contextTransition = transition.catch((error) => {
-      ctx.logger.warn(`[client] context transition failed: ${errorMessage(error)}`);
+    this.#contextCommit = commit.catch((error) => {
+      ctx.logger.warn(`[client] context commit failed: ${errorMessage(error)}`);
     });
-    return transition;
+    return commit;
+  }
+
+  #contextRequestIsCurrent(
+    ctx: ClientContext,
+    request: number,
+    uri: string | null,
+    sessionClient: unknown,
+  ): boolean {
+    if (request !== this.#contextRequest || this.#ctx !== ctx) return false;
+    const document = ctx.vscode.window.activeTextEditor?.document;
+    const currentUri = document?.uri.toString() ?? null;
+    if (currentUri !== uri) return false;
+    const currentSession = document == null ? undefined : ctx.languageClient.sessionForUri(document.uri);
+    return currentSession?.client === sessionClient;
+  }
+
+  #cancelContextRequest(): void {
+    const cancellation = this.#contextCancellation;
+    this.#contextCancellation = null;
+    if (cancellation == null) return;
+    cancellation.cancel();
+    cancellation.dispose();
   }
 
   async #deactivate(activationError: unknown): Promise<void> {
     const { vscode, logger, languageClient } = this.#services;
     this.#ctx = null;
     this.#contextRequest += 1;
-    await this.#contextTransition.catch(() => {});
+    this.#cancelContextRequest();
 
     disposeOwned(logger, "client subscriptions", [...this.#subscriptions].reverse());
     this.#subscriptions = [];
+    await Promise.all([
+      this.#contextTransition.catch(() => {}),
+      this.#contextCommit.catch(() => {}),
+    ]);
+    this.#analysisVersions.clear();
     disposeOwned(logger, "feature contributions", [...this.#featureActivations].reverse());
     this.#featureActivations = [];
     disposeOwned(logger, "LSP facade", this.#lsp == null ? [] : [this.#lsp]);

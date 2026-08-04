@@ -27,6 +27,7 @@ import {
   openSeamOverviewInputSchema,
   patternExampleInputSchema,
   patternMenuInputSchema,
+  projectConfigurationsInputSchema,
   routerOverviewInputSchema,
   templateCompletionsInputSchema,
   templateCursorInfoInputSchema,
@@ -48,6 +49,7 @@ import {
   type AureliaMcpOpenSeamOverviewInput,
   type AureliaMcpPatternExampleInput,
   type AureliaMcpPatternMenuInput,
+  type AureliaMcpProjectConfigurationsInput,
   type AureliaMcpResponse,
   type AureliaMcpRouterOverviewInput,
   type AureliaMcpTemplateCompletionsInput,
@@ -88,6 +90,18 @@ export function registerAureliaSemanticRuntimeTools(
       annotations: readOnlyClosedWorldToolAnnotations,
     },
     async (input) => jsonResultFrom(() => adapter.workspaceOverview(input as AureliaMcpWorkspaceOverviewInput)),
+  );
+
+  server.registerTool(
+    aureliaMcpToolNames.projectConfigurations,
+    {
+      title: 'Aurelia Project Configurations',
+      description: 'Return native aurelia.project.json inventory/applied exclusions or exact diagnostic rows without opening an Aurelia app world, with optional project/path filters and paging.',
+      inputSchema: strictInputSchema(projectConfigurationsInputSchema),
+      outputSchema: aureliaMcpResponseOutputSchema,
+      annotations: readOnlyClosedWorldToolAnnotations,
+    },
+    async (input) => jsonResultFrom(() => adapter.projectConfigurations(input as AureliaMcpProjectConfigurationsInput)),
   );
 
   server.registerTool(
@@ -335,6 +349,10 @@ function resourceLinksForResult(value: unknown) {
         semanticRuntimeResourceLink('orientation'),
         semanticRuntimeResourceLink('app-queries'),
       ];
+    case aureliaMcpToolNames.projectConfigurations:
+      return [
+        semanticRuntimeResourceLink('orientation'),
+      ];
     case aureliaMcpToolNames.appQuery:
       return [
         semanticRuntimeResourceLink('app-queries'),
@@ -420,6 +438,7 @@ function localToolResponse<TValue>(tool: string, value: TValue): AureliaMcpRespo
     tool,
     generatedAt: new Date().toISOString(),
     workspaceRoot: null,
+    workspaceDescriptor: null,
     value,
   };
 }

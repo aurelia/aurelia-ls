@@ -116,7 +116,7 @@ function stateGetterBindingProductSeed(
       start: site.targetNameStart,
       end: site.targetNameEnd,
     });
-  const programSourceFile = typeSystem.readProgramSourceFileByPath(site.sourcePath);
+  const programSourceFile = typeSystem.readProgramSourceFileByProjectPath(site.sourcePath);
   const selectorReturnType = programSourceFile == null
     ? null
     : selectorReturnTypeReference(

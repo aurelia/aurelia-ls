@@ -2,7 +2,18 @@ import { describe, expect, test, vi } from "vitest";
 import { createMiddleware } from "../../out/client-middleware.js";
 
 class StubUri {
-  constructor(readonly value: string) {}
+  readonly scheme: string;
+  readonly authority: string;
+  readonly fsPath: string;
+  readonly path: string;
+
+  constructor(readonly value: string) {
+    const parsed = new URL(value);
+    this.scheme = parsed.protocol.slice(0, -1);
+    this.authority = parsed.host;
+    this.path = decodeURIComponent(parsed.pathname);
+    this.fsPath = this.path;
+  }
 
   toString(): string {
     return this.value;
@@ -13,6 +24,7 @@ function createHarness(options: {
   openDocumentVersion?: number;
   editVersion?: number;
   resolvedEdit?: unknown;
+  workspaceUri?: string;
 } = {}) {
   const uri = "file:///app.ts";
   const document = {
@@ -65,6 +77,13 @@ function createHarness(options: {
     },
     workspace: {
       textDocuments: [document],
+      workspaceFolders: [
+        { name: "outer", index: 0, uri: new StubUri("file:///work") },
+        ...(options.workspaceUri == null
+          ? []
+          : [{ name: "nested", index: 1, uri: new StubUri(options.workspaceUri) }]),
+      ],
+      getConfiguration: () => ({ get: () => "auto" }),
     },
     window: { showWarningMessage },
   };
@@ -77,6 +96,23 @@ function createHarness(options: {
 }
 
 describe("code-action resolve middleware", () => {
+  test("keeps global topology watchers as the sole delivery owner for their scoped files", async () => {
+    const harness = createHarness({ workspaceUri: "file:///work/dist/app" });
+    const next = vi.fn(async () => {});
+    const middleware = harness.middleware.workspace?.didChangeWatchedFile;
+
+    await middleware?.({ uri: "file:///work/dist/app/package.json", type: 2 }, next);
+    await middleware?.({ uri: "file:///work/dist/app/aurelia.project.json", type: 2 }, next);
+    expect(next).not.toHaveBeenCalled();
+
+    const ordinaryJson = { uri: "file:///work/dist/app/src/data.json", type: 2 as const };
+    const ignoredTopology = { uri: "file:///work/dist/app/generated/dist/package.json", type: 2 as const };
+    await middleware?.(ordinaryJson, next);
+    await middleware?.(ignoredTopology, next);
+    expect(next).toHaveBeenNthCalledWith(1, ordinaryJson);
+    expect(next).toHaveBeenNthCalledWith(2, ignoredTopology);
+  });
+
   test("returns a current resolved action after protocol conversion and version validation", async () => {
     const harness = createHarness();
     const token = { isCancellationRequested: false };

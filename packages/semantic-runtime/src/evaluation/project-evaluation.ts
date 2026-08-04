@@ -24,6 +24,10 @@ import type { ProductHandle } from '../kernel/handles.js';
 import type {
   SemanticRuntimeProjectInputReadScope,
 } from '../kernel/project-input.js';
+import {
+  externalizeSourceFileRole,
+  inferSourceFileRole,
+} from '../kernel/source-classification.js';
 import type {
   KernelStore,
   KernelStoreDisposalContext,
@@ -43,6 +47,11 @@ import {
   type EvaluationModuleResolutionPolicy,
   type EvaluationModuleResolutionOpen,
 } from './module-host.js';
+import {
+  evaluationModuleKey,
+  type ResolvedEvaluationModuleOrigin,
+  ResolvedEvaluationModuleSourceScope,
+} from './package-origin.js';
 import { StaticModuleGraphEvaluator, type StaticModuleGraphEvaluationResult } from './module-evaluator.js';
 import type { StaticModuleExternalValueResolver } from './module-evaluator.js';
 import {
@@ -138,12 +147,15 @@ export class StaticProjectEvaluationSourceResult {
     readonly unresolvedModules: readonly EvaluationModuleResolutionOpen[],
     /** Compact reasons this source entered static project evaluation. */
     readonly origins: readonly StaticProjectEvaluationSourceOrigin[] = [],
+    /** Resolver-owned package identity; independent from authored project ownership and editability. */
+    readonly packageOrigin: ResolvedEvaluationModuleOrigin | null = null,
   ) {}
 }
 
 /** Static-evaluation result for one booted project frame. */
 export class StaticProjectEvaluationResult {
   private projectFrame: ProjectBootFrame;
+  private readonly packageOriginsByModuleKey = new Map<string, ResolvedEvaluationModuleOrigin>();
 
   constructor(
     /** Project frame whose TS/JS source files were evaluated. */
@@ -162,6 +174,21 @@ export class StaticProjectEvaluationResult {
     private readonly upstreamReads: readonly ComputationRead[] = [],
   ) {
     this.projectFrame = project;
+    for (const source of sources) {
+      if (source.packageOrigin == null) {
+        continue;
+      }
+      this.packageOriginsByModuleKey.set(
+        evaluationModuleKey(project.rootDir, source.moduleKey),
+        source.packageOrigin,
+      );
+      if (source.sourceFile != null) {
+        this.packageOriginsByModuleKey.set(
+          evaluationModuleKey(project.rootDir, source.sourceFile.fileName),
+          source.packageOrigin,
+        );
+      }
+    }
   }
 
   get project(): ProjectBootFrame {
@@ -174,6 +201,11 @@ export class StaticProjectEvaluationResult {
 
   readUnresolvedModules(): readonly EvaluationModuleResolutionOpen[] {
     return this.sources.flatMap((source) => source.unresolvedModules);
+  }
+
+  /** Read exact package provenance for an evaluated module without changing authored source ownership. */
+  packageOriginForModuleKey(moduleKey: string): ResolvedEvaluationModuleOrigin | null {
+    return this.packageOriginsByModuleKey.get(evaluationModuleKey(this.projectFrame.rootDir, moduleKey)) ?? null;
   }
 
   readRegisteredInputs(): readonly ComputationRead[] {
@@ -214,6 +246,7 @@ export class StaticProjectEvaluationResult {
             session.forkModuleEvaluation(source.evaluation),
             source.unresolvedModules,
             source.origins,
+            source.packageOrigin,
           )
         : source),
       this.evaluationOrderModuleKeys,
@@ -457,6 +490,10 @@ class StaticEvaluationAmbientGlobalGeneration implements ComputationRead {
     return this.validate().isCurrent ? this : null;
   }
 
+  readComputationDependencies() {
+    return [this.computationAuthority];
+  }
+
   tryRebaseFor(
     project: ProjectBootFrame,
     validationScope: ComputationReadValidationScope,
@@ -591,6 +628,10 @@ export class StaticProjectEvaluationGeneration<TContext> implements ComputationR
 
   isCurrent(scope?: ComputationReadValidationScope): boolean {
     return (scope ?? new ComputationReadValidationScope()).validate(this).isCurrent;
+  }
+
+  readComputationDependencies() {
+    return [this.computationAuthority];
   }
 
   requireCurrent(scope?: ComputationReadValidationScope): void {
@@ -992,6 +1033,7 @@ class StaticProjectEvaluationFrame {
       this.inputReadScope.host,
       this.project.compilerOptions.options,
       this.options.moduleResolutionPolicy,
+      this.project.authoredSources,
     );
     const ambientGlobals = this.ambientAccess == null
       ? measureStaticProjectEvaluationPhase(
@@ -1110,6 +1152,7 @@ class StaticProjectEvaluationFrame {
         null,
         unresolvedByEntry.get(graphModuleKey) ?? [],
         this.originsForModule(graphModuleKey),
+        this.host.readPackageOrigin(graphModuleKey),
       ));
       return;
     }
@@ -1117,7 +1160,13 @@ class StaticProjectEvaluationFrame {
     const kernelEmitter = this.kernelEmitter;
     if (kernelEmitter != null) {
       kernelEmitter.emitOpenSeams(evaluation, (seam) =>
-        resolveOpenSeamSource(kernelEmitter.store, this.project, this.admissionsByModuleKey, seam)
+        resolveOpenSeamSource(
+          kernelEmitter.store,
+          this.project,
+          this.admissionsByModuleKey,
+          seam,
+          this.host.readPackageOrigin(seam.sourceFile.fileName),
+        )
       );
     }
     this.publishSourceResult(new StaticProjectEvaluationSourceResult(
@@ -1127,6 +1176,7 @@ class StaticProjectEvaluationFrame {
       evaluation,
       unresolvedByEntry.get(graphModuleKey) ?? [],
       this.originsForModule(graphModuleKey),
+      this.host.readPackageOrigin(graphModuleKey),
     ));
   }
 
@@ -1146,6 +1196,7 @@ class StaticProjectEvaluationFrame {
         null,
         unresolvedByEntry.get(entry.moduleKey) ?? [],
         this.originsForModule(entry.moduleKey),
+        this.host.readPackageOrigin(entry.moduleKey),
       ));
     }
   }
@@ -1198,7 +1249,12 @@ class StaticProjectEvaluationFrame {
     if (this.kernelEmitter == null) {
       return null;
     }
-    const admitted = linkedSourceAdmission(this.kernelEmitter.store, this.project, sourceFile);
+    const admitted = linkedSourceAdmission(
+      this.kernelEmitter.store,
+      this.project,
+      sourceFile,
+      this.host.readPackageOrigin(graphModuleKey),
+    );
     indexSourceAdmission(this.admissionsByModuleKey, this.project, admitted);
     this.admissionsByModuleKey.set(graphModuleKey, admitted);
     this.admissionsByModuleKey.set(normalizeModuleKey(sourceFile.fileName), admitted);
@@ -1257,6 +1313,7 @@ class StaticProjectEvaluationFrame {
       existing.evaluation,
       existing.unresolvedModules,
       this.originsForModule(moduleKey),
+      existing.packageOrigin,
     );
     const index = this.sources.indexOf(existing);
     if (index !== -1) {
@@ -1317,6 +1374,7 @@ function resolveOpenSeamSource(
   project: ProjectBootFrame,
   admissionsByModuleKey: Map<string, SourceFileAdmission>,
   seam: EvaluationOpenSeam,
+  packageOrigin: ResolvedEvaluationModuleOrigin | null,
 ): EvaluationOpenSeamSource {
   const sourceFile = seam.sourceFile;
   const sourceModuleKey = normalizeModuleKey(sourceFile.fileName);
@@ -1327,7 +1385,7 @@ function resolveOpenSeamSource(
       sourceFileAddressHandle: existing.addressHandle,
     };
   }
-  const admitted = linkedSourceAdmission(store, project, sourceFile);
+  const admitted = linkedSourceAdmission(store, project, sourceFile, packageOrigin);
   indexSourceAdmission(admissionsByModuleKey, project, admitted);
   admissionsByModuleKey.set(sourceModuleKey, admitted);
   return {
@@ -1349,10 +1407,23 @@ function linkedSourceAdmission(
   store: KernelStore,
   project: ProjectBootFrame,
   sourceFile: ts.SourceFile,
+  packageOrigin: ResolvedEvaluationModuleOrigin | null,
 ): SourceFileAdmission {
   // Source locations are project-lifetime identities. Import reachability and text stay evaluator-generation reads.
+  const physicalSourcePath = packageOrigin == null
+    ? sourceFile.fileName
+    : path.resolve(
+        packageOrigin.packageInstance.physicalRootDir,
+        packageOrigin.packageRelativePath,
+      );
+  const inferredRole = inferSourceFileRole(physicalSourcePath);
+  const authored = packageOrigin == null
+    ? project.authoredSources.contains(physicalSourcePath)
+    : packageOrigin.sourceScope === ResolvedEvaluationModuleSourceScope.AuthoredProject;
+  const role = authored ? inferredRole : externalizeSourceFileRole(inferredRole);
   return admitSourceFile(store, project.workspaceRootDir, project.rootDir, project.projectKey, {
     path: sourceFile.fileName,
+    role,
     note: 'Source file admitted as a static evaluation dependency.',
   });
 }

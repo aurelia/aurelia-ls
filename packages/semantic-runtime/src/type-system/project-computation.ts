@@ -148,6 +148,10 @@ class TypeSystemEvaluationSourceRead implements ComputationRead {
     return this.validate().isCurrent ? this : null;
   }
 
+  readComputationDependencies() {
+    return [this.evaluation.computationAuthority];
+  }
+
   canRebaseTo(
     evaluation: StaticProjectEvaluationGeneration<null>,
     validationScope: ComputationReadValidationScope,
@@ -180,6 +184,10 @@ export class TypeSystemProjectGeneration implements ComputationRead {
 
   isCurrent(scope?: ComputationReadValidationScope): boolean {
     return (scope ?? new ComputationReadValidationScope()).validate(this).isCurrent;
+  }
+
+  readComputationDependencies() {
+    return [this.computationAuthority];
   }
 
   requireCurrent(scope?: ComputationReadValidationScope): void {
