@@ -235,6 +235,10 @@ Graph-discovered physical source locations reuse the project-qualified source-ad
 of the replaceable evaluator generation. The evaluator generation owns whether a module is reachable and the exact
 text/existence/resolution reads that established that reachability. Keeping those lifetimes separate lets downstream
 records retain valid source-address references while a later evaluator generation removes or relocates an import.
+NodeNext package conditions are part of that graph identity. Parsed sources retain TypeScript's implied module format,
+each import/re-export/dynamic-import/require carrier retains its exact `ResolutionMode`, and graph plus host caches key
+an edge by `(from, specifier, mode)`. A CommonJS require therefore cannot overwrite an import edge with the same text;
+the shared resolver still decides the target, while evaluator package admission remains a separate policy boundary.
 The module-source host reports specifier-shape counters as well as resolution outcomes. Use `querySuffixCalls`,
 `assetSpecifierCalls`, `extensionlessRelativeCalls`, and `emittedJavaScriptRelativeCalls` to understand the authored
 module graph before changing caches or source-admission policy. Asset/query-shaped relative imports path-probe before

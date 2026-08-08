@@ -1,43 +1,11 @@
 import path from 'node:path';
 
-import ts from 'typescript';
-
 import { isHostPathWithin } from '../boot/host-files.js';
+import { projectModuleHostPathKey } from '../project-analysis/package-identity.js';
+import type { ResolvedPackageInstance } from '../project-analysis/package-identity.js';
 import { normalizeModuleKey } from './module-graph.js';
 
-/** One physical package owner, independent from package-manager locator aliases. */
-export class ResolvedPackageOwner {
-  constructor(
-    readonly ownerKey: string,
-    readonly name: string,
-    readonly version: string | null,
-    readonly physicalRootDir: string,
-  ) {}
-}
-
-/** One exact package installation identity selected by TypeScript module resolution. */
-export class ResolvedPackageInstance {
-  constructor(
-    readonly instanceKey: string,
-    readonly owner: ResolvedPackageOwner,
-    /** Opaque locator identity. Path locators are prefixed with `path:`; future adapters may supply other forms. */
-    readonly locatorKey: string | null,
-    /** Logical package-manager root before symlink canonicalization, when logical identity is preserved. */
-    readonly locatorRootDir: string | null,
-  ) {}
-
-  get name(): string {
-    return this.owner.name;
-  }
-
-  get version(): string | null {
-    return this.owner.version;
-  }
-
-  get physicalRootDir(): string {
-    return this.owner.physicalRootDir;
-  }
-}
+export { ResolvedPackageInstance, ResolvedPackageOwner } from '../project-analysis/package-identity.js';
 
 /** Relationship of one resolved package module to the current semantic project source world. */
 export const enum ResolvedEvaluationModuleSourceScope {
@@ -56,8 +24,7 @@ export class ResolvedEvaluationModuleOrigin {
 
 /** Case-aware absolute host key shared by evaluator origin production and downstream lookup. */
 export function evaluationModuleHostPathKey(fileName: string): string {
-  const normalized = normalizeModuleKey(path.resolve(fileName));
-  return ts.sys.useCaseSensitiveFileNames ? normalized : normalized.toLowerCase();
+  return projectModuleHostPathKey(fileName);
 }
 
 export function evaluationModuleKey(rootDir: string, modulePath: string): string {

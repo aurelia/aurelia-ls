@@ -147,15 +147,27 @@ export class StaticModuleGraphEvaluator {
         entry.importKind === EvaluationImportKind.CommonJsRequire
           || entry.importKind === EvaluationImportKind.DynamicImport
           ? []
-          : [{ moduleSpecifier: entry.moduleSpecifier, node: entry.node }]
+          : [{
+            moduleSpecifier: entry.moduleSpecifier,
+            resolutionMode: entry.resolutionMode,
+            node: entry.node,
+          }]
       ),
       ...record.exports.flatMap((entry) => entry.moduleSpecifier == null
         ? []
-        : [{ moduleSpecifier: entry.moduleSpecifier, node: entry.node }]),
+        : [{
+          moduleSpecifier: entry.moduleSpecifier,
+          resolutionMode: entry.resolutionMode,
+          node: entry.node,
+        }]),
     ].sort((left, right) => left.node.getStart() - right.node.getStart());
     const visited = new Set<string>();
     for (const dependency of dependencies) {
-      const targetModuleKey = this.graph.readLinkedModule(record.moduleKey, dependency.moduleSpecifier);
+      const targetModuleKey = this.graph.readLinkedModule(
+        record.moduleKey,
+        dependency.moduleSpecifier,
+        dependency.resolutionMode,
+      );
       if (targetModuleKey == null || visited.has(targetModuleKey)) {
         continue;
       }
@@ -238,7 +250,14 @@ export class StaticModuleGraphEvaluator {
         && entry.moduleSpecifier != null
         && entry.valueName != null
       ) {
-        return this.readReExportEvidence(moduleKey, entry.moduleSpecifier, entry.valueName, entry.node, true);
+        return this.readReExportEvidence(
+          moduleKey,
+          entry.moduleSpecifier,
+          entry.resolutionMode,
+          entry.valueName,
+          entry.node,
+          true,
+        );
       }
       if (
         entry.exportKind === EvaluationExportKind.NamespaceReExport
@@ -246,7 +265,12 @@ export class StaticModuleGraphEvaluator {
         && entry.moduleSpecifier != null
       ) {
         return new EvaluationValueEvidence(
-          this.readNamespaceReExportValue(moduleKey, entry.moduleSpecifier, entry.node),
+          this.readNamespaceReExportValue(
+            moduleKey,
+            entry.moduleSpecifier,
+            entry.resolutionMode,
+            entry.node,
+          ),
           [],
         );
       }
@@ -299,7 +323,11 @@ export class StaticModuleGraphEvaluator {
   }
 
   private evaluateSideEffectImport(fromModuleKey: string, entry: EvaluationImportEntry): void {
-    const targetModuleKey = this.graph.readLinkedModule(fromModuleKey, entry.moduleSpecifier);
+    const targetModuleKey = this.graph.readLinkedModule(
+      fromModuleKey,
+      entry.moduleSpecifier,
+      entry.resolutionMode,
+    );
     if (targetModuleKey == null) {
       if (isRelativeModuleSpecifier(entry.moduleSpecifier)) {
         this.openValue(`Side-effect import '${entry.moduleSpecifier}' from ${fromModuleKey} did not resolve to a local module.`, entry.node);
@@ -314,7 +342,11 @@ export class StaticModuleGraphEvaluator {
   }
 
   private resolveImportEvidence(fromModuleKey: string, entry: EvaluationImportEntry): EvaluationValueEvidence {
-    const targetModuleKey = this.graph.readLinkedModule(fromModuleKey, entry.moduleSpecifier);
+    const targetModuleKey = this.graph.readLinkedModule(
+      fromModuleKey,
+      entry.moduleSpecifier,
+      entry.resolutionMode,
+    );
     if (targetModuleKey == null) {
       const value = this.externalValueResolver?.resolveImportValue(fromModuleKey, entry)
         ?? (isRelativeModuleSpecifier(entry.moduleSpecifier)
@@ -335,7 +367,16 @@ export class StaticModuleGraphEvaluator {
     moduleSpecifier: string,
     node: ts.Node,
   ): StaticEvaluationRuntimeValueResult {
-    const targetModuleKey = this.graph.readLinkedModule(fromModuleKey, moduleSpecifier);
+    const targetModuleKey = this.graph.readLinkedModule(
+      fromModuleKey,
+      moduleSpecifier,
+      this.readRuntimeImportResolutionMode(
+        fromModuleKey,
+        moduleSpecifier,
+        EvaluationImportKind.CommonJsRequire,
+        node,
+      ),
+    );
     if (targetModuleKey == null) {
       const value = isRelativeModuleSpecifier(moduleSpecifier)
         ? this.openValue(`CommonJS require '${moduleSpecifier}' from ${fromModuleKey} did not resolve to a local module.`, node)
@@ -382,7 +423,16 @@ export class StaticModuleGraphEvaluator {
     moduleSpecifier: string,
     node: ts.CallExpression,
   ): EvaluationValue {
-    const targetModuleKey = this.graph.readLinkedModule(fromModuleKey, moduleSpecifier);
+    const targetModuleKey = this.graph.readLinkedModule(
+      fromModuleKey,
+      moduleSpecifier,
+      this.readRuntimeImportResolutionMode(
+        fromModuleKey,
+        moduleSpecifier,
+        EvaluationImportKind.DynamicImport,
+        node,
+      ),
+    );
     if (targetModuleKey == null) {
       return isRelativeModuleSpecifier(moduleSpecifier)
         ? EvaluationPromiseValue.open(new EvaluationValueEvidence(
@@ -430,11 +480,12 @@ export class StaticModuleGraphEvaluator {
   private readReExportEvidence(
     fromModuleKey: string,
     moduleSpecifier: string,
+    resolutionMode: ts.ResolutionMode,
     exportName: string,
     node: ts.Node,
     reportMissing: boolean,
   ): EvaluationValueEvidence | null {
-    const targetModuleKey = this.graph.readLinkedModule(fromModuleKey, moduleSpecifier);
+    const targetModuleKey = this.graph.readLinkedModule(fromModuleKey, moduleSpecifier, resolutionMode);
     return targetModuleKey == null
       ? isRelativeModuleSpecifier(moduleSpecifier)
         ? this.openEvidence(`Re-export '${moduleSpecifier}' from ${fromModuleKey} did not resolve to a local module.`, node)
@@ -449,6 +500,7 @@ export class StaticModuleGraphEvaluator {
                 exportName,
                 exportName,
                 node,
+                resolutionMode,
               ),
             ) ?? new EvaluationBoundaryValue(
               EvaluationBoundaryKind.ExternalModule,
@@ -460,12 +512,26 @@ export class StaticModuleGraphEvaluator {
       : this.readExportEvidenceCore(targetModuleKey, exportName, reportMissing);
   }
 
+  private readRuntimeImportResolutionMode(
+    fromModuleKey: string,
+    moduleSpecifier: string,
+    importKind: EvaluationImportKind.CommonJsRequire | EvaluationImportKind.DynamicImport,
+    node: ts.Node,
+  ): ts.ResolutionMode {
+    return this.graph.readModule(fromModuleKey)?.imports.find((entry) =>
+      entry.importKind === importKind
+      && entry.moduleSpecifier === moduleSpecifier
+      && entry.node === node
+    )?.resolutionMode;
+  }
+
   private readNamespaceReExportValue(
     fromModuleKey: string,
     moduleSpecifier: string,
+    resolutionMode: ts.ResolutionMode,
     node: ts.Node,
   ): EvaluationValue {
-    const targetModuleKey = this.graph.readLinkedModule(fromModuleKey, moduleSpecifier);
+    const targetModuleKey = this.graph.readLinkedModule(fromModuleKey, moduleSpecifier, resolutionMode);
     return targetModuleKey == null
       ? isRelativeModuleSpecifier(moduleSpecifier)
         ? this.openValue(`Namespace re-export '${moduleSpecifier}' from ${fromModuleKey} did not resolve to a local module.`, node)
@@ -477,6 +543,7 @@ export class StaticModuleGraphEvaluator {
             null,
             null,
             node,
+            resolutionMode,
           ),
         ) ?? new EvaluationBoundaryObjectValue(
             EvaluationBoundaryKind.ExternalModule,
@@ -496,11 +563,24 @@ export class StaticModuleGraphEvaluator {
       if (entry.exportKind !== EvaluationExportKind.ExportAll || entry.moduleSpecifier == null) {
         continue;
       }
-      const evidence = this.readReExportEvidence(record.moduleKey, entry.moduleSpecifier, exportName, entry.node, false);
+      const evidence = this.readReExportEvidence(
+        record.moduleKey,
+        entry.moduleSpecifier,
+        entry.resolutionMode,
+        exportName,
+        entry.node,
+        false,
+      );
       if (evidence != null && evidence.value.kind !== EvaluationValueKind.Unknown) {
         candidates.push(new EvaluationExportCandidate(
           evidence,
-          this.readReExportBindingIdentity(record.moduleKey, entry.moduleSpecifier, exportName, new Set())
+          this.readReExportBindingIdentity(
+            record.moduleKey,
+            entry.moduleSpecifier,
+            entry.resolutionMode,
+            exportName,
+            new Set(),
+          )
             ?? `open:${record.moduleKey}:${index}:${exportName}`,
         ));
       }
@@ -511,10 +591,11 @@ export class StaticModuleGraphEvaluator {
   private readReExportBindingIdentity(
     fromModuleKey: string,
     moduleSpecifier: string,
+    resolutionMode: ts.ResolutionMode,
     exportName: string,
     activeExports: Set<string>,
   ): string | null {
-    const targetModuleKey = this.graph.readLinkedModule(fromModuleKey, moduleSpecifier);
+    const targetModuleKey = this.graph.readLinkedModule(fromModuleKey, moduleSpecifier, resolutionMode);
     return targetModuleKey == null
       ? isRelativeModuleSpecifier(moduleSpecifier)
         ? null
@@ -560,6 +641,7 @@ export class StaticModuleGraphEvaluator {
           return this.readReExportBindingIdentity(
             moduleKey,
             entry.moduleSpecifier,
+            entry.resolutionMode,
             entry.valueName,
             activeExports,
           );
@@ -569,7 +651,11 @@ export class StaticModuleGraphEvaluator {
           && entry.exportName === exportName
           && entry.moduleSpecifier != null
         ) {
-          const targetModuleKey = this.graph.readLinkedModule(moduleKey, entry.moduleSpecifier);
+          const targetModuleKey = this.graph.readLinkedModule(
+            moduleKey,
+            entry.moduleSpecifier,
+            entry.resolutionMode,
+          );
           return targetModuleKey == null
             ? isRelativeModuleSpecifier(entry.moduleSpecifier)
               ? null
@@ -585,6 +671,7 @@ export class StaticModuleGraphEvaluator {
         const identity = this.readReExportBindingIdentity(
           moduleKey,
           entry.moduleSpecifier,
+          entry.resolutionMode,
           exportName,
           activeExports,
         );
@@ -621,7 +708,11 @@ export class StaticModuleGraphEvaluator {
     if (imported == null) {
       return `local:${record.moduleKey}:${localName}`;
     }
-    const targetModuleKey = this.graph.readLinkedModule(record.moduleKey, imported.moduleSpecifier);
+    const targetModuleKey = this.graph.readLinkedModule(
+      record.moduleKey,
+      imported.moduleSpecifier,
+      imported.resolutionMode,
+    );
     if (imported.importKind === EvaluationImportKind.Namespace) {
       return targetModuleKey == null
         ? isRelativeModuleSpecifier(imported.moduleSpecifier)
@@ -694,7 +785,11 @@ export class StaticModuleGraphEvaluator {
       if (entry.exportKind !== EvaluationExportKind.ExportAll || entry.moduleSpecifier == null) {
         continue;
       }
-      const targetModuleKey = this.graph.readLinkedModule(moduleKey, entry.moduleSpecifier);
+      const targetModuleKey = this.graph.readLinkedModule(
+        moduleKey,
+        entry.moduleSpecifier,
+        entry.resolutionMode,
+      );
       if (targetModuleKey == null) {
         open = true;
         continue;
@@ -743,7 +838,11 @@ export class StaticModuleGraphEvaluator {
       if (entry.exportKind !== EvaluationExportKind.ExportAll || entry.moduleSpecifier == null) {
         continue;
       }
-      const targetModuleKey = this.graph.readLinkedModule(moduleKey, entry.moduleSpecifier);
+      const targetModuleKey = this.graph.readLinkedModule(
+        moduleKey,
+        entry.moduleSpecifier,
+        entry.resolutionMode,
+      );
       if (targetModuleKey == null) {
         continue;
       }

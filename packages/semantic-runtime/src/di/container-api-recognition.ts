@@ -58,11 +58,11 @@ export class DiContainerApiCallSite {
     readonly receiverFreshCreateContainer: boolean,
     readonly nullishKeyArguments: readonly DiNullishKeyArgument[],
     readonly receiverText: string,
-    /** Candidate-local call node for DI-owned activation and source evaluation. */
+    /** Program-owned call node used by checker-backed source recognition. */
     readonly sourceNode: ts.CallExpression,
-    /** Candidate-local receiver expression proven to be an Aurelia container. */
+    /** Program-owned receiver expression proven to be an Aurelia container. */
     readonly receiverExpression: ts.Expression,
-    /** Candidate-local key expression, when directly authored. */
+    /** Program-owned key expression, when directly authored. */
     readonly keyExpression: ts.Expression | null,
   ) {}
 }

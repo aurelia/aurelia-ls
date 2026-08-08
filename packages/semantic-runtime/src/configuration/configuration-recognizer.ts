@@ -1,6 +1,5 @@
 import ts from 'typescript';
 import { openSeamReasonKindsForEvaluationRead } from '../evaluation/boundary-open-reason.js';
-import { readEvaluationEnumerableOwnEntries } from '../evaluation/enumerable-own-properties.js';
 import {
   readStaticSourceLiteralValue,
   readStaticStringArrayValue,
@@ -13,10 +12,7 @@ import {
 } from '../evaluation/invocation.js';
 import { evaluationOpenSeamDefaultReasonKinds } from '../evaluation/seams.js';
 import {
-  EvaluationObjectPropertyState,
   EvaluationValueKind,
-  type EvaluationClassValue,
-  type EvaluationFunctionValue,
   type EvaluationValue,
 } from '../evaluation/values.js';
 import { OpenSeamReasonKind } from '../kernel/open-seam.js';
@@ -57,37 +53,29 @@ import {
   frameworkRegistrationKindsForModule,
   traceNameForFrameworkRegistrationKind,
 } from '../registration/framework-registration-manifest.js';
-import { registrationAdmissionForEvaluatedFactory } from '../registration/evaluated-registration-factory.js';
 import { projectEvaluatedRegistrationValue } from '../registration/evaluated-registration-projector.js';
 import {
   evaluatedConstructableValueSource,
-  evaluatedRegistryValueObservation,
   evaluatedValueLocalName,
   hasEvaluationRegisterFunction,
   isDeclarationValueNode,
   registryObjectLiteralLocalName,
-  registryValueSource,
-  type EvaluatedRegistrationValueSource,
-  type EvaluatedRegistryValue,
 } from '../registration/evaluated-registration-value.js';
 import {
-  AureliaInterfaceDefaultRegistrationState,
   aureliaContainerEvaluationForValue,
   aureliaFacadeEvaluationForValue,
   aureliaFrameworkRegistrationEvaluationForValue,
   aureliaFrameworkRegistrationKindForEvaluationValue,
   aureliaFrameworkRegistrationValueForKind,
-  aureliaRegistryBodyForEvaluationValue,
   AureliaContainerEvaluationKind,
   AureliaFacadeContainerState,
   type AureliaContainerEvaluation,
   type AureliaFacadeEvaluation,
-  type AureliaInterfaceDefaultRegistrationEffect,
 } from './aurelia-evaluation-runtime.js';
 import {
   APP_TASK_SLOTS,
   AppTaskCallbackKind,
-  AppTaskSlot,
+  type AppTaskSlot,
 } from './app-task.js';
 import {
   checkerPropertySymbol,
@@ -128,11 +116,6 @@ const CONTAINER_MODULES = new Set([
   '@aurelia/kernel',
 ]);
 
-const REGISTRY_MODULES = new Set([
-  'aurelia',
-  '@aurelia/kernel',
-]);
-
 const APP_TASK_MODULES = new Set([
   'aurelia',
   '@aurelia/runtime-html',
@@ -150,7 +133,6 @@ class ImportedBindings {
   readonly containerNamespaces = new Set<string>();
   readonly containerDiIdentifiers = new Set<string>();
   readonly containerTypeIdentifiers = new Set<string>();
-  readonly registryTypeIdentifiers = new Set<string>();
   readonly frameworkRegistrationIdentifiers = new Map<string, FrameworkRegistrationKind>();
   readonly frameworkRegistrationNamespaces = new Map<string, readonly FrameworkRegistrationKind[]>();
 }
@@ -882,9 +864,6 @@ function readImportedBindings(sourceFile: ts.SourceFile): ImportedBindings {
       if (REGISTRATION_MODULES.has(moduleName) && importedName === 'Registration') {
         bindings.registrationIdentifiers.add(element.name.text);
       }
-      if (REGISTRY_MODULES.has(moduleName) && importedName === 'IRegistry') {
-        bindings.registryTypeIdentifiers.add(element.name.text);
-      }
       if (CONTAINER_MODULES.has(moduleName) && importedName === 'createContainer') {
         bindings.containerFactoryIdentifiers.add(element.name.text);
       }
@@ -1504,6 +1483,7 @@ function recognizeCheckerRegistryArgument(
       null,
       null,
       valueSource.sourceFileAddressHandle,
+      valueSource.moduleKey,
     ),
     [],
     [],
@@ -1534,8 +1514,12 @@ function checkerRegistryValueSource(
     : checkerRegistryDeclarationSource(context, expression, declaration);
 }
 
-interface NamedRegistryValueSource extends EvaluatedRegistrationValueSource {
+/** Checker-owned registry source, remapped to the evaluator epoch when that exact source was evaluated. */
+interface NamedRegistryValueSource {
+  readonly node: ts.Node;
   readonly localName: string | null;
+  readonly sourceFileAddressHandle: RegistrationValueObservation['sourceFileAddressHandle'];
+  readonly moduleKey: RegistrationValueObservation['moduleKey'];
 }
 
 function checkerRegistryDeclarationSource(
@@ -1547,7 +1531,8 @@ function checkerRegistryDeclarationSource(
   if (sourceFileAddressHandle == null) {
     return checkerRegistryExpressionSource(expression);
   }
-  const valueNode = registryDeclarationValueNode(declaration);
+  const programValueNode = registryDeclarationValueNode(declaration);
+  const valueNode = context.typeSystem?.readEvaluatedNode(programValueNode) ?? programValueNode;
   return {
     node: valueNode,
     localName: readDeclarationLocalName(declaration) ?? readReferenceName(expression) ?? 'IRegistry',
@@ -1869,36 +1854,36 @@ function optionValueObservationForEvaluation(
   traceName: string | null,
 ): ConfigurationOptionValueObservation {
   switch (value.kind) {
-    case 'boolean':
+    case EvaluationValueKind.Boolean:
       return optionValueObservation(expression, ConfigurationOptionValueKind.Boolean, traceName, value.value);
-    case 'string':
+    case EvaluationValueKind.String:
       return optionValueObservation(expression, ConfigurationOptionValueKind.String, traceName, value.value);
-    case 'number':
+    case EvaluationValueKind.Number:
       return optionValueObservation(expression, ConfigurationOptionValueKind.Number, traceName, value.value);
-    case 'null':
+    case EvaluationValueKind.Null:
       return optionValueObservation(expression, ConfigurationOptionValueKind.Null, traceName);
-    case 'array':
+    case EvaluationValueKind.Array:
       return optionArrayValueObservation(expression, value, traceName);
-    case 'set':
-    case 'map':
-    case 'regular-expression':
+    case EvaluationValueKind.Set:
+    case EvaluationValueKind.Map:
+    case EvaluationValueKind.RegularExpression:
       return optionValueObservation(expression, ConfigurationOptionValueKind.Object, traceName);
-    case 'object':
-    case 'boundary-object':
-    case 'instance':
+    case EvaluationValueKind.Object:
+    case EvaluationValueKind.BoundaryObject:
+    case EvaluationValueKind.Instance:
       return optionValueObservation(expression, ConfigurationOptionValueKind.Object, traceName);
-    case 'function':
+    case EvaluationValueKind.Function:
       return optionValueObservation(expression, ConfigurationOptionValueKind.Callback, traceName);
-    case 'class':
+    case EvaluationValueKind.Class:
       return optionValueObservation(expression, ConfigurationOptionValueKind.Identity, traceName);
-    case 'bigint':
-    case 'module-namespace':
-    case 'boundary-value':
-    case 'promise':
+    case EvaluationValueKind.BigInt:
+    case EvaluationValueKind.ModuleNamespace:
+    case EvaluationValueKind.BoundaryValue:
+    case EvaluationValueKind.Promise:
       return optionValueObservation(expression, ConfigurationOptionValueKind.Unknown, traceName);
-    case 'undefined':
+    case EvaluationValueKind.Undefined:
       return optionValueObservation(expression, ConfigurationOptionValueKind.Undefined, traceName);
-    case 'unknown':
+    case EvaluationValueKind.Unknown:
       return optionValueObservation(expression, ConfigurationOptionValueKind.Unknown, traceName);
   }
   return optionValueObservation(expression, ConfigurationOptionValueKind.Unknown, traceName);
@@ -1906,7 +1891,7 @@ function optionValueObservationForEvaluation(
 
 function optionArrayValueObservation(
   expression: ts.Expression,
-  value: Extract<EvaluationValue, { readonly kind: 'array' }>,
+  value: Extract<EvaluationValue, { readonly kind: EvaluationValueKind.Array }>,
   traceName: string | null,
 ): ConfigurationOptionValueObservation {
   const stringValues = readStaticStringArrayValue(value);
@@ -1935,7 +1920,7 @@ function readConfigurationBooleanObjectProperty(
     return null;
   }
   const value = context.expressionReader.evaluateExpression(expression).value;
-  return value?.kind === 'boolean' ? value.value : null;
+  return value?.kind === EvaluationValueKind.Boolean ? value.value : null;
 }
 
 function readCallMemberName(call: ts.CallExpression): string | null {
@@ -2141,35 +2126,6 @@ function isContainerTypeName(
   return typeName.right.text === 'IContainer'
     && ts.isIdentifier(typeName.left)
     && bindings.containerNamespaces.has(typeName.left.text);
-}
-
-function isRegistryTypeNode(
-  typeNode: ts.TypeNode | undefined,
-  bindings: ImportedBindings,
-): boolean {
-  return typeNode != null
-    && ts.isTypeReferenceNode(typeNode)
-    && isRegistryTypeName(typeNode.typeName, bindings);
-}
-
-function isRegistryTypeName(
-  typeName: ts.EntityName | ts.Expression,
-  bindings: ImportedBindings,
-): boolean {
-  if (ts.isIdentifier(typeName)) {
-    return bindings.registryTypeIdentifiers.has(typeName.text);
-  }
-  if (ts.isPropertyAccessExpression(typeName)) {
-    return typeName.name.text === 'IRegistry'
-      && ts.isIdentifier(typeName.expression)
-      && bindings.containerNamespaces.has(typeName.expression.text);
-  }
-  if (ts.isQualifiedName(typeName)) {
-    return typeName.right.text === 'IRegistry'
-      && ts.isIdentifier(typeName.left)
-      && bindings.containerNamespaces.has(typeName.left.text);
-  }
-  return false;
 }
 
 function isImportedAppTaskExpression(

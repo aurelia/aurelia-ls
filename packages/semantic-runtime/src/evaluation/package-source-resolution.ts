@@ -4,19 +4,23 @@ import ts from 'typescript';
 
 import type { AuthoredSourceBoundary } from '../boot/source-boundary.js';
 import {
-  type BootPackageManifest,
   isHostPathWithin,
 } from '../boot/host-files.js';
-import { stableKernelLocalHash } from '../kernel/handles.js';
+import { createResolvedPackageInstance } from '../project-analysis/package-identity.js';
+import {
+  externalPackageRootForPath,
+  ProjectPackageLocator,
+} from '../project-analysis/package-topology.js';
 import { normalizeModuleKey } from './module-graph.js';
 import { isRelativeModuleSpecifier } from './module-specifier.js';
 import {
   EvaluationPackageOriginIndex,
   evaluationModuleHostPathKey,
-  type ResolvedEvaluationModuleOrigin,
   ResolvedEvaluationModuleSourceScope,
+} from './package-origin.js';
+import type {
+  ResolvedEvaluationModuleOrigin,
   ResolvedPackageInstance,
-  ResolvedPackageOwner,
 } from './package-origin.js';
 import {
   candidateEvaluationModulePaths,
@@ -56,11 +60,6 @@ interface PackageRootCandidate {
   readonly locatorRootDir: string | null;
 }
 
-interface PackageManifestIdentity {
-  readonly name: string;
-  readonly version: string | null;
-}
-
 /**
  * Per-evaluation authority for package ownership, source mapping, containment, and logical module identity.
  *
@@ -68,8 +67,8 @@ interface PackageManifestIdentity {
  * independent computation receipt/currentness contract.
  */
 export class EvaluationPackageSourceResolver {
-  private readonly packageRootByBareSpecifier = new Map<string, string | null>();
   private readonly originIndex: EvaluationPackageOriginIndex;
+  private readonly packageLocator: ProjectPackageLocator;
   private readonly sourceLayout: EvaluationPackageSourceLayout;
 
   constructor(
@@ -80,6 +79,7 @@ export class EvaluationPackageSourceResolver {
     private readonly authoredSources: AuthoredSourceBoundary | null,
   ) {
     this.originIndex = new EvaluationPackageOriginIndex(rootDir, preserveSymlinks);
+    this.packageLocator = new ProjectPackageLocator(fileSystem);
     this.sourceLayout = new EvaluationPackageSourceLayout(
       fileSystem,
       admitSourceShippedPackageEntrypoints,
@@ -337,33 +337,20 @@ export class EvaluationPackageSourceResolver {
   ): ResolvedPackageInstance | null {
     for (const candidate of candidates) {
       const manifest = this.sourceLayout.readPackageManifest(candidate.rootDir);
-      const identity = packageManifestIdentity(manifest, packageId);
-      if (identity == null) {
-        continue;
-      }
       const physicalRootDir = this.fileSystem.realpath(candidate.rootDir);
       if (!isHostPathWithin(physicalFileName, physicalRootDir)) {
         continue;
       }
-      const ownerKey = resolvedPackageOwnerKey(identity, physicalRootDir);
-      const owner = new ResolvedPackageOwner(
-        ownerKey,
-        identity.name,
-        identity.version,
+      const packageInstance = createResolvedPackageInstance(
+        manifest,
+        packageId,
         physicalRootDir,
+        candidate.locatorRootDir,
+        this.preserveSymlinks,
       );
-      const locatorRootDir = this.preserveSymlinks && candidate.locatorRootDir != null
-        ? path.resolve(candidate.locatorRootDir)
-        : null;
-      const locatorKey = locatorRootDir == null
-        ? null
-        : `path:${evaluationModuleHostPathKey(locatorRootDir)}`;
-      return new ResolvedPackageInstance(
-        locatorKey == null ? ownerKey : resolvedPackageLocatorInstanceKey(ownerKey, locatorKey),
-        owner,
-        locatorKey,
-        locatorRootDir,
-      );
+      if (packageInstance != null) {
+        return packageInstance;
+      }
     }
     return null;
   }
@@ -372,42 +359,7 @@ export class EvaluationPackageSourceResolver {
     fromAbsolute: string,
     moduleSpecifier: string,
   ): string | null {
-    const packageName = packageNameForBareModuleSpecifier(moduleSpecifier);
-    if (packageName == null) {
-      return null;
-    }
-    return this.findExternalPackageRoot(path.dirname(fromAbsolute), packageName);
-  }
-
-  private findExternalPackageRoot(fromDirectory: string, packageName: string): string | null {
-    let current = path.resolve(fromDirectory);
-    const visitedKeys: string[] = [];
-    while (true) {
-      const cacheKey = `${evaluationModuleHostPathKey(current)}::${packageName}`;
-      const cached = this.packageRootByBareSpecifier.get(cacheKey);
-      if (cached !== undefined) {
-        this.cachePackageRootSearchResults(visitedKeys, cached);
-        return cached;
-      }
-      visitedKeys.push(cacheKey);
-      const packageRoot = path.join(current, 'node_modules', packageName);
-      if (this.fileSystem.fileExists(path.join(packageRoot, 'package.json'))) {
-        this.cachePackageRootSearchResults(visitedKeys, packageRoot);
-        return packageRoot;
-      }
-      const parent = path.dirname(current);
-      if (parent === current) {
-        this.cachePackageRootSearchResults(visitedKeys, null);
-        return null;
-      }
-      current = parent;
-    }
-  }
-
-  private cachePackageRootSearchResults(keys: readonly string[], packageRoot: string | null): void {
-    for (const key of keys) {
-      this.packageRootByBareSpecifier.set(key, packageRoot);
-    }
+    return this.packageLocator.findBarePackageRoot(fromAbsolute, moduleSpecifier);
   }
 
   private shouldAdmitResolvedSource(
@@ -594,44 +546,6 @@ function packageRootForSubmodulePath(fileName: string, subModuleName: string): s
     : null;
 }
 
-function packageManifestIdentity(
-  manifest: BootPackageManifest | null,
-  packageId: ts.PackageId | null,
-): PackageManifestIdentity | null {
-  if (manifest == null || typeof manifest.name !== 'string' || manifest.name.length === 0) {
-    return null;
-  }
-  const version = typeof manifest.version === 'string' && manifest.version.length > 0
-    ? manifest.version
-    : packageId?.version ?? null;
-  if (
-    packageId != null
-    && (
-      manifest.name !== packageId.name
-      || (
-        typeof manifest.version === 'string'
-        && manifest.version.length > 0
-        && manifest.version !== packageId.version
-      )
-    )
-  ) {
-    return null;
-  }
-  return { name: manifest.name, version };
-}
-
-function resolvedPackageOwnerKey(identity: PackageManifestIdentity, physicalRootDir: string): string {
-  return `resolved-package-owner:${stableKernelLocalHash(JSON.stringify([
-    identity.name,
-    identity.version,
-    evaluationModuleHostPathKey(physicalRootDir),
-  ]))}`;
-}
-
-function resolvedPackageLocatorInstanceKey(ownerKey: string, locatorKey: string): string {
-  return `resolved-package-instance:${stableKernelLocalHash(JSON.stringify([ownerKey, locatorKey]))}`;
-}
-
 function isPackageConfinedPathSpecifier(moduleSpecifier: string): boolean {
   return isRelativeModuleSpecifier(moduleSpecifier)
     || moduleSpecifier.startsWith('/')
@@ -640,22 +554,6 @@ function isPackageConfinedPathSpecifier(moduleSpecifier: string): boolean {
 
 function isPackageSelfReferenceSpecifier(moduleSpecifier: string, packageName: string): boolean {
   return moduleSpecifier === packageName || moduleSpecifier.startsWith(`${packageName}/`);
-}
-
-function packageNameForBareModuleSpecifier(moduleSpecifier: string): string | null {
-  if (moduleSpecifier.startsWith('.') || moduleSpecifier.startsWith('/') || moduleSpecifier.length === 0) {
-    return null;
-  }
-  const segments = moduleSpecifier.split('/');
-  const first = segments[0];
-  if (first == null || first.length === 0 || first.startsWith('#')) {
-    return null;
-  }
-  if (first.startsWith('@')) {
-    const second = segments[1];
-    return second == null || second.length === 0 ? null : `${first}/${second}`;
-  }
-  return first;
 }
 
 function pathPatternMatchesSpecifier(pattern: string, moduleSpecifier: string): boolean {
@@ -671,22 +569,6 @@ function pathPatternMatchesSpecifier(pattern: string, moduleSpecifier: string): 
 function isDeclarationFile(fileName: string): boolean {
   const lower = fileName.toLowerCase();
   return lower.endsWith('.d.ts') || lower.endsWith('.d.mts') || lower.endsWith('.d.cts');
-}
-
-function externalPackageRootForPath(fileName: string): string | null {
-  const normalized = normalizeModuleKey(path.resolve(fileName));
-  const segments = normalized.split('/');
-  const nodeModulesIndex = segments.lastIndexOf('node_modules');
-  if (nodeModulesIndex === -1 || nodeModulesIndex + 1 >= segments.length) {
-    return null;
-  }
-  const packageNameIndex = nodeModulesIndex + 1;
-  const packageName = segments[packageNameIndex];
-  if (packageName == null) {
-    return null;
-  }
-  const endIndex = packageName.startsWith('@') ? packageNameIndex + 2 : packageNameIndex + 1;
-  return endIndex <= segments.length ? segments.slice(0, endIndex).join('/') : null;
 }
 
 function comparableHostPath(value: string): string {

@@ -586,7 +586,7 @@ class StaticProjectEvaluationAuthority {
       result,
       context,
     );
-    this.generation = generation as StaticProjectEvaluationGeneration<unknown>;
+    this.generation = generation;
     return generation;
   }
 
@@ -952,7 +952,7 @@ export class StaticProjectEvaluationComputationService implements KernelStoreSid
         + 'Reuse one profile object so its revision and preparation semantics cannot diverge behind the same key.',
       );
     }
-    this.profilesByKey.set(profile.key, profile as StaticProjectEvaluationComputationProfile<unknown>);
+    this.profilesByKey.set(profile.key, profile);
   }
 }
 
@@ -1338,12 +1338,21 @@ function reachableEvaluationModuleKeys(
     if (record == null) {
       return;
     }
-    const moduleSpecifiers = new Set([
-      ...record.imports.map((entry) => entry.moduleSpecifier),
-      ...record.exports.flatMap((entry) => entry.moduleSpecifier == null ? [] : [entry.moduleSpecifier]),
-    ]);
-    for (const moduleSpecifier of moduleSpecifiers) {
-      const linked = graph.readLinkedModule(normalizedModuleKey, moduleSpecifier);
+    const moduleEdges = [
+      ...record.imports.map((entry) => ({
+        moduleSpecifier: entry.moduleSpecifier,
+        resolutionMode: entry.resolutionMode,
+      })),
+      ...record.exports.flatMap((entry) => entry.moduleSpecifier == null
+        ? []
+        : [{ moduleSpecifier: entry.moduleSpecifier, resolutionMode: entry.resolutionMode }]),
+    ];
+    for (const edge of moduleEdges) {
+      const linked = graph.readLinkedModule(
+        normalizedModuleKey,
+        edge.moduleSpecifier,
+        edge.resolutionMode,
+      );
       if (linked != null) {
         visit(linked);
       }

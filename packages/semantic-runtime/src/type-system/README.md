@@ -449,6 +449,10 @@ than probing multiple roots. Use
 `readProgramRelatedMemberFamilyByHostPath(...)`,
 `readProgramTypeOfSymbolAtLocation(...)`, or higher-level helpers such as `readRuntimeTargetType(...)` before asking the
 checker about a node that originated outside the Program SourceFile.
+The inverse boundary is equally explicit: checker-backed recognition retains Program-owned carriers, while a
+candidate-local evaluator consumer must use `readEvaluatedNode(...)` at its owning consumption boundary. Recognition
+must not discard a checker-backed fact merely because evaluation is open or absent, and a matching file/span does not
+make a Program call node valid as an evaluator invocation key.
 Cross-file member references and rename must resolve their public source carrier to an absolute host path, then use
 `readProgramRelatedMemberFamilyByHostPath(...)`, not raw symbol equality or a
 Program-wide identifier scan. Interface implementations, base/override members, getter/setter pairs, overloads,
@@ -537,7 +541,8 @@ hit/write source-text traffic, cacheable-read lanes, bypass lanes, and Program s
 path, or widening cacheability to authored source. The traffic counters are the CPU/memory trade-off unit: write text
 shows dependency/library text admitted into the warm cache during a cold Program, while hit text shows how much cached
 text a later Program reused. Cache keys use canonical file paths, the TypeScript parse options that affect `SourceFile`
-shape, and the source-text revision. Duplicate canonical-path entries are therefore visible as intentional
+shape (including effective module-detection and JSX module-indicator policy), and the source-text revision. Duplicate
+canonical-path entries are therefore visible as intentional
 parse-option/revision separation rather than hidden map growth or stale source reuse.
 `runtime.analysisCacheOverview()` exposes the same process-local cache entry count and lifetime counters, plus
 source-text density counts split by dependency, declaration, default-library, and external-declaration class. Counts

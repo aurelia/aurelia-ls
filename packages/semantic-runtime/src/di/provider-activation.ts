@@ -39,7 +39,7 @@ import {
 import { StaticProjectEvaluationSourceIndex } from '../evaluation/project-source-index.js';
 import {
   compactEvaluationOpenSeams,
-  EvaluationOpenSeam,
+  type EvaluationOpenSeam,
   EvaluationOpenSeamKind,
 } from '../evaluation/seams.js';
 import { DefaultStaticEvaluationPolicy } from '../evaluation/policy.js';
@@ -60,7 +60,6 @@ import {
   type EvaluationValue,
 } from '../evaluation/values.js';
 import type { AddressHandle, IdentityHandle } from '../kernel/handles.js';
-import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import {
   SourceFileAddress,
   SourceSpanAddress,
@@ -87,7 +86,7 @@ import {
   DiContainerApiMethodKind,
   type DiContainerApiCallSite,
 } from './container-api-recognition.js';
-import { Container } from './container.js';
+import type { Container } from './container.js';
 import { ContainerDefaultResolverPolicy } from './container-configuration.js';
 import {
   ContainerResolutionFailureKind,
@@ -102,8 +101,8 @@ import {
   containerLookupKeyForRegistrationValue,
 } from './container-key.js';
 import {
+  type ContainerFactorySlot,
   type ContainerResolverLikeSlot,
-  ContainerFactorySlot,
   ContainerResolverSlot,
   ContainerSelfResolverSlot,
 } from './container-slot.js';
@@ -120,7 +119,6 @@ import { InstanceProvider, InstanceProviderResolutionKind } from './instance-pro
 import {
   Resolver,
   ResolverResolutionKind,
-  ResolverStrategy,
 } from './resolver.js';
 import { DiContainerKeyExpressionIdentityKind } from './source-key-expression.js';
 import {
@@ -135,7 +133,9 @@ import {
   diClassDecoratorModeForTypeSystem,
   readClassInjectionMetadata,
   type DiClassInjectionEvaluation,
+  type DiClassDecoratorMode,
   type DiClassInjectionMetadata,
+  type DiDesignParamTypesMetadataState,
 } from './injection-metadata.js';
 import {
   DiClassDependencyPlanner,
@@ -241,6 +241,10 @@ interface DiProviderActivationExecutionEvent {
 interface DiContainerApiActivationContext {
   readonly requestor: Container;
   readonly invocation: StaticInvocationOccurrence<ts.CallExpression>;
+  /** Evaluator-owned call carrier matched to `invocation`. */
+  readonly sourceNode: ts.CallExpression;
+  /** Evaluator-owned first argument, when the recognized Program call authored one. */
+  readonly keyExpression: ts.Expression | null;
   readonly openSeams: readonly EvaluationOpenSeam[];
 }
 
@@ -438,15 +442,15 @@ export class DiProviderActivationView {
       return null;
     }
     const context = this.containerApiActivationContext(site);
-    if (context == null) {
+    if (context == null || context.keyExpression == null) {
       return null;
     }
     return activationWithAdditionalPressure(
       this.createSession().activateInvocationArgument(
         context.requestor,
-        site.keyExpression,
+        context.keyExpression,
         context.invocation,
-        site.sourceNode,
+        context.sourceNode,
       ),
       context.openSeams,
     );
@@ -455,7 +459,11 @@ export class DiProviderActivationView {
   private containerApiActivationContext(
     site: DiContainerApiCallSite,
   ): DiContainerApiActivationContext | null {
-    const invocations = this.invocationsByExpression.get(site.sourceNode) ?? [];
+    const evaluatedCall = this.typeSystem.readEvaluatedNode(site.sourceNode);
+    if (evaluatedCall == null) {
+      return null;
+    }
+    const invocations = this.invocationsByExpression.get(evaluatedCall) ?? [];
     const invocation = invocations.length === 1 ? invocations[0]! : null;
     const receiverEvidence = invocation?.thisValue ?? null;
     if (invocation == null || receiverEvidence == null) {
@@ -473,6 +481,8 @@ export class DiProviderActivationView {
     return {
       requestor,
       invocation,
+      sourceNode: invocation.node,
+      keyExpression: site.keyExpression == null ? null : invocation.node.arguments[0] ?? null,
       openSeams: receiverEvidence.openSeams,
     };
   }
@@ -481,7 +491,6 @@ export class DiProviderActivationView {
     expression: ts.Expression,
     evaluatedValue: EvaluationValue | null,
   ): DiProviderActivationKey {
-    const source = this.sourceForNode(expression);
     const sourceAddressHandle = this.sourceIndex.addressHandleForNode(expression);
     const local = [
       'di-provider-activation-key',
@@ -581,13 +590,13 @@ export class DiProviderActivationView {
     return aureliaClassInjectionEvaluationForValue(value);
   }
 
-  classDecoratorMode(): import('./injection-metadata.js').DiClassDecoratorMode {
+  classDecoratorMode(): DiClassDecoratorMode {
     return diClassDecoratorModeForTypeSystem(this.typeSystem);
   }
 
   classDesignParamTypesMetadataState(
     value: EvaluationClassValue,
-  ): import('./injection-metadata.js').DiDesignParamTypesMetadataState {
+  ): DiDesignParamTypesMetadataState {
     return designParamTypesMetadataState(value.declaration, this.typeSystem);
   }
 
@@ -855,7 +864,8 @@ export class DiProviderActivationSession {
     site: DiContainerApiCallSite,
     invocation: StaticInvocationOccurrence<ts.CallExpression>,
   ): ContainerResolutionFailureKind | null {
-    const expression = site.keyExpression;
+    const sourceNode = invocation.node;
+    const expression = site.keyExpression == null ? null : sourceNode.arguments[0] ?? null;
     const ordinal = this.view.executionOrdinalForInvocation(invocation);
     if (expression == null || ordinal == null) {
       return null;
@@ -875,7 +885,7 @@ export class DiProviderActivationSession {
       const key = this.view.keyForExpression(expression, value);
       switch (site.methodKind) {
         case DiContainerApiMethodKind.Get:
-          return this.activatePreparedExpression(requestor, expression, evidence, site.sourceNode, null, 0).failureKind;
+          return this.activatePreparedExpression(requestor, expression, evidence, sourceNode, null, 0).failureKind;
         case DiContainerApiMethodKind.GetResolver:
           if (site.autoRegister !== true || resolver != null) {
             return null;
@@ -884,7 +894,7 @@ export class DiProviderActivationSession {
             requestor,
             expression,
             value,
-            site.sourceNode,
+            sourceNode,
             null,
             0,
           ).failureKind;

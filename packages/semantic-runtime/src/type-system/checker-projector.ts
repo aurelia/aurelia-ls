@@ -46,7 +46,7 @@ import {
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import { TypeSystemHotDetails, TypeSystemProductDetails } from './product-details.js';
 import {
-  CheckerIndexedAccessKeyKind,
+  type CheckerIndexedAccessKeyKind,
   CheckerTypeCarrier,
   CheckerTypeMember,
   CheckerTypeMemberCarrier,
@@ -83,7 +83,7 @@ export interface CheckerTypeProjectionRequest {
   readonly type: ts.Type;
   /** How this projection was requested. */
   readonly origin?: CheckerTypeProjectionOrigin;
-  /** Source node whose type was requested, when the caller has one. */
+  /** Program-owned source node from this checker epoch whose type was requested, when the caller has one. */
   readonly sourceNode?: ts.Node | null;
   /** Source address for navigation/explanation when already materialized. */
   readonly sourceAddressHandle?: AddressHandle | null;
@@ -386,7 +386,6 @@ export class CheckerTypeProjector {
       input.localKey,
       typeProjectionSourceAddress(input, descriptor),
       'TypeChecker-backed type projection for template or expression inquiry.',
-      'TypeChecker projection.',
     );
     records.push(...source.records);
     return this.recordsForShapePublication(this.publicationFrameForType(input, descriptor, source, records));
@@ -461,7 +460,6 @@ export class CheckerTypeProjector {
       input.localKey,
       typeProjectionSourceAddress(input),
       'Synthetic type-system projection for template or expression inquiry.',
-      'Synthetic type-system projection.',
     );
     records.push(...source.records);
 
@@ -642,7 +640,6 @@ export class CheckerTypeProjector {
     localKey: string,
     addressHandle: AddressHandle | null,
     evidenceSummary: string,
-    provenanceSummary: string,
   ): TypeProjectionSourceSet {
     const evidenceHandle = this.store.handles.evidence(`type-system:${localKey}`);
     const provenanceHandle = this.store.handles.provenance(`type-system:${localKey}`);

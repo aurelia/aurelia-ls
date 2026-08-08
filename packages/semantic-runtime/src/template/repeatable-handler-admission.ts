@@ -20,7 +20,6 @@ import {
 } from '../type-system/checker-related-types.js';
 import {
   checkerPropertySymbol,
-  checkerSymbolValueType,
 } from '../type-system/checker-node-helpers.js';
 import {
   checkerCallableContextSignatures,
@@ -95,9 +94,9 @@ function customHandlerContracts(
 
   const checker = typeSystem.checker;
   const iterate = checkerPropertySymbol(checker, handlerType, 'iterate');
-  const iterateType = iterate == null
+  const iterateType = iterate == null || classValue == null
     ? null
-    : checkerSymbolValueType(checker, iterate, classValue?.declaration ?? null);
+    : typeSystem.readProgramTypeOfSymbolAtLocation(iterate, classValue.declaration);
   if (iterateType == null) {
     return [];
   }

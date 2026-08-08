@@ -25,6 +25,7 @@ import {
   readDiContainerApiCallSites,
   type DiContainerApiCallSite,
 } from '../src/di/container-api-recognition.js';
+import { readDiResolveCallSites } from '../src/di/resolve-call-recognition.js';
 import {
   ContainerResolutionFailureKind,
 } from '../src/di/container-lookup.js';
@@ -50,7 +51,8 @@ import {
 } from '../src/di/di-issue.js';
 import {
   isEvaluatedProjectSource,
-  type StaticProjectEvaluationResult,
+  StaticProjectEvaluationResult,
+  StaticProjectEvaluationSourceResult,
 } from '../src/evaluation/project-evaluation.js';
 import {
   EvaluationObjectValue,
@@ -84,6 +86,10 @@ import {
   RegistrationCarrierKind,
 } from '../src/registration/registration-observation.js';
 import { FrameworkRegistrationKind } from '../src/registration/registration-reference.js';
+import {
+  TypeSystemProjectBuilder,
+  type TypeSystemProject,
+} from '../src/type-system/project.js';
 
 const pressureFixtures = fileURLToPath(new URL('../fixtures/pressure', import.meta.url));
 
@@ -116,6 +122,131 @@ describe('DI provider model', () => {
     expect(frameworkRegistrationKindForRegistrationEvidence(admission, exactNonFrameworkValue))
       .toBeNull();
   });
+
+  test('keeps checker-recognized DI sites Program-owned and bridges exact evaluator carriers', async () => {
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: path.join(pressureFixtures, 'di-provider-activation'),
+      storeKey: 'test:di-provider-model:checker-evaluator-carrier-bridge',
+    });
+    const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
+    const evaluatedSource = app.emission.evaluation.readEvaluatedSources().find((candidate) =>
+      isEvaluatedProjectSource(candidate)
+      && candidate.admission.path.replace(/\\/g, '/').endsWith('src/main.ts')
+    );
+    if (evaluatedSource == null || !isEvaluatedProjectSource(evaluatedSource)) {
+      throw new Error('Expected the provider fixture main source to be evaluated.');
+    }
+    const programSource = app.emission.typeSystem.readProgramSourceFileByProjectPath('src/main.ts');
+    if (programSource == null) {
+      throw new Error('Expected the provider fixture main source in the Program.');
+    }
+    expect(programSource).not.toBe(evaluatedSource.sourceFile);
+
+    const containerSite = readDiContainerApiCallSites(app.project, app.emission.typeSystem).find((site) =>
+      enclosingVariableName(site.sourceNode) === 'exactInstanceRead'
+    );
+    if (containerSite == null) {
+      throw new Error('Expected the exact-instance container call site.');
+    }
+    const containerAccess = containerSite.sourceNode.expression;
+    expect(ts.isPropertyAccessExpression(containerAccess)).toBe(true);
+    expect(containerSite.sourceNode.getSourceFile()).toBe(programSource);
+    expect(containerSite.receiverExpression)
+      .toBe(ts.isPropertyAccessExpression(containerAccess) ? containerAccess.expression : null);
+    expect(containerSite.keyExpression).toBe(containerSite.sourceNode.arguments[0]);
+    const evaluatedContainerCall = app.emission.typeSystem.readEvaluatedNode(containerSite.sourceNode);
+    if (evaluatedContainerCall == null) {
+      throw new Error('Expected an evaluator counterpart for the container call.');
+    }
+    const evaluatedContainerAccess = evaluatedContainerCall.expression;
+    expect(ts.isPropertyAccessExpression(evaluatedContainerAccess)).toBe(true);
+    expect(evaluatedContainerCall.getSourceFile()).toBe(evaluatedSource.sourceFile);
+    expect(app.emission.typeSystem.readEvaluatedNode(containerSite.receiverExpression))
+      .toBe(ts.isPropertyAccessExpression(evaluatedContainerAccess) ? evaluatedContainerAccess.expression : null);
+    expect(app.emission.typeSystem.readEvaluatedNode(containerSite.keyExpression!))
+      .toBe(evaluatedContainerCall.arguments[0]);
+    expect(evaluatedSource.evaluation.invocations.some((invocation) =>
+      invocation.node === evaluatedContainerCall
+    )).toBe(true);
+    expect(app.emission.typeSystem.readProgramNode(evaluatedContainerCall)).toBe(containerSite.sourceNode);
+
+    const resolveSite = readDiResolveCallSites(app.project, app.emission.typeSystem).find((site) =>
+      site.enclosingClassName === 'SingletonConsumer'
+      && site.keyExpressionText === "'scoped-alias'"
+    );
+    if (resolveSite == null) {
+      throw new Error('Expected the SingletonConsumer resolve call site.');
+    }
+    expect(resolveSite.sourceNode.getSourceFile()).toBe(programSource);
+    expect(resolveSite.keyExpression).toBe(resolveSite.sourceNode.arguments[0]);
+    const evaluatedResolveCall = app.emission.typeSystem.readEvaluatedNode(resolveSite.sourceNode);
+    if (evaluatedResolveCall == null) {
+      throw new Error('Expected an evaluator counterpart for the resolve call.');
+    }
+    expect(evaluatedResolveCall.getSourceFile()).toBe(evaluatedSource.sourceFile);
+    expect(app.emission.typeSystem.readEvaluatedNode(resolveSite.keyExpression!))
+      .toBe(evaluatedResolveCall.arguments[0]);
+    expect(app.emission.typeSystem.readProgramNode(evaluatedResolveCall)).toBe(resolveSite.sourceNode);
+  }, 30_000);
+
+  test('retains checker-recognized DI facts when a parsed Program root has no evaluation', async () => {
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: path.join(pressureFixtures, 'di-provider-activation'),
+      storeKey: 'test:di-provider-model:program-only-di-sites',
+    });
+    const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
+    const baselineEvaluation = app.emission.evaluation;
+    const mainSource = baselineEvaluation.sources.find((source) =>
+      source.admission.path.replace(/\\/g, '/').endsWith('src/main.ts')
+    );
+    if (mainSource?.sourceFile == null || mainSource.evaluation == null) {
+      throw new Error('Expected an evaluated provider fixture main source.');
+    }
+    const programOnlyMain = new StaticProjectEvaluationSourceResult(
+      mainSource.admission,
+      mainSource.moduleKey,
+      mainSource.sourceFile,
+      null,
+      mainSource.unresolvedModules,
+      mainSource.origins,
+      mainSource.packageOrigin,
+    );
+    const programOnlyEvaluation = new StaticProjectEvaluationResult(
+      app.project,
+      baselineEvaluation.sources.map((source) => source === mainSource ? programOnlyMain : source),
+      baselineEvaluation.evaluationOrderModuleKeys,
+      baselineEvaluation.profile,
+      baselineEvaluation.graphOpenValues,
+    );
+    const typeSystem = new TypeSystemProjectBuilder(runtime.frameworkSupport)
+      .build(app.project, programOnlyEvaluation);
+    const programSource = typeSystem.readProgramSourceFileByProjectPath('src/main.ts');
+    if (programSource == null) {
+      throw new Error('Expected the parsed Program-only main source.');
+    }
+    expect(typeSystem.readEvaluatedNode(programSource)).toBeNull();
+
+    const baselineContainerSites = readDiContainerApiCallSites(app.project, app.emission.typeSystem);
+    const programOnlyContainerSites = readDiContainerApiCallSites(app.project, typeSystem);
+    expect(diContainerSiteRecognitionKeys(programOnlyContainerSites))
+      .toEqual(diContainerSiteRecognitionKeys(baselineContainerSites));
+    const exactInstanceRead = programOnlyContainerSites.find((site) =>
+      enclosingVariableName(site.sourceNode) === 'exactInstanceRead'
+    );
+    expect(exactInstanceRead?.sourceNode.getSourceFile()).toBe(programSource);
+    expect(exactInstanceRead == null ? null : typeSystem.readEvaluatedNode(exactInstanceRead.sourceNode)).toBeNull();
+
+    const baselineResolveSites = readDiResolveCallSites(app.project, app.emission.typeSystem);
+    const programOnlyResolveSites = readDiResolveCallSites(app.project, typeSystem);
+    expect(diResolveSiteRecognitionKeys(programOnlyResolveSites))
+      .toEqual(diResolveSiteRecognitionKeys(baselineResolveSites));
+    const scopedAliasResolve = programOnlyResolveSites.find((site) =>
+      site.enclosingClassName === 'SingletonConsumer'
+      && site.keyExpressionText === "'scoped-alias'"
+    );
+    expect(scopedAliasResolve?.sourceNode.getSourceFile()).toBe(programSource);
+    expect(scopedAliasResolve == null ? null : typeSystem.readEvaluatedNode(scopedAliasResolve.sourceNode)).toBeNull();
+  }, 30_000);
 
   test('carries a createInterface default registration into the registration corridor', async () => {
     const runtime = await createSemanticRuntime({
@@ -1304,6 +1435,7 @@ interface ProviderActivationFixture {
   readonly container: Container;
   readonly sites: ReadonlyMap<string, DiContainerApiCallSite>;
   readonly evaluation: StaticProjectEvaluationResult;
+  readonly typeSystem: TypeSystemProject;
   readonly diWorld: DiWorldConstructionEmission;
 }
 
@@ -1341,6 +1473,7 @@ async function openProviderActivationFixture(
     container,
     sites,
     evaluation: app.emission.evaluation,
+    typeSystem: app.emission.typeSystem,
     diWorld: app.emission.appWorld.diWorld,
   };
 }
@@ -1436,21 +1569,26 @@ function activateNamedSite(
   if (site?.keyExpression == null) {
     throw new Error(`Expected a modeled container.get key at ${name}.`);
   }
+  const sourceNode = fixture.typeSystem.readEvaluatedNode(site.sourceNode);
+  const keyExpression = sourceNode?.arguments[0] ?? null;
+  if (sourceNode == null || keyExpression == null) {
+    throw new Error(`Expected exact evaluator carriers for ${name}.`);
+  }
   const source = fixture.evaluation.sources.find((candidate) =>
-    isEvaluatedProjectSource(candidate) && candidate.sourceFile === site.sourceNode.getSourceFile()
+    isEvaluatedProjectSource(candidate) && candidate.sourceFile === sourceNode.getSourceFile()
   );
   if (source == null || !isEvaluatedProjectSource(source)) {
     throw new Error(`Expected an evaluated source for ${name}.`);
   }
-  const invocation = source.evaluation.invocations.find((candidate) => candidate.node === site.sourceNode);
+  const invocation = source.evaluation.invocations.find((candidate) => candidate.node === sourceNode);
   if (invocation == null) {
     throw new Error(`Expected an invocation occurrence for ${name}.`);
   }
   return session.activateInvocationArgument(
     requestor,
-    site.keyExpression,
+    keyExpression,
     invocation,
-    site.sourceNode,
+    sourceNode,
   );
 }
 
@@ -1478,6 +1616,32 @@ function enclosingVariableName(node: ts.Node): string | null {
     current = current.parent;
   }
   return null;
+}
+
+function diContainerSiteRecognitionKeys(
+  sites: readonly DiContainerApiCallSite[],
+): readonly string[] {
+  return sites.map((site) => [
+    site.sourcePath,
+    site.start,
+    site.end,
+    site.methodKind,
+    site.keyExpressionText,
+    site.receiverText,
+  ].join(':'));
+}
+
+function diResolveSiteRecognitionKeys(
+  sites: ReturnType<typeof readDiResolveCallSites>,
+): readonly string[] {
+  return sites.map((site) => [
+    site.sourcePath,
+    site.start,
+    site.end,
+    site.keyExpressionText,
+    site.enclosingClassName,
+    site.enclosingMemberName,
+  ].join(':'));
 }
 
 function marker(value: EvaluationValue | null): string | null {

@@ -145,6 +145,7 @@ class TypeSystemCompilerHostSourceFileCache {
   readOrCreate(
     fileName: string,
     languageVersionOrOptions: ts.ScriptTarget | ts.CreateSourceFileOptions,
+    compilerOptions: ts.CompilerOptions,
     projectRootDir: string,
     shouldCreateNewSourceFile: boolean | undefined,
     sourceRevision: string,
@@ -157,7 +158,11 @@ class TypeSystemCompilerHostSourceFileCache {
       return create();
     }
 
-    const key = `${typeSystemHostSourceFileCacheKey(fileName, languageVersionOrOptions)}\0${sourceRevision}`;
+    const key = `${typeSystemHostSourceFileCacheKey(
+      fileName,
+      languageVersionOrOptions,
+      compilerOptions,
+    )}\0${sourceRevision}`;
     const existing = this.sourceFiles.get(key);
     if (existing !== undefined) {
       this.hits += 1;
@@ -420,12 +425,17 @@ export function diffCompilerHostSourceFileCacheStats(
 function typeSystemHostSourceFileCacheKey(
   fileName: string,
   languageVersionOrOptions: ts.ScriptTarget | ts.CreateSourceFileOptions,
+  compilerOptions: ts.CompilerOptions,
 ): string {
-  return `${canonicalTypeSystemPath(fileName)}::${typeSystemSourceFileParseOptionKey(languageVersionOrOptions)}`;
+  return `${canonicalTypeSystemPath(fileName)}::${typeSystemSourceFileParseOptionKey(
+    languageVersionOrOptions,
+    compilerOptions,
+  )}`;
 }
 
 function typeSystemSourceFileParseOptionKey(
   languageVersionOrOptions: ts.ScriptTarget | ts.CreateSourceFileOptions,
+  compilerOptions: ts.CompilerOptions,
 ): string {
   const scriptTarget = typeof languageVersionOrOptions === 'number'
     ? languageVersionOrOptions
@@ -437,7 +447,38 @@ function typeSystemSourceFileParseOptionKey(
     `target:${typeScriptEnumName(ts.ScriptTarget, scriptTarget)}`,
     `format:${typeScriptEnumName(ts.ModuleKind, languageVersionOrOptions.impliedNodeFormat)}`,
     `jsdoc:${typeScriptEnumName(ts.JSDocParsingMode, languageVersionOrOptions.jsDocParsingMode)}`,
+    `module-detection:${typeScriptEnumName(
+      ts.ModuleDetectionKind,
+      effectiveTypeSystemModuleDetection(compilerOptions),
+    )}`,
+    `jsx-module-detection:${usesJsxModuleDetection(compilerOptions) ? 'enabled' : 'disabled'}`,
   ].join(';');
+}
+
+/** Match TypeScript's effective module-detection default without using its private computed-options helper. */
+function effectiveTypeSystemModuleDetection(
+  compilerOptions: ts.CompilerOptions,
+): ts.ModuleDetectionKind {
+  if (compilerOptions.moduleDetection != null) {
+    return compilerOptions.moduleDetection;
+  }
+  const moduleKind = compilerOptions.module;
+  return moduleKind != null
+      && moduleKind >= ts.ModuleKind.Node16
+      && moduleKind <= ts.ModuleKind.NodeNext
+    ? ts.ModuleDetectionKind.Force
+    : ts.ModuleDetectionKind.Auto;
+}
+
+/** Auto detection treats JSX as a module signal only for the automatic JSX runtimes. */
+function usesJsxModuleDetection(
+  compilerOptions: ts.CompilerOptions,
+): boolean {
+  return effectiveTypeSystemModuleDetection(compilerOptions) === ts.ModuleDetectionKind.Auto
+    && (
+      compilerOptions.jsx === ts.JsxEmit.ReactJSX
+      || compilerOptions.jsx === ts.JsxEmit.ReactJSXDev
+    );
 }
 
 function typeScriptEnumName(

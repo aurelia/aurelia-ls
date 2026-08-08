@@ -45,6 +45,8 @@ export class EvaluationImportEntry {
     readonly exportName: string | null,
     /** Exact import binding, side-effect declaration, or dynamic import/require call. */
     readonly node: ts.Node,
+    /** TypeScript package-condition mode selected by this exact import usage. */
+    readonly resolutionMode: ts.ResolutionMode = undefined,
   ) {}
 }
 
@@ -61,6 +63,8 @@ export class EvaluationExportEntry {
     readonly moduleSpecifier: string | null,
     /** Source node that declared the export. */
     readonly node: ts.Node,
+    /** TypeScript package-condition mode selected by this exact re-export usage. */
+    readonly resolutionMode: ts.ResolutionMode = undefined,
   ) {}
 }
 
@@ -89,13 +93,18 @@ export class EvaluationModuleGraph {
   }
 
   /** Record how one authored module specifier resolved from one module. */
-  linkModule(fromModuleKey: string, moduleSpecifier: string, toModuleKey: string | null): void {
+  linkModule(
+    fromModuleKey: string,
+    moduleSpecifier: string,
+    resolutionMode: ts.ResolutionMode,
+    toModuleKey: string | null,
+  ): void {
     let edges = this.resolvedEdges.get(fromModuleKey);
     if (edges === undefined) {
       edges = new Map<string, string | null>();
       this.resolvedEdges.set(fromModuleKey, edges);
     }
-    edges.set(moduleSpecifier, toModuleKey);
+    edges.set(evaluationModuleResolutionEdgeKey(moduleSpecifier, resolutionMode), toModuleKey);
   }
 
   /** Read one module record by key. */
@@ -104,8 +113,13 @@ export class EvaluationModuleGraph {
   }
 
   /** Read the linked target for one authored module specifier. */
-  readLinkedModule(fromModuleKey: string, moduleSpecifier: string): string | null {
-    return this.resolvedEdges.get(fromModuleKey)?.get(moduleSpecifier) ?? null;
+  readLinkedModule(
+    fromModuleKey: string,
+    moduleSpecifier: string,
+    resolutionMode: ts.ResolutionMode = undefined,
+  ): string | null {
+    return this.resolvedEdges.get(fromModuleKey)
+      ?.get(evaluationModuleResolutionEdgeKey(moduleSpecifier, resolutionMode)) ?? null;
   }
 
   /** Read all known module records in insertion order. */
@@ -118,17 +132,18 @@ export class EvaluationModuleGraph {
 export function readEvaluationModuleRecord(
   sourceFile: ts.SourceFile,
   moduleKey: string = normalizeModuleKey(sourceFile.fileName),
+  compilerOptions: ts.CompilerOptions = {},
 ): EvaluationModuleRecord {
   const imports: EvaluationImportEntry[] = [];
   const exports: EvaluationExportEntry[] = [];
 
   for (const statement of sourceFile.statements) {
     if (ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier)) {
-      imports.push(...readImportEntries(statement));
+      imports.push(...readImportEntries(statement, sourceFile, compilerOptions));
       continue;
     }
     if (ts.isExportDeclaration(statement)) {
-      exports.push(...readExportDeclarationEntries(statement));
+      exports.push(...readExportDeclarationEntries(statement, sourceFile, compilerOptions));
       continue;
     }
     if (ts.isExportAssignment(statement)) {
@@ -146,8 +161,8 @@ export function readEvaluationModuleRecord(
 
   return new EvaluationModuleRecord(moduleKey, sourceFile, [
     ...imports,
-    ...readCommonJsRequireEntries(sourceFile),
-    ...readDynamicImportEntries(sourceFile),
+    ...readCommonJsRequireEntries(sourceFile, compilerOptions),
+    ...readDynamicImportEntries(sourceFile, compilerOptions),
   ], exports);
 }
 
@@ -156,11 +171,16 @@ export function normalizeModuleKey(moduleKey: string): string {
   return moduleKey.replace(/\\/g, '/');
 }
 
-function readImportEntries(statement: ts.ImportDeclaration): readonly EvaluationImportEntry[] {
+function readImportEntries(
+  statement: ts.ImportDeclaration,
+  sourceFile: ts.SourceFile,
+  compilerOptions: ts.CompilerOptions,
+): readonly EvaluationImportEntry[] {
   if (!ts.isStringLiteral(statement.moduleSpecifier)) {
     return [];
   }
   const moduleSpecifier = statement.moduleSpecifier.text;
+  const resolutionMode = ts.getModeForUsageLocation(sourceFile, statement.moduleSpecifier, compilerOptions);
   const clause = statement.importClause;
   if (clause == null) {
     return [
@@ -170,6 +190,7 @@ function readImportEntries(statement: ts.ImportDeclaration): readonly Evaluation
         null,
         null,
         statement,
+        resolutionMode,
       ),
     ];
   }
@@ -185,6 +206,7 @@ function readImportEntries(statement: ts.ImportDeclaration): readonly Evaluation
       clause.name.text,
       'default',
       clause.name,
+      resolutionMode,
     ));
   }
 
@@ -199,6 +221,7 @@ function readImportEntries(statement: ts.ImportDeclaration): readonly Evaluation
       named.name.text,
       null,
       named,
+      resolutionMode,
     ));
     return entries;
   }
@@ -213,12 +236,16 @@ function readImportEntries(statement: ts.ImportDeclaration): readonly Evaluation
       element.name.text,
       element.propertyName?.text ?? element.name.text,
       element,
+      resolutionMode,
     ));
   }
   return entries;
 }
 
-function readCommonJsRequireEntries(sourceFile: ts.SourceFile): readonly EvaluationImportEntry[] {
+function readCommonJsRequireEntries(
+  sourceFile: ts.SourceFile,
+  compilerOptions: ts.CompilerOptions,
+): readonly EvaluationImportEntry[] {
   const entries: EvaluationImportEntry[] = [];
   const visit = (node: ts.Node): void => {
     if (
@@ -235,6 +262,7 @@ function readCommonJsRequireEntries(sourceFile: ts.SourceFile): readonly Evaluat
           null,
           null,
           node,
+          ts.getModeForUsageLocation(sourceFile, specifier, compilerOptions),
         ));
       }
       return;
@@ -245,7 +273,10 @@ function readCommonJsRequireEntries(sourceFile: ts.SourceFile): readonly Evaluat
   return entries;
 }
 
-function readDynamicImportEntries(sourceFile: ts.SourceFile): readonly EvaluationImportEntry[] {
+function readDynamicImportEntries(
+  sourceFile: ts.SourceFile,
+  compilerOptions: ts.CompilerOptions,
+): readonly EvaluationImportEntry[] {
   const entries: EvaluationImportEntry[] = [];
   const visit = (node: ts.Node): void => {
     if (
@@ -261,6 +292,7 @@ function readDynamicImportEntries(sourceFile: ts.SourceFile): readonly Evaluatio
           null,
           null,
           node,
+          ts.getModeForUsageLocation(sourceFile, specifier, compilerOptions),
         ));
       }
       return;
@@ -271,7 +303,11 @@ function readDynamicImportEntries(sourceFile: ts.SourceFile): readonly Evaluatio
   return entries;
 }
 
-function readExportDeclarationEntries(statement: ts.ExportDeclaration): readonly EvaluationExportEntry[] {
+function readExportDeclarationEntries(
+  statement: ts.ExportDeclaration,
+  sourceFile: ts.SourceFile,
+  compilerOptions: ts.CompilerOptions,
+): readonly EvaluationExportEntry[] {
   if (statement.isTypeOnly) {
     return [];
   }
@@ -279,6 +315,9 @@ function readExportDeclarationEntries(statement: ts.ExportDeclaration): readonly
     return [];
   }
   const moduleSpecifier = statement.moduleSpecifier?.text ?? null;
+  const resolutionMode = statement.moduleSpecifier == null
+    ? undefined
+    : ts.getModeForUsageLocation(sourceFile, statement.moduleSpecifier, compilerOptions);
   if (statement.exportClause == null) {
     return moduleSpecifier == null
       ? []
@@ -289,6 +328,7 @@ function readExportDeclarationEntries(statement: ts.ExportDeclaration): readonly
           null,
           moduleSpecifier,
           statement,
+          resolutionMode,
         ),
       ];
   }
@@ -301,6 +341,7 @@ function readExportDeclarationEntries(statement: ts.ExportDeclaration): readonly
         '*',
         moduleSpecifier,
         statement.exportClause,
+        resolutionMode,
       )];
   }
   if (!ts.isNamedExports(statement.exportClause)) {
@@ -316,6 +357,7 @@ function readExportDeclarationEntries(statement: ts.ExportDeclaration): readonly
         element.propertyName?.text ?? element.name.text,
         moduleSpecifier,
         element,
+        resolutionMode,
       )
     );
 }
@@ -393,4 +435,11 @@ export function resolveRelativeModuleKey(fromModuleKey: string, moduleSpecifier:
     return null;
   }
   return normalizeModuleKey(path.resolve(path.dirname(fromModuleKey), moduleSpecifier));
+}
+
+function evaluationModuleResolutionEdgeKey(
+  moduleSpecifier: string,
+  resolutionMode: ts.ResolutionMode,
+): string {
+  return JSON.stringify([moduleSpecifier, resolutionMode ?? null]);
 }

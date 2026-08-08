@@ -1,5 +1,4 @@
 import ts from 'typescript';
-import type { EvaluationValue } from '../evaluation/values.js';
 import {
   SourceSpanAddress,
   SourceSpanRole,
@@ -65,15 +64,14 @@ import {
 } from './registration-admission.js';
 import {
   EvaluatedRegistrationCarrier,
-  RegistrationAdmissionObservation,
   RegistrationCarrierKind,
-  RegistrationKeyObservation,
   RegistrationKeyObservationKind,
   RegistrationRecognitionOpen,
-  RegistrationValueObservation,
+  type RegistrationAdmissionObservation,
+  type RegistrationKeyObservation,
+  type RegistrationValueObservation,
 } from './registration-observation.js';
 import {
-  FrameworkRegistrationKind,
   RegistrationKeyReference,
   RegistrationValueKind,
   RegistrationValueReference,
@@ -412,15 +410,16 @@ class RegistrationAdmissionSupportMaterializer {
             handles.addressHandle,
           ),
         );
-    if (declarationSource == null) {
-      const fallbackIdentity = this.registrationValueDeclarationIdentity(context, observation, handles);
-      if (fallbackIdentity != null) {
-        records.push(fallbackIdentity);
-      }
+    const fallbackIdentity = declarationSource == null
+      ? this.registrationValueDeclarationIdentity(context, observation, handles)
+      : null;
+    if (fallbackIdentity != null) {
+      records.push(fallbackIdentity);
     }
     const identityHandle = keyIdentity?.identityHandle
       ?? declarationSource?.identity.handle
-      ?? handles.identityHandle;
+      ?? fallbackIdentity?.handle
+      ?? null;
     return new RegistrationValueEmission(
       records,
       this.registrationValueReference(observation, handles, identityHandle, keyIdentity?.keyKind ?? null),
@@ -502,11 +501,16 @@ class RegistrationAdmissionSupportMaterializer {
     observation: RegistrationValueObservation,
     handles: RegistrationValueHandles,
   ): TypeScriptDeclarationIdentity | null {
-    return handles.identityHandle == null
+    const moduleKey = observation.moduleKey
+      ?? (observation.sourceFileAddressHandle == null
+        || observation.sourceFileAddressHandle === context.sourceFileAddressHandle
+        ? context.moduleKey
+        : null);
+    return handles.identityHandle == null || moduleKey == null
       ? null
       : new TypeScriptDeclarationIdentity(
         handles.identityHandle,
-        observation.moduleKey ?? context.moduleKey,
+        moduleKey,
         null,
         observation.localName,
         handles.addressHandle,

@@ -7,6 +7,8 @@ import { evaluationModuleHostPathKey } from './package-origin.js';
 const MODULE_EXTENSIONS = [
   '.ts',
   '.tsx',
+  '.mts',
+  '.cts',
   '.js',
   '.jsx',
   '.mjs',
@@ -19,6 +21,8 @@ const MODULE_EXTENSIONS = [
 const MODULE_INDEX_FILES = [
   'index.ts',
   'index.tsx',
+  'index.mts',
+  'index.cts',
   'index.js',
   'index.jsx',
   'index.mjs',
@@ -157,7 +161,7 @@ export function isAuthoredPackageSourceModule(fileName: string, packageRoot: str
   const extension = path.extname(fileName).toLowerCase();
   return segments[0] === 'src'
     ? isEvaluationModulePath(fileName)
-    : extension === '.ts' || extension === '.tsx';
+    : extension === '.ts' || extension === '.tsx' || extension === '.mts' || extension === '.cts';
 }
 
 function shouldProbeIndexModulePaths(base: string): boolean {
@@ -167,17 +171,26 @@ function shouldProbeIndexModulePaths(base: string): boolean {
 
 function candidateDirectModulePaths(base: string): readonly string[] {
   const extension = path.extname(base);
-  if (extension === '.js' || extension === '.jsx' || extension === '.mjs' || extension === '.cjs') {
-    const withoutExtension = base.slice(0, -extension.length);
-    return [
-      base,
-      `${withoutExtension}.ts`,
-      `${withoutExtension}.tsx`,
-      `${withoutExtension}.js`,
-      `${withoutExtension}.jsx`,
-      `${withoutExtension}.mjs`,
-      `${withoutExtension}.cjs`,
-    ];
+  const withoutExtension = base.slice(0, -extension.length);
+  switch (extension) {
+    case '.js':
+      return [
+        `${withoutExtension}.ts`,
+        `${withoutExtension}.tsx`,
+        `${withoutExtension}.js`,
+        `${withoutExtension}.jsx`,
+      ];
+    case '.jsx':
+      return [
+        `${withoutExtension}.tsx`,
+        `${withoutExtension}.ts`,
+        `${withoutExtension}.jsx`,
+        `${withoutExtension}.js`,
+      ];
+    case '.mjs':
+      return [`${withoutExtension}.mts`, `${withoutExtension}.mjs`];
+    case '.cjs':
+      return [`${withoutExtension}.cts`, `${withoutExtension}.cjs`];
   }
   if (extension.length > 0 && isEvaluationModulePath(base)) {
     return [base];

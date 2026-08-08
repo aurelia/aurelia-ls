@@ -56,9 +56,9 @@ export class DiResolveCallSite {
     readonly keyImportModuleSpecifier: string | null,
     readonly keyImportName: string | null,
     readonly keyImportKind: DiResolveKeyImportKind,
-    /** Candidate-local source call used by DI-owned activation queries. */
+    /** Program-owned source call used by checker-backed recognition and source products. */
     readonly sourceNode: ts.CallExpression,
-    /** Candidate-local unwrapped key expression, when directly authored. */
+    /** Program-owned unwrapped key expression, when directly authored. */
     readonly keyExpression: ts.Expression | null,
   ) {}
 }

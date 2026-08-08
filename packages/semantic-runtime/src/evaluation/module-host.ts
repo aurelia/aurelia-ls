@@ -8,6 +8,10 @@ import {
 } from '../boot/host-files.js';
 import type { SemanticRuntimeProjectInputHost } from '../kernel/project-input.js';
 import {
+  ProjectModuleResolutionKind,
+  ProjectModuleResolver,
+} from '../project-analysis/project-module-resolution.js';
+import {
   EvaluationModuleGraph,
   normalizeModuleKey,
   readEvaluationModuleRecord,
@@ -56,6 +60,8 @@ export interface EvaluationModuleResolutionProfile {
   readonly typeScriptCalls: number;
   readonly typeScriptMilliseconds: number;
   readonly resolvedByTypeScript: number;
+  readonly resolvedByLinkedSource: number;
+  readonly linkedSourceOpenings: number;
   readonly resolvedByPathProbe: number;
   readonly resolvedByPathProbeBeforeTypeScript: number;
   readonly resolvedByPathProbeAfterTypeScript: number;
@@ -124,10 +130,16 @@ export const DefaultEvaluationModuleResolutionPolicy: EvaluationModuleResolution
 
 /** Source host boundary for recursive module graph construction. */
 export interface EvaluationModuleSourceHost {
+  /** Compiler options that determine usage-specific package conditions, when the host owns them. */
+  readonly compilerOptions?: ts.CompilerOptions;
   /** Read and parse one module key into a TypeScript source file. */
   readSourceFile(moduleKey: string): ts.SourceFile | null;
   /** Resolve an authored module specifier from one module key. */
-  resolveModuleSpecifier(fromModuleKey: string, moduleSpecifier: string): string | null;
+  resolveModuleSpecifier(
+    fromModuleKey: string,
+    moduleSpecifier: string,
+    resolutionMode?: ts.ResolutionMode,
+  ): string | null;
 }
 
 class CachedEvaluationModuleHostFileSystem {
@@ -266,8 +278,7 @@ class CachedEvaluationModuleHostFileSystem {
 export class FileSystemEvaluationModuleSourceHost implements EvaluationModuleSourceHost {
   private readonly sourceFileCache = new Map<string, ts.SourceFile | null>();
   private readonly fileSystem: CachedEvaluationModuleHostFileSystem;
-  private readonly moduleResolutionHost: ts.ModuleResolutionHost;
-  private readonly moduleResolutionCache: ts.ModuleResolutionCache;
+  private readonly projectModules: ProjectModuleResolver;
   private readonly resolvedModuleSpecifiers = new Map<string, string | null>();
   private readonly packageSources: EvaluationPackageSourceResolver;
 
@@ -292,6 +303,8 @@ export class FileSystemEvaluationModuleSourceHost implements EvaluationModuleSou
   private typeScriptModuleResolutionCalls = 0;
   private typeScriptModuleResolutionMilliseconds = 0;
   private resolvedByTypeScript = 0;
+  private resolvedByLinkedSource = 0;
+  private linkedSourceOpenings = 0;
   private resolvedByPathProbe = 0;
   private resolvedByPathProbeBeforeTypeScript = 0;
   private resolvedByPathProbeAfterTypeScript = 0;
@@ -318,25 +331,17 @@ export class FileSystemEvaluationModuleSourceHost implements EvaluationModuleSou
     readonly authoredSources: AuthoredSourceBoundary | null = null,
   ) {
     this.fileSystem = new CachedEvaluationModuleHostFileSystem(inputHost);
+    this.projectModules = new ProjectModuleResolver(
+      this.rootDir,
+      this.compilerOptions,
+      inputHost,
+    );
     this.packageSources = new EvaluationPackageSourceResolver(
       this.rootDir,
       this.fileSystem,
       this.compilerOptions.preserveSymlinks === true,
       this.moduleResolutionPolicy.admitSourceShippedPackageEntrypoints,
       this.authoredSources,
-    );
-    this.moduleResolutionHost = {
-      fileExists: (fileName) => this.fileSystem.fileExists(fileName),
-      readFile: (fileName) => this.fileSystem.readFile(fileName),
-      directoryExists: (directoryName) => this.fileSystem.directoryExists(directoryName),
-      getCurrentDirectory: () => this.rootDir,
-      getDirectories: (directoryName) => this.fileSystem.getDirectories(directoryName) as string[],
-      realpath: (fileName) => this.fileSystem.realpath(fileName),
-    };
-    this.moduleResolutionCache = ts.createModuleResolutionCache(
-      this.rootDir,
-      (fileName) => normalizeModuleKey(path.resolve(fileName)),
-      this.compilerOptions,
     );
   }
 
@@ -364,7 +369,10 @@ export class FileSystemEvaluationModuleSourceHost implements EvaluationModuleSou
     const sourceFile = ts.createSourceFile(
       absolute,
       moduleText,
-      ts.ScriptTarget.Latest,
+      {
+        languageVersion: ts.ScriptTarget.Latest,
+        impliedNodeFormat: this.projectModules.getImpliedNodeFormatForFile(absolute),
+      },
       true,
       assetText == null ? guessScriptKind(absolute) : ts.ScriptKind.TS,
     );
@@ -373,17 +381,21 @@ export class FileSystemEvaluationModuleSourceHost implements EvaluationModuleSou
     return sourceFile;
   }
 
-  resolveModuleSpecifier(fromModuleKey: string, moduleSpecifier: string): string | null {
+  resolveModuleSpecifier(
+    fromModuleKey: string,
+    moduleSpecifier: string,
+    resolutionMode?: ts.ResolutionMode,
+  ): string | null {
     this.moduleResolutionCalls += 1;
     const started = performance.now();
-    const cacheKey = moduleResolutionCacheKey(fromModuleKey, moduleSpecifier);
+    const cacheKey = moduleResolutionCacheKey(fromModuleKey, moduleSpecifier, resolutionMode);
     if (this.resolvedModuleSpecifiers.has(cacheKey)) {
       this.moduleResolutionCacheHits += 1;
       this.moduleResolutionMilliseconds += performance.now() - started;
       return this.resolvedModuleSpecifiers.get(cacheKey) ?? null;
     }
     this.moduleResolutionCacheMisses += 1;
-    const resolved = this.resolveModuleSpecifierCore(fromModuleKey, moduleSpecifier);
+    const resolved = this.resolveModuleSpecifierCore(fromModuleKey, moduleSpecifier, resolutionMode);
     this.resolvedModuleSpecifiers.set(cacheKey, resolved);
     this.moduleResolutionMilliseconds += performance.now() - started;
     return resolved;
@@ -422,6 +434,8 @@ export class FileSystemEvaluationModuleSourceHost implements EvaluationModuleSou
         typeScriptCalls: this.typeScriptModuleResolutionCalls,
         typeScriptMilliseconds: this.typeScriptModuleResolutionMilliseconds,
         resolvedByTypeScript: this.resolvedByTypeScript,
+        resolvedByLinkedSource: this.resolvedByLinkedSource,
+        linkedSourceOpenings: this.linkedSourceOpenings,
         resolvedByPathProbe: this.resolvedByPathProbe,
         resolvedByPathProbeBeforeTypeScript: this.resolvedByPathProbeBeforeTypeScript,
         resolvedByPathProbeAfterTypeScript: this.resolvedByPathProbeAfterTypeScript,
@@ -445,7 +459,11 @@ export class FileSystemEvaluationModuleSourceHost implements EvaluationModuleSou
     };
   }
 
-  private resolveModuleSpecifierCore(fromModuleKey: string, moduleSpecifier: string): string | null {
+  private resolveModuleSpecifierCore(
+    fromModuleKey: string,
+    moduleSpecifier: string,
+    resolutionMode: ts.ResolutionMode,
+  ): string | null {
     const fromAbsolute = this.toAbsolutePath(fromModuleKey);
     const modulePathSpecifier = moduleSpecifierWithoutQuery(moduleSpecifier);
     const relativeSpecifier = isRelativeModuleSpecifier(modulePathSpecifier);
@@ -476,14 +494,19 @@ export class FileSystemEvaluationModuleSourceHost implements EvaluationModuleSou
 
     this.typeScriptModuleResolutionCalls += 1;
     const typeScriptStarted = performance.now();
-    const resolved = ts.resolveModuleName(
+    const projectResolution = this.projectModules.resolveModuleName(
       modulePathSpecifier,
       fromAbsolute,
-      this.compilerOptions,
-      this.moduleResolutionHost,
-      this.moduleResolutionCache,
-    ).resolvedModule;
+      undefined,
+      resolutionMode,
+    );
+    const resolved = projectResolution.resolvedModule;
     this.typeScriptModuleResolutionMilliseconds += performance.now() - typeScriptStarted;
+    if (projectResolution.kind === ProjectModuleResolutionKind.LinkedSource) {
+      this.resolvedByLinkedSource += 1;
+    } else if (projectResolution.opening != null) {
+      this.linkedSourceOpenings += 1;
+    }
     const sourceResolution = this.packageSources.resolveTypeScriptModule(
       resolved,
       fromAbsolute,
@@ -593,6 +616,8 @@ export class EvaluationModuleResolutionOpen {
     readonly fromModuleKey: string,
     /** Module specifier text as authored. */
     readonly moduleSpecifier: string,
+    /** TypeScript package-condition mode selected by the exact unresolved usage. */
+    readonly resolutionMode: ts.ResolutionMode,
     /** Source node that carried the module specifier. */
     readonly node: ts.Node,
   ) {}
@@ -636,21 +661,38 @@ export function buildEvaluationModuleGraphForEntries(
       return;
     }
 
-    const record = readEvaluationModuleRecord(sourceFile, normalizedModuleKey);
+    const record = readEvaluationModuleRecord(sourceFile, normalizedModuleKey, host.compilerOptions);
     graph.addModule(record);
     const moduleSpecifiers = uniqueModuleEdges([
-      ...record.imports.map((entry) => ({ moduleSpecifier: entry.moduleSpecifier, node: entry.node })),
+      ...record.imports.map((entry) => ({
+        moduleSpecifier: entry.moduleSpecifier,
+        resolutionMode: entry.resolutionMode,
+        node: entry.node,
+      })),
       ...record.exports
         .filter((entry) => entry.moduleSpecifier != null)
-        .map((entry) => ({ moduleSpecifier: entry.moduleSpecifier as string, node: entry.node })),
+        .map((entry) => ({
+          moduleSpecifier: entry.moduleSpecifier as string,
+          resolutionMode: entry.resolutionMode,
+          node: entry.node,
+        })),
     ]);
 
     for (const edge of moduleSpecifiers) {
-      const target = host.resolveModuleSpecifier(normalizedModuleKey, edge.moduleSpecifier);
-      graph.linkModule(normalizedModuleKey, edge.moduleSpecifier, target);
+      const target = host.resolveModuleSpecifier(
+        normalizedModuleKey,
+        edge.moduleSpecifier,
+        edge.resolutionMode,
+      );
+      graph.linkModule(normalizedModuleKey, edge.moduleSpecifier, edge.resolutionMode, target);
       if (target == null) {
         if (isRelativeModuleSpecifier(edge.moduleSpecifier)) {
-          unresolvedModules.push(new EvaluationModuleResolutionOpen(normalizedModuleKey, edge.moduleSpecifier, edge.node));
+          unresolvedModules.push(new EvaluationModuleResolutionOpen(
+            normalizedModuleKey,
+            edge.moduleSpecifier,
+            edge.resolutionMode,
+            edge.node,
+          ));
         }
         continue;
       }
@@ -665,15 +707,28 @@ export function buildEvaluationModuleGraphForEntries(
 }
 
 function uniqueModuleEdges(
-  edges: readonly { readonly moduleSpecifier: string; readonly node: ts.Node }[],
-): readonly { readonly moduleSpecifier: string; readonly node: ts.Node }[] {
+  edges: readonly {
+    readonly moduleSpecifier: string;
+    readonly resolutionMode: ts.ResolutionMode;
+    readonly node: ts.Node;
+  }[],
+): readonly {
+  readonly moduleSpecifier: string;
+  readonly resolutionMode: ts.ResolutionMode;
+  readonly node: ts.Node;
+}[] {
   const seen = new Set<string>();
-  const unique: { readonly moduleSpecifier: string; readonly node: ts.Node }[] = [];
+  const unique: {
+    readonly moduleSpecifier: string;
+    readonly resolutionMode: ts.ResolutionMode;
+    readonly node: ts.Node;
+  }[] = [];
   for (const edge of edges) {
-    if (seen.has(edge.moduleSpecifier)) {
+    const key = JSON.stringify([edge.moduleSpecifier, edge.resolutionMode ?? null]);
+    if (seen.has(key)) {
       continue;
     }
-    seen.add(edge.moduleSpecifier);
+    seen.add(key);
     unique.push(edge);
   }
   return unique;
@@ -690,8 +745,12 @@ function moduleSpecifierSuffixIndex(moduleSpecifier: string): number {
   return relativeIndex === -1 ? -1 : start + relativeIndex;
 }
 
-function moduleResolutionCacheKey(fromModuleKey: string, moduleSpecifier: string): string {
-  return `${normalizeModuleKey(fromModuleKey)}\0${moduleSpecifier}`;
+function moduleResolutionCacheKey(
+  fromModuleKey: string,
+  moduleSpecifier: string,
+  resolutionMode: ts.ResolutionMode,
+): string {
+  return JSON.stringify([normalizeModuleKey(fromModuleKey), moduleSpecifier, resolutionMode ?? null]);
 }
 
 /**

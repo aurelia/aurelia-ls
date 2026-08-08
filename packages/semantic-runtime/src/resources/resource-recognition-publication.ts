@@ -608,7 +608,11 @@ function projectTargetType(
   ownerIdentityHandle: IdentityHandle | null,
   display: string | null,
 ): CheckerTypeReference | null {
-  const type = typeSystem.readRuntimeTargetType(node);
+  const programNode = typeSystem.readProgramNode(node);
+  if (programNode == null) {
+    return null;
+  }
+  const type = typeSystem.readRuntimeTargetType(programNode);
   if (type == null) {
     return null;
   }
@@ -617,7 +621,7 @@ function projectTargetType(
     checker: typeSystem.checker,
     type,
     origin: CheckerTypeProjectionOrigin.TypeChecker,
-    sourceNode: node,
+    sourceNode: programNode,
     sourceAddressHandle,
     ownerIdentityHandle,
     display,

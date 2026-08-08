@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 
 import { createSemanticRuntime } from '../src/api/runtime.js';
 import { aureliaAppProjectEvaluationProfile } from '../src/configuration/aurelia-project-evaluation.js';
@@ -21,6 +21,7 @@ import { ResourceProductDetails } from '../src/resources/product-details.js';
 import { resourceConventionToolingEvaluationProfile } from '../src/resources/resource-convention-transform-admission.js';
 import { ResourceRecognitionProjectPass } from '../src/resources/resource-recognition-project-pass.js';
 import { ResourceTargetReference } from '../src/resources/resource-reference.js';
+import { CheckerTypeProjector } from '../src/type-system/checker-projector.js';
 import { TypeSystemProjectBuilder } from '../src/type-system/project.js';
 
 describe('resource recognition publication', () => {
@@ -54,6 +55,7 @@ describe('resource recognition publication', () => {
       summary: `resource recognition for ${project.projectKey}`,
     };
 
+    const checkerProjectionSpy = vi.spyOn(CheckerTypeProjector.prototype, 'ensureProjection');
     const firstRun = runtime.computationLifecycle.begin(locus);
     const first = new ResourceRecognitionProjectPass().recognizeAndEmit(
       store,
@@ -63,6 +65,26 @@ describe('resource recognition publication', () => {
       typeSystem,
       firstRun,
     );
+    const evaluatorTargetNode = first.readObservations()
+      .map((observation) => observation.definition?.target?.node ?? null)
+      .find((node) => node != null) ?? null;
+    if (evaluatorTargetNode == null) {
+      throw new Error('Expected an evaluator-owned resource target node.');
+    }
+    const programTargetNode = typeSystem.readProgramNode(evaluatorTargetNode);
+    if (programTargetNode == null) {
+      throw new Error('Expected the resource target Program node.');
+    }
+    const checkerUsedProgramTarget = checkerProjectionSpy.mock.calls.some(([input]) =>
+      input.sourceNode === programTargetNode
+    );
+    const checkerUsedEvaluatorTarget = checkerProjectionSpy.mock.calls.some(([input]) =>
+      input.sourceNode === evaluatorTargetNode
+    );
+    checkerProjectionSpy.mockRestore();
+    expect(programTargetNode).not.toBe(evaluatorTargetNode);
+    expect(checkerUsedProgramTarget).toBe(true);
+    expect(checkerUsedEvaluatorTarget).toBe(false);
     const firstDefinition = first.readDefinitions()[0];
     expect(firstDefinition).toBeDefined();
     if (firstDefinition?.productHandle == null) {

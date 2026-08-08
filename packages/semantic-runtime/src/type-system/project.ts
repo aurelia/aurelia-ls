@@ -26,6 +26,7 @@ import type {
   SemanticRuntimeProjectInputReadScope,
 } from '../kernel/project-input.js';
 import { sourceTextContentRevision } from '../kernel/source-text-revision.js';
+import { ProjectModuleResolver } from '../project-analysis/project-module-resolution.js';
 import { typeSystemProjectOptions } from './project-options.js';
 import {
   diffCompilerHostSourceFileCacheStats,
@@ -215,6 +216,8 @@ export class TypeSystemProject {
   private readonly moduleExportsBySpecifier = new Map<string, ReadonlyMap<string, ts.Symbol> | null>();
   private readonly programNodeRemapCache = new WeakMap<ts.Node, ts.Node | null>();
   private readonly programNodeRemapSpanIndexesByPath = new Map<string, ReadonlyMap<string, ts.Node>>();
+  private readonly evaluatedNodeRemapCache = new WeakMap<ts.Node, ts.Node | null>();
+  private readonly evaluatedNodeRemapSpanIndexesByPath = new Map<string, ReadonlyMap<string, ts.Node>>();
   private programNodeRemapRequests = 0;
   private programNodeRemapCacheHits = 0;
   private programNodeRemapCacheMisses = 0;
@@ -232,7 +235,7 @@ export class TypeSystemProject {
     readonly epoch: TypeSystemProjectEpoch,
     /** Project frame whose evaluated source files anchor this checker epoch. */
     readonly project: ProjectBootFrame,
-    /** Static evaluation whose parsed source files are reused by this program. */
+    /** Static evaluation whose source text and nodes are bridged into this Program epoch. */
     readonly evaluation: StaticProjectEvaluationResult,
     /** Semantic revision of the evaluated TS/JS source subset consumed by this Program. */
     readonly evaluatedSourceRevision: string,
@@ -256,6 +259,7 @@ export class TypeSystemProject {
     private readonly overlaySourcePaths: ReadonlySet<string>,
     private readonly diagnosticSourcePaths: ReadonlySet<string> | null,
     private readonly inputReadScope: SemanticRuntimeProjectInputReadScope,
+    private readonly moduleResolver: ProjectModuleResolver,
   ) {
     this.bootSourceAdmissionsByPath = typeSystemBootSourceAdmissionIndex(project);
     this.sourceAdmissionsByPath = typeSystemEvaluationSourceAdmissionIndex(project, evaluation);
@@ -445,6 +449,36 @@ export class TypeSystemProject {
     return match;
   }
 
+  /**
+   * Read the evaluator-owned counterpart of a Program/source-discovery node.
+   *
+   * Checker-backed recognition walks Program-owned carriers, while candidate-local evaluation products must retain
+   * nodes from the evaluator epoch. This is the inverse of `readProgramNode`: it crosses that boundary by exact
+   * file/kind/span identity and refuses Program-only dependencies and overlays that have no evaluator counterpart.
+   */
+  readEvaluatedNode<TNode extends ts.Node>(node: TNode): TNode | null {
+    if (this.evaluatedNodeRemapCache.has(node)) {
+      return this.evaluatedNodeRemapCache.get(node) as TNode | null;
+    }
+    const sourceFile = node.getSourceFile();
+    const moduleKey = this.readModuleKeyForSourceFile(sourceFile);
+    const evaluatedSourceFile = moduleKey == null
+      ? null
+      : this.readEvaluatedSourceFileByModuleKey(moduleKey);
+    if (evaluatedSourceFile == null) {
+      this.evaluatedNodeRemapCache.set(node, null);
+      return null;
+    }
+    if (evaluatedSourceFile === sourceFile) {
+      this.evaluatedNodeRemapCache.set(node, node);
+      return node;
+    }
+    const match = this.readEvaluatedNodeSpanIndex(evaluatedSourceFile)
+      .get(typeSystemProgramNodeSpanKey(node)) as TNode | undefined ?? null;
+    this.evaluatedNodeRemapCache.set(node, match);
+    return match;
+  }
+
   /** Read a Program-owned expression counterpart and reject impossible span matches explicitly. */
   readProgramExpression<TExpression extends ts.Expression>(expression: TExpression): TExpression | null {
     const node = this.readProgramNode(expression);
@@ -547,6 +581,19 @@ export class TypeSystemProject {
     return index;
   }
 
+  private readEvaluatedNodeSpanIndex(
+    evaluatedSourceFile: ts.SourceFile,
+  ): ReadonlyMap<string, ts.Node> {
+    const sourcePath = canonicalTypeSystemPath(evaluatedSourceFile.fileName);
+    const cached = this.evaluatedNodeRemapSpanIndexesByPath.get(sourcePath);
+    if (cached != null) {
+      return cached;
+    }
+    const index = typeSystemProgramNodeSpanIndex(evaluatedSourceFile);
+    this.evaluatedNodeRemapSpanIndexesByPath.set(sourcePath, index);
+    return index;
+  }
+
   /**
    * Read the Program counterpart for an AST carrier without weakening the strict public host-path API.
    * Evaluator-only virtual SourceFiles have logical non-host names and deliberately have no Program counterpart.
@@ -612,7 +659,7 @@ export class TypeSystemProject {
     return valueType == null ? null : constructedReturnType(this.checker, valueType) ?? valueType;
   }
 
-  /** Resolve an installed package export into this Program's canonical, alias-resolved symbol. */
+  /** Resolve a package export visible from the project-root module context into its canonical symbol. */
   readProgramExportedSymbol(
     moduleSpecifier: string,
     exportName: string,
@@ -659,11 +706,12 @@ export class TypeSystemProject {
 
   private resolveModuleSourceFile(moduleSpecifier: string): ts.SourceFile | null {
     const containingFile = path.join(this.project.rootDir, '.semantic-runtime', 'framework-type-probe.ts');
-    const resolved = ts.resolveModuleName(
+    const resolutionMode = this.moduleResolver.getImpliedNodeFormatForFile(containingFile);
+    const resolved = this.moduleResolver.resolveModuleName(
       moduleSpecifier,
       containingFile,
-      this.program.getCompilerOptions(),
-      this.inputReadScope.host,
+      undefined,
+      resolutionMode,
     ).resolvedModule?.resolvedFileName ?? null;
     return resolved == null ? null : this.program.getSourceFile(resolved) ?? null;
   }
@@ -740,10 +788,18 @@ export class TypeSystemProjectBuilder {
 
     const options = projectOptions.compilerOptions;
     const inputReadScope = project.inputGeneration.createReadScope('type-system-project');
+    const moduleResolver = new ProjectModuleResolver(project.rootDir, options, inputReadScope.host);
     const host = measureTypeSystemProjectPhase(
       phases,
       'compiler-host',
-      () => createTypeSystemCompilerHost(options, sourceFiles.byPath, project.rootDir, inputReadScope.host),
+      () => createTypeSystemCompilerHost(
+        options,
+        sourceFiles.byPath,
+        overlaySourcesByPath,
+        project.rootDir,
+        inputReadScope.host,
+        moduleResolver,
+      ),
       () => sourceFiles.byPath.size,
     );
 
@@ -821,6 +877,7 @@ export class TypeSystemProjectBuilder {
       overlaySourcePaths,
       typeSystemDiagnosticSourcePaths(projectOptions.configRootFileNames),
       inputReadScope,
+      moduleResolver,
     );
   }
 }
@@ -1407,8 +1464,10 @@ function typeSystemProjectProgramDiagnosticSourceFile(
 function createTypeSystemCompilerHost(
   options: ts.CompilerOptions,
   byPath: ReadonlyMap<string, ts.SourceFile>,
+  overlaySourcesByPath: ReadonlyMap<string, TypeSystemOverlaySource>,
   projectRootDir: string,
   inputHost: SemanticRuntimeProjectInputHost,
+  moduleResolver: ProjectModuleResolver,
 ): ts.CompilerHost {
   const compilerHost = ts.createCompilerHost(options, true);
   compilerHost.fileExists = (fileName) => inputHost.fileExists(fileName);
@@ -1420,6 +1479,22 @@ function createTypeSystemCompilerHost(
   compilerHost.realpath = (fileName) => inputHost.realpath(fileName);
   compilerHost.readDirectory = (rootDir, extensions, excludes, includes, depth) =>
     [...inputHost.matchFiles(rootDir, extensions, excludes, includes, depth)];
+  compilerHost.resolveModuleNameLiterals = (
+    moduleLiterals,
+    containingFile,
+    redirectedReference,
+    resolutionOptions,
+    containingSourceFile,
+  ) => moduleLiterals.map((moduleLiteral) => moduleResolver.resolveModuleName(
+    moduleLiteral.text,
+    containingFile,
+    redirectedReference,
+    ts.getModeForUsageLocation(containingSourceFile, moduleLiteral, resolutionOptions),
+  ).typescript);
+  compilerHost.getModuleResolutionCache = () => moduleResolver.getModuleResolutionCache();
+  // A fresh resolver is scoped to the fresh input receipt. Never let Program reuse retain an edge from an older
+  // receipt: a linked package may have been retargeted even when the containing source text is unchanged.
+  compilerHost.hasInvalidatedResolutions = () => true;
   compilerHost.getSourceFile = (
     fileName,
     languageVersionOrOptions,
@@ -1428,7 +1503,18 @@ function createTypeSystemCompilerHost(
   ) => {
     const existing = byPath.get(canonicalTypeSystemPath(fileName));
     if (existing != null) {
-      return existing;
+      // Evaluator and overlay carriers predate Program construction and were parsed without the Program's complete
+      // CreateSourceFileOptions. Reparse their unchanged text instead of mutating/reusing that AST: moduleDetection,
+      // impliedNodeFormat, and external-module indicators belong to the Program epoch. Checker-facing evaluator nodes
+      // cross this identity boundary through TypeSystemProject's exact file/path + kind/span remapping.
+      return ts.createSourceFile(
+        fileName,
+        existing.text,
+        languageVersionOrOptions,
+        true,
+        overlaySourcesByPath.get(canonicalTypeSystemPath(fileName))?.scriptKind
+          ?? scriptKindForTypeSystemPath(fileName),
+      );
     }
     const text = inputHost.readFile(fileName);
     if (text === undefined) {
@@ -1438,6 +1524,7 @@ function createTypeSystemCompilerHost(
     return sharedCompilerHostSourceFileCache.readOrCreate(
       fileName,
       languageVersionOrOptions,
+      options,
       projectRootDir,
       shouldCreateNewSourceFile,
       sourceTextContentRevision(text),
