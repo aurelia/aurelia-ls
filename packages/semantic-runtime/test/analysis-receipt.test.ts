@@ -25,10 +25,11 @@ import {
 } from '../src/api/analysis-receipt.js';
 import { SemanticAnswerTransaction } from '../src/api/analysis-answer-transaction.js';
 import { AureliaAppWorldProjectGeneration } from '../src/configuration/app-analysis-computation.js';
-import type {
-  QueryClaimAnswerDisposalCollector,
-  QueryClaimAnswerLease,
-  QueryClaimProvisionalAnswerHandle,
+import {
+  QueryClaimGraph,
+  type QueryClaimAnswerDisposalCollector,
+  type QueryClaimAnswerLease,
+  type QueryClaimProvisionalAnswerHandle,
 } from '../src/inquiry/query-claim-graph.js';
 
 const temporaryRoots: string[] = [];
@@ -336,6 +337,241 @@ describe('semantic answer receipts', () => {
     app.cacheSummary(8, false);
 
     expect(validateAppGeneration).toHaveBeenCalledTimes(1);
+  });
+
+  test('captures each cache-overview app and query-claim graph once', async () => {
+    const workspaceRoot = await createShapeWorkspace();
+    const runtime = await createSemanticRuntime({
+      workspaceRoot,
+      storeKey: 'analysis-receipt:cache-overview-currentness',
+      projects: [{ projectKey: 'app', rootDir: workspaceRoot }],
+    });
+    await runtime.answerAppQuery({
+      kind: SemanticAppQueryKind.Summary,
+      projectKey: 'app',
+      inquiryProfile: 'mcp-orientation',
+      appRetention: 'retain-app',
+    });
+    await runtime.answerAppQuery({
+      kind: SemanticAppQueryKind.Summary,
+      projectKey: 'app',
+      inquiryProfile: 'lsp-cursor',
+      appRetention: 'retain-app',
+    });
+    const validateAppGeneration = vi.spyOn(AureliaAppWorldProjectGeneration.prototype, 'isCurrent');
+    const inspectQueryClaims = vi.spyOn(QueryClaimGraph.prototype, 'inspect');
+
+    const overview = runtime.analysisCacheOverview({ includeQueryClaimRows: true, rowLimit: 8 }).value;
+
+    const cachedApp = overview.cachedApps[0];
+    const defaultProfile = cachedApp?.queryClaimProfiles.find(
+      ({ inquiryProfile }) => inquiryProfile === cachedApp.profile.inquiryProfile,
+    );
+    expect(validateAppGeneration).toHaveBeenCalledTimes(1);
+    expect(inspectQueryClaims).toHaveBeenCalledTimes(
+      (cachedApp?.queryClaimProfiles.length ?? 0) + overview.runtimeQueryClaimProfiles.length,
+    );
+    expect(overview.runtimeQueryClaimProfiles.length).toBeGreaterThan(1);
+    expect(cachedApp?.queryClaimProfiles.length).toBeGreaterThan(1);
+    expect(cachedApp?.queryClaims).toEqual(defaultProfile?.queryClaims);
+    expect(cachedApp?.queryClaims).not.toBe(defaultProfile?.queryClaims);
+    expect([
+      ...overview.runtimeQueryClaimProfiles,
+      ...(cachedApp?.queryClaimProfiles ?? []),
+    ].every((profile) => profile.queryClaimRows != null && profile.queryClaimRows.length <= 8)).toBe(true);
+  });
+
+  test('reuses one routed-query cache preflight but keeps direct app opens independently validated', async () => {
+    const workspaceRoot = await createShapeWorkspace();
+    const runtime = await createSemanticRuntime({
+      workspaceRoot,
+      storeKey: 'analysis-receipt:warm-cache-preflight',
+      projects: [{ projectKey: 'app', rootDir: workspaceRoot }],
+    });
+    const request = {
+      projectKey: 'app',
+      inquiryProfile: 'mcp-orientation',
+      appRetention: 'retain-app',
+      includeAppProfile: true,
+      queries: [{ kind: SemanticAppQueryKind.Summary }],
+    } as const;
+    const runtimeInternals = runtime as unknown as {
+      readCachedApp: (...args: unknown[]) => unknown;
+    };
+    const readCachedApp = vi.spyOn(runtimeInternals, 'readCachedApp');
+    await runtime.answerAppQueries(request);
+    expect(readCachedApp).toHaveBeenCalledTimes(1);
+    readCachedApp.mockClear();
+    const validateAppGeneration = vi.spyOn(AureliaAppWorldProjectGeneration.prototype, 'isCurrent');
+    const validateReceipt = vi.spyOn(SemanticRuntimeAnalysisReceipt.prototype, 'validate');
+
+    const result = await runtime.answerAppQueries(request);
+
+    expect(result.result).toBe('answered');
+    expect(readCachedApp).toHaveBeenCalledTimes(1);
+    expect(validateAppGeneration).toHaveBeenCalledTimes(1);
+    expect(validateReceipt).toHaveBeenCalledTimes(2);
+
+    validateAppGeneration.mockClear();
+    readCachedApp.mockClear();
+    await runtime.openApp({ projectKey: 'app' });
+    expect(readCachedApp).toHaveBeenCalledTimes(1);
+    expect(validateAppGeneration).toHaveBeenCalledTimes(1);
+  });
+
+  test('rejects unrelated cache variants cheaply and validates one compatible deeper app', async () => {
+    const workspaceRoot = await createShapeWorkspace();
+    const runtime = await createSemanticRuntime({
+      workspaceRoot,
+      storeKey: 'analysis-receipt:cache-variant-selection',
+      projects: [
+        { projectKey: 'first', rootDir: workspaceRoot },
+        { projectKey: 'second', rootDir: workspaceRoot },
+      ],
+    });
+    const second = await runtime.openApp({ projectKey: 'second' });
+    const validateSecond = vi.spyOn(second, 'isCurrent');
+
+    await runtime.openApp({ projectKey: 'first', analysisDepth: 'runtime-topology' });
+
+    // The unrelated cached app is touched only by post-publication stale retirement, not either cache lookup.
+    expect(validateSecond).toHaveBeenCalledTimes(1);
+    const deep = await runtime.openApp({ projectKey: 'first', analysisDepth: 'binding-observation' });
+    validateSecond.mockClear();
+    const validateDeep = vi.spyOn(deep, 'isCurrent');
+
+    const compatible = await runtime.openApp({ projectKey: 'first', analysisDepth: 'runtime-topology' });
+
+    expect(compatible).toBe(deep);
+    expect(validateDeep).toHaveBeenCalledTimes(1);
+    expect(validateSecond).not.toHaveBeenCalled();
+  });
+
+  test('reuses an all-authoring app for a subset and rebuilds a finite subset for an all-source request', async () => {
+    const workspaceRoot = pressureFixtureRoot('resource-registration-local-templates');
+    const subsetSourceFile = path.join(workspaceRoot, 'src/local-templates-app.html');
+    const allRuntime = await createSemanticRuntime({
+      workspaceRoot,
+      storeKey: 'analysis-receipt:authoring-cache-all-to-subset',
+      projects: [{ projectKey: 'app', rootDir: workspaceRoot }],
+    });
+    const all = await allRuntime.openApp({
+      projectKey: 'app',
+      includeAuthoringTemplates: true,
+    });
+
+    const subsetFromAll = await allRuntime.openApp({
+      projectKey: 'app',
+      includeAuthoringTemplates: true,
+      authoringTemplateSourceFiles: [subsetSourceFile],
+      authoringTemplateLimit: 1,
+    });
+
+    expect(subsetFromAll).toBe(all);
+
+    const subsetRuntime = await createSemanticRuntime({
+      workspaceRoot,
+      storeKey: 'analysis-receipt:authoring-cache-subset-to-all',
+      projects: [{ projectKey: 'app', rootDir: workspaceRoot }],
+    });
+    const subset = await subsetRuntime.openApp({
+      projectKey: 'app',
+      includeAuthoringTemplates: true,
+      authoringTemplateSourceFiles: [subsetSourceFile],
+      authoringTemplateLimit: 1,
+    });
+
+    const rebuiltAll = await subsetRuntime.openApp({
+      projectKey: 'app',
+      includeAuthoringTemplates: true,
+    });
+
+    expect(rebuiltAll).not.toBe(subset);
+    expect(subset.isCurrent()).toBe(false);
+    expect(rebuiltAll.isCurrent()).toBe(true);
+  }, 60_000);
+
+  test('rejects an unwatched mutation after routed cache preflight before publishing claims', async () => {
+    const workspaceRoot = await createShapeWorkspace();
+    const sourceFile = path.join(workspaceRoot, 'src/main.ts');
+    const sourceText = await readFile(sourceFile, 'utf8');
+    const overlay = new MutableSourceOverlay();
+    overlay.write(sourceFile, sourceText);
+    const authority = new SemanticRuntimeProjectInputAuthority(
+      new NodeSemanticRuntimeProjectInputHost(overlay),
+    );
+    const runtime = await createSemanticRuntime({
+      workspaceRoot,
+      storeKey: 'analysis-receipt:warm-cache-preflight-mutation',
+      projects: [{ projectKey: 'app', rootDir: workspaceRoot }],
+      projectInputAuthority: authority,
+    });
+    const request = {
+      projectKey: 'app',
+      inquiryProfile: 'mcp-orientation',
+      appRetention: 'retain-app',
+      includeAppProfile: true,
+      queries: [{ kind: SemanticAppQueryKind.Summary }],
+    } as const;
+    await runtime.answerAppQueries(request);
+    const before = runtime.analysisCacheOverview().value;
+    const runtimeInternals = runtime as unknown as {
+      readCachedApp: (...args: unknown[]) => unknown;
+    };
+    const readCachedApp = runtimeInternals.readCachedApp.bind(runtimeInternals);
+    let mutationInjected = false;
+    vi.spyOn(runtimeInternals, 'readCachedApp').mockImplementation((...args) => {
+      const cachedApp = readCachedApp(...args);
+      if (cachedApp != null && !mutationInjected) {
+        mutationInjected = true;
+        overlay.write(sourceFile, `${sourceText}\nexport const changedAfterCachePreflight = true;\n`);
+      }
+      return cachedApp;
+    });
+
+    await expect(runtime.answerAppQueries(request)).rejects.toThrow(/no longer current/);
+
+    expect(mutationInjected).toBe(true);
+    overlay.write(sourceFile, sourceText);
+    const after = runtime.analysisCacheOverview().value;
+    expect(retainedQueryClaimCounts(after.runtimeQueryClaimProfiles)).toEqual(
+      retainedQueryClaimCounts(before.runtimeQueryClaimProfiles),
+    );
+    expectNoAdditionalRetainedQueryClaims(
+      after.cachedApps[0]?.queryClaimProfiles ?? [],
+      before.cachedApps[0]?.queryClaimProfiles ?? [],
+    );
+  });
+
+  test('captures a selected default project only once during app-open planning', async () => {
+    const workspaceRoot = pressureFixtureRoot('template-completion-member-metadata');
+    const runtime = await createSemanticRuntime({
+      workspaceRoot,
+      storeKey: 'analysis-receipt:default-project-single-capture',
+      projects: [{ projectKey: 'app', rootDir: workspaceRoot }],
+    });
+    const captureProject = vi.spyOn(runtime.workspace.projectInputAuthority, 'capture');
+
+    await runtime.openApp();
+
+    expect(captureProject).toHaveBeenCalledTimes(1);
+  });
+
+  test('reports every non-app default candidate without recapturing it for the failure summary', async () => {
+    const workspaceRoot = await createShapeWorkspace();
+    const runtime = await createSemanticRuntime({
+      workspaceRoot,
+      storeKey: 'analysis-receipt:default-project-non-app-summary',
+      projects: [
+        { projectKey: 'first', rootDir: workspaceRoot },
+        { projectKey: 'second', rootDir: workspaceRoot },
+      ],
+    });
+    const captureProject = vi.spyOn(runtime.workspace.projectInputAuthority, 'capture');
+
+    await expect(runtime.openApp()).rejects.toThrow(/project shapes: non-aurelia=2/);
+
+    expect(captureProject).toHaveBeenCalledTimes(2);
   });
 
   test('rolls back nested query claims when an input mutates before the root proof', async () => {
@@ -724,6 +960,31 @@ describe('semantic answer receipts', () => {
     expect(receipt?.isCurrent()).toBe(false);
   }, 60_000);
 });
+
+function retainedQueryClaimCounts(
+  profiles: readonly {
+    readonly inquiryProfile: string;
+    readonly queryClaims: { readonly retainedRecords: number };
+  }[],
+): readonly (readonly [string, number])[] {
+  return profiles.map(({ inquiryProfile, queryClaims }) => [inquiryProfile, queryClaims.retainedRecords] as const);
+}
+
+function expectNoAdditionalRetainedQueryClaims(
+  actual: readonly {
+    readonly inquiryProfile: string;
+    readonly queryClaims: { readonly retainedRecords: number };
+  }[],
+  before: readonly {
+    readonly inquiryProfile: string;
+    readonly queryClaims: { readonly retainedRecords: number };
+  }[],
+): void {
+  const retainedBefore = new Map(retainedQueryClaimCounts(before));
+  for (const { inquiryProfile, queryClaims } of actual) {
+    expect(queryClaims.retainedRecords).toBeLessThanOrEqual(retainedBefore.get(inquiryProfile) ?? 0);
+  }
+}
 
 class MutableSourceOverlay implements SemanticRuntimeSourceTextOverlay {
   private readonly sourceByPath = new Map<string, string>();

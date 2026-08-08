@@ -377,6 +377,12 @@ export interface QueryClaimGraphSnapshot {
   readonly netKernelHandleCharacterDelta: number;
 }
 
+/** One point-in-time graph view used by control-plane readers that need counters and recent rows together. */
+export interface QueryClaimGraphInspection {
+  readonly snapshot: QueryClaimGraphSnapshot;
+  readonly recentRecords: readonly QueryClaimRecord[] | null;
+}
+
 export interface QueryClaimGraphDisposalSummary {
   readonly profile: SemanticRuntimeInquiryProfile;
   readonly reason: QueryClaimDisposalReason;
@@ -485,17 +491,37 @@ export class QueryClaimGraph {
   readRecords(transactionToken?: object): readonly QueryClaimRecord[] {
     const visibleNodes = this.visibleNodes(transactionToken);
     const dependencies = this.dependencyView(visibleNodes);
-    return visibleNodes.map((node) => node.toRecord(
-      dependencies.dependencyIdsByDependentId.get(node.id) ?? [],
-    ));
+    return this.recordsFromVisibleNodes(visibleNodes, dependencies);
   }
 
   readRecentRecords(limit: number, transactionToken?: object): readonly QueryClaimRecord[] {
     if (limit <= 0) {
       return [];
     }
-    const records = this.readRecords(transactionToken);
-    return records.slice(Math.max(0, records.length - limit));
+    const visibleNodes = this.visibleNodes(transactionToken);
+    const dependencies = this.dependencyView(visibleNodes);
+    return this.recordsFromVisibleNodes(
+      visibleNodes.slice(Math.max(0, visibleNodes.length - limit)),
+      dependencies,
+    );
+  }
+
+  /** Capture aggregate counters and an optional recent tail from one visibility/dependency traversal. */
+  inspect(
+    recentRecordLimit: number | null = null,
+    transactionToken?: object,
+  ): QueryClaimGraphInspection {
+    const visibleNodes = this.visibleNodes(transactionToken);
+    const dependencies = this.dependencyView(visibleNodes);
+    const recentNodes = recentRecordLimit == null
+      ? null
+      : visibleNodes.slice(Math.max(0, visibleNodes.length - Math.max(0, recentRecordLimit)));
+    return {
+      snapshot: this.snapshotFromVisibleNodes(visibleNodes, dependencies),
+      recentRecords: recentNodes == null
+        ? null
+        : this.recordsFromVisibleNodes(recentNodes, dependencies),
+    };
   }
 
   dispose(
@@ -577,6 +603,22 @@ export class QueryClaimGraph {
   snapshot(transactionToken?: object): QueryClaimGraphSnapshot {
     const visibleNodes = this.visibleNodes(transactionToken);
     const dependencies = this.dependencyView(visibleNodes);
+    return this.snapshotFromVisibleNodes(visibleNodes, dependencies);
+  }
+
+  private recordsFromVisibleNodes(
+    visibleNodes: readonly QueryClaimNode[],
+    dependencies: QueryClaimDependencyView,
+  ): readonly QueryClaimRecord[] {
+    return visibleNodes.map((node) => node.toRecord(
+      dependencies.dependencyIdsByDependentId.get(node.id) ?? [],
+    ));
+  }
+
+  private snapshotFromVisibleNodes(
+    visibleNodes: readonly QueryClaimNode[],
+    dependencies: QueryClaimDependencyView,
+  ): QueryClaimGraphSnapshot {
     const indexes = queryClaimGraphIndexCardinality(visibleNodes);
     const keyCharacters = queryClaimGraphKeyCharacters(visibleNodes);
     const retainedShape = queryClaimGraphRetainedShape(visibleNodes, dependencies);

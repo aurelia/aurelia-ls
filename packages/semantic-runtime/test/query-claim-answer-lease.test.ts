@@ -155,6 +155,34 @@ function retainedAnswerPolicy(
 }
 
 describe('query-claim answer leases', () => {
+  test('inspects aggregate counters and recent rows from one token-scoped graph view', () => {
+    const graph = new QueryClaimGraph('mcp-orientation', retainedAnswerPolicy());
+    graph.answer(input, () => answer('committed'));
+    const transaction = new TestAnswerTransaction();
+    graph.answer({
+      ...input,
+      queryKind: 'provisional',
+      queryKey: 'provisional-key',
+    }, () => answer('provisional'), {
+      answerTransaction: transaction,
+    });
+
+    const committed = graph.inspect(8);
+    const owner = graph.inspect(8, transaction.token);
+    const foreign = graph.inspect(8, Object.freeze({ kind: 'foreign-transaction' }));
+    const aggregateOnly = graph.inspect();
+    const zeroRows = graph.inspect(0, transaction.token);
+
+    expect(committed.snapshot.retainedRecords).toBe(1);
+    expect(committed.recentRecords?.map((record) => record.queryKind)).toEqual([input.queryKind]);
+    expect(owner.snapshot.retainedRecords).toBe(2);
+    expect(owner.recentRecords?.map((record) => record.queryKind)).toEqual([input.queryKind, 'provisional']);
+    expect(foreign).toEqual(committed);
+    expect(aggregateOnly.recentRecords).toBeNull();
+    expect(zeroRows.recentRecords).toEqual([]);
+    transaction.rollback();
+  });
+
   test('seals and observes a current lease before disposal and exposes it again on a retained hit', () => {
     const graph = new QueryClaimGraph('mcp-orientation', retainedAnswerPolicy());
     const store = new KernelStore('query-claim-answer-lease-order');
