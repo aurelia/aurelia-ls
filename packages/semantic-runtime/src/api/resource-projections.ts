@@ -29,7 +29,9 @@ import type {
   SemanticResourceDefinitionWatchRow,
   SemanticResourceIssueRow,
   SemanticResourceIssuesResult,
+  SemanticRuntimePageInput,
 } from './contracts.js';
+import { pageProjectedRows } from './answer-helpers.js';
 import {
   projectBindableDefinitionSources,
   projectBindableDefinitionSurface,
@@ -52,20 +54,48 @@ export type ResourceDefinitionSourceProjection = Pick<
   'source' | 'nameSource' | 'targetSource' | 'targetDeclarationSource'
 >;
 
-export function readResourceDefinitionRows(
+interface ResourceDefinitionPageCandidate {
+  readonly definition: FullResourceDefinition;
+  readonly resourceKind: SemanticResourceDefinitionRow['resourceKind'];
+  readonly name: SemanticResourceDefinitionRow['name'];
+  readonly targetName: SemanticResourceDefinitionRow['targetName'];
+  readonly sourceProjection: ResourceDefinitionSourceProjection;
+  readonly orderingKey: string;
+  readonly cursorKey: string;
+  readonly ordinal: number;
+}
+
+export function readResourceDefinitionPage(
   emission: AureliaAppWorldProjectEmission,
   store: KernelStore,
   handles: boolean,
-): readonly SemanticResourceDefinitionRow[] {
-  const issues = readProjectResourceIssues(emission, store);
-  return emission.resources.readDefinitions()
-    .map((definition): SemanticResourceDefinitionRow =>
-      resourceDefinitionRow(emission, store, definition, issues, handles)
-    )
-    .sort((left, right) =>
-      `${left.resourceKind}:${left.name ?? ''}:${left.targetName ?? ''}:${left.source?.label ?? ''}`
-        .localeCompare(`${right.resourceKind}:${right.name ?? ''}:${right.targetName ?? ''}:${right.source?.label ?? ''}`)
-    );
+  page?: SemanticRuntimePageInput,
+) {
+  const candidates = emission.resources.readDefinitions()
+    .map((definition, ordinal) => resourceDefinitionPageCandidate(store, definition, ordinal))
+    .sort((left, right) => left.orderingKey.localeCompare(right.orderingKey) || left.ordinal - right.ordinal);
+  let issues: readonly ResourceIssue[] | null = null;
+  return pageProjectedRows(
+    candidates,
+    page,
+    (candidate) => resourceDefinitionRow(
+      emission,
+      store,
+      candidate,
+      issues ??= readProjectResourceIssues(emission, store),
+      handles,
+    ),
+    {
+      unboundCursorBasis: () => [
+        'resource-definitions',
+        emission.project.projectKey,
+        emission.project.inputGeneration.revision,
+        emission.analysisDepth,
+        handles,
+        candidates.map((candidate) => candidate.cursorKey),
+      ],
+    },
+  );
 }
 
 export function readResourceIssueRows(
@@ -85,19 +115,26 @@ export function readResourceIssueRows(
 function resourceDefinitionRow(
   emission: AureliaAppWorldProjectEmission,
   store: KernelStore,
-  definition: FullResourceDefinition,
+  candidate: ResourceDefinitionPageCandidate,
   issues: readonly ResourceIssue[],
   handles: boolean,
 ): SemanticResourceDefinitionRow {
-  const core = readResourceDefinitionCoreProjection(emission, store, definition, true);
+  const definition = candidate.definition;
+  const core = readResourceDefinitionCoreProjection(
+    emission,
+    store,
+    definition,
+    true,
+    candidate.sourceProjection,
+  );
   return {
     projectKey: emission.project.projectKey,
-    resourceKind: taxonomyResourceKindForDefinition(definition),
+    resourceKind: candidate.resourceKind,
     declarationModes: core.declarationModes,
-    name: readDefinitionName(definition),
+    name: candidate.name,
     aliases: core.aliases,
     key: readDefinitionKey(definition),
-    targetName: definition.target.localName,
+    targetName: candidate.targetName,
     captureKind: 'capture' in definition ? definition.capture.kind : null,
     template: 'template' in definition ? templateRow(definition.template, store) : null,
     bindables: core.bindables,
@@ -148,8 +185,8 @@ export function readResourceDefinitionCoreProjection(
   store: KernelStore,
   definition: FullResourceDefinition,
   includeTypeSurfaces: boolean,
+  sources: ResourceDefinitionSourceProjection = readResourceDefinitionSourceProjection(store, definition),
 ): ResourceDefinitionCoreProjection {
-  const sources = readResourceDefinitionSourceProjection(store, definition);
   return {
     aliases: readDefinitionAliases(definition, store),
     bindables: 'bindables' in definition
@@ -164,6 +201,28 @@ export function readResourceDefinitionCoreProjection(
     declarationModes: declarationModesForDefinition(definition),
     defaultProperty: 'defaultProperty' in definition ? definition.defaultProperty : null,
     ...sources,
+  };
+}
+
+function resourceDefinitionPageCandidate(
+  store: KernelStore,
+  definition: FullResourceDefinition,
+  ordinal: number,
+): ResourceDefinitionPageCandidate {
+  const resourceKind = taxonomyResourceKindForDefinition(definition);
+  const name = readDefinitionName(definition);
+  const targetName = definition.target.localName;
+  const sourceProjection = readResourceDefinitionSourceProjection(store, definition);
+  const orderingKey = `${resourceKind}:${name ?? ''}:${targetName ?? ''}:${sourceProjection.source?.label ?? ''}`;
+  return {
+    definition,
+    resourceKind,
+    name,
+    targetName,
+    sourceProjection,
+    orderingKey,
+    cursorKey: `${orderingKey}:${String(definition.productHandle)}:${String(definition.identityHandle)}:${ordinal}`,
+    ordinal,
   };
 }
 

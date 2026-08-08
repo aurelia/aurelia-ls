@@ -35,6 +35,14 @@ export interface SemanticRuntimeAnswerOptions {
   readonly coverage: SemanticRuntimeAnswerCoverage | `${SemanticRuntimeAnswerCoverage}`;
 }
 
+export interface ProjectedPageRowsOptions {
+  /**
+   * Deterministic cheap identity for the complete ordered candidate universe when a direct internal call did not bind
+   * the page to a semantic query/epoch scope. Public runtime pages are already bound and never evaluate this callback.
+   */
+  readonly unboundCursorBasis: () => unknown;
+}
+
 /** Canonical state for collection/static-catalog answers whose semantic basis is fully enumerated. */
 export const COMPLETE_COLLECTION_ANSWER_OPTIONS = {
   selection: SemanticRuntimeAnswerSelection.NotApplicable,
@@ -133,6 +141,27 @@ export function pageRows<TRow>(
   readonly rows: readonly TRow[];
   readonly page: SemanticRuntimePageResult;
 } {
+  return pageProjectedRows(rows, page, (row) => row, {
+    // Preserve the pre-existing direct-call cursor fingerprint byte for byte.
+    unboundCursorBasis: () => rows,
+  });
+}
+
+/**
+ * Page a deterministic one-candidate-to-one-row universe before spending its potentially expensive public projection.
+ *
+ * Ordering and filtering belong to the caller. With a byte policy, one rejected projected row may be inspected as the
+ * exact budget lookahead; it never advances the cursor or enters the returned page.
+ */
+export function pageProjectedRows<TCandidate, TRow>(
+  orderedCandidates: readonly TCandidate[],
+  page: SemanticRuntimePageInput | undefined,
+  projectRow: (candidate: TCandidate) => TRow,
+  options: ProjectedPageRowsOptions,
+): {
+  readonly rows: readonly TRow[];
+  readonly page: SemanticRuntimePageResult;
+} {
   assertSemanticRuntimePageInput(page);
   const scope = page == null ? null : pageScopes.get(page) ?? null;
   const policy = scope?.policy ?? null;
@@ -140,10 +169,10 @@ export function pageRows<TRow>(
   const maxSize = normalizedPositiveLimit(policy?.maxSize);
   const size = maxSize == null ? requestedSize : Math.min(requestedSize, maxSize);
   const cursor = page?.cursor ?? null;
-  const cursorScope = pageCursorScope(scope, rows);
+  const cursorScope = pageCursorScope(scope, options.unboundCursorBasis);
   const parsed = cursor == null
     ? { start: 0, problem: null }
-    : parsePageCursor(cursor, cursorScope, rows.length);
+    : parsePageCursor(cursor, cursorScope, orderedCandidates.length);
   if (parsed.problem != null) {
     return {
       rows: [],
@@ -153,7 +182,7 @@ export function pageRows<TRow>(
         cursor,
         nextCursor: null,
         returnedRows: 0,
-        totalRows: rows.length,
+        totalRows: orderedCandidates.length,
         exhausted: false,
         cursorProblem: parsed.problem,
         maxSize,
@@ -162,17 +191,14 @@ export function pageRows<TRow>(
   }
 
   const start = parsed.start;
-  const pageWindow = rows.slice(start, start + size);
+  const pageWindow = orderedCandidates.slice(start, start + size);
   const maxRowsJsonBytes = normalizedPositiveLimit(policy?.maxRowsJsonBytes);
   const selected = maxRowsJsonBytes == null
-    ? {
-      rows: pageWindow,
-      estimatedRowsJsonBytes: estimatedJsonBytes(pageWindow),
-    }
-    : rowsWithinEstimatedJsonByteBudget(pageWindow, maxRowsJsonBytes);
+    ? projectPageWindow(pageWindow, projectRow)
+    : projectRowsWithinEstimatedJsonByteBudget(pageWindow, projectRow, maxRowsJsonBytes);
   const byteClamped = selected.rows.length < pageWindow.length;
   const nextOffset = start + selected.rows.length;
-  const exhausted = nextOffset >= rows.length;
+  const exhausted = nextOffset >= orderedCandidates.length;
   const nextCursor = exhausted
     ? null
     : encodePageCursor(cursorScope, nextOffset);
@@ -184,7 +210,7 @@ export function pageRows<TRow>(
       cursor,
       nextCursor,
       returnedRows: selected.rows.length,
-      totalRows: rows.length,
+      totalRows: orderedCandidates.length,
       exhausted,
       estimatedRowsJsonBytes: selected.estimatedRowsJsonBytes,
       maxRowsJsonBytes,
@@ -194,16 +220,20 @@ export function pageRows<TRow>(
   };
 }
 
-function pageCursorScope<TRow>(
+function pageCursorScope(
   scope: SemanticRuntimePageScope | null,
-  rows: readonly TRow[],
+  unboundCursorBasis: () => unknown,
 ): Required<Pick<SemanticRuntimePageScope, 'queryKey' | 'epochKey' | 'orderingKey'>> {
   if (scope != null) {
     return scope;
   }
+  const serializedBasis = JSON.stringify(unboundCursorBasis());
+  if (serializedBasis == null) {
+    throw new TypeError('Semantic-runtime direct page cursor basis must be JSON-serializable.');
+  }
   return {
     queryKey: 'direct-pageRows-call',
-    epochKey: fingerprint(JSON.stringify(rows)),
+    epochKey: fingerprint(serializedBasis),
     orderingKey: PAGE_ORDERING_VERSION,
   };
 }
@@ -336,23 +366,39 @@ function assertSemanticRuntimePagePolicy(
   }
 }
 
-function rowsWithinEstimatedJsonByteBudget<TRow>(
-  rows: readonly TRow[],
+function projectPageWindow<TCandidate, TRow>(
+  candidates: readonly TCandidate[],
+  projectRow: (candidate: TCandidate) => TRow,
+): {
+  readonly rows: readonly TRow[];
+  readonly estimatedRowsJsonBytes: number;
+} {
+  const rows = candidates.map(projectRow);
+  return {
+    rows,
+    estimatedRowsJsonBytes: estimatedJsonBytes(rows),
+  };
+}
+
+function projectRowsWithinEstimatedJsonByteBudget<TCandidate, TRow>(
+  candidates: readonly TCandidate[],
+  projectRow: (candidate: TCandidate) => TRow,
   maxBytes: number,
 ): {
   readonly rows: readonly TRow[];
   readonly estimatedRowsJsonBytes: number;
 } {
-  if (rows.length === 0) {
+  if (candidates.length === 0) {
     return {
-      rows,
+      rows: [],
       estimatedRowsJsonBytes: 2,
     };
   }
 
   const selected: TRow[] = [];
   let estimatedBytes = 2;
-  for (const row of rows) {
+  for (const candidate of candidates) {
+    const row = projectRow(candidate);
     const rowBytes = estimatedJsonBytes(row);
     const separatorBytes = selected.length === 0 ? 0 : 1;
     if (selected.length > 0 && estimatedBytes + separatorBytes + rowBytes > maxBytes) {

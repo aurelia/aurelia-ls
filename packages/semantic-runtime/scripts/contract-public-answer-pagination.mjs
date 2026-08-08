@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import {
   answer,
   bindSemanticRuntimePageInput,
+  pageProjectedRows,
   pageRows,
 } from '../out/api/answer-helpers.js';
 import {
@@ -21,6 +22,7 @@ const scope = {
 
 verifyZeroRowRollup();
 verifyDeterministicContinuation();
+verifyProjectedPaging();
 verifyCursorRejection();
 verifyTransportPolicy();
 verifyUnboundedIdePage();
@@ -65,6 +67,150 @@ function verifyDeterministicContinuation() {
   expect(second.rows.map((row) => row.id).join(',') === '2,3', 'Second page should resume at the encoded offset.');
   expect(third.rows.map((row) => row.id).join(',') === '4', 'Final page should return the remaining row.');
   expect(third.page.exhausted === true && third.page.nextCursor == null, 'Final page should report exhaustion without another cursor.');
+}
+
+function verifyProjectedPaging() {
+  const projectedIds = [];
+  const projectRow = (row) => {
+    projectedIds.push(row.id);
+    return row;
+  };
+  const projectedPage = (
+    candidates,
+    page,
+    pageScope = scope,
+    policy = undefined,
+  ) => pageProjectedRows(
+    candidates,
+    bindSemanticRuntimePageInput(page, pageScope, policy),
+    projectRow,
+    { unboundCursorBasis: () => candidates },
+  );
+
+  const directEager = pageRows(rows, { size: 2 });
+  projectedIds.length = 0;
+  const directLazy = pageProjectedRows(rows, { size: 2 }, projectRow, {
+    unboundCursorBasis: () => rows,
+  });
+  expect(
+    directLazy.page.nextCursor === directEager.page.nextCursor,
+    'Identity-projected direct pages should preserve the existing opaque cursor fingerprint.',
+  );
+  expect(projectedIds.join(',') === '0,1', 'An unbounded projected page should materialize only its selected window.');
+
+  projectedIds.length = 0;
+  const zero = projectedPage(rows, { size: 0 });
+  expect(projectedIds.length === 0, 'A projected size-zero page must not materialize any row.');
+  expect(
+    zero.page.returnedRows === 0 && zero.page.estimatedRowsJsonBytes === 2 && zero.page.nextCursor != null,
+    'A projected size-zero page should preserve empty-array bytes and its same-offset continuation.',
+  );
+
+  projectedIds.length = 0;
+  const first = projectedPage(rows, { size: 2 });
+  expect(projectedIds.join(',') === '0,1', 'Projected paging should materialize exactly the first requested window.');
+  projectedIds.length = 0;
+  const second = projectedPage(rows, { size: 2, cursor: first.page.nextCursor });
+  expect(
+    projectedIds.join(',') === '2,3' && second.rows.map((row) => row.id).join(',') === '2,3',
+    'Projected paging should resume and materialize only the next cursor window.',
+  );
+
+  const rejectedScopes = [
+    [{ ...scope, queryKey: 'different-query' }, 'query-mismatch'],
+    [{ ...scope, epochKey: 'project-input:demo:revision-b' }, 'stale'],
+    [{ ...scope, orderingKey: 'different-order' }, 'ordering-mismatch'],
+  ];
+  for (const [rejectedScope, problemKind] of rejectedScopes) {
+    projectedIds.length = 0;
+    const rejected = projectedPage(rows, { size: 2, cursor: first.page.nextCursor }, rejectedScope);
+    expect(
+      rejected.page.cursorProblem?.kind === problemKind && projectedIds.length === 0,
+      `A projected ${problemKind} cursor must be rejected before row materialization.`,
+    );
+  }
+
+  projectedIds.length = 0;
+  const malformed = projectedPage(rows, { size: 2, cursor: 'after:1' });
+  expect(
+    malformed.page.cursorProblem?.kind === 'malformed'
+      && malformed.page.estimatedRowsJsonBytes == null
+      && malformed.page.exhausted === false
+      && projectedIds.length === 0,
+    'A projected malformed cursor must return invalid page metadata without materializing rows.',
+  );
+
+  projectedIds.length = 0;
+  const outOfRange = projectedPage(rows.slice(0, 1), { size: 2, cursor: first.page.nextCursor });
+  expect(
+    outOfRange.page.cursorProblem?.kind === 'offset-out-of-range' && projectedIds.length === 0,
+    'A projected out-of-range cursor must be rejected before row materialization.',
+  );
+
+  projectedIds.length = 0;
+  const exactEnd = projectedPage(rows.slice(0, 2), { size: 2, cursor: first.page.nextCursor });
+  expect(
+    exactEnd.rows.length === 0
+      && exactEnd.page.exhausted === true
+      && exactEnd.page.estimatedRowsJsonBytes === 2
+      && projectedIds.length === 0,
+    'A projected cursor exactly at the row-universe end should return a valid exhausted empty page.',
+  );
+
+  projectedIds.length = 0;
+  const maxSize = projectedPage(rows, { size: 5 }, scope, { maxSize: 2 });
+  expect(
+    projectedIds.join(',') === '0,1'
+      && maxSize.page.requestedSize === 5
+      && maxSize.page.size === 2
+      && maxSize.page.clamped === true,
+    'Projected paging should apply maxSize before materializing its selected window.',
+  );
+
+  const byteRows = [{ id: 0 }, { id: 1 }, { id: 2 }];
+  projectedIds.length = 0;
+  const byteClamped = projectedPage(byteRows, { size: 3 }, scope, { maxRowsJsonBytes: 10 });
+  expect(
+    byteClamped.rows.map((row) => row.id).join(',') === '0'
+      && projectedIds.join(',') === '0,1'
+      && byteClamped.page.estimatedRowsJsonBytes === 10
+      && byteClamped.page.byteClamped === true,
+    'Projected byte paging should materialize one returned row plus exactly one rejected lookahead.',
+  );
+
+  projectedIds.length = 0;
+  const afterByteClamp = projectedPage(
+    byteRows,
+    { size: 3, cursor: byteClamped.page.nextCursor },
+    scope,
+    { maxRowsJsonBytes: 10 },
+  );
+  expect(
+    afterByteClamp.rows.map((row) => row.id).join(',') === '1'
+      && projectedIds.join(',') === '1,2',
+    'A rejected byte-budget lookahead must remain the first candidate on the next page.',
+  );
+
+  projectedIds.length = 0;
+  const firstOversized = projectedPage(byteRows, { size: 3 }, scope, { maxRowsJsonBytes: 1 });
+  expect(
+    firstOversized.rows.map((row) => row.id).join(',') === '0'
+      && projectedIds.join(',') === '0'
+      && firstOversized.page.estimatedRowsJsonBytes > 1
+      && firstOversized.page.byteClamped === true,
+    'A first oversized projected row should still be returned so paging makes progress.',
+  );
+
+  projectedIds.length = 0;
+  const empty = projectedPage([], { size: 2 });
+  expect(
+    empty.rows.length === 0
+      && empty.page.totalRows === 0
+      && empty.page.exhausted === true
+      && empty.page.estimatedRowsJsonBytes === 2
+      && projectedIds.length === 0,
+    'An empty projected universe should remain a valid exhausted empty-array page.',
+  );
 }
 
 function verifyCursorRejection() {

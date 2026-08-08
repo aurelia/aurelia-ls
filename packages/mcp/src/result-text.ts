@@ -187,7 +187,7 @@ function semanticAnswerPageText(value: unknown): string | null {
   const byteClamped = value.byteClamped === true
     && typeof value.estimatedRowsJsonBytes === 'number'
     && typeof value.maxRowsJsonBytes === 'number'
-    ? ` Row payload budget stopped this page at ~${value.estimatedRowsJsonBytes} JSON byte(s) of max ${value.maxRowsJsonBytes}.`
+    ? ` Row payload target stopped this page at ~${value.estimatedRowsJsonBytes} JSON byte(s) against target ${value.maxRowsJsonBytes}.`
     : '';
   if (returned == null && size == null && nextCursor == null) {
     const text = `${clamped}${byteClamped}`;

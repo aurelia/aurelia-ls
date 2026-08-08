@@ -752,7 +752,10 @@ export interface SemanticRuntimePageInput {
 export interface SemanticRuntimePagePolicy {
   /** Positive safe-integer row ceiling; null leaves the caller's requested size unbounded. */
   readonly maxSize?: number | null;
-  /** Positive safe-integer estimated row-JSON ceiling; null disables byte-budget clamping. */
+  /**
+   * Positive safe-integer estimated row-JSON target; null disables byte-budget clamping.
+   * The first selected row is returned even when it alone exceeds this target so a continuation can make progress.
+   */
   readonly maxRowsJsonBytes?: number | null;
 }
 
@@ -1157,9 +1160,9 @@ export interface SemanticRuntimePageResult {
   readonly clamped?: boolean;
   /** Estimated UTF-8 JSON bytes for the returned row array. */
   readonly estimatedRowsJsonBytes?: number;
-  /** Maximum estimated row JSON bytes supplied by transport policy. */
+  /** Target estimated row JSON bytes supplied by transport policy; one first oversized row may exceed it. */
   readonly maxRowsJsonBytes?: number;
-  /** True when row selection stopped before `size` because the transport row payload budget was reached. */
+  /** True when row selection stopped before `size` because the transport row payload target was reached. */
   readonly byteClamped?: boolean;
 }
 

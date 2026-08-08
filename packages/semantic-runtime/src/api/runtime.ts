@@ -258,7 +258,7 @@ import {
   type OpenSeamProjectionFact,
 } from './open-seam-projections.js';
 import {
-  readResourceDefinitionRows,
+  readResourceDefinitionPage,
   readResourceIssueRows,
 } from './resource-projections.js';
 import {
@@ -5079,11 +5079,15 @@ export class SemanticApp {
     if (claimed != null) {
       return claimed;
     }
-    const rows = readResourceDefinitionRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
-    const paged = pageRows(rows, page);
+    const paged = readResourceDefinitionPage(
+      this.emission,
+      this.runtime.workspace.store,
+      includeHandles(detail),
+      page,
+    );
     return answer(
       SemanticRuntimeAnswerResult.Answered,
-      `Returned ${paged.rows.length} of ${rows.length} recognized resource definition row(s).`,
+      `Returned ${paged.rows.length} of ${paged.page.totalRows} recognized resource definition row(s).`,
       { rows: paged.rows },
       { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
     );

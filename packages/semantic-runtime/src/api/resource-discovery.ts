@@ -53,13 +53,14 @@ import {
   type SemanticResourceInventorySources,
   type SemanticRuntimeAnswer,
   type SemanticRuntimePageInput,
+  type SemanticRuntimePageResult,
   type SemanticRuntimeSourceCursorInput,
   type SemanticTemplateResourceAvailabilityResult,
   type SemanticTemplateResourceScopeCandidate,
 } from './contracts.js';
 import {
   answer,
-  pageRows,
+  pageProjectedRows,
 } from './answer-helpers.js';
 import {
   readResourceDefinitionCoreProjection,
@@ -155,6 +156,15 @@ class ResourceInventoryCandidate {
 interface ResourceInventoryProjection {
   readonly rows: readonly SemanticResourceInventoryRow[];
   readonly completeness: SemanticResourceInventoryCompleteness;
+  readonly page: SemanticRuntimePageResult;
+}
+
+interface ResourceInventoryCandidateProjectionBasis {
+  readonly sources: SemanticResourceInventorySources;
+  readonly targetIdentityHandle: IdentityHandle | null;
+  readonly identityKey: string;
+  readonly origin: SemanticResourceInventoryOrigin;
+  readonly orderingKey: string;
 }
 
 /** Project the selected app's resource definitions and effective compiler catalogs without leaking kernel handles. */
@@ -164,23 +174,22 @@ export function readSemanticResourceInventory(
   page?: SemanticRuntimePageInput,
   includeTypeSurfaces = false,
 ): SemanticRuntimeAnswer<SemanticResourceInventoryResult> {
-  const projection = new ResourceInventoryBuilder(emission, store, includeTypeSurfaces).read();
-  const paged = pageRows(projection.rows, page);
+  const projection = new ResourceInventoryBuilder(emission, store, includeTypeSurfaces).read(page);
   return answer(
     SemanticRuntimeAnswerResult.Answered,
-    `Returned ${paged.rows.length} of ${projection.rows.length} runtime resource row(s) for ${emission.project.projectKey}.`,
+    `Returned ${projection.rows.length} of ${projection.page.totalRows} runtime resource row(s) for ${emission.project.projectKey}.`,
     {
-      displayText: resourceInventoryDisplayText(paged.rows, projection.rows.length, projection.completeness),
+      displayText: resourceInventoryDisplayText(projection.rows, projection.page.totalRows, projection.completeness),
       projectKey: emission.project.projectKey,
       projectRoot: emission.project.rootDir,
       typeSurfacesIncluded: includeTypeSurfaces,
-      rows: paged.rows,
+      rows: projection.rows,
       completeness: projection.completeness,
     },
     {
       selection: SemanticRuntimeAnswerSelection.NotApplicable,
       coverage: resourceInventoryCoverage(projection.completeness),
-      page: paged.page,
+      page: projection.page,
     },
   );
 }
@@ -332,6 +341,7 @@ class ResourceInventoryBuilder {
   private readonly candidatesByHandle = new Map<string, ResourceInventoryCandidate>();
   private readonly candidatesByFallback = new Map<string, ResourceInventoryCandidate>();
   private readonly candidateByVisibleResource = new Map<TemplateVisibleResource, ResourceInventoryCandidate>();
+  private readonly projectionBases = new Map<ResourceInventoryCandidate, ResourceInventoryCandidateProjectionBasis>();
   private readonly definitionProjections = new Map<ResourceInventoryCandidate, ResourceDefinitionCoreProjection>();
   private readonly definitionSourceProjections = new Map<ResourceInventoryCandidate, ResourceDefinitionSourceProjection>();
   private readonly rowsByCandidate = new Map<ResourceInventoryCandidate, SemanticResourceInventoryRow>();
@@ -345,12 +355,35 @@ class ResourceInventoryBuilder {
     private readonly includeTypeSurfaces: boolean,
   ) {}
 
-  read(): ResourceInventoryProjection {
+  read(page?: SemanticRuntimePageInput): ResourceInventoryProjection {
     this.collect();
-    const rows = this.candidates.map((candidate) => this.rowForCandidate(candidate)).sort(compareInventoryRows);
+    const orderedCandidates = this.candidates
+      .map((candidate, ordinal) => ({
+        candidate,
+        ordinal,
+        orderingKey: this.projectionBasisFor(candidate).orderingKey,
+      }))
+      .sort((left, right) => left.orderingKey.localeCompare(right.orderingKey) || left.ordinal - right.ordinal)
+      .map((entry) => entry.candidate);
+    const paged = pageProjectedRows(
+      orderedCandidates,
+      page,
+      (candidate) => this.rowForCandidate(candidate),
+      {
+        unboundCursorBasis: () => [
+          'resource-inventory',
+          this.emission.project.projectKey,
+          this.emission.project.inputGeneration.revision,
+          this.emission.analysisDepth,
+          this.includeTypeSurfaces,
+          orderedCandidates.map((candidate) => this.projectionBasisFor(candidate).orderingKey),
+        ],
+      },
+    );
     return {
-      rows,
+      rows: paged.rows,
       completeness: this.completeness(),
+      page: paged.page,
     };
   }
 
@@ -462,7 +495,7 @@ class ResourceInventoryBuilder {
       candidate.definition = definition;
     } else if (!sameDefinitionProduct(candidate.definition, definition)) {
       throw new Error(
-        `Resource inventory candidate '${candidate.resourceKind}:${candidate.name}' merged conflicting definition products '${candidate.definition.productHandle}' and '${definition.productHandle}'.`,
+        `Resource inventory candidate '${candidate.resourceKind}:${candidate.name}' merged conflicting definition products '${String(candidate.definition.productHandle)}' and '${String(definition.productHandle)}'.`,
       );
     }
     candidate.mergeLocalityEvidence(localityEvidence);
@@ -601,11 +634,7 @@ class ResourceInventoryBuilder {
 
   identityKeyForCandidate(candidate: ResourceInventoryCandidate): string {
     this.collect();
-    return this.identityKeyFor(
-      candidate,
-      this.primaryCandidateSources(candidate),
-      this.targetIdentityHandle(candidate),
-    );
+    return this.projectionBasisFor(candidate).identityKey;
   }
 
   completeness(): SemanticResourceInventoryCompleteness {
@@ -629,6 +658,7 @@ class ResourceInventoryBuilder {
     if (existing != null) {
       return existing;
     }
+    const basis = this.projectionBasisFor(candidate);
     const definitionProjection = this.definitionProjectionFor(candidate);
     const metadata = definitionProjection == null
       ? this.headerMetadata(candidate)
@@ -636,19 +666,15 @@ class ResourceInventoryBuilder {
           aliases: definitionProjection.aliases,
           bindables: definitionProjection.bindables,
           declarationModes: definitionProjection.declarationModes,
-          sources: inventorySources(
-            definitionProjection.nameSource,
-            definitionProjection.targetDeclarationSource ?? definitionProjection.source,
-            definitionProjection.targetSource,
-            candidate.builtIn != null,
-          ),
-          targetIdentityHandle: candidate.definition?.target.identityHandle ?? null,
         };
-    const identityKey = this.identityKeyFor(candidate, metadata.sources, metadata.targetIdentityHandle);
+    const identityKey = basis.identityKey;
     const owner = candidate.localOwnerHandle == null
       ? null
       : this.candidatesByHandle.get(handleKey(candidate.localOwnerHandle)) ?? null;
-    const ownerRowSource = owner == null ? null : this.primaryCandidateSource(owner);
+    const ownerBasis = owner == null ? null : this.projectionBasisFor(owner);
+    const ownerRowSource = ownerBasis == null
+      ? null
+      : ownerBasis.sources.publicName ?? ownerBasis.sources.implementation ?? ownerBasis.sources.declaration;
     const row: SemanticResourceInventoryRow = {
       identityKey,
       projectKey: this.emission.project.projectKey,
@@ -690,16 +716,16 @@ class ResourceInventoryBuilder {
         : candidate.header != null
           ? SemanticResourceInventoryMetadataState.HeaderOnly
           : SemanticResourceInventoryMetadataState.VisibilityOnly,
-      origin: this.originFor(candidate, metadata.sources, metadata.targetIdentityHandle),
+      origin: basis.origin,
       locality: {
         kind: candidate.localOwnerHandle == null
           ? SemanticResourceInventoryLocalityKind.Project
           : SemanticResourceInventoryLocalityKind.LocalTemplate,
-        ownerIdentityKey: owner == null ? null : this.identityKeyFor(owner, this.primaryCandidateSources(owner), this.targetIdentityHandle(owner)),
+        ownerIdentityKey: ownerBasis?.identityKey ?? null,
         ownerName: owner?.name ?? null,
         ownerSource: ownerRowSource,
       },
-      sources: metadata.sources,
+      sources: basis.sources,
     };
     this.rowsByCandidate.set(candidate, row);
     return row;
@@ -709,12 +735,9 @@ class ResourceInventoryBuilder {
     readonly aliases: ResourceDefinitionCoreProjection['aliases'];
     readonly bindables: ResourceDefinitionCoreProjection['bindables'];
     readonly declarationModes: ResourceDefinitionCoreProjection['declarationModes'];
-    readonly sources: SemanticResourceInventorySources;
-    readonly targetIdentityHandle: IdentityHandle | null;
   } {
     if (candidate.header instanceof ResourceDefinitionHeaderEmission) {
       const header = candidate.header;
-      const target = header.targetReference;
       return {
         aliases: header.aliasNames.map((name, index) => ({
           name,
@@ -722,13 +745,6 @@ class ResourceInventoryBuilder {
         })),
         bindables: [],
         declarationModes: ['header'],
-        sources: inventorySources(
-          describeAddress(this.store, header.lookupNameSourceAddressHandles[0] ?? null),
-          describeAddress(this.store, target?.declarationSourceAddressHandle ?? header.sourceAddressHandle),
-          describeAddress(this.store, target?.addressHandle ?? null),
-          candidate.builtIn != null,
-        ),
-        targetIdentityHandle: target?.identityHandle ?? null,
       };
     }
     if (candidate.header != null) {
@@ -736,24 +752,12 @@ class ResourceInventoryBuilder {
         aliases: candidate.header.aliases.map((name) => ({ name, source: null })),
         bindables: [],
         declarationModes: ['header'],
-        sources: inventorySources(
-          null,
-          describeAddress(this.store, candidate.header.sourceAddressHandle),
-          null,
-          candidate.builtIn != null,
-        ),
-        targetIdentityHandle: null,
       };
     }
-    const availabilitySource = candidate.visibilityRows
-      .map((row) => describeAddress(this.store, row.sourceAddressHandle))
-      .find((source) => source != null) ?? null;
     return {
       aliases: candidate.visibilityRows[0]?.aliases.map((name) => ({ name, source: null })) ?? [],
       bindables: [],
       declarationModes: [],
-      sources: inventorySources(null, availabilitySource, null, candidate.builtIn != null),
-      targetIdentityHandle: null,
     };
   }
 
@@ -910,12 +914,28 @@ class ResourceInventoryBuilder {
         candidate.builtIn != null,
       );
     }
-    return this.headerMetadata(candidate).sources;
-  }
-
-  private primaryCandidateSource(candidate: ResourceInventoryCandidate): SemanticSourceReference | null {
-    const sources = this.primaryCandidateSources(candidate);
-    return sources.publicName ?? sources.implementation ?? sources.declaration;
+    if (candidate.header instanceof ResourceDefinitionHeaderEmission) {
+      const header = candidate.header;
+      const target = header.targetReference;
+      return inventorySources(
+        describeAddress(this.store, header.lookupNameSourceAddressHandles[0] ?? null),
+        describeAddress(this.store, target?.declarationSourceAddressHandle ?? header.sourceAddressHandle),
+        describeAddress(this.store, target?.addressHandle ?? null),
+        candidate.builtIn != null,
+      );
+    }
+    if (candidate.header != null) {
+      return inventorySources(
+        null,
+        describeAddress(this.store, candidate.header.sourceAddressHandle),
+        null,
+        candidate.builtIn != null,
+      );
+    }
+    const availabilitySource = candidate.visibilityRows
+      .map((row) => describeAddress(this.store, row.sourceAddressHandle))
+      .find((source) => source != null) ?? null;
+    return inventorySources(null, availabilitySource, null, candidate.builtIn != null);
   }
 
   private targetIdentityHandle(candidate: ResourceInventoryCandidate): IdentityHandle | null {
@@ -923,6 +943,28 @@ class ResourceInventoryBuilder {
       ?? (candidate.header instanceof ResourceDefinitionHeaderEmission
         ? candidate.header.targetReference?.identityHandle ?? null
         : null);
+  }
+
+  private projectionBasisFor(
+    candidate: ResourceInventoryCandidate,
+  ): ResourceInventoryCandidateProjectionBasis {
+    const existing = this.projectionBases.get(candidate);
+    if (existing != null) {
+      return existing;
+    }
+    const sources = this.primaryCandidateSources(candidate);
+    const targetIdentityHandle = this.targetIdentityHandle(candidate);
+    const identityKey = this.identityKeyFor(candidate, sources, targetIdentityHandle);
+    const origin = this.originFor(candidate, sources, targetIdentityHandle);
+    const basis: ResourceInventoryCandidateProjectionBasis = {
+      sources,
+      targetIdentityHandle,
+      identityKey,
+      origin,
+      orderingKey: `${candidate.resourceKind}:${candidate.name}:${origin.kind}:${identityKey}`,
+    };
+    this.projectionBases.set(candidate, basis);
+    return basis;
   }
 
   private definitionProjectionFor(
@@ -936,11 +978,16 @@ class ResourceInventoryBuilder {
     if (existing != null) {
       return existing;
     }
+    const sources = this.definitionSourceProjectionFor(candidate);
+    if (sources == null) {
+      throw new Error(`Resource inventory definition candidate '${candidate.internalKey}' has no source projection.`);
+    }
     const projection = readResourceDefinitionCoreProjection(
       this.emission,
       this.store,
       definition,
       this.includeTypeSurfaces,
+      sources,
     );
     this.definitionProjections.set(candidate, projection);
     return projection;
@@ -1152,11 +1199,6 @@ function sameNameOrdinal<T>(
     if (identity(rows[current]!) === key) ordinal += 1;
   }
   return ordinal;
-}
-
-function compareInventoryRows(left: SemanticResourceInventoryRow, right: SemanticResourceInventoryRow): number {
-  return `${left.resourceKind}:${left.name}:${left.origin.kind}:${left.identityKey}`
-    .localeCompare(`${right.resourceKind}:${right.name}:${right.origin.kind}:${right.identityKey}`);
 }
 
 function resourceInventoryCoverage(

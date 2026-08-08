@@ -394,12 +394,18 @@ projection rather than cursor text. Paging never changes answer coverage: a boun
 `answered/not-applicable/complete` when the query enumerated its declared semantic basis. `page.nextCursor` alone says
 that more transport rows remain. A size-zero page returns rollup/total state without rows and can still provide a
 followable continuation.
-Paged row tables are bounded by row count and by estimated UTF-8 JSON size for the returned row array. Dense families
-such as binding observed-dependency rows can hit the payload budget before they hit the row-count clamp; in that case
-the page returns fewer rows, sets `byteClamped: true`, reports `estimatedRowsJsonBytes` and `maxRowsJsonBytes`, and
-still provides `nextCursor` when more rows are available. Public adapters should treat this as pagination, not lossy
+Paged row tables are bounded by row count and target an estimated UTF-8 JSON size for the returned row array. Dense
+families such as binding observed-dependency rows can hit the payload target before they hit the row-count clamp; in
+that case the page returns fewer rows, sets `byteClamped: true`, reports `estimatedRowsJsonBytes` and
+`maxRowsJsonBytes`, and still provides `nextCursor` when more rows are available. The first selected row is returned
+even when it alone exceeds the byte target so that paging can advance; `estimatedRowsJsonBytes` can therefore exceed
+`maxRowsJsonBytes` for that one-row progress case. Public adapters should treat this as pagination, not lossy
 truncation. Callers that need complete row families should drain `nextCursor`; semantic `coverage` remains independent
 from row-count and byte clamping.
+Answerers whose deterministic row order can be derived from compact candidate facts page those candidates before rich
+row projection. A size-zero or rejected-cursor request must therefore do no selected-row work. Byte-budgeted pages may
+project one additional candidate to decide that it does not fit, but that lookahead is neither returned nor consumed by
+the continuation cursor.
 `OpenSeamSites` reads the same unpaged seam fact set as `OpenSeams`, then groups repeated derivations by exact authored
 root source. One site may therefore retain multiple seam kinds, reason kinds, boundary kinds, and pressure kinds. Use it
 before raw seams or kind summaries when a large app reports hundreds of seams: one

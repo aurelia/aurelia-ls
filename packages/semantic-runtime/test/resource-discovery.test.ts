@@ -15,8 +15,11 @@ import {
   SemanticRuntimeAnswerResult,
   SemanticRuntimeAnswerSelection,
   SemanticRuntimeDetail,
+  type SemanticResourceDefinitionsResult,
   type SemanticResourceInventoryResult,
   type SemanticRuntimeAnswer,
+  type SemanticRuntimePageInput,
+  type SemanticRuntimePagePolicy,
   type SemanticTemplateResourceAvailabilityResult,
 } from '../src/index.js';
 import { CheckerTypeShapeAccess } from '../src/type-system/checker-type-shape-access.js';
@@ -255,19 +258,210 @@ describe('resource discovery', () => {
     });
     expect(unsupported.result).toBe(SemanticRuntimeAnswerResult.Unsupported);
   }, 60_000);
+
+  test('pages compact and rich resource inventory without projecting discarded type surfaces', async () => {
+    const fixtureRoot = pressureFixtureRoot('resource-registration-local-templates');
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: fixtureRoot,
+      storeKey: 'resource-discovery-inventory-paging',
+    });
+    await runtime.answerAppQuery({
+      kind: SemanticAppQueryKind.Summary,
+      includeAuthoringTemplates: true,
+      appRetention: 'retain-app',
+    });
+    const memberValueAccess = vi.spyOn(CheckerTypeShapeAccess.prototype, 'memberValueAccess');
+
+    const richZero = await resourceInventory(runtime, true, { size: 0 });
+    expect(richZero.value.typeSurfacesIncluded).toBe(true);
+    expect(richZero.value.rows).toEqual([]);
+    expect(richZero.page).toMatchObject({
+      returnedRows: 0,
+      totalRows: 36,
+      exhausted: false,
+    });
+    expect(memberValueAccess).not.toHaveBeenCalled();
+
+    memberValueAccess.mockClear();
+    const richMalformed = await resourceInventory(runtime, true, {
+      size: 1,
+      cursor: 'not-a-semantic-runtime-page-cursor',
+    });
+    expect(richMalformed.result).toBe(SemanticRuntimeAnswerResult.Invalid);
+    expect(richMalformed.value.rows).toEqual([]);
+    expect(richMalformed.page).toMatchObject({
+      returnedRows: 0,
+      totalRows: 36,
+      cursorProblem: { kind: 'malformed' },
+    });
+    expect(memberValueAccess).not.toHaveBeenCalled();
+
+    memberValueAccess.mockClear();
+    const compactFull = await resourceInventory(runtime);
+    const compactDrain = await drainResourceInventory(runtime, 5);
+    expect(compactDrain.rows.map((row) => row.identityKey)).toEqual(
+      compactFull.value.rows.map((row) => row.identityKey),
+    );
+    expect(compactDrain.completeness).toEqual(compactFull.value.completeness);
+    expect(compactDrain.pageCompleteness.every((value) =>
+      JSON.stringify(value) === JSON.stringify(compactFull.value.completeness)
+    )).toBe(true);
+    expect(memberValueAccess).not.toHaveBeenCalled();
+
+    const compactPage = await resourceInventory(runtime, false, { size: 5 });
+    memberValueAccess.mockClear();
+    const richPage = await resourceInventory(runtime, true, { size: 5 });
+    const richPageAccessKeys = memberValueAccess.mock.calls.map((call) => call[2]);
+    const richPageBindableCount = richPage.value.rows.reduce(
+      (count, row) => count + row.bindables.length,
+      0,
+    );
+    expect(richPage.value.typeSurfacesIncluded).toBe(true);
+    expect(compactPage.value.typeSurfacesIncluded).toBe(false);
+    expect(inventoryFactsWithoutTypeSurfaces(richPage.value)).toEqual(
+      inventoryFactsWithoutTypeSurfaces(compactPage.value),
+    );
+    expect(richPage.value.completeness).toEqual(compactPage.value.completeness);
+    expect(richPageAccessKeys).toHaveLength(new Set(richPageAccessKeys).size);
+    expect(richPageAccessKeys.length).toBeLessThanOrEqual(richPageBindableCount);
+
+    memberValueAccess.mockClear();
+    await resourceInventory(runtime, true);
+    expect(richPageAccessKeys.length).toBeLessThan(memberValueAccess.mock.calls.length);
+  }, 60_000);
+
+  test('projects only paged resource-definition bindables and one byte-budget lookahead', async () => {
+    const fixtureRoot = pressureFixtureRoot('bindable-contracts-lab');
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: fixtureRoot,
+      storeKey: 'resource-definitions-projection-lazy-paging',
+    });
+    await runtime.answerAppQuery({
+      kind: SemanticAppQueryKind.Summary,
+      appRetention: 'retain-app',
+    });
+    const memberValueAccess = vi.spyOn(CheckerTypeShapeAccess.prototype, 'memberValueAccess');
+
+    const zero = await resourceDefinitions(runtime, { size: 0 });
+    expect(zero.value.rows).toEqual([]);
+    expect(zero.page).toMatchObject({
+      returnedRows: 0,
+      totalRows: 15,
+      exhausted: false,
+      estimatedRowsJsonBytes: 2,
+    });
+    expect(memberValueAccess).not.toHaveBeenCalled();
+
+    memberValueAccess.mockClear();
+    const malformed = await resourceDefinitions(runtime, {
+      size: 1,
+      cursor: 'not-a-semantic-runtime-page-cursor',
+    });
+    expect(malformed.result).toBe(SemanticRuntimeAnswerResult.Invalid);
+    expect(malformed.value.rows).toEqual([]);
+    expect(malformed.page).toMatchObject({
+      returnedRows: 0,
+      totalRows: 15,
+      cursorProblem: { kind: 'malformed' },
+    });
+    expect(memberValueAccess).not.toHaveBeenCalled();
+
+    memberValueAccess.mockClear();
+    const first = await resourceDefinitions(runtime, { size: 1 });
+    expect(first.value.rows.map((row) => [row.name, row.bindables.length])).toEqual([
+      ['active-state', 0],
+    ]);
+    expect(first.page?.nextCursor).not.toBeNull();
+    expect(memberValueAccess).not.toHaveBeenCalled();
+
+    memberValueAccess.mockClear();
+    const second = await resourceDefinitions(runtime, {
+      size: 1,
+      cursor: first.page?.nextCursor,
+    });
+    expect(second.value.rows.map((row) => [row.name, row.bindables.length])).toEqual([
+      ['display-hint', 3],
+    ]);
+    expect(memberValueAccess).toHaveBeenCalledTimes(3);
+
+    memberValueAccess.mockClear();
+    const byteClamped = await resourceDefinitions(
+      runtime,
+      { size: 500 },
+      { maxRowsJsonBytes: 3_000 },
+    );
+    expect(byteClamped.value.rows.map((row) => [row.name, row.bindables.length])).toEqual([
+      ['active-state', 0],
+    ]);
+    expect(byteClamped.page).toMatchObject({
+      returnedRows: 1,
+      totalRows: 15,
+      exhausted: false,
+      maxRowsJsonBytes: 3_000,
+      byteClamped: true,
+    });
+    expect(byteClamped.page?.estimatedRowsJsonBytes).toBeGreaterThan(0);
+    expect(byteClamped.page?.estimatedRowsJsonBytes).toBeLessThanOrEqual(3_000);
+    expect(memberValueAccess).toHaveBeenCalledTimes(3);
+
+    memberValueAccess.mockClear();
+    const full = await resourceDefinitions(runtime, { size: 500 });
+    expect(full.value.rows).toHaveLength(15);
+    expect(full.value.rows.reduce((count, row) => count + row.bindables.length, 0)).toBe(28);
+    expect(memberValueAccess).toHaveBeenCalledTimes(28);
+  }, 60_000);
 });
 
 async function resourceInventory(
   runtime: Awaited<ReturnType<typeof createSemanticRuntime>>,
   includeTypeSurfaces = false,
+  page: SemanticRuntimePageInput = { size: 500 },
 ): Promise<SemanticRuntimeAnswer<SemanticResourceInventoryResult>> {
   return await runtime.answerAppQuery({
     kind: SemanticAppQueryKind.ResourceInventory,
     includeTypeSurfaces,
     includeAuthoringTemplates: true,
     appRetention: 'retain-app',
-    page: { size: 500 },
+    page,
   }) as SemanticRuntimeAnswer<SemanticResourceInventoryResult>;
+}
+
+async function drainResourceInventory(
+  runtime: Awaited<ReturnType<typeof createSemanticRuntime>>,
+  pageSize: number,
+): Promise<{
+  readonly rows: SemanticResourceInventoryResult['rows'];
+  readonly completeness: SemanticResourceInventoryResult['completeness'];
+  readonly pageCompleteness: readonly SemanticResourceInventoryResult['completeness'][];
+}> {
+  const rows: SemanticResourceInventoryResult['rows'][number][] = [];
+  const pageCompleteness: SemanticResourceInventoryResult['completeness'][] = [];
+  let cursor: string | null | undefined;
+  let completeness: SemanticResourceInventoryResult['completeness'] | null = null;
+  do {
+    const page = await resourceInventory(runtime, false, { size: pageSize, cursor });
+    rows.push(...page.value.rows);
+    pageCompleteness.push(page.value.completeness);
+    completeness ??= page.value.completeness;
+    cursor = page.page?.nextCursor;
+  } while (cursor != null);
+  if (completeness == null) {
+    throw new Error('Expected at least one resource inventory page.');
+  }
+  return { rows, completeness, pageCompleteness };
+}
+
+async function resourceDefinitions(
+  runtime: Awaited<ReturnType<typeof createSemanticRuntime>>,
+  page: SemanticRuntimePageInput,
+  pagePolicy?: SemanticRuntimePagePolicy,
+): Promise<SemanticRuntimeAnswer<SemanticResourceDefinitionsResult>> {
+  return await runtime.answerAppQuery({
+    kind: SemanticAppQueryKind.ResourceDefinitions,
+    page,
+    pagePolicy,
+    appRetention: 'retain-app',
+  }) as SemanticRuntimeAnswer<SemanticResourceDefinitionsResult>;
 }
 
 async function templateAvailability(
