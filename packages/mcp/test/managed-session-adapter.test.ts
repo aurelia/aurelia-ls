@@ -3,6 +3,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  SemanticRuntime,
+  SemanticSourceWorldCurrentnessKind,
+  type SemanticRuntimeSummary,
+  type SemanticSourceFilesResult,
+} from '@aurelia-ls/semantic-runtime';
+import {
   AureliaMcpSemanticRuntimeAdapter,
   projectDetachedAureliaMcpResponse,
 } from '../src/runtime-adapter.js';
@@ -91,6 +97,108 @@ describe('managed MCP workspace operations', () => {
       { workspaceRoot, sourceFile: { filePath: 'src/my-app.html' } },
       projectAureliaMcpToolResult,
     )).resolves.toMatchObject({ structuredContent: { tool: 'aurelia_template_diagnostics' } });
+  });
+
+  it('publishes one fresh MCP incarnation when a nested package marker appears during projection', async () => {
+    const adapter = managedAdapter();
+    const nestedRoot = path.join(workspaceRoot, 'src', 'nested-app');
+    const nestedSource = path.join(nestedRoot, 'main.ts');
+    const markerFile = path.join(nestedRoot, 'package.json');
+    await mkdir(nestedRoot, { recursive: true });
+    await writeFile(
+      nestedSource,
+      "import { Aurelia } from 'aurelia';\nexport const nestedApp = new Aurelia();\n",
+      'utf8',
+    );
+
+    const summary = vi.spyOn(SemanticRuntime.prototype, 'summary');
+    const retire = vi.spyOn(SemanticRuntime.prototype, 'retireWorkspaceIncarnation');
+
+    try {
+      const baseline = await adapter.workspaceOverview(
+        { workspaceRoot, projectPage: { size: 10 } },
+        projectDetachedAureliaMcpResponse,
+      );
+      const baselineRuntime = summary.mock.contexts.at(-1);
+      const baselineSummary = baseline.value.value as SemanticRuntimeSummary;
+      expect(baselineRuntime).toBeDefined();
+      expect(baselineSummary.projects.map((project) => project.rootDir))
+        .not.toContain(path.normalize(nestedRoot));
+
+      let projectorCalls = 0;
+      await expect(adapter.workspaceOverview(
+        { workspaceRoot, projectPage: { size: 10 } },
+        async (response) => {
+          projectorCalls += 1;
+          await writeFile(markerFile, JSON.stringify({
+            name: 'managed-mcp-nested-app',
+            private: true,
+            type: 'module',
+            dependencies: { aurelia: '^2.0.0-rc.1' },
+          }), 'utf8');
+          return projectDetachedAureliaMcpResponse(response);
+        },
+      )).rejects.toMatchObject({
+        code: 'SEMANTIC_RUNTIME_OPERATION_STALE',
+        reason: 'source-world-changed',
+        currentnessKind: SemanticSourceWorldCurrentnessKind.FreshBootRequired,
+        previousSourceWorldRevision: baseline.value.analysisBasis?.sourceWorldRevision,
+      });
+      expect(projectorCalls).toBe(1);
+      expect(summary.mock.contexts.at(-1)).toBe(baselineRuntime);
+
+      const replacement = await adapter.workspaceOverview(
+        { workspaceRoot, projectPage: { size: 10 } },
+        projectDetachedAureliaMcpResponse,
+      );
+      const replacementRuntime = summary.mock.contexts.at(-1);
+      expect(replacementRuntime).toBeDefined();
+      expect(replacementRuntime).not.toBe(baselineRuntime);
+      expect(replacement.value.analysisBasis?.sourceWorldRevision)
+        .not.toBe(baseline.value.analysisBasis?.sourceWorldRevision);
+      expect(new Set(summary.mock.contexts)).toEqual(new Set([baselineRuntime!, replacementRuntime!]));
+
+      const replacementSummary = replacement.value.value as SemanticRuntimeSummary;
+      const nestedProject = replacementSummary.projects.find(
+        (project) => project.rootDir === path.normalize(nestedRoot),
+      );
+      expect(nestedProject).toMatchObject({
+        rootDir: path.normalize(nestedRoot),
+        admissionOrigins: [{
+          kind: 'package-json-marker',
+          sourceFilePath: path.normalize(markerFile),
+          viaProjectRootHintDir: null,
+        }],
+      });
+
+      const owned = await adapter.appQuery(
+        {
+          workspaceRoot,
+          projectKey: nestedProject?.projectKey,
+          queryKind: 'source-files',
+          page: { size: 20 },
+        },
+        projectDetachedAureliaMcpResponse,
+      );
+      const ownedSources = owned.value.value as SemanticSourceFilesResult;
+      expect(ownedSources.rows).toContainEqual(expect.objectContaining({
+        projectKey: nestedProject?.projectKey,
+        path: 'main.ts',
+      }));
+
+      const reused = await adapter.workspaceOverview(
+        { workspaceRoot, projectPage: { size: 10 } },
+        projectDetachedAureliaMcpResponse,
+      );
+      expect(summary.mock.contexts.at(-1)).toBe(replacementRuntime);
+      expect(reused.value.analysisBasis?.sourceWorldRevision)
+        .toBe(replacement.value.analysisBasis?.sourceWorldRevision);
+      expect(retire.mock.contexts.filter((runtime) => runtime === baselineRuntime)).toHaveLength(1);
+      expect(retire.mock.contexts).not.toContain(replacementRuntime);
+    } finally {
+      summary.mockRestore();
+      retire.mockRestore();
+    }
   });
 
   it('detaches executable receipt symbols before invoking the final MCP projector', async () => {
@@ -316,23 +424,38 @@ describe('managed MCP workspace operations', () => {
       .toBe(beforeDisposalProcessClears + 1);
   });
 
-  it('rejects active registry nesting but admits a deferred descendant after operation egress', async () => {
+  it('rejects registry data and control nesting across a macrotask but admits the lineage after egress', async () => {
     const registry = managedRegistry();
-    const releaseDescendant = deferred<void>();
-    let descendant!: Promise<string>;
+    let descendant!: Promise<unknown>;
+    const nestedOverviewProjector = vi.fn((value: unknown) => value);
+    const nestedClearProjector = vi.fn((value: unknown) => value);
 
     await expect(registry.run({ workspaceRoot }, async () => {
-      descendant = (async () => {
-        await releaseDescendant.promise;
-        return registry.run({ workspaceRoot }, () => 'descendant-complete');
-      })();
+      await nextTurn();
       await expect(registry.run({ workspaceRoot }, () => 'nested'))
         .rejects.toBeInstanceOf(SemanticRuntimeSessionRegistryReentrantOperationError);
+      await expect(registry.overview(undefined, {}, nestedOverviewProjector))
+        .rejects.toBeInstanceOf(SemanticRuntimeSessionRegistryReentrantOperationError);
+      await expect(registry.clearAnalysisCache(undefined, {}, nestedClearProjector))
+        .rejects.toBeInstanceOf(SemanticRuntimeSessionRegistryReentrantOperationError);
+      await expect(registry.dispose({ workspaceRoot }))
+        .rejects.toBeInstanceOf(SemanticRuntimeSessionRegistryReentrantOperationError);
+      expect(() => registry.disposeAll())
+        .toThrow(SemanticRuntimeSessionRegistryReentrantOperationError);
+      descendant = new Promise((resolve, reject) => {
+        setImmediate(() => {
+          registry.overview(undefined, {}, (value) => value).then(resolve, reject);
+        });
+      });
       return 'outer-complete';
     })).resolves.toBe('outer-complete');
 
-    releaseDescendant.resolve();
-    await expect(descendant).resolves.toBe('descendant-complete');
+    expect(nestedOverviewProjector).not.toHaveBeenCalled();
+    expect(nestedClearProjector).not.toHaveBeenCalled();
+    await expect(descendant).resolves.toMatchObject({
+      totalSessions: 1,
+      matchingSessions: 1,
+    });
   });
 
   it('rejects caller-owned store namespaces and project input authorities at runtime', async () => {
@@ -371,7 +494,7 @@ interface SessionEntryProbe {
   readonly key: string;
   readonly descriptor: unknown;
   readonly session: {
-    clearAnalysisCache: (...args: any[]) => Promise<any>;
+    clearAnalysisCache: (...args: unknown[]) => Promise<unknown>;
   };
 }
 
@@ -386,7 +509,8 @@ function countSymbols(value: unknown, seen = new Set<object>()): number {
   }
   seen.add(value);
   return Object.getOwnPropertySymbols(value).length
-    + Object.values(value).reduce((total, child) => total + countSymbols(child, seen), 0);
+    + Object.values(value as Record<string, unknown>)
+      .reduce<number>((total, child) => total + countSymbols(child, seen), 0);
 }
 
 function deferred<TValue>() {

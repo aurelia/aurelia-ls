@@ -9,6 +9,7 @@ import {
   ManagedSemanticWorkspaceReentrantOperationError,
   ManagedSemanticWorkspaceSession,
   NodeSemanticRuntimeProjectInputHost,
+  ProjectRootAdmissionOriginKind,
   SemanticAppQueryKind,
   SemanticRuntimeProjectInputAuthority,
   SemanticRuntimeProjectInputChange,
@@ -18,6 +19,7 @@ import {
   SemanticSourceWorldCurrentnessKind,
   SemanticSourceWorldInputReceipt,
   SemanticRuntime,
+  type ProjectRootAdmissionOrigin,
   type SemanticRuntimeSourceTextOverlay,
 } from '../src/index.js';
 import {
@@ -477,6 +479,90 @@ describe('managed semantic workspace session', () => {
     expect(staleCallbackCalls).toBe(1);
     expect(replacementCallbackCalls).toBe(1);
     expect(replacementSourceWorldRevision).not.toBe(baseline.sourceWorldRevision);
+  });
+
+  test('transfers nested source ownership through one fresh marker-root replacement and reuses it', async () => {
+    const workspaceRoot = await createWorkspace();
+    const nestedRoot = path.join(workspaceRoot, 'packages', 'feature');
+    const nestedSource = await writeWorkspaceFile(
+      nestedRoot,
+      'src/feature.ts',
+      'export const feature = true;\n',
+    );
+    await writeWorkspaceFile(workspaceRoot, 'package.json', '{"name":"workspace"}');
+    await writeWorkspaceFile(workspaceRoot, 'src/main.ts', 'export const main = true;\n');
+    const authority = new SemanticRuntimeProjectInputAuthority(undefined, {
+      authorityForRead: () => ({ mode: SemanticRuntimeProjectInputCurrentnessMode.PushObserved }),
+    });
+    const session = new ManagedSemanticWorkspaceSession({
+      workspaceRoot,
+      projectInputAuthority: authority,
+    });
+    sessions.push(session);
+    const baseline = await captureRuntime(session);
+    const baselineProject = capturedProjectForRoot(baseline, workspaceRoot);
+    expect(baseline.projects).toHaveLength(1);
+    expect(baselineProject.sourceFilePaths).toContain(path.normalize(nestedSource));
+
+    const retireRuntime = vi.spyOn(SemanticRuntime.prototype, 'retireWorkspaceIncarnation');
+    const clearRuntime = vi.spyOn(SemanticRuntime.prototype, 'sessionAnalysisCacheClear');
+    const incumbentEntered = deferred<void>();
+    const releaseIncumbent = deferred<void>();
+    const incumbentOperation = session.run(async ({ runtime }) => {
+      runtime.summary();
+      incumbentEntered.resolve();
+      await releaseIncumbent.promise;
+      return 'incumbent';
+    });
+    await incumbentEntered.promise;
+
+    const markerFile = await writeWorkspaceFile(nestedRoot, 'package.json', '{"name":"feature"}');
+    authority.advance([
+      new SemanticRuntimeProjectInputChange(
+        SemanticRuntimeProjectInputChangeKind.StructuralMembership,
+        markerFile,
+      ),
+    ]);
+    const replacementOperation = captureRuntime(session);
+    await yieldTurn();
+
+    releaseIncumbent.resolve();
+    const staleError = await incumbentOperation.then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(staleError).toBeInstanceOf(ManagedSemanticWorkspaceOperationStaleError);
+    expect(staleError).toMatchObject({
+      code: 'SEMANTIC_RUNTIME_OPERATION_STALE',
+      reason: 'source-world-changed',
+      currentnessKind: SemanticSourceWorldCurrentnessKind.FreshBootRequired,
+      previousSourceWorldRevision: baseline.sourceWorldRevision,
+    });
+
+    const replacement = await replacementOperation;
+    const stable = await captureRuntime(session);
+    const replacementParent = capturedProjectForRoot(replacement, workspaceRoot);
+    const replacementNested = capturedProjectForRoot(replacement, nestedRoot);
+    expect(replacement.projects).toHaveLength(2);
+    expect(replacementParent.sourceFilePaths).not.toContain(path.normalize(nestedSource));
+    expect(replacementNested.sourceFilePaths).toContain(path.normalize(nestedSource));
+    expect(replacementNested.admissionOrigins).toEqual([{
+      kind: ProjectRootAdmissionOriginKind.PackageJsonMarker,
+      sourceFilePath: path.normalize(markerFile),
+      viaProjectRootHintDir: null,
+    }]);
+    expect(replacement.runtimeIdentity).not.toBe(baseline.runtimeIdentity);
+    expect(replacement.storeIdentity).not.toBe(baseline.storeIdentity);
+    expect(storeIncarnationSequence(replacement.storeKey)).toBe(2);
+    expect(staleError).toMatchObject({
+      nextSourceWorldRevision: replacement.sourceWorldRevision,
+    });
+    expect(stable.runtimeIdentity).toBe(replacement.runtimeIdentity);
+    expect(stable.storeIdentity).toBe(replacement.storeIdentity);
+    expect(stable.storeKey).toBe(replacement.storeKey);
+    expect(stable.sourceWorldIdentity).toBe(replacement.sourceWorldIdentity);
+    expect(retireRuntime.mock.contexts.filter((runtime) => runtime === baseline.runtimeIdentity)).toHaveLength(1);
+    expect(clearRuntime.mock.contexts.filter((runtime) => runtime === baseline.runtimeIdentity)).toHaveLength(1);
   });
 
   test('drains every pinned operation before publishing an equivalent warm rebind', async () => {
@@ -1600,12 +1686,13 @@ describe('managed semantic workspace session', () => {
     })).resolves.toBe('handled');
   });
 
-  test('types every nested managed action and keeps the outer session usable', async () => {
+  test('types every setImmediate-lineage nested action and admits post-egress descendants', async () => {
     const workspaceRoot = await createWorkspace();
     await writeWorkspaceFile(workspaceRoot, 'src/main.ts', 'export const main = true;\n');
     const session = createSession(workspaceRoot);
 
     await session.run(async () => {
+      await yieldTurn();
       await expect(session.analysisCacheOverview({}, (answer) => answer.value)).rejects.toMatchObject({
         code: 'SEMANTIC_RUNTIME_WORKSPACE_REENTRANT_OPERATION',
         action: 'analysis-cache-overview',
@@ -1616,6 +1703,7 @@ describe('managed semantic workspace session', () => {
       }));
     });
     await session.analysisCacheOverview({}, async (answer) => {
+      await yieldTurn();
       await expect(session.run(() => 'nested')).rejects.toMatchObject({
         code: 'SEMANTIC_RUNTIME_WORKSPACE_REENTRANT_OPERATION',
         action: 'run',
@@ -1627,6 +1715,7 @@ describe('managed semantic workspace session', () => {
       return answer.value.cachedAppCount;
     });
     await session.clearAnalysisCache({}, async () => {
+      await yieldTurn();
       await expect(session.analysisCacheOverview({}, (answer) => answer.value)).rejects.toMatchObject({
         code: 'SEMANTIC_RUNTIME_WORKSPACE_REENTRANT_OPERATION',
         action: 'analysis-cache-overview',
@@ -1634,6 +1723,18 @@ describe('managed semantic workspace session', () => {
       return 'cleared';
     });
     await expect(session.run(() => 'still-open')).resolves.toBe('still-open');
+
+    const admitDescendant = deferred<void>();
+    const descendantResult = deferred<string>();
+    await session.run(() => {
+      setImmediate(() => {
+        void admitDescendant.promise
+          .then(() => session.run(() => 'post-egress-descendant'))
+          .then(descendantResult.resolve, descendantResult.reject);
+      });
+    });
+    admitDescendant.resolve();
+    await expect(descendantResult.promise).resolves.toBe('post-egress-descendant');
   });
 
   test('makes a raw session clear self-stale when it bypasses the managed exclusive API', async () => {
@@ -1676,6 +1777,13 @@ interface CapturedRuntime {
   readonly projectInputGenerationRevision: string;
   readonly projectInputReadCount: number;
   readonly projectKey: string;
+  readonly projects: readonly CapturedProject[];
+}
+
+interface CapturedProject {
+  readonly rootDir: string;
+  readonly admissionOrigins: readonly ProjectRootAdmissionOrigin[];
+  readonly sourceFilePaths: readonly string[];
 }
 
 interface ProjectShapeCacheEntryForTest {
@@ -1710,6 +1818,12 @@ async function captureRuntime(session: ManagedSemanticWorkspaceSession): Promise
       projectInputGenerationRevision: project.inputGeneration.revision,
       projectInputReadCount: project.inputGeneration.readRegisteredInputs().length,
       projectKey: project.projectKey,
+      projects: Object.freeze(this.workspace.projects.map((candidate) => Object.freeze({
+        rootDir: candidate.rootDir,
+        admissionOrigins: candidate.admissionOrigins,
+        sourceFilePaths: Object.freeze(candidate.sourceFiles.map((source) =>
+          path.normalize(path.resolve(candidate.rootDir, source.path)))),
+      }))),
     };
     return answer;
   });
@@ -1724,6 +1838,15 @@ async function captureRuntime(session: ManagedSemanticWorkspaceSession): Promise
     throw new Error('Managed runtime summary did not execute while capturing its test identity.');
   }
   return captured;
+}
+
+function capturedProjectForRoot(runtime: CapturedRuntime, rootDir: string): CapturedProject {
+  const normalizedRoot = path.normalize(rootDir);
+  const project = runtime.projects.find((candidate) => path.normalize(candidate.rootDir) === normalizedRoot);
+  if (project == null) {
+    throw new Error(`Expected captured project root '${normalizedRoot}'.`);
+  }
+  return project;
 }
 
 async function captureProjectShapeCache(

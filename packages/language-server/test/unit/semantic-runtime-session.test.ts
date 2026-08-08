@@ -1,5 +1,6 @@
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import fs from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { TextDocument } from "vscode-languageserver-textdocument";
@@ -9,16 +10,22 @@ import {
   NodeSemanticRuntimeProjectInputHost,
   SEMANTIC_RUNTIME_API_VERSION,
   SemanticAppQueryKind,
+  SemanticRuntime,
   SemanticRuntimeAnswerCoverage,
   SemanticRuntimeAnswerResult,
   SemanticRuntimeAnswerSelection,
+  SemanticSourceWorldCurrentnessKind,
+  type SemanticAuthoredSourceOwnershipResult,
   type SemanticRuntimeAnswer,
   type SemanticRuntimeContinuationRow,
+  type SemanticRuntimeSummary,
 } from "@aurelia-ls/semantic-runtime";
 import {
+  SemanticRuntimeLspReentrantLifecycleError,
   SemanticRuntimeLspSession,
   drainSemanticRuntimePages,
   isSemanticRuntimeLspRequestAborted,
+  type SemanticRuntimeLspGeneration,
 } from "../../src/runtime/semantic-runtime-session.js";
 import {
   OpenDocumentSourceTextOverlay,
@@ -26,6 +33,14 @@ import {
   type OpenTextDocumentStore,
 } from "../../src/runtime/open-document-source-text-overlay.js";
 import { WorkspaceDocumentUris } from "../../src/utils/document-uri.js";
+
+const temporaryWorkspaceRoots: string[] = [];
+
+afterEach(async () => {
+  vi.restoreAllMocks();
+  await Promise.all(temporaryWorkspaceRoots.splice(0).map((root) =>
+    fs.promises.rm(root, { force: true, recursive: true })));
+});
 
 class TestDocumentStore implements OpenTextDocumentStore {
   private readonly documents = new Map<string, TextDocument>();
@@ -318,6 +333,137 @@ describe("SemanticRuntimeLspSession", () => {
         return operation.templateCompletions(document, { line: 0, character: 13 });
       }),
     ).rejects.toMatchObject({ reason: "stale" });
+  });
+
+  test("rejects reentrant workspace lifecycle before mutation across a macrotask", async () => {
+    const fixtureRoot = minimalFixtureRoot();
+    const session = createSession(fixtureRoot, new TestDocumentStore());
+    const baselineGeneration = await session.runRequest(null, (operation) => operation.generation);
+
+    const attempts = await session.runRequest(null, async () => {
+      await yieldTurn();
+      return {
+        configure: captureThrown(() => session.configureWorkspace([path.join(fixtureRoot, "src")])),
+        dispose: captureThrown(() => session.dispose()),
+      };
+    });
+
+    expect(attempts.configure).toBeInstanceOf(SemanticRuntimeLspReentrantLifecycleError);
+    expect(attempts.configure).toMatchObject({
+      code: "SEMANTIC_RUNTIME_LSP_REENTRANT_LIFECYCLE",
+      action: "configure-workspace",
+    });
+    expect(attempts.dispose).toBeInstanceOf(SemanticRuntimeLspReentrantLifecycleError);
+    expect(attempts.dispose).toMatchObject({
+      code: "SEMANTIC_RUNTIME_LSP_REENTRANT_LIFECYCLE",
+      action: "dispose",
+    });
+    await expect(session.runRequest(null, (operation) => operation.generation))
+      .resolves.toEqual(baselineGeneration);
+    await expect(session.dispose()).resolves.toBeUndefined();
+  });
+
+  test("allows an external workspace reconfiguration to stale a paused request", async () => {
+    const fixtureRoot = minimalFixtureRoot();
+    const session = createSession(fixtureRoot, new TestDocumentStore());
+    const entered = deferred<SemanticRuntimeLspGeneration>();
+    const release = deferred<void>();
+    const paused = session.runRequest(null, async (operation) => {
+      entered.resolve(operation.generation);
+      await release.promise;
+      return "obsolete";
+    });
+    const staleGeneration = await entered.promise;
+
+    session.configureWorkspace([path.join(fixtureRoot, "src")]);
+    release.resolve(undefined);
+
+    await expect(paused).rejects.toMatchObject({ reason: "stale" });
+    const currentGeneration = await session.runRequest(null, (operation) => operation.generation);
+    expect(currentGeneration.requestEpoch).not.toBe(staleGeneration.requestEpoch);
+    expect(currentGeneration.workspaceGeneration).not.toBe(staleGeneration.workspaceGeneration);
+    await expect(session.dispose()).resolves.toBeUndefined();
+  });
+
+  test("transfers a nested marker owner through one stale request and reuses the replacement incarnation", async () => {
+    const { workspaceRoot, nestedRoot, nestedSourcePath, markerPath } = createNestedMarkerWorkspace();
+    const nestedSourceUri = pathToFileURL(nestedSourcePath).toString();
+    const publishEffect = vi.fn();
+    const session = createSession(workspaceRoot, new TestDocumentStore(), publishEffect);
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- the spy invokes this with its captured runtime receiver.
+    const rawSummary = SemanticRuntime.prototype.summary;
+    const runtimeIdentities: SemanticRuntime[] = [];
+    const summarySpy = vi.spyOn(SemanticRuntime.prototype, "summary")
+      .mockImplementation(function (this: SemanticRuntime, request = {}) {
+        runtimeIdentities.push(this);
+        return rawSummary.call(this, { ...request, projectPage: { size: 20 } });
+      });
+    const entered = deferred<LspMarkerSnapshot>();
+    const release = deferred<void>();
+    const paused = session.runRequest(null, async (operation) => {
+      const summary = await operation.workspaceSummary();
+      const ownership = await operation.authoredSourceOwnership(nestedSourceUri);
+      operation.deferEffect({ kind: "log", level: "info", message: "obsolete marker result" });
+      entered.resolve({ generation: operation.generation, summary, ownership });
+      await release.promise;
+      return "obsolete";
+    });
+    const baseline = await entered.promise;
+
+    fs.writeFileSync(markerPath, '{"name":"nested-feature"}\n', "utf8");
+    session.recordProjectTopologyChanged([markerPath]);
+    release.resolve(undefined);
+    const staleError = await paused.then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(staleError).toMatchObject({
+      reason: "stale",
+      cause: {
+        code: "SEMANTIC_RUNTIME_OPERATION_STALE",
+        currentnessKind: SemanticSourceWorldCurrentnessKind.FreshBootRequired,
+      },
+    });
+    expect(publishEffect).not.toHaveBeenCalled();
+    expect(baseline.ownership.value.owners).toEqual([
+      expect.objectContaining({
+        projectRootDir: path.normalize(workspaceRoot),
+        projectPath: "packages/feature/src/feature.ts",
+      }),
+    ]);
+
+    const replacement = await captureMarkerSnapshot(session, nestedSourceUri);
+    const reused = await captureMarkerSnapshot(session, nestedSourceUri);
+    const nestedProject = replacement.summary.value.projects.find(
+      (project) => path.normalize(project.rootDir) === path.normalize(nestedRoot),
+    );
+
+    expect(baseline.summary.value.projects.some(
+      (project) => path.normalize(project.rootDir) === path.normalize(nestedRoot),
+    )).toBe(false);
+    expect(replacement.generation.requestEpoch).not.toBe(baseline.generation.requestEpoch);
+    expect(replacement.generation.workspaceGeneration).not.toBe(baseline.generation.workspaceGeneration);
+    expect(replacement.generation.sourceWorldRevision).not.toBe(baseline.generation.sourceWorldRevision);
+    expect(nestedProject?.admissionOrigins).toEqual([{
+      kind: "package-json-marker",
+      sourceFilePath: path.normalize(markerPath),
+      viaProjectRootHintDir: null,
+    }]);
+    expect(replacement.ownership.value.owners).toEqual([
+      expect.objectContaining({
+        projectRootDir: path.normalize(nestedRoot),
+        projectPath: "src/feature.ts",
+      }),
+    ]);
+    expect(reused.generation).toEqual(replacement.generation);
+    expect(reused.summary.value.projects).toEqual(replacement.summary.value.projects);
+    expect(runtimeIdentities).toHaveLength(3);
+    expect(runtimeIdentities[1]).not.toBe(runtimeIdentities[0]);
+    expect(runtimeIdentities[2]).toBe(runtimeIdentities[1]);
+
+    summarySpy.mockRestore();
+    await expect(session.dispose()).resolves.toBeUndefined();
   });
 
   test("does not return an accepted result when the final deferred effect closes the session", async () => {
@@ -936,6 +1082,68 @@ function createSession(
     },
     publishEffect,
   });
+}
+
+interface LspMarkerSnapshot {
+  readonly generation: SemanticRuntimeLspGeneration;
+  readonly summary: SemanticRuntimeAnswer<SemanticRuntimeSummary>;
+  readonly ownership: SemanticRuntimeAnswer<SemanticAuthoredSourceOwnershipResult>;
+}
+
+async function captureMarkerSnapshot(
+  session: SemanticRuntimeLspSession,
+  sourceUri: string,
+): Promise<LspMarkerSnapshot> {
+  return session.runRequest(null, async (operation) => ({
+    generation: operation.generation,
+    summary: await operation.workspaceSummary(),
+    ownership: await operation.authoredSourceOwnership(sourceUri),
+  }));
+}
+
+function createNestedMarkerWorkspace(): {
+  readonly workspaceRoot: string;
+  readonly nestedRoot: string;
+  readonly nestedSourcePath: string;
+  readonly markerPath: string;
+} {
+  const workspaceRoot = fs.mkdtempSync(path.join(tmpdir(), "aurelia-lsp-marker-"));
+  temporaryWorkspaceRoots.push(workspaceRoot);
+  const nestedRoot = path.join(workspaceRoot, "packages", "feature");
+  const nestedSourcePath = path.join(nestedRoot, "src", "feature.ts");
+  const markerPath = path.join(nestedRoot, "package.json");
+  fs.mkdirSync(path.dirname(nestedSourcePath), { recursive: true });
+  fs.mkdirSync(path.join(workspaceRoot, "src"), { recursive: true });
+  fs.writeFileSync(path.join(workspaceRoot, "package.json"), '{"name":"marker-workspace"}\n', "utf8");
+  fs.writeFileSync(path.join(workspaceRoot, "src", "main.ts"), "export const main = true;\n", "utf8");
+  fs.writeFileSync(nestedSourcePath, "export const feature = true;\n", "utf8");
+  return { workspaceRoot, nestedRoot, nestedSourcePath, markerPath };
+}
+
+interface Deferred<T> {
+  readonly promise: Promise<T>;
+  readonly resolve: (value: T | PromiseLike<T>) => void;
+}
+
+function deferred<T>(): Deferred<T> {
+  let resolve!: Deferred<T>["resolve"];
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
+function yieldTurn(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
+function captureThrown(callback: () => unknown): unknown {
+  try {
+    callback();
+    return null;
+  } catch (error) {
+    return error;
+  }
 }
 
 function diagnosticRequest(

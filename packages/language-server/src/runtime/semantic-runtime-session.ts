@@ -1,5 +1,6 @@
 import { MessageType, type Position } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import {
@@ -168,6 +169,14 @@ interface SemanticRuntimeLspRequestState {
   readonly workspace: SemanticRuntimeLspWorkspaceSession;
 }
 
+interface SemanticRuntimeLspOperationScope {
+  readonly session: SemanticRuntimeLspSession;
+  readonly parent: SemanticRuntimeLspOperationScope | null;
+  active: boolean;
+}
+
+type SemanticRuntimeLspLifecycleAction = "configure-workspace" | "dispose";
+
 interface SemanticRuntimeLspRequestToken {
   readonly requestEpoch: number;
   readonly isCancellationRequested: (() => boolean) | null;
@@ -206,6 +215,7 @@ type SemanticRuntimeLspDiagnosticOperationOutcome<TItem> =
 
 const MAX_DIAGNOSTIC_CACHE_ENTRIES = 256;
 const DIAGNOSTIC_RESULT_ID_SCHEMA = "semantic-runtime-lsp-diagnostic-result/v1";
+const semanticRuntimeLspOperationScopes = new AsyncLocalStorage<SemanticRuntimeLspOperationScope>();
 
 interface SemanticRuntimePageDrainOptions<
   TPageValue,
@@ -379,6 +389,19 @@ export function isSemanticRuntimeLspRequestAborted(
   return error instanceof SemanticRuntimeLspRequestAbortedError;
 }
 
+/** Raised before an operation callback can mutate or dispose its own outer LSP session. */
+export class SemanticRuntimeLspReentrantLifecycleError extends Error {
+  readonly code = "SEMANTIC_RUNTIME_LSP_REENTRANT_LIFECYCLE" as const;
+
+  constructor(readonly action: SemanticRuntimeLspLifecycleAction) {
+    super(
+      `Cannot ${action === "configure-workspace" ? "configure the workspace" : "dispose the session"} `
+      + "from one of its active request callbacks.",
+    );
+    this.name = "SemanticRuntimeLspReentrantLifecycleError";
+  }
+}
+
 export class SemanticRuntimeLspSession {
   private readonly sessionIdentity = randomUUID();
   private readonly projectInputAuthority: SemanticRuntimeProjectInputAuthority;
@@ -414,6 +437,7 @@ export class SemanticRuntimeLspSession {
   }
 
   configureWorkspace(projectRootHints: readonly string[] = []): void {
+    this.assertLifecycleNotReentrant("configure-workspace");
     this.assertOpen();
     const boundary = semanticWorkspaceBoundary(this.documentUris, projectRootHints);
     if (this.workspaceBoundaryKey === boundary.key) {
@@ -478,6 +502,7 @@ export class SemanticRuntimeLspSession {
   }
 
   dispose(): Promise<void> {
+    this.assertLifecycleNotReentrant("dispose");
     if (this.disposal != null) {
       return this.disposal;
     }
@@ -646,14 +671,23 @@ export class SemanticRuntimeLspSession {
     });
     const token = this.createRequestToken(state, context, generation);
     const operation = this.createOperation(token);
+    const operationScope: SemanticRuntimeLspOperationScope = {
+      session: this,
+      parent: semanticRuntimeLspOperationScopes.getStore() ?? null,
+      active: true,
+    };
     try {
-      const value = await callback(operation, context);
+      const value = await semanticRuntimeLspOperationScopes.run(
+        operationScope,
+        () => callback(operation, context),
+      );
       this.assertRequestTokenActive(token);
       return Object.freeze({
         value,
         effects: Object.freeze([...token.effects]),
       });
     } finally {
+      operationScope.active = false;
       token.active = false;
       token.documents.close();
     }
@@ -903,6 +937,19 @@ export class SemanticRuntimeLspSession {
   private assertOpen(): void {
     if (this.closing) {
       throw new Error("Cannot use a semantic-runtime LSP session after disposal has begun.");
+    }
+  }
+
+  private assertLifecycleNotReentrant(action: SemanticRuntimeLspLifecycleAction): void {
+    for (
+      let scope: SemanticRuntimeLspOperationScope | null =
+        semanticRuntimeLspOperationScopes.getStore() ?? null;
+      scope != null;
+      scope = scope.parent
+    ) {
+      if (scope.active && scope.session === this) {
+        throw new SemanticRuntimeLspReentrantLifecycleError(action);
+      }
     }
   }
 
