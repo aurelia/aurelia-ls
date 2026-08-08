@@ -20,15 +20,18 @@ const packageRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const repoRoot = path.resolve(packageRoot, "../..");
 const serverEntry = path.join(packageRoot, "out/main.js");
 const pressureFixtureRoot = path.join(repoRoot, "packages/semantic-runtime/fixtures/pressure");
+const defaultFixtureName = "app-pattern-routed-catalog-storefront";
+const valueArgumentNames = new Set(["fixture", "workspace", "cancel-after", "cycles"]);
+const booleanArgumentNames = new Set(["json"]);
 
 async function main() {
-  const args = parseArgs(process.argv.slice(2));
-  const fixtureName = args.fixture ?? "app-pattern-routed-catalog-storefront";
+  const args = parseProtocolResponsivenessArgs(process.argv.slice(2));
+  const fixtureName = args.fixture ?? defaultFixtureName;
   const workspaceRoot = args.workspace == null
     ? path.join(pressureFixtureRoot, fixtureName)
     : path.resolve(args.workspace);
-  const cancellationDelayMilliseconds = positiveInteger(args["cancel-after"] ?? "25", "--cancel-after");
-  const cycles = positiveInteger(args.cycles ?? "3", "--cycles");
+  const cancellationDelayMilliseconds = args.cancellationDelayMilliseconds;
+  const cycles = args.cycles;
   const targetPath = await targetHtmlPath(workspaceRoot);
   const targetUri = pathToFileURL(targetPath).toString();
   const originalText = await fs.readFile(targetPath, "utf8");
@@ -65,8 +68,11 @@ async function main() {
       targetDocument: relativePath(workspaceRoot, targetPath),
     },
     cancellationDelayMilliseconds,
-    coldDiagnosticMilliseconds: 0,
-    warmDiagnosticMilliseconds: 0,
+    initializeMilliseconds: 0,
+    coldFullWithoutPreviousResultIdMilliseconds: 0,
+    warmFullWithoutPreviousResultIdMilliseconds: 0,
+    previousResultIdUnchangedMilliseconds: 0,
+    preEditDiagnosticReports: null,
     cycles: [],
     diagnosticRefreshRequests: 0,
     serverLogs,
@@ -74,21 +80,26 @@ async function main() {
   };
 
   try {
-    await withTimeout(connection.sendRequest("initialize", {
-      processId: process.pid,
-      rootUri: pathToFileURL(workspaceRoot).toString(),
-      capabilities: {
-        workspace: {
-          configuration: true,
-          diagnostics: { refreshSupport: true },
-          inlayHint: { refreshSupport: true },
+    const initialize = await elapsedResult(
+      () => connection.sendRequest("initialize", {
+        processId: process.pid,
+        rootUri: pathToFileURL(workspaceRoot).toString(),
+        capabilities: {
+          workspace: {
+            configuration: true,
+            diagnostics: { refreshSupport: true },
+            inlayHint: { refreshSupport: true },
+          },
+          textDocument: {
+            diagnostic: {},
+            completion: {},
+          },
         },
-        textDocument: {
-          diagnostic: {},
-          completion: {},
-        },
-      },
-    }), 10_000, "initialize");
+      }),
+      10_000,
+      "initialize",
+    );
+    report.initializeMilliseconds = initialize.milliseconds;
     connection.sendNotification("initialized", {});
     connection.sendNotification("textDocument/didOpen", {
       textDocument: {
@@ -99,8 +110,14 @@ async function main() {
       },
     });
 
-    report.coldDiagnosticMilliseconds = await elapsed(() => sendDiagnostics(connection, targetUri));
-    report.warmDiagnosticMilliseconds = await elapsed(() => sendDiagnostics(connection, targetUri));
+    const diagnostics = await measurePreEditDiagnostics(connection, targetUri);
+    report.coldFullWithoutPreviousResultIdMilliseconds =
+      diagnostics.coldFullWithoutPreviousResultIdMilliseconds;
+    report.warmFullWithoutPreviousResultIdMilliseconds =
+      diagnostics.warmFullWithoutPreviousResultIdMilliseconds;
+    report.previousResultIdUnchangedMilliseconds =
+      diagnostics.previousResultIdUnchangedMilliseconds;
+    report.preEditDiagnosticReports = diagnostics.reports;
 
     let version = 1;
     for (let index = 0; index < cycles; index += 1) {
@@ -155,7 +172,7 @@ async function main() {
     }
     report.diagnosticRefreshRequests = diagnosticRefreshRequests;
 
-    if (args.json === "true") {
+    if (args.json) {
       console.log(JSON.stringify(report, null, 2));
     } else {
       console.log(markdownReport(report));
@@ -172,9 +189,74 @@ async function main() {
   }
 }
 
-function sendDiagnostics(connection, uri) {
+export async function measurePreEditDiagnostics(connection, uri) {
+  const cold = await elapsedResult(
+    () => sendDiagnostics(connection, uri),
+    30_000,
+    "cold full diagnostic without previousResultId",
+  );
+  const coldReport = requireFullDiagnosticReport(cold.value, "Cold diagnostic");
+  const warmFull = await elapsedResult(
+    () => sendDiagnostics(connection, uri),
+    30_000,
+    "warm full diagnostic without previousResultId",
+  );
+  const warmFullReport = requireFullDiagnosticReport(warmFull.value, "Warm full diagnostic");
+  const unchanged = await elapsedResult(
+    () => sendDiagnostics(connection, uri, warmFullReport.resultId),
+    30_000,
+    "diagnostic with previousResultId",
+  );
+  const unchangedReport = requireUnchangedDiagnosticReport(
+    unchanged.value,
+    warmFullReport.resultId,
+  );
+
+  return Object.freeze({
+    coldFullWithoutPreviousResultIdMilliseconds: cold.milliseconds,
+    warmFullWithoutPreviousResultIdMilliseconds: warmFull.milliseconds,
+    previousResultIdUnchangedMilliseconds: unchanged.milliseconds,
+    reports: Object.freeze({
+      cold: diagnosticReportSummary(coldReport),
+      warmFull: diagnosticReportSummary(warmFullReport),
+      previousResultId: diagnosticReportSummary(unchangedReport),
+    }),
+  });
+}
+
+function sendDiagnostics(connection, uri, previousResultId) {
   return connection.sendRequest("textDocument/diagnostic", {
     textDocument: { uri },
+    ...(previousResultId == null ? {} : { previousResultId }),
+  });
+}
+
+function requireFullDiagnosticReport(report, label) {
+  if (
+    report == null
+    || report.kind !== "full"
+    || typeof report.resultId !== "string"
+    || report.resultId.length === 0
+  ) {
+    throw new Error(`${label} must return a full report with a resultId.`);
+  }
+  return report;
+}
+
+function requireUnchangedDiagnosticReport(report, previousResultId) {
+  if (report?.kind !== "unchanged" || report.resultId !== previousResultId) {
+    throw new Error(
+      `Diagnostic previousResultId '${previousResultId}' must return an unchanged report with the same resultId.`,
+    );
+  }
+  return report;
+}
+
+function diagnosticReportSummary(report) {
+  return Object.freeze({
+    kind: report.kind,
+    resultId: report.resultId,
+    itemCount: Array.isArray(report.items) ? report.items.length : null,
   });
 }
 
@@ -214,10 +296,13 @@ function withMeasurementMarker(text, index) {
   return `${text.replace(/\s*$/, "")}\n${marker}\n`;
 }
 
-async function elapsed(run) {
+async function elapsedResult(run, timeoutMilliseconds, label) {
   const started = performance.now();
-  await withTimeout(run(), 30_000, "timed request");
-  return performance.now() - started;
+  const value = await withTimeout(run(), timeoutMilliseconds, label);
+  return Object.freeze({
+    milliseconds: performance.now() - started,
+    value,
+  });
 }
 
 function settled(promise) {
@@ -262,24 +347,82 @@ function withTimeout(promise, milliseconds, label) {
 }
 
 function positiveInteger(value, label) {
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed) || parsed < 1) {
+  if (!/^[1-9]\d*$/.test(value)) {
     throw new Error(`${label} must be a positive integer.`);
+  }
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed)) {
+    throw new Error(`${label} must be a safe positive integer.`);
   }
   return parsed;
 }
 
-function parseArgs(argv) {
-  const args = {};
+export function parseProtocolResponsivenessArgs(argv) {
+  const values = new Map();
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
-    if (!arg.startsWith("--")) continue;
-    const [key, inlineValue] = arg.slice(2).split("=", 2);
-    const next = inlineValue ?? argv[index + 1];
-    if (inlineValue == null && next != null && !next.startsWith("--")) index += 1;
-    args[key] = next == null || next.startsWith("--") ? "true" : next;
+    if (!arg.startsWith("--")) {
+      throw new Error(`Unexpected positional argument '${arg}'.`);
+    }
+    const body = arg.slice(2);
+    const separator = body.indexOf("=");
+    const key = separator < 0 ? body : body.slice(0, separator);
+    const inlineValue = separator < 0 ? null : body.slice(separator + 1);
+    if (!valueArgumentNames.has(key) && !booleanArgumentNames.has(key)) {
+      throw new Error(`Unknown argument '--${key}'.`);
+    }
+    if (values.has(key)) {
+      throw new Error(`Argument '--${key}' may only be supplied once.`);
+    }
+
+    if (booleanArgumentNames.has(key)) {
+      let value = inlineValue;
+      const next = argv[index + 1];
+      if (value == null && next != null && !next.startsWith("--")) {
+        value = next;
+        index += 1;
+      }
+      values.set(key, value == null ? true : strictBoolean(value, `--${key}`));
+      continue;
+    }
+
+    let value = inlineValue;
+    if (value == null) {
+      const next = argv[index + 1];
+      if (next == null || next.startsWith("--")) {
+        throw new Error(`Argument '--${key}' requires a value.`);
+      }
+      value = next;
+      index += 1;
+    }
+    if (value.length === 0) {
+      throw new Error(`Argument '--${key}' requires a non-empty value.`);
+    }
+    values.set(key, value);
   }
-  return args;
+
+  const fixture = values.get("fixture") ?? null;
+  const workspace = values.get("workspace") ?? null;
+  if (fixture != null && workspace != null) {
+    throw new Error("Arguments '--fixture' and '--workspace' are mutually exclusive.");
+  }
+  return Object.freeze({
+    fixture,
+    workspace,
+    cancellationDelayMilliseconds: positiveInteger(
+      values.get("cancel-after") ?? "25",
+      "--cancel-after",
+    ),
+    cycles: positiveInteger(values.get("cycles") ?? "3", "--cycles"),
+    json: values.get("json") ?? false,
+  });
+}
+
+function strictBoolean(value, label) {
+  if (value !== "true" && value !== "false") {
+    throw new Error(`${label} must be 'true' or 'false'.`);
+  }
+  return value === "true";
 }
 
 function markdownReport(report) {
@@ -289,8 +432,10 @@ function markdownReport(report) {
     `Workspace: \`${report.workspace.root}\``,
     `Target: \`${report.workspace.targetDocument}\``,
     `Cancellation delay: ${report.cancellationDelayMilliseconds}ms`,
-    `Cold diagnostics: ${report.coldDiagnosticMilliseconds.toFixed(2)}ms`,
-    `Warm diagnostics: ${report.warmDiagnosticMilliseconds.toFixed(2)}ms`,
+    `Initialize handshake: ${report.initializeMilliseconds.toFixed(2)}ms`,
+    `Cold full diagnostics (no previousResultId): ${report.coldFullWithoutPreviousResultIdMilliseconds.toFixed(2)}ms`,
+    `Warm full diagnostics (no previousResultId): ${report.warmFullWithoutPreviousResultIdMilliseconds.toFixed(2)}ms`,
+    `Warm unchanged diagnostics (previousResultId): ${report.previousResultIdUnchangedMilliseconds.toFixed(2)}ms`,
     `Diagnostic refresh requests: ${report.diagnosticRefreshRequests}`,
     "",
     table(
@@ -326,7 +471,9 @@ function relativePath(root, filePath) {
   return path.relative(root, filePath).replace(/\\/g, "/");
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.stack ?? error.message : String(error));
-  process.exitCode = 1;
-});
+if (process.argv[1] != null && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.stack ?? error.message : String(error));
+    process.exitCode = 1;
+  });
+}
