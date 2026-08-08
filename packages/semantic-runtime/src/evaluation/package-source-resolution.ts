@@ -38,7 +38,7 @@ export {
 
 export type { EvaluationPackageSourceFileSystem } from './package-source-layout.js';
 
-export interface EvaluationPackageSourceResolverProfile extends EvaluationPackageSourceLayoutProfile {}
+export type EvaluationPackageSourceResolverProfile = EvaluationPackageSourceLayoutProfile;
 
 export const enum EvaluationModuleSourceResolutionKind {
   Source = 'source',
@@ -189,6 +189,7 @@ export class EvaluationPackageSourceResolver {
       const physicalFileName = this.fileSystem.realpath(candidate);
       const packageInstance = fromPackageOrigin != null
         && isHostPathWithin(physicalFileName, fromPackageOrigin.packageInstance.physicalRootDir)
+        && moduleLocatorPathBelongsToPackageInstance(candidate, fromPackageOrigin.packageInstance)
         ? fromPackageOrigin.packageInstance
         : this.packageInstanceForPaths(candidate, physicalFileName, null);
       const packageSourceScope = packageInstance == null
@@ -291,6 +292,7 @@ export class EvaluationPackageSourceResolver {
     if (
       fromPackageOrigin != null
       && isHostPathWithin(physicalFileName, fromPackageOrigin.packageInstance.physicalRootDir)
+      && resolvedModuleBelongsToPackageInstance(resolved, fromPackageOrigin.packageInstance)
       && (
         isPackageConfinedPathSpecifier(moduleSpecifier)
         || moduleSpecifier.startsWith('#')
@@ -504,6 +506,38 @@ function unresolvedEvaluationModuleSourceResolution(): EvaluationModuleSourceRes
 function resolvedModuleOriginalPath(resolved: ts.ResolvedModuleFull): string | null {
   const originalPath = (resolved as ts.ResolvedModuleFull & { readonly originalPath?: unknown }).originalPath;
   return typeof originalPath === 'string' && originalPath.length > 0 ? originalPath : null;
+}
+
+function resolvedModuleBelongsToPackageInstance(
+  resolved: ts.ResolvedModuleFull,
+  packageInstance: ResolvedPackageInstance,
+): boolean {
+  const packageId = resolved.packageId;
+  if (
+    packageId != null
+    && (
+      packageId.name !== packageInstance.name
+      || (packageInstance.version != null && packageId.version !== packageInstance.version)
+    )
+  ) {
+    return false;
+  }
+  const locatorFileName = resolvedModuleOriginalPath(resolved) ?? resolved.resolvedFileName;
+  return moduleLocatorPathBelongsToPackageInstance(locatorFileName, packageInstance);
+}
+
+function moduleLocatorPathBelongsToPackageInstance(
+  locatorFileName: string,
+  packageInstance: ResolvedPackageInstance,
+): boolean {
+  const selectedLocatorRoot = externalPackageRootForPath(locatorFileName);
+  if (selectedLocatorRoot == null) {
+    return true;
+  }
+  const selectedLocatorKey = evaluationModuleHostPathKey(selectedLocatorRoot);
+  return [packageInstance.locatorRootDir, packageInstance.physicalRootDir].some((candidateRoot) =>
+    candidateRoot != null && evaluationModuleHostPathKey(candidateRoot) === selectedLocatorKey
+  );
 }
 
 function addPackageRootCandidatesForPath(

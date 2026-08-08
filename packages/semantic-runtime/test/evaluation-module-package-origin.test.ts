@@ -550,6 +550,84 @@ describe('evaluation module package origin', () => {
     },
   );
 
+  test.each([false, true])(
+    'keeps a package import target in its nested node_modules owner with preserveSymlinks=%s',
+    (preserveSymlinks) => {
+      const appRoot = temporaryRoot();
+      const outerPackageRoot = path.join(appRoot, 'node_modules', '@acme', 'aurelia-toolkit');
+      const innerPackageRoot = path.join(
+        outerPackageRoot,
+        'node_modules',
+        '@acme',
+        'shared-config',
+      );
+      const entryFile = path.join(appRoot, 'src', 'main.ts');
+      const outerPackageEntry = path.join(outerPackageRoot, 'src', 'index.ts');
+      const innerPackageEntry = path.join(innerPackageRoot, 'src', 'index.ts');
+      const innerQuerySource = path.join(innerPackageRoot, 'src', 'query.ts');
+
+      writeText(entryFile, "import { toolkitConfig } from '@acme/aurelia-toolkit';\n");
+      writeJson(path.join(outerPackageRoot, 'package.json'), {
+        name: '@acme/aurelia-toolkit',
+        version: '0.0.0',
+        type: 'module',
+        dependencies: {
+          '@acme/shared-config': '0.0.0',
+          aurelia: '2.0.0',
+        },
+        exports: {
+          '.': {
+            types: './dist/types/index.d.ts',
+            import: './dist/esm/index.js',
+          },
+        },
+        imports: {
+          '#external': '@acme/shared-config',
+        },
+      });
+      writeText(
+        path.join(outerPackageRoot, 'dist', 'types', 'index.d.ts'),
+        'export declare const toolkitConfig: string;\n',
+      );
+      writeText(
+        outerPackageEntry,
+        "export { sharedConfig as toolkitConfig } from '#external';\n",
+      );
+      writeAdmittedPackage(innerPackageRoot, '@acme/shared-config', 'nested');
+      writeText(innerQuerySource, "export const query = 'nested';\n");
+
+      const { host } = evaluationHost(appRoot, { preserveSymlinks });
+      const resolvedOuter = host.resolveModuleSpecifier(entryFile, '@acme/aurelia-toolkit');
+      expect(resolvedOuter).not.toBeNull();
+      expectModuleIdentity(appRoot, resolvedOuter!, outerPackageEntry);
+
+      const resolvedInner = host.resolveModuleSpecifier(resolvedOuter!, '#external');
+      expect(resolvedInner).not.toBeNull();
+      expectModuleIdentity(appRoot, resolvedInner!, innerPackageEntry);
+
+      const outerOrigin = host.readPackageOrigin(resolvedOuter!);
+      const innerOrigin = host.readPackageOrigin(resolvedInner!);
+      expect(innerOrigin).toMatchObject({
+        packageRelativePath: 'src/index.ts',
+        packageInstance: {
+          name: '@acme/shared-config',
+          version: '0.0.0',
+        },
+      });
+      expect(innerOrigin?.packageInstance.instanceKey).not.toBe(
+        outerOrigin?.packageInstance.instanceKey,
+      );
+      expect(
+        sameHostPath(innerOrigin!.packageInstance.physicalRootDir, innerPackageRoot),
+      ).toBe(true);
+      expectRejectedPackageEscape(
+        host,
+        resolvedOuter!,
+        '../node_modules/@acme/shared-config/src/query.ts?raw',
+      );
+    },
+  );
+
   test('invalidates captured package reads when a logical locator is retargeted', () => {
     const fixtureRoot = temporaryRoot();
     const appRoot = path.join(fixtureRoot, 'app');
