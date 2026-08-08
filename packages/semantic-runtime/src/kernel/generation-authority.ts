@@ -1,3 +1,5 @@
+import { SemanticRuntimeAnalysisCurrentnessError } from './analysis-currentness.js';
+
 /**
  * Operational currentness for a read or publication view.
  * A transient view may become unusable without denoting a durable generation identity.
@@ -73,12 +75,17 @@ export class GenerationCurrentnessWitness {
 }
 
 /** One failed monotonic generation proof, containing every invalid logical authority key. */
-export class GenerationCurrentnessChangedError extends Error {
+export class GenerationCurrentnessChangedError extends SemanticRuntimeAnalysisCurrentnessError {
   readonly invalidKeys: readonly string[];
 
   constructor(invalidKeys: readonly string[]) {
     const normalized = Object.freeze([...new Set(invalidKeys)].sort((left, right) => left.localeCompare(right)));
-    super(`Generation currentness changed for ${normalized.join(', ')}.`);
+    super({
+      message: `Generation currentness changed for ${normalized.join(', ')}.`,
+      reason: 'generation-changed',
+      invalidGenerationKeys: normalized,
+    });
+    this.name = 'GenerationCurrentnessChangedError';
     this.invalidKeys = normalized;
   }
 }

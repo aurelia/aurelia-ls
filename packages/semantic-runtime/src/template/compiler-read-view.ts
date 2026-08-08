@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 
 import type { ComputationRead, ComputationReadValidation } from '../kernel/computation-lifecycle.js';
+import { SemanticRuntimeAnalysisCurrentnessError } from '../kernel/analysis-currentness.js';
 import type { IdentityHandle, OpenSeamHandle, ProductHandle } from '../kernel/handles.js';
 import type { ProductDetailReadView } from '../kernel/product-details.js';
 import type {
@@ -123,13 +124,18 @@ class TemplateCompilerReadRevision {
 /** Authority for the compiler world currently admitted at one stable owner/cohort locus. */
 export class TemplateCompilerWorldAuthority {
   constructor(
+    readonly key: string,
     private readonly read: () => TemplateCompilerWorldEmission | null,
   ) {}
 
   current(): TemplateCompilerWorldEmission {
     const world = this.read();
     if (world == null) {
-      throw new Error('The compiler world is no longer current at this cohort locus.');
+      throw new SemanticRuntimeAnalysisCurrentnessError({
+        message: 'The compiler world is no longer current at this cohort locus.',
+        reason: 'generation-changed',
+        invalidGenerationKeys: [this.key],
+      });
     }
     return world;
   }
@@ -139,7 +145,7 @@ export class TemplateCompilerWorldAuthority {
   }
 
   static fixed(world: TemplateCompilerWorldEmission): TemplateCompilerWorldAuthority {
-    return new TemplateCompilerWorldAuthority(() => world);
+    return new TemplateCompilerWorldAuthority('template-compiler-world:fixed', () => world);
   }
 }
 

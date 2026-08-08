@@ -5,9 +5,10 @@ import type {
   QueryClaimProvisionalAnswerHandle,
 } from '../inquiry/query-claim-graph.js';
 import type { SemanticRuntimeProjectInputRead } from '../kernel/project-input.js';
+import { SemanticRuntimeAnalysisCurrentnessError } from '../kernel/analysis-currentness.js';
 import {
   SemanticRuntimeAnalysisReceipt,
-  SemanticRuntimeAnalysisReceiptBuilder,
+  type SemanticRuntimeAnalysisReceiptBuilder,
 } from './analysis-receipt.js';
 
 const enum SemanticAnswerTransactionPhase {
@@ -148,11 +149,18 @@ export class SemanticAnswerTransaction {
     const rootBuilder = this.requireRootBuilder();
     if (rootBuilder.readMutationOrdinal() !== this.rootValidatedMutationOrdinal) {
       this.rollback();
-      throw new Error('Semantic answer proof changed after root currentness validation.');
+      throw new SemanticRuntimeAnalysisCurrentnessError({
+        message: 'Semantic answer proof changed after root currentness validation.',
+        reason: 'answer-proof-changed',
+      });
     }
     if (this.rootValidatedReceipt?.isRuntimeIncarnationCurrent() !== true) {
       this.rollback();
-      throw new Error('Semantic answer runtime incarnation changed after root currentness validation.');
+      throw new SemanticRuntimeAnalysisCurrentnessError({
+        message: 'Semantic answer runtime incarnation changed after root currentness validation.',
+        reason: 'analysis-lifetime-changed',
+        invalidGenerationKeys: ['semantic-runtime-analysis-lifetime'],
+      });
     }
     this.phase = SemanticAnswerTransactionPhase.Committing;
     const commitGroups = new Map<object, QueryClaimProvisionalAnswerHandle>();

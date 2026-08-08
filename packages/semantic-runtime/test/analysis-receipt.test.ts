@@ -15,7 +15,9 @@ import {
   SemanticRuntimeProjectInputReadKind,
   SemanticSourceWorldCurrentnessKind,
   SemanticSourceWorldInputReceipt,
+  SemanticRuntimeAnalysisCurrentnessError,
   createSemanticRuntime,
+  isSemanticRuntimeAnalysisCurrentnessError,
   type SemanticRuntimeSourceTextOverlay,
 } from '../src/api/index.js';
 import {
@@ -25,6 +27,7 @@ import {
 } from '../src/api/analysis-receipt.js';
 import { SemanticAnswerTransaction } from '../src/api/analysis-answer-transaction.js';
 import { AureliaAppWorldProjectGeneration } from '../src/configuration/app-analysis-computation.js';
+import type { ComputationRead } from '../src/kernel/computation-lifecycle.js';
 import {
   QueryClaimGraph,
   type QueryClaimAnswerDisposalCollector,
@@ -40,6 +43,100 @@ afterEach(async () => {
 });
 
 describe('semantic answer receipts', () => {
+  test('reports conflicting portable semantic facts by their full domain-qualified identity', async () => {
+    const workspaceRoot = await createShapeWorkspace();
+    const runtime = await createSemanticRuntime({
+      workspaceRoot,
+      storeKey: 'analysis-receipt:semantic-fact-conflict',
+      projects: [{ projectKey: 'app', rootDir: workspaceRoot }],
+    });
+    const builder = runtime.createAnalysisReceiptBuilder();
+    const observer = builder as unknown as {
+      observeSemanticFactReads(reads: readonly ComputationRead[]): void;
+    };
+    const semanticFact = (observedRevision: string): ComputationRead => ({
+      domain: 'project-compiler-options-environment',
+      readKey: 'shared-read-key',
+      observedRevision,
+      validate: () => ({ isCurrent: true, currentRevision: observedRevision, changedFacets: [] }),
+      tryRebaseCurrent() {
+        return this;
+      },
+    });
+
+    observer.observeSemanticFactReads([semanticFact('revision:1')]);
+    const failure = (() => {
+      try {
+        observer.observeSemanticFactReads([semanticFact('revision:2')]);
+        return null;
+      } catch (error) {
+        return error;
+      }
+    })();
+
+    expect(failure).toBeInstanceOf(SemanticRuntimeAnalysisCurrentnessError);
+    expect(failure).toMatchObject({
+      reason: 'answer-proof-changed',
+      changedReadKeys: [],
+      changedFacets: [],
+      changedSemanticFactKeys: [
+        'project-compiler-options-environment:shared-read-key',
+      ],
+    });
+    runtime.releaseAnalysisReceiptBuilder(builder);
+  });
+
+  test('reports the exact stale portable semantic fact from a sealed receipt', async () => {
+    const workspaceRoot = await createShapeWorkspace();
+    const runtime = await createSemanticRuntime({
+      workspaceRoot,
+      storeKey: 'analysis-receipt:stale-semantic-fact',
+      projects: [{ projectKey: 'app', rootDir: workspaceRoot }],
+    });
+    const builder = runtime.createAnalysisReceiptBuilder();
+    const observer = builder as unknown as {
+      observeSemanticFactReads(reads: readonly ComputationRead[]): void;
+    };
+    let current = true;
+    const semanticFact: ComputationRead = {
+      domain: 'static-project-evaluation-profile',
+      readKey: 'project:app',
+      observedRevision: 'revision:1',
+      validate: () => ({
+        isCurrent: current,
+        currentRevision: current ? 'revision:1' : 'revision:2',
+        changedFacets: current ? [] : ['semantic-profile'],
+      }),
+      tryRebaseCurrent() {
+        return this;
+      },
+    };
+    observer.observeSemanticFactReads([semanticFact]);
+    const receipt = builder.seal();
+    current = false;
+
+    let failure: unknown;
+    try {
+      receipt.assertCurrent();
+    } catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toBeInstanceOf(SemanticRuntimeAnalysisCurrentnessError);
+    expect(failure).toMatchObject({
+      reason: 'query-answer-lease-changed',
+      answerLeaseKind: 'semantic-runtime-analysis-receipt/1',
+      invalidGenerationKeys: [],
+      changedReadKeys: [],
+      changedFacets: ['semantic-profile'],
+      changedSemanticFactKeys: [
+        'static-project-evaluation-profile:project:app',
+      ],
+    });
+    receipt.dispose();
+    runtime.releaseAnalysisReceiptBuilder(builder);
+  });
+
   test('validates one aggregate receipt for fresh runtime-to-app nesting', async () => {
     const workspaceRoot = await createShapeWorkspace();
     const runtime = await createSemanticRuntime({
@@ -324,6 +421,73 @@ describe('semantic answer receipts', () => {
     runtime.releaseAnalysisReceiptBuilder(builder);
   });
 
+  test('reports root-proof mutation after validation as nominal answer currentness', async () => {
+    const workspaceRoot = await createShapeWorkspace();
+    const runtime = await createSemanticRuntime({
+      workspaceRoot,
+      storeKey: 'analysis-receipt:proof-mutated-after-validation',
+      projects: [{ projectKey: 'app', rootDir: workspaceRoot }],
+    });
+    const transaction = new SemanticAnswerTransaction();
+    const builder = runtime.createAnalysisReceiptBuilder(transaction);
+    const receipt = builder.seal();
+    transaction.boundaryFor(builder).didValidateAnswerLease(receipt);
+    builder.readSourceText(path.join(workspaceRoot, 'src/main.ts'));
+
+    let failure: unknown;
+    try {
+      transaction.commit();
+    } catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toBeInstanceOf(SemanticRuntimeAnalysisCurrentnessError);
+    expect(isSemanticRuntimeAnalysisCurrentnessError(failure) && failure.reason).toBe('answer-proof-changed');
+    receipt.dispose();
+    runtime.releaseAnalysisReceiptBuilder(builder);
+  });
+
+  test('reports runtime-lifetime revocation after validation as nominal analysis currentness', async () => {
+    const workspaceRoot = await createShapeWorkspace();
+    const runtime = await createSemanticRuntime({
+      workspaceRoot,
+      storeKey: 'analysis-receipt:lifetime-revoked-after-validation',
+      projects: [{ projectKey: 'app', rootDir: workspaceRoot }],
+    });
+    const transaction = new SemanticAnswerTransaction();
+    const builder = runtime.createAnalysisReceiptBuilder(transaction);
+    const receipt = builder.seal();
+    transaction.boundaryFor(builder).didValidateAnswerLease(receipt);
+    runtime.clearAnalysisCache({ typeSystemDependencyCacheClearPolicy: 'preserve' });
+
+    let failure: unknown;
+    try {
+      transaction.commit();
+    } catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toBeInstanceOf(SemanticRuntimeAnalysisCurrentnessError);
+    expect(isSemanticRuntimeAnalysisCurrentnessError(failure) && failure).toMatchObject({
+      reason: 'analysis-lifetime-changed',
+      invalidGenerationKeys: ['semantic-runtime-analysis-lifetime'],
+    });
+    receipt.dispose();
+    runtime.releaseAnalysisReceiptBuilder(builder);
+  });
+
+  test('does not classify answer-transaction phase invariants as semantic currentness', () => {
+    let failure: unknown;
+    try {
+      new SemanticAnswerTransaction().commit();
+    } catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toBeInstanceOf(Error);
+    expect(isSemanticRuntimeAnalysisCurrentnessError(failure)).toBe(false);
+  });
+
   test('validates an ordinary cache summary once instead of once per profile field', async () => {
     const workspaceRoot = await createShapeWorkspace();
     const runtime = await createSemanticRuntime({
@@ -332,11 +496,11 @@ describe('semantic answer receipts', () => {
       projects: [{ projectKey: 'app', rootDir: workspaceRoot }],
     });
     const app = await runtime.openApp({ projectKey: 'app' });
-    const validateAppGeneration = vi.spyOn(AureliaAppWorldProjectGeneration.prototype, 'isCurrent');
+    const requireAppGeneration = vi.spyOn(AureliaAppWorldProjectGeneration.prototype, 'requireCurrent');
 
     app.cacheSummary(8, false);
 
-    expect(validateAppGeneration).toHaveBeenCalledTimes(1);
+    expect(requireAppGeneration).toHaveBeenCalledTimes(1);
   });
 
   test('captures each cache-overview app and query-claim graph once', async () => {
@@ -529,7 +693,19 @@ describe('semantic answer receipts', () => {
       return cachedApp;
     });
 
-    await expect(runtime.answerAppQueries(request)).rejects.toThrow(/no longer current/);
+    let failure: unknown;
+    try {
+      await runtime.answerAppQueries(request);
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toBeInstanceOf(SemanticRuntimeAnalysisCurrentnessError);
+    expect(isSemanticRuntimeAnalysisCurrentnessError(failure) && failure).toMatchObject({
+      reason: 'query-answer-lease-changed',
+      changedReadKeys: [authority.fileContentReadKey(sourceFile)],
+      changedFacets: [SemanticRuntimeProjectInputReadKind.FileContent],
+      changedSemanticFactKeys: [],
+    });
 
     expect(mutationInjected).toBe(true);
     overlay.write(sourceFile, sourceText);
@@ -924,6 +1100,21 @@ describe('semantic answer receipts', () => {
     expect(beforeReceipt?.validate()).toMatchObject({
       isCurrent: false,
       runtimeIncarnationCurrent: false,
+    });
+    let failure: unknown;
+    try {
+      beforeReceipt?.assertCurrent();
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toBeInstanceOf(SemanticRuntimeAnalysisCurrentnessError);
+    expect(failure).toMatchObject({
+      reason: 'analysis-lifetime-changed',
+      answerLeaseKind: 'semantic-runtime-analysis-receipt/1',
+      invalidGenerationKeys: ['semantic-runtime-analysis-lifetime'],
+      changedReadKeys: [],
+      changedFacets: [],
+      changedSemanticFactKeys: [],
     });
 
     const after = runtime.summary();

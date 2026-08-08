@@ -15,6 +15,7 @@ import {
   GenerationCurrentnessClock,
   type GenerationCurrentnessWitness,
 } from '../kernel/generation-authority.js';
+import { SemanticRuntimeAnalysisCurrentnessError } from '../kernel/analysis-currentness.js';
 import { sourceTextContentRevision } from '../kernel/source-text-revision.js';
 import type { QueryClaimAnswerLease } from '../inquiry/query-claim-graph.js';
 import {
@@ -35,6 +36,7 @@ export interface SemanticRuntimeAnalysisReceiptValidation {
   readonly isCurrent: boolean;
   readonly runtimeIncarnationCurrent: boolean;
   readonly changedReadKeys: readonly string[];
+  readonly changedFacets: readonly string[];
   readonly changedSemanticFactKeys: readonly string[];
 }
 
@@ -56,7 +58,11 @@ export class SemanticRuntimeAnalysisLifetimeAuthority {
 
   capture(): GenerationCurrentnessWitness {
     if (this.closed) {
-      throw new Error('Cannot capture an analysis receipt from a retired semantic-runtime incarnation.');
+      throw new SemanticRuntimeAnalysisCurrentnessError({
+        message: 'Cannot capture an analysis receipt from a retired semantic-runtime incarnation.',
+        reason: 'analysis-lifetime-changed',
+        invalidGenerationKeys: ['semantic-runtime-analysis-lifetime'],
+      });
     }
     return this.currentness.capture('semantic-runtime-analysis-lifetime');
   }
@@ -116,6 +122,7 @@ export class SemanticRuntimeAnalysisReceipt implements QueryClaimAnswerLease {
         isCurrent: false,
         runtimeIncarnationCurrent: false,
         changedReadKeys: Object.freeze([]),
+        changedFacets: Object.freeze([]),
         changedSemanticFactKeys: Object.freeze([]),
       });
     }
@@ -125,25 +132,34 @@ export class SemanticRuntimeAnalysisReceipt implements QueryClaimAnswerLease {
         isCurrent: false,
         runtimeIncarnationCurrent: false,
         changedReadKeys: Object.freeze([]),
+        changedFacets: Object.freeze([]),
         changedSemanticFactKeys: Object.freeze([]),
       });
     }
     const projectInputEventSequence = this.projectInputAuthority.currentEventSequence;
-    const directlyChangedReadKeys = this.projectInputReads
-      .filter((read) => !read.validateObservedValue().isCurrent)
-      .map((read) => read.readKey);
-    const changedSemanticFactKeys = this.semanticFactReads
-      .filter((read) => !read.validate().isCurrent)
-      .map(semanticFactKey);
-    const reentrantChangedReadKeys = this.projectInputAuthority.currentEventSequence === projectInputEventSequence
+    const directlyChangedProjectInputReads = this.projectInputReads
+      .map((read) => ({ read, validation: read.validateObservedValue() }))
+      .filter(({ validation }) => !validation.isCurrent);
+    const changedSemanticFactReads = this.semanticFactReads
+      .map((read) => ({ read, validation: read.validate() }))
+      .filter(({ validation }) => !validation.isCurrent);
+    const reentrantChangedProjectInputReads =
+      this.projectInputAuthority.currentEventSequence === projectInputEventSequence
       ? []
       : this.projectInputReads
-        .filter((read) => this.projectInputAuthority.mayHaveChanged(read.descriptor, projectInputEventSequence))
-        .map((read) => read.readKey);
+        .filter((read) => this.projectInputAuthority.mayHaveChanged(read.descriptor, projectInputEventSequence));
     const changedReadKeys = [...new Set([
-      ...directlyChangedReadKeys,
-      ...reentrantChangedReadKeys,
+      ...directlyChangedProjectInputReads.map(({ read }) => read.readKey),
+      ...reentrantChangedProjectInputReads.map((read) => read.readKey),
     ])].sort();
+    const changedFacets = [...new Set([
+      ...directlyChangedProjectInputReads.flatMap(({ validation }) => validation.changedFacets),
+      ...changedSemanticFactReads.flatMap(({ validation }) => validation.changedFacets),
+      ...reentrantChangedProjectInputReads.map((read) => read.kind),
+    ])].sort();
+    const changedSemanticFactKeys = changedSemanticFactReads
+      .map(({ read }) => semanticFactKey(read))
+      .sort();
     // Validation callbacks are allowed to re-enter the runtime. A cache clear or retirement during one of those
     // callbacks must invalidate this receipt even when every individual input still reports its observed value.
     const runtimeIncarnationCurrent = !this.disposed && this.lifetimeWitness.isCurrent();
@@ -153,12 +169,37 @@ export class SemanticRuntimeAnalysisReceipt implements QueryClaimAnswerLease {
         && changedSemanticFactKeys.length === 0,
       runtimeIncarnationCurrent,
       changedReadKeys: Object.freeze(changedReadKeys),
+      changedFacets: Object.freeze(changedFacets),
       changedSemanticFactKeys: Object.freeze(changedSemanticFactKeys),
     });
   }
 
   isCurrent(): boolean {
     return this.validate().isCurrent;
+  }
+
+  /** Preserve the exact invalidated inputs when the query-claim graph validates this opaque lease. */
+  assertCurrent(): void {
+    const validation = this.validate();
+    if (validation.isCurrent) {
+      return;
+    }
+    const runtimeIncarnationChanged = !validation.runtimeIncarnationCurrent;
+    throw new SemanticRuntimeAnalysisCurrentnessError({
+      message: runtimeIncarnationChanged
+        ? `Query answer lease '${this.kind}' belongs to a semantic-runtime incarnation that is no longer current.`
+        : `Query answer lease '${this.kind}' has analysis inputs that are no longer current.`,
+      reason: runtimeIncarnationChanged
+        ? 'analysis-lifetime-changed'
+        : 'query-answer-lease-changed',
+      answerLeaseKind: this.kind,
+      invalidGenerationKeys: runtimeIncarnationChanged
+        ? ['semantic-runtime-analysis-lifetime']
+        : [],
+      changedReadKeys: validation.changedReadKeys,
+      changedFacets: validation.changedFacets,
+      changedSemanticFactKeys: validation.changedSemanticFactKeys,
+    });
   }
 
   /** Independent proof for an answer envelope or enclosing operation; ownership never aliases the graph lease. */
@@ -217,10 +258,12 @@ export class SemanticRuntimeAnalysisReceiptBuilder {
       }
       const existing = this.projectInputReadsByKey.get(read.readKey);
       if (existing != null && existing.observedRevision !== read.observedRevision) {
-        throw new Error(
-          `Semantic answer basis contains conflicting revisions for '${read.readKey}': `
-          + `${existing.observedRevision} and ${read.observedRevision}.`,
-        );
+        throw new SemanticRuntimeAnalysisCurrentnessError({
+          message: `Semantic answer basis contains conflicting revisions for '${read.readKey}': `
+            + `${existing.observedRevision} and ${read.observedRevision}.`,
+          reason: 'answer-proof-changed',
+          changedReadKeys: [read.readKey],
+        });
       }
       this.projectInputReadsByKey.set(read.readKey, read);
       this.mutationOrdinal += 1;
@@ -274,7 +317,11 @@ export class SemanticRuntimeAnalysisReceiptBuilder {
       throw new Error('Cannot compose a semantic answer receipt from another runtime incarnation.');
     }
     if (!receipt.isRuntimeIncarnationCurrent()) {
-      throw new Error('Cannot compose a semantic answer receipt whose runtime incarnation is no longer current.');
+      throw new SemanticRuntimeAnalysisCurrentnessError({
+        message: 'Cannot compose a semantic answer receipt whose runtime incarnation is no longer current.',
+        reason: 'analysis-lifetime-changed',
+        invalidGenerationKeys: ['semantic-runtime-analysis-lifetime'],
+      });
     }
     if (
       receipt.basis.semanticWorkspaceKey !== this.sourceWorld.semanticWorkspaceKey
@@ -376,10 +423,12 @@ export class SemanticRuntimeAnalysisReceiptBuilder {
       const key = semanticFactKey(read);
       const existing = this.semanticFactReadsByKey.get(key);
       if (existing != null && existing.observedRevision !== read.observedRevision) {
-        throw new Error(
-          `Semantic answer basis contains conflicting revisions for '${key}': `
-          + `${existing.observedRevision} and ${read.observedRevision}.`,
-        );
+        throw new SemanticRuntimeAnalysisCurrentnessError({
+          message: `Semantic answer basis contains conflicting revisions for '${key}': `
+            + `${existing.observedRevision} and ${read.observedRevision}.`,
+          reason: 'answer-proof-changed',
+          changedSemanticFactKeys: [key],
+        });
       }
       this.semanticFactReadsByKey.set(key, read);
       this.mutationOrdinal += 1;
@@ -388,6 +437,7 @@ export class SemanticRuntimeAnalysisReceiptBuilder {
 }
 
 const semanticRuntimeAnalysisReceiptSymbol = Symbol('semantic-runtime-analysis-receipt');
+const semanticRuntimeAnalysisReceiptsByCarrier = new WeakMap<object, SemanticRuntimeAnalysisReceipt>();
 
 /** Attach a portable basis plus a non-serializable executable receipt to a public answer envelope. */
 export function withSemanticRuntimeAnalysisReceipt<TValue>(
@@ -398,8 +448,10 @@ export function withSemanticRuntimeAnalysisReceipt<TValue>(
     ...answer,
     analysisBasis: receipt.basis,
   };
+  const carrier = Object.freeze(Object.create(null) as object);
+  semanticRuntimeAnalysisReceiptsByCarrier.set(carrier, receipt.fork());
   Object.defineProperty(projected, semanticRuntimeAnalysisReceiptSymbol, {
-    value: receipt.fork(),
+    value: carrier,
     enumerable: true,
     configurable: false,
     writable: false,
@@ -414,7 +466,29 @@ export function semanticRuntimeAnalysisReceiptFor(
   const candidate = (answer as SemanticRuntimeAnswer<unknown> & {
     readonly [semanticRuntimeAnalysisReceiptSymbol]?: unknown;
   })[semanticRuntimeAnalysisReceiptSymbol];
-  return candidate instanceof SemanticRuntimeAnalysisReceipt ? candidate : null;
+  return isObject(candidate)
+    ? semanticRuntimeAnalysisReceiptsByCarrier.get(candidate) ?? null
+    : null;
+}
+
+/** @internal Revoke the process-private proof carried directly by one answer envelope, if present. */
+export function revokeSemanticRuntimeAnalysisReceiptFor(
+  answer: SemanticRuntimeAnswer<unknown>,
+): void {
+  const descriptor = Object.getOwnPropertyDescriptor(answer, semanticRuntimeAnalysisReceiptSymbol);
+  if (descriptor == null || !('value' in descriptor) || !isObject(descriptor.value)) {
+    return;
+  }
+  const receipt = semanticRuntimeAnalysisReceiptsByCarrier.get(descriptor.value);
+  if (receipt == null) {
+    return;
+  }
+  semanticRuntimeAnalysisReceiptsByCarrier.delete(descriptor.value);
+  receipt.dispose();
+}
+
+function isObject(value: unknown): value is object {
+  return (typeof value === 'object' && value != null) || typeof value === 'function';
 }
 
 function isPortableSemanticAnalysisRead(read: ComputationRead): read is ComputationRead {

@@ -12,6 +12,7 @@ import {
 } from '@aurelia-ls/patterns';
 import { readAureliaDocsCorpusForMcp } from '../docs-runtime.js';
 import { AureliaMcpSemanticRuntimeAdapter } from '../runtime-adapter.js';
+import { serializeAureliaMcpError, type SerializedAureliaMcpError } from '../tool-errors.js';
 import { aureliaMcpResultText } from '../result-text.js';
 import {
   appDiagnosticsInputSchema,
@@ -40,9 +41,6 @@ import type {
   AureliaMcpAppOverviewInput,
   AureliaMcpAppQueryBatchInput,
   AureliaMcpAppQueryInput,
-  AureliaMcpAppQueryCatalogInput,
-  AureliaMcpAnalysisCacheOverviewInput,
-  AureliaMcpClearAnalysisCacheInput,
   AureliaMcpDiagnosticOverviewInput,
   AureliaMcpDocsFetchInput,
   AureliaMcpDocsSearchInput,
@@ -111,12 +109,15 @@ if (rawArgs.length === 0 || rawArgs[0] === '--help' || rawArgs[0] === '-h') {
 try {
   const { command, input, outputMode } = parseInvocation(rawArgs);
   normalizeInvocationPaths(input);
-  const result = await invoke(command, validateCommandInput(command, input));
-  process.stdout.write(outputMode === 'text'
-    ? `${aureliaMcpResultText(result)}\n`
-    : `${JSON.stringify(result, null, 2)}\n`);
+  process.stdout.write(await invoke(command, validateCommandInput(command, input), outputMode));
 } catch (error) {
-  process.stderr.write(`${JSON.stringify({ error: serializeError(error) }, null, 2)}\n`);
+  process.stderr.write(`${JSON.stringify({ error: serializeInvokeError(error) }, null, 2)}\n`);
+  process.exitCode = 1;
+}
+try {
+  await adapter.dispose();
+} catch (error) {
+  process.stderr.write(`${JSON.stringify({ error: serializeInvokeError(error) }, null, 2)}\n`);
   process.exitCode = 1;
 }
 
@@ -125,52 +126,63 @@ function validateCommandInput(command: string, input: Record<string, unknown>): 
   if (schema == null) {
     throw new Error(`Unknown command '${command}'. ${usage()}`);
   }
-  return schema.parse(input) as Record<string, unknown>;
+  return schema.parse(input);
 }
 
-async function invoke(command: string, input: Record<string, unknown>): Promise<unknown> {
+async function invoke(
+  command: string,
+  input: Record<string, unknown>,
+  outputMode: 'json' | 'text',
+): Promise<string> {
+  const project = (response: unknown) => invocationOutput(response, outputMode);
   switch (command) {
     case 'workspace-overview':
-      return adapter.workspaceOverview(input as unknown as AureliaMcpWorkspaceOverviewInput);
+      return adapter.workspaceOverview(input as unknown as AureliaMcpWorkspaceOverviewInput, project);
     case 'project-configurations':
-      return adapter.projectConfigurations(input as unknown as AureliaMcpProjectConfigurationsInput);
+      return adapter.projectConfigurations(input as unknown as AureliaMcpProjectConfigurationsInput, project);
     case 'analysis-cache-overview':
-      return adapter.analysisCacheOverview(input as unknown as AureliaMcpAnalysisCacheOverviewInput);
+      return adapter.analysisCacheOverview(input, project);
     case 'clear-analysis-cache':
-      return adapter.clearAnalysisCache(input as unknown as AureliaMcpClearAnalysisCacheInput);
+      return adapter.clearAnalysisCache(input, project);
     case 'app-query-catalog':
-      return adapter.appQueryCatalog(input as unknown as AureliaMcpAppQueryCatalogInput);
+      return invocationOutput(await adapter.appQueryCatalog(input), outputMode);
     case 'pattern-menu':
-      return patternMenu(input as unknown as AureliaMcpPatternMenuInput);
+      return invocationOutput(patternMenu(input), outputMode);
     case 'pattern-example':
-      return patternExample(input as unknown as AureliaMcpPatternExampleInput);
+      return invocationOutput(patternExample(input as unknown as AureliaMcpPatternExampleInput), outputMode);
     case 'docs-search':
-      return docsSearch(input as unknown as AureliaMcpDocsSearchInput);
+      return invocationOutput(docsSearch(input as unknown as AureliaMcpDocsSearchInput), outputMode);
     case 'docs-fetch':
-      return docsFetch(input as unknown as AureliaMcpDocsFetchInput);
+      return invocationOutput(docsFetch(input as unknown as AureliaMcpDocsFetchInput), outputMode);
     case 'app-query':
-      return adapter.appQuery(input as unknown as AureliaMcpAppQueryInput);
+      return adapter.appQuery(input as unknown as AureliaMcpAppQueryInput, project);
     case 'app-query-batch':
-      return adapter.appQueryBatch(input as unknown as AureliaMcpAppQueryBatchInput);
+      return adapter.appQueryBatch(input as unknown as AureliaMcpAppQueryBatchInput, project);
     case 'app-overview':
-      return adapter.appOverview(input as unknown as AureliaMcpAppOverviewInput);
+      return adapter.appOverview(input as unknown as AureliaMcpAppOverviewInput, project);
     case 'router-overview':
-      return adapter.routerOverview(input as unknown as AureliaMcpRouterOverviewInput);
+      return adapter.routerOverview(input as unknown as AureliaMcpRouterOverviewInput, project);
     case 'open-seam-overview':
-      return adapter.openSeamOverview(input as unknown as AureliaMcpOpenSeamOverviewInput);
+      return adapter.openSeamOverview(input as unknown as AureliaMcpOpenSeamOverviewInput, project);
     case 'app-diagnostics':
-      return adapter.appDiagnostics(input as unknown as AureliaMcpAppDiagnosticsInput);
+      return adapter.appDiagnostics(input as unknown as AureliaMcpAppDiagnosticsInput, project);
     case 'diagnostic-overview':
-      return adapter.diagnosticOverview(input as unknown as AureliaMcpDiagnosticOverviewInput);
+      return adapter.diagnosticOverview(input as unknown as AureliaMcpDiagnosticOverviewInput, project);
     case 'template-cursor-info':
-      return adapter.templateCursorInfo(input as unknown as AureliaMcpTemplateCursorInput);
+      return adapter.templateCursorInfo(input as unknown as AureliaMcpTemplateCursorInput, project);
     case 'template-completions':
-      return adapter.templateCompletions(input as unknown as AureliaMcpTemplateCompletionsInput);
+      return adapter.templateCompletions(input as unknown as AureliaMcpTemplateCompletionsInput, project);
     case 'template-diagnostics':
-      return adapter.templateDiagnostics(input as unknown as AureliaMcpTemplateDiagnosticsInput);
+      return adapter.templateDiagnostics(input as unknown as AureliaMcpTemplateDiagnosticsInput, project);
     default:
       throw new Error(`Unknown command '${command}'. ${usage()}`);
   }
+}
+
+function invocationOutput(value: unknown, outputMode: 'json' | 'text'): string {
+  return outputMode === 'text'
+    ? `${aureliaMcpResultText(value)}\n`
+    : `${JSON.stringify(value, null, 2)}\n`;
 }
 
 function patternMenu(input: AureliaMcpPatternMenuInput): AureliaMcpResponse<{
@@ -682,23 +694,14 @@ function parseNonNegativeInteger(value: string, key: string): number {
   throw new Error(`${key} expects a non-negative integer.`);
 }
 
-function serializeError(error: unknown): { name: string; message: string } {
+function serializeInvokeError(error: unknown): SerializedAureliaMcpError {
   if (error instanceof z.ZodError) {
     return {
       name: 'ZodError',
       message: formatZodError(error),
     };
   }
-  if (error instanceof Error) {
-    return {
-      name: error.name,
-      message: error.message,
-    };
-  }
-  return {
-    name: 'Error',
-    message: String(error),
-  };
+  return serializeAureliaMcpError(error);
 }
 
 function formatZodError(error: z.ZodError): string {

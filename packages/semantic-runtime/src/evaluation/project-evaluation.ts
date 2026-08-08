@@ -12,6 +12,8 @@ import {
 } from '../kernel/address.js';
 import type { KernelPublicationContext } from '../kernel/publication.js';
 import {
+  computationCommitCurrentnessError,
+  computationReadCurrentnessError,
   ComputationCommitState,
   ComputationReadValidationScope,
   type ComputationGenerationAuthority,
@@ -451,8 +453,13 @@ class StaticEvaluationAmbientGlobalGeneration implements ComputationRead {
   }
 
   readDeclarations(scope?: ComputationReadValidationScope): StaticEvaluationAmbientGlobalDeclarations {
-    if (!this.isCurrent(scope)) {
-      throw new Error(`Ambient-global generation ${this.readKey}@${this.observedRevision} is no longer current.`);
+    const validation = (scope ?? new ComputationReadValidationScope()).validate(this);
+    if (!validation.isCurrent) {
+      throw computationReadCurrentnessError(
+        this,
+        validation,
+        `Ambient-global generation ${this.readKey}@${this.observedRevision} is no longer current.`,
+      );
     }
     return this.declarations;
   }
@@ -635,8 +642,13 @@ export class StaticProjectEvaluationGeneration<TContext> implements ComputationR
   }
 
   requireCurrent(scope?: ComputationReadValidationScope): void {
-    if (!this.isCurrent(scope)) {
-      throw new Error(`Static project evaluation ${this.readKey}@${this.observedRevision} is no longer current.`);
+    const validation = (scope ?? new ComputationReadValidationScope()).validate(this);
+    if (!validation.isCurrent) {
+      throw computationReadCurrentnessError(
+        this,
+        validation,
+        `Static project evaluation ${this.readKey}@${this.observedRevision} is no longer current.`,
+      );
     }
   }
 
@@ -810,7 +822,8 @@ export class StaticProjectEvaluationComputationService implements KernelStoreSid
       finished = true;
       const commit = run.commit();
       if (commit.state !== ComputationCommitState.Committed) {
-        throw new Error(
+        throw computationCommitCurrentnessError(
+          commit,
           `Static project evaluation ${project.projectKey}/${profile.key} was rejected as ${commit.state}.`,
         );
       }
@@ -897,7 +910,8 @@ export class StaticProjectEvaluationComputationService implements KernelStoreSid
       finished = true;
       const commit = run.commit();
       if (commit.state !== ComputationCommitState.Committed) {
-        throw new Error(
+        throw computationCommitCurrentnessError(
+          commit,
           `Static-evaluation ambient globals for ${project.projectKey} were rejected as ${commit.state}.`,
         );
       }

@@ -16,6 +16,8 @@
   },
   "scripts": {
     "build": "tsc -b tsconfig.json",
+    "test": "node ../../scripts/run-vitest.mjs --root ../.. --config vitest.config.ts packages/mcp/test",
+    "typecheck:test": "tsc --noEmit -p tsconfig.test.json",
     "clean": "node -e \"require('node:fs').rmSync('out', { recursive: true, force: true }); require('node:fs').rmSync('tsconfig.tsbuildinfo', { force: true })\"",
     "dev:invoke": "node ./out/dev/invoke.js",
     "dev:prompt": "node ./out/dev/prompt.js",

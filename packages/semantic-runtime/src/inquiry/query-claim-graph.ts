@@ -15,6 +15,9 @@ import type {
   KernelStoreLifetimeMarker,
 } from '../kernel/store.js';
 import {
+  isSemanticRuntimeAnalysisCurrentnessError,
+} from '../kernel/analysis-currentness.js';
+import {
   queryClaimRetentionPolicyForProfile,
   queryClaimAppEpochDisposalPolicy,
   queryClaimDisposalPolicy,
@@ -62,7 +65,13 @@ export interface QueryClaimRequestInput {
 export interface QueryClaimAnswerLease {
   /** Stable protocol kind used to prevent consumers from reusing an answer under the wrong validation contract. */
   readonly kind: string;
-  isCurrent(): boolean;
+  /**
+   * Assert the exact proof carried by this lease is still current.
+   *
+   * A lost currentness race must retain its owning nominal error and evidence; arbitrary validation failures must pass
+   * through unchanged. A boolean cannot distinguish those outcomes or carry the reads that changed.
+   */
+  assertCurrent(): void;
   /** Release resources retained solely for answer reuse. The graph invokes this at most once. */
   dispose(): void;
 }
@@ -839,22 +848,27 @@ export class QueryClaimGraph {
           boundary.requiredAnswerLeaseKind,
         ));
       if (leaseFailure != null) {
-        if (provisional) {
-          this.rollbackProvisionalNode(node, QueryClaimDisposalReason.AnswerLeaseInvalidated);
-        } else {
-          this.disposeRetainedNode(node, QueryClaimDisposalReason.AnswerLeaseInvalidated);
+        if (isQueryClaimAnswerLeaseInvalidationFailure(leaseFailure)) {
+          if (provisional) {
+            this.rollbackProvisionalNode(node, QueryClaimDisposalReason.AnswerLeaseInvalidated);
+          } else {
+            this.disposeRetainedNode(node, QueryClaimDisposalReason.AnswerLeaseInvalidated);
+          }
         }
-        throw new Error(
+        throw queryClaimAnswerLeaseBoundaryError(
           `Cannot reread query claim '${node.queryKind}' at locus '${node.locusKey}' because its answer lease is no longer current.`,
-          { cause: leaseFailure },
+          leaseFailure,
         );
       }
       if (!provisional) {
         const finalizationFailure = finalizeValidatedCommittedQueryClaimAnswerLease(prepared.lease, boundary);
         if (finalizationFailure != null) {
-          throw new Error(
+          if (isQueryClaimAnswerLeaseInvalidationFailure(finalizationFailure)) {
+            this.disposeRetainedNode(node, QueryClaimDisposalReason.AnswerLeaseInvalidated);
+          }
+          throw queryClaimAnswerLeaseBoundaryError(
             `Cannot finalize retained query claim '${node.queryKind}' at locus '${node.locusKey}'.`,
-            { cause: finalizationFailure },
+            finalizationFailure,
           );
         }
       }
@@ -991,24 +1005,27 @@ export class QueryClaimGraph {
         if (leaseFailure != null) {
           if (provisional) {
             this.rollbackProvisionalNode(node, QueryClaimDisposalReason.AnswerLeaseInvalidated);
-            throw new Error(
+            throw queryClaimAnswerLeaseBoundaryError(
               `Cannot reuse provisional query claim '${node.queryKind}' at locus '${node.locusKey}'.`,
-              { cause: leaseFailure },
+              leaseFailure,
             );
-          } else {
-            this.disposeRetainedNode(node, QueryClaimDisposalReason.AnswerLeaseInvalidated);
           }
-          continue;
+          if (isQueryClaimAnswerLeaseInvalidationFailure(leaseFailure)) {
+            this.disposeRetainedNode(node, QueryClaimDisposalReason.AnswerLeaseInvalidated);
+            continue;
+          }
+          throw leaseFailure;
         }
         const answer = node.readRetainedAnswer<TAnswer>();
         if (answer != null) {
           if (!provisional) {
             const finalizationFailure = finalizeValidatedCommittedQueryClaimAnswerLease(prepared.lease, boundary);
             if (finalizationFailure != null) {
-              throw new Error(
-                `Cannot finalize retained query claim '${node.queryKind}' at locus '${node.locusKey}'.`,
-                { cause: finalizationFailure },
-              );
+              if (isQueryClaimAnswerLeaseInvalidationFailure(finalizationFailure)) {
+                this.disposeRetainedNode(node, QueryClaimDisposalReason.AnswerLeaseInvalidated);
+                continue;
+              }
+              throw finalizationFailure;
             }
           }
           return { node, answer, provisional };
@@ -2467,6 +2484,8 @@ class QueryClaimGraphCounters {
   }
 }
 
+class QueryClaimAnswerLeaseStructuralError extends Error {}
+
 function queryClaimAnswerLeaseStructuralFailure(
   lease: QueryClaimAnswerLease | null,
   requiredKind: string | undefined,
@@ -2474,10 +2493,10 @@ function queryClaimAnswerLeaseStructuralFailure(
   if (lease == null) {
     return requiredKind == null
       ? null
-      : new Error(`Required query answer lease '${requiredKind}' was not sealed.`);
+      : new QueryClaimAnswerLeaseStructuralError(`Required query answer lease '${requiredKind}' was not sealed.`);
   }
   return requiredKind != null && lease.kind !== requiredKind
-    ? new Error(
+    ? new QueryClaimAnswerLeaseStructuralError(
       `Query answer lease '${lease.kind}' does not satisfy required lease kind '${requiredKind}'.`,
     )
     : null;
@@ -2521,11 +2540,10 @@ function queryClaimAnswerLeaseCurrentnessFailure(
   lease: QueryClaimAnswerLease,
 ): Error | null {
   try {
-    return lease.isCurrent()
-      ? null
-      : new Error(`Query answer lease '${lease.kind}' is no longer current.`);
+    lease.assertCurrent();
+    return null;
   } catch (error) {
-    return new Error('Query answer lease currentness validation failed.', { cause: error });
+    return queryClaimAnswerLeaseError(error);
   }
 }
 
@@ -2618,6 +2636,20 @@ function queryClaimAnswerLeaseError(error: unknown): Error {
   return error instanceof Error
     ? error
     : new Error(errorSummary(error));
+}
+
+function isQueryClaimAnswerLeaseInvalidationFailure(error: Error): boolean {
+  return error instanceof QueryClaimAnswerLeaseStructuralError
+    || isSemanticRuntimeAnalysisCurrentnessError(error);
+}
+
+function queryClaimAnswerLeaseBoundaryError(message: string, error: Error): Error {
+  if (isSemanticRuntimeAnalysisCurrentnessError(error)) {
+    return error;
+  }
+  return error instanceof QueryClaimAnswerLeaseStructuralError
+    ? new Error(message, { cause: error })
+    : error;
 }
 
 function disposeQueryClaimAnswerLease(lease: QueryClaimAnswerLease | null): void {

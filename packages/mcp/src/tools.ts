@@ -1,4 +1,4 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types.js';
 import { z, type ZodRawShape } from 'zod/v4';
 import {
@@ -12,6 +12,7 @@ import {
 } from '@aurelia-ls/patterns';
 import { readAureliaDocsCorpusForMcp } from './docs-runtime.js';
 import { AureliaMcpSemanticRuntimeAdapter } from './runtime-adapter.js';
+import { aureliaMcpErrorResult } from './tool-errors.js';
 import {
   appDiagnosticsInputSchema,
   appOverviewInputSchema,
@@ -89,7 +90,10 @@ export function registerAureliaSemanticRuntimeTools(
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,
     },
-    async (input) => jsonResultFrom(() => adapter.workspaceOverview(input as AureliaMcpWorkspaceOverviewInput)),
+    async (input) => toolResultFrom(() => adapter.workspaceOverview(
+      input as AureliaMcpWorkspaceOverviewInput,
+      projectAureliaMcpToolResult,
+    )),
   );
 
   server.registerTool(
@@ -101,31 +105,40 @@ export function registerAureliaSemanticRuntimeTools(
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,
     },
-    async (input) => jsonResultFrom(() => adapter.projectConfigurations(input as AureliaMcpProjectConfigurationsInput)),
+    async (input) => toolResultFrom(() => adapter.projectConfigurations(
+      input as AureliaMcpProjectConfigurationsInput,
+      projectAureliaMcpToolResult,
+    )),
   );
 
   server.registerTool(
     aureliaMcpToolNames.clearAnalysisCache,
     {
       title: 'Aurelia Clear Analysis Cache',
-      description: 'Clear semantic-runtime sessions cached inside this MCP server process after source edits or rebuilds.',
+      description: 'Reclaim session-local retained semantic analysis when memory pressure outweighs warm reuse; dependency SourceFile policy is process-global even with a workspace selector, and managed sessions reconcile edits automatically.',
       inputSchema: strictInputSchema(clearAnalysisCacheInputSchema),
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: cacheManagementToolAnnotations,
     },
-    async (input) => jsonResultFrom(() => adapter.clearAnalysisCache(input as AureliaMcpClearAnalysisCacheInput)),
+    async (input) => toolResultFrom(() => adapter.clearAnalysisCache(
+      input as AureliaMcpClearAnalysisCacheInput,
+      projectAureliaMcpToolResult,
+    )),
   );
 
   server.registerTool(
     aureliaMcpToolNames.analysisCacheOverview,
     {
       title: 'Aurelia Analysis Cache Overview',
-      description: 'Summarize semantic-runtime analysis sessions currently cached inside this MCP server process.',
+      description: 'Summarize managed semantic workspace retention plus process-global dependency-cache and memory telemetry.',
       inputSchema: strictInputSchema(analysisCacheOverviewInputSchema),
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,
     },
-    async (input) => jsonResultFrom(() => adapter.analysisCacheOverview(input as AureliaMcpAnalysisCacheOverviewInput)),
+    async (input) => toolResultFrom(() => adapter.analysisCacheOverview(
+      input as AureliaMcpAnalysisCacheOverviewInput,
+      projectAureliaMcpToolResult,
+    )),
   );
 
   server.registerTool(
@@ -149,7 +162,7 @@ export function registerAureliaSemanticRuntimeTools(
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,
     },
-    async (input) => jsonResultFrom(async () => patternMenu(input as AureliaMcpPatternMenuInput)),
+    (input) => jsonResultFrom(() => patternMenu(input)),
   );
 
   server.registerTool(
@@ -161,7 +174,7 @@ export function registerAureliaSemanticRuntimeTools(
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,
     },
-    async (input) => jsonResultFrom(async () => patternExample(input as AureliaMcpPatternExampleInput)),
+    (input) => jsonResultFrom(() => patternExample(input)),
   );
 
   server.registerTool(
@@ -173,7 +186,7 @@ export function registerAureliaSemanticRuntimeTools(
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,
     },
-    async (input) => jsonResultFrom(async () => docsSearch(input as AureliaMcpDocsSearchInput)),
+    (input) => jsonResultFrom(() => docsSearch(input)),
   );
 
   server.registerTool(
@@ -185,7 +198,7 @@ export function registerAureliaSemanticRuntimeTools(
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,
     },
-    async (input) => jsonResultFrom(async () => docsFetch(input as AureliaMcpDocsFetchInput)),
+    (input) => jsonResultFrom(() => docsFetch(input)),
   );
 
   server.registerTool(
@@ -197,7 +210,10 @@ export function registerAureliaSemanticRuntimeTools(
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,
     },
-    async (input) => jsonResultFrom(() => adapter.appOverview(input as AureliaMcpAppOverviewInput)),
+    async (input) => toolResultFrom(() => adapter.appOverview(
+      input as AureliaMcpAppOverviewInput,
+      projectAureliaMcpToolResult,
+    )),
   );
 
   server.registerTool(
@@ -209,7 +225,10 @@ export function registerAureliaSemanticRuntimeTools(
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,
     },
-    async (input) => jsonResultFrom(() => adapter.routerOverview(input as AureliaMcpRouterOverviewInput)),
+    async (input) => toolResultFrom(() => adapter.routerOverview(
+      input as AureliaMcpRouterOverviewInput,
+      projectAureliaMcpToolResult,
+    )),
   );
 
   server.registerTool(
@@ -221,7 +240,10 @@ export function registerAureliaSemanticRuntimeTools(
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,
     },
-    async (input) => jsonResultFrom(() => adapter.appQuery(input as AureliaMcpAppQueryInput)),
+    async (input) => toolResultFrom(() => adapter.appQuery(
+      input as AureliaMcpAppQueryInput,
+      projectAureliaMcpToolResult,
+    )),
   );
 
   server.registerTool(
@@ -233,7 +255,10 @@ export function registerAureliaSemanticRuntimeTools(
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,
     },
-    async (input) => jsonResultFrom(() => adapter.appQueryBatch(input as AureliaMcpAppQueryBatchInput)),
+    async (input) => toolResultFrom(() => adapter.appQueryBatch(
+      input as AureliaMcpAppQueryBatchInput,
+      projectAureliaMcpToolResult,
+    )),
   );
 
   server.registerTool(
@@ -245,7 +270,10 @@ export function registerAureliaSemanticRuntimeTools(
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,
     },
-    async (input) => jsonResultFrom(() => adapter.openSeamOverview(input as AureliaMcpOpenSeamOverviewInput)),
+    async (input) => toolResultFrom(() => adapter.openSeamOverview(
+      input as AureliaMcpOpenSeamOverviewInput,
+      projectAureliaMcpToolResult,
+    )),
   );
 
   server.registerTool(
@@ -257,7 +285,10 @@ export function registerAureliaSemanticRuntimeTools(
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,
     },
-    async (input) => jsonResultFrom(() => adapter.diagnosticOverview(input as AureliaMcpDiagnosticOverviewInput)),
+    async (input) => toolResultFrom(() => adapter.diagnosticOverview(
+      input as AureliaMcpDiagnosticOverviewInput,
+      projectAureliaMcpToolResult,
+    )),
   );
 
   server.registerTool(
@@ -269,7 +300,10 @@ export function registerAureliaSemanticRuntimeTools(
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,
     },
-    async (input) => jsonResultFrom(() => adapter.appDiagnostics(input as AureliaMcpAppDiagnosticsInput)),
+    async (input) => toolResultFrom(() => adapter.appDiagnostics(
+      input as AureliaMcpAppDiagnosticsInput,
+      projectAureliaMcpToolResult,
+    )),
   );
 
   server.registerTool(
@@ -281,7 +315,10 @@ export function registerAureliaSemanticRuntimeTools(
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,
     },
-    async (input) => jsonResultFrom(() => adapter.templateCursorInfo(input as AureliaMcpTemplateCursorInput)),
+    async (input) => toolResultFrom(() => adapter.templateCursorInfo(
+      input as AureliaMcpTemplateCursorInput,
+      projectAureliaMcpToolResult,
+    )),
   );
 
   server.registerTool(
@@ -293,7 +330,10 @@ export function registerAureliaSemanticRuntimeTools(
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,
     },
-    async (input) => jsonResultFrom(() => adapter.templateCompletions(input as AureliaMcpTemplateCompletionsInput)),
+    async (input) => toolResultFrom(() => adapter.templateCompletions(
+      input as AureliaMcpTemplateCompletionsInput,
+      projectAureliaMcpToolResult,
+    )),
   );
 
   server.registerTool(
@@ -305,35 +345,35 @@ export function registerAureliaSemanticRuntimeTools(
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,
     },
-    async (input) => jsonResultFrom(() => adapter.templateDiagnostics(input as AureliaMcpTemplateDiagnosticsInput)),
+    async (input) => toolResultFrom(() => adapter.templateDiagnostics(
+      input as AureliaMcpTemplateDiagnosticsInput,
+      projectAureliaMcpToolResult,
+    )),
   );
 }
 
-async function jsonResultFrom(read: () => Promise<unknown>) {
+async function jsonResultFrom(read: () => unknown) {
+  return toolResultFrom(async () => projectAureliaMcpToolResult(await read()));
+}
+
+async function toolResultFrom<TResult>(read: () => Promise<TResult>) {
   try {
-    return jsonResult(await read());
+    return await read();
   } catch (error) {
-    return {
-      isError: true,
-      content: [
-        {
-          type: 'text' as const,
-          text: JSON.stringify({ error: serializeError(error) }, null, 2),
-        },
-      ],
-    };
+    return aureliaMcpErrorResult(error);
   }
 }
 
-function jsonResult(value: unknown) {
+export function projectAureliaMcpToolResult(value: unknown) {
+  const detached = jsonDetachedValue(value);
   return {
-    structuredContent: structuredContent(value),
+    structuredContent: structuredContent(detached),
     content: [
       {
         type: 'text' as const,
-        text: aureliaMcpResultText(value),
+        text: aureliaMcpResultText(detached),
       },
-      ...resourceLinksForResult(value),
+      ...resourceLinksForResult(detached),
     ],
   };
 }
@@ -472,15 +512,10 @@ function structuredContent(value: unknown): Record<string, unknown> {
   return { value };
 }
 
-function serializeError(error: unknown): { name: string; message: string } {
-  if (error instanceof Error) {
-    return {
-      name: error.name,
-      message: error.message,
-    };
+function jsonDetachedValue(value: unknown): unknown {
+  const serialized = JSON.stringify(value);
+  if (serialized === undefined) {
+    throw new TypeError('Aurelia MCP tool results must be JSON-serializable values.');
   }
-  return {
-    name: 'Error',
-    message: String(error),
-  };
+  return JSON.parse(serialized) as unknown;
 }

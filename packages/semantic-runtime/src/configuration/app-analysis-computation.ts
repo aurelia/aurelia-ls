@@ -17,6 +17,7 @@ import type {
 } from '../kernel/store.js';
 import {
   combineGenerationCurrentnessWitnesses,
+  requireGenerationCurrentness,
   type GenerationAuthority,
   type GenerationCurrentnessWitness,
 } from '../kernel/generation-authority.js';
@@ -50,12 +51,12 @@ export class AureliaAppWorldProjectGeneration implements GenerationAuthority, Co
   readonly currentnessWitness: GenerationCurrentnessWitness;
 
   constructor(
-    private readonly authority: ComputationGenerationAuthority,
+    readonly computationAuthority: ComputationGenerationAuthority,
     private readonly currentEmission: AureliaAppWorldProjectEmission,
   ) {
-    this.key = authority.key;
+    this.key = computationAuthority.key;
     this.currentnessWitness = combineGenerationCurrentnessWitnesses([
-      authority.currentnessWitness,
+      computationAuthority.currentnessWitness,
       currentEmission.project.inputGeneration.currentnessWitness,
       currentEmission.preTemplate.evaluationGeneration.computationAuthority.currentnessWitness,
       currentEmission.preTemplate.conventionToolingEvaluationGeneration.computationAuthority.currentnessWitness,
@@ -64,11 +65,11 @@ export class AureliaAppWorldProjectGeneration implements GenerationAuthority, Co
   }
 
   get computationId(): ComputationId {
-    return this.authority.computationId;
+    return this.computationAuthority.computationId;
   }
 
   get runSequence(): number {
-    return this.authority.runSequence;
+    return this.computationAuthority.runSequence;
   }
 
   isCurrent(): boolean {
@@ -85,13 +86,17 @@ export class AureliaAppWorldProjectGeneration implements GenerationAuthority, Co
 
   /** Whether the atomic app publication remains the private committed incumbent. */
   isAdmitted(): boolean {
-    return this.authority.isCurrent();
+    return this.computationAuthority.isCurrent();
   }
 
   requireCurrent(): void {
-    if (!this.isCurrent()) {
-      throw new Error(`Aurelia app generation ${this.key} is no longer current.`);
-    }
+    const validationScope = new ComputationReadValidationScope();
+    this.computationAuthority.requireCurrent();
+    this.currentEmission.project.inputGeneration.requireCurrent();
+    this.currentEmission.preTemplate.evaluationGeneration.requireCurrent(validationScope);
+    this.currentEmission.preTemplate.conventionToolingEvaluationGeneration.requireCurrent(validationScope);
+    this.currentEmission.preTemplate.typeSystemGeneration.requireCurrent(validationScope);
+    requireGenerationCurrentness(this.currentnessWitness);
   }
 
   get emission(): AureliaAppWorldProjectEmission {
@@ -101,7 +106,7 @@ export class AureliaAppWorldProjectGeneration implements GenerationAuthority, Co
 
   /** Internal committed handoff; unlike the public emission it may be read while source inputs are temporarily stale. */
   readCommittedEmission(): AureliaAppWorldProjectEmission {
-    this.authority.requireCurrent();
+    this.computationAuthority.requireCurrent();
     return this.currentEmission;
   }
 }

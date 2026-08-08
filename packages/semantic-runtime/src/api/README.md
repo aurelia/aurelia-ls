@@ -105,12 +105,32 @@ not repeatedly rediscover whether the live host now has a different project/sour
 build-daemon consumers must own a `ManagedSemanticWorkspaceSession`. That shared boundary validates source-world
 admission at operation ingress and egress, coalesces re-resolution, keeps the warm runtime for an equivalent portable
 plan, and atomically replaces the private store/runtime incarnation when the plan changes. Its callback must include
-all paging and consumer projection work, and `absorb(...)` must see every semantic answer used by the returned result.
+all paging and consumer projection work. The callback receives a positive, revocable query facade rather than the raw
+runtime: facade answers are composed into the operation receipt automatically, and facade promises still pending when
+the callback finishes are drained before egress. Use `absorb(...)` only for a semantic answer obtained outside that
+facade; explicitly absorbing a facade answer is rejected so receipt observation is not duplicated. Facade answer
+envelopes remain portable DTOs after the callback, but their process-private root and nested proofs are revoked at that
+boundary. Consumers that deliberately retain a bounded mapped result with executable currentness must use
+`runWithReceipt(...)`, retain its opaque managed receipt alongside the mapped value, and dispose that receipt when the
+cache entry is replaced.
 Reconciliation may coalesce or retry before admission, but an admitted callback runs at most once: a stale egress is a
 typed operation failure for the protocol/client to reissue, never an implicit replay of consumer mapping or side effects.
 Descriptor parity means IDE, MCP, and AOT apply the same semantic rules to the same admitted input snapshot. Independent
 MCP disk authority cannot literally share unsaved IDE buffers until a future IDE-session proxy or immutable overlay
 handoff supplies that same source snapshot and its revisions.
+
+Managed cache control uses the same writer-preferring FIFO boundary. `analysisCacheOverview({}, projector)` is a shared,
+session-local read whose projector receives only the supplied control answer. `clearAnalysisCache({}, projector)` closes
+reader admission, drains the FIFO-selected incumbent, clears its session-owned cache exactly once, and keeps projection
+inside the exclusive operation. A topology change during the drain reports `reconciliation-pending`; it does not stale-
+reject or replay the successful clear, and reconciliation runs before later readers. The leading request is deliberately
+required because the projector is required; pass `{}` while session-local clear has no policy knobs.
+
+Process-owned TypeScript dependency SourceFile retention has a separate zero-session authority:
+`semanticRuntimeProcessTypeSystemCacheOverview(...)` and `clearSemanticRuntimeProcessTypeSystemCache(...)`. Aggregate
+consumers should observe or clear that cache once per process operation, not once per managed workspace. Legacy raw
+`SemanticRuntime.analysisCacheOverview(...)` and `clearAnalysisCache(...)` compose the session-local and process-owned
+views for one-shot callers; managed session overview, clear, retirement, and disposal never rescan or clear process state.
 
 Use a runtime snapshot to open one project app with `runtime.openApp(...)`. `SemanticApp.ask(...)` accepts a small query
 envelope for app facts; direct cursor-locus
@@ -208,6 +228,13 @@ The temporary aggregate is released after use and never replaces the historical 
 Project-input, source-world, analysis-receipt, and app-generation validators resample their relevant authority after
 fallible/reentrant callbacks. A callback that publishes a relevant input event or revokes a combined generation cannot
 return a receipt or cache generation that was current only at the start of validation.
+An intended race that survives those validators escapes as `SemanticRuntimeAnalysisCurrentnessError`, with the stable
+code `SEMANTIC_RUNTIME_ANALYSIS_CURRENTNESS_CHANGED` and JSON-safe reason, lease, generation, read, semantic-fact, and
+facet facts.
+That nominal error is shared semantic evidence, not a transport retry decision: consumers may classify the direct error
+with `isSemanticRuntimeAnalysisCurrentnessError`, but must not infer staleness from message text, a nested `cause`, an
+`AggregateError`, or a failure receipt that happened to become stale later. Arbitrary mapper, lease-callback, ownership,
+and invariant failures retain their original identity and do not authorize retained-answer eviction or automatic retry.
 Transport page policy is not semantic query identity, but it is retained-answer response-policy identity. A bounded
 caller and an unbounded caller may share semantic materialization while never replaying each other's clamped DTO.
 App-world-free app-query answers stay at the runtime boundary. `SourceFiles` can answer from the booted project frame,

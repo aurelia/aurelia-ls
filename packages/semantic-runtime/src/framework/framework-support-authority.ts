@@ -1,4 +1,5 @@
 import {
+  computationCommitCurrentnessError,
   ComputationCommitState,
   type ComputationGenerationAuthority,
   type ComputationLifecycleRegistry,
@@ -121,7 +122,10 @@ export class FrameworkSupportAuthority implements SemanticRuntimeSupport {
     )));
     const commit = run.commit();
     if (commit.state !== ComputationCommitState.Committed) {
-      throw new Error(`Framework intrinsic DI keys were rejected as ${commit.state}.`);
+      throw computationCommitCurrentnessError(
+        commit,
+        `Framework intrinsic DI keys were rejected as ${commit.state}.`,
+      );
     }
     this.intrinsicDiKeyAuthority = this.lifecycle.admitCommittedGeneration(
       run.computationId,
@@ -225,7 +229,10 @@ export class FrameworkSupportAuthority implements SemanticRuntimeSupport {
     }
     const commit = run.commit();
     if (commit.state !== ComputationCommitState.Committed) {
-      throw new Error(`Framework support catalog ${kind}:${key} was rejected as ${commit.state}.`);
+      throw computationCommitCurrentnessError(
+        commit,
+        `Framework support catalog ${kind}:${key} was rejected as ${commit.state}.`,
+      );
     }
     const authority = this.lifecycle.admitCommittedGeneration(
       run.computationId,

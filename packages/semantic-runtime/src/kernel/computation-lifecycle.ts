@@ -7,7 +7,7 @@ import type {
 import type { ProductDetailReadView, ProductDetailSlot } from './product-details.js';
 import {
   KernelDetailAdmission,
-  KernelPublicationDecision,
+  type KernelPublicationDecision,
   KernelPublicationDecisionKind,
   KernelPublicationManifest,
   KernelPublicationPlan,
@@ -44,10 +44,12 @@ import {
   combineGenerationCurrentnessWitnesses,
   GenerationCurrentnessChangedError,
   GenerationCurrentnessClock,
+  requireGenerationCurrentness,
   rekeyGenerationCurrentnessWitness,
   type GenerationAuthority,
   type GenerationCurrentnessWitness,
 } from './generation-authority.js';
+import { SemanticRuntimeAnalysisCurrentnessError } from './analysis-currentness.js';
 import type { SourceFileAddress } from './address.js';
 
 declare const computationIdBrand: unique symbol;
@@ -55,7 +57,7 @@ declare const computationIdBrand: unique symbol;
 /** Opaque identity for one logical computation occurrence inside an active store. */
 export type ComputationId = string & { readonly [computationIdBrand]: true };
 
-/** Exact identity of one admitted committed computation generation. */
+/** Exact structural identity of one committed computation generation; admission authority remains separately minted. */
 export interface ComputationGenerationReference {
   readonly computationId: ComputationId;
   readonly runSequence: number;
@@ -798,6 +800,55 @@ export class ComputationCommitResult {
   }
 }
 
+/** Convert an expected rejected publication into the shared semantic currentness signal. */
+export function computationCommitCurrentnessError(
+  result: ComputationCommitResult,
+  message = `Computation ${result.transition.computationId}@${result.transition.runSequence} was rejected as ${result.state}.`,
+): SemanticRuntimeAnalysisCurrentnessError {
+  switch (result.state) {
+    case ComputationCommitState.RejectedSuperseded:
+      return new SemanticRuntimeAnalysisCurrentnessError({
+        message,
+        reason: 'computation-superseded',
+        invalidGenerationKeys: [computationRunCurrentnessKey(result.transition.computationId)],
+      });
+    case ComputationCommitState.RejectedInputsChanged:
+      return new SemanticRuntimeAnalysisCurrentnessError({
+        message,
+        reason: 'computation-inputs-changed',
+        changedReadKeys: result.transition.invalidReads.map((read) => read.readKey),
+        changedFacets: result.transition.invalidReads.flatMap((read) => read.changedFacets),
+      });
+    case ComputationCommitState.RejectedCurrentnessChanged:
+      return new SemanticRuntimeAnalysisCurrentnessError({
+        message,
+        reason: 'computation-currentness-changed',
+        invalidGenerationKeys: result.transition.invalidCurrentnessGuards.map((guard) => guard.guardKey),
+      });
+    case ComputationCommitState.Committed:
+      throw new Error('A committed computation result has no currentness failure.');
+  }
+}
+
+/** Convert one failed committed-read validation into the shared semantic currentness signal. */
+export function computationReadCurrentnessError(
+  read: Pick<ComputationRead, 'domain' | 'readKey' | 'observedRevision'>,
+  validation: ComputationReadValidation,
+  message = `Computation read ${read.readKey}@${read.observedRevision} is no longer current.`,
+): SemanticRuntimeAnalysisCurrentnessError {
+  if (validation.isCurrent) {
+    throw new Error(`Current computation read '${read.readKey}' has no currentness failure.`);
+  }
+  const generationChanged = validation.changedFacets.includes('generation');
+  return new SemanticRuntimeAnalysisCurrentnessError({
+    message,
+    reason: generationChanged ? 'generation-changed' : 'computation-inputs-changed',
+    invalidGenerationKeys: generationChanged ? [read.readKey] : [],
+    changedReadKeys: generationChanged ? [] : [read.readKey],
+    changedFacets: validation.changedFacets,
+  });
+}
+
 /** Current complete read/output closure for one logical computation. */
 export class ComputationState {
   readonly computationId: ComputationId;
@@ -1043,16 +1094,15 @@ class ComputationChildPreparationFailure extends Error {
 }
 
 /** Revocable capability for one successfully committed computation generation. */
-export interface ComputationGenerationAuthority extends GenerationAuthority {
+export interface ComputationGenerationAuthority extends GenerationAuthority, ComputationGenerationReference {
   readonly key: string;
-  readonly computationId: ComputationId;
-  readonly runSequence: number;
 }
 
 class LifecycleComputationGenerationAuthority implements ComputationGenerationAuthority {
   readonly key: string;
 
   constructor(
+    private readonly owner: object,
     readonly computationId: ComputationId,
     readonly runSequence: number,
     readonly currentnessWitness: GenerationCurrentnessWitness,
@@ -1065,9 +1115,11 @@ class LifecycleComputationGenerationAuthority implements ComputationGenerationAu
   }
 
   requireCurrent(): void {
-    if (!this.isCurrent()) {
-      throw new Error(`Computation generation ${this.key} is no longer current.`);
-    }
+    requireGenerationCurrentness(this.currentnessWitness);
+  }
+
+  belongsTo(owner: object): boolean {
+    return this.owner === owner;
   }
 }
 
@@ -1220,14 +1272,20 @@ export class ComputationRun implements KernelPublicationContext {
     }
     this.requireHealthy();
     if (!this.registry.isLatestRun(this)) {
-      throw new Error(`Computation run ${this.computationId}@${this.runSequence} has been superseded.`);
+      throw new SemanticRuntimeAnalysisCurrentnessError({
+        message: `Computation run ${this.computationId}@${this.runSequence} has been superseded.`,
+        reason: 'computation-superseded',
+        invalidGenerationKeys: [computationRunCurrentnessKey(this.computationId)],
+      });
     }
     const invalidGuards = invalidCurrentnessGuards([...this.currentnessGuardsByKey.values()]);
     if (invalidGuards.length > 0) {
-      throw new Error(
-        `Computation run ${this.computationId}@${this.runSequence} has revoked currentness guards: `
-        + invalidGuards.map((guard) => guard.guardKey).join(', '),
-      );
+      throw new SemanticRuntimeAnalysisCurrentnessError({
+        message: `Computation run ${this.computationId}@${this.runSequence} has revoked currentness guards: `
+          + invalidGuards.map((guard) => guard.guardKey).join(', '),
+        reason: 'computation-currentness-changed',
+        invalidGenerationKeys: invalidGuards.map((guard) => guard.guardKey),
+      });
     }
     this.publications.requireCurrent();
   }
@@ -2289,6 +2347,7 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
   private readonly childProducerByKey = new Map<string, ComputationChildId>();
   private nextComputationOrdinal = 1;
   private readonly publicationOwner = {};
+  private readonly generationAuthorityOwner = {};
 
   constructor(private readonly store: KernelStore) {
     store.registerComputationLifecycle(this);
@@ -2334,8 +2393,15 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
     candidate: KernelPublicationDecisionPreviewCandidate,
   ): readonly KernelPublicationDecision[] {
     const entry = this.entriesById.get(run.computationId);
-    if (entry == null || !run.candidateCurrentnessWitness.isCurrent()) {
-      throw new Error(`Cannot preview superseded computation run ${run.computationId}@${run.runSequence}.`);
+    if (entry == null) {
+      throw new Error(`Cannot preview unknown computation run ${run.computationId}@${run.runSequence}.`);
+    }
+    if (!run.candidateCurrentnessWitness.isCurrent()) {
+      throw new SemanticRuntimeAnalysisCurrentnessError({
+        message: `Cannot preview superseded computation run ${run.computationId}@${run.runSequence}.`,
+        reason: 'computation-superseded',
+        invalidGenerationKeys: [computationRunCurrentnessKey(run.computationId)],
+      });
     }
     return this.store.previewOwnedPublicationCandidateDecisions(
       entry.state?.publication ?? KernelPublicationManifest.empty,
@@ -2353,7 +2419,9 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
    * computation generations.
    *
    * This is the safe extraction boundary for detached provenance such as source-world receipts. It deliberately does
-   * not expose `ComputationState`, sealed wrappers, currentness clocks, publications, or domain object graphs.
+   * not expose `ComputationState`, sealed wrappers, currentness clocks, publications, or domain object graphs. A
+   * locally minted authority preserves nominal currentness when its admitted generation is superseded; structural or
+   * foreign references cannot make that claim and fail as ordinary invariants.
    */
   readCommittedGenerationReadClosure<TRead extends ComputationRead>(
     generation: ComputationGenerationReference,
@@ -2364,6 +2432,18 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
     const selectedRevisionByKey = new Map<string, string>();
 
     const visit = (reference: ComputationGenerationReference): void => {
+      const carriedAuthority = reference instanceof LifecycleComputationGenerationAuthority
+        ? reference
+        : null;
+      const localAuthority = carriedAuthority?.belongsTo(this.generationAuthorityOwner) === true
+        ? carriedAuthority
+        : null;
+      if (carriedAuthority != null && localAuthority == null) {
+        throw new Error(
+          `Cannot project uncommitted or unadmitted computation generation `
+          + `${reference.computationId}@${reference.runSequence}.`,
+        );
+      }
       const generationKey = JSON.stringify([reference.computationId, reference.runSequence]);
       if (visitedGenerations.has(generationKey)) {
         return;
@@ -2374,13 +2454,16 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
         entry == null
         || state?.committedRunSequence !== reference.runSequence
         || entry.admittedGenerationDomains.size === 0
-        || !state.currentnessWitness.isCurrent()
       ) {
+        // Only an authority minted by this registry proves that this exact generation was once admitted. Its revoked
+        // witness is an expected currentness race; foreign and structural references remain ordinary invariants.
+        localAuthority?.requireCurrent();
         throw new Error(
           `Cannot project uncommitted or unadmitted computation generation `
           + `${reference.computationId}@${reference.runSequence}.`,
         );
       }
+      requireGenerationCurrentness(state.currentnessWitness);
       visitedGenerations.add(generationKey);
 
       const openReads = [
@@ -2438,6 +2521,7 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
     }
     entry.admittedGenerationDomains.add(domain);
     return new LifecycleComputationGenerationAuthority(
+      this.generationAuthorityOwner,
       computationId,
       runSequence,
       entry.state.currentnessWitness,

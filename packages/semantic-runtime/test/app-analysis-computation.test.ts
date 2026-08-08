@@ -6,7 +6,12 @@ import { describe, expect, test, vi } from 'vitest';
 
 import { createSemanticRuntime } from '../src/api/runtime.js';
 import { SemanticAppQueryKind, SemanticRuntimeDetail } from '../src/api/contracts.js';
+import {
+  SEMANTIC_RUNTIME_ANALYSIS_CURRENTNESS_ERROR_CODE,
+  SemanticRuntimeAnalysisCurrentnessError,
+} from '../src/kernel/analysis-currentness.js';
 import { ComputationCommitState } from '../src/kernel/computation-lifecycle.js';
+import { GenerationCurrentnessChangedError } from '../src/kernel/generation-authority.js';
 import {
   NodeSemanticRuntimeProjectInputHost,
   SemanticRuntimeProjectInputAuthority,
@@ -65,6 +70,11 @@ describe('app analysis computation', () => {
     });
     const incumbent = await runtime.openApp({ analysisDepth: 'runtime-topology' });
     const projectKey = incumbent.project.projectKey;
+    const incumbentGeneration = runtime.appAnalysisComputations.authorityFor(projectKey).committed();
+    expect(incumbentGeneration).not.toBeNull();
+    if (incumbentGeneration == null) {
+      throw new Error('Expected the incumbent app generation to be committed.');
+    }
     const retainedExpressionWorld = incumbent.emission.templates.expressionWorld;
     const retainedInquiryWorld = retainedExpressionWorld.freshInquiryGeneration();
     const retainedAsk = incumbent.ask.bind(incumbent);
@@ -131,11 +141,17 @@ describe('app analysis computation', () => {
     expect(store.productDetails.read(TemplateProductDetails.Source, candidateSource.productHandle)).toBe(candidateSource);
     expect(generation.emission.templates.expressionWorld.projector.publication.isCurrent()).toBe(true);
     expect(incumbent.isCurrent()).toBe(false);
-    expect(() => incumbent.emission).toThrow(/no longer current/);
-    expect(() => incumbent.queryClaims).toThrow(/no longer current/);
-    expect(() => retainedAsk({ kind: SemanticAppQueryKind.TemplateCompilations })).toThrow(/no longer current/);
-    expect(() => retainedExpressionWorld.evaluator()).toThrow(/no longer current/);
-    expect(() => retainedInquiryWorld.evaluator()).toThrow(/no longer current/);
+    const incumbentInvalidGenerationKeys = [
+      `computation-generation:${incumbentGeneration.computationId}`,
+    ];
+    expectGenerationCurrentnessChanged(() => incumbent.emission, incumbentInvalidGenerationKeys);
+    expectGenerationCurrentnessChanged(() => incumbent.queryClaims, incumbentInvalidGenerationKeys);
+    expectGenerationCurrentnessChanged(
+      () => retainedAsk({ kind: SemanticAppQueryKind.TemplateCompilations }),
+      incumbentInvalidGenerationKeys,
+    );
+    expectGenerationCurrentnessChanged(() => retainedExpressionWorld.evaluator(), incumbentInvalidGenerationKeys);
+    expectGenerationCurrentnessChanged(() => retainedInquiryWorld.evaluator(), incumbentInvalidGenerationKeys);
     expect(runtime.appAnalysisComputations.retire(generation)).toBe(true);
     expect(runtime.appAnalysisComputations.authorityFor(projectKey).current()).toBeNull();
   }, 60_000);
@@ -198,7 +214,10 @@ describe('app analysis computation', () => {
     expect(runtime.workspace.store.read(ownedSource.productHandle)).toBeNull();
     expect(service.authorityFor(incumbent.project.projectKey).current()).toBeNull();
     expect(winningGeneration.isCurrent()).toBe(false);
-    expect(() => winningGeneration.emission).toThrow(/no longer current/);
+    expectGenerationCurrentnessChanged(
+      () => winningGeneration.emission,
+      [`computation-generation:${winningGeneration.computationId}`],
+    );
     expect(service.retire(winningGeneration)).toBe(false);
   }, 90_000);
 
@@ -235,8 +254,12 @@ describe('app analysis computation', () => {
     expect(first.isCurrent()).toBe(false);
     expect(advancedDuringValidation).toBe(true);
     validationSpy.mockRestore();
-    expect(() => first.emission).toThrow(/no longer current/);
-    expect(() => retainedAsk({ kind: SemanticAppQueryKind.TemplateCompilations })).toThrow(/no longer current/);
+    const invalidProjectInputGenerationKeys = [`project-input-generation:${first.project.projectKey}`];
+    expectGenerationCurrentnessChanged(() => first.emission, invalidProjectInputGenerationKeys);
+    expectGenerationCurrentnessChanged(
+      () => retainedAsk({ kind: SemanticAppQueryKind.TemplateCompilations }),
+      invalidProjectInputGenerationKeys,
+    );
 
     const second = await runtime.openApp({ analysisDepth: 'binding-observation' });
     expect(second).not.toBe(first);
@@ -665,4 +688,28 @@ describe('app analysis computation', () => {
 function pressureFixtureRoot(fixtureName: string): string {
   const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
   return path.join(packageRoot, 'fixtures/pressure', fixtureName);
+}
+
+function expectGenerationCurrentnessChanged(
+  operation: () => unknown,
+  invalidGenerationKeys: readonly string[],
+): void {
+  let failure: unknown;
+  try {
+    operation();
+  } catch (error) {
+    failure = error;
+  }
+
+  expect(failure).toBeInstanceOf(GenerationCurrentnessChangedError);
+  expect(failure).toBeInstanceOf(SemanticRuntimeAnalysisCurrentnessError);
+  expect(failure).toMatchObject({
+    code: SEMANTIC_RUNTIME_ANALYSIS_CURRENTNESS_ERROR_CODE,
+    reason: 'generation-changed',
+    answerLeaseKind: null,
+    invalidKeys: invalidGenerationKeys,
+    invalidGenerationKeys,
+    changedReadKeys: [],
+    changedFacets: [],
+  });
 }

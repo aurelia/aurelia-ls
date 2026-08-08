@@ -46,6 +46,9 @@ jobs:
         env:
           PNPM_APPROVE_BUILDS: esbuild
 
+      - name: Bootstrap linked Aurelia dependencies
+        run: pnpm bootstrap:aurelia
+
       - name: Build semantic runtime
         run: pnpm --filter @aurelia-ls/semantic-runtime build
 
@@ -84,6 +87,9 @@ jobs:
         run: pnpm install --frozen-lockfile
         env:
           PNPM_APPROVE_BUILDS: esbuild
+
+      - name: Bootstrap linked Aurelia dependencies
+        run: pnpm bootstrap:aurelia
 
       - name: Smoke Atlas source maps
         run: pnpm --filter @aurelia-ls/atlas smoke

@@ -21,9 +21,14 @@ import {
   type QueryClaimRetentionPolicy,
 } from '../src/inquiry/query-claim-policy.js';
 import { KernelStore } from '../src/kernel/store.js';
+import {
+  isSemanticRuntimeAnalysisCurrentnessError,
+  SemanticRuntimeAnalysisCurrentnessError,
+} from '../src/kernel/analysis-currentness.js';
 
 class TestAnswerLease implements QueryClaimAnswerLease {
   current = true;
+  currentnessFailure: Error | null = null;
   validationCalls = 0;
   disposalCalls = 0;
 
@@ -32,9 +37,18 @@ class TestAnswerLease implements QueryClaimAnswerLease {
     private readonly onDispose?: () => void,
   ) {}
 
-  isCurrent(): boolean {
+  assertCurrent(): void {
     this.validationCalls += 1;
-    return this.current;
+    if (this.currentnessFailure != null) {
+      throw this.currentnessFailure;
+    }
+    if (!this.current) {
+      throw new SemanticRuntimeAnalysisCurrentnessError({
+        message: `Query answer lease '${this.kind}' is no longer current.`,
+        reason: 'query-answer-lease-changed',
+        answerLeaseKind: this.kind,
+      });
+    }
   }
 
   dispose(): void {
@@ -275,6 +289,100 @@ describe('query-claim answer leases', () => {
       disposed: 1,
     });
   });
+
+  test('reports an explicitly stale fresh lease as nominal semantic currentness', () => {
+    const graph = new QueryClaimGraph('mcp-orientation', retainedAnswerPolicy());
+    const lease = new TestAnswerLease('semantic-basis');
+    lease.current = false;
+
+    let failure: unknown;
+    try {
+      graph.answer(input, () => answer('stale'), {
+        requiredAnswerLeaseKind: 'semantic-basis',
+        sealAnswerLease: () => lease,
+      });
+    } catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toBeInstanceOf(SemanticRuntimeAnalysisCurrentnessError);
+    expect(isSemanticRuntimeAnalysisCurrentnessError(failure) && failure).toMatchObject({
+      reason: 'query-answer-lease-changed',
+      answerLeaseKind: 'semantic-basis',
+    });
+  });
+
+  test('preserves the exact nominal evidence owned by a stale lease', () => {
+    const graph = new QueryClaimGraph('mcp-orientation', retainedAnswerPolicy());
+    const lease = new TestAnswerLease('semantic-basis');
+    const exactFailure = new SemanticRuntimeAnalysisCurrentnessError({
+      message: 'The exact lease proof changed.',
+      reason: 'query-answer-lease-changed',
+      answerLeaseKind: lease.kind,
+      invalidGenerationKeys: ['generation:app'],
+      changedReadKeys: ['project-input:file-content:C:/workspace/src/app.ts'],
+      changedFacets: ['templates'],
+      changedSemanticFactKeys: ['static-project-evaluation-profile:project:app'],
+    });
+    lease.currentnessFailure = exactFailure;
+
+    let failure: unknown;
+    try {
+      graph.answer(input, () => answer('stale'), {
+        requiredAnswerLeaseKind: 'semantic-basis',
+        sealAnswerLease: () => lease,
+      });
+    } catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toBe(exactFailure);
+    expect(failure).toMatchObject({
+      invalidGenerationKeys: ['generation:app'],
+      changedReadKeys: ['project-input:file-content:C:/workspace/src/app.ts'],
+      changedFacets: ['templates'],
+      changedSemanticFactKeys: ['static-project-evaluation-profile:project:app'],
+    });
+  });
+
+  test.each(['validator', 'composer'] as const)(
+    'propagates an arbitrary retained-lease %s failure without discarding or rematerializing the answer',
+    (failureKind) => {
+      const graph = new QueryClaimGraph('mcp-orientation', retainedAnswerPolicy());
+      const lease = new TestAnswerLease('semantic-basis');
+      let materializations = 0;
+      graph.answer(input, () => {
+        materializations += 1;
+        return answer('retained');
+      }, {
+        requiredAnswerLeaseKind: 'semantic-basis',
+        sealAnswerLease: () => lease,
+      });
+      const sentinel = new Error(`${failureKind} mapping exploded`);
+      if (failureKind === 'validator') {
+        lease.assertCurrent = () => {
+          throw sentinel;
+        };
+      }
+
+      expect(() => graph.answer(input, () => {
+        materializations += 1;
+        return answer('must not rematerialize');
+      }, {
+        requiredAnswerLeaseKind: 'semantic-basis',
+        composeRetainedAnswerLease: failureKind === 'composer'
+          ? () => { throw sentinel; }
+          : undefined,
+      })).toThrow(sentinel);
+
+      expect(materializations).toBe(1);
+      expect(lease.disposalCalls).toBe(0);
+      expect(graph.snapshot()).toMatchObject({
+        retainedRecords: 1,
+        disposed: 0,
+      });
+    },
+  );
 
   test('rejects unleased and wrong-kind retained answers under a required lease contract', () => {
     const missingGraph = new QueryClaimGraph('mcp-orientation', retainedAnswerPolicy());

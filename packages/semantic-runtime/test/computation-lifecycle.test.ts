@@ -17,8 +17,13 @@ import {
   ComputationChildRole,
   ComputationChildSccKind,
   ComputationChildTransitionKind,
+  ComputationCommitResult,
   ComputationCommitState,
+  ComputationInvalidCurrentnessGuard,
+  ComputationInvalidRead,
   ComputationReadValidationScope,
+  ComputationTransition,
+  computationCommitCurrentnessError,
   computationChildResultReadKey,
   computationHotDetailReadKey,
   ComputationLifecycleRegistry,
@@ -83,9 +88,79 @@ import {
 import { KernelVocabulary, type ProductKindKey } from "../src/kernel/vocabulary.js";
 import {
   emptyGenerationCurrentnessWitness,
+  GenerationCurrentnessChangedError,
   GenerationCurrentnessClock,
   type GenerationCurrentnessWitness,
 } from "../src/kernel/generation-authority.js";
+import { SemanticRuntimeAnalysisCurrentnessError } from "../src/kernel/analysis-currentness.js";
+
+describe("computation currentness failures", () => {
+  test.each([
+    {
+      state: ComputationCommitState.RejectedSuperseded,
+      invalidReads: [],
+      invalidGuards: [],
+      expected: {
+        reason: "computation-superseded",
+        invalidGenerationKeys: ["computation-run:currentness-helper"],
+        changedReadKeys: [],
+        changedFacets: [],
+      },
+    },
+    {
+      state: ComputationCommitState.RejectedInputsChanged,
+      invalidReads: [new ComputationInvalidRead(
+        "source:b",
+        "source",
+        "before",
+        "after",
+        ["text", "existence"],
+      )],
+      invalidGuards: [],
+      expected: {
+        reason: "computation-inputs-changed",
+        invalidGenerationKeys: [],
+        changedReadKeys: ["source:b"],
+        changedFacets: ["existence", "text"],
+      },
+    },
+    {
+      state: ComputationCommitState.RejectedCurrentnessChanged,
+      invalidReads: [],
+      invalidGuards: [new ComputationInvalidCurrentnessGuard("guard:b")],
+      expected: {
+        reason: "computation-currentness-changed",
+        invalidGenerationKeys: ["guard:b"],
+        changedReadKeys: [],
+        changedFacets: [],
+      },
+    },
+  ])("classifies $state without losing its invalidation facts", ({
+    state,
+    invalidReads,
+    invalidGuards,
+    expected,
+  }) => {
+    const transition = new ComputationTransition(
+      "currentness-helper" as never,
+      7,
+      state,
+      [],
+      invalidReads,
+      invalidGuards,
+      [],
+      [],
+    );
+
+    const failure = computationCommitCurrentnessError(
+      new ComputationCommitResult(state, transition),
+      "Currentness helper rejected its candidate.",
+    );
+
+    expect(failure).toBeInstanceOf(SemanticRuntimeAnalysisCurrentnessError);
+    expect(failure).toMatchObject(expected);
+  });
+});
 
 describe("kernel detail reference normalization", () => {
   test("preserves surface identity while deduplicating into canonical order", () => {
@@ -7873,7 +7948,7 @@ describe("computation lifecycle", () => {
     const replacement = lifecycle.begin(locus("typed-read-closure-root"));
     replacement.observe(derivedRead("root-child-generation", middleGeneration));
     expect(replacement.commit().state).toBe(ComputationCommitState.Committed);
-    lifecycle.admitCommittedGeneration(
+    const replacementGeneration = lifecycle.admitCommittedGeneration(
       replacement.computationId,
       replacement.runSequence,
       "test-root-generation",
@@ -7881,7 +7956,88 @@ describe("computation lifecycle", () => {
     expect(() => lifecycle.readCommittedGenerationReadClosure(
       rootGeneration,
       (read): read is SemanticRuntimeProjectInputRead => read instanceof SemanticRuntimeProjectInputRead,
+    )).toThrow(GenerationCurrentnessChangedError);
+
+    expect(() => lifecycle.readCommittedGenerationReadClosure(
+      {
+        computationId: rootGeneration.computationId,
+        runSequence: rootGeneration.runSequence,
+      },
+      (read): read is SemanticRuntimeProjectInputRead => read instanceof SemanticRuntimeProjectInputRead,
     )).toThrow(/uncommitted or unadmitted computation generation/);
+
+    const sourceReplacement = lifecycle.begin(locus("typed-read-closure-source"));
+    sourceReplacement.observe(inputRead);
+    expect(sourceReplacement.commit().state).toBe(ComputationCommitState.Committed);
+    lifecycle.admitCommittedGeneration(
+      sourceReplacement.computationId,
+      sourceReplacement.runSequence,
+      "test-source-generation",
+    );
+    expect(() => lifecycle.readCommittedGenerationReadClosure(
+      replacementGeneration,
+      (read): read is SemanticRuntimeProjectInputRead => read instanceof SemanticRuntimeProjectInputRead,
+    )).toThrow(GenerationCurrentnessChangedError);
+  });
+
+  test("recognizes superseded authorities only when they were minted by the same lifecycle registry", () => {
+    const localStore = new KernelStore("computation-local-generation-authority");
+    const localLifecycle = new ComputationLifecycleRegistry(localStore);
+    const localRun = localLifecycle.begin(locus("generation-authority-owner"));
+    expect(localRun.commit().state).toBe(ComputationCommitState.Committed);
+    const localGeneration = localLifecycle.admitCommittedGeneration(
+      localRun.computationId,
+      localRun.runSequence,
+      "local-generation",
+    );
+
+    const foreignStore = new KernelStore("computation-foreign-generation-authority");
+    const foreignLifecycle = new ComputationLifecycleRegistry(foreignStore);
+    const foreignRun = foreignLifecycle.begin(locus("generation-authority-owner"));
+    expect(foreignRun.commit().state).toBe(ComputationCommitState.Committed);
+    const foreignGeneration = foreignLifecycle.admitCommittedGeneration(
+      foreignRun.computationId,
+      foreignRun.runSequence,
+      "foreign-generation",
+    );
+    expect(foreignGeneration).toMatchObject({
+      computationId: localGeneration.computationId,
+      runSequence: localGeneration.runSequence,
+    });
+    const foreignReplacement = foreignLifecycle.begin(locus("generation-authority-owner"));
+    expect(foreignReplacement.commit().state).toBe(ComputationCommitState.Committed);
+    foreignLifecycle.admitCommittedGeneration(
+      foreignReplacement.computationId,
+      foreignReplacement.runSequence,
+      "foreign-generation",
+    );
+    expect(foreignGeneration.isCurrent()).toBe(false);
+    expect(() => localLifecycle.readCommittedGenerationReadClosure(
+      foreignGeneration,
+      (_read): _read is ComputationRead => true,
+    )).toThrow(/uncommitted or unadmitted computation generation/);
+
+    const replacement = localLifecycle.begin(locus("generation-authority-owner"));
+    expect(replacement.commit().state).toBe(ComputationCommitState.Committed);
+    localLifecycle.admitCommittedGeneration(
+      replacement.computationId,
+      replacement.runSequence,
+      "local-generation",
+    );
+    let failure: unknown;
+    try {
+      localLifecycle.readCommittedGenerationReadClosure(
+        localGeneration,
+        (_read): _read is ComputationRead => true,
+      );
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toBeInstanceOf(GenerationCurrentnessChangedError);
+    expect(failure).toMatchObject({
+      reason: "generation-changed",
+      invalidGenerationKeys: [`computation-generation:${localGeneration.computationId}`],
+    });
   });
 
   test("supersedes an unpublished first generation across a lifetime disposal boundary", () => {

@@ -1226,30 +1226,42 @@ export interface SemanticRuntimeSummary {
   readonly projects: readonly SemanticProjectSummary[];
 }
 
-export interface SemanticRuntimeAnalysisCacheOverviewRequest {
+/** Retention controls that are meaningful for one runtime/session overview. */
+export interface SemanticRuntimeSessionAnalysisCacheOverviewRequest {
   /** Include top kernel-density breakdown rows; defaults to false for low-token cache checks. */
   readonly includeKernelBreakdowns?: boolean | null;
   /** Include opt-in shallow product-detail and hot-detail density rows; requires kernel breakdowns. */
   readonly includeDetailDensity?: boolean | null;
   /** Include recent retained query-claim records for each runtime/app graph; defaults to false. */
   readonly includeQueryClaimRows?: boolean | null;
-  /** Include largest retained TypeScript dependency source-file cache entries; defaults to false. */
-  readonly includeTypeSystemDependencyEntries?: boolean | null;
   /** Cap high-cardinality breakdown rows; defaults to 8. */
   readonly rowLimit?: number | null;
 }
 
-export interface SemanticRuntimeAnalysisCacheOverviewResult {
+/** Legacy combined session and process overview request. */
+export interface SemanticRuntimeAnalysisCacheOverviewRequest
+  extends SemanticRuntimeSessionAnalysisCacheOverviewRequest {
+  /** Include largest retained TypeScript dependency source-file cache entries; defaults to false. */
+  readonly includeTypeSystemDependencyEntries?: boolean | null;
+}
+
+/** Retention owned by one runtime/session, excluding process-owned caches and process memory. */
+export interface SemanticRuntimeSessionAnalysisCacheOverviewResult {
   readonly displayText: string;
   readonly cachedAppCount: number;
   readonly typeSystemProjectCount: number;
   readonly cachedApps: readonly SemanticRuntimeCachedAppSummary[];
   readonly runtimeQueryClaimProfiles: readonly SemanticRuntimeCachedAppQueryClaimProfileSummary[];
-  readonly typeSystemDependencyCache: SemanticRuntimeTypeSystemDependencyCacheSummary;
-  readonly processMemory: SemanticRuntimeMemorySample;
   readonly workspaceKernel: SemanticRuntimeKernelCountSnapshot | SemanticRuntimeKernelDensitySnapshot;
   readonly retention: SemanticRuntimeCacheRetentionSummary;
   readonly summary: string;
+}
+
+/** Legacy combined view of one runtime/session plus process-owned retention and memory. */
+export interface SemanticRuntimeAnalysisCacheOverviewResult
+  extends SemanticRuntimeSessionAnalysisCacheOverviewResult {
+  readonly typeSystemDependencyCache: SemanticRuntimeTypeSystemDependencyCacheSummary;
+  readonly processMemory: SemanticRuntimeMemorySample;
 }
 
 export interface SemanticRuntimeTypeSystemDependencyCacheSummary {
@@ -1311,6 +1323,17 @@ export interface SemanticRuntimeTypeSystemDependencyCacheEntrySummary {
   readonly isDeclarationFile: boolean;
 }
 
+/** Process-owned TypeScript dependency SourceFile cache overview, independent of any workspace session. */
+export interface SemanticRuntimeProcessTypeSystemCacheOverviewRequest {
+  readonly includeTypeSystemDependencyEntries?: boolean | null;
+  readonly rowLimit?: number | null;
+}
+
+/** Process-owned TypeScript dependency SourceFile cache clear, independent of any workspace session. */
+export interface SemanticRuntimeProcessTypeSystemCacheClearRequest {
+  readonly typeSystemDependencyCacheClearPolicy?: SemanticTypeSystemDependencyCacheClearPolicy | null;
+}
+
 export interface SemanticRuntimeAnalysisCacheClearRequest {
   /**
    * Clear part of the process-local TypeSystemProject compiler-host source-file cache for dependency/lib files.
@@ -1322,9 +1345,12 @@ export interface SemanticRuntimeAnalysisCacheClearRequest {
   readonly typeSystemDependencyCacheClearPolicy?: SemanticTypeSystemDependencyCacheClearPolicy | null;
 }
 
-export interface SemanticRuntimeAnalysisCacheClearResult {
+/** Session-local clear currently has no policy knobs; pass `{}` to keep projection positional and explicit. */
+export type SemanticRuntimeSessionAnalysisCacheClearRequest = Readonly<Record<string, never>>;
+
+/** Cache state reclaimed from one runtime/session, excluding process-owned caches. */
+export interface SemanticRuntimeSessionAnalysisCacheClearResult {
   readonly displayText: string;
-  readonly typeSystemDependencyCacheClearPolicy: SemanticTypeSystemDependencyCacheClearPolicy;
   readonly disposedCachedApps: number;
   readonly disposedStaticProjectEvaluations: number;
   readonly disposedTypeSystemProjects: number;
@@ -1333,6 +1359,17 @@ export interface SemanticRuntimeAnalysisCacheClearResult {
   readonly disposedProductDetails: number;
   readonly disposedHotDetails: number;
   readonly disposedKernelHandleCharacters: number;
+  readonly remainingCachedApps: number;
+  readonly remainingStaticProjectEvaluations: number;
+  readonly remainingTypeSystemProjects: number;
+  readonly workspaceKernel: SemanticRuntimeKernelCountSnapshot;
+  readonly summary: string;
+}
+
+/** Legacy combined clear result for one runtime/session plus the process-owned dependency cache. */
+export interface SemanticRuntimeAnalysisCacheClearResult
+  extends SemanticRuntimeSessionAnalysisCacheClearResult {
+  readonly typeSystemDependencyCacheClearPolicy: SemanticTypeSystemDependencyCacheClearPolicy;
   readonly clearedTypeSystemDependencySourceFiles: number;
   readonly clearedTypeSystemDependencySourceTextCharacters: number;
   readonly clearedTypeSystemDependencyNodeModuleSourceFiles: number;
@@ -1343,10 +1380,23 @@ export interface SemanticRuntimeAnalysisCacheClearResult {
   readonly clearedTypeSystemDependencyDefaultLibrarySourceTextCharacters: number;
   readonly clearedTypeSystemDependencyExternalDeclarationSourceFiles: number;
   readonly clearedTypeSystemDependencyExternalDeclarationSourceTextCharacters: number;
-  readonly remainingCachedApps: number;
-  readonly remainingStaticProjectEvaluations: number;
-  readonly remainingTypeSystemProjects: number;
-  readonly workspaceKernel: SemanticRuntimeKernelCountSnapshot;
+}
+
+/** Process-owned TypeScript dependency SourceFile cache clear, independent of any workspace session. */
+export interface SemanticRuntimeProcessTypeSystemCacheClearResult {
+  readonly displayText: string;
+  readonly typeSystemDependencyCacheClearPolicy: SemanticTypeSystemDependencyCacheClearPolicy;
+  readonly clearedTypeSystemDependencySourceFiles: number;
+  readonly clearedTypeSystemDependencySourceTextCharacters: number;
+  readonly clearedTypeSystemDependencyNodeModuleSourceFiles: number;
+  readonly clearedTypeSystemDependencyNodeModuleSourceTextCharacters: number;
+  readonly clearedTypeSystemDependencyDeclarationSourceFiles: number;
+  readonly clearedTypeSystemDependencyDeclarationSourceTextCharacters: number;
+  readonly clearedTypeSystemDependencyDefaultLibrarySourceFiles: number;
+  readonly clearedTypeSystemDependencyDefaultLibrarySourceTextCharacters: number;
+  readonly clearedTypeSystemDependencyExternalDeclarationSourceFiles: number;
+  readonly clearedTypeSystemDependencyExternalDeclarationSourceTextCharacters: number;
+  readonly remainingTypeSystemDependencySourceFiles: number;
   readonly summary: string;
 }
 

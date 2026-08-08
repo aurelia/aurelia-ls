@@ -23,4 +23,44 @@ registerAureliaSemanticRuntimePrompts(server);
 registerAureliaSemanticRuntimeResources(server);
 registerAureliaSemanticRuntimeTools(server, adapter);
 
+let shutdown: Promise<void> | null = null;
+
+server.server.onclose = () => {
+  void disposeAdapter().catch(reportShutdownError);
+};
+process.once('SIGINT', requestShutdown);
+process.once('SIGTERM', requestShutdown);
+process.stdin.once('end', requestShutdown);
+
 await server.connect(new StdioServerTransport());
+
+function requestShutdown(): void {
+  void shutdownServer().catch(reportShutdownError);
+}
+
+function shutdownServer(): Promise<void> {
+  if (shutdown != null) {
+    return shutdown;
+  }
+  shutdown = (async () => {
+    try {
+      await server.close();
+    } finally {
+      await disposeAdapter();
+    }
+  })();
+  return shutdown;
+}
+
+let adapterDisposal: Promise<void> | null = null;
+
+function disposeAdapter(): Promise<void> {
+  adapterDisposal ??= adapter.dispose();
+  return adapterDisposal;
+}
+
+function reportShutdownError(error: unknown): void {
+  const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+  process.stderr.write(`Aurelia MCP shutdown failed: ${message}\n`);
+  process.exitCode = 1;
+}

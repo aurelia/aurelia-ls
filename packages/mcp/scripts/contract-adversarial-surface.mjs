@@ -1,7 +1,10 @@
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { AureliaMcpSemanticRuntimeAdapter } from '../out/runtime-adapter.js';
+import {
+  AureliaMcpSemanticRuntimeAdapter,
+  projectDetachedAureliaMcpResponse,
+} from '../out/runtime-adapter.js';
 import {
   expectedPatternCatalogCount,
   patternReleaseSentinels,
@@ -387,7 +390,7 @@ async function verifyPageClampAndTextPreview() {
   expect(page?.estimatedRowsJsonBytes <= page?.maxRowsJsonBytes, 'Byte-clamped page should report an estimated row payload within the public budget.');
   const text = resultText(response);
   expect(text.includes('Clamped requested size 100000 to max 200'), 'Text content should mention page-size clamping.');
-  expect(text.includes('Row payload budget stopped this page'), 'Text content should mention byte-budget pagination.');
+  expect(text.includes('Row payload target stopped this page'), 'Text content should mention byte-target pagination.');
   expect(text.includes('Rows:'), 'Text content should include a bounded row preview for row answers.');
 }
 
@@ -670,11 +673,13 @@ async function verifyDirectAdapterSourceFileGuard() {
     await adapter.templateDiagnostics({
       workspaceRoot: fixtureRoot,
       sourceFile: 'src/app.html',
-    });
+    }, projectDetachedAureliaMcpResponse);
   } catch (error) {
     expect(error instanceof Error, 'Direct adapter sourceFile guard should throw an Error.');
     expect(error.message.includes('sourceFile must be an object'), 'Direct adapter sourceFile guard should explain the expected object shape.');
     return;
+  } finally {
+    await adapter.dispose();
   }
   throw new Error('Direct adapter accepted a string sourceFile unexpectedly.');
 }

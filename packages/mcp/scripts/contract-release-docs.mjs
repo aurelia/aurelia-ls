@@ -8,6 +8,7 @@ import {
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const workspaceRoot = path.resolve(packageRoot, '../..');
+const workspacePackage = JSON.parse(await readWorkspaceFile('package.json'));
 
 const docs = {
   rootReadme: await readWorkspaceFile('README.md'),
@@ -24,6 +25,11 @@ expectIncludes(docs.rootReadme, 'aurelia-ls-mcp-0.2.0.tgz', 'Root README should 
 expectIncludes(docs.rootReadme, 'Aurelia Patterns', 'Root README should mention the Patterns surface shipped in the MCP release.');
 expectIncludes(docs.rootReadme, 'bundled Aurelia docs', 'Root README should mention bundled docs grounding.');
 expectIncludes(docs.rootReadme, 'packages/mcp/release-notes/mcp-v0.2.0.md', 'Root README should link the current MCP release notes.');
+expectIncludes(docs.rootReadme, 'pnpm bootstrap:aurelia', 'Root README should document linked Aurelia dependency bootstrap.');
+
+if (workspacePackage?.scripts?.['bootstrap:aurelia'] !== 'npm --prefix aurelia ci --ignore-scripts') {
+  throw new Error('Root bootstrap:aurelia should install the linked Aurelia dependency closure without lifecycle scripts.');
+}
 
 expectIncludes(docs.ciWorkflow, 'mcp-release', 'CI workflow should use release wording for the MCP job id.');
 expectIncludes(docs.ciWorkflow, 'MCP Release Pack', 'CI workflow should use release wording for the MCP job name.');
@@ -31,6 +37,7 @@ expectIncludes(docs.ciWorkflow, 'Pack MCP release tarball', 'CI workflow should 
 expectIncludes(docs.ciWorkflow, 'aurelia-ls-mcp-release', 'CI artifact name should use release wording.');
 expectIncludes(docs.ciWorkflow, 'pnpm --filter @aurelia-ls/mcp contract:release', 'CI workflow should run the aggregate MCP release contract.');
 expectIncludes(docs.ciWorkflow, 'pnpm --filter @aurelia-ls/mcp release:pack', 'CI workflow should pack the MCP release tarball.');
+expectOccurrenceCount(docs.ciWorkflow, 'run: pnpm bootstrap:aurelia', 2, 'Both CI jobs should bootstrap linked Aurelia dependencies before semantic contracts.');
 
 expectIncludes(docs.readme, 'aurelia_pattern_menu', 'README should name the pattern menu tool.');
 expectIncludes(docs.readme, 'aurelia_pattern_example', 'README should name the pattern example tool.');
@@ -43,6 +50,7 @@ expectIncludes(docs.readme, 'AUR0713', 'README should mention removed Aurelia 1 
 expectIncludes(docs.readme, '.delegate', 'README should mention the removed .delegate diagnostic.');
 expectIncludes(docs.readme, '.call', 'README should mention the removed .call diagnostic.');
 expectIncludes(docs.readme, 'docs/ai-authoring.md', 'README should link persistent AI authoring guidance.');
+expectIncludes(docs.readme, 'pnpm bootstrap:aurelia', 'README should document linked Aurelia dependency bootstrap.');
 for (const sentinel of patternReleaseSentinels) {
   expectIncludes(docs.readme, sentinel.patternId, `README should name catalog sentinel ${sentinel.patternId}.`);
 }
@@ -156,5 +164,12 @@ function expectIncludes(text, fragment, message) {
 function expectNotIncludes(text, fragment, message) {
   if (text.includes(fragment)) {
     throw new Error(message);
+  }
+}
+
+function expectOccurrenceCount(text, fragment, expectedCount, message) {
+  const actualCount = text.split(fragment).length - 1;
+  if (actualCount !== expectedCount) {
+    throw new Error(`${message} Expected ${expectedCount}, found ${actualCount}.`);
   }
 }

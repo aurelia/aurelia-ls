@@ -12,6 +12,7 @@
     "node": ">=22.13 <25"
   },
   "scripts": {
+    "bootstrap:aurelia": "npm --prefix aurelia ci --ignore-scripts",
     "build": "tsc -b",
     "watch": "tsc -b -w",
     "clean": "node scripts/clean.mjs",

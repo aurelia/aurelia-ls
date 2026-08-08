@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   AureliaMcpSemanticRuntimeAdapter,
+  projectDetachedAureliaMcpResponse,
   SemanticRuntimeSessionRegistry,
 } from '../out/index.js';
 import { aureliaMcpResultText } from '../out/result-text.js';
@@ -17,7 +18,7 @@ const single = await adapter.appQuery({
   workspaceRoot: fixtureRoot,
   queryKind: 'open-seams',
   page: { size: 1 },
-});
+}, projectDetachedAureliaMcpResponse);
 
 expect(single.tool === 'aurelia_app_query', 'single app-query should report the public MCP tool name.');
 expectContinuation(
@@ -147,7 +148,7 @@ const diagnosticFiltered = await adapter.appQuery({
   queryKind: 'app-diagnostic-summary',
   page: { size: 50 },
   continuationIntents: ['diagnose'],
-});
+}, projectDetachedAureliaMcpResponse);
 
 expectContinuation(
   diagnosticFiltered.value,
@@ -168,7 +169,7 @@ expect(
 const curatedFiltered = await adapter.appOverview({
   workspaceRoot: fixtureRoot,
   continuationIntents: ['diagnose'],
-});
+}, projectDetachedAureliaMcpResponse);
 
 expect(
   (curatedFiltered.value.continuations ?? []).length > 0,
@@ -188,7 +189,7 @@ const batch = await adapter.appQueryBatch({
     { kind: 'summary' },
     { kind: 'open-seams', page: { size: 1 } },
   ],
-});
+}, projectDetachedAureliaMcpResponse);
 
 const openSeamChild = batch.value.value?.rows?.find((row) => row.queryKind === 'open-seams')?.answer;
 expectContinuation(
@@ -211,6 +212,8 @@ expect(
   aureliaMcpResultText(batch).includes('open-seams -> open-seam-summary'),
   'batch child continuation text should not let the first child monopolize the compact continuation budget.',
 );
+
+await adapter.dispose();
 
 if (failures.length > 0) {
   console.error(failures.join('\n'));

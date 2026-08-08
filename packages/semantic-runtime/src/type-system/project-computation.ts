@@ -1,5 +1,7 @@
 import type { ProjectBootFrame } from '../boot/frames.js';
 import {
+  computationCommitCurrentnessError,
+  computationReadCurrentnessError,
   ComputationCommitState,
   ComputationReadValidationScope,
   type ComputationGenerationAuthority,
@@ -191,8 +193,13 @@ export class TypeSystemProjectGeneration implements ComputationRead {
   }
 
   requireCurrent(scope?: ComputationReadValidationScope): void {
-    if (!this.isCurrent(scope)) {
-      throw new Error(`Type-system project ${this.readKey}@${this.observedRevision} is no longer current.`);
+    const validation = (scope ?? new ComputationReadValidationScope()).validate(this);
+    if (!validation.isCurrent) {
+      throw computationReadCurrentnessError(
+        this,
+        validation,
+        `Type-system project ${this.readKey}@${this.observedRevision} is no longer current.`,
+      );
     }
   }
 
@@ -334,7 +341,10 @@ export class TypeSystemProjectComputationService implements KernelStoreSidecarIn
       finished = true;
       const commit = run.commit();
       if (commit.state !== ComputationCommitState.Committed) {
-        throw new Error(`Type-system project ${project.projectKey} was rejected as ${commit.state}.`);
+        throw computationCommitCurrentnessError(
+          commit,
+          `Type-system project ${project.projectKey} was rejected as ${commit.state}.`,
+        );
       }
       const generation = authority.accept(
         this.lifecycle.admitCommittedGeneration(

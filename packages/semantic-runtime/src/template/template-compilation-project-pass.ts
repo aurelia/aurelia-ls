@@ -35,6 +35,11 @@ import type { KernelStore, KernelTelemetryReadView } from '../kernel/store.js';
 import { authoredSourceHostPathCandidates } from '../kernel/authored-source-text.js';
 import { sourceFileAddressForAddress } from '../kernel/source-address.js';
 import { sourceTextContentRevision } from '../kernel/source-text-revision.js';
+import { SemanticRuntimeAnalysisCurrentnessError } from '../kernel/analysis-currentness.js';
+import {
+  SemanticRuntimeProjectInputReadKind,
+  semanticRuntimeProjectInputFileReadKey,
+} from '../kernel/project-input.js';
 import type { FrameworkSupportCatalogs } from '../framework/framework-support-authority.js';
 import type { GenerationAuthority } from '../kernel/generation-authority.js';
 import type {
@@ -939,40 +944,77 @@ export class TemplateCompilationProjectPass {
     if (sourceFile == null) {
       throw new Error(`Template owner ${owner.definition.name} has no authored source-file address.`);
     }
+    const sourceHostPaths = authoredSourceHostPathCandidates(
+      project.workspaceRootDir,
+      project.rootDir,
+      sourceFile.path,
+    );
     if (template.authoredSourceRevision == null) {
-      for (const fileName of authoredSourceHostPathCandidates(
-        project.workspaceRootDir,
-        project.rootDir,
-        sourceFile.path,
-      )) {
+      for (const fileName of sourceHostPaths) {
         if (!project.inputGeneration.host.fileExists(fileName)) {
           continue;
         }
         if (project.inputGeneration.host.readFile(fileName) == null) {
-          throw new Error(`Template source ${fileName} exists but its text is unavailable.`);
+          throw new SemanticRuntimeAnalysisCurrentnessError({
+            message: `Template source ${fileName} exists but its text is unavailable.`,
+            reason: 'computation-inputs-changed',
+            changedReadKeys: [semanticRuntimeProjectInputFileReadKey(
+              SemanticRuntimeProjectInputReadKind.FileExistence,
+              fileName,
+            )],
+            changedFacets: ['file-existence'],
+          });
         }
-        throw new Error(`Template source ${sourceFile.path} became available after an open definition was admitted.`);
+        throw new SemanticRuntimeAnalysisCurrentnessError({
+          message: `Template source ${sourceFile.path} became available after an open definition was admitted.`,
+          reason: 'computation-inputs-changed',
+          changedReadKeys: [semanticRuntimeProjectInputFileReadKey(
+            SemanticRuntimeProjectInputReadKind.FileExistence,
+            fileName,
+          )],
+          changedFacets: ['file-existence'],
+        });
       }
       return;
     }
-    for (const fileName of authoredSourceHostPathCandidates(
-      project.workspaceRootDir,
-      project.rootDir,
-      sourceFile.path,
-    )) {
+    for (const fileName of sourceHostPaths) {
       if (!project.inputGeneration.host.fileExists(fileName)) {
         continue;
       }
       const sourceText = project.inputGeneration.host.readFile(fileName);
       if (sourceText == null) {
-        throw new Error(`Template source ${fileName} exists but its text is unavailable.`);
+        throw new SemanticRuntimeAnalysisCurrentnessError({
+          message: `Template source ${fileName} exists but its text is unavailable.`,
+          reason: 'computation-inputs-changed',
+          changedReadKeys: [semanticRuntimeProjectInputFileReadKey(
+            SemanticRuntimeProjectInputReadKind.FileContent,
+            fileName,
+          )],
+          changedFacets: ['file-content'],
+        });
       }
       if (sourceTextContentRevision(sourceText) !== template.authoredSourceRevision) {
-        throw new Error(`Template source ${sourceFile.path} changed after its definition was admitted.`);
+        throw new SemanticRuntimeAnalysisCurrentnessError({
+          message: `Template source ${sourceFile.path} changed after its definition was admitted.`,
+          reason: 'computation-inputs-changed',
+          changedReadKeys: [semanticRuntimeProjectInputFileReadKey(
+            SemanticRuntimeProjectInputReadKind.FileContent,
+            fileName,
+          )],
+          changedFacets: ['file-content'],
+        });
       }
       return;
     }
-    throw new Error(`Template source ${sourceFile.path} is absent from every authored source root.`);
+    throw new SemanticRuntimeAnalysisCurrentnessError({
+      message: `Template source ${sourceFile.path} is absent from every authored source root.`,
+      reason: 'computation-inputs-changed',
+      changedReadKeys: sourceHostPaths.map((fileName) => semanticRuntimeProjectInputFileReadKey(
+        SemanticRuntimeProjectInputReadKind.FileExistence,
+        fileName,
+      )),
+      changedFacets: ['file-existence'],
+    });
   }
 
   private analyzeCompiledResources(
@@ -1054,13 +1096,14 @@ export class TemplateCompilationProjectPass {
     }
     return new TemplateCompilerWorldSelection(
       compilerWorld,
-      new TemplateCompilerWorldAuthority(() =>
-        this.projectCompilerWorldWithPreferredResources(
+      new TemplateCompilerWorldAuthority(
+        `template-compiler-world:${localKey}:local-template-world`,
+        () => this.projectCompilerWorldWithPreferredResources(
           parentCompilerWorldAuthority.current(),
           localResources,
           `${localKey}:local-template-world`,
           sourceAddressHandle,
-        )
+        ),
       ),
     );
   }

@@ -199,7 +199,7 @@ export const projectConfigurationsInputSchema = {
 
 export const analysisCacheOverviewInputSchema = {
   workspace: cacheWorkspaceSelectorSchema.nullable().optional()
-    .describe('Exact workspace session to inspect; omit to inspect every cached session.'),
+    .describe('Exact managed workspace session whose session-local retention rows should be inspected; process-global telemetry is always reported once.'),
   includeKernelBreakdowns: z.boolean().nullable().optional()
     .describe('Include kernel-density breakdowns; omit for low-token checks.'),
   includeDetailDensity: z.boolean().nullable().optional()
@@ -212,9 +212,9 @@ export const analysisCacheOverviewInputSchema = {
 
 export const clearAnalysisCacheInputSchema = {
   workspace: cacheWorkspaceSelectorSchema.nullable().optional()
-    .describe('Exact workspace session to clear; omit to clear every cached session.'),
+    .describe('Exact managed workspace session whose session-local retained analysis should be reclaimed; omit for every retained session. This selector does not scope the process cache policy.'),
   typeSystemDependencyCacheClearPolicy: z.enum(SEMANTIC_TYPE_SYSTEM_DEPENDENCY_CACHE_CLEAR_POLICIES).nullable().optional()
-    .describe('Dependency SourceFile cache policy; omit to keep warm libs.'),
+    .describe('Process-global dependency SourceFile cache policy; omit to preserve warm libs. A non-preserve policy can affect every workspace descriptor in the process.'),
 } as const;
 
 export const appQueryCatalogInputSchema = {

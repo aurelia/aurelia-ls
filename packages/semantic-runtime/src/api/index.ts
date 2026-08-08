@@ -48,6 +48,16 @@ export {
   SemanticRuntimeWorkspaceInputGeneration,
 } from '../kernel/project-input.js';
 export {
+  SEMANTIC_RUNTIME_ANALYSIS_CURRENTNESS_ERROR_CODE,
+  SemanticRuntimeAnalysisCurrentnessError,
+  isSemanticRuntimeAnalysisCurrentnessError,
+  semanticRuntimeAnalysisCurrentnessFailure,
+} from '../kernel/analysis-currentness.js';
+export type {
+  SemanticRuntimeAnalysisCurrentnessFailure,
+  SemanticRuntimeAnalysisCurrentnessReason,
+} from '../kernel/analysis-currentness.js';
+export {
   SOURCE_FILE_ROLE_VALUES,
   SOURCE_LANGUAGE_VALUES,
   SourceFileRole,

@@ -17,6 +17,7 @@ import {
 import {
   combineGenerationCurrentnessWitnesses,
   GenerationCurrentnessClock,
+  requireGenerationCurrentness,
   type GenerationAuthority,
   type GenerationCurrentnessWitness,
 } from './generation-authority.js';
@@ -708,9 +709,7 @@ abstract class SemanticRuntimeInputGeneration implements GenerationAuthority {
   }
 
   requireCurrent(): void {
-    if (!this.isCurrent()) {
-      throw new Error(`Project-input generation ${this.revision} is no longer current.`);
-    }
+    requireGenerationCurrentness(this.currentnessWitness);
   }
 
   validate(validationScope: ComputationReadValidationScope = new ComputationReadValidationScope()): ComputationReadValidation {
@@ -996,10 +995,10 @@ export class SemanticRuntimeProjectInputAuthority {
    * the same authority that mints the read, so adapters never need to reproduce path normalization or case policy.
    */
   fileContentReadKey(fileName: string): string {
-    return projectInputReadKey(projectInputFileDescriptor(
+    return semanticRuntimeProjectInputFileReadKey(
       SemanticRuntimeProjectInputReadKind.FileContent,
       fileName,
-    ));
+    );
   }
 
   /**
@@ -1157,6 +1156,14 @@ function projectInputMatchedFilesDescriptor(
     includes: Object.freeze([...includes]),
     depth: depth ?? null,
   });
+}
+
+/** Canonical machine key for an exact project-input file fact without observing the host. */
+export function semanticRuntimeProjectInputFileReadKey(
+  kind: SemanticRuntimeProjectInputReadKind.FileContent | SemanticRuntimeProjectInputReadKind.FileExistence,
+  fileName: string,
+): string {
+  return projectInputReadKey(projectInputFileDescriptor(kind, fileName));
 }
 
 function projectInputReadKey(descriptor: SemanticRuntimeProjectInputReadDescriptor): string {

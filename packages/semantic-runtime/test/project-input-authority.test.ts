@@ -6,11 +6,16 @@ import { describe, expect, test, vi } from 'vitest';
 
 import { createSemanticRuntime } from '../src/api/runtime.js';
 import {
+  SEMANTIC_RUNTIME_ANALYSIS_CURRENTNESS_ERROR_CODE,
+  SemanticRuntimeAnalysisCurrentnessError,
+} from '../src/kernel/analysis-currentness.js';
+import {
   SemanticRuntimeProjectInputCurrentnessMode,
   type SemanticRuntimeProjectInputCurrentnessPolicy,
   type SemanticRuntimeProjectInputReadDescriptor,
 } from '../src/index.js';
 import { ComputationReadValidationScope } from '../src/kernel/computation-lifecycle.js';
+import { GenerationCurrentnessChangedError } from '../src/kernel/generation-authority.js';
 import {
   NodeSemanticRuntimeProjectInputHost,
   SemanticRuntimeProjectInputAuthority,
@@ -197,7 +202,10 @@ describe('SemanticRuntimeProjectInputAuthority', () => {
 
     expect(authority.advance()).toBe(1);
     expect(first.isCurrent()).toBe(false);
-    expect(() => first.host.fileExists(`${rootDir}/src/app.ts`)).toThrow(/no longer current/);
+    expectGenerationCurrentnessChanged(
+      () => first.host.fileExists(`${rootDir}/src/app.ts`),
+      ['project-input-generation:app'],
+    );
 
     const second = authority.capture({ projectKey: 'app', rootDir });
     expect(second.eventSequence).toBe(1);
@@ -749,7 +757,10 @@ describe('SemanticRuntimeProjectInputAuthority', () => {
     expect(existenceScope.tryRebaseCurrent(second)).toBe(false);
     expect(contentScope.belongsTo(first)).toBe(true);
     expect(existenceScope.belongsTo(first)).toBe(true);
-    expect(() => contentScope.host.readFile(sourceFile)).toThrow(/no longer current/);
+    expectGenerationCurrentnessChanged(
+      () => contentScope.host.readFile(sourceFile),
+      ['project-input-generation:app'],
+    );
   });
 
   test('refuses read-scope rebase across input authorities and while the scope is active', () => {
@@ -811,6 +822,30 @@ describe('SemanticRuntimeProjectInputAuthority', () => {
 
 function normalize(fileName: string): string {
   return path.resolve(fileName).replace(/\\/g, '/').toLowerCase();
+}
+
+function expectGenerationCurrentnessChanged(
+  operation: () => unknown,
+  invalidGenerationKeys: readonly string[],
+): void {
+  let failure: unknown;
+  try {
+    operation();
+  } catch (error) {
+    failure = error;
+  }
+
+  expect(failure).toBeInstanceOf(GenerationCurrentnessChangedError);
+  expect(failure).toBeInstanceOf(SemanticRuntimeAnalysisCurrentnessError);
+  expect(failure).toMatchObject({
+    code: SEMANTIC_RUNTIME_ANALYSIS_CURRENTNESS_ERROR_CODE,
+    reason: 'generation-changed',
+    answerLeaseKind: null,
+    invalidKeys: invalidGenerationKeys,
+    invalidGenerationKeys,
+    changedReadKeys: [],
+    changedFacets: [],
+  });
 }
 
 function pushObservedFileContentPolicy(

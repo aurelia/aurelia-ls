@@ -24,10 +24,12 @@ import {
   type KernelStoreLifetimeMarker,
 } from '../kernel/store.js';
 import {
+  computationCommitCurrentnessError,
   ComputationCommitState,
   ComputationLifecycleRegistry,
   type ComputationGenerationReference,
 } from '../kernel/computation-lifecycle.js';
+import { isSemanticRuntimeAnalysisCurrentnessError } from '../kernel/analysis-currentness.js';
 import { FrameworkSupportAuthority } from '../framework/framework-support-authority.js';
 import { AureliaAppWorldProjectEmission } from '../configuration/app-world-project-pass.js';
 import {
@@ -325,6 +327,13 @@ import {
   type SemanticRuntimeAnalysisCacheClearRequest,
   type SemanticRuntimeAnalysisCacheClearResult,
   type SemanticRuntimeAnalysisCacheOverviewResult,
+  type SemanticRuntimeProcessTypeSystemCacheClearResult,
+  type SemanticRuntimeProcessTypeSystemCacheClearRequest,
+  type SemanticRuntimeProcessTypeSystemCacheOverviewRequest,
+  type SemanticRuntimeSessionAnalysisCacheClearResult,
+  type SemanticRuntimeSessionAnalysisCacheClearRequest,
+  type SemanticRuntimeSessionAnalysisCacheOverviewResult,
+  type SemanticRuntimeSessionAnalysisCacheOverviewRequest,
   type SemanticRuntimeQueryClaimDisposeRequest,
   type SemanticRuntimeQueryClaimDisposeResult,
   type SemanticRuntimeQueryClaimDisposeProfileSummary,
@@ -972,6 +981,31 @@ export class SemanticRuntime {
   analysisCacheOverview(
     request: SemanticRuntimeAnalysisCacheOverviewRequest = {},
   ): SemanticRuntimeAnswer<SemanticRuntimeAnalysisCacheOverviewResult> {
+    const {
+      displayText: _sessionDisplayText,
+      ...session
+    } = this.sessionAnalysisCacheOverview(request).value;
+    const valueWithoutDisplayText: Omit<SemanticRuntimeAnalysisCacheOverviewResult, 'displayText'> = {
+      ...session,
+      typeSystemDependencyCache: semanticRuntimeProcessTypeSystemCacheOverview(request),
+      processMemory: readSemanticRuntimeMemorySample(),
+    };
+    const value: SemanticRuntimeAnalysisCacheOverviewResult = {
+      ...valueWithoutDisplayText,
+      displayText: semanticRuntimeAnalysisCacheOverviewDisplayText(valueWithoutDisplayText),
+    };
+    return answer(
+      SemanticRuntimeAnswerResult.Answered,
+      value.summary,
+      value,
+      COMPLETE_COLLECTION_ANSWER_OPTIONS,
+    );
+  }
+
+  /** Inspect retention owned by this runtime/session without rescanning process-owned caches or process memory. */
+  sessionAnalysisCacheOverview(
+    request: SemanticRuntimeSessionAnalysisCacheOverviewRequest = {},
+  ): SemanticRuntimeAnswer<SemanticRuntimeSessionAnalysisCacheOverviewResult> {
     const rowLimit = normalizeCacheOverviewRowLimit(request.rowLimit);
     const workspaceKernel = trimKernelDensitySnapshot(
       this.workspace.store.readTelemetrySnapshot({
@@ -992,18 +1026,11 @@ export class SemanticRuntime {
         || left.authoringTemplateSourceFileCount - right.authoringTemplateSourceFileCount
       );
     const runtimeQueryClaimProfiles = this.runtimeQueryClaimProfileSummaries(rowLimit, request.includeQueryClaimRows === true);
-    const typeSystemDependencyCache = typeSystemDependencyCacheSummary(
-      rowLimit,
-      request.includeTypeSystemDependencyEntries === true,
-    );
-    const processMemory = readSemanticRuntimeMemorySample();
-    const valueWithoutDisplayText: Omit<SemanticRuntimeAnalysisCacheOverviewResult, 'displayText'> = {
+    const valueWithoutDisplayText: Omit<SemanticRuntimeSessionAnalysisCacheOverviewResult, 'displayText'> = {
       cachedAppCount: cachedApps.length,
       typeSystemProjectCount: this.typeSystemProjects.readEntryCount(),
       cachedApps,
       runtimeQueryClaimProfiles,
-      typeSystemDependencyCache,
-      processMemory,
       workspaceKernel,
       retention: {
         runtimeCacheScope: 'semantic-runtime-session',
@@ -1027,9 +1054,9 @@ export class SemanticRuntime {
       },
       summary: `Semantic-runtime session retains ${cachedApps.length} cached app epoch(s) and ${workspaceKernel.totalRecords} kernel record(s).`,
     };
-    const value: SemanticRuntimeAnalysisCacheOverviewResult = {
+    const value: SemanticRuntimeSessionAnalysisCacheOverviewResult = {
       ...valueWithoutDisplayText,
-      displayText: semanticRuntimeAnalysisCacheOverviewDisplayText(valueWithoutDisplayText),
+      displayText: semanticRuntimeSessionAnalysisCacheOverviewDisplayText(valueWithoutDisplayText),
     };
     return answer(
       SemanticRuntimeAnswerResult.Answered,
@@ -1045,10 +1072,47 @@ export class SemanticRuntime {
     const typeSystemDependencyCacheClearPolicy = normalizeTypeSystemDependencyCacheClearPolicy(
       request.typeSystemDependencyCacheClearPolicy,
     );
+    const {
+      displayText: _sessionDisplayText,
+      summary: _sessionSummary,
+      ...session
+    } = this.sessionAnalysisCacheClear().value;
+    const clearedTypeSystemDependencyCache = clearSemanticRuntimeProcessTypeSystemCache({
+      typeSystemDependencyCacheClearPolicy,
+    });
+    const value = withAnalysisCacheClearDisplayText({
+      ...session,
+      typeSystemDependencyCacheClearPolicy,
+      ...typeSystemDependencyCacheClearFields(clearedTypeSystemDependencyCache),
+      summary:
+        `Cleared ${session.disposedCachedApps} cached app epoch(s), ${session.disposedTypeSystemProjects} TypeScript project generation(s), ` +
+        `${session.disposedStaticProjectEvaluations} static project evaluation(s), ` +
+        `${session.disposedQueryClaimRecords} query-claim record(s), ` +
+        `${describeKernelDisposal({
+          records: session.disposedKernelRecords,
+          productDetails: session.disposedProductDetails,
+          hotDetails: session.disposedHotDetails,
+          handleCharacters: session.disposedKernelHandleCharacters,
+        })}, and ${clearedTypeSystemDependencyCache.clearedTypeSystemDependencySourceFiles} ` +
+        `TypeScript dependency source-file cache file(s) using policy '${typeSystemDependencyCacheClearPolicy}'; ` +
+        `workspace kernel now retains ${session.workspaceKernel.totalRecords} record(s).`,
+    });
+    return answer(
+      SemanticRuntimeAnswerResult.Answered,
+      value.summary,
+      value,
+      COMPLETE_COLLECTION_ANSWER_OPTIONS,
+    );
+  }
+
+  /** Clear cache state owned by this runtime/session without touching the process-owned dependency cache. */
+  sessionAnalysisCacheClear(
+    request: SemanticRuntimeSessionAnalysisCacheClearRequest = {},
+  ): SemanticRuntimeAnswer<SemanticRuntimeSessionAnalysisCacheClearResult> {
+    void request;
     // Detached receipt capabilities may carry process-local handles into app/query/type-system state reclaimed below.
     // Advance before the first mutation; a partial clear must not leave a pre-clear capability looking usable.
     this.analysisLifetime.advance();
-    const clearedTypeSystemDependencyCache = clearTypeSystemCompilerHostSourceFileCache(typeSystemDependencyCacheClearPolicy);
     const kernelBefore = this.workspace.store.readTelemetrySnapshot({ includeBreakdowns: false });
     const disposed = this.disposeCachedAppEpochs(QueryClaimDisposalReason.AppEpochDisposed);
     const disposedTypeSystemProjects = disposed.typeSystemProjects + this.typeSystemProjects.retireAll();
@@ -1056,8 +1120,7 @@ export class SemanticRuntime {
     const disposedRuntimeQueryClaimRecords = this.disposeRuntimeQueryClaims(QueryClaimDisposalReason.SessionEnded);
     const workspaceKernel = this.workspace.store.readTelemetrySnapshot({ includeBreakdowns: false });
     const kernel = kernelDisposalBetween(kernelBefore, workspaceKernel);
-    const value = withAnalysisCacheClearDisplayText({
-      typeSystemDependencyCacheClearPolicy,
+    const value = withSessionAnalysisCacheClearDisplayText({
       disposedCachedApps: disposed.apps,
       disposedStaticProjectEvaluations,
       disposedTypeSystemProjects,
@@ -1066,7 +1129,6 @@ export class SemanticRuntime {
       disposedProductDetails: kernel.productDetails,
       disposedHotDetails: kernel.hotDetails,
       disposedKernelHandleCharacters: kernel.handleCharacters,
-      ...typeSystemDependencyCacheClearResultFields(clearedTypeSystemDependencyCache),
       remainingCachedApps: this.appsByCacheKey.size,
       remainingStaticProjectEvaluations: this.projectEvaluations.readEntryCount(),
       remainingTypeSystemProjects: this.typeSystemProjects.readEntryCount(),
@@ -1075,9 +1137,7 @@ export class SemanticRuntime {
         `Cleared ${disposed.apps} cached app epoch(s), ${disposedTypeSystemProjects} TypeScript project generation(s), ` +
         `${disposedStaticProjectEvaluations} static project evaluation(s), ` +
         `${disposed.queryClaimRecords + disposedRuntimeQueryClaimRecords} query-claim record(s), ` +
-        `${describeKernelDisposal(kernel)}, and ${clearedTypeSystemDependencyCache.entries} ` +
-        `TypeScript dependency source-file cache file(s) using policy '${typeSystemDependencyCacheClearPolicy}'; ` +
-        `workspace kernel now retains ${workspaceKernel.totalRecords} record(s).`,
+        `${describeKernelDisposal(kernel)}; workspace kernel now retains ${workspaceKernel.totalRecords} record(s).`,
     });
     return answer(
       SemanticRuntimeAnswerResult.Answered,
@@ -1936,10 +1996,12 @@ export class SemanticRuntime {
         failureReceipt.dispose();
         transaction.tryObserveFailedBuilder(receiptBuilder);
       } catch (receiptError) {
-        failure = new AggregateError(
-          [error, receiptError],
-          `Semantic runtime query '${input.queryKind}' failed and its exact failure-path proof could not be composed.`,
-        );
+        if (!isSemanticRuntimeAnalysisCurrentnessError(error)) {
+          failure = new AggregateError(
+            [error, receiptError],
+            `Semantic runtime query '${input.queryKind}' failed and its exact failure-path proof could not be composed.`,
+          );
+        }
       }
       transaction.rollbackTo(savepoint);
       if (ownsTransaction) {
@@ -2362,7 +2424,10 @@ export class SemanticRuntime {
         telemetry,
       }).commit();
     if (result.commit.state !== ComputationCommitState.Committed || result.committedGeneration == null) {
-      throw new Error(`App analysis for ${project.projectKey} did not commit: ${result.commit.state}.`);
+      throw computationCommitCurrentnessError(
+        result.commit,
+        `App analysis for ${project.projectKey} did not commit: ${result.commit.state}.`,
+      );
     }
     this.retireStaleCachedApps(QueryClaimDisposalReason.AppEpochDisposed);
     const kernelMarker = this.workspace.store.markLifetime();
@@ -2890,6 +2955,52 @@ function semanticRuntimeAnalysisCacheOverviewDisplayText(
     lines.push('Next: inspect retained sessions after appRetention=retain-app, or leave default dispose-app for one-off MCP app-building calls.');
   }
   return lines.join('\n');
+}
+
+function semanticRuntimeSessionAnalysisCacheOverviewDisplayText(
+  value: Omit<SemanticRuntimeSessionAnalysisCacheOverviewResult, 'displayText'>,
+): string {
+  const workspaceKernel = value.workspaceKernel;
+  const lines = [
+    `Session analysis cache: ${value.cachedAppCount} cached app epoch(s); workspace kernel ${workspaceKernel.totalRecords} record(s), ${workspaceKernel.productDetails} product detail(s), ${workspaceKernel.hotDetails} hot detail(s), ${workspaceKernel.handleCharacters} handle character(s).`,
+  ];
+  if (value.runtimeQueryClaimProfiles.length > 0) {
+    lines.push(`Runtime query claims: ${value.runtimeQueryClaimProfiles.map((profile) =>
+      `${profile.inquiryProfile} retained=${profile.queryClaims.retainedRecords}/${profile.queryClaims.createdRecords}`
+    ).join('; ')}.`);
+  }
+  if (value.cachedApps.length === 0) {
+    lines.push('Cached apps: none.');
+  } else {
+    lines.push(`Cached apps: ${value.cachedApps.slice(0, RUNTIME_DISPLAY_SAMPLE_LIMIT).map((app) =>
+      `${app.projectKey} depth=${app.analysisDepth} retainedClaims=${app.queryClaims.retainedRecords} appTime=${app.profile.totalMilliseconds.toFixed(1)}ms`
+    ).join(' | ')}${value.cachedApps.length > RUNTIME_DISPLAY_SAMPLE_LIMIT ? ` | +${value.cachedApps.length - RUNTIME_DISPLAY_SAMPLE_LIMIT} more` : ''}.`);
+  }
+  if ('recordKinds' in workspaceKernel) {
+    lines.push(`Kernel top records: ${countRowsKeyDisplay(workspaceKernel.recordKinds)}.`);
+    lines.push(`Kernel top products: ${countRowsKeyDisplay(workspaceKernel.productKinds)}.`);
+  } else {
+    lines.push('Breakdowns: omitted; pass includeKernelBreakdowns when the question is what retained records are made of.');
+  }
+  return lines.join('\n');
+}
+
+function withSessionAnalysisCacheClearDisplayText(
+  value: Omit<SemanticRuntimeSessionAnalysisCacheClearResult, 'displayText'>,
+): SemanticRuntimeSessionAnalysisCacheClearResult {
+  return {
+    ...value,
+    displayText: semanticRuntimeSessionAnalysisCacheClearDisplayText(value),
+  };
+}
+
+function semanticRuntimeSessionAnalysisCacheClearDisplayText(
+  value: Omit<SemanticRuntimeSessionAnalysisCacheClearResult, 'displayText'>,
+): string {
+  return [
+    `Session analysis cache clear: disposed ${value.disposedCachedApps} cached app epoch(s), ${value.disposedTypeSystemProjects} TypeScript project generation(s), ${value.disposedStaticProjectEvaluations} static project evaluation(s), ${value.disposedQueryClaimRecords} query-claim record(s), and ${value.disposedKernelRecords} analysis-owned kernel record(s).`,
+    `Kernel disposal: ${value.disposedProductDetails} product detail(s), ${value.disposedHotDetails} hot detail(s), ${value.disposedKernelHandleCharacters} handle character(s); remaining app epochs=${value.remainingCachedApps}, TypeScript projects=${value.remainingTypeSystemProjects}, static evaluations=${value.remainingStaticProjectEvaluations}, workspace kernel records=${value.workspaceKernel.totalRecords}.`,
+  ].join('\n');
 }
 
 function withAnalysisCacheClearDisplayText(
@@ -3432,7 +3543,7 @@ export class SemanticApp {
 
   /** Exact committed app computation used to seal detached answer provenance before app-epoch disposal. */
   get analysisGenerationReference(): ComputationGenerationReference {
-    return this.appGeneration;
+    return this.appGeneration.computationAuthority;
   }
 
   /** Complete app fan-in guarded by the exact app-analysis generation that produced it. */
@@ -4016,10 +4127,12 @@ export class SemanticApp {
         failureReceipt.dispose();
         transaction.tryObserveFailedBuilder(receiptBuilder);
       } catch (receiptError) {
-        failure = new AggregateError(
-          [error, receiptError],
-          `Semantic app query '${query.kind}' failed and its exact failure-path proof could not be composed.`,
-        );
+        if (!isSemanticRuntimeAnalysisCurrentnessError(error)) {
+          failure = new AggregateError(
+            [error, receiptError],
+            `Semantic app query '${query.kind}' failed and its exact failure-path proof could not be composed.`,
+          );
+        }
       }
       transaction.rollbackTo(savepoint);
       if (ownsTransaction) {
@@ -5832,6 +5945,39 @@ function describeKernelDisposal(
     `${disposal.hotDetails} hot detail(s), and ${disposal.handleCharacters} handle character(s)`;
 }
 
+/** Inspect the process-owned TypeScript dependency SourceFile cache without opening a workspace runtime. */
+export function semanticRuntimeProcessTypeSystemCacheOverview(
+  request: SemanticRuntimeProcessTypeSystemCacheOverviewRequest = {},
+): SemanticRuntimeTypeSystemDependencyCacheSummary {
+  const rowLimit = normalizeCacheOverviewRowLimit(request.rowLimit);
+  return typeSystemDependencyCacheSummary(
+    rowLimit,
+    request.includeTypeSystemDependencyEntries === true,
+  );
+}
+
+/** Clear the process-owned TypeScript dependency SourceFile cache exactly once, even when no workspace session exists. */
+export function clearSemanticRuntimeProcessTypeSystemCache(
+  request: SemanticRuntimeProcessTypeSystemCacheClearRequest = {},
+): SemanticRuntimeProcessTypeSystemCacheClearResult {
+  const typeSystemDependencyCacheClearPolicy = normalizeTypeSystemDependencyCacheClearPolicy(
+    request.typeSystemDependencyCacheClearPolicy,
+  );
+  const cleared = clearTypeSystemCompilerHostSourceFileCache(typeSystemDependencyCacheClearPolicy);
+  const fields = typeSystemDependencyCacheClearResultFields(cleared);
+  const summary =
+    `Cleared ${fields.clearedTypeSystemDependencySourceFiles} process-local TypeScript dependency SourceFile(s) `
+    + `(${fields.clearedTypeSystemDependencySourceTextCharacters} source-text character(s)) using policy `
+    + `'${typeSystemDependencyCacheClearPolicy}'; ${cleared.remainingEntries} source file(s) remain.`;
+  return Object.freeze({
+    displayText: summary,
+    typeSystemDependencyCacheClearPolicy,
+    ...fields,
+    remainingTypeSystemDependencySourceFiles: cleared.remainingEntries,
+    summary,
+  });
+}
+
 function typeSystemDependencyCacheSummary(
   rowLimit = 0,
   includeLargestEntries = false,
@@ -5922,6 +6068,41 @@ function typeSystemDependencyCacheClearResultFields(
     clearedTypeSystemDependencyDefaultLibrarySourceTextCharacters: cleared.defaultLibrarySourceTextCharacters,
     clearedTypeSystemDependencyExternalDeclarationSourceFiles: cleared.externalDeclarationEntries,
     clearedTypeSystemDependencyExternalDeclarationSourceTextCharacters: cleared.externalDeclarationSourceTextCharacters,
+  };
+}
+
+function typeSystemDependencyCacheClearFields(
+  cleared: SemanticRuntimeProcessTypeSystemCacheClearResult,
+): Pick<
+  SemanticRuntimeAnalysisCacheClearResult,
+  | 'clearedTypeSystemDependencySourceFiles'
+  | 'clearedTypeSystemDependencySourceTextCharacters'
+  | 'clearedTypeSystemDependencyNodeModuleSourceFiles'
+  | 'clearedTypeSystemDependencyNodeModuleSourceTextCharacters'
+  | 'clearedTypeSystemDependencyDeclarationSourceFiles'
+  | 'clearedTypeSystemDependencyDeclarationSourceTextCharacters'
+  | 'clearedTypeSystemDependencyDefaultLibrarySourceFiles'
+  | 'clearedTypeSystemDependencyDefaultLibrarySourceTextCharacters'
+  | 'clearedTypeSystemDependencyExternalDeclarationSourceFiles'
+  | 'clearedTypeSystemDependencyExternalDeclarationSourceTextCharacters'
+> {
+  return {
+    clearedTypeSystemDependencySourceFiles: cleared.clearedTypeSystemDependencySourceFiles,
+    clearedTypeSystemDependencySourceTextCharacters: cleared.clearedTypeSystemDependencySourceTextCharacters,
+    clearedTypeSystemDependencyNodeModuleSourceFiles: cleared.clearedTypeSystemDependencyNodeModuleSourceFiles,
+    clearedTypeSystemDependencyNodeModuleSourceTextCharacters:
+      cleared.clearedTypeSystemDependencyNodeModuleSourceTextCharacters,
+    clearedTypeSystemDependencyDeclarationSourceFiles: cleared.clearedTypeSystemDependencyDeclarationSourceFiles,
+    clearedTypeSystemDependencyDeclarationSourceTextCharacters:
+      cleared.clearedTypeSystemDependencyDeclarationSourceTextCharacters,
+    clearedTypeSystemDependencyDefaultLibrarySourceFiles:
+      cleared.clearedTypeSystemDependencyDefaultLibrarySourceFiles,
+    clearedTypeSystemDependencyDefaultLibrarySourceTextCharacters:
+      cleared.clearedTypeSystemDependencyDefaultLibrarySourceTextCharacters,
+    clearedTypeSystemDependencyExternalDeclarationSourceFiles:
+      cleared.clearedTypeSystemDependencyExternalDeclarationSourceFiles,
+    clearedTypeSystemDependencyExternalDeclarationSourceTextCharacters:
+      cleared.clearedTypeSystemDependencyExternalDeclarationSourceTextCharacters,
   };
 }
 

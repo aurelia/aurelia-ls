@@ -89,13 +89,17 @@ cd aurelia-ls
 
 # Build aurelia-ls
 pnpm install
+pnpm bootstrap:aurelia
 pnpm run build
 ```
 
 The repo links Aurelia framework packages from the `aurelia/` submodule through
-`pnpm-workspace.yaml` overrides, so the submodule must be initialized. The MCP
-and semantic-runtime MCP paths do not require building the Aurelia submodule
-itself.
+`pnpm-workspace.yaml` overrides, so the submodule must be initialized. The root
+`pnpm install` creates the direct package links; `pnpm bootstrap:aurelia`
+installs the linked Aurelia workspace's dependency closure without running its
+lifecycle scripts. The MCP and semantic-runtime paths can then resolve exact
+linked package sources when declarations are absent, so they do not require
+building the Aurelia submodule itself.
 
 ## Documentation
 

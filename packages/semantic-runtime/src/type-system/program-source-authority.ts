@@ -1,6 +1,6 @@
 import {
   SourceFileAddress,
-  SourceFileRole,
+  type SourceFileRole,
 } from '../kernel/address.js';
 import type {
   ComputationGenerationAuthority,
@@ -8,6 +8,7 @@ import type {
   ComputationLocus,
 } from '../kernel/computation-lifecycle.js';
 import {
+  computationCommitCurrentnessError,
   ComputationCommitState,
 } from '../kernel/computation-lifecycle.js';
 import {
@@ -89,7 +90,10 @@ export class TypeSystemProgramSourceAuthority implements TypeSystemProgramSource
     )));
     const commit = run.commit();
     if (commit.state !== ComputationCommitState.Committed) {
-      throw new Error(`TypeSystem program source ${path} was rejected as ${commit.state}.`);
+      throw computationCommitCurrentnessError(
+        commit,
+        `TypeSystem program source ${path} was rejected as ${commit.state}.`,
+      );
     }
     const authority = this.lifecycle.admitCommittedGeneration(
       run.computationId,

@@ -61,12 +61,17 @@ Fresh clone setup:
 git clone --recurse-submodules https://github.com/aurelia/aurelia-ls.git
 cd aurelia-ls
 pnpm install
+pnpm bootstrap:aurelia
 pnpm --filter @aurelia-ls/semantic-runtime build
 pnpm --filter @aurelia-ls/mcp build
 ```
 
 The `aurelia/` submodule must be initialized because workspace overrides link
-to its packages, but it does not need to be built for the MCP tarball path.
+to its packages. The root install creates those direct links, while
+`pnpm bootstrap:aurelia` installs the linked framework workspace's dependency
+closure without running lifecycle scripts. Exact source-link resolution can
+then use framework source when declarations are absent, so the submodule does
+not need to be built for the MCP tarball path.
 
 Build the package:
 
@@ -239,8 +244,17 @@ them for every consumer; a live IDE-to-MCP descriptor handoff remains an explici
 
 Cache-control tools use an explicit two-state selector. Omit `workspace` to inspect or clear every cached session; pass
 `workspace: { workspaceRoot, projectRootHints?, excludedWorkspaceRoots? }` to select one exact shared semantic workspace
-descriptor. Boundary fields without `workspaceRoot` are rejected, and descriptor-distinct sessions never cross-clear.
+descriptor. Boundary fields without `workspaceRoot` are rejected, and descriptor-distinct sessions never cross-clear
+their session-local retained analysis. The selector does not scope the process-global TypeScript dependency `SourceFile`
+cache: any non-`preserve` dependency-cache policy is applied once for the process and can affect other descriptors.
 Session rows project that shared descriptor and do not expose runtime store namespaces or synthetic project inputs.
+
+Managed sessions reconcile source membership, configuration, and analysis-basis changes automatically on ordinary tool
+calls. `aurelia_clear_analysis_cache` is therefore retention control for cases where memory reclamation matters more than
+warm reuse; it is not a correctness step after edits. Registry-wide cache results report process memory and the shared
+TypeScript dependency `SourceFile` cache once at the top level. A non-preserving dependency-cache policy is applied once
+per registry operation rather than attributed repeatedly to individual workspace sessions. Disposing managed workspace
+sessions preserves this process-owned cache; it remains visible and explicitly clearable even when no session exists.
 
 Use `aurelia_project_configurations` when native `aurelia.project.json` state or applied authored-source exclusions
 matter. It returns exact, paged semantic-runtime rows without opening an app world; omit `sourceFilePaths` for all
