@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const RESULT_SCHEMA_VERSION = 'semantic-runtime-managed-query-latency/1';
+const RESULT_SCHEMA_VERSION = 'semantic-runtime-managed-query-latency/2';
 const CHILD_CONFIG_ENV = 'SEMANTIC_RUNTIME_MANAGED_QUERY_LATENCY_CHILD_CONFIG';
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const repositoryRoot = path.resolve(packageRoot, '../..');
@@ -14,13 +14,21 @@ const baselineFixtureName = 'resource-registration-local-templates';
 const pressureFixtureRoot = path.join(packageRoot, 'fixtures/pressure');
 const baselineFixtureRoot = path.join(pressureFixtureRoot, baselineFixtureName);
 const baselineProjectKey = 'app';
-const baselineQuery = Object.freeze({
-  kind: 'resource-inventory',
-  inquiryProfile: 'mcp-orientation',
-  appRetention: 'retain-app',
-  page: Object.freeze({ size: 100 }),
+const resourceInventoryProjections = Object.freeze({
+  'historical-rich': Object.freeze({
+    name: 'historical-rich',
+    includeTypeSurfaces: true,
+    note: 'Explicitly preserves the original benchmark workload, including bindable TypeChecker surfaces.',
+  }),
+  compact: Object.freeze({
+    name: 'compact',
+    includeTypeSurfaces: false,
+    note: 'Measures the compact inventory contract without bindable TypeChecker surfaces.',
+  }),
 });
 const historicalBaseline = Object.freeze({
+  resourceInventoryProjection: 'historical-rich',
+  typeSurfacesIncluded: true,
   returnedRows: 36,
   exactProjectInputLeaves: 785,
 });
@@ -51,10 +59,13 @@ async function orchestratorMain(args) {
   }
 
   const outputPath = path.resolve(process.cwd(), options.outputPath);
+  const projection = readResourceInventoryProjection(options.projection);
+  const query = baselineQuery(projection);
   const childConfig = {
     fixtureRoot: baselineFixtureRoot,
     projectKey: baselineProjectKey,
-    query: baselineQuery,
+    resourceInventoryProjection: projection.name,
+    query,
     warmRuns: options.warmRuns,
   };
   const metadata = await reproducibilityMetadata(options, outputPath);
@@ -85,7 +96,8 @@ async function orchestratorMain(args) {
         projectKey: baselineProjectKey,
         rootDir: baselineFixtureRoot,
       },
-      query: baselineQuery,
+      resourceInventoryProjection: projection,
+      query,
       historicalBaseline,
       processIsolation: 'fresh-sequential-child-processes',
       processes: options.processes,
@@ -111,7 +123,7 @@ async function orchestratorMain(args) {
     },
     reproducibility: metadata,
     summary: summarizeProcesses(processes, options.warmRuns),
-    semanticOutcome: summarizeSemanticOutcomes(semanticOutcomes),
+    semanticOutcome: summarizeSemanticOutcomes(semanticOutcomes, projection),
     processes,
     diagnostic: diagnosticProcess,
   };
@@ -177,6 +189,7 @@ async function runDiagnosticChild(session, query, warmRuns) {
     { SemanticRuntimeAnalysisReceipt },
     { SemanticAnswerTransaction },
     { QueryClaimGraph },
+    { CheckerTypeShapeAccess },
   ] = await Promise.all([
     import('../out/api/runtime.js'),
     import('../out/kernel/project-input.js'),
@@ -184,6 +197,7 @@ async function runDiagnosticChild(session, query, warmRuns) {
     import('../out/api/analysis-receipt.js'),
     import('../out/api/analysis-answer-transaction.js'),
     import('../out/inquiry/query-claim-graph.js'),
+    import('../out/type-system/checker-type-shape-access.js'),
   ]);
   const profiler = installDiagnosticProfiler([
     diagnosticTarget(SemanticRuntimeProjectInputGeneration, 'validate'),
@@ -200,6 +214,7 @@ async function runDiagnosticChild(session, query, warmRuns) {
     diagnosticTarget(SemanticRuntime, 'answerRuntimeQuery'),
     diagnosticTarget(SemanticRuntime, 'answerAppQuery'),
     diagnosticTarget(SemanticApp, 'answerRoutedQuery'),
+    diagnosticTarget(CheckerTypeShapeAccess, 'memberValueAccess'),
   ]);
   try {
     const cold = await measureDiagnosticManagedRun(session, query, profiler, 'cold');
@@ -237,6 +252,7 @@ async function measureManagedRun(session, query) {
       selection: answer.selection,
       coverage: answer.coverage,
       projectKey: answer.value?.projectKey ?? null,
+      typeSurfacesIncluded: answer.value?.typeSurfacesIncluded ?? null,
       returnedRows: Array.isArray(answer.value?.rows) ? answer.value.rows.length : null,
       totalRows: answer.page?.totalRows ?? null,
       pageExhausted: answer.page?.exhausted ?? null,
@@ -642,6 +658,7 @@ async function reproducibilityMetadata(options, outputPath) {
       processes: options.processes,
       warmRuns: options.warmRuns,
       diagnostic: options.diagnostic,
+      resourceInventoryProjection: options.projection,
     },
   };
 }
@@ -723,19 +740,26 @@ function percentile(sorted, fraction) {
   return sorted[lower] + ((sorted[upper] - sorted[lower]) * weight);
 }
 
-function summarizeSemanticOutcomes(outcomes) {
+function summarizeSemanticOutcomes(outcomes, projection) {
   const encoded = outcomes.map((outcome) => JSON.stringify(outcome));
   const first = outcomes[0] ?? null;
+  const matchesHistoricalCardinalityBaseline = first != null
+    && first.result === 'answered'
+    && first.projectKey === baselineProjectKey
+    && first.returnedRows === historicalBaseline.returnedRows
+    && first.totalRows === historicalBaseline.returnedRows
+    && first.pageExhausted === true;
+  const matchesSelectedProjection = first != null
+    && first.typeSurfacesIncluded === projection.includeTypeSurfaces;
   return {
     stableAcrossRuns: new Set(encoded).size <= 1,
-    matchesHistoricalBaseline: first != null
-      && first.result === 'answered'
-      && first.projectKey === baselineProjectKey
-      && first.returnedRows === historicalBaseline.returnedRows
-      && first.totalRows === historicalBaseline.returnedRows
-      && first.pageExhausted === true,
+    matchesHistoricalBaseline: projection.name === historicalBaseline.resourceInventoryProjection
+      && matchesHistoricalCardinalityBaseline
+      && matchesSelectedProjection,
+    matchesHistoricalCardinalityBaseline,
+    matchesSelectedProjection,
     observed: first,
-    note: 'Exact project-input leaf counts are intentionally not sampled in this unperturbed timing lane.',
+    note: 'Exact project-input leaf counts are intentionally not sampled in this unperturbed timing lane; compact projection intentionally does not match the historical rich payload.',
   };
 }
 
@@ -744,6 +768,7 @@ function parseCliOptions(args) {
   let processes = 9;
   let warmRuns = 5;
   let diagnostic = false;
+  let projection = 'historical-rich';
   let help = false;
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -770,12 +795,18 @@ function parseCliOptions(args) {
       diagnostic = true;
       continue;
     }
+    if (arg === '--projection') {
+      projection = requireCliValue(args, index, arg);
+      readResourceInventoryProjection(projection);
+      index += 1;
+      continue;
+    }
     throw new Error(`Unknown managed query latency option '${arg}'.\n\n${usageText()}`);
   }
   if (!help && outputPath == null) {
     throw new Error(`--output is required.\n\n${usageText()}`);
   }
-  return { outputPath, processes, warmRuns, diagnostic, help };
+  return { outputPath, processes, warmRuns, diagnostic, projection, help };
 }
 
 function parseChildConfig(text) {
@@ -783,18 +814,21 @@ function parseChildConfig(text) {
     throw new Error(`Missing ${CHILD_CONFIG_ENV}.`);
   }
   const candidate = JSON.parse(text);
+  const projection = readResourceInventoryProjection(candidate?.resourceInventoryProjection);
   if (candidate?.fixtureRoot !== baselineFixtureRoot
     || candidate?.projectKey !== baselineProjectKey
-    || candidate?.query?.kind !== baselineQuery.kind
-    || candidate?.query?.inquiryProfile !== baselineQuery.inquiryProfile
-    || candidate?.query?.appRetention !== baselineQuery.appRetention
-    || candidate?.query?.page?.size !== baselineQuery.page.size
+    || candidate?.query?.kind !== 'resource-inventory'
+    || candidate?.query?.inquiryProfile !== 'mcp-orientation'
+    || candidate?.query?.appRetention !== 'retain-app'
+    || candidate?.query?.page?.size !== 100
+    || candidate?.query?.includeTypeSurfaces !== projection.includeTypeSurfaces
     || (candidate?.lane !== 'primary' && candidate?.lane !== 'diagnostic')) {
     throw new Error('Managed query latency child received a non-baseline benchmark shape.');
   }
   return {
     fixtureRoot: candidate.fixtureRoot,
     projectKey: candidate.projectKey,
+    resourceInventoryProjection: projection.name,
     query: candidate.query,
     warmRuns: positiveInteger(candidate.warmRuns, 'warmRuns'),
     lane: candidate.lane,
@@ -817,6 +851,26 @@ function positiveInteger(value, label) {
   return parsed;
 }
 
+function readResourceInventoryProjection(value) {
+  if (typeof value !== 'string' || !Object.hasOwn(resourceInventoryProjections, value)) {
+    throw new Error(
+      `--projection must be 'historical-rich' or 'compact'; received '${value}'.`,
+    );
+  }
+  const projection = resourceInventoryProjections[value];
+  return projection;
+}
+
+function baselineQuery(projection) {
+  return Object.freeze({
+    kind: 'resource-inventory',
+    inquiryProfile: 'mcp-orientation',
+    appRetention: 'retain-app',
+    includeTypeSurfaces: projection.includeTypeSurfaces,
+    page: Object.freeze({ size: 100 }),
+  });
+}
+
 function usageText() {
   return [
     'Managed semantic-runtime ResourceInventory latency harness',
@@ -828,11 +882,13 @@ function usageText() {
     '  -o, --output <file>   Required JSON result path.',
     '  --processes <count>   Fresh sequential primary child processes (default: 9).',
     '  --warm-runs <count>   Warm session.run calls after each cold call (default: 5).',
+    '  --projection <kind>   ResourceInventory projection: historical-rich or compact',
+    '                        (default: historical-rich).',
     '  --diagnostic          Run one separately isolated, non-authoritative call-topology child.',
     '  -h, --help            Show this help.',
     '',
     `Fixed baseline: ${baselineFixtureName}, explicit project '${baselineProjectKey}',`,
-    "ResourceInventory, mcp-orientation, retain-app, page size 100.",
+    "ResourceInventory, mcp-orientation, retain-app, page size 100; projection is selected explicitly.",
   ].join('\n');
 }
 

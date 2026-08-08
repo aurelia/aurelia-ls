@@ -66,7 +66,7 @@ export const UserCommandsFeature: ClientFeature = {
         const outcome = await showResourceQuickPick(
           vscode,
           "Go to Aurelia Resource",
-          async (token) => inventoryQuickPickModel(await lsp.getResourceInventory(undefined, token)),
+          async (token) => inventoryQuickPickModel(await lsp.getResourceInventory({}, token)),
         );
         if (outcome.status !== "selected") return;
         await openResourceNavigation(vscode, lsp, ctx.logger, outcome.value.navigation);

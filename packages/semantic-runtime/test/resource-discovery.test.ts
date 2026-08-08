@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { describe, expect, test } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import {
   createSemanticRuntime,
@@ -19,8 +19,11 @@ import {
   type SemanticRuntimeAnswer,
   type SemanticTemplateResourceAvailabilityResult,
 } from '../src/index.js';
+import { CheckerTypeShapeAccess } from '../src/type-system/checker-type-shape-access.js';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
+
+afterEach(() => vi.restoreAllMocks());
 
 describe('resource discovery', () => {
   test('projects stable resource identity, exact source roles, local ownership, and framework provenance', async () => {
@@ -29,10 +32,19 @@ describe('resource discovery', () => {
       workspaceRoot: fixtureRoot,
       storeKey: 'resource-discovery-inventory',
     });
+    await runtime.answerAppQuery({
+      kind: SemanticAppQueryKind.Summary,
+      includeAuthoringTemplates: true,
+      appRetention: 'retain-app',
+    });
+    const memberValueAccess = vi.spyOn(CheckerTypeShapeAccess.prototype, 'memberValueAccess');
     const first = await resourceInventory(runtime);
     const firstRows = first.value.rows;
 
     expect(first.selection).toBe(SemanticRuntimeAnswerSelection.NotApplicable);
+    expect(first.value.typeSurfacesIncluded).toBe(false);
+    expect(memberValueAccess).not.toHaveBeenCalled();
+    expect(firstRows.every((row) => row.bindables.every(hasEmptyTypeSurface))).toBe(true);
     expect(firstRows).not.toHaveLength(0);
     expect(firstRows.every((row) => SEMANTIC_RESOURCE_INVENTORY_KINDS.includes(row.resourceKind))).toBe(true);
     expect(first.value.completeness.excludedCompilerSyntax).toBeGreaterThan(0);
@@ -95,6 +107,17 @@ describe('resource discovery', () => {
     ]));
 
     const firstIdentityBySemanticLocus = inventoryIdentityBySemanticLocus(first.value);
+    const compactSemanticFacts = inventoryFactsWithoutTypeSurfaces(first.value);
+    memberValueAccess.mockClear();
+    const rich = await resourceInventory(runtime, true);
+    const richAccessKeys = memberValueAccess.mock.calls.map((call) => call[2]);
+    expect(rich.value.typeSurfacesIncluded).toBe(true);
+    expect(richAccessKeys.length).toBeGreaterThan(0);
+    expect(richAccessKeys).toHaveLength(new Set(richAccessKeys).size);
+    expect(rich.value.rows.some((row) => row.bindables.some((bindable) => bindable.valueType != null))).toBe(true);
+    expect(inventoryFactsWithoutTypeSurfaces(rich.value)).toEqual(compactSemanticFacts);
+    memberValueAccess.mockRestore();
+
     runtime.clearAnalysisCache();
     const second = await resourceInventory(runtime);
     expect(inventoryIdentityBySemanticLocus(second.value)).toEqual(firstIdentityBySemanticLocus);
@@ -122,6 +145,8 @@ describe('resource discovery', () => {
 
     const primary = await templateAvailability(runtime, primaryTemplate, '<local-chip public-label');
     expect(primary.selection).toBe(SemanticRuntimeAnswerSelection.Exact);
+    expect(primary.value.typeSurfacesIncluded).toBe(false);
+    expect(primary.value.rows.every((row) => row.resource.bindables.every(hasEmptyTypeSurface))).toBe(true);
     expect(primary.value.selectedTemplate).toMatchObject({
       definitionName: 'local-templates-app',
       compilationLane: 'app-runtime',
@@ -146,6 +171,33 @@ describe('resource discovery', () => {
       role: 'range',
     });
 
+    const memberValueAccess = vi.spyOn(CheckerTypeShapeAccess.prototype, 'memberValueAccess');
+    const richPrimary = await templateAvailability(
+      runtime,
+      primaryTemplate,
+      '<local-chip public-label',
+      undefined,
+      true,
+    );
+    expect(richPrimary.value.typeSurfacesIncluded).toBe(true);
+    expect(richPrimary.value.rows.some((row) =>
+      row.resource.bindables.some((bindable) => bindable.valueType != null)
+    )).toBe(true);
+    expect(availabilityFactsWithoutTypeSurfaces(richPrimary.value)).toEqual(
+      availabilityFactsWithoutTypeSurfaces(primary.value),
+    );
+    const availabilityAccessKeys = memberValueAccess.mock.calls.map((call) => call[2]);
+    expect(availabilityAccessKeys).toHaveLength(new Set(availabilityAccessKeys).size);
+
+    memberValueAccess.mockClear();
+    const inventory = await resourceInventory(runtime, true);
+    const inventoryAccessKeys = memberValueAccess.mock.calls.map((call) => call[2]);
+    const inventoryAccessKeySet = new Set(inventoryAccessKeys);
+    expect(availabilityAccessKeys.every((key) => inventoryAccessKeySet.has(key))).toBe(true);
+    expect(availabilityAccessKeys.length).toBeLessThan(inventoryAccessKeys.length);
+    expect(primary.value.completeness).toEqual(inventory.value.completeness);
+    memberValueAccess.mockRestore();
+
     const secondary = await templateAvailability(runtime, secondaryTemplate, '<local-chip');
     expect(secondary.selection).toBe(SemanticRuntimeAnswerSelection.Exact);
     expect(secondary.value.selectedTemplate?.definitionName).toBe('secondary-host');
@@ -169,6 +221,24 @@ describe('resource discovery', () => {
     expect(new Set(answer.value.candidates.map((candidate) => candidate.scopeIdentityKey)).size).toBe(2);
     expect(new Set(answer.value.candidates.map((candidate) => candidate.templateIdentityKey)).size).toBe(1);
 
+    const memberValueAccess = vi.spyOn(CheckerTypeShapeAccess.prototype, 'memberValueAccess');
+    const richAmbiguous = await templateAvailability(runtime, templateFile, '<template>', undefined, true);
+    expect(richAmbiguous.selection).toBe(SemanticRuntimeAnswerSelection.Ambiguous);
+    expect(richAmbiguous.value.typeSurfacesIncluded).toBe(true);
+    expect(memberValueAccess).not.toHaveBeenCalled();
+
+    memberValueAccess.mockClear();
+    const richMissingCursor = await runtime.answerAppQuery({
+      kind: SemanticAppQueryKind.TemplateResourceAvailability,
+      includeTypeSurfaces: true,
+      includeAuthoringTemplates: true,
+      appRetention: 'retain-app',
+    }) as SemanticRuntimeAnswer<SemanticTemplateResourceAvailabilityResult>;
+    expect(richMissingCursor.selection).toBe(SemanticRuntimeAnswerSelection.Absent);
+    expect(richMissingCursor.value.typeSurfacesIncluded).toBe(true);
+    expect(memberValueAccess).not.toHaveBeenCalled();
+    memberValueAccess.mockRestore();
+
     const selected = await templateAvailability(
       runtime,
       templateFile,
@@ -189,10 +259,13 @@ describe('resource discovery', () => {
 
 async function resourceInventory(
   runtime: Awaited<ReturnType<typeof createSemanticRuntime>>,
+  includeTypeSurfaces = false,
 ): Promise<SemanticRuntimeAnswer<SemanticResourceInventoryResult>> {
   return await runtime.answerAppQuery({
     kind: SemanticAppQueryKind.ResourceInventory,
+    includeTypeSurfaces,
     includeAuthoringTemplates: true,
+    appRetention: 'retain-app',
     page: { size: 500 },
   }) as SemanticRuntimeAnswer<SemanticResourceInventoryResult>;
 }
@@ -202,6 +275,7 @@ async function templateAvailability(
   filePath: string,
   marker: string,
   templateResourceScopeIdentityKey?: string,
+  includeTypeSurfaces = false,
 ): Promise<SemanticRuntimeAnswer<SemanticTemplateResourceAvailabilityResult>> {
   const offset = readFileSync(filePath, 'utf8').indexOf(marker);
   expect(offset).toBeGreaterThanOrEqual(0);
@@ -209,6 +283,7 @@ async function templateAvailability(
     kind: SemanticAppQueryKind.TemplateResourceAvailability,
     cursor: { filePath, offset },
     templateResourceScopeIdentityKey,
+    includeTypeSurfaces,
     includeAuthoringTemplates: true,
   }) as SemanticRuntimeAnswer<SemanticTemplateResourceAvailabilityResult>;
 }
@@ -239,6 +314,53 @@ function inventoryIdentityBySemanticLocus(result: SemanticResourceInventoryResul
     ]),
     row.identityKey,
   ]));
+}
+
+function inventoryFactsWithoutTypeSurfaces(result: SemanticResourceInventoryResult): readonly unknown[] {
+  return result.rows.map(inventoryRowWithoutTypeSurfaces);
+}
+
+function availabilityFactsWithoutTypeSurfaces(result: SemanticTemplateResourceAvailabilityResult): unknown {
+  return {
+    displayText: result.displayText,
+    projectKey: result.projectKey,
+    projectRoot: result.projectRoot,
+    selectedTemplate: result.selectedTemplate,
+    candidates: result.candidates,
+    completeness: result.completeness,
+    rows: result.rows.map((row) => ({
+      ...row,
+      resource: inventoryRowWithoutTypeSurfaces(row.resource),
+    })),
+  };
+}
+
+function inventoryRowWithoutTypeSurfaces(
+  row: SemanticResourceInventoryResult['rows'][number],
+): unknown {
+  const typeSurfaceFields = new Set([
+    'valueType',
+    'valueTypeShapeKind',
+    'effectiveValueTypeShapeKind',
+    'valueTypeHasCallSignature',
+    'valueTypeHasMembers',
+    'valueTypeIsWeak',
+  ]);
+  return {
+    ...row,
+    bindables: row.bindables.map((bindable) => Object.fromEntries(
+      Object.entries(bindable).filter(([field]) => !typeSurfaceFields.has(field)),
+    )),
+  };
+}
+
+function hasEmptyTypeSurface(bindable: SemanticResourceInventoryResult['rows'][number]['bindables'][number]): boolean {
+  return bindable.valueType == null
+    && bindable.valueTypeShapeKind == null
+    && bindable.effectiveValueTypeShapeKind == null
+    && bindable.valueTypeHasCallSignature == null
+    && bindable.valueTypeHasMembers == null
+    && bindable.valueTypeIsWeak == null;
 }
 
 function localTemplateOwners(result: SemanticTemplateResourceAvailabilityResult): ReadonlySet<string | null> {

@@ -35,6 +35,23 @@ import {
   projectBindableDefinitionSurface,
 } from './bindable-projection.js';
 
+export type ResourceDefinitionCoreProjection = Pick<
+  SemanticResourceDefinitionRow,
+  | 'aliases'
+  | 'bindables'
+  | 'declarationModes'
+  | 'defaultProperty'
+  | 'source'
+  | 'nameSource'
+  | 'targetSource'
+  | 'targetDeclarationSource'
+>;
+
+export type ResourceDefinitionSourceProjection = Pick<
+  ResourceDefinitionCoreProjection,
+  'source' | 'nameSource' | 'targetSource' | 'targetDeclarationSource'
+>;
+
 export function readResourceDefinitionRows(
   emission: AureliaAppWorldProjectEmission,
   store: KernelStore,
@@ -72,24 +89,18 @@ function resourceDefinitionRow(
   issues: readonly ResourceIssue[],
   handles: boolean,
 ): SemanticResourceDefinitionRow {
+  const core = readResourceDefinitionCoreProjection(emission, store, definition, true);
   return {
     projectKey: emission.project.projectKey,
     resourceKind: taxonomyResourceKindForDefinition(definition),
-    declarationModes: declarationModesForDefinition(definition),
+    declarationModes: core.declarationModes,
     name: readDefinitionName(definition),
-    aliases: readDefinitionAliases(definition, store),
+    aliases: core.aliases,
     key: readDefinitionKey(definition),
     targetName: definition.target.localName,
     captureKind: 'capture' in definition ? definition.capture.kind : null,
     template: 'template' in definition ? templateRow(definition.template, store) : null,
-    bindables: 'bindables' in definition
-      ? bindableRows(
-          definition.bindables,
-          definition.target,
-          store,
-          emission.templates.expressionWorld.projector,
-        )
-      : [],
+    bindables: core.bindables,
     watches: 'watches' in definition ? watchRows(definition.watches, store) : [],
     issues: issues
       .filter((issue) => issue.ownerDefinitionIdentityHandle === definition.identityHandle)
@@ -97,7 +108,7 @@ function resourceDefinitionRow(
     dependencies: 'dependencies' in definition ? dependencyRows(definition.dependencies) : [],
     isTemplateController: 'isTemplateController' in definition ? definition.isTemplateController : null,
     containerStrategy: 'containerStrategy' in definition ? definition.containerStrategy : null,
-    defaultProperty: 'defaultProperty' in definition ? definition.defaultProperty : null,
+    defaultProperty: core.defaultProperty,
     noMultiBindings: 'noMultiBindings' in definition ? definition.noMultiBindings : null,
     containerless: 'containerless' in definition ? definition.containerless : null,
     shadowMode: 'shadowOptions' in definition ? definition.shadowOptions?.mode ?? null : null,
@@ -108,10 +119,10 @@ function resourceDefinitionRow(
       symbols: pattern.symbols,
       source: describeAddress(store, pattern.addressHandle),
     })) : [],
-    source: describeAddress(store, definition.sourceAddressHandle),
-    nameSource: describeAddress(store, readDefinitionNameSourceAddressHandle(definition)),
-    targetSource: describeAddress(store, definition.target.addressHandle),
-    targetDeclarationSource: describeAddress(store, definition.target.declarationSourceAddressHandle),
+    source: core.source,
+    nameSource: core.nameSource,
+    targetSource: core.targetSource,
+    targetDeclarationSource: core.targetDeclarationSource,
     ...(handles ? {
       handles: {
         definitionProductHandle: definition.productHandle,
@@ -126,14 +137,47 @@ function resourceDefinitionRow(
   };
 }
 
-/** Project one already-selected full definition without forcing callers to duplicate source-role policy. */
-export function readResourceDefinitionRow(
+/**
+ * Project the definition facts shared by full definition reads and resource discovery.
+ *
+ * ResourceDefinitions always requests the canonical checker-backed bindable surface. ResourceInventory can omit that
+ * surface and the broader watches, issues, dependencies, and template metadata without re-deriving the common facts.
+ */
+export function readResourceDefinitionCoreProjection(
   emission: AureliaAppWorldProjectEmission,
   store: KernelStore,
   definition: FullResourceDefinition,
-  handles: boolean,
-): SemanticResourceDefinitionRow {
-  return resourceDefinitionRow(emission, store, definition, readProjectResourceIssues(emission, store), handles);
+  includeTypeSurfaces: boolean,
+): ResourceDefinitionCoreProjection {
+  const sources = readResourceDefinitionSourceProjection(store, definition);
+  return {
+    aliases: readDefinitionAliases(definition, store),
+    bindables: 'bindables' in definition
+      ? bindableRows(
+          definition.bindables,
+          definition.target,
+          store,
+          emission.templates.expressionWorld.projector,
+          includeTypeSurfaces,
+        )
+      : [],
+    declarationModes: declarationModesForDefinition(definition),
+    defaultProperty: 'defaultProperty' in definition ? definition.defaultProperty : null,
+    ...sources,
+  };
+}
+
+/** Project source roles without forcing bindable or TypeChecker work. */
+export function readResourceDefinitionSourceProjection(
+  store: KernelStore,
+  definition: FullResourceDefinition,
+): ResourceDefinitionSourceProjection {
+  return {
+    source: describeAddress(store, definition.sourceAddressHandle),
+    nameSource: describeAddress(store, readDefinitionNameSourceAddressHandle(definition)),
+    targetSource: describeAddress(store, definition.target.addressHandle),
+    targetDeclarationSource: describeAddress(store, definition.target.declarationSourceAddressHandle),
+  };
 }
 
 function readProjectResourceIssues(
@@ -271,6 +315,7 @@ function bindableRows(
   target: FullResourceDefinition['target'],
   store: KernelStore,
   projector: CheckerTypeProjector,
+  includeTypeSurfaces = true,
 ): readonly SemanticResourceDefinitionBindableRow[] {
   return bindables
     .map((bindable): SemanticResourceDefinitionBindableRow => ({
@@ -278,7 +323,9 @@ function bindableRows(
       attribute: bindable.attribute,
       callback: bindable.callback,
       mode: bindable.mode,
-      ...projectBindableDefinitionSurface(store, projector, bindable, target),
+      ...projectBindableDefinitionSurface(store, projector, bindable, target, {
+        includeTypeSurface: includeTypeSurfaces,
+      }),
       ...projectBindableDefinitionSources(store, bindable),
     }))
     .sort((left, right) => left.name.localeCompare(right.name));

@@ -3812,7 +3812,7 @@ export class SemanticApp {
   ): SemanticRuntimeAnswer<unknown> {
     switch (query.kind) {
       case SemanticAppQueryKind.ResourceInventory:
-        return answerCurrentQuery(() => this.resourceInventory(query.page));
+        return answerCurrentQuery(() => this.resourceInventory(query.page, query.includeTypeSurfaces));
       case SemanticAppQueryKind.ResourceDefinitions:
         return answerCurrentQuery(() => this.resourceDefinitions(query.page, query.detail));
       case SemanticAppQueryKind.ResourceIssues:
@@ -5091,15 +5091,22 @@ export class SemanticApp {
 
   resourceInventory(
     page?: SemanticRuntimePageInput,
+    includeTypeSurfaces: boolean | null | undefined = false,
   ): SemanticRuntimeAnswer<SemanticResourceInventoryResult> {
     const claimed = this.answerPublicQueryIfNeeded<SemanticResourceInventoryResult>({
       kind: SemanticAppQueryKind.ResourceInventory,
       page,
+      includeTypeSurfaces,
     });
     if (claimed != null) {
       return claimed;
     }
-    return readSemanticResourceInventory(this.emission, this.runtime.workspace.store, page);
+    return readSemanticResourceInventory(
+      this.emission,
+      this.runtime.workspace.store,
+      page,
+      includeTypeSurfaces === true,
+    );
   }
 
   templateResourceAvailability(
@@ -5115,6 +5122,7 @@ export class SemanticApp {
       this.runtime.workspace.store,
       query.cursor,
       query.templateResourceScopeIdentityKey,
+      query.includeTypeSurfaces === true,
     );
   }
 

@@ -618,11 +618,12 @@ export class SemanticRuntimeLspSession {
     guard: SemanticRuntimeLspRequestGuard,
   ): Promise<SemanticRuntimeAnswer<SemanticResourceDefinitionsResult>> {
     const runtime = await this.openRuntime(guard);
-    return this.collectRows(runtime, SemanticAppQueryKind.ResourceDefinitions, 500, { detail: "handles" }, guard);
+    return this.collectRows(runtime, SemanticAppQueryKind.ResourceDefinitions, 500, {}, guard);
   }
 
   async resourceInventory(
     projectKey: string,
+    includeTypeSurfaces: boolean,
     guard: SemanticRuntimeLspRequestGuard,
   ): Promise<SemanticRuntimeAnswer<SemanticResourceInventoryResult>> {
     const runtime = await this.openRuntime(guard);
@@ -632,6 +633,7 @@ export class SemanticRuntimeLspSession {
       readPage: (cursor) => runtime.answerAppQuery({
         kind: SemanticAppQueryKind.ResourceInventory,
         projectKey,
+        includeTypeSurfaces,
         page: { size: 500, cursor },
         inquiryProfile: "lsp-cursor",
         appRetention: "retain-app",

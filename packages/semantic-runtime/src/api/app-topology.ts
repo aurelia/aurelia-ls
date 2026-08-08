@@ -51,7 +51,7 @@ import {
   resolvedRouteableComponentName,
   type RouteConfigModel,
 } from '../router/model.js';
-import { projectBindableTypeSurface } from './bindable-projection.js';
+import { emptyBindableTypeSurface, projectBindableTypeSurface } from './bindable-projection.js';
 import {
   readBindingObservedDependencyRows,
   readBindingTargetAccessRows,
@@ -1099,7 +1099,7 @@ function applicationComponentReference(
             bindable,
             definition.target,
           )
-        : nullBindableTypeSurface();
+        : emptyBindableTypeSurface();
       return {
         name: bindable.name,
         attribute: bindable.attribute,
@@ -1143,17 +1143,6 @@ function applicationComponentReference(
         templateSourceAddressHandle: definition.template?.addressHandle ?? null,
       },
     } : {}),
-  };
-}
-
-function nullBindableTypeSurface() {
-  return {
-    valueType: null,
-    valueTypeShapeKind: null,
-    effectiveValueTypeShapeKind: null,
-    valueTypeHasCallSignature: null,
-    valueTypeHasMembers: null,
-    valueTypeIsWeak: null,
   };
 }
 

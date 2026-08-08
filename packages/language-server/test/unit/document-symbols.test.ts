@@ -57,7 +57,7 @@ function createMockContext(input: { text?: string; definitions?: unknown[] }) {
 }
 
 describe("runtime-backed document symbols", () => {
-  test("maps source-backed resources and bindables into document symbols", async () => {
+  test("maps public source refs without kernel handles into resource and bindable symbols", async () => {
     const text = [
       "export class ProductCard {",
       "  @bindable product!: string;",

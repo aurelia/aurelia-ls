@@ -42,18 +42,26 @@ export interface SemanticBindableDefinitionSourceProjection {
   readonly nullableSource: SemanticSourceReference | null;
 }
 
+export interface SemanticBindableDefinitionSurfaceOptions {
+  /** Spend query-local checker work for the bindable value surface. Defaults to true for explicit definition reads. */
+  readonly includeTypeSurface?: boolean;
+}
+
 /** Project the semantic bindable contract shared by resource and cursor inquiries. */
 export function projectBindableDefinitionSurface(
   store: KernelStore,
   projector: CheckerTypeProjector,
   bindable: BindableDefinition,
   ownerTarget: ResourceTargetReference | null,
+  options: SemanticBindableDefinitionSurfaceOptions = {},
 ): SemanticBindableDefinitionSurfaceProjection {
   return {
     setterKind: bindable.set.kind,
     setterTargetName: bindable.set.target?.localName ?? null,
     nullable: bindable.set.nullable,
-    ...projectBindableTypeSurface(store, projector, bindable, ownerTarget),
+    ...(options.includeTypeSurface === false
+      ? emptyBindableTypeSurface()
+      : projectBindableTypeSurface(store, projector, bindable, ownerTarget)),
   };
 }
 
@@ -72,6 +80,18 @@ export function projectBindableTypeSurface(
     valueTypeHasCallSignature: surface.hasCallSignature,
     valueTypeHasMembers: surface.hasMembers,
     valueTypeIsWeak: surface.isWeak,
+  };
+}
+
+/** Null projection used when a summary/catalog answer deliberately does not spend checker-backed type detail. */
+export function emptyBindableTypeSurface(): SemanticBindableTypeSurfaceProjection {
+  return {
+    valueType: null,
+    valueTypeShapeKind: null,
+    effectiveValueTypeShapeKind: null,
+    valueTypeHasCallSignature: null,
+    valueTypeHasMembers: null,
+    valueTypeIsWeak: null,
   };
 }
 

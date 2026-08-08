@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -7,9 +7,11 @@ import {
   InquiryContinuationKind,
   NodeSemanticRuntimeProjectInputHost,
   SEMANTIC_RUNTIME_API_VERSION,
+  SemanticAppQueryKind,
   SemanticRuntimeAnswerCoverage,
   SemanticRuntimeAnswerResult,
   SemanticRuntimeAnswerSelection,
+  type SemanticRuntime,
   type SemanticRuntimeAnswer,
   type SemanticRuntimeContinuationRow,
 } from "@aurelia-ls/semantic-runtime";
@@ -316,6 +318,61 @@ describe("SemanticRuntimeLspSession", () => {
     await expect(
       session.templateCompletions(document, { line: 0, character: 13 }, guard),
     ).rejects.toMatchObject({ reason: "stale" });
+  });
+
+  test("requests resource definitions without handles and keeps inventory type surfaces caller-selected", async () => {
+    const session = createSession(minimalFixtureRoot(), new TestDocumentStore());
+    const guard = session.requestGuard(null);
+    await session.preflight(guard);
+    const runtime = await (Reflect.get(session, "runtime") as Promise<SemanticRuntime>);
+    const answerAppQuery = vi.spyOn(runtime, "answerAppQuery").mockResolvedValue(
+      rowPageAnswer(
+        [],
+        null,
+        null,
+        true,
+        [],
+        {
+          result: SemanticRuntimeAnswerResult.Answered,
+          selection: SemanticRuntimeAnswerSelection.Exact,
+          coverage: SemanticRuntimeAnswerCoverage.Complete,
+        },
+        0,
+      ) as never,
+    );
+
+    await session.resourceDefinitions(guard);
+
+    const definitionRequest = answerAppQuery.mock.calls.at(-1)?.[0];
+    expect(definitionRequest).toMatchObject({
+      kind: SemanticAppQueryKind.ResourceDefinitions,
+      page: { size: 500 },
+      inquiryProfile: "lsp-cursor",
+    });
+    expect(definitionRequest).not.toHaveProperty("detail");
+    expect(definitionRequest).not.toHaveProperty("includeTypeSurfaces");
+
+    answerAppQuery.mockClear();
+    await session.resourceInventory("project:fixture", false, guard);
+
+    expect(answerAppQuery).toHaveBeenCalledWith(expect.objectContaining({
+      kind: SemanticAppQueryKind.ResourceInventory,
+      projectKey: "project:fixture",
+      includeTypeSurfaces: false,
+      page: { size: 500 },
+      inquiryProfile: "lsp-cursor",
+    }));
+
+    answerAppQuery.mockClear();
+    await session.resourceInventory("project:fixture", true, guard);
+
+    expect(answerAppQuery).toHaveBeenCalledWith(expect.objectContaining({
+      kind: SemanticAppQueryKind.ResourceInventory,
+      projectKey: "project:fixture",
+      includeTypeSurfaces: true,
+      page: { size: 500 },
+      inquiryProfile: "lsp-cursor",
+    }));
   });
 });
 

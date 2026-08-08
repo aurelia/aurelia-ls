@@ -118,6 +118,7 @@ function readyProject(resources: readonly ReturnType<typeof resource>[], project
     status: "ready",
     project: project(projectKey),
     answer: { ...completeAnswer, coverage },
+    typeSurfacesIncluded: true,
     resources,
     completeness: {
       fullDefinitions: resources.length,
@@ -136,18 +137,19 @@ function response(projects: readonly unknown[], owner = workspace(), fingerprint
   return { workspaces: [{ ...owner, status: "ready", response: { fingerprint, projects } }] };
 }
 
-function createHarness(getResourceInventory: () => Promise<unknown>) {
+function createHarness(getResourceInventory: (_options?: unknown) => Promise<unknown>) {
   const { vscode: stubVscode } = createVscodeApi();
   const vscode = stubVscode as unknown as VscodeApi;
   const logger = { debug: vi.fn(), warn: vi.fn() };
+  const inventory = vi.fn(getResourceInventory);
   const provider = new ResourceExplorerProvider(
     vscode,
-    { getResourceInventory: vi.fn(getResourceInventory) } as never,
+    { getResourceInventory: inventory } as never,
     logger as never,
   );
   const view: { message?: string; description?: string } = {};
   provider.attachView(view as never);
-  return { logger, provider, view, vscode };
+  return { getResourceInventory: inventory, logger, provider, view, vscode };
 }
 
 async function roots(provider: ResourceExplorerProvider): Promise<Node[]> {
@@ -178,6 +180,8 @@ describe("ResourceExplorerProvider", () => {
     const cardNode = tree[0]!.children![0]!;
     expect(cardNode.description).toContain("project");
     expect(cardNode.children?.map((node) => node.label)).toEqual(["store-card", "labelText (display-label)"]);
+    expect(cardNode.children?.[1]?.description).toBe(": string");
+    expect(harness.getResourceInventory).toHaveBeenCalledWith({ includeTypeSurfaces: true });
     expect(harness.provider.getTreeItem(cardNode as never).command).toEqual(expect.objectContaining({
       command: AureliaCommand.OpenResource,
     }));

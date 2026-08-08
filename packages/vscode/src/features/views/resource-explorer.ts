@@ -325,7 +325,7 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Dis
       : "Discovering Aurelia resources...");
     try {
       this.#logger.debug("resourceExplorer.refresh.start");
-      const response = await this.#lsp.getResourceInventory();
+      const response = await this.#lsp.getResourceInventory({ includeTypeSurfaces: true });
       if (generation !== this.#refreshGeneration) return;
       this.#response = response;
       this.#tree = response == null

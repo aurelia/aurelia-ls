@@ -53,7 +53,7 @@ function createMockContext(input: { text: string; definitions: unknown[] }) {
 }
 
 describe("runtime-backed workspace symbols", () => {
-  test("maps source-backed resources into query-filtered workspace symbols", async () => {
+  test("maps public source refs without kernel handles into query-filtered workspace symbols", async () => {
     const text = [
       "export class ProductCard {}",
       "export class CurrencyValueConverter {}",

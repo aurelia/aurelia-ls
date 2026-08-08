@@ -430,7 +430,8 @@ instead of a cursor-bearing page when samples are needed. Use the specific route
 `ViewportAgents`, when a caller needs cursor paging for one family. Router overview also owns `displayText` so public
 clients can see the route/runtime-tree counts, issue state, and row-sampling policy before opening raw router rows.
 `readSemanticAppQueryCatalog()` and `runtime.appQueryCatalog()` expose the supported app query vocabulary with group,
-result-role, paging/detail, source-file, cursor, router-product, and minimum analysis-depth metadata. `pagingKind`
+result-role, paging/detail, source-file, cursor, type-surface capability, materialization policy, router-product, and
+minimum analysis-depth metadata. `pagingKind`
 distinguishes ordinary offset row cursors from router row-sample sizing and cursor-locus
 continuations. Public adapters such as MCP should use `minimumAnalysisDepth` for default generic-query opening so first reads can stay at
 `runtime-topology` while binding-owned rows still request their required substrate. The catalog accepts `group` and
@@ -1518,6 +1519,14 @@ public-name token. Pathless framework/catalog rows remain visible and explicitly
 does not absorb admission provenance: a framework row can retain an external catalog declaration while a template
 availability row points at the authored registration that admitted it.
 
+Inventory bindable identity, mode, setter/nullability policy, and source roles are part of the compact default answer.
+Checker-backed value-type surfaces are enrichment: pass `includeTypeSurfaces: true` when a consumer needs them and
+inspect `typeSurfacesIncluded` to distinguish an intentionally compact answer from unavailable type facts. Compact rows
+preserve the type-surface fields as `null`, so adapters do not need a second DTO. Resource evidence is converged before
+projection and each final definition is projected once; repeated configured/compiler/visibility occurrences must not
+multiply checker work or select a different definition by visitation order. `TemplateResourceAvailability` follows the
+same selector contract while retaining its cursor-selected scope semantics.
+
 `TemplateResourceAvailability` is the cursor-scoped companion. It selects the narrowest compiled template occurrence
 and returns exactly that compiler world's effective runtime-resource scope. Equally specific occurrences from different
 app roots return `selection: ambiguous` with candidate template/scope identities and no unioned rows. A caller must
@@ -1532,7 +1541,9 @@ booting an app root. Rows include resource kind, declaration modes, name/key/ali
 dependencies, template shape, watch metadata, attribute-pattern entries, custom-element/custom-attribute flags, and
 optional kernel handles. Declaration modes preserve the convergence carrier mechanism, so public analysis and future
 generation policy can distinguish decorator, static, definition-object/factory, and current convention resource styles
-without re-reading source.
+without re-reading source. Its bindable type surface is part of that full definition contract rather than an optional
+selector, so the query is always classified as `query-type-projection`; callers wanting the compact app-facing catalog
+should use `ResourceInventory` instead.
 Resource source loci are intentionally not interchangeable: `source` is the metadata carrier that produced the
 definition, `targetSource` is the exact target token used for navigation and edits, and `targetDeclarationSource` is
 the full class or variable declaration used by hierarchy/outline consumers. Imported define-call targets retain the

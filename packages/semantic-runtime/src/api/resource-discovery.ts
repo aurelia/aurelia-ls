@@ -45,7 +45,6 @@ import {
   SemanticRuntimeAnswerResult,
   SemanticRuntimeAnswerSelection,
   SemanticTemplateResourceAvailabilityState,
-  type SemanticResourceDefinitionRow,
   type SemanticResourceInventoryCompleteness,
   type SemanticResourceInventoryKind,
   type SemanticResourceInventoryOrigin,
@@ -63,7 +62,10 @@ import {
   pageRows,
 } from './answer-helpers.js';
 import {
-  readResourceDefinitionRow,
+  readResourceDefinitionCoreProjection,
+  readResourceDefinitionSourceProjection,
+  type ResourceDefinitionCoreProjection,
+  type ResourceDefinitionSourceProjection,
 } from './resource-projections.js';
 import {
   describeAddress,
@@ -78,13 +80,54 @@ interface BuiltInResourceFacts {
   readonly catalog: BuiltInResourceCatalog;
 }
 
+type ResourceInventoryLocalityEvidence =
+  | { readonly kind: 'unknown' }
+  | { readonly kind: 'non-local' }
+  | {
+    readonly kind: 'local';
+    readonly ownerHandle: IdentityHandle | ProductHandle;
+  };
+
+const unknownLocalityEvidence: ResourceInventoryLocalityEvidence = { kind: 'unknown' };
+const nonLocalityEvidence: ResourceInventoryLocalityEvidence = { kind: 'non-local' };
+
+function localTemplateLocalityEvidence(
+  ownerHandle: IdentityHandle | ProductHandle,
+): ResourceInventoryLocalityEvidence {
+  return { kind: 'local', ownerHandle };
+}
+
+/** @internal Exact convergence rule for the independent resource-inventory evidence lanes. */
+export function mergeResourceInventoryLocalityEvidence(
+  current: ResourceInventoryLocalityEvidence,
+  incoming: ResourceInventoryLocalityEvidence,
+  candidateLabel = 'resource inventory candidate',
+): ResourceInventoryLocalityEvidence {
+  if (current.kind === 'unknown') return incoming;
+  if (incoming.kind === 'unknown') return current;
+  if (current.kind === 'non-local' && incoming.kind === 'non-local') return current;
+  if (
+    current.kind === 'local'
+    && incoming.kind === 'local'
+    && current.ownerHandle === incoming.ownerHandle
+  ) {
+    return current;
+  }
+  throw new Error(
+    `${candidateLabel} merged conflicting locality evidence '${localityEvidenceText(current)}' and '${localityEvidenceText(incoming)}'.`,
+  );
+}
+
+function localityEvidenceText(evidence: ResourceInventoryLocalityEvidence): string {
+  return evidence.kind === 'local' ? `local:${evidence.ownerHandle}` : evidence.kind;
+}
+
 class ResourceInventoryCandidate {
   readonly visibilityRows: TemplateVisibleResource[] = [];
   builtIn: BuiltInResourceFacts | null = null;
   definition: FullResourceDefinition | null = null;
-  definitionRow: SemanticResourceDefinitionRow | null = null;
   header: ResourceDefinitionHeaderEmission | BuiltInResource | null = null;
-  localOwnerHandle: IdentityHandle | ProductHandle | null = null;
+  private localityEvidence: ResourceInventoryLocalityEvidence = unknownLocalityEvidence;
   identityKey: string | null = null;
 
   constructor(
@@ -95,13 +138,23 @@ class ResourceInventoryCandidate {
     readonly resourceProductHandle: ProductHandle | null,
     readonly definitionProductHandle: ProductHandle | null,
   ) {}
+
+  get localOwnerHandle(): IdentityHandle | ProductHandle | null {
+    return this.localityEvidence.kind === 'local' ? this.localityEvidence.ownerHandle : null;
+  }
+
+  mergeLocalityEvidence(incoming: ResourceInventoryLocalityEvidence): void {
+    this.localityEvidence = mergeResourceInventoryLocalityEvidence(
+      this.localityEvidence,
+      incoming,
+      `Resource inventory candidate '${this.resourceKind}:${this.name}'`,
+    );
+  }
 }
 
 interface ResourceInventoryProjection {
   readonly rows: readonly SemanticResourceInventoryRow[];
   readonly completeness: SemanticResourceInventoryCompleteness;
-  readonly rowByCandidate: ReadonlyMap<ResourceInventoryCandidate, SemanticResourceInventoryRow>;
-  readonly candidateByVisibleResource: ReadonlyMap<TemplateVisibleResource, ResourceInventoryCandidate>;
 }
 
 /** Project the selected app's resource definitions and effective compiler catalogs without leaking kernel handles. */
@@ -109,8 +162,9 @@ export function readSemanticResourceInventory(
   emission: AureliaAppWorldProjectEmission,
   store: KernelStore,
   page?: SemanticRuntimePageInput,
+  includeTypeSurfaces = false,
 ): SemanticRuntimeAnswer<SemanticResourceInventoryResult> {
-  const projection = new ResourceInventoryBuilder(emission, store).read();
+  const projection = new ResourceInventoryBuilder(emission, store, includeTypeSurfaces).read();
   const paged = pageRows(projection.rows, page);
   return answer(
     SemanticRuntimeAnswerResult.Answered,
@@ -119,6 +173,7 @@ export function readSemanticResourceInventory(
       displayText: resourceInventoryDisplayText(paged.rows, projection.rows.length, projection.completeness),
       projectKey: emission.project.projectKey,
       projectRoot: emission.project.rootDir,
+      typeSurfacesIncluded: includeTypeSurfaces,
       rows: paged.rows,
       completeness: projection.completeness,
     },
@@ -137,8 +192,11 @@ export function readSemanticTemplateResourceAvailability(
   store: KernelStore,
   cursor: SemanticRuntimeSourceCursorInput | null | undefined,
   requestedScopeIdentityKey: string | null | undefined,
+  includeTypeSurfaces = false,
 ): SemanticRuntimeAnswer<SemanticTemplateResourceAvailabilityResult> {
-  const projection = new ResourceInventoryBuilder(emission, store).read();
+  const inventory = new ResourceInventoryBuilder(emission, store, includeTypeSurfaces);
+  inventory.collect();
+  const completeness = inventory.completeness();
   const emptyValue = (
     displayText: string,
     candidates: readonly SemanticTemplateResourceScopeCandidate[] = [],
@@ -146,10 +204,11 @@ export function readSemanticTemplateResourceAvailability(
     displayText,
     projectKey: emission.project.projectKey,
     projectRoot: emission.project.rootDir,
+    typeSurfacesIncluded: includeTypeSurfaces,
     selectedTemplate: null,
     candidates,
     rows: [],
-    completeness: projection.completeness,
+    completeness,
   });
   if (cursor == null) {
     return answer(
@@ -188,7 +247,7 @@ export function readSemanticTemplateResourceAvailability(
     resolution.cursor.offset,
   );
   const selectedScopes = distinctTemplateScopeSelections(
-    selections.map((selection) => templateScopeSelection(emission, store, projection, selection)),
+    selections.map((selection) => templateScopeSelection(emission, store, inventory, selection)),
   );
   if (selectedScopes.length === 0) {
     return answer(
@@ -232,8 +291,7 @@ export function readSemanticTemplateResourceAvailability(
   const selected = requestedScope ?? selectedScopes[0]!;
   const rows = selected.selection.resource.compilation.compilerWorld.resourceScope.resources
     .map((visibleResource) => {
-      const candidate = projection.candidateByVisibleResource.get(visibleResource);
-      const resource = candidate == null ? null : projection.rowByCandidate.get(candidate) ?? null;
+      const resource = inventory.rowForVisibleResource(visibleResource);
       return resource == null
         ? null
         : {
@@ -248,7 +306,7 @@ export function readSemanticTemplateResourceAvailability(
     .filter((row): row is NonNullable<typeof row> => row != null);
   const coverage = rows.some((row) => row.state === SemanticTemplateResourceAvailabilityState.Open)
     ? SemanticRuntimeAnswerCoverage.Open
-    : resourceInventoryCoverage(projection.completeness);
+    : resourceInventoryCoverage(completeness);
   return answer(
     SemanticRuntimeAnswerResult.Answered,
     `Returned ${rows.length} resource(s) available to ${selected.candidate.definitionName}.`,
@@ -256,10 +314,11 @@ export function readSemanticTemplateResourceAvailability(
       displayText: `${selected.candidate.definitionName}: ${rows.length} available runtime resource(s).`,
       projectKey: emission.project.projectKey,
       projectRoot: emission.project.rootDir,
+      typeSurfacesIncluded: includeTypeSurfaces,
       selectedTemplate: selected.candidate,
       candidates: [selected.candidate],
       rows,
-      completeness: projection.completeness,
+      completeness,
     },
     {
       selection: SemanticRuntimeAnswerSelection.Exact,
@@ -273,34 +332,38 @@ class ResourceInventoryBuilder {
   private readonly candidatesByHandle = new Map<string, ResourceInventoryCandidate>();
   private readonly candidatesByFallback = new Map<string, ResourceInventoryCandidate>();
   private readonly candidateByVisibleResource = new Map<TemplateVisibleResource, ResourceInventoryCandidate>();
+  private readonly definitionProjections = new Map<ResourceInventoryCandidate, ResourceDefinitionCoreProjection>();
+  private readonly definitionSourceProjections = new Map<ResourceInventoryCandidate, ResourceDefinitionSourceProjection>();
+  private readonly rowsByCandidate = new Map<ResourceInventoryCandidate, SemanticResourceInventoryRow>();
   private readonly excludedCompilerSyntax = new Set<string>();
   private unnamedDefinitions = 0;
+  private collected = false;
 
   constructor(
     private readonly emission: AureliaAppWorldProjectEmission,
     private readonly store: KernelStore,
+    private readonly includeTypeSurfaces: boolean,
   ) {}
 
   read(): ResourceInventoryProjection {
+    this.collect();
+    const rows = this.candidates.map((candidate) => this.rowForCandidate(candidate)).sort(compareInventoryRows);
+    return {
+      rows,
+      completeness: this.completeness(),
+    };
+  }
+
+  collect(): void {
+    if (this.collected) {
+      return;
+    }
+    this.collected = true;
     this.readProjectDefinitions();
     this.readConfiguredBuiltIns();
     this.readCompiledDefinitions();
     this.readProjectHeaders();
     this.readCompilerVisibility();
-
-    const rowByCandidate = new Map<ResourceInventoryCandidate, SemanticResourceInventoryRow>();
-    const rows = this.candidates.map((candidate) => {
-      const row = this.rowForCandidate(candidate);
-      rowByCandidate.set(candidate, row);
-      return row;
-    }).sort(compareInventoryRows);
-    const completeness = this.completeness(rows);
-    return {
-      rows,
-      completeness,
-      rowByCandidate,
-      candidateByVisibleResource: this.candidateByVisibleResource,
-    };
   }
 
   private readProjectDefinitions(): void {
@@ -309,7 +372,7 @@ class ResourceInventoryBuilder {
         this.rememberExcludedDefinition(definition);
         continue;
       }
-      this.applyDefinition(definition, null);
+      this.applyDefinition(definition, nonLocalityEvidence);
     }
   }
 
@@ -322,8 +385,8 @@ class ResourceInventoryBuilder {
         continue;
       }
       const candidate = builtIn.definition == null
-        ? this.applyHeader(builtIn.resource)
-        : this.applyDefinition(builtIn.definition, null);
+        ? this.applyHeader(builtIn.resource, nonLocalityEvidence)
+        : this.applyDefinition(builtIn.definition, nonLocalityEvidence);
       candidate.builtIn = { resource: builtIn.resource, catalog };
       this.registerCandidateHandles(candidate, {
         resourceIdentityHandle: builtIn.resource.identityHandle,
@@ -340,10 +403,10 @@ class ResourceInventoryBuilder {
         continue;
       }
       const definitionOwner = definition.identityHandle ?? definition.productHandle;
-      const localOwnerHandle = definitionOwner !== resource.compilation.familyOwnerHandle
-        ? resource.compilation.familyOwnerHandle
-        : null;
-      this.applyDefinition(definition, localOwnerHandle);
+      const localityEvidence = definitionOwner !== resource.compilation.familyOwnerHandle
+        ? localTemplateLocalityEvidence(resource.compilation.familyOwnerHandle)
+        : nonLocalityEvidence;
+      this.applyDefinition(definition, localityEvidence);
     }
   }
 
@@ -357,7 +420,7 @@ class ResourceInventoryBuilder {
         this.unnamedDefinitions += 1;
         continue;
       }
-      this.applyHeader(header);
+      this.applyHeader(header, nonLocalityEvidence);
     }
   }
 
@@ -380,7 +443,7 @@ class ResourceInventoryBuilder {
 
   private applyDefinition(
     definition: FullResourceDefinition,
-    localOwnerHandle: IdentityHandle | ProductHandle | null,
+    localityEvidence: ResourceInventoryLocalityEvidence,
   ): ResourceInventoryCandidate {
     const resourceKind = taxonomyResourceKindForDefinition(definition);
     if (!isInventoryKind(resourceKind)) {
@@ -395,13 +458,21 @@ class ResourceInventoryBuilder {
       definitionProductHandle: definition.productHandle,
       sourceAddressHandle: definition.sourceAddressHandle,
     });
-    candidate.definition = definition;
-    candidate.definitionRow = readResourceDefinitionRow(this.emission, this.store, definition, false);
-    candidate.localOwnerHandle ??= localOwnerHandle;
+    if (candidate.definition == null) {
+      candidate.definition = definition;
+    } else if (!sameDefinitionProduct(candidate.definition, definition)) {
+      throw new Error(
+        `Resource inventory candidate '${candidate.resourceKind}:${candidate.name}' merged conflicting definition products '${candidate.definition.productHandle}' and '${definition.productHandle}'.`,
+      );
+    }
+    candidate.mergeLocalityEvidence(localityEvidence);
     return candidate;
   }
 
-  private applyHeader(header: ResourceDefinitionHeaderEmission | BuiltInResource): ResourceInventoryCandidate {
+  private applyHeader(
+    header: ResourceDefinitionHeaderEmission | BuiltInResource,
+    localityEvidence: ResourceInventoryLocalityEvidence,
+  ): ResourceInventoryCandidate {
     const resourceKind = header instanceof ResourceDefinitionHeaderEmission
       ? header.resourceKind
       : header.resourceKind;
@@ -426,13 +497,14 @@ class ResourceInventoryBuilder {
       sourceAddressHandle: header.sourceAddressHandle,
     });
     candidate.header ??= header;
+    candidate.mergeLocalityEvidence(localityEvidence);
     return candidate;
   }
 
   private candidateForVisibleResource(visibleResource: TemplateVisibleResource): ResourceInventoryCandidate {
     const fullDefinition = readVisibleTemplateResourceDefinition(this.store, visibleResource);
     if (fullDefinition != null) {
-      const candidate = this.applyDefinition(fullDefinition, null);
+      const candidate = this.applyDefinition(fullDefinition, unknownLocalityEvidence);
       this.registerCandidateHandles(candidate, visibleResource);
       return candidate;
     }
@@ -441,7 +513,7 @@ class ResourceInventoryBuilder {
       detail != null
       && (!(detail instanceof ResourceDefinitionHeaderEmission) || detail.primaryName != null)
     ) {
-      const candidate = this.applyHeader(detail);
+      const candidate = this.applyHeader(detail, unknownLocalityEvidence);
       this.registerCandidateHandles(candidate, visibleResource);
       return candidate;
     }
@@ -509,17 +581,65 @@ class ResourceInventoryBuilder {
     }
   }
 
+  rowForVisibleResource(visibleResource: TemplateVisibleResource): SemanticResourceInventoryRow | null {
+    this.collect();
+    const candidate = this.candidateByVisibleResource.get(visibleResource) ?? null;
+    return candidate == null ? null : this.rowForCandidate(candidate);
+  }
+
+  candidateForDefinition(definition: FullResourceDefinition): ResourceInventoryCandidate | null {
+    this.collect();
+    const resourceKind = taxonomyResourceKindForDefinition(definition);
+    const name = namedDefinitionName(definition);
+    return this.candidates.find((candidate) =>
+      candidate.resourceKind === resourceKind
+      && candidate.name === name
+      && candidate.definition != null
+      && sameDefinitionProduct(candidate.definition, definition)
+    ) ?? null;
+  }
+
+  identityKeyForCandidate(candidate: ResourceInventoryCandidate): string {
+    this.collect();
+    return this.identityKeyFor(
+      candidate,
+      this.primaryCandidateSources(candidate),
+      this.targetIdentityHandle(candidate),
+    );
+  }
+
+  completeness(): SemanticResourceInventoryCompleteness {
+    this.collect();
+    return {
+      fullDefinitions: this.candidates.filter((candidate) => candidate.definition != null).length,
+      headerOnly: this.candidates.filter((candidate) => candidate.definition == null && candidate.header != null).length,
+      visibilityOnly: this.candidates.filter((candidate) => candidate.definition == null && candidate.header == null).length,
+      localTemplates: this.candidates.filter((candidate) => candidate.localOwnerHandle != null).length,
+      excludedCompilerSyntax: this.excludedCompilerSyntax.size,
+      unnamedDefinitions: this.unnamedDefinitions,
+      unresolvedModules: this.emission.resources.readUnresolvedModules().length,
+      openVisibility: this.candidates.filter((candidate) =>
+        candidate.visibilityRows.some((row) => row.visibilityKind === TemplateResourceVisibilityKind.Open)
+      ).length,
+    };
+  }
+
   private rowForCandidate(candidate: ResourceInventoryCandidate): SemanticResourceInventoryRow {
-    const metadata = candidate.definitionRow == null
+    const existing = this.rowsByCandidate.get(candidate);
+    if (existing != null) {
+      return existing;
+    }
+    const definitionProjection = this.definitionProjectionFor(candidate);
+    const metadata = definitionProjection == null
       ? this.headerMetadata(candidate)
       : {
-          aliases: candidate.definitionRow.aliases,
-          bindables: candidate.definitionRow.bindables,
-          declarationModes: candidate.definitionRow.declarationModes,
+          aliases: definitionProjection.aliases,
+          bindables: definitionProjection.bindables,
+          declarationModes: definitionProjection.declarationModes,
           sources: inventorySources(
-            candidate.definitionRow.nameSource,
-            candidate.definitionRow.targetDeclarationSource ?? candidate.definitionRow.source,
-            candidate.definitionRow.targetSource,
+            definitionProjection.nameSource,
+            definitionProjection.targetDeclarationSource ?? definitionProjection.source,
+            definitionProjection.targetSource,
             candidate.builtIn != null,
           ),
           targetIdentityHandle: candidate.definition?.target.identityHandle ?? null,
@@ -529,7 +649,7 @@ class ResourceInventoryBuilder {
       ? null
       : this.candidatesByHandle.get(handleKey(candidate.localOwnerHandle)) ?? null;
     const ownerRowSource = owner == null ? null : this.primaryCandidateSource(owner);
-    return {
+    const row: SemanticResourceInventoryRow = {
       identityKey,
       projectKey: this.emission.project.projectKey,
       resourceKind: candidate.resourceKind,
@@ -559,13 +679,13 @@ class ResourceInventoryBuilder {
             bindable.attribute,
             sameNameOrdinal(metadata.bindables, index, (row) => `${row.name}\u0000${row.attribute}`),
           ]),
-          primary: candidate.definitionRow?.defaultProperty === bindable.name,
+          primary: definitionProjection?.defaultProperty === bindable.name,
           navigationSource: navigation?.source ?? null,
           navigationRole: navigation?.role ?? null,
         };
       }),
       declarationModes: metadata.declarationModes,
-      metadataState: candidate.definitionRow != null
+      metadataState: definitionProjection != null
         ? SemanticResourceInventoryMetadataState.FullDefinition
         : candidate.header != null
           ? SemanticResourceInventoryMetadataState.HeaderOnly
@@ -581,12 +701,14 @@ class ResourceInventoryBuilder {
       },
       sources: metadata.sources,
     };
+    this.rowsByCandidate.set(candidate, row);
+    return row;
   }
 
   private headerMetadata(candidate: ResourceInventoryCandidate): {
-    readonly aliases: SemanticResourceDefinitionRow['aliases'];
-    readonly bindables: SemanticResourceDefinitionRow['bindables'];
-    readonly declarationModes: SemanticResourceDefinitionRow['declarationModes'];
+    readonly aliases: ResourceDefinitionCoreProjection['aliases'];
+    readonly bindables: ResourceDefinitionCoreProjection['bindables'];
+    readonly declarationModes: ResourceDefinitionCoreProjection['declarationModes'];
     readonly sources: SemanticResourceInventorySources;
     readonly targetIdentityHandle: IdentityHandle | null;
   } {
@@ -779,11 +901,12 @@ class ResourceInventoryBuilder {
   }
 
   private primaryCandidateSources(candidate: ResourceInventoryCandidate): SemanticResourceInventorySources {
-    if (candidate.definitionRow != null) {
+    const sourceProjection = this.definitionSourceProjectionFor(candidate);
+    if (sourceProjection != null) {
       return inventorySources(
-        candidate.definitionRow.nameSource,
-        candidate.definitionRow.targetDeclarationSource ?? candidate.definitionRow.source,
-        candidate.definitionRow.targetSource,
+        sourceProjection.nameSource,
+        sourceProjection.targetDeclarationSource ?? sourceProjection.source,
+        sourceProjection.targetSource,
         candidate.builtIn != null,
       );
     }
@@ -802,19 +925,41 @@ class ResourceInventoryBuilder {
         : null);
   }
 
-  private completeness(rows: readonly SemanticResourceInventoryRow[]): SemanticResourceInventoryCompleteness {
-    return {
-      fullDefinitions: rows.filter((row) => row.metadataState === SemanticResourceInventoryMetadataState.FullDefinition).length,
-      headerOnly: rows.filter((row) => row.metadataState === SemanticResourceInventoryMetadataState.HeaderOnly).length,
-      visibilityOnly: rows.filter((row) => row.metadataState === SemanticResourceInventoryMetadataState.VisibilityOnly).length,
-      localTemplates: rows.filter((row) => row.locality.kind === SemanticResourceInventoryLocalityKind.LocalTemplate).length,
-      excludedCompilerSyntax: this.excludedCompilerSyntax.size,
-      unnamedDefinitions: this.unnamedDefinitions,
-      unresolvedModules: this.emission.resources.readUnresolvedModules().length,
-      openVisibility: this.candidates.filter((candidate) =>
-        candidate.visibilityRows.some((row) => row.visibilityKind === TemplateResourceVisibilityKind.Open)
-      ).length,
-    };
+  private definitionProjectionFor(
+    candidate: ResourceInventoryCandidate,
+  ): ResourceDefinitionCoreProjection | null {
+    const definition = candidate.definition;
+    if (definition == null) {
+      return null;
+    }
+    const existing = this.definitionProjections.get(candidate);
+    if (existing != null) {
+      return existing;
+    }
+    const projection = readResourceDefinitionCoreProjection(
+      this.emission,
+      this.store,
+      definition,
+      this.includeTypeSurfaces,
+    );
+    this.definitionProjections.set(candidate, projection);
+    return projection;
+  }
+
+  private definitionSourceProjectionFor(
+    candidate: ResourceInventoryCandidate,
+  ): ResourceDefinitionSourceProjection | null {
+    const definition = candidate.definition;
+    if (definition == null) {
+      return null;
+    }
+    const existing = this.definitionSourceProjections.get(candidate);
+    if (existing != null) {
+      return existing;
+    }
+    const projection = readResourceDefinitionSourceProjection(this.store, definition);
+    this.definitionSourceProjections.set(candidate, projection);
+    return projection;
   }
 
   private rememberExcludedDefinition(definition: FullResourceDefinition): void {
@@ -844,19 +989,18 @@ interface TemplateScopeSelection {
 function templateScopeSelection(
   emission: AureliaAppWorldProjectEmission,
   store: KernelStore,
-  projection: ResourceInventoryProjection,
+  inventory: ResourceInventoryBuilder,
   selection: TemplateResourceCursorSelection,
 ): TemplateScopeSelection {
   const compilation = selection.resource.compilation;
-  const definitionCandidate = candidateForCompilationDefinition(projection, compilation.definition);
+  const definitionCandidate = inventory.candidateForDefinition(compilation.definition);
   const definitionIdentityKey = definitionCandidate == null
     ? semanticKey('template-owner', [
         emission.project.projectKey,
         compilation.definition.name,
         semanticSourceReferenceKey(describeAddress(store, compilation.definition.sourceAddressHandle)),
       ])
-    : projection.rowByCandidate.get(definitionCandidate)?.identityKey
-      ?? semanticKey('template-owner', [emission.project.projectKey, compilation.definition.name]);
+    : inventory.identityKeyForCandidate(definitionCandidate);
   const source = describeAddress(store, compilation.unit.templateSource.sourceAddressHandle);
   const templateIdentityKey = semanticKey('template-source', [
     definitionIdentityKey,
@@ -882,28 +1026,19 @@ function templateScopeSelection(
   };
 }
 
-function candidateForCompilationDefinition(
-  projection: ResourceInventoryProjection,
-  definition: FullResourceDefinition,
-): ResourceInventoryCandidate | null {
-  const name = namedDefinitionName(definition);
-  for (const [candidate, row] of projection.rowByCandidate) {
-    if (
-      row.resourceKind === taxonomyResourceKindForDefinition(definition)
-      && row.name === name
-      && candidate.definition === definition
-    ) {
-      return candidate;
-    }
-  }
-  return null;
-}
-
 function namedDefinitionName(definition: FullResourceDefinition): string {
   if ('name' in definition) {
     return definition.name;
   }
   throw new Error(`Compiler-syntax definition '${definition.type}' has no runtime resource name.`);
+}
+
+function sameDefinitionProduct(
+  left: FullResourceDefinition,
+  right: FullResourceDefinition,
+): boolean {
+  return left === right
+    || (left.productHandle != null && left.productHandle === right.productHandle);
 }
 
 function distinctTemplateScopeSelections(

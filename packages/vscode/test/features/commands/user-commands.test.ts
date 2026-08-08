@@ -162,7 +162,9 @@ function createHarness(input: {
   });
   const vscode = stubVscode as unknown as VscodeApi;
   const { errors, logger } = createTestServices(vscode);
-  const getResourceInventory = vi.fn(async () => input.inventory ?? inventory());
+  const getResourceInventory = vi.fn(async (_options?: unknown, _token?: unknown) =>
+    input.inventory ?? inventory()
+  );
   const getTemplateResourceAvailability = vi.fn(async (...args: unknown[]) =>
     input.availability?.(...args) ?? exactAvailability()
   );
@@ -208,6 +210,10 @@ describe("UserCommandsFeature", () => {
     await command;
 
     expect(harness.getResourceInventory).toHaveBeenCalledTimes(2);
+    expect(harness.getResourceInventory.mock.calls.map(([options]) => options)).toEqual([
+      {},
+      { workspaceKey: owner.key },
+    ]);
     expect(harness.recorded.openedDocuments.at(-1)?.uri.toString()).toBe("file:///repo/src/product-card.ts");
     expect(harness.recorded.shownDocuments.at(-1)?.opts).toMatchObject({
       preview: true,

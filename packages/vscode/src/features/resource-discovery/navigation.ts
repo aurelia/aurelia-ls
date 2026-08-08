@@ -11,7 +11,7 @@ export async function openResourceNavigation(
   request: ResourceNavigationRequest,
   viewColumn?: ViewColumn,
 ): Promise<boolean> {
-  const inventory = await lsp.getResourceInventory(request.workspaceKey);
+  const inventory = await lsp.getResourceInventory({ workspaceKey: request.workspaceKey });
   const workspace = inventory?.workspaces.find((candidate) => candidate.key === request.workspaceKey);
   if (workspace == null || workspace.status === "error") {
     vscode.window.showInformationMessage("The Aurelia resource project is no longer available. Refresh and try again.");

@@ -87,13 +87,14 @@ export function semanticAppQueryMaterializationPolicy(
   catalogPolicy: SemanticQueryMaterializationPolicy,
 ): SemanticQueryMaterializationPolicy {
   const shapedQuery = semanticAppQueryCatalogShape(query);
-  return diagnosticProjectionControlsMaterialization(shapedQuery)
+  const defaultProjectionPolicy = diagnosticProjectionControlsMaterialization(shapedQuery)
     && shapedQuery.diagnosticProjection === 'available-products'
     && catalogPolicy === 'query-type-projection'
     ? 'projection-only'
-    : shapedQuery.kind === SemanticAppQueryKind.AppTopology && shapedQuery.includeTypeSurfaces === true
-      ? 'query-type-projection'
-      : catalogPolicy;
+    : catalogPolicy;
+  return shapedQuery.includeTypeSurfaces === true
+    ? 'query-type-projection'
+    : defaultProjectionPolicy;
 }
 
 function diagnosticProjectionControlsMaterialization(query: SemanticAppQuery): boolean {

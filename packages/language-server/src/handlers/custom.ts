@@ -14,6 +14,7 @@ import type {
   RelatedFilesResponse,
   RenameFromTsParams,
   RenameFromTsResponse,
+  ResourceInventoryParams,
   ResourceInventoryResponse,
   SourceOwnershipParams,
   SourceOwnershipResponse,
@@ -49,6 +50,7 @@ import {
 export type {
   RenameFromTsParams,
   RenameFromTsResponse,
+  ResourceInventoryParams,
   ResourceInventoryResponse,
   SourceOwnershipParams,
   SourceOwnershipResponse,
@@ -81,6 +83,7 @@ export async function handleSourceOwnership(
 
 export async function handleResourceInventory(
   ctx: ServerContext,
+  params: ResourceInventoryParams | null | undefined,
   guard: SemanticRuntimeLspRequestGuard,
 ): Promise<ResourceInventoryResponse> {
   const generation = await ctx.semanticRuntime.preflight(guard);
@@ -93,11 +96,16 @@ export async function handleResourceInventory(
   for (const candidate of summary.value.appCandidates) {
     const project = mapResourceProject(candidate, ctx.documentUris);
     try {
-      const answer = await ctx.semanticRuntime.resourceInventory(candidate.projectKey, guard);
+      const answer = await ctx.semanticRuntime.resourceInventory(
+        candidate.projectKey,
+        params?.includeTypeSurfaces === true,
+        guard,
+      );
       projects.push({
         status: "ready",
         project,
         answer: mapRuntimeAnswer(answer),
+        typeSurfacesIncluded: answer.value.typeSurfacesIncluded,
         resources: answer.value.rows.map((row) => mapResourceInventoryItem(row, mappingContext)),
         completeness: answer.value.completeness,
       });
@@ -406,9 +414,9 @@ export function registerCustomHandlers(ctx: ServerContext): void {
   ctx.connection.onRequest(AureliaProtocolRequest.SourceOwnership, (params: SourceOwnershipParams, token: CancellationToken) =>
     request(ctx, "sourceOwnership", token, params?.uri,
       (guard) => handleSourceOwnership(ctx, params, guard)));
-  ctx.connection.onRequest(AureliaProtocolRequest.ResourceInventory, (_params: unknown, token: CancellationToken) =>
+  ctx.connection.onRequest(AureliaProtocolRequest.ResourceInventory, (params: ResourceInventoryParams, token: CancellationToken) =>
     request(ctx, "resourceInventory", token, undefined,
-      (guard) => handleResourceInventory(ctx, guard)));
+      (guard) => handleResourceInventory(ctx, params, guard)));
   ctx.connection.onRequest(
     AureliaProtocolRequest.TemplateResourceAvailability,
     (params: TemplateResourceAvailabilityParams, token: CancellationToken) =>

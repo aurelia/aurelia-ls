@@ -18,7 +18,11 @@ describe("resource discovery protocol boundary", () => {
   test("queries every explicit app project and preserves partial project failure", async () => {
     const first = project("first", workspaceRoot);
     const second = project("second", path.join(workspaceRoot, "nested"));
-    const resourceInventory = vi.fn(async (projectKey: string) => {
+    const resourceInventory = vi.fn(async (
+      projectKey: string,
+      _includeTypeSurfaces: boolean,
+      _guard: unknown,
+    ) => {
       if (projectKey === second.projectKey) throw new Error("second project failed");
       return answer(inventoryValue(resourceRow()));
     });
@@ -27,14 +31,17 @@ describe("resource discovery protocol boundary", () => {
       resourceInventory,
     });
 
-    const result = await handleResourceInventory(ctx as never, testRequestGuard);
+    const result = await handleResourceInventory(ctx as never, {}, testRequestGuard);
 
-    expect(resourceInventory.mock.calls.map(([projectKey]) => projectKey)).toEqual(["first", "second"]);
+    expect(resourceInventory.mock.calls.map(([projectKey, includeTypeSurfaces]) =>
+      [projectKey, includeTypeSurfaces]
+    )).toEqual([["first", false], ["second", false]]);
     expect(result.fingerprint).toBe(testAnalysisGeneration.fingerprint);
     expect(result.projects).toHaveLength(2);
     expect(result.projects[0]).toMatchObject({
       status: "ready",
       project: { projectKey: "first" },
+      typeSurfacesIncluded: false,
       resources: [{ identityKey: "resource:product-card:v1" }],
     });
     if (result.projects[0]?.status !== "ready") throw new Error("Expected ready project.");
@@ -49,6 +56,29 @@ describe("resource discovery protocol boundary", () => {
       status: "error",
       project: { projectKey: "second" },
       message: "second project failed",
+    });
+  });
+
+  test("forwards explicit inventory type-surface policy to every selected project", async () => {
+    const owner = project("first", workspaceRoot);
+    const resourceInventory = vi.fn(async (_projectKey: string, includeTypeSurfaces: boolean) =>
+      answer(inventoryValue(resourceRow(), includeTypeSurfaces))
+    );
+    const ctx = context({
+      workspaceSummary: vi.fn(async () => answer({ appCandidates: [owner] })),
+      resourceInventory,
+    });
+
+    const result = await handleResourceInventory(
+      ctx as never,
+      { includeTypeSurfaces: true },
+      testRequestGuard,
+    );
+
+    expect(resourceInventory).toHaveBeenCalledWith("first", true, testRequestGuard);
+    expect(result.projects[0]).toMatchObject({
+      status: "ready",
+      typeSurfacesIncluded: true,
     });
   });
 
@@ -202,11 +232,12 @@ function resourceRow() {
   };
 }
 
-function inventoryValue(row: ReturnType<typeof resourceRow>) {
+function inventoryValue(row: ReturnType<typeof resourceRow>, typeSurfacesIncluded = false) {
   return {
     displayText: "1 resource",
     projectKey: "first",
     projectRoot: workspaceRoot,
+    typeSurfacesIncluded,
     rows: [row],
     completeness: completeness(),
   };

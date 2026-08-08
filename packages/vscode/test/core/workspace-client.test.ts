@@ -824,6 +824,26 @@ describe("LspFacade workspace routing", () => {
         ? workspace.response.projects.flatMap((project) => project.status === "ready" ? project.resources : []).map((resource) => resource.name)
         : []
     )).toEqual([["shared-name"], ["shared-name"]]);
+    expect(harness.clients[0]?.sendRequest).toHaveBeenCalledWith(
+      "aurelia/resourceInventory",
+      {},
+      undefined,
+    );
+    expect(harness.clients[1]?.sendRequest).toHaveBeenCalledWith(
+      "aurelia/resourceInventory",
+      {},
+      undefined,
+    );
+
+    await facade.getResourceInventory({
+      workspaceKey: "file:///work/b",
+      includeTypeSurfaces: true,
+    });
+    expect(harness.clients[1]?.sendRequest).toHaveBeenLastCalledWith(
+      "aurelia/resourceInventory",
+      { includeTypeSurfaces: true },
+      undefined,
+    );
 
     const converted = await facade.convertWorkspaceEdit(
       "file:///work/b/src/card.ts",

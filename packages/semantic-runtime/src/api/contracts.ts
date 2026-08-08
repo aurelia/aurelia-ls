@@ -846,7 +846,7 @@ export interface SemanticAppQuery {
    * worth the CPU/memory trade-off.
    */
   readonly diagnosticProjection?: SemanticDiagnosticProjectionPolicy | `${SemanticDiagnosticProjectionPolicy}` | null;
-  /** Include query-local TypeChecker value type surfaces for overview/topology rows that default to summary-first. */
+  /** Include query-local TypeChecker value type surfaces for query kinds that advertise `supportsTypeSurfaces`. */
   readonly includeTypeSurfaces?: boolean | null;
   /** AppOverview diagnostic-cluster page size; defaults to the compact overview budget. */
   readonly diagnosticPageSize?: number | null;
@@ -1029,6 +1029,8 @@ export interface SemanticAppQueryCatalogRow {
   /** Whether open-seam queries accept seam kind, reason kind, and source-role filters. */
   readonly supportsOpenSeamFilters: boolean;
   readonly supportsDiagnosticProjection: boolean;
+  /** Whether `includeTypeSurfaces` can opt this query into answer-time TypeChecker surface projection. */
+  readonly supportsTypeSurfaces: boolean;
   /** Whether `continuationIntents` can narrow returned continuation rows without changing query identity. */
   readonly supportsContinuationIntentFilter: boolean;
   readonly requiresCursor: boolean;
@@ -2296,6 +2298,8 @@ export interface SemanticResourceInventoryResult {
   readonly displayText: string;
   readonly projectKey: string;
   readonly projectRoot: string;
+  /** Whether bindable rows include the opt-in TypeChecker value-type projection. */
+  readonly typeSurfacesIncluded: boolean;
   readonly rows: readonly SemanticResourceInventoryRow[];
   readonly completeness: SemanticResourceInventoryCompleteness;
 }
@@ -2327,6 +2331,8 @@ export interface SemanticTemplateResourceAvailabilityResult {
   readonly displayText: string;
   readonly projectKey: string;
   readonly projectRoot: string;
+  /** Whether resource bindable rows include the opt-in TypeChecker value-type projection. */
+  readonly typeSurfacesIncluded: boolean;
   readonly selectedTemplate: SemanticTemplateResourceScopeCandidate | null;
   readonly candidates: readonly SemanticTemplateResourceScopeCandidate[];
   readonly rows: readonly SemanticTemplateResourceAvailabilityRow[];

@@ -48,6 +48,7 @@ test("resource discovery transports exact project inventory and cursor-selected 
       selection: "not-applicable",
       page: null,
     });
+    expect(project.typeSurfacesIncluded).toBe(false);
     expect(new Set(project.resources.map((resource) => resource.identityKey)).size).toBe(project.resources.length);
     expect(project.resources.map((resource) => String(resource.kind))).not.toEqual(expect.arrayContaining([
       "binding-command",
@@ -93,8 +94,20 @@ test("resource discovery transports exact project inventory and cursor-selected 
       }),
     ]));
     const labelText = productCard?.bindables.find((bindable) => bindable.name === "labelText");
+    expect(productCard?.bindables.every((bindable) => bindable.valueType == null)).toBe(true);
     expect(sourceTargetText(productCardText, labelText?.sources.name)).toBe("labelText");
     expect(sourceTargetText(productCardText, labelText?.sources.attribute)).toBe("display-label");
+
+    const richResult = await connection.sendRequest<ResourceInventoryResponse>(
+      AureliaProtocolRequest.ResourceInventory,
+      { includeTypeSurfaces: true },
+    );
+    const richProject = richResult.projects[0];
+    if (richProject?.status !== "ready") throw new Error("Expected rich resource inventory project.");
+    expect(richProject.typeSurfacesIncluded).toBe(true);
+    expect(richProject.resources.find((resource) =>
+      resource.identityKey === productCard?.identityKey
+    )?.bindables.find((bindable) => bindable.name === "labelText")?.valueType).toBe("string");
 
     const localPill = project.resources.find((resource) =>
       resource.kind === "custom-element" && resource.name === "local-pill"

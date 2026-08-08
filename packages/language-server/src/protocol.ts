@@ -115,6 +115,11 @@ export interface SourceOwnershipResponse {
   readonly owners: readonly SourceOwnershipOwner[];
 }
 
+/** Optional projection policy for the shared semantic resource inventory. */
+export interface ResourceInventoryParams {
+  readonly includeTypeSurfaces?: boolean;
+}
+
 /** JSON transport form of semantic-runtime's author-facing resource taxonomy. */
 export type ResourceInventoryKind = `${SemanticResourceInventoryKind}`;
 
@@ -224,6 +229,7 @@ export type ResourceInventoryProjectResult =
       readonly status: "ready";
       readonly project: ResourceProject;
       readonly answer: RuntimeAnswerTransport;
+      readonly typeSurfacesIncluded: boolean;
       readonly resources: readonly ResourceInventoryItem[];
       readonly completeness: SemanticResourceInventoryCompleteness;
     }

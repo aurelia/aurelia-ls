@@ -1455,6 +1455,7 @@ function overviewQuery(
     kind,
     ...detailFromQuery(kind, source),
     ...diagnosticProjectionFromQuery(kind, source),
+    ...typeSurfacesFromQuery(kind, source),
   };
 }
 
@@ -1467,6 +1468,7 @@ function rowQuery(
     kind,
     ...detailFromQuery(kind, source),
     ...diagnosticProjectionFromQuery(kind, source),
+    ...typeSurfacesFromQuery(kind, source),
     ...openSeamFilterFromQuery(kind, source),
     ...observedDependencyLocusFromQuery(kind, source),
     page,
@@ -1481,6 +1483,7 @@ function pagedQuery(
   return {
     kind,
     ...detailFromQuery(kind, source),
+    ...typeSurfacesFromQuery(kind, source),
     page,
   };
 }
@@ -1494,6 +1497,7 @@ function diagnosticQuery(
     kind,
     ...detailFromQuery(kind, source),
     ...diagnosticProjectionFromQuery(kind, source),
+    ...typeSurfacesFromQuery(kind, source),
     page,
   };
 }
@@ -1520,6 +1524,7 @@ function cursorQuery(
     ),
     ...detailFromQuery(kind, source),
     ...diagnosticProjectionFromQuery(kind, source),
+    ...typeSurfacesFromQuery(kind, source),
   };
 }
 
@@ -1551,6 +1556,15 @@ function diagnosticProjectionFromQuery(
 ): Pick<SemanticAppQuery, 'diagnosticProjection'> {
   return semanticAppQueryCatalogRow(kind).supportsDiagnosticProjection && query.diagnosticProjection != null
     ? { diagnosticProjection: query.diagnosticProjection }
+    : {};
+}
+
+function typeSurfacesFromQuery(
+  kind: SemanticAppQueryKind | `${SemanticAppQueryKind}`,
+  query: SemanticAppQuery,
+): Pick<SemanticAppQuery, 'includeTypeSurfaces'> {
+  return query.includeTypeSurfaces === true && semanticAppQueryCatalogRow(kind).supportsTypeSurfaces
+    ? { includeTypeSurfaces: true }
     : {};
 }
 

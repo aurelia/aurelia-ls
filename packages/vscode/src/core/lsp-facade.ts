@@ -2,6 +2,7 @@ import type { CancellationToken, Disposable, WorkspaceEdit } from "vscode";
 import {
   AureliaProtocolNotification,
   AureliaProtocolRequest,
+  type ResourceInventoryParams,
   type ResourceInventoryResponse,
   type SourceOwnershipResponse,
   type TemplateResourceAvailabilityResponse,
@@ -20,6 +21,11 @@ import type {
 } from "../types.js";
 
 type NotificationHandler = (payload: unknown) => void;
+
+export interface ResourceInventoryOptions {
+  readonly workspaceKey?: string;
+  readonly includeTypeSurfaces?: boolean;
+}
 
 /** Routes custom LSP traffic across the active workspace-owned client sessions. */
 export class LspFacade implements Disposable {
@@ -72,19 +78,22 @@ export class LspFacade implements Disposable {
   }
 
   async getResourceInventory(
-    workspaceKey?: string,
+    options: ResourceInventoryOptions = {},
     token?: CancellationToken,
   ): Promise<ResourceInventorySnapshot | null> {
-    const sessions = workspaceKey == null
+    const sessions = options.workspaceKey == null
       ? this.#clients.sessions
-      : this.#clients.sessions.filter((session) => session.workspace.key === workspaceKey);
+      : this.#clients.sessions.filter((session) => session.workspace.key === options.workspaceKey);
     if (sessions.length === 0) return null;
+    const params: ResourceInventoryParams = options.includeTypeSurfaces === true
+      ? { includeTypeSurfaces: true }
+      : {};
     const rows = await Promise.all(sessions.map(async (session) => {
       try {
         const response = await this.#sendRequest<ResourceInventoryResponse>(
           session,
           AureliaProtocolRequest.ResourceInventory,
-          undefined,
+          params,
           token,
         );
         return { ...session.workspace, status: "ready" as const, response };
