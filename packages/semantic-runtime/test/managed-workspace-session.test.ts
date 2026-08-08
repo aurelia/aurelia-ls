@@ -21,6 +21,17 @@ import {
   type SemanticRuntimeSourceTextOverlay,
 } from '../src/index.js';
 import {
+  ComputationReadValidationScope,
+  type ComputationRead,
+} from '../src/kernel/computation-lifecycle.js';
+import {
+  SemanticRuntimeProjectInputRead,
+} from '../src/kernel/project-input.js';
+import {
+  AureliaAppWorldProjectGeneration,
+} from '../src/configuration/app-analysis-computation.js';
+import {
+  SemanticRuntimeAnalysisReceipt,
   SemanticRuntimeAnalysisReceiptBuilder,
   semanticRuntimeAnalysisReceiptFor,
 } from '../src/api/analysis-receipt.js';
@@ -234,6 +245,163 @@ describe('managed semantic workspace session', () => {
     expect(operationReceiptObservations).toBe(1);
     expect(rootReceipt?.validate().isCurrent).toBe(false);
     expect(childReceipt?.validate().isCurrent).toBe(false);
+  });
+
+  test('shares routed capture and cache-preflight pulls while keeping claim and egress proofs fresh', async () => {
+    const workspaceRoot = await createWorkspace();
+    await writeWorkspaceFile(workspaceRoot, 'src/main.ts', 'export const main = true;\n');
+    const session = createSession(workspaceRoot);
+    const baseline = await captureRuntime(session);
+    const request = {
+      kind: SemanticAppQueryKind.Summary,
+      projectKey: baseline.projectKey,
+      inquiryProfile: 'mcp-orientation',
+      appRetention: 'retain-app',
+      typeSystemDependencyCacheClearPolicy: 'preserve',
+    } as const;
+    await session.run(({ runtime }) => runtime.answerAppQuery(request));
+
+    const captureProjectInput = SemanticRuntimeProjectInputAuthority.prototype.capture;
+    const validateAppGeneration = AureliaAppWorldProjectGeneration.prototype.isCurrent;
+    const validateInScope = ComputationReadValidationScope.prototype.validate;
+    const validatePullRead = SemanticRuntimeProjectInputRead.prototype.validate;
+    const validateObservedValue = SemanticRuntimeProjectInputRead.prototype.validateObservedValue;
+    const validateReceipt = SemanticRuntimeAnalysisReceipt.prototype.validate;
+    const assertReceiptCurrent = SemanticRuntimeAnalysisReceipt.prototype.assertCurrent;
+    const captureScopes: (ComputationReadValidationScope | undefined)[] = [];
+    const cacheCurrentnessScopes: (ComputationReadValidationScope | undefined)[] = [];
+    const captureRequests = new Set<string>();
+    const cacheCurrentnessRequests = new Set<string>();
+    const pullValidationsByIdentity = new Map<string, number>();
+    const receiptObservationsByIdentity = new Map<
+      string,
+      { executions: number; receipts: Set<SemanticRuntimeAnalysisReceipt> }
+    >();
+    const validatedReceipts: SemanticRuntimeAnalysisReceipt[] = [];
+    const receiptBoundaries = new Map<SemanticRuntimeAnalysisReceipt, 'query-claim' | 'managed-egress'>();
+    let validationPhase: 'capture' | 'cache-currentness' | null = null;
+    let activeReceipt: SemanticRuntimeAnalysisReceipt | null = null;
+    let activeReceiptBoundary: 'query-claim' | null = null;
+    const readIdentity = (read: Pick<ComputationRead, 'domain' | 'readKey' | 'observedRevision'>): string =>
+      `${read.domain}\0${read.readKey}\0${read.observedRevision}`;
+    const increment = (counts: Map<string, number>, identity: string): void => {
+      counts.set(identity, (counts.get(identity) ?? 0) + 1);
+    };
+
+    vi.spyOn(SemanticRuntimeProjectInputAuthority.prototype, 'capture').mockImplementation(function (
+      this: SemanticRuntimeProjectInputAuthority,
+      scope,
+      validationScope,
+    ) {
+      captureScopes.push(validationScope);
+      const previousPhase = validationPhase;
+      validationPhase = 'capture';
+      try {
+        return captureProjectInput.call(this, scope, validationScope);
+      } finally {
+        validationPhase = previousPhase;
+      }
+    });
+    vi.spyOn(AureliaAppWorldProjectGeneration.prototype, 'isCurrent').mockImplementation(function (
+      this: AureliaAppWorldProjectGeneration,
+      validationScope,
+    ) {
+      cacheCurrentnessScopes.push(validationScope);
+      const previousPhase = validationPhase;
+      validationPhase = 'cache-currentness';
+      try {
+        return validateAppGeneration.call(this, validationScope);
+      } finally {
+        validationPhase = previousPhase;
+      }
+    });
+    vi.spyOn(ComputationReadValidationScope.prototype, 'validate').mockImplementation(function (
+      this: ComputationReadValidationScope,
+      read: ComputationRead,
+    ) {
+      if (
+        read instanceof SemanticRuntimeProjectInputRead
+        && read.currentnessAuthority.mode === SemanticRuntimeProjectInputCurrentnessMode.PullValidated
+      ) {
+        const identity = readIdentity(read);
+        if (validationPhase === 'capture') {
+          captureRequests.add(identity);
+        } else if (validationPhase === 'cache-currentness') {
+          cacheCurrentnessRequests.add(identity);
+        }
+      }
+      return validateInScope.call(this, read);
+    });
+    vi.spyOn(SemanticRuntimeProjectInputRead.prototype, 'validate').mockImplementation(function (
+      this: SemanticRuntimeProjectInputRead,
+    ) {
+      increment(pullValidationsByIdentity, readIdentity(this));
+      return validatePullRead.call(this);
+    });
+    vi.spyOn(SemanticRuntimeProjectInputRead.prototype, 'validateObservedValue').mockImplementation(function (
+      this: SemanticRuntimeProjectInputRead,
+    ) {
+      if (
+        activeReceipt != null
+        && this.currentnessAuthority.mode === SemanticRuntimeProjectInputCurrentnessMode.PullValidated
+      ) {
+        const identity = readIdentity(this);
+        let observation = receiptObservationsByIdentity.get(identity);
+        if (observation == null) {
+          observation = { executions: 0, receipts: new Set() };
+          receiptObservationsByIdentity.set(identity, observation);
+        }
+        observation.executions += 1;
+        observation.receipts.add(activeReceipt);
+      }
+      return validateObservedValue.call(this);
+    });
+    vi.spyOn(SemanticRuntimeAnalysisReceipt.prototype, 'assertCurrent').mockImplementation(function (
+      this: SemanticRuntimeAnalysisReceipt,
+    ) {
+      const previousBoundary = activeReceiptBoundary;
+      activeReceiptBoundary = 'query-claim';
+      try {
+        return assertReceiptCurrent.call(this);
+      } finally {
+        activeReceiptBoundary = previousBoundary;
+      }
+    });
+    vi.spyOn(SemanticRuntimeAnalysisReceipt.prototype, 'validate').mockImplementation(function (
+      this: SemanticRuntimeAnalysisReceipt,
+    ) {
+      validatedReceipts.push(this);
+      receiptBoundaries.set(this, activeReceiptBoundary ?? 'managed-egress');
+      const previousReceipt = activeReceipt;
+      activeReceipt = this;
+      try {
+        return validateReceipt.call(this);
+      } finally {
+        activeReceipt = previousReceipt;
+      }
+    });
+
+    await session.run(({ runtime }) => runtime.answerAppQuery(request));
+
+    expect(captureScopes).toHaveLength(1);
+    expect(cacheCurrentnessScopes).toHaveLength(1);
+    expect(captureScopes[0]).toBeInstanceOf(ComputationReadValidationScope);
+    expect(cacheCurrentnessScopes[0]).toBe(captureScopes[0]);
+    expect(validatedReceipts).toHaveLength(2);
+    expect(new Set(validatedReceipts).size).toBe(2);
+    expect(new Set(receiptBoundaries.values())).toEqual(new Set(['query-claim', 'managed-egress']));
+
+    const sharedPullIdentities = [...captureRequests]
+      .filter((identity) => cacheCurrentnessRequests.has(identity));
+    expect(sharedPullIdentities.length).toBeGreaterThan(0);
+    expect(sharedPullIdentities.every((identity) => pullValidationsByIdentity.get(identity) === 1)).toBe(true);
+    const independentlyProvedIdentity = sharedPullIdentities.find((identity) => {
+      const observation = receiptObservationsByIdentity.get(identity);
+      return pullValidationsByIdentity.get(identity) === 1
+        && observation?.executions === 2
+        && observation.receipts.size === 2;
+    });
+    expect(independentlyProvedIdentity).toBeDefined();
   });
 
   test('mints a new non-reused store when source membership changes and cycles back', async () => {

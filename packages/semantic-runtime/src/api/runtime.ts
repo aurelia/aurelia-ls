@@ -27,6 +27,7 @@ import {
   computationCommitCurrentnessError,
   ComputationCommitState,
   ComputationLifecycleRegistry,
+  ComputationReadValidationScope,
   type ComputationGenerationReference,
 } from '../kernel/computation-lifecycle.js';
 import { isSemanticRuntimeAnalysisCurrentnessError } from '../kernel/analysis-currentness.js';
@@ -1414,6 +1415,9 @@ export class SemanticRuntime {
     const typeSystemDependencyCacheClearPolicy = normalizeTypeSystemDependencyCacheClearPolicy(
       typeSystemDependencyCacheClearPolicyForRoutedQuery(request, inquiryProfile),
     );
+    // Planning capture and compatible-app lookup are one synchronous routed preflight. Share only this exact proof;
+    // retained-query validation and every publication/managed-operation boundary still create fresh scopes.
+    const cachePreflightValidationScope = new ComputationReadValidationScope();
     const plan = this.planOpenApp({
       projectKey: request.projectKey,
       sourceFilePath: appQuerySourceFilePath(request),
@@ -1425,8 +1429,8 @@ export class SemanticRuntime {
         ...(request.telemetry ?? {}),
         inquiryProfile,
       },
-    });
-    const cachePreflight = this.readAppCachePreflight(plan);
+    }, cachePreflightValidationScope);
+    const cachePreflight = this.readAppCachePreflight(plan, cachePreflightValidationScope);
     const cachedBefore = cachePreflight.cachedApp;
     const canonicalRequest = bindProjectQueryPage(
       plan.project,
@@ -1507,6 +1511,9 @@ export class SemanticRuntime {
     const typeSystemDependencyCacheClearPolicy = normalizeTypeSystemDependencyCacheClearPolicy(
       typeSystemDependencyCacheClearPolicyForRoutedQuery(request, inquiryProfile),
     );
+    // Planning capture and compatible-app lookup are one synchronous routed preflight. Share only this exact proof;
+    // retained-query validation and every publication/managed-operation boundary still create fresh scopes.
+    const cachePreflightValidationScope = new ComputationReadValidationScope();
     const plan = this.planOpenApp({
       projectKey: request.projectKey,
       sourceFilePath: appQueryBatchSourceFilePath(request),
@@ -1518,7 +1525,7 @@ export class SemanticRuntime {
         ...(request.telemetry ?? {}),
         inquiryProfile,
       },
-    });
+    }, cachePreflightValidationScope);
     const canonicalQueries = queries.map((query) =>
       bindProjectQueryPage(
         plan.project,
@@ -1538,7 +1545,7 @@ export class SemanticRuntime {
         ),
       );
     }
-    const cachePreflight = this.readAppCachePreflight(plan);
+    const cachePreflight = this.readAppCachePreflight(plan, cachePreflightValidationScope);
     return projectSemanticAppQueryBatchContinuations(
       canonicalQueries,
       this.answerAppWorldQueryBatch(
@@ -2264,7 +2271,10 @@ export class SemanticRuntime {
     return sourceFilePath == null ? null : this.selectProjectForSourceFile(sourceFilePath);
   }
 
-  private planOpenApp(options: OpenSemanticAppOptions): SemanticAppOpenPlan {
+  private planOpenApp(
+    options: OpenSemanticAppOptions,
+    validationScope?: ComputationReadValidationScope,
+  ): SemanticAppOpenPlan {
     const planningReads = new Map<string, SemanticRuntimeProjectInputRead>();
     this.activePlanningReadCollectors.push(planningReads);
     try {
@@ -2273,10 +2283,10 @@ export class SemanticRuntime {
       const sourceFilePath = normalizeSourceFilePathOption(options.sourceFilePath);
       const requestedAuthoringSourceFiles = normalizeAuthoringTemplateSourceFiles(options.authoringTemplateSourceFiles);
       const project = options.projectKey != null
-        ? this.captureProject(selectProject(this.workspace.projects, options.projectKey))
+        ? this.captureProject(selectProject(this.workspace.projects, options.projectKey), validationScope)
         : sourceFilePath == null
-          ? this.selectDefaultProject()
-          : this.captureProject(this.selectProjectForSourceFile(sourceFilePath));
+          ? this.selectDefaultProject(validationScope)
+          : this.captureProject(this.selectProjectForSourceFile(sourceFilePath), validationScope);
       const projectSourceFilePath = sourceFilePath == null
         ? null
         : canonicalProjectSourceFilePath(project, sourceFilePath);
@@ -2458,7 +2468,10 @@ export class SemanticRuntime {
     return app;
   }
 
-  private readAppCachePreflight(plan: SemanticAppOpenPlan): SemanticAppCachePreflight {
+  private readAppCachePreflight(
+    plan: SemanticAppOpenPlan,
+    validationScope?: ComputationReadValidationScope,
+  ): SemanticAppCachePreflight {
     return Object.freeze({
       plan,
       cachedApp: this.readCachedApp(
@@ -2468,6 +2481,7 @@ export class SemanticRuntime {
         plan.includeAuthoringTemplates,
         plan.authoringTemplateSourceFiles,
         plan.authoringTemplateLimit,
+        validationScope,
       ),
     });
   }
@@ -2479,6 +2493,7 @@ export class SemanticRuntime {
     includeAuthoringTemplates: boolean,
     authoringTemplateSourceFiles: readonly string[],
     authoringTemplateLimit: number | null,
+    validationScope?: ComputationReadValidationScope,
   ): SemanticApp | null {
     const exactCacheKey = appCacheKey(
       projectKey,
@@ -2489,7 +2504,7 @@ export class SemanticRuntime {
       authoringTemplateLimit,
     );
     const exact = this.appsByCacheKey.get(exactCacheKey);
-    if (exact?.isCurrent() === true) {
+    if (exact?.isCurrent(validationScope) === true) {
       return exact;
     }
     for (const app of this.appsByCacheKey.values()) {
@@ -2502,6 +2517,7 @@ export class SemanticRuntime {
           includeAuthoringTemplates,
           authoringTemplateSourceFiles,
           authoringTemplateLimit,
+          validationScope,
         )
       ) {
         return app;
@@ -2680,13 +2696,13 @@ export class SemanticRuntime {
     }
   }
 
-  private selectDefaultProject(): ProjectBootFrame {
+  private selectDefaultProject(validationScope?: ComputationReadValidationScope): ProjectBootFrame {
     if (this.workspace.projects.length === 0) {
       throw new Error('Cannot open semantic app: workspace did not boot any projects.');
     }
     const counts = new Map<string, number>();
     for (const bootProject of this.workspace.projects) {
-      const project = this.captureProject(bootProject);
+      const project = this.captureProject(bootProject, validationScope);
       const shapeKind = this.readProjectShape(project).shapeKind;
       if (shapeKind === SemanticProjectShapeKind.AureliaApp) {
         return project;
@@ -2714,8 +2730,11 @@ export class SemanticRuntime {
     throw new Error(`Cannot open semantic app: source file '${sourceFilePath}' was not admitted into any project.`);
   }
 
-  private captureProject(project: ProjectBootFrame): ProjectBootFrame {
-    return project.forInputGeneration(this.workspace.projectInputAuthority.capture(project));
+  private captureProject(
+    project: ProjectBootFrame,
+    validationScope?: ComputationReadValidationScope,
+  ): ProjectBootFrame {
+    return project.forInputGeneration(this.workspace.projectInputAuthority.capture(project, validationScope));
   }
 }
 
@@ -3576,9 +3595,9 @@ export class SemanticApp {
     this.appGeneration.requireCurrent();
   }
 
-  isCurrent(): boolean {
+  isCurrent(validationScope?: ComputationReadValidationScope): boolean {
     return this.project.inputGeneration.isCurrent()
-      && this.appGeneration.isCurrent();
+      && this.appGeneration.isCurrent(validationScope);
   }
 
   retireGeneration(): boolean {
@@ -3593,13 +3612,14 @@ export class SemanticApp {
     includeAuthoringTemplates: boolean,
     authoringTemplateSourceFiles: readonly string[],
     authoringTemplateLimit: number | null,
+    validationScope?: ComputationReadValidationScope,
   ): boolean {
     if (
       this.project.projectKey !== projectKey
       || this.project.inputGeneration.revision !== projectInputRevision
       || !semanticAppAnalysisDepthSatisfies(this.cacheRequest.analysisDepth, requestedDepth)
       || (includeAuthoringTemplates && !this.cacheRequest.includeAuthoringTemplates)
-      || !this.isCurrent()
+      || !this.isCurrent(validationScope)
     ) {
       return false;
     }

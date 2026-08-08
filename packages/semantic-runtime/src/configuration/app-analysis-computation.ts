@@ -72,8 +72,9 @@ export class AureliaAppWorldProjectGeneration implements GenerationAuthority, Co
     return this.computationAuthority.runSequence;
   }
 
-  isCurrent(): boolean {
-    const validationScope = new ComputationReadValidationScope();
+  isCurrent(
+    validationScope: ComputationReadValidationScope = new ComputationReadValidationScope(),
+  ): boolean {
     return this.isAdmitted()
       && this.currentEmission.project.inputGeneration.isCurrent()
       && validationScope.validate(this.currentEmission.preTemplate.evaluationGeneration).isCurrent

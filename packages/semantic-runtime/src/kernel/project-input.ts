@@ -1034,14 +1034,17 @@ export class SemanticRuntimeProjectInputAuthority {
     );
   }
 
-  capture(scope: SemanticRuntimeProjectInputScope): SemanticRuntimeProjectInputGeneration {
+  capture(
+    scope: SemanticRuntimeProjectInputScope,
+    validationScope: ComputationReadValidationScope = new ComputationReadValidationScope(),
+  ): SemanticRuntimeProjectInputGeneration {
     const rootDir = resolveProjectInputPath(scope.rootDir);
     const current = this.generationsByProjectKey.get(scope.projectKey);
     if (
       current != null
       && current.rootDir === rootDir
       && current.eventSequence === this.currentEventSequence
-      && current.validate().isCurrent
+      && current.validate(validationScope).isCurrent
     ) {
       return current;
     }
