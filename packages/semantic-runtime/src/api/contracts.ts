@@ -1125,6 +1125,37 @@ export interface SemanticRuntimeAnalysisBasis {
 
 export interface SemanticRuntimeAnswerProfile {
   readonly appWorldFreeProfile?: SemanticRuntimeAppWorldFreeProfileSummary | null;
+  /**
+   * Retrospective synchronous routed-answer boundary timings, emitted only when the routed request explicitly enables
+   * telemetry and returns an answer successfully. Thrown cancellation, currentness, and failure paths expose no profile.
+   *
+   * The preflight-complete marker identifies the only current candidate location for a future observation/abort check;
+   * profiling does not perform that check or yield. A future yielding implementation must rerun or freshly validate
+   * preflight before opening the answer transaction. Planning may already populate the immutable project-shape cache,
+   * so aborting at this location is not a promise that no internal cache was warmed.
+   */
+  readonly routedAnswer?: SemanticRuntimeRoutedAnswerProfile | null;
+}
+
+export type SemanticRuntimeRoutedAnswerCheckpointName =
+  | 'entry'
+  | 'preflight-complete'
+  | 'answer-transaction-complete';
+
+export interface SemanticRuntimeRoutedAnswerCheckpoint {
+  readonly name: SemanticRuntimeRoutedAnswerCheckpointName;
+  /** Monotonic elapsed time from routed-answer entry; portable answers never expose a process clock origin. */
+  readonly elapsedMilliseconds: number;
+}
+
+export interface SemanticRuntimeRoutedAnswerProfile {
+  readonly checkpoints: readonly SemanticRuntimeRoutedAnswerCheckpoint[];
+  readonly preflightMilliseconds: number;
+  /** Includes retained-claim validation or materialization plus the synchronous answer transaction commit. */
+  readonly answerTransactionMilliseconds: number;
+  readonly totalMilliseconds: number;
+  /** Largest span between the profiled candidate boundaries; the current call remains synchronous end to end. */
+  readonly longestUninterruptedMilliseconds: number;
 }
 
 export interface SemanticRuntimeAppWorldFreeProfileSummary {

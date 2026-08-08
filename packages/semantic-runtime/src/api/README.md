@@ -253,6 +253,16 @@ may carry an `appWorldFreeProfile` with static-evaluation phase, source-host, an
 answer-boundary telemetry, not an opened app profile. Each child row in an app-world-free batch still enters the runtime
 query-claim graph as a nested child claim, so row-level reuse and source/project invalidation remain graph-owned without
 manufacturing an opened app just to get child claim storage.
+Routed app-world answers that explicitly pass `telemetry` also carry a compact `routedAnswer` envelope profile. Its
+retrospective relative markers divide the synchronous call into routed planning/cache preflight and the answer
+transaction. `preflight-complete` identifies the only current candidate location for a future observation/abort check;
+profiling does not perform that check or yield, and the call still runs synchronously end to end. The reported
+`longestUninterruptedMilliseconds` is the largest span between those candidate boundaries and is measurement evidence
+for scheduling work, not permission to yield inside the transaction. Any future asynchronous resume must rerun or
+freshly validate planning and cache preflight before it opens the synchronous answer transaction. The profile exists
+only on successfully returned answers; thrown cancellation, currentness, and failure paths require caller-side timing.
+Planning can also populate or rebind the immutable project-shape cache before the marker, so aborting there prevents app
+open and query-claim publication but does not promise that no internal planning cache was warmed.
 One-off routed app disposal is part of the answer boundary, not an afterthought outside the graph. The runtime-level
 claim records both the kernel products/details/hot details materialized for the answer and the app/query-claim records
 reclaimed after the answer is shaped, so cache overview can show "spent during answer" separately from "retained after

@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { performance } from 'node:perf_hooks';
 import type { BootProjectInput, ProjectBootFrame, WorkspaceBootFrame } from '../boot/frames.js';
 import { bootWorkspace, bootWorkspaceFromSourceWorld } from '../boot/boot-workspace.js';
 import type { ResolvedSemanticSourceWorld } from '../boot/source-world.js';
@@ -340,6 +341,7 @@ import {
   type SemanticRuntimeQueryClaimDisposeProfileSummary,
   type SemanticRuntimeAnswerProfile,
   type SemanticRuntimeAppWorldFreeProfileSummary,
+  type SemanticRuntimeRoutedAnswerProfile,
   type SemanticRuntimeCachedAppSummary,
   type SemanticRuntimeCachedAppQueryClaimProfileSummary,
   type SemanticRuntimePhaseTimingSummary,
@@ -1412,6 +1414,7 @@ export class SemanticRuntime {
     inquiryProfile: SemanticRuntimeInquiryProfile,
   ): SemanticRuntimeAnswer<unknown> {
     assertCompatibleRoutedAppRetention(request);
+    const routedAnswerStartedAt = request.telemetry == null ? null : performance.now();
     const typeSystemDependencyCacheClearPolicy = normalizeTypeSystemDependencyCacheClearPolicy(
       typeSystemDependencyCacheClearPolicyForRoutedQuery(request, inquiryProfile),
     );
@@ -1437,9 +1440,10 @@ export class SemanticRuntime {
       canonicalizeRuntimeAppQueryRequest(plan.project, request),
       request.pagePolicy,
     ) as SemanticRuntimeAppQueryRequest;
+    const routedPreflightCompletedAt = routedAnswerStartedAt == null ? null : performance.now();
     let appOpened = false;
     let openedApp: SemanticApp | null = null;
-    return this.answerRuntimeQuery(
+    const result = this.answerRuntimeQuery(
       {
         inquiryProfile,
         queryKind: canonicalRequest.kind,
@@ -1484,6 +1488,13 @@ export class SemanticRuntime {
         }, request.pagePolicy ?? null, transaction);
       },
     );
+    return routedAnswerStartedAt == null || routedPreflightCompletedAt == null
+      ? result
+      : withRoutedAnswerProfile(
+          result,
+          routedAnswerStartedAt,
+          routedPreflightCompletedAt,
+        );
   }
 
   async answerAppQueries(
@@ -1508,6 +1519,7 @@ export class SemanticRuntime {
         this.answerPreAppWorldQueryBatch(queries, inquiryProfile, request.pagePolicy ?? null),
       );
     }
+    const routedAnswerStartedAt = request.telemetry == null ? null : performance.now();
     const typeSystemDependencyCacheClearPolicy = normalizeTypeSystemDependencyCacheClearPolicy(
       typeSystemDependencyCacheClearPolicyForRoutedQuery(request, inquiryProfile),
     );
@@ -1546,17 +1558,23 @@ export class SemanticRuntime {
       );
     }
     const cachePreflight = this.readAppCachePreflight(plan, cachePreflightValidationScope);
-    return projectSemanticAppQueryBatchContinuations(
+    const routedPreflightCompletedAt = routedAnswerStartedAt == null ? null : performance.now();
+    const result = this.answerAppWorldQueryBatch(
+      request,
+      plan,
       canonicalQueries,
-      this.answerAppWorldQueryBatch(
-        request,
-        plan,
-        canonicalQueries,
-        inquiryProfile,
-        cachePreflight,
-        typeSystemDependencyCacheClearPolicy,
-      ),
+      inquiryProfile,
+      cachePreflight,
+      typeSystemDependencyCacheClearPolicy,
     );
+    const profiledResult = routedAnswerStartedAt == null || routedPreflightCompletedAt == null
+      ? result
+      : withRoutedAnswerProfile(
+          result,
+          routedAnswerStartedAt,
+          routedPreflightCompletedAt,
+        );
+    return projectSemanticAppQueryBatchContinuations(canonicalQueries, profiledResult);
   }
 
   private answerPreAppWorldQueryBatch(
@@ -3492,6 +3510,51 @@ function withAppWorldFreeEvaluationProfile<TValue>(
   const profile: SemanticRuntimeAnswerProfile = {
     ...(result.profile ?? {}),
     appWorldFreeProfile,
+  };
+  return {
+    ...result,
+    profile,
+  };
+}
+
+function withRoutedAnswerProfile<TValue>(
+  result: SemanticRuntimeAnswer<TValue>,
+  startedAtMilliseconds: number,
+  preflightCompletedAtMilliseconds: number,
+): SemanticRuntimeAnswer<TValue> {
+  const answerTransactionCompletedAtMilliseconds = performance.now();
+  const preflightMilliseconds = roundMilliseconds(
+    Math.max(0, preflightCompletedAtMilliseconds - startedAtMilliseconds),
+  );
+  const answerTransactionMilliseconds = roundMilliseconds(
+    Math.max(0, answerTransactionCompletedAtMilliseconds - preflightCompletedAtMilliseconds),
+  );
+  const totalMilliseconds = roundMilliseconds(
+    Math.max(0, answerTransactionCompletedAtMilliseconds - startedAtMilliseconds),
+  );
+  const routedAnswer: SemanticRuntimeRoutedAnswerProfile = {
+    checkpoints: Object.freeze([
+      Object.freeze({ name: 'entry' as const, elapsedMilliseconds: 0 }),
+      Object.freeze({
+        name: 'preflight-complete' as const,
+        elapsedMilliseconds: preflightMilliseconds,
+      }),
+      Object.freeze({
+        name: 'answer-transaction-complete' as const,
+        elapsedMilliseconds: totalMilliseconds,
+      }),
+    ]),
+    preflightMilliseconds,
+    answerTransactionMilliseconds,
+    totalMilliseconds,
+    longestUninterruptedMilliseconds: Math.max(
+      preflightMilliseconds,
+      answerTransactionMilliseconds,
+    ),
+  };
+  const profile: SemanticRuntimeAnswerProfile = {
+    ...(result.profile ?? {}),
+    routedAnswer: Object.freeze(routedAnswer),
   };
   return {
     ...result,

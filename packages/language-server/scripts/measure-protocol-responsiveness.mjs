@@ -23,6 +23,11 @@ const pressureFixtureRoot = path.join(repoRoot, "packages/semantic-runtime/fixtu
 const defaultFixtureName = "app-pattern-routed-catalog-storefront";
 const valueArgumentNames = new Set(["fixture", "workspace", "cancel-after", "cycles"]);
 const booleanArgumentNames = new Set(["json"]);
+const oldCompletionBase = "state.items.";
+const replacementCompletionBase = "state.selection.";
+const replacementRequiredLabel = "itemCount";
+const replacementForbiddenLabel = "searchText";
+export const protocolResponsivenessSchemaVersion = "aurelia-ls/protocol-responsiveness/v2";
 
 async function main() {
   const args = parseProtocolResponsivenessArgs(process.argv.slice(2));
@@ -35,7 +40,6 @@ async function main() {
   const targetPath = await targetHtmlPath(workspaceRoot);
   const targetUri = pathToFileURL(targetPath).toString();
   const originalText = await fs.readFile(targetPath, "utf8");
-  const position = completionPosition(originalText);
 
   const child = spawn(process.execPath, [serverEntry, "--stdio"], {
     cwd: workspaceRoot,
@@ -63,6 +67,9 @@ async function main() {
   connection.listen();
 
   const report = {
+    schemaVersion: protocolResponsivenessSchemaVersion,
+    replacementDispatchedDuringContention: false,
+    independentSettlementTimestamps: true,
     workspace: {
       root: workspaceRoot,
       targetDocument: relativePath(workspaceRoot, targetPath),
@@ -121,55 +128,20 @@ async function main() {
 
     let version = 1;
     for (let index = 0; index < cycles; index += 1) {
-      version += 1;
-      const editedText = withMeasurementMarker(originalText, index * 2);
-      connection.sendNotification("textDocument/didChange", {
-        textDocument: { uri: targetUri, version },
-        contentChanges: [{ text: editedText }],
+      const measured = await measureCancellationCycle({
+        connection,
+        targetUri,
+        originalText,
+        initialVersion: version,
+        index,
+        cancellationDelayMilliseconds,
       });
-
-      const cancellation = new CancellationTokenSource();
-      const requestStarted = performance.now();
-      const completion = settled(connection.sendRequest("textDocument/completion", {
-        textDocument: { uri: targetUri },
-        position,
-      }, cancellation.token));
-
-      await delay(cancellationDelayMilliseconds);
-      const cancellationSent = performance.now();
-      cancellation.cancel();
-      version += 1;
-      const supersedingText = withMeasurementMarker(originalText, index * 2 + 1);
-      connection.sendNotification("textDocument/didChange", {
-        textDocument: { uri: targetUri, version },
-        contentChanges: [{ text: supersedingText }],
-      });
-      const probeStarted = performance.now();
-      const probe = settled(connection.sendRequest("aurelia/workspaceStatus", null));
-
-      const completionOutcome = await withTimeout(completion, 30_000, `cancelled completion ${index + 1}`);
-      const completionSettled = performance.now();
-      const probeOutcome = await withTimeout(probe, 30_000, `workspace-status probe ${index + 1}`);
-      const probeSettled = performance.now();
-      const supersedingCompletionStarted = performance.now();
-      const supersedingCompletionOutcome = await withTimeout(settled(connection.sendRequest("textDocument/completion", {
-        textDocument: { uri: targetUri },
-        position,
-      })), 30_000, `superseding completion ${index + 1}`);
-      const supersedingCompletionSettled = performance.now();
-      cancellation.dispose();
-
-      report.cycles.push({
-        index: index + 1,
-        requestMilliseconds: completionSettled - requestStarted,
-        cancellationToSettlementMilliseconds: completionSettled - cancellationSent,
-        probeMilliseconds: probeSettled - probeStarted,
-        supersedingCompletionMilliseconds: supersedingCompletionSettled - supersedingCompletionStarted,
-        completionOutcome: outcomeSummary(completionOutcome),
-        probeOutcome: outcomeSummary(probeOutcome),
-        supersedingCompletionOutcome: outcomeSummary(supersedingCompletionOutcome),
-      });
+      version = measured.version;
+      report.cycles.push({ index: index + 1, ...measured.cycle });
     }
+    report.replacementDispatchedDuringContention = report.cycles.every(
+      (cycle) => cycle.replacementDispatchedDuringContention,
+    );
     report.diagnosticRefreshRequests = diagnosticRefreshRequests;
 
     if (args.json) {
@@ -187,6 +159,170 @@ async function main() {
       child.kill("SIGKILL");
     }
   }
+}
+
+/**
+ * Run one cancellation/supersession cycle while all three post-cancel requests are genuinely in flight together.
+ * The cancelled request remains observational: this harness records its result but does not predeclare success.
+ */
+export async function measureCancellationCycle(options) {
+  const now = options.now ?? (() => performance.now());
+  const wait = options.delay ?? delay;
+  const cancellation = options.createCancellationSource?.() ?? new CancellationTokenSource();
+  const oldVariant = createProtocolCompletionVariant(options.originalText, options.index * 2, "old");
+  const oldVersion = options.initialVersion + 1;
+  options.connection.sendNotification("textDocument/didChange", {
+    textDocument: { uri: options.targetUri, version: oldVersion },
+    contentChanges: [{ text: oldVariant.text }],
+  });
+
+  const requestStarted = now();
+  let oldRequestSettled = false;
+  const completion = timedSettlement(
+    options.connection.sendRequest("textDocument/completion", {
+      textDocument: { uri: options.targetUri },
+      position: oldVariant.position,
+    }, cancellation.token),
+    requestStarted,
+    now,
+  ).then((measurement) => {
+    oldRequestSettled = true;
+    return measurement;
+  });
+
+  await wait(options.cancellationDelayMilliseconds);
+  const cancellationSent = now();
+  cancellation.cancel();
+
+  const replacementVariant = createProtocolCompletionVariant(
+    options.originalText,
+    options.index * 2 + 1,
+    "replacement",
+  );
+  const replacementVersion = oldVersion + 1;
+  const replacementDispatchedDuringContention = !oldRequestSettled;
+  options.connection.sendNotification("textDocument/didChange", {
+    textDocument: { uri: options.targetUri, version: replacementVersion },
+    contentChanges: [{ text: replacementVariant.text }],
+  });
+
+  const replacementCompletionStarted = now();
+  const replacementCompletion = timedSettlement(
+    options.connection.sendRequest("textDocument/completion", {
+      textDocument: { uri: options.targetUri },
+      position: replacementVariant.position,
+    }),
+    replacementCompletionStarted,
+    now,
+  );
+  const probeStarted = now();
+  const probe = timedSettlement(
+    options.connection.sendRequest("aurelia/workspaceStatus", null),
+    probeStarted,
+    now,
+  );
+
+  let completionMeasurement;
+  let replacementCompletionMeasurement;
+  let probeMeasurement;
+  try {
+    [completionMeasurement, replacementCompletionMeasurement, probeMeasurement] = await Promise.all([
+      withTimeout(completion, 30_000, `cancelled completion ${options.index + 1}`),
+      withTimeout(replacementCompletion, 30_000, `replacement completion ${options.index + 1}`),
+      withTimeout(probe, 30_000, `workspace-status probe ${options.index + 1}`),
+    ]);
+  } finally {
+    cancellation.dispose();
+  }
+
+  const replacementCompletionCurrentness = requireCurrentReplacementCompletion(
+    replacementCompletionMeasurement.outcome,
+  );
+  return Object.freeze({
+    version: replacementVersion,
+    cycle: Object.freeze({
+      replacementDispatchedDuringContention,
+      requestMilliseconds: completionMeasurement.milliseconds,
+      cancellationToSettlementMilliseconds: completionMeasurement.settledAt - cancellationSent,
+      probeMilliseconds: probeMeasurement.milliseconds,
+      replacementCompletionMilliseconds: replacementCompletionMeasurement.milliseconds,
+      completionOutcome: outcomeSummary(completionMeasurement.outcome),
+      probeOutcome: outcomeSummary(probeMeasurement.outcome),
+      replacementCompletionOutcome: outcomeSummary(replacementCompletionMeasurement.outcome),
+      replacementCompletionCurrentness,
+      timeline: Object.freeze({
+        oldRequestStartedMilliseconds: requestStarted,
+        cancellationSentMilliseconds: cancellationSent,
+        replacementRequestStartedMilliseconds: replacementCompletionStarted,
+        probeRequestStartedMilliseconds: probeStarted,
+        replacementRequestSettledMilliseconds: replacementCompletionMeasurement.settledAt,
+        probeRequestSettledMilliseconds: probeMeasurement.settledAt,
+        oldRequestSettledMilliseconds: completionMeasurement.settledAt,
+      }),
+    }),
+  });
+}
+
+/** Build one source version whose completion locus distinguishes the old and replacement requests. */
+export function createProtocolCompletionVariant(originalText, index, kind) {
+  if (kind !== "old" && kind !== "replacement") {
+    throw new Error(`Unsupported protocol completion variant '${kind}'.`);
+  }
+  const targetOffset = originalText.indexOf(oldCompletionBase);
+  if (targetOffset < 0) {
+    throw new Error(`Protocol responsiveness source must contain '${oldCompletionBase}'.`);
+  }
+  const completionBase = kind === "old" ? oldCompletionBase : replacementCompletionBase;
+  const targetedText = kind === "old"
+    ? originalText
+    : `${originalText.slice(0, targetOffset)}${replacementCompletionBase}${originalText.slice(targetOffset + oldCompletionBase.length)}`;
+  const text = withMeasurementMarker(targetedText, index);
+  return Object.freeze({
+    text,
+    position: completionPosition(text, completionBase),
+  });
+}
+
+/** Require the replacement response to carry semantic evidence from the replacement document version. */
+export function requireCurrentReplacementCompletion(outcome) {
+  if (outcome.status !== "fulfilled") {
+    throw new Error("Replacement completion must fulfill before its currentness can be verified.");
+  }
+  const items = Array.isArray(outcome.value) ? outcome.value : outcome.value?.items;
+  if (!Array.isArray(items)) {
+    throw new Error("Replacement completion must return a completion list or completion-item array.");
+  }
+  const labels = new Set(items.flatMap((item) =>
+    typeof item?.label === "string" ? [item.label] : []));
+  if (!labels.has(replacementRequiredLabel)) {
+    throw new Error(
+      `Replacement completion must contain current-version label '${replacementRequiredLabel}'.`,
+    );
+  }
+  if (labels.has(replacementForbiddenLabel)) {
+    throw new Error(
+      `Replacement completion must not contain stale-version label '${replacementForbiddenLabel}'.`,
+    );
+  }
+  return Object.freeze({
+    requiredLabel: replacementRequiredLabel,
+    requiredLabelPresent: true,
+    forbiddenLabel: replacementForbiddenLabel,
+    forbiddenLabelAbsent: true,
+  });
+}
+
+/** Capture the settlement instant inside the promise's own continuation, independent of later await order. */
+export function timedSettlement(promise, startedAt, now = () => performance.now()) {
+  return settled(promise).then((outcome) => {
+    const settledAt = now();
+    return Object.freeze({
+      startedAt,
+      settledAt,
+      milliseconds: settledAt - startedAt,
+      outcome,
+    });
+  });
 }
 
 export async function measurePreEditDiagnostics(connection, uri) {
@@ -279,10 +415,12 @@ async function isFile(filePath) {
   return stats?.isFile() === true;
 }
 
-function completionPosition(text) {
-  const completionBase = "state.items.";
-  const marker = text.includes(completionBase) ? completionBase : "state";
-  const offset = Math.max(0, text.indexOf(marker)) + marker.length;
+function completionPosition(text, completionBase) {
+  const markerOffset = text.indexOf(completionBase);
+  if (markerOffset < 0) {
+    throw new Error(`Protocol responsiveness source must contain '${completionBase}'.`);
+  }
+  const offset = markerOffset + completionBase.length;
   const prefix = text.slice(0, offset);
   const lines = prefix.split(/\r?\n/);
   return {
@@ -429,6 +567,9 @@ function markdownReport(report) {
   return [
     "# Protocol Responsiveness Measurement",
     "",
+    `Schema: \`${report.schemaVersion}\``,
+    `Replacement dispatched during contention: ${report.replacementDispatchedDuringContention}`,
+    `Independent settlement timestamps: ${report.independentSettlementTimestamps}`,
     `Workspace: \`${report.workspace.root}\``,
     `Target: \`${report.workspace.targetDocument}\``,
     `Cancellation delay: ${report.cancellationDelayMilliseconds}ms`,
@@ -439,15 +580,55 @@ function markdownReport(report) {
     `Diagnostic refresh requests: ${report.diagnosticRefreshRequests}`,
     "",
     table(
-      ["cycle", "request ms", "cancel -> settle ms", "probe ms", "new completion ms", "old completion", "new completion"],
+      [
+        "cycle",
+        "request ms",
+        "cancel -> settle ms",
+        "probe ms",
+        "replacement ms",
+        "replacement during old",
+        "old completion",
+        "replacement completion",
+        "replacement current",
+      ],
       report.cycles.map((cycle) => [
         String(cycle.index),
         cycle.requestMilliseconds.toFixed(2),
         cycle.cancellationToSettlementMilliseconds.toFixed(2),
         cycle.probeMilliseconds.toFixed(2),
-        cycle.supersedingCompletionMilliseconds.toFixed(2),
+        cycle.replacementCompletionMilliseconds.toFixed(2),
+        cycle.replacementDispatchedDuringContention ? "yes" : "no",
         describeOutcome(cycle.completionOutcome),
-        describeOutcome(cycle.supersedingCompletionOutcome),
+        describeOutcome(cycle.replacementCompletionOutcome),
+        cycle.replacementCompletionCurrentness.requiredLabelPresent
+          && cycle.replacementCompletionCurrentness.forbiddenLabelAbsent
+          ? "yes"
+          : "no",
+      ]),
+    ),
+    "",
+    "Monotonic request timeline (milliseconds):",
+    "",
+    table(
+      [
+        "cycle",
+        "old start",
+        "cancel sent",
+        "replacement start",
+        "probe start",
+        "replacement settled",
+        "probe settled",
+        "old settled",
+      ],
+      report.cycles.map((cycle) => [
+        String(cycle.index),
+        cycle.timeline.oldRequestStartedMilliseconds.toFixed(2),
+        cycle.timeline.cancellationSentMilliseconds.toFixed(2),
+        cycle.timeline.replacementRequestStartedMilliseconds.toFixed(2),
+        cycle.timeline.probeRequestStartedMilliseconds.toFixed(2),
+        cycle.timeline.replacementRequestSettledMilliseconds.toFixed(2),
+        cycle.timeline.probeRequestSettledMilliseconds.toFixed(2),
+        cycle.timeline.oldRequestSettledMilliseconds.toFixed(2),
       ]),
     ),
   ].join("\n");

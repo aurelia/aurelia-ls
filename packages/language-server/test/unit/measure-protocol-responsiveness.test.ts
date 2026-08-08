@@ -25,8 +25,90 @@ interface PreEditDiagnosticMeasurement {
   };
 }
 
+interface SettledProtocolOutcome {
+  readonly status: "fulfilled" | "rejected";
+  readonly value?: unknown;
+  readonly error?: unknown;
+}
+
+interface ProtocolCompletionVariant {
+  readonly text: string;
+  readonly position: { readonly line: number; readonly character: number };
+}
+
+interface TimedProtocolSettlement {
+  readonly startedAt: number;
+  readonly settledAt: number;
+  readonly milliseconds: number;
+  readonly outcome: SettledProtocolOutcome;
+}
+
+interface CancellationCycleMeasurement {
+  readonly version: number;
+  readonly cycle: {
+    readonly replacementDispatchedDuringContention: boolean;
+    readonly requestMilliseconds: number;
+    readonly cancellationToSettlementMilliseconds: number;
+    readonly probeMilliseconds: number;
+    readonly replacementCompletionMilliseconds: number;
+    readonly completionOutcome: { readonly status: string };
+    readonly probeOutcome: { readonly status: string };
+    readonly replacementCompletionOutcome: { readonly status: string };
+    readonly replacementCompletionCurrentness: {
+      readonly requiredLabel: string;
+      readonly requiredLabelPresent: boolean;
+      readonly forbiddenLabel: string;
+      readonly forbiddenLabelAbsent: boolean;
+    };
+    readonly timeline: {
+      readonly oldRequestStartedMilliseconds: number;
+      readonly cancellationSentMilliseconds: number;
+      readonly replacementRequestStartedMilliseconds: number;
+      readonly probeRequestStartedMilliseconds: number;
+      readonly replacementRequestSettledMilliseconds: number;
+      readonly probeRequestSettledMilliseconds: number;
+      readonly oldRequestSettledMilliseconds: number;
+    };
+  };
+}
+
 interface ProtocolResponsivenessMeasurementModule {
+  readonly protocolResponsivenessSchemaVersion: string;
   parseProtocolResponsivenessArgs(argv: readonly string[]): ParsedProtocolResponsivenessArgs;
+  createProtocolCompletionVariant(
+    originalText: string,
+    index: number,
+    kind: "old" | "replacement",
+  ): ProtocolCompletionVariant;
+  requireCurrentReplacementCompletion(outcome: SettledProtocolOutcome): {
+    readonly requiredLabel: string;
+    readonly requiredLabelPresent: boolean;
+    readonly forbiddenLabel: string;
+    readonly forbiddenLabelAbsent: boolean;
+  };
+  timedSettlement(
+    promise: Promise<unknown>,
+    startedAt: number,
+    now?: () => number,
+  ): Promise<TimedProtocolSettlement>;
+  measureCancellationCycle(options: {
+    readonly connection: {
+      sendNotification(method: string, params: unknown): void;
+      sendRequest(method: string, params: unknown, token?: unknown): Promise<unknown>;
+    };
+    readonly targetUri: string;
+    readonly originalText: string;
+    readonly initialVersion: number;
+    readonly index: number;
+    readonly cancellationDelayMilliseconds: number;
+    readonly now?: () => number;
+    readonly delay?: (milliseconds: number) => Promise<void>;
+    readonly createCancellationSource?: () => {
+      readonly token: unknown;
+      cancel(): void;
+      dispose(): void;
+    };
+  }): Promise<CancellationCycleMeasurement>;
   measurePreEditDiagnostics(
     connection: {
       sendRequest(method: string, params: unknown): Promise<unknown>;
@@ -46,8 +128,12 @@ async function loadMeasurementModule(): Promise<ProtocolResponsivenessMeasuremen
 
 describe("protocol responsiveness measurement", () => {
   test("normalizes defaults and exact value/boolean spellings", async () => {
-    const { parseProtocolResponsivenessArgs } = await loadMeasurementModule();
+    const {
+      parseProtocolResponsivenessArgs,
+      protocolResponsivenessSchemaVersion,
+    } = await loadMeasurementModule();
 
+    expect(protocolResponsivenessSchemaVersion).toBe("aurelia-ls/protocol-responsiveness/v2");
     expect(parseProtocolResponsivenessArgs([])).toEqual({
       fixture: null,
       workspace: null,
@@ -136,4 +222,182 @@ describe("protocol responsiveness measurement", () => {
       "file:///workspace/src/app.html",
     )).rejects.toThrow("must return an unchanged report with the same resultId");
   });
+
+  test("builds distinct old and replacement completion loci", async () => {
+    const { createProtocolCompletionVariant } = await loadMeasurementModule();
+    const source = [
+      "<template>",
+      "  <p if.bind=\"state.items.isLoading\">Loading</p>",
+      "</template>",
+    ].join("\n");
+
+    const oldVariant = createProtocolCompletionVariant(source, 0, "old");
+    const replacementVariant = createProtocolCompletionVariant(source, 1, "replacement");
+
+    expect(oldVariant.text).toContain("state.items.isLoading");
+    expect(oldVariant.text).toContain("protocol responsiveness marker: A");
+    expect(replacementVariant.text).toContain("state.selection.isLoading");
+    expect(replacementVariant.text).not.toContain("state.items.isLoading");
+    expect(replacementVariant.text).toContain("protocol responsiveness marker: B");
+    expect(oldVariant.position).toEqual({ line: 1, character: 26 });
+    expect(replacementVariant.position).toEqual({ line: 1, character: 30 });
+  });
+
+  test("requires semantic evidence from the replacement completion version", async () => {
+    const { requireCurrentReplacementCompletion } = await loadMeasurementModule();
+
+    expect(requireCurrentReplacementCompletion({
+      status: "fulfilled",
+      value: { items: [{ label: "itemCount" }, { label: "selectedItemIds" }] },
+    })).toEqual({
+      requiredLabel: "itemCount",
+      requiredLabelPresent: true,
+      forbiddenLabel: "searchText",
+      forbiddenLabelAbsent: true,
+    });
+    expect(() => requireCurrentReplacementCompletion({
+      status: "fulfilled",
+      value: { items: [{ label: "selectedItemIds" }] },
+    })).toThrow("must contain current-version label 'itemCount'");
+    expect(() => requireCurrentReplacementCompletion({
+      status: "fulfilled",
+      value: { items: [{ label: "itemCount" }, { label: "searchText" }] },
+    })).toThrow("must not contain stale-version label 'searchText'");
+    expect(() => requireCurrentReplacementCompletion({
+      status: "rejected",
+      error: new Error("cancelled"),
+    })).toThrow("must fulfill before its currentness can be verified");
+
+    expect(requireCurrentReplacementCompletion({
+      status: "fulfilled",
+      value: [{ label: "itemCount" }, { label: "selectedItemIds" }],
+    })).toMatchObject({ requiredLabelPresent: true, forbiddenLabelAbsent: true });
+  });
+
+  test("timestamps each request in its own settlement continuation", async () => {
+    const { timedSettlement } = await loadMeasurementModule();
+    const first = deferred<unknown>();
+    const second = deferred<unknown>();
+    let timestamp = 10;
+    const firstMeasurement = timedSettlement(first.promise, 0, () => timestamp);
+    const secondMeasurement = timedSettlement(second.promise, 0, () => timestamp);
+
+    second.resolve("second");
+    timestamp = 20;
+    const secondResult = await secondMeasurement;
+    first.resolve("first");
+    timestamp = 40;
+    const firstResult = await firstMeasurement;
+
+    expect(secondResult).toMatchObject({ settledAt: 20, milliseconds: 20 });
+    expect(firstResult).toMatchObject({ settledAt: 40, milliseconds: 40 });
+  });
+
+  test("dispatches replacement and probe before the observational old completion settles", async () => {
+    const { measureCancellationCycle } = await loadMeasurementModule();
+    const oldCompletion = deferred<unknown>();
+    const replacementCompletion = deferred<unknown>();
+    const probe = deferred<unknown>();
+    const events: string[] = [];
+    let completionRequests = 0;
+    let cancelled = false;
+    let timestamp = 0;
+    const connection = {
+      sendNotification: vi.fn((method: string, params: unknown) => {
+        const version = (params as { textDocument: { version: number } }).textDocument.version;
+        events.push(`${method}:${version}`);
+      }),
+      sendRequest: vi.fn((method: string, _params: unknown, token?: unknown) => {
+        if (method === "textDocument/completion") {
+          completionRequests += 1;
+          if (completionRequests === 1) {
+            expect(token).toBeDefined();
+            events.push("old-completion");
+            return oldCompletion.promise;
+          }
+          events.push("replacement-completion");
+          return replacementCompletion.promise;
+        }
+        events.push("probe");
+        return probe.promise;
+      }),
+    };
+
+    const measurement = measureCancellationCycle({
+      connection,
+      targetUri: "file:///workspace/src/app.html",
+      originalText: "<p if.bind=\"state.items.isLoading\">Loading</p>",
+      initialVersion: 7,
+      index: 0,
+      cancellationDelayMilliseconds: 25,
+      delay: () => Promise.resolve(),
+      now: () => {
+        timestamp += 10;
+        return timestamp;
+      },
+      createCancellationSource: () => ({
+        token: { get isCancellationRequested() { return cancelled; } },
+        cancel: () => {
+          cancelled = true;
+          events.push("cancel");
+        },
+        dispose: () => events.push("dispose"),
+      }),
+    });
+    await Promise.resolve();
+
+    expect(events).toEqual([
+      "textDocument/didChange:8",
+      "old-completion",
+      "cancel",
+      "textDocument/didChange:9",
+      "replacement-completion",
+      "probe",
+    ]);
+    expect(cancelled).toBe(true);
+
+    replacementCompletion.resolve({ items: [{ label: "itemCount" }] });
+    await flushMicrotasks();
+    probe.resolve({ fingerprint: "current" });
+    await flushMicrotasks();
+    oldCompletion.resolve({ items: [{ label: "searchText" }] });
+    const result = await measurement;
+
+    expect(result.version).toBe(9);
+    expect(result.cycle).toMatchObject({
+      replacementDispatchedDuringContention: true,
+      requestMilliseconds: 60,
+      cancellationToSettlementMilliseconds: 50,
+      probeMilliseconds: 20,
+      replacementCompletionMilliseconds: 20,
+      completionOutcome: { status: "fulfilled" },
+      probeOutcome: { status: "fulfilled" },
+      replacementCompletionOutcome: { status: "fulfilled" },
+      replacementCompletionCurrentness: {
+        requiredLabel: "itemCount",
+        forbiddenLabel: "searchText",
+      },
+      timeline: {
+        oldRequestStartedMilliseconds: 10,
+        cancellationSentMilliseconds: 20,
+        replacementRequestStartedMilliseconds: 30,
+        probeRequestStartedMilliseconds: 40,
+        replacementRequestSettledMilliseconds: 50,
+        probeRequestSettledMilliseconds: 60,
+        oldRequestSettledMilliseconds: 70,
+      },
+    });
+    expect(events.at(-1)).toBe("dispose");
+  });
 });
+
+function deferred<T>(): { promise: Promise<T>; resolve(value: T): void } {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((accept) => { resolve = accept; });
+  return { promise, resolve };
+}
+
+async function flushMicrotasks(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+}

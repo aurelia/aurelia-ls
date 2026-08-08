@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const RESULT_SCHEMA_VERSION = 'semantic-runtime-managed-query-latency/2';
+const RESULT_SCHEMA_VERSION = 'semantic-runtime-managed-query-latency/3';
 const CHILD_CONFIG_ENV = 'SEMANTIC_RUNTIME_MANAGED_QUERY_LATENCY_CHILD_CONFIG';
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const repositoryRoot = path.resolve(packageRoot, '../..');
@@ -104,6 +104,7 @@ async function orchestratorMain(args) {
       warmRunsPerProcess: options.warmRuns,
       timedBoundary: 'await ManagedSemanticWorkspaceSession.run(operation)',
       timedOperation: 'managed ingress, ResourceInventory answer, receipt absorption, result projection, and managed egress',
+      routedAnswerProfile: 'opt-in relative checkpoints for routed preflight and the synchronous answer transaction',
       excludedFromTimedBoundary: [
         'session construction',
         'session disposal',
@@ -245,24 +246,65 @@ async function runDiagnosticChild(session, query, warmRuns) {
 
 async function measureManagedRun(session, query) {
   const started = process.hrtime.bigint();
-  const outcome = await session.run(async ({ runtime, absorb }) => {
-    const answer = absorb(await runtime.answerAppQuery(query));
+  const measured = await session.run(async ({ runtime }) => {
+    const answer = await runtime.answerAppQuery(query);
     return {
-      result: answer.result,
-      selection: answer.selection,
-      coverage: answer.coverage,
-      projectKey: answer.value?.projectKey ?? null,
-      typeSurfacesIncluded: answer.value?.typeSurfacesIncluded ?? null,
-      returnedRows: Array.isArray(answer.value?.rows) ? answer.value.rows.length : null,
-      totalRows: answer.page?.totalRows ?? null,
-      pageExhausted: answer.page?.exhausted ?? null,
+      outcome: {
+        result: answer.result,
+        selection: answer.selection,
+        coverage: answer.coverage,
+        projectKey: answer.value?.projectKey ?? null,
+        typeSurfacesIncluded: answer.value?.typeSurfacesIncluded ?? null,
+        returnedRows: Array.isArray(answer.value?.rows) ? answer.value.rows.length : null,
+        totalRows: answer.page?.totalRows ?? null,
+        pageExhausted: answer.page?.exhausted ?? null,
+      },
+      routedAnswerProfile: requireRoutedAnswerProfile(answer.profile?.routedAnswer),
     };
   });
   const elapsedNanoseconds = process.hrtime.bigint() - started;
   return {
     milliseconds: roundMilliseconds(Number(elapsedNanoseconds) / 1e6),
-    outcome,
+    outcome: measured.outcome,
+    routedAnswerProfile: measured.routedAnswerProfile,
   };
+}
+
+function requireRoutedAnswerProfile(profile) {
+  const checkpoints = profile?.checkpoints;
+  const entry = checkpoints?.[0];
+  const preflightComplete = checkpoints?.[1];
+  const answerTransactionComplete = checkpoints?.[2];
+  const timings = [
+    entry?.elapsedMilliseconds,
+    preflightComplete?.elapsedMilliseconds,
+    answerTransactionComplete?.elapsedMilliseconds,
+    profile?.preflightMilliseconds,
+    profile?.answerTransactionMilliseconds,
+    profile?.totalMilliseconds,
+    profile?.longestUninterruptedMilliseconds,
+  ];
+  if (
+    profile == null
+    || !Array.isArray(checkpoints)
+    || checkpoints.length !== 3
+    || entry?.name !== 'entry'
+    || preflightComplete?.name !== 'preflight-complete'
+    || answerTransactionComplete?.name !== 'answer-transaction-complete'
+    || timings.some((value) => !Number.isFinite(value) || value < 0)
+    || entry.elapsedMilliseconds !== 0
+    || preflightComplete.elapsedMilliseconds !== profile.preflightMilliseconds
+    || answerTransactionComplete.elapsedMilliseconds !== profile.totalMilliseconds
+    || preflightComplete.elapsedMilliseconds > answerTransactionComplete.elapsedMilliseconds
+    || profile.totalMilliseconds < profile.longestUninterruptedMilliseconds
+    || profile.longestUninterruptedMilliseconds !== Math.max(
+      profile.preflightMilliseconds,
+      profile.answerTransactionMilliseconds,
+    )
+  ) {
+    throw new Error('Managed query latency telemetry requires the routed-answer checkpoint profile.');
+  }
+  return profile;
 }
 
 async function measureDiagnosticManagedRun(session, query, profiler, label) {
@@ -706,6 +748,28 @@ function processCohortStatistics(processes, warmRuns) {
       warmRun: index + 1,
       ...statistics(processes.map((entry) => entry.warm[index].milliseconds)),
     })),
+    routedAnswer: {
+      cold: routedAnswerProfileStatistics(processes.map((entry) => entry.cold.routedAnswerProfile)),
+      warmAll: routedAnswerProfileStatistics(
+        processes.flatMap((entry) => entry.warm.map((run) => run.routedAnswerProfile)),
+      ),
+      warmByOrdinal: Array.from({ length: warmRuns }, (_, index) => ({
+        warmRun: index + 1,
+        ...routedAnswerProfileStatistics(
+          processes.map((entry) => entry.warm[index].routedAnswerProfile),
+        ),
+      })),
+    },
+  };
+}
+
+function routedAnswerProfileStatistics(profiles) {
+  return {
+    preflight: statistics(profiles.map((profile) => profile.preflightMilliseconds)),
+    answerTransaction: statistics(profiles.map((profile) => profile.answerTransactionMilliseconds)),
+    longestUninterrupted: statistics(
+      profiles.map((profile) => profile.longestUninterruptedMilliseconds),
+    ),
   };
 }
 
@@ -820,6 +884,8 @@ function parseChildConfig(text) {
     || candidate?.query?.kind !== 'resource-inventory'
     || candidate?.query?.inquiryProfile !== 'mcp-orientation'
     || candidate?.query?.appRetention !== 'retain-app'
+    || candidate?.query?.telemetry == null
+    || Object.keys(candidate.query.telemetry).length !== 0
     || candidate?.query?.page?.size !== 100
     || candidate?.query?.includeTypeSurfaces !== projection.includeTypeSurfaces
     || (candidate?.lane !== 'primary' && candidate?.lane !== 'diagnostic')) {
@@ -866,6 +932,7 @@ function baselineQuery(projection) {
     kind: 'resource-inventory',
     inquiryProfile: 'mcp-orientation',
     appRetention: 'retain-app',
+    telemetry: Object.freeze({}),
     includeTypeSurfaces: projection.includeTypeSurfaces,
     page: Object.freeze({ size: 100 }),
   });
