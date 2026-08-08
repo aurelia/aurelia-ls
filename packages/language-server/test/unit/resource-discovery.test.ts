@@ -6,7 +6,10 @@ import {
   handleResourceInventory,
   handleTemplateResourceAvailability,
 } from "../../src/handlers/custom.js";
-import { testAnalysisGeneration, testRequestGuard } from "./test-request-guard.js";
+import {
+  createContextTestOperation,
+  testAnalysisGeneration,
+} from "./test-request-guard.js";
 import { testWorkspaceDocumentUris } from "./test-document-uris.js";
 
 const workspaceRoot = path.resolve("resource-discovery-workspace");
@@ -31,7 +34,7 @@ describe("resource discovery protocol boundary", () => {
       resourceInventory,
     });
 
-    const result = await handleResourceInventory(ctx as never, {}, testRequestGuard);
+    const result = await handleResourceInventory(ctx as never, {}, createContextTestOperation(ctx));
 
     expect(resourceInventory.mock.calls.map(([projectKey, includeTypeSurfaces]) =>
       [projectKey, includeTypeSurfaces]
@@ -72,10 +75,10 @@ describe("resource discovery protocol boundary", () => {
     const result = await handleResourceInventory(
       ctx as never,
       { includeTypeSurfaces: true },
-      testRequestGuard,
+      createContextTestOperation(ctx),
     );
 
-    expect(resourceInventory).toHaveBeenCalledWith("first", true, testRequestGuard);
+    expect(resourceInventory).toHaveBeenCalledWith("first", true);
     expect(result.projects[0]).toMatchObject({
       status: "ready",
       typeSurfacesIncluded: true,
@@ -94,7 +97,7 @@ describe("resource discovery protocol boundary", () => {
     const result = await handleTemplateResourceAvailability(
       ctx as never,
       { uri: componentUri, position: { line: 0, character: 2 } },
-      testRequestGuard,
+      createContextTestOperation(ctx),
     );
 
     expect(result.projectSelection).toMatchObject({
@@ -141,7 +144,7 @@ describe("resource discovery protocol boundary", () => {
         projectKey: owner.projectKey,
         templateResourceScopeIdentityKey: "scope:my-app:v1",
       },
-      testRequestGuard,
+      createContextTestOperation(ctx),
     );
 
     expect(templateResourceAvailability).toHaveBeenCalledWith(
@@ -149,7 +152,6 @@ describe("resource discovery protocol boundary", () => {
       expect.objectContaining({ uri: componentUri }),
       { line: 0, character: 2 },
       "scope:my-app:v1",
-      testRequestGuard,
     );
     expect(result.projectSelection).toMatchObject({
       status: "exact",
@@ -169,7 +171,6 @@ function context(semanticRuntime: Record<string, unknown>) {
       ? TextDocument.create(uri, "html", 1, "<product-card></product-card>")
       : null,
     semanticRuntime: {
-      preflight: vi.fn(async () => testAnalysisGeneration),
       ...semanticRuntime,
     },
   };

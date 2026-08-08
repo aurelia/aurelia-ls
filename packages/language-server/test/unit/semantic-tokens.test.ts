@@ -8,22 +8,23 @@ import {
 } from "../../src/handlers/semantic-tokens.js";
 import type { ServerContext } from "../../src/context.js";
 import type { SemanticTemplateSemanticTokenRow } from "@aurelia-ls/semantic-runtime";
-import { testRequestGuard } from "./test-request-guard.js";
+import { createTestOperation } from "./test-request-guard.js";
 
-function createContext(text: string, tokens: SemanticTemplateSemanticTokenRow[]): ServerContext {
+function createContext(text: string, tokens: SemanticTemplateSemanticTokenRow[]) {
   const uri = "file:///test.html";
   const doc = TextDocument.create(uri, "html", 1, text);
 
-  const semanticRuntime = {
+  const operation = createTestOperation({
+    documents: { ensureProgramDocument: () => doc },
     templateSemanticTokens: async () => ({
       value: {
         displayText: `${tokens.length} test token(s).`,
         rows: tokens,
       },
     }),
-  };
+  });
 
-  return {
+  const ctx = {
     trace: {
       span: (_name: string, run: () => unknown) => run(),
       spanAsync: (_name: string, run: () => Promise<unknown>) => run(),
@@ -41,9 +42,8 @@ function createContext(text: string, tokens: SemanticTemplateSemanticTokenRow[])
       warn: () => {},
       error: () => {},
     },
-    ensureProgramDocument: () => doc,
-    semanticRuntime,
   } as unknown as ServerContext;
+  return { ctx, operation };
 }
 
 describe("semantic tokens handler", () => {
@@ -61,8 +61,8 @@ describe("semantic tokens handler", () => {
       { tokenType: "aureliaElement", tokenModifiers: [], definitionName: "nav-bar", source: source(11, 18) },
     ];
 
-    const ctx = createContext(text, tokens);
-    const result = await handleSemanticTokensFull(ctx, { textDocument: { uri: "file:///test.html" } }, testRequestGuard);
+    const { ctx, operation } = createContext(text, tokens);
+    const result = await handleSemanticTokensFull(ctx, { textDocument: { uri: "file:///test.html" } }, operation);
 
     expect(result?.data).toEqual([
       0, 1, 7, 0, 0,
@@ -84,8 +84,8 @@ describe("semantic tokens handler", () => {
       },
     ];
 
-    const ctx = createContext(text, tokens);
-    const result = await handleSemanticTokensFull(ctx, { textDocument: { uri: "file:///test.html" } }, testRequestGuard);
+    const { ctx, operation } = createContext(text, tokens);
+    const result = await handleSemanticTokensFull(ctx, { textDocument: { uri: "file:///test.html" } }, operation);
 
     // type index 3 = aureliaController; modifier bits 5+6 => 32 + 64 = 96
     expect(result?.data).toEqual([0, 5, 6, 3, 96]);

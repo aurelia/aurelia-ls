@@ -61,14 +61,18 @@ describe("language-server dependency currentness", () => {
     registerDiagnosticHandlers(ctx);
 
     expect(diagnosticHandler).not.toBeNull();
-    expect((await ctx.semanticRuntime.authoredSourceOwnership(
-      templateUri,
-      ctx.semanticRuntime.requestGuard(null),
-    )).value.owners).not.toEqual([]);
-    expect((await ctx.semanticRuntime.authoredSourceOwnership(
-      dependencyUri,
-      ctx.semanticRuntime.requestGuard(null),
-    )).value.owners).toEqual([]);
+    expect(await ctx.semanticRuntime.runRequest(
+      null,
+      async (operation) => [
+        ...(await operation.authoredSourceOwnership(templateUri)).value.owners,
+      ],
+    )).not.toEqual([]);
+    expect(await ctx.semanticRuntime.runRequest(
+      null,
+      async (operation) => [
+        ...(await operation.authoredSourceOwnership(dependencyUri)).value.owners,
+      ],
+    )).toEqual([]);
 
     const first = await diagnosticHandler!({
       textDocument: { uri: templateUri },
@@ -85,10 +89,12 @@ describe("language-server dependency currentness", () => {
       "utf8",
     );
 
-    expect((await ctx.semanticRuntime.authoredSourceOwnership(
-      dependencyUri,
-      ctx.semanticRuntime.requestGuard(null),
-    )).value.owners).toEqual([]);
+    expect(await ctx.semanticRuntime.runRequest(
+      null,
+      async (operation) => [
+        ...(await operation.authoredSourceOwnership(dependencyUri)).value.owners,
+      ],
+    )).toEqual([]);
 
     const second = await diagnosticHandler!({
       textDocument: { uri: templateUri },

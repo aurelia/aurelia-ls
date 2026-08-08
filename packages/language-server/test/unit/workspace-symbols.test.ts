@@ -3,7 +3,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { SymbolKind } from "vscode-languageserver/node";
 import { handleWorkspaceSymbols } from "../../src/handlers/workspace-symbols.js";
-import { testRequestGuard } from "./test-request-guard.js";
+import { createTestOperation } from "./test-request-guard.js";
 import { testWorkspaceDocumentUris } from "./test-document-uris.js";
 
 const workspaceRoot = path.resolve("test-workspace");
@@ -35,6 +35,22 @@ function answer<T>(rows: T[]) {
 }
 
 function createMockContext(input: { text: string; definitions: unknown[] }) {
+  const resourceDefinitions = vi.fn(() => answer(input.definitions));
+  const lookupWorkspaceDocumentSnapshot = vi.fn((uri: string) =>
+    uri === resourceUri
+      ? {
+          uri: resourceUri,
+          languageId: "typescript",
+          version: null,
+          text: input.text,
+        }
+      : null,
+  );
+  const operation = createTestOperation({
+    documents: { lookupWorkspaceDocumentSnapshot },
+    resourceDefinitions,
+  });
+
   return {
     workspaceRoot,
     documentUris,
@@ -43,12 +59,9 @@ function createMockContext(input: { text: string; definitions: unknown[] }) {
       all: vi.fn(() => []),
     },
     logger: { log: vi.fn(), info: vi.fn(), error: vi.fn(), warn: vi.fn() },
-    semanticRuntime: {
-      resourceDefinitions: vi.fn(() => answer(input.definitions)),
-    },
-    lookupText: vi.fn((uri: string) =>
-      uri === resourceUri ? input.text : null,
-    ),
+    operation,
+    resourceDefinitions,
+    lookupWorkspaceDocumentSnapshot,
   };
 }
 
@@ -103,7 +116,7 @@ describe("runtime-backed workspace symbols", () => {
     const result = await handleWorkspaceSymbols(
       ctx as never,
       { query: "tile" },
-      testRequestGuard,
+      ctx.operation,
     );
 
     expect(result).toEqual([
@@ -120,7 +133,8 @@ describe("runtime-backed workspace symbols", () => {
         containerName: "custom-element: product-card",
       },
     ]);
-    expect(ctx.semanticRuntime.resourceDefinitions).toHaveBeenCalledTimes(1);
+    expect(ctx.resourceDefinitions).toHaveBeenCalledTimes(1);
+    expect(ctx.lookupWorkspaceDocumentSnapshot).toHaveBeenCalledWith(resourceUri);
   });
 
   test("returns null when no source-backed resource matches the query", async () => {
@@ -142,7 +156,7 @@ describe("runtime-backed workspace symbols", () => {
     const result = await handleWorkspaceSymbols(
       ctx as never,
       { query: "missing" },
-      testRequestGuard,
+      ctx.operation,
     );
 
     expect(result).toBeNull();

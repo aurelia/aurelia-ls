@@ -62,6 +62,8 @@ export type ManagedSemanticWorkspaceRuntimeReadFacade = Pick<
 
 /** Callback-scoped access to one pinned runtime and composition of every semantic answer used by the result. */
 export interface ManagedSemanticWorkspaceOperationContext {
+  /** Portable resolved semantic-plan revision pinned for this complete consumer operation. */
+  readonly sourceWorldRevision: string;
   /**
    * Facade calls auto-compose their answer receipts and any still-pending promise is drained before egress.
    * Answer proofs are borrowed only for this callback and revoked at its close; retained envelopes keep portable data.
@@ -368,6 +370,7 @@ export class ManagedSemanticWorkspaceSession {
     const context = new ManagedSemanticWorkspaceOperationContextScope(
       incarnation.runtime,
       receiptBuilder,
+      incarnation.sourceWorld.sourceWorldRevision,
     );
     try {
       let result!: TResult;
@@ -807,6 +810,7 @@ class ManagedSemanticWorkspaceOperationContextScope implements ManagedSemanticWo
   constructor(
     runtime: SemanticRuntime,
     private readonly receiptBuilder: SemanticRuntimeAnalysisReceiptBuilder,
+    readonly sourceWorldRevision: string,
   ) {
     this.runtime = managedSemanticWorkspaceRuntimeReadFacade(
       runtime,

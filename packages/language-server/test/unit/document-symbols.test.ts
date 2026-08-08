@@ -4,7 +4,7 @@ import { pathToFileURL } from "node:url";
 import { SymbolKind } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { handleDocumentSymbols } from "../../src/handlers/document-symbols.js";
-import { testRequestGuard } from "./test-request-guard.js";
+import { createTestOperation } from "./test-request-guard.js";
 import { testWorkspaceDocumentUris } from "./test-document-uris.js";
 
 const workspaceRoot = path.resolve("test-workspace");
@@ -42,17 +42,23 @@ function createMockContext(input: { text?: string; definitions?: unknown[] }) {
     input.text ?? "",
   );
 
+  const resourceDefinitions = vi.fn(() => answer(input.definitions ?? []));
+  const operation = createTestOperation({
+    documents: {
+      openDocument: (uri: string) => (uri === resourceUri ? document : null),
+    },
+    resourceDefinitions,
+  });
+
   return {
     workspaceRoot,
     documentUris: testWorkspaceDocumentUris(workspaceRoot),
     documents: {
       get: vi.fn((uri: string) => (uri === resourceUri ? document : undefined)),
     },
-    openDocument: vi.fn((uri: string) => (uri === resourceUri ? document : null)),
     logger: { log: vi.fn(), info: vi.fn(), error: vi.fn(), warn: vi.fn() },
-    semanticRuntime: {
-      resourceDefinitions: vi.fn(() => answer(input.definitions ?? [])),
-    },
+    operation,
+    resourceDefinitions,
   };
 }
 
@@ -142,7 +148,7 @@ describe("runtime-backed document symbols", () => {
     const result = await handleDocumentSymbols(
       ctx as never,
       { textDocument: { uri: resourceUri } },
-      testRequestGuard,
+      ctx.operation,
     );
 
     expect(result).toHaveLength(2);
@@ -183,7 +189,7 @@ describe("runtime-backed document symbols", () => {
         end: { line: 3, character: 35 },
       },
     });
-    expect(ctx.semanticRuntime.resourceDefinitions).toHaveBeenCalledTimes(1);
+    expect(ctx.resourceDefinitions).toHaveBeenCalledTimes(1);
   });
 
   test("does not query runtime rows for non-TypeScript files", async () => {
@@ -198,10 +204,10 @@ describe("runtime-backed document symbols", () => {
           ).toString(),
         },
       },
-      testRequestGuard,
+      ctx.operation,
     );
 
     expect(result).toBeNull();
-    expect(ctx.semanticRuntime.resourceDefinitions).not.toHaveBeenCalled();
+    expect(ctx.resourceDefinitions).not.toHaveBeenCalled();
   });
 });

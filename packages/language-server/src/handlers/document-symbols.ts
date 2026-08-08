@@ -26,7 +26,7 @@ import {
   semanticSourceRangeForDocument,
   semanticSourceReferenceFilePath,
 } from "../mapping/source-locations.js";
-import type { SemanticRuntimeLspRequestGuard } from "../runtime/semantic-runtime-session.js";
+import type { SemanticRuntimeLspOperation } from "../runtime/semantic-runtime-session.js";
 import { isScriptDocument } from "../utils/document-kind.js";
 
 const DOCUMENT_SYMBOL_RESOURCE_KINDS = new Set<string>([
@@ -48,16 +48,16 @@ const RESOURCE_SYMBOL_KIND: Readonly<Record<string, SymbolKind>> = {
 export async function handleDocumentSymbols(
   ctx: ServerContext,
   params: DocumentSymbolParams,
-  guard: SemanticRuntimeLspRequestGuard,
+  operation: SemanticRuntimeLspOperation,
 ): Promise<DocumentSymbol[] | null> {
   const uri = params.textDocument.uri;
-  const doc = ctx.openDocument(uri);
+  const doc = operation.documents.openDocument(uri);
   if (doc == null || !isScriptDocument(doc)) return null;
 
   const requestedPath = ctx.documentUris.authoredHostPath(uri);
   if (requestedPath == null) return null;
   const requested = canonicalTypeSystemPath(requestedPath);
-  const definitions = await ctx.semanticRuntime.resourceDefinitions(guard);
+  const definitions = await operation.resourceDefinitions();
   const symbols: DocumentSymbol[] = [];
 
   for (const definition of definitions.value.rows) {

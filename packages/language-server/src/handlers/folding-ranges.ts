@@ -12,7 +12,7 @@ import {
   semanticSourceOffsetRangeForDocument,
   semanticSourceReferenceMatchesDocument,
 } from "../mapping/source-locations.js";
-import type { SemanticRuntimeLspRequestGuard } from "../runtime/semantic-runtime-session.js";
+import type { SemanticRuntimeLspOperation } from "../runtime/semantic-runtime-session.js";
 import { isTemplateDocument } from "../utils/document-kind.js";
 
 interface OffsetRange {
@@ -23,15 +23,14 @@ interface OffsetRange {
 export async function handleFoldingRanges(
   ctx: ServerContext,
   params: FoldingRangeParams,
-  guard: SemanticRuntimeLspRequestGuard,
+  operation: SemanticRuntimeLspOperation,
 ): Promise<FoldingRange[] | null> {
-  const doc = ctx.ensureProgramDocument(params.textDocument.uri);
+  const doc = operation.documents.ensureProgramDocument(params.textDocument.uri);
   if (!doc) return null;
   if (!isTemplateDocument(doc)) return null;
 
-  const answer = await ctx.semanticRuntime.templateFoldingRanges(
+  const answer = await operation.templateFoldingRanges(
     doc,
-    guard,
   );
   const ranges = answer.value.rows
     .map((row) => foldingRangeForRow(ctx, doc, row))

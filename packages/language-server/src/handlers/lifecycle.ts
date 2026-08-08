@@ -2,6 +2,10 @@
  * LSP lifecycle handlers: initialize, document events, configuration changes
  */
 import {
+  ManagedSemanticWorkspaceOperationStaleError,
+  SemanticSourceWorldCurrentnessKind,
+} from "@aurelia-ls/semantic-runtime";
+import {
   TextDocumentSyncKind,
   FileChangeType,
   DidChangeConfigurationNotification,
@@ -20,6 +24,10 @@ import type {
   AureliaInitializeOptions,
 } from "../protocol.js";
 import { isAnalyzedSourceDocumentUri } from "../utils/document-kind.js";
+import {
+  isSemanticRuntimeLspRequestAborted,
+  type SemanticRuntimeLspGeneration,
+} from "../runtime/semantic-runtime-session.js";
 import { SEMANTIC_TOKENS_LEGEND } from "./semantic-tokens.js";
 
 /** Quiet period before publishing workspace-wide derived analysis. */
@@ -374,13 +382,32 @@ async function notifyAnalysisChanged(
   changeKind: AnalysisChangedPayload["changeKind"],
 ): Promise<void> {
   if (lifecycleRefreshState(ctx).shutdown != null) return;
-  const guard = ctx.semanticRuntime.requestGuard(null);
-  const generation = await ctx.semanticRuntime.preflight(guard);
+  let generation: SemanticRuntimeLspGeneration;
+  try {
+    generation = await ctx.semanticRuntime.runRequest(
+      null,
+      (operation) => operation.generation,
+    );
+  } catch (error) {
+    if (lifecycleRefreshState(ctx).shutdown != null) return;
+    if (!isSettledAnalysisStale(error)) throw error;
+    // A pull can discover source-world movement which did not arrive through the
+    // editor event stream. Retry from a new managed ingress instead of publishing
+    // or logging a generation which failed egress currentness.
+    scheduleAnalysisRefresh(
+      ctx,
+      "managed analysis currentness retry",
+      retryAnalysisChangeKind(error, changeKind),
+    );
+    return;
+  }
+  if (lifecycleRefreshState(ctx).shutdown != null) return;
   const analysisChanged: AnalysisChangedPayload = {
     fingerprint: generation.fingerprint,
     changeKind,
   };
   await ctx.connection.sendNotification(AureliaProtocolNotification.AnalysisChanged, analysisChanged);
+  if (lifecycleRefreshState(ctx).shutdown != null) return;
   // This is the single post-change diagnostic scheduler. The client deliberately
   // disables pull-on-change: starting a speculative pull before this semantic
   // generation settles would race this refresh and repeat the same expensive
@@ -394,6 +421,32 @@ async function notifyAnalysisChanged(
     requestClientRefresh(ctx, "semantic tokens", () =>
       ctx.connection.languages.semanticTokens.refresh());
   }
+}
+
+function isSettledAnalysisStale(error: unknown): boolean {
+  return error instanceof ManagedSemanticWorkspaceOperationStaleError
+    || (isSemanticRuntimeLspRequestAborted(error) && error.reason === "stale");
+}
+
+function retryAnalysisChangeKind(
+  error: unknown,
+  fallback: AnalysisChangedPayload["changeKind"],
+): AnalysisChangedPayload["changeKind"] {
+  const managedStale = managedOperationStaleCause(error);
+  return managedStale?.currentnessKind === SemanticSourceWorldCurrentnessKind.FreshBootRequired
+    ? "topology"
+    : fallback;
+}
+
+function managedOperationStaleCause(
+  error: unknown,
+): ManagedSemanticWorkspaceOperationStaleError | null {
+  if (error instanceof ManagedSemanticWorkspaceOperationStaleError) return error;
+  if (isSemanticRuntimeLspRequestAborted(error)
+      && error.cause instanceof ManagedSemanticWorkspaceOperationStaleError) {
+    return error.cause;
+  }
+  return null;
 }
 
 /**

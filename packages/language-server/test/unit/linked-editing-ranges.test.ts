@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { handleLinkedEditingRange } from "../../src/handlers/linked-editing-ranges.js";
-import { testRequestGuard } from "./test-request-guard.js";
+import { createTestOperation } from "./test-request-guard.js";
 import { testWorkspaceDocumentUris } from "./test-document-uris.js";
 
 const documentUris = testWorkspaceDocumentUris("/app");
@@ -32,24 +32,27 @@ function source(start: number, end: number) {
 }
 
 function createMockContext(value: Record<string, unknown>) {
+  const templateCursorInfo = vi.fn(() =>
+    Promise.resolve({
+      schemaVersion: "0.2",
+      result: "answered",
+      selection: "not-applicable",
+      coverage: "complete",
+      summary: "mock",
+      value,
+      page: null,
+    }),
+  );
+  const operation = createTestOperation({
+    documents: { ensureProgramDocument: () => doc },
+    templateCursorInfo,
+  });
   return {
     workspaceRoot: documentUris.workspaceRoot,
     documentUris,
     logger: { log: vi.fn(), info: vi.fn(), error: vi.fn(), warn: vi.fn() },
-    ensureProgramDocument: vi.fn(() => doc),
-    semanticRuntime: {
-      templateCursorInfo: vi.fn(() =>
-        Promise.resolve({
-          schemaVersion: "0.2",
-          result: "answered",
-          selection: "not-applicable",
-          coverage: "complete",
-          summary: "mock",
-          value,
-          page: null,
-        }),
-      ),
-    },
+    operation,
+    templateCursorInfo,
   };
 }
 
@@ -115,13 +118,12 @@ describe("runtime-backed linked editing ranges", () => {
         textDocument: { uri },
         position,
       },
-      testRequestGuard,
+      ctx.operation,
     );
 
-    expect(ctx.semanticRuntime.templateCursorInfo).toHaveBeenCalledWith(
+    expect(ctx.templateCursorInfo).toHaveBeenCalledWith(
       doc,
       position,
-      testRequestGuard,
     );
     expect(result).toEqual({
       ranges: [
@@ -141,7 +143,7 @@ describe("runtime-backed linked editing ranges", () => {
         textDocument: { uri },
         position: doc.positionAt(text.indexOf("value.bind")),
       },
-      testRequestGuard,
+      ctx.operation,
     );
 
     expect(result).toBeNull();
@@ -162,7 +164,7 @@ describe("runtime-backed linked editing ranges", () => {
         textDocument: { uri },
         position: doc.positionAt(inputStart + 2),
       },
-      testRequestGuard,
+      ctx.operation,
     );
 
     expect(result).toBeNull();

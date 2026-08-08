@@ -1,5 +1,4 @@
 import {
-  DocumentDiagnosticReportKind,
   type CancellationToken,
   type DocumentDiagnosticParams,
   type DocumentDiagnosticReport,
@@ -16,6 +15,8 @@ import {
 } from "../mapping/lsp-types.js";
 import { runSemanticRuntimeDiagnosticRequest } from "./request-guard.js";
 
+const DIAGNOSTIC_PRESENTATION_SCHEMA = "lsp-document-diagnostics/v2";
+
 export function registerDiagnosticHandlers(ctx: ServerContext): void {
   ctx.connection.languages.diagnostics.on((params, token) =>
     documentDiagnostics(ctx, params, token));
@@ -26,87 +27,51 @@ async function documentDiagnostics(
   params: DocumentDiagnosticParams,
   token: CancellationToken,
 ): Promise<DocumentDiagnosticReport> {
-  return runSemanticRuntimeDiagnosticRequest(ctx, token, async (guard) => {
-    const generation = await ctx.semanticRuntime.preflight(guard);
-    const document = ctx.ensureProgramDocument(params.textDocument.uri);
+  return runSemanticRuntimeDiagnosticRequest(ctx, token, {
+    uri: params.textDocument.uri,
+    identifier: params.identifier ?? null,
+    previousResultId: params.previousResultId ?? null,
+    projectionKey: DIAGNOSTIC_PRESENTATION_SCHEMA,
+  }, async (operation) => {
+    const document = operation.documents.ensureProgramDocument(params.textDocument.uri);
     if (document == null) {
-      const resultId = `${generation.fingerprint}:document-closed`;
-      if (params.previousResultId === resultId) {
-        return { kind: DocumentDiagnosticReportKind.Unchanged, resultId };
-      }
-      return {
-        kind: DocumentDiagnosticReportKind.Full,
-        resultId,
-        items: [],
-      };
+      return [];
     }
 
     if (isNativeProjectConfiguration(ctx, document.uri)) {
-      const answer = await ctx.semanticRuntime.projectConfigurationDiagnostics(document.uri, guard);
-      const resultId = diagnosticResultId(generation.fingerprint, document.version, answer);
-      if (params.previousResultId === resultId) {
-        return { kind: DocumentDiagnosticReportKind.Unchanged, resultId };
-      }
+      const answer = await operation.projectConfigurationDiagnostics(document.uri);
       const mapped = mapSemanticProjectConfigurationDiagnostics(answer, document, ctx.documentUris);
       if (mapped.failures.length > 0) {
-        ctx.logger.warn(
-          `[diagnostics] omitted ${mapped.failures.length} project-configuration row(s): ${mapped.failures.join(" ")}`,
-        );
+        operation.deferEffect({
+          kind: "log",
+          level: "warn",
+          message: `[diagnostics] omitted ${mapped.failures.length} project-configuration row(s): ${mapped.failures.join(" ")}`,
+        });
       }
-      return {
-        kind: DocumentDiagnosticReportKind.Full,
-        resultId,
-        items: mapped.value,
-      };
+      return mapped.value;
     }
 
-    const ownership = await ctx.semanticRuntime.authoredSourceOwnership(document.uri, guard);
+    const ownership = await operation.authoredSourceOwnership(document.uri);
     if (ownership.value.owners.length === 0) {
-      const resultId = diagnosticResultId(generation.fingerprint, document.version, ownership);
-      if (params.previousResultId === resultId) {
-        return { kind: DocumentDiagnosticReportKind.Unchanged, resultId };
-      }
-      return {
-        kind: DocumentDiagnosticReportKind.Full,
-        resultId,
-        items: [],
-      };
+      return [];
     }
 
-    const answer = await ctx.semanticRuntime.appDiagnostics(document, guard);
-    const resultId = diagnosticResultId(generation.fingerprint, document.version, answer);
-    if (params.previousResultId === resultId) {
-      return { kind: DocumentDiagnosticReportKind.Unchanged, resultId };
-    }
+    const answer = await operation.appDiagnostics(document);
     const mapped = mapSemanticRuntimeAppDiagnostics(
       answer,
       document,
       ctx.documentUris,
-      (uri) => ctx.lookupText(uri),
+      (uri) => operation.documents.lookupText(uri),
     );
     if (mapped.failures.length > 0) {
-      ctx.logger.warn(
-        `[diagnostics] omitted ${mapped.failures.length} source-backed row(s): ${mapped.failures.join(" ")}`,
-      );
+      operation.deferEffect({
+        kind: "log",
+        level: "warn",
+        message: `[diagnostics] omitted ${mapped.failures.length} source-backed row(s): ${mapped.failures.join(" ")}`,
+      });
     }
-    return {
-      kind: DocumentDiagnosticReportKind.Full,
-      resultId,
-      items: mapped.value,
-    };
-  }, params.textDocument.uri);
-}
-
-function diagnosticResultId(
-  generationFingerprint: string,
-  documentVersion: number,
-  answer: { readonly analysisBasis?: { readonly revision: string } },
-): string {
-  const revision = answer.analysisBasis?.revision;
-  if (revision == null) {
-    throw new Error("Semantic-runtime diagnostic input returned without an exact analysis basis.");
-  }
-  return `${generationFingerprint}:answer-${revision}:document-${documentVersion}`;
+    return mapped.value;
+  });
 }
 
 function isNativeProjectConfiguration(ctx: ServerContext, uri: string): boolean {

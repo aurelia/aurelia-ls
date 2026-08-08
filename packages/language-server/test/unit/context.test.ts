@@ -14,7 +14,7 @@ function createLogger() {
 }
 
 describe("createServerContext", () => {
-  test("ensureProgramDocument returns open documents without syncing a second workspace", () => {
+  test("finds synchronized open-document metadata without syncing a second workspace", () => {
     const rootUri = pathToFileURL(path.resolve("test-workspace")).toString();
     const uri = pathToFileURL(path.resolve("test-workspace/component.html")).toString();
     const live = TextDocument.create(uri, "html", 1, "<template>${name}</template>");
@@ -29,12 +29,21 @@ describe("createServerContext", () => {
     });
     ctx.configureWorkspace(rootUri);
 
-    expect(ctx.ensureProgramDocument(uri)).toBe(live);
-    expect(ctx.ensureProgramDocument(uri)).toBe(live);
+    expect(ctx.openWorkspaceDocument(uri)).toEqual({
+      uri,
+      languageId: "html",
+      version: 1,
+    });
+    expect(ctx.openWorkspaceDocument(uri)).not.toHaveProperty("getText");
+    expect(ctx.openWorkspaceDocument(uri)).toEqual({
+      uri,
+      languageId: "html",
+      version: 1,
+    });
     expect(documents.get).toHaveBeenCalledWith(uri);
   });
 
-  test("lookupText can resolve an open document by canonical equivalent URI", () => {
+  test("finds open-document metadata by canonical equivalent URI", () => {
     const rootUri = pathToFileURL(path.resolve("test-workspace")).toString();
     const uri = pathToFileURL(path.resolve("test-workspace/component.html")).toString();
     const live = TextDocument.create(uri, "html", 1, "<template>${name}</template>");
@@ -49,7 +58,11 @@ describe("createServerContext", () => {
     });
     ctx.configureWorkspace(rootUri);
 
-    expect(ctx.lookupText(uri)).toBe("<template>${name}</template>");
+    expect(ctx.openWorkspaceDocument(uri)).toEqual({
+      uri,
+      languageId: "html",
+      version: 1,
+    });
   });
 
   test("keeps excluded synchronized text readable without granting authored document access", () => {
@@ -69,11 +82,11 @@ describe("createServerContext", () => {
     ctx.configureWorkspace(rootUri, [excludedRootUri]);
 
     expect(ctx.ownsDocument(uri)).toBe(false);
-    expect(ctx.openWorkspaceDocument(uri)).toBe(live);
-    expect(ctx.openDocument(uri)).toBeNull();
-    expect(ctx.ensureProgramDocument(uri)).toBeNull();
-    expect(ctx.lookupDocumentSnapshot(uri)).toBeNull();
-    expect(ctx.lookupText(uri)).toBe("<template>${name}</template>");
+    expect(ctx.openWorkspaceDocument(uri)).toEqual({
+      uri,
+      languageId: "html",
+      version: 1,
+    });
     expect(ctx.documentUris.hostPath(uri)).toBe(path.resolve("test-workspace/packages/disabled/component.html"));
   });
 

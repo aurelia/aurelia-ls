@@ -2,7 +2,7 @@ import { describe, expect, test, vi } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { handleFoldingRanges } from "../../src/handlers/folding-ranges.js";
 import type { SemanticTemplateFoldingRangeRow } from "@aurelia-ls/semantic-runtime";
-import { testRequestGuard } from "./test-request-guard.js";
+import { createTestOperation } from "./test-request-guard.js";
 import { testWorkspaceDocumentUris } from "./test-document-uris.js";
 
 const documentUris = testWorkspaceDocumentUris("/app");
@@ -51,27 +51,30 @@ function row(
 }
 
 function createMockContext(rows: SemanticTemplateFoldingRangeRow[]) {
+  const templateFoldingRanges = vi.fn(() =>
+    Promise.resolve({
+      schemaVersion: "0.2",
+      result: "answered",
+      selection: "not-applicable",
+      coverage: "complete",
+      summary: "mock",
+      value: {
+        displayText: "mock",
+        rows,
+      },
+      page: null,
+    }),
+  );
+  const operation = createTestOperation({
+    documents: { ensureProgramDocument: () => doc },
+    templateFoldingRanges,
+  });
   return {
     workspaceRoot: documentUris.workspaceRoot,
     documentUris,
     logger: { log: vi.fn(), info: vi.fn(), error: vi.fn(), warn: vi.fn() },
-    ensureProgramDocument: vi.fn(() => doc),
-    semanticRuntime: {
-      templateFoldingRanges: vi.fn(() =>
-        Promise.resolve({
-          schemaVersion: "0.2",
-          result: "answered",
-          selection: "not-applicable",
-          coverage: "complete",
-          summary: "mock",
-          value: {
-            displayText: "mock",
-            rows,
-          },
-          page: null,
-        }),
-      ),
-    },
+    operation,
+    templateFoldingRanges,
   };
 }
 
@@ -88,12 +91,11 @@ describe("runtime-backed folding ranges", () => {
       {
         textDocument: { uri },
       },
-      testRequestGuard,
+      ctx.operation,
     );
 
-    expect(ctx.semanticRuntime.templateFoldingRanges).toHaveBeenCalledWith(
+    expect(ctx.templateFoldingRanges).toHaveBeenCalledWith(
       doc,
-      testRequestGuard,
     );
     expect(result).toEqual([
       {
@@ -115,7 +117,7 @@ describe("runtime-backed folding ranges", () => {
       {
         textDocument: { uri },
       },
-      testRequestGuard,
+      ctx.operation,
     );
 
     expect(result).toBeNull();

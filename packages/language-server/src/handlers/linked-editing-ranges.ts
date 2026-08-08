@@ -20,7 +20,7 @@ import {
   semanticSourceOffsetRangeForDocument,
   semanticSourceReferenceMatchesDocument,
 } from "../mapping/source-locations.js";
-import type { SemanticRuntimeLspRequestGuard } from "../runtime/semantic-runtime-session.js";
+import type { SemanticRuntimeLspOperation } from "../runtime/semantic-runtime-session.js";
 import { isTemplateDocument } from "../utils/document-kind.js";
 
 interface OffsetRange {
@@ -31,16 +31,15 @@ interface OffsetRange {
 export async function handleLinkedEditingRange(
   ctx: ServerContext,
   params: LinkedEditingRangeParams,
-  guard: SemanticRuntimeLspRequestGuard,
+  operation: SemanticRuntimeLspOperation,
 ): Promise<LinkedEditingRanges | null> {
-  const doc = ctx.ensureProgramDocument(params.textDocument.uri);
+  const doc = operation.documents.ensureProgramDocument(params.textDocument.uri);
   if (!doc) return null;
   if (!isTemplateDocument(doc)) return null;
 
-  const answer = await ctx.semanticRuntime.templateCursorInfo(
+  const answer = await operation.templateCursorInfo(
     doc,
     params.position,
-    guard,
   );
   return linkedEditingRangesForCursor(ctx, doc, params.position, answer.value);
 }

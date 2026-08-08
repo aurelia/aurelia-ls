@@ -51,15 +51,12 @@ import {
   semanticSourceReferencePath,
   semanticSourceReferenceUri,
 } from "./source-locations.js";
+import type { SemanticRuntimeLspDocumentSnapshot } from "../runtime/semantic-runtime-session.js";
 
 export type LookupTextFn = (uri: DocumentUri) => string | null;
-export interface LspDocumentSnapshot {
-  readonly uri: DocumentUri;
-  readonly languageId: string;
-  readonly version: number | null;
-  readonly text: string;
-}
-export type LookupDocumentSnapshotFn = (uri: DocumentUri) => LspDocumentSnapshot | null;
+export type LookupDocumentSnapshotFn = (
+  uri: DocumentUri,
+) => SemanticRuntimeLspDocumentSnapshot | null;
 
 /** Best-effort read projection plus every source-backed row the adapter could not represent. */
 export interface SemanticRuntimeReadMapping<TValue> {
@@ -243,7 +240,7 @@ function semanticRuntimeTypeScriptDiagnosticCode(row: SemanticAppDiagnosticRow):
   for (const candidate of candidates) {
     if (candidate == null) continue;
     const match = /^typescript:TS(\d+)$/.exec(candidate);
-    if (match) return `TS${match[1]}`;
+    if (match) return `TS${match[1]!}`;
   }
   return null;
 }
@@ -606,7 +603,7 @@ function truncateHoverValue(value: string): string {
 }
 
 function escapeMarkdown(value: string): string {
-  return value.replace(/([\\`*_{}\[\]()#+.!|-])/g, "\\$1");
+  return value.replace(/([\\`*_{}[\]()#+.!|-])/g, "\\$1");
 }
 
 function escapeMarkdownCode(value: string): string {
@@ -1199,7 +1196,7 @@ export function workspaceEditChanges(
 function snapshotForDocument(
   document: TextDocument,
   documentUris: WorkspaceDocumentUris,
-): LspDocumentSnapshot {
+): SemanticRuntimeLspDocumentSnapshot {
   return {
     uri: documentUris.resolve(document.uri).uri,
     languageId: document.languageId,

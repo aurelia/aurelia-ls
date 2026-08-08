@@ -16,7 +16,7 @@ import {
 } from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
 import { semanticSourceOffsetRangeForDocument } from "../mapping/source-locations.js";
-import type { SemanticRuntimeLspRequestGuard } from "../runtime/semantic-runtime-session.js";
+import type { SemanticRuntimeLspOperation } from "../runtime/semantic-runtime-session.js";
 import { isTemplateDocument } from "../utils/document-kind.js";
 
 export const WORKSPACE_TOKEN_MODIFIER_GAP_AWARE = "aureliaGapAware" as const;
@@ -42,17 +42,16 @@ interface RawToken {
 }
 
 export async function handleSemanticTokensFull(
-  ctx: ServerContext,
+  _ctx: ServerContext,
   params: SemanticTokensParams,
-  guard: SemanticRuntimeLspRequestGuard,
+  operation: SemanticRuntimeLspOperation,
 ): Promise<SemanticTokens | null> {
-  const doc = ctx.ensureProgramDocument(params.textDocument.uri);
+  const doc = operation.documents.ensureProgramDocument(params.textDocument.uri);
   if (!doc) return null;
   if (!isTemplateDocument(doc)) return null;
 
-  const response = await ctx.semanticRuntime.templateSemanticTokens(
+  const response = await operation.templateSemanticTokens(
     doc,
-    guard,
   );
   const tokens = response.value.rows;
   if (tokens.length === 0) return null;

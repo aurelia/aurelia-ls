@@ -44,7 +44,7 @@ import {
 } from "./request-guard.js";
 import {
   isSemanticRuntimeLspRequestAborted,
-  type SemanticRuntimeLspRequestGuard,
+  type SemanticRuntimeLspOperation,
 } from "../runtime/semantic-runtime-session.js";
 
 export type {
@@ -61,13 +61,13 @@ export type {
 export async function handleSourceOwnership(
   ctx: ServerContext,
   params: SourceOwnershipParams,
-  guard: SemanticRuntimeLspRequestGuard,
+  operation: SemanticRuntimeLspOperation,
 ): Promise<SourceOwnershipResponse> {
   if (!params?.uri) {
     throw new Error("Source ownership requires a document URI.");
   }
-  const generation = await ctx.semanticRuntime.preflight(guard);
-  const answer = await ctx.semanticRuntime.authoredSourceOwnership(params.uri, guard);
+  const generation = operation.generation;
+  const answer = await operation.authoredSourceOwnership(params.uri);
   return {
     fingerprint: generation.fingerprint,
     sourceUri: ctx.documentUris.resolve(params.uri).uri,
@@ -84,22 +84,21 @@ export async function handleSourceOwnership(
 export async function handleResourceInventory(
   ctx: ServerContext,
   params: ResourceInventoryParams | null | undefined,
-  guard: SemanticRuntimeLspRequestGuard,
+  operation: SemanticRuntimeLspOperation,
 ): Promise<ResourceInventoryResponse> {
-  const generation = await ctx.semanticRuntime.preflight(guard);
-  const summary = await ctx.semanticRuntime.workspaceSummary(guard);
+  const generation = operation.generation;
+  const summary = await operation.workspaceSummary();
   const mappingContext = {
     documentUris: ctx.documentUris,
-    lookupText: (uri: string) => ctx.lookupText(uri),
+    lookupText: (uri: string) => operation.documents.lookupText(uri),
   };
   const projects: ResourceInventoryResponse["projects"][number][] = [];
   for (const candidate of summary.value.appCandidates) {
     const project = mapResourceProject(candidate, ctx.documentUris);
     try {
-      const answer = await ctx.semanticRuntime.resourceInventory(
+      const answer = await operation.resourceInventory(
         candidate.projectKey,
         params?.includeTypeSurfaces === true,
-        guard,
       );
       projects.push({
         status: "ready",
@@ -120,19 +119,19 @@ export async function handleResourceInventory(
 export async function handleTemplateResourceAvailability(
   ctx: ServerContext,
   params: TemplateResourceAvailabilityParams,
-  guard: SemanticRuntimeLspRequestGuard,
+  operation: SemanticRuntimeLspOperation,
 ): Promise<TemplateResourceAvailabilityResponse> {
   if (!params?.uri || params.position == null) {
     throw new Error("Template resource availability requires a document URI and cursor position.");
   }
-  const generation = await ctx.semanticRuntime.preflight(guard);
-  const document = ctx.ensureProgramDocument(params.uri);
+  const generation = operation.generation;
+  const document = operation.documents.ensureProgramDocument(params.uri);
   const fingerprint = generation.fingerprint;
   if (document == null) {
     return { fingerprint, projectSelection: { status: "absent", candidates: [] } };
   }
-  const summary = await ctx.semanticRuntime.workspaceSummary(guard);
-  const owners = await ctx.semanticRuntime.projectsOwningDocument(document, summary.value.appCandidates, guard);
+  const summary = await operation.workspaceSummary();
+  const owners = await operation.projectsOwningDocument(document, summary.value.appCandidates);
   const candidates = owners.map((owner) => mapResourceProject(owner, ctx.documentUris));
   const selectedOwner = params.projectKey == null
     ? owners.length === 1 ? owners[0]! : null
@@ -147,16 +146,15 @@ export async function handleTemplateResourceAvailability(
     };
   }
 
-  const answer = await ctx.semanticRuntime.templateResourceAvailability(
+  const answer = await operation.templateResourceAvailability(
     selectedOwner.projectKey,
     document,
     params.position,
     params.templateResourceScopeIdentityKey ?? null,
-    guard,
   );
   const mappingContext = {
     documentUris: ctx.documentUris,
-    lookupText: (uri: string) => ctx.lookupText(uri),
+    lookupText: (uri: string) => operation.documents.lookupText(uri),
   };
   return {
     fingerprint,
@@ -179,13 +177,12 @@ export async function handleTemplateResourceAvailability(
 export async function handleWorkspaceStatus(
   ctx: ServerContext,
   params: WorkspaceStatusParams | null | undefined,
-  guard: SemanticRuntimeLspRequestGuard,
+  operation: SemanticRuntimeLspOperation,
 ): Promise<WorkspaceStatusResponse | null> {
-  const generation = await ctx.semanticRuntime.preflight(guard);
-  const answer = await ctx.semanticRuntime.workspaceSummary(guard);
-  const nativeProjectConfigurations = await ctx.semanticRuntime.nativeProjectConfigurations(
+  const generation = operation.generation;
+  const answer = await operation.workspaceSummary();
+  const nativeProjectConfigurations = await operation.nativeProjectConfigurations(
     params?.nativeProjectConfigurationUris ?? [],
-    guard,
   );
   return {
     fingerprint: generation.fingerprint,
@@ -213,21 +210,20 @@ export async function handleWorkspaceStatus(
 export async function handleRenameFromTs(
   ctx: ServerContext,
   params: RenameFromTsParams,
-  guard: SemanticRuntimeLspRequestGuard,
+  operation: SemanticRuntimeLspOperation,
 ): Promise<RenameFromTsResponse> {
   if (!params?.uri || !params.position || (params.newName != null && typeof params.newName !== "string")) {
     return renameFromTsBlocked("invalid-request", "Aurelia cross-domain rename requires a URI and position, with an optional new name.");
   }
 
   const sourcePath = ctx.documentUris.authoredHostPath(params.uri);
-  const doc = sourcePath == null ? null : ctx.ensureProgramDocument(params.uri);
+  const doc = sourcePath == null ? null : operation.documents.ensureProgramDocument(params.uri);
   if (doc == null || sourcePath == null) {
     return renameFromTsBlocked("document-unavailable", "Aurelia cross-domain rename could not read the TypeScript document.");
   }
-  const answer = await ctx.semanticRuntime.templateRenameFromTypeScript(
+  const answer = await operation.templateRenameFromTypeScript(
     doc,
     params.position,
-    guard,
     params.newName ?? null,
   );
   const templateReferenceCount = answer.value.templateReferenceCount;
@@ -236,7 +232,11 @@ export async function handleRenameFromTs(
   if (answer.value.status !== "available") {
     const reason = answer.value.reason ?? answer.value.status;
     const message = answer.value.displayText || answer.summary;
-    ctx.logger.info(`[renameFromTs] cross-domain rename declined for ${sourcePath}: ${reason}`);
+    operation.deferEffect({
+      kind: "log",
+      level: "info",
+      message: `[renameFromTs] cross-domain rename declined for ${sourcePath}: ${reason}`,
+    });
     if (reason === "no-aurelia-references" || reason === "no-source-backed-member") {
       return {
         status: "not-applicable",
@@ -301,12 +301,16 @@ export async function handleRenameFromTs(
       candidateCount,
     );
   }
-  const mapping = mapSemanticRuntimeTemplateRenameEdit(answer, (uri) => ctx.lookupDocumentSnapshot(uri), {
+  const mapping = mapSemanticRuntimeTemplateRenameEdit(answer, (uri) => operation.documents.lookupDocumentSnapshot(uri), {
     documentUris: ctx.documentUris,
     originDocument: doc,
   });
   if (mapping.edit == null) {
-    ctx.logger.warn(`[renameFromTs] cross-domain edit mapping was blocked: ${mapping.failures.join(" ")}`);
+    operation.deferEffect({
+      kind: "log",
+      level: "warn",
+      message: `[renameFromTs] cross-domain edit mapping was blocked: ${mapping.failures.join(" ")}`,
+    });
     return renameFromTsBlocked(
       "mapping-failed",
       `Aurelia cross-domain rename was blocked: ${mapping.failures.join(" ")}`,
@@ -322,7 +326,11 @@ export async function handleRenameFromTs(
     .map((change) => change.textDocument.uri)).size;
 
   if (fileCount > 0) {
-    ctx.logger.info(`[renameFromTs] prepared ${fileCount} file(s), ${typeScriptReferenceCount} TypeScript and ${templateReferenceCount} Aurelia reference(s)`);
+    operation.deferEffect({
+      kind: "log",
+      level: "info",
+      message: `[renameFromTs] prepared ${fileCount} file(s), ${typeScriptReferenceCount} TypeScript and ${templateReferenceCount} Aurelia reference(s)`,
+    });
   }
   return fileCount
     ? {
@@ -365,13 +373,13 @@ function renameFromTsBlocked(
 export async function handleGetRelatedFiles(
   ctx: ServerContext,
   params: DocumentUriParams,
-  guard: SemanticRuntimeLspRequestGuard,
+  operation: SemanticRuntimeLspOperation,
 ): Promise<RelatedFilesResponse> {
   const uri = params?.uri;
   if (!uri) return [];
   const filePath = ctx.documentUris.authoredHostPath(uri);
   if (filePath == null) return [];
-  const topology = await ctx.semanticRuntime.appTopology(filePath, guard);
+  const topology = await operation.appTopology(filePath);
   const requested = canonicalTypeSystemPath(filePath);
   const candidates: RelatedFileCandidate[] = [];
   for (const component of topology.value.components) {
@@ -421,8 +429,8 @@ export function registerCustomHandlers(ctx: ServerContext): void {
     AureliaProtocolRequest.TemplateResourceAvailability,
     (params: TemplateResourceAvailabilityParams, token: CancellationToken) =>
       documentRequest(ctx, "templateResourceAvailability", token, params.uri,
-        async (guard): Promise<TemplateResourceAvailabilityResponse> => ({
-          fingerprint: (await ctx.semanticRuntime.preflight(guard)).fingerprint,
+        (operation): TemplateResourceAvailabilityResponse => ({
+          fingerprint: operation.generation.fingerprint,
           projectSelection: { status: "absent", candidates: [] },
         }),
         (guard) => handleTemplateResourceAvailability(ctx, params, guard)),
@@ -452,8 +460,8 @@ function documentRequest<T>(
   feature: string,
   token: CancellationToken,
   uri: string,
-  whenNotAuthored: (guard: SemanticRuntimeLspRequestGuard) => T | Promise<T>,
-  handler: (guard: SemanticRuntimeLspRequestGuard) => T | Promise<T>,
+  whenNotAuthored: (operation: SemanticRuntimeLspOperation) => T | Promise<T>,
+  handler: (operation: SemanticRuntimeLspOperation) => T | Promise<T>,
 ): Promise<T> {
   return runSemanticRuntimeDocumentRequest(
     ctx,
@@ -470,7 +478,7 @@ function request<T>(
   feature: string,
   token: CancellationToken,
   uri: string | undefined,
-  handler: (guard: SemanticRuntimeLspRequestGuard) => T | Promise<T>,
+  handler: (operation: SemanticRuntimeLspOperation) => T | Promise<T>,
 ): Promise<T> {
   return runSemanticRuntimeRequest(ctx, feature, token, handler, uri);
 }

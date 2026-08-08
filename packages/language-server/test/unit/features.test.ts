@@ -1,5 +1,9 @@
 import { describe, test, expect, vi } from "vitest";
-import { CompletionItemKind, ResponseError } from "vscode-languageserver/node";
+import {
+  CompletionItemKind,
+  LSPErrorCodes,
+  ResponseError,
+} from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import {
   handleCodeAction,
@@ -11,9 +15,14 @@ import {
   handlePrepareRename,
   handleReferences,
   handleRename,
+  registerFeatureHandlers,
 } from "../../src/handlers/features.js";
+import { SemanticRuntimeLspRequestAbortedError } from "../../src/runtime/semantic-runtime-session.js";
 import { workspaceEditChanges } from "../../src/mapping/lsp-types.js";
-import { testRequestGuard } from "./test-request-guard.js";
+import {
+  createContextTestOperation,
+  createTestOperation,
+} from "./test-request-guard.js";
 import { testWorkspaceDocumentUris } from "./test-document-uris.js";
 
 const testText = "<template>\n  <my-el></my-el>\n</template>";
@@ -30,6 +39,70 @@ const renameDefinitionStart = renameDefinitionText.indexOf("title");
 const codeActionText = "<template>${titel}</template>";
 const codeActionStart = codeActionText.indexOf("titel");
 const codeActionInsertionOffset = definitionText.lastIndexOf("\n}");
+
+function createInlayRegistrationHarness() {
+  let inlayHandler: ((params: unknown, token: unknown) => Promise<unknown>) | null = null;
+  const managedAdmission = vi.fn();
+  const getConfiguration = vi.fn(async () => false);
+  const semanticRuntime = {
+    runRequest: vi.fn(async (
+      isCancellationRequested: (() => boolean) | null,
+      request: (operation: unknown) => unknown,
+    ) => {
+      if (isCancellationRequested?.() === true) {
+        throw new SemanticRuntimeLspRequestAbortedError("cancelled");
+      }
+      managedAdmission();
+      return await request(createTestOperation({
+        authoredSourceOwnership: vi.fn(async () => ({
+          value: { owners: [{ projectKey: "app" }] },
+        })),
+      }));
+    }),
+  };
+  const connection = {
+    onCompletion: vi.fn(),
+    onHover: vi.fn(),
+    onDefinition: vi.fn(),
+    onReferences: vi.fn(),
+    onDocumentHighlight: vi.fn(),
+    onPrepareRename: vi.fn(),
+    onRenameRequest: vi.fn(),
+    onCodeAction: vi.fn(),
+    onCodeActionResolve: vi.fn(),
+    onDocumentSymbol: vi.fn(),
+    onWorkspaceSymbol: vi.fn(),
+    onSelectionRanges: vi.fn(),
+    onFoldingRanges: vi.fn(),
+    onRequest: vi.fn(),
+    sendNotification: vi.fn(async () => undefined),
+    workspace: { getConfiguration },
+    languages: {
+      onLinkedEditingRange: vi.fn(),
+      inlayHint: {
+        on: vi.fn((handler: (params: unknown, token: unknown) => Promise<unknown>) => {
+          inlayHandler = handler;
+        }),
+      },
+    },
+  };
+  const ctx = {
+    connection,
+    semanticRuntime,
+    clientSupport: { configurationPull: true },
+    logger: { log: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+    ownsDocument: vi.fn(() => true),
+  };
+  registerFeatureHandlers(ctx as never);
+  if (inlayHandler == null) throw new Error("Inlay-hint registration was not captured.");
+  return {
+    ctx,
+    getConfiguration,
+    managedAdmission,
+    semanticRuntime,
+    inlayHandler,
+  };
+}
 
 function mockMissingMemberDiagnostic() {
   const source = {
@@ -526,10 +599,10 @@ describe("handleRename", () => {
     });
 
     await expect(
-      handleRename(ctx as never, params, testRequestGuard),
+      handleRename(ctx as never, params, createContextTestOperation(ctx)),
     ).rejects.toThrow(ResponseError);
     await expect(
-      handleRename(ctx as never, params, testRequestGuard),
+      handleRename(ctx as never, params, createContextTestOperation(ctx)),
     ).rejects.toMatchObject({
       message: "No source-backed template member is selected at this cursor.",
     });
@@ -586,7 +659,7 @@ describe("handleRename", () => {
       typeScriptReferenceCount: 1,
     });
 
-    const result = await handleRename(ctx as never, params, testRequestGuard);
+    const result = await handleRename(ctx as never, params, createContextTestOperation(ctx));
     expect(result).not.toBeNull();
     expect(result!.changes).toBeUndefined();
     expect(result!.documentChanges).toEqual(
@@ -612,6 +685,77 @@ describe("handleRename", () => {
     ]);
   });
 });
+
+describe("inlay-hint request admission", () => {
+  const params = {
+    textDocument: { uri: templateUri },
+    range: {
+      start: { line: 0, character: 0 },
+      end: { line: 10, character: 0 },
+    },
+  };
+
+  test("does not admit semantic work when resource presentation is disabled", async () => {
+    const harness = createInlayRegistrationHarness();
+    const token = {
+      isCancellationRequested: false,
+      onCancellationRequested: vi.fn(),
+    };
+
+    await expect(harness.inlayHandler(params, token)).resolves.toBeNull();
+
+    expect(harness.getConfiguration).toHaveBeenCalledOnce();
+    expect(harness.semanticRuntime.runRequest).not.toHaveBeenCalled();
+    expect(harness.managedAdmission).not.toHaveBeenCalled();
+  });
+
+  test("does not admit semantic work when resource configuration is unavailable", async () => {
+    const harness = createInlayRegistrationHarness();
+    harness.getConfiguration.mockRejectedValueOnce(new Error("configuration client unavailable"));
+    const token = {
+      isCancellationRequested: false,
+      onCancellationRequested: vi.fn(),
+    };
+
+    await expect(harness.inlayHandler(params, token)).resolves.toBeNull();
+
+    expect(harness.semanticRuntime.runRequest).not.toHaveBeenCalled();
+    expect(harness.managedAdmission).not.toHaveBeenCalled();
+    expect(harness.ctx.logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining("configuration client unavailable"),
+    );
+  });
+
+  test("preserves cancellation while configuration is pending without managed admission", async () => {
+    const harness = createInlayRegistrationHarness();
+    const configuration = deferredValue<boolean>();
+    harness.getConfiguration.mockImplementationOnce(async () => await configuration.promise);
+    const token = {
+      isCancellationRequested: false,
+      onCancellationRequested: vi.fn(),
+    };
+
+    const response = harness.inlayHandler(params, token);
+    expect(harness.getConfiguration).toHaveBeenCalledOnce();
+    expect(harness.semanticRuntime.runRequest).not.toHaveBeenCalled();
+
+    token.isCancellationRequested = true;
+    configuration.resolve(false);
+
+    await expect(response).rejects.toMatchObject({ code: LSPErrorCodes.RequestCancelled });
+    expect(harness.semanticRuntime.runRequest).toHaveBeenCalledOnce();
+    expect(harness.managedAdmission).not.toHaveBeenCalled();
+  });
+});
+
+function deferredValue<T>(): {
+  readonly promise: Promise<T>;
+  readonly resolve: (value: T) => void;
+} {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((settle) => { resolve = settle; });
+  return { promise, resolve };
+}
 
 describe("handlePrepareRename", () => {
   const params = {
@@ -644,13 +788,12 @@ describe("handlePrepareRename", () => {
     const result = await handlePrepareRename(
       ctx as never,
       params,
-      testRequestGuard,
+      createContextTestOperation(ctx),
     );
 
     expect(ctx.semanticRuntime.templateRename).toHaveBeenCalledWith(
       expect.objectContaining({ uri: templateUri }),
       params.position,
-      testRequestGuard,
     );
     expect(result).toEqual({
       range: {
@@ -675,14 +818,13 @@ describe("handleReferences", () => {
     const result = await handleReferences(
       ctx as never,
       params,
-      testRequestGuard,
+      createContextTestOperation(ctx),
     );
 
     expect(ctx.semanticRuntime.templateReferences).toHaveBeenCalledWith(
       expect.objectContaining({ uri: templateUri }),
       params.position,
       true,
-      testRequestGuard,
     );
     expect(result).toHaveLength(2);
     expect(result?.[0]?.uri).toBe(templateUri);
@@ -700,7 +842,7 @@ describe("handleReferences", () => {
       }],
     });
 
-    const result = await handleReferences(ctx as never, params, testRequestGuard);
+    const result = await handleReferences(ctx as never, params, createContextTestOperation(ctx));
 
     expect(result).toHaveLength(2);
     expect(ctx.connection.sendNotification).toHaveBeenCalledWith(
@@ -715,7 +857,7 @@ describe("handleReferences", () => {
   test("returns the mapped subset and warns when a source-backed row cannot be transported", async () => {
     const ctx = createMockReferencesContext({ readableDefinition: false });
 
-    const result = await handleReferences(ctx as never, params, testRequestGuard);
+    const result = await handleReferences(ctx as never, params, createContextTestOperation(ctx));
 
     expect(result).toHaveLength(1);
     expect(ctx.logger.warn).toHaveBeenCalledWith(
@@ -743,14 +885,13 @@ describe("handleDocumentHighlight", () => {
     const result = await handleDocumentHighlight(
       ctx as never,
       params,
-      testRequestGuard,
+      createContextTestOperation(ctx),
     );
 
     expect(ctx.semanticRuntime.templateReferences).toHaveBeenCalledWith(
       expect.objectContaining({ uri: templateUri }),
       params.position,
       true,
-      testRequestGuard,
     );
     expect(result).toEqual([
       {
@@ -780,13 +921,12 @@ describe("handleCodeAction", () => {
     const result = await handleCodeAction(
       ctx as never,
       params,
-      testRequestGuard,
+      createContextTestOperation(ctx),
     );
 
     expect(ctx.semanticRuntime.templateCodeActions).toHaveBeenCalledWith(
       expect.objectContaining({ uri: templateUri }),
       params.range.start,
-      testRequestGuard,
     );
     expect(result).toHaveLength(1);
     expect(result?.[0]).toEqual(
@@ -824,13 +964,13 @@ describe("handleCodeAction", () => {
     const actions = await handleCodeAction(
       ctx as never,
       params,
-      testRequestGuard,
+      createContextTestOperation(ctx),
     );
 
     const resolved = await handleCodeActionResolve(
       ctx as never,
       actions![0]!,
-      testRequestGuard,
+      createContextTestOperation(ctx),
     );
 
     expect(ctx.semanticRuntime.templateCodeActions).toHaveBeenCalledTimes(2);
@@ -852,7 +992,7 @@ describe("handleCodeAction", () => {
     const actions = await handleCodeAction(
       ctx as never,
       params,
-      testRequestGuard,
+      createContextTestOperation(ctx),
     );
 
     expect(actions?.[0]?.edit?.documentChanges).toEqual([
@@ -868,7 +1008,7 @@ describe("handleCodeAction", () => {
     const actions = await handleCodeAction(
       ctx as never,
       params,
-      testRequestGuard,
+      createContextTestOperation(ctx),
     );
     ctx.semanticRuntime.templateCodeActions.mockResolvedValueOnce({
       schemaVersion: "0.2",
@@ -882,7 +1022,7 @@ describe("handleCodeAction", () => {
     const resolved = await handleCodeActionResolve(
       ctx as never,
       actions![0]!,
-      testRequestGuard,
+      createContextTestOperation(ctx),
     );
 
     expect(resolved.edit).toBeUndefined();
@@ -895,7 +1035,7 @@ describe("handleCodeAction", () => {
     const ctx = createMockCodeActionContext({ actions: [] });
 
     await expect(
-      handleCodeAction(ctx as never, params, testRequestGuard),
+      handleCodeAction(ctx as never, params, createContextTestOperation(ctx)),
     ).resolves.toBeNull();
   });
 
@@ -935,7 +1075,7 @@ describe("handleCodeAction", () => {
     const result = await handleCodeAction(
       ctx as never,
       params,
-      testRequestGuard,
+      createContextTestOperation(ctx),
     );
 
     expect(result).toBeNull();
@@ -977,7 +1117,7 @@ describe("handleCodeAction", () => {
     const result = await handleCodeAction(
       ctx as never,
       params,
-      testRequestGuard,
+      createContextTestOperation(ctx),
     );
 
     expect(result).toBeNull();
@@ -1017,7 +1157,7 @@ describe("handleCompletion", () => {
     const result = await handleCompletion(
       ctx as never,
       params,
-      testRequestGuard,
+      createContextTestOperation(ctx),
     );
     expect(result.isIncomplete).toBe(false);
     expect(result.items).toHaveLength(2);
@@ -1053,7 +1193,7 @@ describe("handleCompletion", () => {
     const result = await handleCompletion(
       ctx as never,
       params,
-      testRequestGuard,
+      createContextTestOperation(ctx),
     );
     expect(result.isIncomplete).toBe(false);
     expect(result.items.map((item) => item.label)).toEqual(["summary-panel"]);
@@ -1071,7 +1211,7 @@ describe("handleCompletion", () => {
     const result = await handleCompletion(
       ctx as never,
       params,
-      testRequestGuard,
+      createContextTestOperation(ctx),
     );
     expect(result.isIncomplete).toBe(false);
     expect(result.items.map((item) => item.label)).toEqual(["summary-panel"]);
@@ -1083,7 +1223,7 @@ describe("handleCompletion", () => {
     const result = await handleCompletion(
       ctx as never,
       params,
-      testRequestGuard,
+      createContextTestOperation(ctx),
     );
     expect(result).toEqual({ isIncomplete: false, items: [] });
   });
@@ -1095,7 +1235,7 @@ describe("handleCompletion", () => {
     await expect(handleCompletion(
       ctx as never,
       params,
-      testRequestGuard,
+      createContextTestOperation(ctx),
     )).rejects.toThrow("completion failed");
   });
 });
@@ -1109,12 +1249,11 @@ describe("handleHover", () => {
   test("maps semantic-runtime cursor info to hover markdown", async () => {
     const ctx = createMockHoverContext();
 
-    const result = await handleHover(ctx as never, params, testRequestGuard);
+    const result = await handleHover(ctx as never, params, createContextTestOperation(ctx));
 
     expect(ctx.semanticRuntime.templateCursorInfo).toHaveBeenCalledWith(
       expect.objectContaining({ uri: templateUri }),
       params.position,
-      testRequestGuard,
     );
     const contents = result?.contents as { value?: string };
     expect(contents.value).toContain("message: string");
@@ -1134,13 +1273,12 @@ describe("handleDefinition", () => {
     const result = await handleDefinition(
       ctx as never,
       params,
-      testRequestGuard,
+      createContextTestOperation(ctx),
     );
 
     expect(ctx.semanticRuntime.templateCursorInfo).toHaveBeenCalledWith(
       expect.objectContaining({ uri: templateUri }),
       params.position,
-      testRequestGuard,
     );
     expect(Array.isArray(result)).toBe(true);
     const [link] = result as Array<{
@@ -1181,7 +1319,7 @@ describe("handleDefinition", () => {
     const result = await handleDefinition(
       ctx as never,
       params,
-      testRequestGuard,
+      createContextTestOperation(ctx),
     );
 
     expect(ctx.semanticRuntime.templateCursorInfo).toHaveBeenCalled();

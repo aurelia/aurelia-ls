@@ -22,16 +22,6 @@ type DiagnosticHandler = (
 
 function createDiagnosticHarness(programDocument: TextDocument | null = document()) {
   let handler: DiagnosticHandler | undefined;
-  const generation = {
-    requestEpoch: 5,
-    workspaceGeneration: 3,
-    sourceWorldRevision: "semantic-source-world:test",
-    fingerprint: "semantic-runtime:test:workspace-3:source-5",
-  };
-  const requestGuard = vi.fn((isCancellationRequested) => ({
-    requestEpoch: generation.requestEpoch,
-    isCancellationRequested,
-  }));
   const analysisBasis = { revision: "semantic-runtime-analysis:test" };
   const appDiagnostics = vi.fn(async () => ({ analysisBasis, value: { rows: [] } }));
   const authoredSourceOwnership = vi.fn(async () => ({
@@ -50,6 +40,33 @@ function createDiagnosticHarness(programDocument: TextDocument | null = document
     warn: vi.fn(),
     error: vi.fn(),
   };
+  const operation = {
+    documents: {
+      ensureProgramDocument: vi.fn(() => programDocument),
+      lookupText: vi.fn(() => null),
+    },
+    deferEffect: vi.fn((effect: { level?: "log" | "info" | "warn"; message: string }) => {
+      if (effect.level != null) logger[effect.level](effect.message);
+    }),
+    appDiagnostics,
+    authoredSourceOwnership,
+    projectConfigurationDiagnostics,
+  };
+  const runDiagnosticRequest = vi.fn(async (
+    _isCancellationRequested: (() => boolean) | null,
+    request: { previousResultId: string | null },
+    render: (operation: unknown) => Promise<readonly unknown[]>,
+  ) => {
+    if (request.previousResultId === "diagnostic:test") {
+      return { kind: DocumentDiagnosticReportKind.Unchanged, resultId: "diagnostic:test" };
+    }
+    const items = [...await render(operation)];
+    return {
+      kind: DocumentDiagnosticReportKind.Full,
+      resultId: "diagnostic:test",
+      items,
+    };
+  });
   const ctx = {
     connection: {
       languages: {
@@ -59,14 +76,8 @@ function createDiagnosticHarness(programDocument: TextDocument | null = document
       },
     },
     documentUris,
-    ensureProgramDocument: vi.fn(() => programDocument),
-    lookupText: vi.fn(() => null),
     semanticRuntime: {
-      requestGuard,
-      preflight: vi.fn(async () => generation),
-      appDiagnostics,
-      authoredSourceOwnership,
-      projectConfigurationDiagnostics,
+      runDiagnosticRequest,
     },
     logger,
   };
@@ -78,6 +89,7 @@ function createDiagnosticHarness(programDocument: TextDocument | null = document
     appDiagnostics,
     authoredSourceOwnership,
     projectConfigurationDiagnostics,
+    runDiagnosticRequest,
     logger,
     request(params: Partial<DocumentDiagnosticParams> = {}) {
       if (handler == null) {
@@ -99,19 +111,28 @@ describe("document diagnostics handler", () => {
 
     expect(report).toEqual({
       kind: DocumentDiagnosticReportKind.Full,
-      resultId: "semantic-runtime:test:workspace-3:source-5:answer-semantic-runtime-analysis:test:document-7",
+      resultId: "diagnostic:test",
       items: [],
     });
     expect(harness.appDiagnostics).toHaveBeenCalledOnce();
     expect(harness.appDiagnostics).toHaveBeenCalledWith(
       expect.objectContaining({ uri, version: 7 }),
-      expect.objectContaining({ requestEpoch: 5 }),
+    );
+    expect(harness.runDiagnosticRequest).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.objectContaining({
+        uri,
+        identifier: null,
+        previousResultId: null,
+        projectionKey: "lsp-document-diagnostics/v2",
+      }),
+      expect.any(Function),
     );
   });
 
   test("returns unchanged only after revalidating the exact accepted answer basis", async () => {
     const harness = createDiagnosticHarness();
-    const previousResultId = "semantic-runtime:test:workspace-3:source-5:answer-semantic-runtime-analysis:test:document-7";
+    const previousResultId = "diagnostic:test";
 
     const report = await harness.request({ previousResultId });
 
@@ -119,7 +140,7 @@ describe("document diagnostics handler", () => {
       kind: DocumentDiagnosticReportKind.Unchanged,
       resultId: previousResultId,
     });
-    expect(harness.appDiagnostics).toHaveBeenCalledOnce();
+    expect(harness.appDiagnostics).not.toHaveBeenCalled();
   });
 
   test("returns an empty full report when the document no longer exists", async () => {
@@ -129,7 +150,7 @@ describe("document diagnostics handler", () => {
 
     expect(report).toEqual({
       kind: DocumentDiagnosticReportKind.Full,
-      resultId: "semantic-runtime:test:workspace-3:source-5:document-closed",
+      resultId: "diagnostic:test",
       items: [],
     });
     expect(harness.appDiagnostics).not.toHaveBeenCalled();
@@ -149,7 +170,7 @@ describe("document diagnostics handler", () => {
 
     expect(report).toEqual({
       kind: DocumentDiagnosticReportKind.Full,
-      resultId: "semantic-runtime:test:workspace-3:source-5:answer-semantic-runtime-analysis:test:document-7",
+      resultId: "diagnostic:test",
       items: [],
     });
     expect(harness.authoredSourceOwnership).toHaveBeenCalledOnce();
@@ -185,7 +206,7 @@ describe("document diagnostics handler", () => {
 
     expect(report).toEqual({
       kind: DocumentDiagnosticReportKind.Full,
-      resultId: "semantic-runtime:test:workspace-3:source-5:answer-semantic-runtime-analysis:test:document-9",
+      resultId: "diagnostic:test",
       items: [expect.objectContaining({
         code: "aurelia-project-config-unsupported-version",
         range: {

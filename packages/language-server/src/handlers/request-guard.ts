@@ -1,4 +1,7 @@
 import {
+  ManagedSemanticWorkspaceOperationStaleError,
+} from "@aurelia-ls/semantic-runtime";
+import {
   type DiagnosticServerCancellationData,
   LSPErrorCodes,
   ResponseError,
@@ -7,29 +10,32 @@ import {
 import type { ServerContext } from "../context.js";
 import {
   isSemanticRuntimeLspRequestAborted,
-  type SemanticRuntimeLspRequestGuard,
+  SemanticRuntimeLspRequestAbortedError,
+  type SemanticRuntimeLspDiagnosticRenderer,
+  type SemanticRuntimeLspDiagnosticReport,
+  type SemanticRuntimeLspDiagnosticRequest,
+  type SemanticRuntimeLspOperation,
 } from "../runtime/semantic-runtime-session.js";
 import { runServerOperation } from "./lifecycle.js";
 
-export function semanticRuntimeRequestGuard(
-  ctx: ServerContext,
+function semanticRuntimeCancellationProbe(
   token: CancellationToken | undefined,
-): SemanticRuntimeLspRequestGuard {
-  return ctx.semanticRuntime.requestGuard(token == null ? null : () => token.isCancellationRequested);
+): (() => boolean) | null {
+  return token == null ? null : () => token.isCancellationRequested;
 }
 
 export async function runSemanticRuntimeRequest<T>(
   ctx: ServerContext,
   feature: string,
   token: CancellationToken,
-  request: (guard: SemanticRuntimeLspRequestGuard) => T | Promise<T>,
+  request: (operation: SemanticRuntimeLspOperation) => T | Promise<T>,
   uri?: string,
 ): Promise<T> {
   try {
     return await runServerOperation(ctx, () =>
-      request(semanticRuntimeRequestGuard(ctx, token)));
+      ctx.semanticRuntime.runRequest(semanticRuntimeCancellationProbe(token), request));
   } catch (error) {
-    throw requestFailure(ctx, feature, error, uri);
+    throw requestFailure(ctx, feature, cancellationPrecedence(error, token), uri);
   }
 }
 
@@ -38,31 +44,34 @@ export async function runSemanticRuntimeRequest<T>(
  * admits that exact source as authored by at least one project.
  *
  * URI/workspace ownership remains the coarse transport boundary. The runtime
- * answer is the project-specific authority and deliberately uses the same
- * request guard as the feature work, so a topology change cannot race the gate.
+ * answer is the project-specific authority and deliberately belongs to the
+ * same managed operation as feature projection, so topology cannot race the gate.
  */
 export async function runSemanticRuntimeDocumentRequest<T>(
   ctx: ServerContext,
   feature: string,
   token: CancellationToken,
   uri: string,
-  whenNotAuthored: (guard: SemanticRuntimeLspRequestGuard) => T | Promise<T>,
-  request: (guard: SemanticRuntimeLspRequestGuard) => T | Promise<T>,
+  whenNotAuthored: (operation: SemanticRuntimeLspOperation) => T | Promise<T>,
+  request: (operation: SemanticRuntimeLspOperation) => T | Promise<T>,
 ): Promise<T> {
   try {
-    return await runServerOperation(ctx, async () => {
-      const guard = semanticRuntimeRequestGuard(ctx, token);
-      if (!ctx.ownsDocument(uri)) {
-        return await whenNotAuthored(guard);
-      }
-      const ownership = await ctx.semanticRuntime.authoredSourceOwnership(uri, guard);
-      if (ownership.value.owners.length === 0) {
-        return await whenNotAuthored(guard);
-      }
-      return await request(guard);
-    });
+    return await runServerOperation(ctx, () =>
+      ctx.semanticRuntime.runRequest(
+        semanticRuntimeCancellationProbe(token),
+        async (operation) => {
+          if (!ctx.ownsDocument(uri)) {
+            return await whenNotAuthored(operation);
+          }
+          const ownership = await operation.authoredSourceOwnership(uri);
+          if (ownership.value.owners.length === 0) {
+            return await whenNotAuthored(operation);
+          }
+          return await request(operation);
+        },
+      ));
   } catch (error) {
-    throw requestFailure(ctx, feature, error, uri);
+    throw requestFailure(ctx, feature, cancellationPrecedence(error, token), uri);
   }
 }
 
@@ -73,25 +82,30 @@ export async function runSemanticRuntimeDocumentRequest<T>(
  * an in-flight pull must return `ServerCancelled` with `retriggerRequest: true`. The VS Code
  * language client treats generic `ContentModified` as a successful empty fallback instead.
  */
-export async function runSemanticRuntimeDiagnosticRequest<T>(
+export async function runSemanticRuntimeDiagnosticRequest<TItem>(
   ctx: ServerContext,
   token: CancellationToken,
-  request: (guard: SemanticRuntimeLspRequestGuard) => T | Promise<T>,
-  uri: string,
-): Promise<T> {
+  request: SemanticRuntimeLspDiagnosticRequest,
+  render: SemanticRuntimeLspDiagnosticRenderer<TItem>,
+): Promise<SemanticRuntimeLspDiagnosticReport<TItem>> {
   try {
     return await runServerOperation(ctx, () =>
-      request(semanticRuntimeRequestGuard(ctx, token)));
+      ctx.semanticRuntime.runDiagnosticRequest(
+        semanticRuntimeCancellationProbe(token),
+        request,
+        render,
+      ));
   } catch (error) {
-    if (isSemanticRuntimeLspRequestAborted(error) && error.reason === "stale") {
-      ctx.logger.log(`[diagnostics] stale semantic-runtime request for ${uri}`);
+    const failure = cancellationPrecedence(error, token);
+    if (isSemanticRuntimeRequestStale(failure)) {
+      ctx.logger.log(`[diagnostics] stale semantic-runtime request for ${request.uri}`);
       throw new ResponseError<DiagnosticServerCancellationData>(
         LSPErrorCodes.ServerCancelled,
         "Aurelia diagnostics changed while the request was running.",
         { retriggerRequest: true },
       );
     }
-    throw requestFailure(ctx, "diagnostics", error, uri);
+    throw requestFailure(ctx, "diagnostics", failure, request.uri);
   }
 }
 
@@ -114,6 +128,13 @@ export function requestFailure(
       ? `Aurelia ${feature} request was cancelled.`
       : `Aurelia ${feature} request used stale document content.`);
   }
+  if (error instanceof ManagedSemanticWorkspaceOperationStaleError) {
+    ctx.logger.log(`[${feature}] stale semantic-runtime request${location}`);
+    return new ResponseError(
+      LSPErrorCodes.ContentModified,
+      `Aurelia ${feature} request used stale document content.`,
+    );
+  }
 
   const detail = error instanceof Error ? error.stack ?? error.message : String(error);
   ctx.logger.error(`[${feature}] failed${location}: ${detail}`);
@@ -121,4 +142,18 @@ export function requestFailure(
     LSPErrorCodes.RequestFailed,
     `Aurelia ${feature} failed. See the Aurelia language server output for details.`,
   );
+}
+
+function isSemanticRuntimeRequestStale(error: unknown): boolean {
+  return error instanceof ManagedSemanticWorkspaceOperationStaleError
+    || (isSemanticRuntimeLspRequestAborted(error) && error.reason === "stale");
+}
+
+function cancellationPrecedence(
+  error: unknown,
+  token: CancellationToken,
+): unknown {
+  return token.isCancellationRequested && isSemanticRuntimeRequestStale(error)
+    ? new SemanticRuntimeLspRequestAbortedError("cancelled", error)
+    : error;
 }

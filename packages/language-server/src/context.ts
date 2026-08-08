@@ -1,15 +1,16 @@
 import type { Connection, TextDocuments } from "vscode-languageserver/node";
-import { TextDocument } from "vscode-languageserver-textdocument";
-import fs from "node:fs";
+import type { TextDocument } from "vscode-languageserver-textdocument";
 import { NodeSemanticRuntimeProjectInputHost } from "@aurelia-ls/semantic-runtime";
 import type { Logger } from "./services/types.js";
 import { OpenDocumentSourceTextOverlay } from "./runtime/open-document-source-text-overlay.js";
-import { SemanticRuntimeLspSession } from "./runtime/semantic-runtime-session.js";
+import {
+  SemanticRuntimeLspSession,
+  type SemanticRuntimeLspOpenDocumentMetadata,
+} from "./runtime/semantic-runtime-session.js";
 import {
   WorkspaceDocumentUris,
   type DocumentUri,
 } from "./utils/document-uri.js";
-import { languageIdForSource } from "./utils/document-kind.js";
 
 /**
  * Shared server context passed to all handlers.
@@ -34,12 +35,12 @@ export interface ServerContext {
   ): void;
 
   ownsDocument(uri: DocumentUri): boolean;
-  /** Synchronized open text anywhere in the coarse workspace, including hard-excluded dependency roots. */
-  openWorkspaceDocument(uri: DocumentUri): TextDocument | null;
-  openDocument(uri: DocumentUri): TextDocument | null;
-  ensureProgramDocument(uri: string): TextDocument | null;
-  lookupDocumentSnapshot(uri: DocumentUri): DocumentSnapshot | null;
-  lookupText(uri: DocumentUri): string | null;
+  /**
+   * Find synchronized open-document metadata anywhere in the coarse workspace,
+   * including hard-excluded dependency roots. Semantic handlers must read text
+   * through their operation-owned document facade instead of this lifecycle helper.
+   */
+  openWorkspaceDocument(uri: DocumentUri): SemanticRuntimeLspOpenDocumentMetadata | null;
 }
 
 export interface ServerClientSupport {
@@ -48,13 +49,6 @@ export interface ServerClientSupport {
   inlayHintRefresh: boolean;
   semanticTokensRefresh: boolean;
   diagnosticRefresh: boolean;
-}
-
-export interface DocumentSnapshot {
-  readonly uri: DocumentUri;
-  readonly languageId: string;
-  readonly version: number | null;
-  readonly text: string;
 }
 
 export interface ServerContextInit {
@@ -74,6 +68,19 @@ export function createServerContext(init: ServerContextInit): ServerContext {
       sourceTextOverlay,
     ),
     projectInputCurrentnessPolicy: sourceTextOverlay,
+    openDocumentMetadata: (uri) => openWorkspaceDocument(uri),
+    publishEffect: (effect) => {
+      switch (effect.kind) {
+        case "log":
+          logger[effect.level](effect.message);
+          return;
+        case "show-message":
+          return connection.sendNotification("window/showMessage", {
+            type: effect.type,
+            message: effect.message,
+          });
+      }
+    },
   });
   const clientSupport: ServerClientSupport = {
     configurationPull: false,
@@ -83,71 +90,24 @@ export function createServerContext(init: ServerContextInit): ServerContext {
     diagnosticRefresh: false,
   };
 
-  function ensureProgramDocument(uri: string): TextDocument | null {
-    const live = openDocument(uri);
-    if (live) {
-      return live;
-    }
-    const snapshot = lookupDocumentSnapshot(uri);
-    return snapshot == null
-      ? null
-      : TextDocument.create(snapshot.uri, snapshot.languageId, snapshot.version ?? 0, snapshot.text);
-  }
-
-  function lookupDocumentSnapshot(uri: DocumentUri): DocumentSnapshot | null {
-    if (!documentUris.ownsDocument(uri)) {
-      return null;
-    }
-    return lookupWorkspaceDocumentSnapshot(uri);
-  }
-
-  function lookupWorkspaceDocumentSnapshot(uri: DocumentUri): DocumentSnapshot | null {
+  function openWorkspaceDocument(
+    uri: DocumentUri,
+  ): SemanticRuntimeLspOpenDocumentMetadata | null {
     if (documentUris.workspaceHostPath(uri) == null) {
       return null;
     }
-    const live = openWorkspaceDocument(uri);
-    if (live) {
-      return {
-        uri: live.uri,
-        languageId: live.languageId,
-        version: live.version,
-        text: live.getText(),
-      };
-    }
-    const resolved = documentUris.resolve(uri);
-    if (resolved.hostPath == null || !fs.existsSync(resolved.hostPath)) {
-      return null;
-    }
-    const text = fs.readFileSync(resolved.hostPath, "utf8");
+    const document = sourceTextOverlay.openDocument(uri);
+    return document == null ? null : openDocumentMetadata(document);
+  }
+
+  function openDocumentMetadata(
+    document: TextDocument,
+  ): SemanticRuntimeLspOpenDocumentMetadata {
     return {
-      uri: resolved.uri,
-      languageId: languageIdForSource(resolved.hostPath),
-      version: null,
-      text,
+      uri: document.uri,
+      languageId: document.languageId,
+      version: document.version,
     };
-  }
-
-  function lookupText(uri: DocumentUri): string | null {
-    return lookupWorkspaceDocumentSnapshot(uri)?.text ?? null;
-  }
-
-  function openDocument(uri: DocumentUri): TextDocument | null {
-    if (!documentUris.ownsDocument(uri)) {
-      return null;
-    }
-    return openWorkspaceDocument(uri);
-  }
-
-  function openWorkspaceDocument(uri: DocumentUri): TextDocument | null {
-    if (documentUris.workspaceHostPath(uri) == null) {
-      return null;
-    }
-    const direct = documents.get(uri);
-    if (direct) {
-      return direct;
-    }
-    const resolved = documentUris.resolve(uri);
-    return documents.all().find((doc) => documentUris.sameDocument(doc.uri, resolved.uri)) ?? null;
   }
 
   return {
@@ -161,6 +121,7 @@ export function createServerContext(init: ServerContextInit): ServerContext {
     get workspaceRoot() { return documentUris.workspaceRoot; },
     configureWorkspace(rootUri, excludedRootUris = [], projectRootHintUris = []) {
       documentUris.configure(rootUri, excludedRootUris);
+      sourceTextOverlay.reindexOpenDocuments();
       const projectRootHints = projectRootHintUris.map((uri) => {
         const hostPath = documentUris.workspaceHostPath(uri);
         if (hostPath == null) {
@@ -174,9 +135,5 @@ export function createServerContext(init: ServerContextInit): ServerContext {
 
     ownsDocument: (uri) => documentUris.ownsDocument(uri),
     openWorkspaceDocument,
-    openDocument,
-    ensureProgramDocument,
-    lookupDocumentSnapshot,
-    lookupText,
   };
 }

@@ -1,6 +1,10 @@
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import {
+  ManagedSemanticWorkspaceOperationStaleError,
+  SemanticSourceWorldCurrentnessKind,
+} from "@aurelia-ls/semantic-runtime";
+import {
   ErrorCodes,
   FileChangeType,
 } from "vscode-languageserver/node";
@@ -11,6 +15,7 @@ import {
   registerLifecycleHandlers,
   runServerOperation,
 } from "../../src/handlers/lifecycle.js";
+import { SemanticRuntimeLspRequestAbortedError } from "../../src/runtime/semantic-runtime-session.js";
 import { WorkspaceDocumentUris } from "../../src/utils/document-uri.js";
 
 const workspaceRoot = path.resolve("test-workspace");
@@ -22,8 +27,10 @@ function workspaceFileUri(relativePath: string): string {
 
 function createGeneration(sourceGeneration = 0, workspaceGeneration = 0) {
   return {
+    requestEpoch: sourceGeneration,
     workspaceGeneration,
     sourceGeneration,
+    sourceWorldRevision: `source-world:${sourceGeneration}`,
     fingerprint: `semantic-runtime:test:workspace-${workspaceGeneration}:source-${sourceGeneration}`,
   };
 }
@@ -60,9 +67,10 @@ function createLifecycleHarness() {
       generation = createGeneration(generation.sourceGeneration + 1, generation.workspaceGeneration);
       return generation;
     }),
-    requestGuard: vi.fn(() => ({ requestEpoch: generation.sourceGeneration, isCancellationRequested: null })),
-    preflight: vi.fn(async () => generation),
-    currentGeneration: vi.fn(() => generation),
+    runRequest: vi.fn(async (
+      _isCancellationRequested: (() => boolean) | null,
+      request: (operation: { readonly generation: ReturnType<typeof createGeneration> }) => unknown,
+    ) => await request({ generation })),
     invalidateRequests: vi.fn(() => {
       generation = createGeneration(generation.sourceGeneration + 1, generation.workspaceGeneration);
     }),
@@ -348,6 +356,102 @@ describe("document source authority", () => {
       );
       expect(harness.connection.languages.semanticTokens.refresh).toHaveBeenCalledOnce();
       expect(harness.connection.languages.diagnostics.refresh).toHaveBeenCalledOnce();
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  test("publishes no analysis effects until managed egress accepts the generation", async () => {
+    vi.useFakeTimers();
+    try {
+      const harness = createLifecycleHarness();
+      harness.clientSupport.diagnosticRefresh = true;
+      harness.clientSupport.semanticTokensRefresh = true;
+      const egress = deferred<void>();
+      harness.semanticRuntime.runRequest.mockImplementationOnce(async (_probe, request) => {
+        const value = await request({ generation: createGeneration(1) });
+        await egress.promise;
+        return value;
+      });
+
+      harness.synchronize(document());
+      await vi.advanceTimersByTimeAsync(300);
+      await settleAsyncWork();
+
+      expect(harness.semanticRuntime.runRequest).toHaveBeenCalledOnce();
+      expect(harness.connection.sendNotification).not.toHaveBeenCalled();
+      expect(harness.connection.languages.diagnostics.refresh).not.toHaveBeenCalled();
+      expect(harness.connection.languages.semanticTokens.refresh).not.toHaveBeenCalled();
+
+      egress.resolve(undefined);
+      await settleAsyncWork();
+
+      expect(harness.connection.sendNotification).toHaveBeenCalledOnce();
+      expect(harness.connection.languages.diagnostics.refresh).toHaveBeenCalledOnce();
+      expect(harness.connection.languages.semanticTokens.refresh).toHaveBeenCalledOnce();
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  test("discards a stale managed generation and retries from a new ingress", async () => {
+    vi.useFakeTimers();
+    try {
+      const harness = createLifecycleHarness();
+      harness.clientSupport.diagnosticRefresh = true;
+      harness.semanticRuntime.runRequest.mockImplementationOnce(async (_probe, request) => {
+        await request({ generation: createGeneration(1) });
+        throw lspStaleError(managedStaleError(SemanticSourceWorldCurrentnessKind.FreshBootRequired));
+      });
+
+      harness.synchronize(document());
+      await vi.advanceTimersByTimeAsync(300);
+      await settleAsyncWork();
+
+      expect(harness.semanticRuntime.runRequest).toHaveBeenCalledOnce();
+      expect(harness.connection.sendNotification).not.toHaveBeenCalled();
+      expect(harness.connection.languages.diagnostics.refresh).not.toHaveBeenCalled();
+      expect(harness.ctx.logger.error).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(300);
+      await settleAsyncWork();
+
+      expect(harness.semanticRuntime.runRequest).toHaveBeenCalledTimes(2);
+      expect(harness.connection.sendNotification).toHaveBeenCalledOnce();
+      expect(harness.connection.sendNotification).toHaveBeenCalledWith(
+        "aurelia/analysisChanged",
+        expect.objectContaining({ changeKind: "topology" }),
+      );
+      expect(harness.connection.languages.diagnostics.refresh).toHaveBeenCalledOnce();
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  test("retries a request-epoch stale analysis without escalating its change kind", async () => {
+    vi.useFakeTimers();
+    try {
+      const harness = createLifecycleHarness();
+      harness.semanticRuntime.runRequest.mockRejectedValueOnce(
+        new SemanticRuntimeLspRequestAbortedError("stale"),
+      );
+
+      harness.synchronize(document());
+      await vi.advanceTimersByTimeAsync(300);
+      await settleAsyncWork();
+      expect(harness.connection.sendNotification).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(300);
+      await settleAsyncWork();
+
+      expect(harness.connection.sendNotification).toHaveBeenCalledWith(
+        "aurelia/analysisChanged",
+        expect.objectContaining({ changeKind: "source-text" }),
+      );
+      expect(harness.ctx.logger.error).not.toHaveBeenCalled();
     } finally {
       vi.clearAllTimers();
       vi.useRealTimers();
@@ -674,6 +778,35 @@ describe("configuration and shutdown", () => {
     }
   });
 
+  test("suppresses analysis effects when shutdown begins during managed egress", async () => {
+    vi.useFakeTimers();
+    try {
+      const harness = createLifecycleHarness();
+      harness.clientSupport.diagnosticRefresh = true;
+      const egress = deferred<void>();
+      harness.semanticRuntime.runRequest.mockImplementationOnce(async (_probe, request) => {
+        const value = await request({ generation: createGeneration(1) });
+        await egress.promise;
+        return value;
+      });
+      harness.synchronize(document());
+
+      await vi.advanceTimersByTimeAsync(300);
+      await settleAsyncWork();
+      expect(harness.semanticRuntime.runRequest).toHaveBeenCalledOnce();
+
+      await harness.handlers.shutdown?.();
+      egress.resolve(undefined);
+      await settleAsyncWork();
+
+      expect(harness.connection.sendNotification).not.toHaveBeenCalled();
+      expect(harness.connection.languages.diagnostics.refresh).not.toHaveBeenCalled();
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
   test("does not let an unanswered client refresh acknowledgement block shutdown", async () => {
     vi.useFakeTimers();
     try {
@@ -702,6 +835,35 @@ async function settleAsyncWork(): Promise<void> {
   for (let index = 0; index < 8; index += 1) {
     await Promise.resolve();
   }
+}
+
+function deferred<T>(): {
+  readonly promise: Promise<T>;
+  readonly resolve: (value: T) => void;
+} {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((settle) => { resolve = settle; });
+  return { promise, resolve };
+}
+
+function managedStaleError(
+  currentnessKind: SemanticSourceWorldCurrentnessKind.FreshBootRequired | null = null,
+): ManagedSemanticWorkspaceOperationStaleError {
+  return new ManagedSemanticWorkspaceOperationStaleError({
+    message: "Managed semantic operation became stale.",
+    reason: currentnessKind == null ? "analysis-currentness-changed" : "source-world-changed",
+    currentnessKind,
+    previousSourceWorldRevision: "source-world:1",
+    nextSourceWorldRevision: currentnessKind == null ? "source-world:1" : "source-world:2",
+    analysisBasisRevision: currentnessKind == null ? "analysis-basis:1" : null,
+    changedReadKeys: [],
+    changedFacets: [],
+    changedSemanticFactKeys: currentnessKind == null ? ["semantic-domain:test"] : [],
+  });
+}
+
+function lspStaleError(cause: unknown): SemanticRuntimeLspRequestAbortedError {
+  return new SemanticRuntimeLspRequestAbortedError("stale", cause);
 }
 
 async function waitFor(predicate: () => boolean, timeoutMs = 2_000): Promise<void> {

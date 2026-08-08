@@ -7,7 +7,10 @@ import {
   handleSourceOwnership,
   handleWorkspaceStatus,
 } from "../../src/handlers/custom.js";
-import { testAnalysisGeneration, testRequestGuard } from "./test-request-guard.js";
+import {
+  createContextTestOperation,
+  testAnalysisGeneration,
+} from "./test-request-guard.js";
 import { testWorkspaceDocumentUris } from "./test-document-uris.js";
 
 const defaultWorkspaceRoot = "/test/workspace";
@@ -53,7 +56,6 @@ function createMockContext(overrides: Record<string, unknown> = {}) {
       all: vi.fn(() => []),
     },
     semanticRuntime: {
-      preflight: vi.fn(() => Promise.resolve(testAnalysisGeneration)),
       authoredSourceOwnership: vi.fn(() => Promise.resolve({
         schemaVersion: "0.2",
         result: "answered",
@@ -164,7 +166,7 @@ describe("handleSourceOwnership", () => {
     const ctx = createMockContext();
     const uri = ctx.documentUris.uriForWorkspaceRelativePath("src/app.ts")!;
 
-    const response = await handleSourceOwnership(ctx as never, { uri }, testRequestGuard);
+    const response = await handleSourceOwnership(ctx as never, { uri }, createContextTestOperation(ctx));
 
     expect(response).toEqual({
       fingerprint: testAnalysisGeneration.fingerprint,
@@ -188,15 +190,15 @@ describe("handleSourceOwnership", () => {
 describe("handleWorkspaceStatus", () => {
   test("returns the semantic-runtime summary envelope without reclassifying project shape", async () => {
     const ctx = createMockContext();
-    const guard = testRequestGuard;
+    const operation = createContextTestOperation(ctx);
 
     const configUri = defaultDocumentUris.uriForHostPath("/test/workspace/aurelia.project.json");
     const response = await handleWorkspaceStatus(ctx as never, {
       nativeProjectConfigurationUris: [configUri],
-    }, guard);
+    }, operation);
 
-    expect(ctx.semanticRuntime.workspaceSummary).toHaveBeenCalledWith(guard);
-    expect(ctx.semanticRuntime.nativeProjectConfigurations).toHaveBeenCalledWith([configUri], guard);
+    expect(ctx.semanticRuntime.workspaceSummary).toHaveBeenCalledWith();
+    expect(ctx.semanticRuntime.nativeProjectConfigurations).toHaveBeenCalledWith([configUri]);
     expect(response?.fingerprint).toBe(testAnalysisGeneration.fingerprint);
     expect(response?.projectAnalysisCounts).toEqual([{ analysisKind: "app-world", count: 1 }]);
     expect(response?.nativeProjectConfigurations.rows).toEqual([{
@@ -299,7 +301,7 @@ describe("handleRenameFromTs", () => {
         position: { line: 0, character: 12 },
         newName: "heading",
       },
-      testRequestGuard,
+      createContextTestOperation(ctx),
     );
 
     expect(
@@ -307,7 +309,6 @@ describe("handleRenameFromTs", () => {
     ).toHaveBeenCalledWith(
       tsDocument,
       { line: 0, character: 12 },
-      testRequestGuard,
       "heading",
     );
     expect(result).toMatchObject({
@@ -386,7 +387,7 @@ describe("handleRenameFromTs", () => {
     const result = await handleRenameFromTs(
       ctx as never,
       { uri: tsDocument.uri, position: { line: 0, character: 13 } },
-      testRequestGuard,
+      createContextTestOperation(ctx),
     );
 
     expect(result).toEqual({
@@ -404,7 +405,6 @@ describe("handleRenameFromTs", () => {
     expect(ctx.semanticRuntime.templateRenameFromTypeScript).toHaveBeenCalledWith(
       tsDocument,
       { line: 0, character: 13 },
-      testRequestGuard,
       null,
     );
   });
@@ -449,7 +449,7 @@ describe("handleRenameFromTs", () => {
         position: { line: 0, character: 12 },
         newName: "heading",
       },
-      testRequestGuard,
+      createContextTestOperation(ctx),
     );
 
     expect(result).toMatchObject({
@@ -520,7 +520,7 @@ describe("handleRenameFromTs", () => {
         position: { line: 0, character: 12 },
         newName: "heading",
       },
-      testRequestGuard,
+      createContextTestOperation(ctx),
     );
 
     expect(result).toMatchObject({

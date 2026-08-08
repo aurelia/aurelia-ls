@@ -21,24 +21,20 @@ import type {
 } from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
 import { semanticSourceOffsetRangeForDocument } from "../mapping/source-locations.js";
-import type { SemanticRuntimeLspRequestGuard } from "../runtime/semantic-runtime-session.js";
+import type { SemanticRuntimeLspOperation } from "../runtime/semantic-runtime-session.js";
 import { isTemplateDocument } from "../utils/document-kind.js";
 
 export async function handleInlayHints(
-  ctx: ServerContext,
+  _ctx: ServerContext,
   params: InlayHintParams,
-  guard: SemanticRuntimeLspRequestGuard,
+  operation: SemanticRuntimeLspOperation,
 ): Promise<InlayHint[] | null> {
   const uri = params.textDocument.uri;
-  const doc = ctx.ensureProgramDocument(uri);
+  const doc = operation.documents.ensureProgramDocument(uri);
   if (!doc) return null;
   if (!isTemplateDocument(doc)) return null;
-  if (!await bindingModeInlayHintsEnabled(ctx, uri)) return null;
 
-  const answer = await ctx.semanticRuntime.templateInlayHints(
-    doc,
-    guard,
-  );
+  const answer = await operation.templateInlayHints(doc);
   const hints = answer.value.rows
     .map((row) => mapSemanticRuntimeTemplateInlayHint(row, doc, params))
     .filter((hint): hint is InlayHint => hint != null);
@@ -46,7 +42,11 @@ export async function handleInlayHints(
   return hints.length > 0 ? hints : null;
 }
 
-async function bindingModeInlayHintsEnabled(ctx: ServerContext, uri: string): Promise<boolean> {
+/** Pull resource-scoped presentation policy before admitting managed semantic work. */
+export async function bindingModeInlayHintsEnabled(
+  ctx: ServerContext,
+  uri: string,
+): Promise<boolean> {
   if (!ctx.clientSupport.configurationPull) return false;
   try {
     const value = await ctx.connection.workspace.getConfiguration({

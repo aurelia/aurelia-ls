@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { handleSelectionRanges } from "../../src/handlers/selection-ranges.js";
-import { testRequestGuard } from "./test-request-guard.js";
+import { createTestOperation } from "./test-request-guard.js";
 import { testWorkspaceDocumentUris } from "./test-document-uris.js";
 
 const documentUris = testWorkspaceDocumentUris("/app");
@@ -28,24 +28,27 @@ function source(start: number, end: number) {
 }
 
 function createMockContext(value: Record<string, unknown>) {
+  const templateCursorInfo = vi.fn(() =>
+    Promise.resolve({
+      schemaVersion: "0.2",
+      result: "answered",
+      selection: "not-applicable",
+      coverage: "complete",
+      summary: "mock",
+      value,
+      page: null,
+    }),
+  );
+  const operation = createTestOperation({
+    documents: { ensureProgramDocument: () => doc },
+    templateCursorInfo,
+  });
   return {
     workspaceRoot: documentUris.workspaceRoot,
     documentUris,
     logger: { log: vi.fn(), info: vi.fn(), error: vi.fn(), warn: vi.fn() },
-    ensureProgramDocument: vi.fn(() => doc),
-    semanticRuntime: {
-      templateCursorInfo: vi.fn(() =>
-        Promise.resolve({
-          schemaVersion: "0.2",
-          result: "answered",
-          selection: "not-applicable",
-          coverage: "complete",
-          summary: "mock",
-          value,
-          page: null,
-        }),
-      ),
-    },
+    operation,
+    templateCursorInfo,
   };
 }
 
@@ -113,13 +116,12 @@ describe("runtime-backed selection ranges", () => {
         textDocument: { uri },
         positions: [position],
       },
-      testRequestGuard,
+      ctx.operation,
     );
 
-    expect(ctx.semanticRuntime.templateCursorInfo).toHaveBeenCalledWith(
+    expect(ctx.templateCursorInfo).toHaveBeenCalledWith(
       doc,
       position,
-      testRequestGuard,
     );
     expect(result).toHaveLength(1);
     expect(result?.[0]?.range).toEqual(range(titleStart, titleEnd));
@@ -161,7 +163,7 @@ describe("runtime-backed selection ranges", () => {
         textDocument: { uri },
         positions: [doc.positionAt(titleStart + 2)],
       },
-      testRequestGuard,
+      ctx.operation,
     );
 
     expect(result).toBeNull();

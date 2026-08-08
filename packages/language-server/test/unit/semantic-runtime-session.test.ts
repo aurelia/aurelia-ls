@@ -5,13 +5,13 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import {
   InquiryContinuationKind,
+  ManagedSemanticWorkspaceOperationReceipt,
   NodeSemanticRuntimeProjectInputHost,
   SEMANTIC_RUNTIME_API_VERSION,
   SemanticAppQueryKind,
   SemanticRuntimeAnswerCoverage,
   SemanticRuntimeAnswerResult,
   SemanticRuntimeAnswerSelection,
-  type SemanticRuntime,
   type SemanticRuntimeAnswer,
   type SemanticRuntimeContinuationRow,
 } from "@aurelia-ls/semantic-runtime";
@@ -22,15 +22,24 @@ import {
 } from "../../src/runtime/semantic-runtime-session.js";
 import {
   OpenDocumentSourceTextOverlay,
+  type OpenTextDocumentListener,
   type OpenTextDocumentStore,
 } from "../../src/runtime/open-document-source-text-overlay.js";
 import { WorkspaceDocumentUris } from "../../src/utils/document-uri.js";
 
 class TestDocumentStore implements OpenTextDocumentStore {
   private readonly documents = new Map<string, TextDocument>();
+  private readonly openListeners: OpenTextDocumentListener[] = [];
+  private readonly changeListeners: OpenTextDocumentListener[] = [];
+  private readonly closeListeners: OpenTextDocumentListener[] = [];
 
   add(document: TextDocument): void {
+    const wasOpen = this.documents.has(document.uri);
     this.documents.set(document.uri, document);
+    if (!wasOpen) {
+      for (const listener of this.openListeners) listener({ document });
+    }
+    for (const listener of this.changeListeners) listener({ document });
   }
 
   get(uri: string): TextDocument | undefined {
@@ -40,6 +49,18 @@ class TestDocumentStore implements OpenTextDocumentStore {
   all(): TextDocument[] {
     return [...this.documents.values()];
   }
+
+  onDidOpen(listener: OpenTextDocumentListener): void {
+    this.openListeners.push(listener);
+  }
+
+  onDidChangeContent(listener: OpenTextDocumentListener): void {
+    this.changeListeners.push(listener);
+  }
+
+  onDidClose(listener: OpenTextDocumentListener): void {
+    this.closeListeners.push(listener);
+  }
 }
 
 describe("SemanticRuntimeLspSession", () => {
@@ -47,7 +68,7 @@ describe("SemanticRuntimeLspSession", () => {
     const fixtureRoot = minimalFixtureRoot();
     const session = createSession(fixtureRoot, new TestDocumentStore());
 
-    const fingerprint = (await session.preflight(session.requestGuard(null))).fingerprint;
+    const fingerprint = (await session.runRequest(null, (operation) => operation.generation)).fingerprint;
 
     expect(fingerprint).toMatch(/^semantic-runtime:[^:]+:workspace-\d+:source-world-.+:request-\d+$/);
     expect(fingerprint).not.toContain(fixtureRoot);
@@ -81,13 +102,10 @@ describe("SemanticRuntimeLspSession", () => {
     documents.add(tsDocument);
 
     const session = createSession(fixtureRoot, documents);
-    const guard = session.requestGuard(null);
-
-    const answer = await session.templateCompletions(
+    const answer = await session.runRequest(null, (operation) => operation.templateCompletions(
       htmlDocument,
       positionAfter(htmlText, "${t"),
-      guard,
-    );
+    ));
     const candidateNames = answer.value.candidates.map(
       (candidate) => candidate.name,
     );
@@ -123,13 +141,10 @@ describe("SemanticRuntimeLspSession", () => {
     documents.add(TextDocument.create(tsUri, "typescript", 2, tsText));
 
     const session = createSession(fixtureRoot, documents);
-    const firstGuard = session.requestGuard(null);
-
-    const firstAnswer = await session.templateCompletions(
+    const firstAnswer = await session.runRequest(null, (operation) => operation.templateCompletions(
       documents.get(htmlUri)!,
       positionAfter(htmlText, "${t"),
-      firstGuard,
-    );
+    ));
     expect(
       firstAnswer.value.candidates.map((candidate) => candidate.name),
     ).toContain("title");
@@ -146,13 +161,10 @@ describe("SemanticRuntimeLspSession", () => {
     documents.add(TextDocument.create(htmlUri, "html", 3, nextHtmlText));
     documents.add(TextDocument.create(tsUri, "typescript", 3, nextTsText));
     session.recordSourceTextChanged([htmlPath, tsPath]);
-    const secondGuard = session.requestGuard(null);
-
-    const secondAnswer = await session.templateCompletions(
+    const secondAnswer = await session.runRequest(null, (operation) => operation.templateCompletions(
       documents.get(htmlUri)!,
       positionAfter(nextHtmlText, "${h"),
-      secondGuard,
-    );
+    ));
     const candidateNames = secondAnswer.value.candidates.map(
       (candidate) => candidate.name,
     );
@@ -169,10 +181,8 @@ describe("SemanticRuntimeLspSession", () => {
     const documents = new TestDocumentStore();
     const session = createSession(fixtureRoot, documents);
 
-    const answer = await session.authoredSourceOwnership(
-      appUri,
-      session.requestGuard(null),
-    );
+    const answer = await session.runRequest(null, (operation) =>
+      operation.authoredSourceOwnership(appUri));
 
     expect(answer.value.sourceFilePath).toBe(path.normalize(appPath));
     expect(answer.value.owners).toEqual([
@@ -190,18 +200,16 @@ describe("SemanticRuntimeLspSession", () => {
     const appPath = path.join(hintedRoot, "app.ts");
     const appUri = pathToFileURL(appPath).toString();
     const session = createSession(fixtureRoot, new TestDocumentStore());
-    const beforeHint = session.requestGuard(null);
-    const beforeHintGeneration = await session.preflight(beforeHint);
+    const beforeHintGeneration = await session.runRequest(null, (operation) => operation.generation);
 
     session.configureWorkspace([hintedRoot]);
-    expect(session.isCurrentGeneration(beforeHintGeneration)).toBe(false);
-    const normalizedHintGeneration = await session.preflight(session.requestGuard(null));
+    const hintedGeneration = await session.runRequest(null, (operation) => operation.generation);
+    expect(hintedGeneration.requestEpoch).not.toBe(beforeHintGeneration.requestEpoch);
     session.configureWorkspace([path.join(hintedRoot, "."), hintedRoot]);
-    expect(session.isCurrentGeneration(normalizedHintGeneration)).toBe(true);
-    const answer = await session.authoredSourceOwnership(
-      appUri,
-      session.requestGuard(null),
-    );
+    const normalizedHintGeneration = await session.runRequest(null, (operation) => operation.generation);
+    expect(normalizedHintGeneration).toEqual(hintedGeneration);
+    const answer = await session.runRequest(null, (operation) =>
+      operation.authoredSourceOwnership(appUri));
 
     expect(answer.value.owners).toEqual([
       expect.objectContaining({
@@ -220,10 +228,8 @@ describe("SemanticRuntimeLspSession", () => {
     documents.add(TextDocument.create(configUri, "json", 1, configText));
     const session = createSession(fixtureRoot, documents);
 
-    const answer = await session.projectConfigurationDiagnostics(
-      configUri,
-      session.requestGuard(null),
-    );
+    const answer = await session.runRequest(null, (operation) =>
+      operation.projectConfigurationDiagnostics(configUri));
 
     expect(answer.value.rows).toEqual([
       expect.objectContaining({
@@ -257,11 +263,10 @@ describe("SemanticRuntimeLspSession", () => {
     documents.add(TextDocument.create(tsUri, "typescript", 2, tsText));
     const session = createSession(fixtureRoot, documents);
 
-    const answer = await session.templateCompletions(
+    const answer = await session.runRequest(null, (operation) => operation.templateCompletions(
       htmlDocument,
       positionAfter(htmlText, "${candidate"),
-      session.requestGuard(null),
-    );
+    ));
     const names = answer.value.candidates.map((candidate) => candidate.name);
 
     expect(answer.page).toBeNull();
@@ -284,14 +289,12 @@ describe("SemanticRuntimeLspSession", () => {
     const documents = new TestDocumentStore();
     documents.add(document);
     const session = createSession(fixtureRoot, documents);
-    const guard = session.requestGuard(() => true);
+    const callback = vi.fn();
 
     await expect(
-      session.templateCompletions(document, { line: 0, character: 13 }, guard),
-    ).rejects.toSatisfy(isSemanticRuntimeLspRequestAborted);
-    await expect(
-      session.templateCompletions(document, { line: 0, character: 13 }, guard),
+      session.runRequest(() => true, callback),
     ).rejects.toMatchObject({ reason: "cancelled" });
+    expect(callback).not.toHaveBeenCalled();
   });
 
   test("aborts a request captured before a source generation change", async () => {
@@ -308,71 +311,317 @@ describe("SemanticRuntimeLspSession", () => {
     const documents = new TestDocumentStore();
     documents.add(document);
     const session = createSession(fixtureRoot, documents);
-    const guard = session.requestGuard(null);
-
-    session.recordSourceTextChanged([path.join(fixtureRoot, "src/app.html")]);
 
     await expect(
-      session.templateCompletions(document, { line: 0, character: 13 }, guard),
-    ).rejects.toSatisfy(isSemanticRuntimeLspRequestAborted);
-    await expect(
-      session.templateCompletions(document, { line: 0, character: 13 }, guard),
+      session.runRequest(null, (operation) => {
+        session.recordSourceTextChanged([path.join(fixtureRoot, "src/app.html")]);
+        return operation.templateCompletions(document, { line: 0, character: 13 });
+      }),
     ).rejects.toMatchObject({ reason: "stale" });
+  });
+
+  test("does not return an accepted result when the final deferred effect closes the session", async () => {
+    const fixtureRoot = minimalFixtureRoot();
+    let session!: SemanticRuntimeLspSession;
+    session = createSession(
+      fixtureRoot,
+      new TestDocumentStore(),
+      async () => session.dispose(),
+    );
+
+    await expect(session.runRequest(null, (operation) => {
+      operation.deferEffect({ kind: "log", level: "info", message: "accepted effect" });
+      return "accepted result";
+    })).rejects.toMatchObject({ reason: "stale" });
   });
 
   test("requests resource definitions without handles and keeps inventory type surfaces caller-selected", async () => {
     const session = createSession(minimalFixtureRoot(), new TestDocumentStore());
-    const guard = session.requestGuard(null);
-    await session.preflight(guard);
-    const runtime = await (Reflect.get(session, "runtime") as Promise<SemanticRuntime>);
-    const answerAppQuery = vi.spyOn(runtime, "answerAppQuery").mockResolvedValue(
-      rowPageAnswer(
-        [],
-        null,
-        null,
-        true,
-        [],
-        {
-          result: SemanticRuntimeAnswerResult.Answered,
-          selection: SemanticRuntimeAnswerSelection.Exact,
-          coverage: SemanticRuntimeAnswerCoverage.Complete,
-        },
-        0,
-      ) as never,
+    const result = await session.runRequest(null, async (operation) => {
+      const summary = await operation.workspaceSummary();
+      const projectKey = summary.value.appCandidates[0]?.projectKey;
+      if (projectKey == null) {
+        throw new Error("Expected the fixture to expose one app candidate.");
+      }
+      const definitions = await operation.resourceDefinitions();
+      const compact = await operation.resourceInventory(projectKey, false);
+      const rich = await operation.resourceInventory(projectKey, true);
+      return {
+        definitionRows: definitions.value.rows.length,
+        definitionsHaveHandles: definitions.value.rows.some((row) =>
+          Object.hasOwn(row, "handles")),
+        compactTypeSurfacesIncluded: compact.value.typeSurfacesIncluded,
+        richTypeSurfacesIncluded: rich.value.typeSurfacesIncluded,
+      };
+    });
+
+    expect(result.definitionRows).toBeGreaterThan(0);
+    expect(result.definitionsHaveHandles).toBe(false);
+    expect(result.compactTypeSurfacesIncluded).toBe(false);
+    expect(result.richTypeSurfacesIncluded).toBe(true);
+  });
+});
+
+describe("SemanticRuntimeLspSession diagnostic receipt cache", () => {
+  test("does not retain a proof when the final deferred effect closes the session", async () => {
+    const fixtureRoot = minimalFixtureRoot();
+    const htmlPath = path.join(fixtureRoot, "src/app.html");
+    const htmlUri = pathToFileURL(htmlPath).toString();
+    const documents = new TestDocumentStore();
+    documents.add(TextDocument.create(htmlUri, "html", 1, fs.readFileSync(htmlPath, "utf8")));
+    let session!: SemanticRuntimeLspSession;
+    session = createSession(fixtureRoot, documents, async () => session.dispose());
+
+    await expect(session.runDiagnosticRequest(
+      null,
+      diagnosticRequest(htmlUri),
+      (operation) => {
+        operation.documents.ensureProgramDocument(htmlUri);
+        operation.deferEffect({ kind: "log", level: "info", message: "accepted diagnostic" });
+        return [];
+      },
+    )).rejects.toMatchObject({ reason: "stale" });
+
+    const cache = Reflect.get(session, "diagnosticCache") as Map<string, unknown>;
+    expect(cache.size).toBe(0);
+  });
+
+  test("absorbs a current completed proof, skips rendering, and rotates receipt ownership", async () => {
+    const fixtureRoot = minimalFixtureRoot();
+    const htmlPath = path.join(fixtureRoot, "src/app.html");
+    const htmlUri = pathToFileURL(htmlPath).toString();
+    const documents = new TestDocumentStore();
+    documents.add(TextDocument.create(htmlUri, "html", 1, fs.readFileSync(htmlPath, "utf8")));
+    const session = createSession(fixtureRoot, documents);
+    const render = vi.fn((operation) => {
+      const document = operation.documents.ensureProgramDocument(htmlUri);
+      return [{ message: document?.getText() ?? "missing" }];
+    });
+    const dispose = vi.spyOn(ManagedSemanticWorkspaceOperationReceipt.prototype, "dispose");
+
+    const first = await session.runDiagnosticRequest(
+      null,
+      diagnosticRequest(htmlUri),
+      render,
+    );
+    expect(first.kind).toBe("full");
+    if (first.kind !== "full") throw new Error("Expected a full diagnostic report.");
+
+    const second = await session.runDiagnosticRequest(
+      null,
+      diagnosticRequest(htmlUri, first.resultId),
+      render,
     );
 
-    await session.resourceDefinitions(guard);
+    expect(second).toEqual({ kind: "unchanged", resultId: first.resultId });
+    expect(render).toHaveBeenCalledOnce();
+    expect(dispose).toHaveBeenCalledTimes(1);
+    await session.dispose();
+    expect(dispose).toHaveBeenCalledTimes(2);
+    dispose.mockRestore();
+  });
 
-    const definitionRequest = answerAppQuery.mock.calls.at(-1)?.[0];
-    expect(definitionRequest).toMatchObject({
-      kind: SemanticAppQueryKind.ResourceDefinitions,
-      page: { size: 500 },
-      inquiryProfile: "lsp-cursor",
+  test("recomputes when a mapping-only dependency changes outside the diagnostic URI", async () => {
+    const fixtureRoot = minimalFixtureRoot();
+    const htmlPath = path.join(fixtureRoot, "src/app.html");
+    const tsPath = path.join(fixtureRoot, "src/app.ts");
+    const htmlUri = pathToFileURL(htmlPath).toString();
+    const tsUri = pathToFileURL(tsPath).toString();
+    const documents = new TestDocumentStore();
+    documents.add(TextDocument.create(htmlUri, "html", 1, fs.readFileSync(htmlPath, "utf8")));
+    documents.add(TextDocument.create(tsUri, "typescript", 1, "export class App { value = 1; }"));
+    const session = createSession(fixtureRoot, documents);
+    const render = vi.fn((operation) => {
+      operation.documents.ensureProgramDocument(htmlUri);
+      return [{ message: operation.documents.lookupText(tsUri) ?? "missing" }];
     });
-    expect(definitionRequest).not.toHaveProperty("detail");
-    expect(definitionRequest).not.toHaveProperty("includeTypeSurfaces");
 
-    answerAppQuery.mockClear();
-    await session.resourceInventory("project:fixture", false, guard);
+    const first = await session.runDiagnosticRequest(null, diagnosticRequest(htmlUri), render);
+    if (first.kind !== "full") throw new Error("Expected a full diagnostic report.");
+    documents.add(TextDocument.create(tsUri, "typescript", 2, "export class App { value = 2; }"));
+    session.recordSourceTextChanged([tsPath]);
 
-    expect(answerAppQuery).toHaveBeenCalledWith(expect.objectContaining({
-      kind: SemanticAppQueryKind.ResourceInventory,
-      projectKey: "project:fixture",
-      includeTypeSurfaces: false,
-      page: { size: 500 },
-      inquiryProfile: "lsp-cursor",
-    }));
+    const second = await session.runDiagnosticRequest(
+      null,
+      diagnosticRequest(htmlUri, first.resultId),
+      render,
+    );
 
-    answerAppQuery.mockClear();
-    await session.resourceInventory("project:fixture", true, guard);
+    expect(second.kind).toBe("full");
+    expect(second.resultId).not.toBe(first.resultId);
+    expect(render).toHaveBeenCalledTimes(2);
+    await session.dispose();
+  });
 
-    expect(answerAppQuery).toHaveBeenCalledWith(expect.objectContaining({
-      kind: SemanticAppQueryKind.ResourceInventory,
-      projectKey: "project:fixture",
-      includeTypeSurfaces: true,
-      page: { size: 500 },
-      inquiryProfile: "lsp-cursor",
-    }));
+  test("evicts the directly changed URI and disposes its retained proof", async () => {
+    const fixtureRoot = minimalFixtureRoot();
+    const htmlPath = path.join(fixtureRoot, "src/app.html");
+    const htmlUri = pathToFileURL(htmlPath).toString();
+    const documents = new TestDocumentStore();
+    documents.add(TextDocument.create(htmlUri, "html", 1, fs.readFileSync(htmlPath, "utf8")));
+    const session = createSession(fixtureRoot, documents);
+    const render = vi.fn((operation) => {
+      operation.documents.ensureProgramDocument(htmlUri);
+      return [];
+    });
+    const first = await session.runDiagnosticRequest(null, diagnosticRequest(htmlUri), render);
+    if (first.kind !== "full") throw new Error("Expected a full diagnostic report.");
+    const dispose = vi.spyOn(ManagedSemanticWorkspaceOperationReceipt.prototype, "dispose");
+
+    session.recordSourceTextChanged([htmlPath]);
+    expect(dispose).toHaveBeenCalledOnce();
+    const second = await session.runDiagnosticRequest(
+      null,
+      diagnosticRequest(htmlUri, first.resultId),
+      render,
+    );
+
+    expect(second.kind).toBe("full");
+    expect(render).toHaveBeenCalledTimes(2);
+    dispose.mockRestore();
+    await session.dispose();
+  });
+
+  test("keeps the accepted cache entry when a replacement renderer fails", async () => {
+    const fixtureRoot = minimalFixtureRoot();
+    const htmlPath = path.join(fixtureRoot, "src/app.html");
+    const htmlUri = pathToFileURL(htmlPath).toString();
+    const text = fs.readFileSync(htmlPath, "utf8");
+    const documents = new TestDocumentStore();
+    documents.add(TextDocument.create(htmlUri, "html", 1, text));
+    const session = createSession(fixtureRoot, documents);
+    const render = vi.fn((operation) => {
+      operation.documents.ensureProgramDocument(htmlUri);
+      return [];
+    });
+    const first = await session.runDiagnosticRequest(null, diagnosticRequest(htmlUri), render);
+    if (first.kind !== "full") throw new Error("Expected a full diagnostic report.");
+
+    documents.add(TextDocument.create(htmlUri, "html", 2, text));
+    await expect(session.runDiagnosticRequest(
+      null,
+      diagnosticRequest(htmlUri, first.resultId),
+      () => { throw new Error("mapping failed"); },
+    )).rejects.toThrow("mapping failed");
+    documents.add(TextDocument.create(htmlUri, "html", 1, text));
+
+    const recovered = await session.runDiagnosticRequest(
+      null,
+      diagnosticRequest(htmlUri, first.resultId),
+      render,
+    );
+    expect(recovered).toEqual({ kind: "unchanged", resultId: first.resultId });
+    expect(render).toHaveBeenCalledOnce();
+    await session.dispose();
+  });
+
+  test("does not let an older concurrent completion replace a newer publication", async () => {
+    const fixtureRoot = minimalFixtureRoot();
+    const htmlPath = path.join(fixtureRoot, "src/app.html");
+    const htmlUri = pathToFileURL(htmlPath).toString();
+    const documents = new TestDocumentStore();
+    documents.add(TextDocument.create(htmlUri, "html", 1, fs.readFileSync(htmlPath, "utf8")));
+    const session = createSession(fixtureRoot, documents);
+    let releaseFirst!: () => void;
+    let announceFirst!: () => void;
+    const firstEntered = new Promise<void>((resolve) => { announceFirst = resolve; });
+    const firstGate = new Promise<void>((resolve) => { releaseFirst = resolve; });
+    const firstRequest = session.runDiagnosticRequest(
+      null,
+      diagnosticRequest(htmlUri),
+      async (operation) => {
+        operation.documents.ensureProgramDocument(htmlUri);
+        announceFirst();
+        await firstGate;
+        return [{ message: "older" }];
+      },
+    );
+    await firstEntered;
+    const newer = await session.runDiagnosticRequest(
+      null,
+      diagnosticRequest(htmlUri),
+      (operation) => {
+        operation.documents.ensureProgramDocument(htmlUri);
+        return [{ message: "newer" }];
+      },
+    );
+    if (newer.kind !== "full") throw new Error("Expected a full diagnostic report.");
+    releaseFirst();
+    await firstRequest;
+    const renderer = vi.fn(() => [{ message: "unexpected" }]);
+
+    const current = await session.runDiagnosticRequest(
+      null,
+      diagnosticRequest(htmlUri, newer.resultId),
+      renderer,
+    );
+
+    expect(current).toEqual({ kind: "unchanged", resultId: newer.resultId });
+    expect(renderer).not.toHaveBeenCalled();
+    await session.dispose();
+  });
+
+  test("preserves open-document presentation URI, language, and version on managed text", async () => {
+    const fixtureRoot = minimalFixtureRoot();
+    const htmlPath = path.join(fixtureRoot, "src/app.html");
+    const canonicalUri = pathToFileURL(htmlPath).toString();
+    const presentationUri = canonicalUri.replace("app.html", "app%2Ehtml");
+    const documents = new TestDocumentStore();
+    documents.add(TextDocument.create(
+      presentationUri,
+      "aurelia-html",
+      17,
+      fs.readFileSync(htmlPath, "utf8"),
+    ));
+    const session = createSession(fixtureRoot, documents);
+
+    const snapshot = await session.runRequest(null, (operation) =>
+      operation.documents.lookupDocumentSnapshot(canonicalUri));
+
+    expect(snapshot).toMatchObject({
+      uri: presentationUri,
+      languageId: "aurelia-html",
+      version: 17,
+    });
+    await session.dispose();
+  });
+
+  test("bounds retained diagnostic proofs and evicts the least-recently published entry", async () => {
+    const session = createSession(minimalFixtureRoot(), new TestDocumentStore());
+    const publish = Reflect.get(session, "publishDiagnosticCacheEntry") as (
+      cacheKey: string,
+      entry: {
+        documentKey: string;
+        presentationKey: string;
+        resultId: string;
+        receipt: ManagedSemanticWorkspaceOperationReceipt;
+        publishOrdinal: number;
+      },
+    ) => boolean;
+    const cache = Reflect.get(session, "diagnosticCache") as Map<string, unknown>;
+    const disposals = Array.from({ length: 258 }, () => vi.fn());
+    const entry = (index: number) => ({
+      documentKey: `document-${index}`,
+      presentationKey: `presentation-${index}`,
+      resultId: `result-${index}`,
+      receipt: {
+        analysisBasis: { revision: `basis-${index}` },
+        dispose: disposals[index],
+      } as unknown as ManagedSemanticWorkspaceOperationReceipt,
+      publishOrdinal: index + 1,
+    });
+    for (let index = 0; index < 256; index += 1) {
+      publish.call(session, `cache-${index}`, entry(index));
+    }
+    publish.call(session, "cache-0", entry(256));
+    publish.call(session, "cache-256", entry(257));
+
+    expect(cache.size).toBe(256);
+    expect(cache.has("cache-0")).toBe(true);
+    expect(cache.has("cache-1")).toBe(false);
+    expect(disposals[0]).toHaveBeenCalledOnce();
+    expect(disposals[1]).toHaveBeenCalledOnce();
+    await session.dispose();
   });
 });
 
@@ -664,6 +913,7 @@ function minimalFixtureRoot(): string {
 function createSession(
   workspaceRoot: string,
   documents: OpenTextDocumentStore,
+  publishEffect: (effect: unknown) => void | PromiseLike<void> = () => undefined,
 ): SemanticRuntimeLspSession {
   const documentUris = new WorkspaceDocumentUris();
   documentUris.configure(pathToFileURL(workspaceRoot).toString());
@@ -674,7 +924,30 @@ function createSession(
       sourceTextOverlay,
     ),
     projectInputCurrentnessPolicy: sourceTextOverlay,
+    openDocumentMetadata: (uri) => {
+      const document = sourceTextOverlay.openDocument(uri);
+      return document == null
+        ? null
+        : {
+            uri: document.uri,
+            languageId: document.languageId,
+            version: document.version,
+          };
+    },
+    publishEffect,
   });
+}
+
+function diagnosticRequest(
+  uri: string,
+  previousResultId: string | null = null,
+) {
+  return {
+    uri,
+    identifier: "aurelia",
+    previousResultId,
+    projectionKey: "test-diagnostic-projection/v1",
+  };
 }
 
 function positionAfter(

@@ -20,7 +20,7 @@ import {
   semanticSourceOffsetRangeForDocument,
   semanticSourceReferenceMatchesDocument,
 } from "../mapping/source-locations.js";
-import type { SemanticRuntimeLspRequestGuard } from "../runtime/semantic-runtime-session.js";
+import type { SemanticRuntimeLspOperation } from "../runtime/semantic-runtime-session.js";
 import { isTemplateDocument } from "../utils/document-kind.js";
 
 interface OffsetRange {
@@ -31,18 +31,17 @@ interface OffsetRange {
 export async function handleSelectionRanges(
   ctx: ServerContext,
   params: SelectionRangeParams,
-  guard: SemanticRuntimeLspRequestGuard,
+  operation: SemanticRuntimeLspOperation,
 ): Promise<SelectionRange[] | null> {
-  const doc = ctx.ensureProgramDocument(params.textDocument.uri);
+  const doc = operation.documents.ensureProgramDocument(params.textDocument.uri);
   if (!doc) return null;
   if (!isTemplateDocument(doc)) return null;
 
   const ranges: SelectionRange[] = [];
   for (const position of params.positions) {
-    const answer = await ctx.semanticRuntime.templateCursorInfo(
+    const answer = await operation.templateCursorInfo(
       doc,
       position,
-      guard,
     );
     const range = selectionRangeForCursor(ctx, doc, position, answer.value);
     if (range == null) return null;

@@ -110,7 +110,9 @@ runtime: facade answers are composed into the operation receipt automatically, a
 the callback finishes are drained before egress. Use `absorb(...)` only for a semantic answer obtained outside that
 facade; explicitly absorbing a facade answer is rejected so receipt observation is not duplicated. Facade answer
 envelopes remain portable DTOs after the callback, but their process-private root and nested proofs are revoked at that
-boundary. Consumers that deliberately retain a bounded mapped result with executable currentness must use
+boundary. The callback context exposes the pinned `sourceWorldRevision` for operation-local transport identities; it is
+not an analysis basis, because the exact query and mapping reads have not yet been composed at ingress. Consumers that
+deliberately retain a bounded mapped result with executable currentness must use
 `runWithReceipt(...)`, retain its opaque managed receipt alongside the mapped value, and dispose that receipt when the
 cache entry is replaced.
 Reconciliation may coalesce or retry before admission, but an admitted callback runs at most once: a stale egress is a

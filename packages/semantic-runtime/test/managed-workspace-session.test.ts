@@ -115,6 +115,40 @@ describe('managed semantic workspace session', () => {
     expect(validateSourceWorld).toHaveBeenCalledTimes(2);
   });
 
+  test('exposes the pinned source-world revision without requiring a semantic query', async () => {
+    const workspaceRoot = await createWorkspace();
+    await writeWorkspaceFile(workspaceRoot, 'src/main.ts', 'export const main = true;\n');
+    const session = createSession(workspaceRoot);
+    const summary = vi.spyOn(SemanticRuntime.prototype, 'summary');
+
+    const sourceWorldRevision = await session.run(({ sourceWorldRevision }) => sourceWorldRevision);
+
+    expect(sourceWorldRevision).toMatch(/^semantic-source-world\/1:/);
+    expect(summary).not.toHaveBeenCalled();
+  });
+
+  test('stale-rejects a zero-query operation whose pinned source world changes before egress', async () => {
+    const workspaceRoot = await createWorkspace();
+    await writeWorkspaceFile(workspaceRoot, 'src/main.ts', 'export const main = true;\n');
+    const session = createSession(workspaceRoot);
+    const entered = deferred<string>();
+    const release = deferred<void>();
+    const operation = session.run(async ({ sourceWorldRevision }) => {
+      entered.resolve(sourceWorldRevision);
+      await release.promise;
+      return sourceWorldRevision;
+    });
+    const pinnedRevision = await entered.promise;
+
+    await writeWorkspaceFile(workspaceRoot, 'src/added.ts', 'export const added = true;\n');
+    release.resolve();
+
+    await expect(operation).rejects.toMatchObject({
+      code: 'SEMANTIC_RUNTIME_OPERATION_STALE',
+      previousSourceWorldRevision: pinnedRevision,
+    });
+  });
+
   test('keeps facade answers portable while transferring currentness only through runWithReceipt', async () => {
     const workspaceRoot = await createWorkspace();
     await writeWorkspaceFile(workspaceRoot, 'src/main.ts', 'export const main = true;\n');

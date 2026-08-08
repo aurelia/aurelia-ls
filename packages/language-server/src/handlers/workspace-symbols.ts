@@ -15,15 +15,13 @@ import type {
 } from "@aurelia-ls/semantic-runtime";
 import {
   semanticExactSourceReference,
-  type SemanticSourceReference,
 } from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
-import { languageIdForSource } from "../utils/document-kind.js";
 import {
   semanticSourceRangeForDocument,
   semanticSourceReferenceUri,
 } from "../mapping/source-locations.js";
-import type { SemanticRuntimeLspRequestGuard } from "../runtime/semantic-runtime-session.js";
+import type { SemanticRuntimeLspOperation } from "../runtime/semantic-runtime-session.js";
 
 const WORKSPACE_SYMBOL_RESOURCE_KINDS = new Set<string>([
   "custom-element",
@@ -46,14 +44,14 @@ const MAX_WORKSPACE_SYMBOLS = 100;
 export async function handleWorkspaceSymbols(
   ctx: ServerContext,
   params: WorkspaceSymbolParams,
-  guard: SemanticRuntimeLspRequestGuard,
+  operation: SemanticRuntimeLspOperation,
 ): Promise<SymbolInformation[] | null> {
   const query = params.query.trim().toLowerCase();
-  const definitions = await ctx.semanticRuntime.resourceDefinitions(guard);
+  const definitions = await operation.resourceDefinitions();
   const symbols: SymbolInformation[] = [];
 
   for (const definition of definitions.value.rows) {
-    const symbol = workspaceSymbolForResource(ctx, query, definition);
+    const symbol = workspaceSymbolForResource(ctx, operation, query, definition);
     if (!symbol) continue;
     symbols.push(symbol);
     if (symbols.length >= MAX_WORKSPACE_SYMBOLS) break;
@@ -69,6 +67,7 @@ export async function handleWorkspaceSymbols(
 
 function workspaceSymbolForResource(
   ctx: ServerContext,
+  operation: SemanticRuntimeLspOperation,
   query: string,
   definition: SemanticResourceDefinitionRow,
 ): SymbolInformation | null {
@@ -86,17 +85,22 @@ function workspaceSymbolForResource(
   if (uri == null) return null;
 
   const canonicalUri = ctx.documentUris.resolve(uri).uri;
-  const text = ctx.lookupText(canonicalUri);
-  if (text == null) return null;
+  const snapshot = operation.documents.lookupWorkspaceDocumentSnapshot(canonicalUri);
+  if (snapshot == null) return null;
 
-  const document = TextDocument.create(canonicalUri, languageIdForSource(canonicalUri), 0, text);
+  const document = TextDocument.create(
+    snapshot.uri,
+    snapshot.languageId,
+    snapshot.version ?? 0,
+    snapshot.text,
+  );
   const range = semanticSourceRangeForDocument(source, document);
   if (range == null) return null;
 
   return {
     name: definition.targetName ?? definition.name,
     kind: RESOURCE_SYMBOL_KIND[definition.resourceKind] ?? SymbolKind.Class,
-    location: { uri: canonicalUri, range },
+    location: { uri: snapshot.uri, range },
     containerName: resourceContainer(definition),
   };
 }

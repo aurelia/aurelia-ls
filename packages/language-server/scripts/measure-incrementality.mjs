@@ -9,9 +9,12 @@ import path from "node:path";
 import { performance } from "node:perf_hooks";
 import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { writeHeapSnapshot } from "node:v8";
+import { getHeapStatistics, writeHeapSnapshot } from "node:v8";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { NodeSemanticRuntimeProjectInputHost } from "@aurelia-ls/semantic-runtime";
+import {
+  NodeSemanticRuntimeProjectInputHost,
+  semanticRuntimeProcessTypeSystemCacheOverview,
+} from "@aurelia-ls/semantic-runtime";
 import {
   SemanticRuntimeLspSession,
   isSemanticRuntimeLspRequestAborted,
@@ -237,6 +240,17 @@ async function main() {
     documentUris,
     projectInputHost,
     projectInputCurrentnessPolicy: sourceTextOverlay,
+    openDocumentMetadata: (uri) => {
+      const document = documents.get(uri);
+      return document == null
+        ? null
+        : {
+            uri: document.uri,
+            languageId: document.languageId,
+            version: document.version,
+          };
+    },
+    publishEffect: () => {},
   });
   const report = {
     fixture: {
@@ -253,7 +267,6 @@ async function main() {
     cache: [],
     editJourneys: [],
     abortPressure: [],
-    referenceDensity: null,
     invariants: [],
     measurement: {
       editCycles,
@@ -261,47 +274,46 @@ async function main() {
     },
   };
 
-  recordGeneration(report, "initial", session.currentGeneration());
-
   const coldDiagnostics = await timed("cold appDiagnostics", measurement, () =>
-    session.appDiagnostics(targetHtml, session.requestGuard(null)));
+    runDocumentRequest(session, targetHtml, null, (operation, document) =>
+      operation.appDiagnostics(document)));
   report.timings.push(timingSummary(coldDiagnostics));
-  recordGeneration(report, "after cold diagnostics", session.currentGeneration());
+  recordGeneration(report, "after cold diagnostics", await managedGeneration(session));
   report.cache.push(await cacheSnapshot("after cold diagnostics", session, forceGc));
 
   const warmDiagnostics = await timed("warm same-generation appDiagnostics", measurement, () =>
-    session.appDiagnostics(targetHtml, session.requestGuard(null)));
+    runDocumentRequest(session, targetHtml, null, (operation, document) =>
+      operation.appDiagnostics(document)));
   report.timings.push(timingSummary(warmDiagnostics));
   report.cache.push(await cacheSnapshot("after warm diagnostics", session, forceGc));
 
   const cursorInfo = await timed("warm same-generation templateCursorInfo", measurement, () =>
-    session.templateCursorInfo(targetHtml, cursorPositions.member, session.requestGuard(null)));
+    runDocumentRequest(session, targetHtml, null, (operation, document) =>
+      operation.templateCursorInfo(document, cursorPositions.member)));
   report.timings.push(timingSummary(cursorInfo));
 
   const initialEditedPaths = editOpenDocuments(documents, fixtureRoot, sourceFiles);
   const sourceChange = await timed("recordSourceTextChanged after TS+HTML edits", measurement, () =>
     session.recordSourceTextChanged(initialEditedPaths));
   report.timings.push(timingSummary(sourceChange));
-  recordGeneration(report, "after source change", session.currentGeneration());
+  recordGeneration(report, "after source change", await managedGeneration(session));
   report.cache.push(await cacheSnapshot("after source change clear", session, forceGc));
 
   const afterEditDiagnostics = await timed("post-edit appDiagnostics", measurement, () =>
-    session.appDiagnostics(targetHtml, session.requestGuard(null)));
+    runDocumentRequest(session, targetHtml, null, (operation, document) =>
+      operation.appDiagnostics(document)));
   report.timings.push(timingSummary(afterEditDiagnostics));
   report.cache.push(await cacheSnapshot("after post-edit diagnostics", session, forceGc));
 
   const afterEditCompletion = await timed("post-edit templateCompletions", measurement, () =>
-    session.templateCompletions(targetHtml, cursorPositions.completion, session.requestGuard(null)));
+    runDocumentRequest(session, targetHtml, null, (operation, document) =>
+      operation.templateCompletions(document, cursorPositions.completion)));
   report.timings.push(timingSummary(afterEditCompletion));
   const postEditCompletionCache = await cacheSnapshot("after post-edit completion", session, forceGc);
   report.cache.push(postEditCompletionCache);
   writeMeasurementHeapSnapshot(heapSnapshotDirectory, "steady-baseline");
 
   const editTargets = measurementEditTargets(fixtureRoot, sourceFiles);
-  let priorComputation = await appComputationStateSnapshot(
-    session,
-    postEditCompletionCache.firstCachedApp?.projectKey ?? null,
-  );
   for (let index = 0; index < editCycles; index += 1) {
     const target = index % 2 === 0 ? editTargets.html : editTargets.typeScript;
     if (target == null) {
@@ -318,7 +330,8 @@ async function main() {
       () => timed(
         `steady ${target.kind} edit ${index + 1}: first completion`,
         measurement,
-        () => session.templateCompletions(targetHtml, cursorPositions.completion, session.requestGuard(null)),
+        () => runDocumentRequest(session, targetHtml, null, (operation, document) =>
+          operation.templateCompletions(document, cursorPositions.completion)),
       ),
     );
     const warmCompletion = await cpuProfiler.captureOnce(
@@ -326,7 +339,8 @@ async function main() {
       () => timed(
         `steady ${target.kind} edit ${index + 1}: warm completion`,
         measurement,
-        () => session.templateCompletions(targetHtml, cursorPositions.completion, session.requestGuard(null)),
+        () => runDocumentRequest(session, targetHtml, null, (operation, document) =>
+          operation.templateCompletions(document, cursorPositions.completion)),
       ),
     );
     const diagnostics = await cpuProfiler.captureOnce(
@@ -334,14 +348,11 @@ async function main() {
       () => timed(
         `steady ${target.kind} edit ${index + 1}: warm diagnostics`,
         measurement,
-        () => session.appDiagnostics(targetHtml, session.requestGuard(null)),
+        () => runDocumentRequest(session, targetHtml, null, (operation, document) =>
+          operation.appDiagnostics(document)),
       ),
     );
     const cache = await cacheSnapshot(`after steady edit ${index + 1}`, session, forceGc);
-    const currentComputation = await appComputationStateSnapshot(
-      session,
-      cache.firstCachedApp?.projectKey ?? null,
-    );
     report.editJourneys.push({
       index: index + 1,
       kind: target.kind,
@@ -350,22 +361,16 @@ async function main() {
       warmQuery: timingSummary(warmCompletion),
       warmDiagnostics: timingSummary(diagnostics),
       cache,
-      computation: computationJourneySummary(priorComputation, currentComputation),
     });
-    priorComputation = currentComputation;
   }
   writeMeasurementHeapSnapshot(heapSnapshotDirectory, "steady-final");
 
   const stalePressure = await staleAbortPressure(session, targetHtml, cursorPositions.member, requestCount);
   report.abortPressure.push(stalePressure);
-  recordGeneration(report, "after stale pressure generation change", session.currentGeneration());
+  recordGeneration(report, "after stale pressure generation change", await managedGeneration(session));
 
   const cancelledPressure = await cancelledAbortPressure(session, targetHtml, cursorPositions.member, requestCount);
   report.abortPressure.push(cancelledPressure);
-
-  if (args["reference-density"] === "true") {
-    report.referenceDensity = await kernelReferenceDensity(session);
-  }
 
   addInvariants(report);
 
@@ -382,11 +387,13 @@ async function main() {
 }
 
 async function staleAbortPressure(session, document, position, requestCount) {
-  const guard = session.requestGuard(null);
-  session.invalidateRequests();
-  return abortPressure("stale templateCursorInfo", requestCount, async () => {
+  return abortPressure("stale managed templateCursorInfo", requestCount, async () => {
     try {
-      await session.templateCursorInfo(document, position, guard);
+      await session.runRequest(null, async (operation) => {
+        session.invalidateRequests();
+        const managedDocument = requireOperationDocument(operation, document.uri);
+        return operation.templateCursorInfo(managedDocument, position);
+      });
       return "completed";
     } catch (error) {
       if (isSemanticRuntimeLspRequestAborted(error)) {
@@ -398,10 +405,10 @@ async function staleAbortPressure(session, document, position, requestCount) {
 }
 
 async function cancelledAbortPressure(session, document, position, requestCount) {
-  const guard = session.requestGuard(() => true);
-  return abortPressure("cancelled templateCursorInfo", requestCount, async () => {
+  return abortPressure("cancelled managed templateCursorInfo", requestCount, async () => {
     try {
-      await session.templateCursorInfo(document, position, guard);
+      await runDocumentRequest(session, document, () => true, (operation, managedDocument) =>
+        operation.templateCursorInfo(managedDocument, position));
       return "completed";
     } catch (error) {
       if (isSemanticRuntimeLspRequestAborted(error)) {
@@ -410,6 +417,23 @@ async function cancelledAbortPressure(session, document, position, requestCount)
       throw error;
     }
   });
+}
+
+function managedGeneration(session) {
+  return session.runRequest(null, (operation) => operation.generation);
+}
+
+function runDocumentRequest(session, document, isCancellationRequested, run) {
+  return session.runRequest(isCancellationRequested, (operation) =>
+    run(operation, requireOperationDocument(operation, document.uri)));
+}
+
+function requireOperationDocument(operation, uri) {
+  const document = operation.documents.openDocument(uri);
+  if (document == null) {
+    throw new Error(`Managed semantic-runtime operation could not read open document '${uri}'.`);
+  }
+  return document;
 }
 
 async function abortPressure(label, requestCount, run) {
@@ -498,11 +522,13 @@ function timingSummary(timing) {
 
 function memorySnapshot() {
   const memory = process.memoryUsage();
+  const heap = getHeapStatistics();
   return {
     rssBytes: memory.rss,
     heapUsedBytes: memory.heapUsed,
     externalBytes: memory.external,
     arrayBuffersBytes: memory.arrayBuffers,
+    v8DetachedContextCount: heap.number_of_detached_contexts,
   };
 }
 
@@ -545,25 +571,24 @@ async function cacheSnapshot(label, session, forceGc) {
   if (forceGc) {
     globalThis.gc();
   }
-  const runtime = await session.runtime;
-  const answer = runtime.analysisCacheOverview({ rowLimit: 10 });
-  const firstApp = answer.value.cachedApps[0] ?? null;
+  const overview = await session.analysisCacheOverview({ rowLimit: 10 });
+  const typeSystemDependencyCache = semanticRuntimeProcessTypeSystemCacheOverview({ rowLimit: 10 });
+  const firstApp = overview.cachedApps[0] ?? null;
   return {
     label,
-    cachedAppCount: answer.value.cachedAppCount,
-    staticProjectEvaluationCount: runtime.projectEvaluations.readEntryCount(),
-    typeSystemProjectCount: answer.value.typeSystemProjectCount,
-    workspaceKernelRecords: answer.value.workspaceKernel.totalRecords,
-    workspaceKernelHandleCharacters: answer.value.workspaceKernel.handleCharacters,
-    runtimeQueryClaimProfiles: answer.value.runtimeQueryClaimProfiles.length,
-    runtimeQueryClaims: queryClaimSummary(answer.value.runtimeQueryClaimProfiles),
-    processMemory: answer.value.processMemory,
+    cachedAppCount: overview.cachedAppCount,
+    typeSystemProjectCount: overview.typeSystemProjectCount,
+    workspaceKernelRecords: overview.workspaceKernel.totalRecords,
+    workspaceKernelHandleCharacters: overview.workspaceKernel.handleCharacters,
+    runtimeQueryClaimProfiles: overview.runtimeQueryClaimProfiles.length,
+    runtimeQueryClaims: queryClaimSummary(overview.runtimeQueryClaimProfiles),
+    processMemory: memorySnapshot(),
     typeSystemDependencyCache: {
-      entries: answer.value.typeSystemDependencyCache.entries,
-      hits: answer.value.typeSystemDependencyCache.hits,
-      misses: answer.value.typeSystemDependencyCache.misses,
-      writes: answer.value.typeSystemDependencyCache.writes,
-      clearOperations: answer.value.typeSystemDependencyCache.clearOperations,
+      entries: typeSystemDependencyCache.entries,
+      hits: typeSystemDependencyCache.hits,
+      misses: typeSystemDependencyCache.misses,
+      writes: typeSystemDependencyCache.writes,
+      clearOperations: typeSystemDependencyCache.clearOperations,
     },
     firstCachedApp: firstApp == null
       ? null
@@ -591,219 +616,6 @@ async function cacheSnapshot(label, session, forceGc) {
           queryClaims: queryClaimSummary(firstApp.queryClaimProfiles),
         },
   };
-}
-
-/** Opt-in post-journey graph scan; it runs after every timed operation and never ships in the extension process. */
-async function kernelReferenceDensity(session) {
-  const runtime = await session.runtime;
-  return [
-    referenceClosureDensity("product detail", runtime.workspace.store.productDetails.readEntries()),
-    referenceClosureDensity("hot detail", runtime.workspace.store.hotDetails.readEntries()),
-  ];
-}
-
-function referenceClosureDensity(kind, entries) {
-  const lengths = entries.map((entry) => entry.references.length).sort((left, right) => left - right);
-  const bucketCounts = new Map([
-    ["0", 0], ["1", 0], ["2", 0], ["3-4", 0], ["5-8", 0], ["9-16", 0], [">16", 0],
-  ]);
-  for (const length of lengths) {
-    const bucket = length === 0 ? "0"
-      : length === 1 ? "1"
-        : length === 2 ? "2"
-          : length <= 4 ? "3-4"
-            : length <= 8 ? "5-8"
-              : length <= 16 ? "9-16"
-                : ">16";
-    bucketCounts.set(bucket, bucketCounts.get(bucket) + 1);
-  }
-  return {
-    kind,
-    entries: lengths.length,
-    references: lengths.reduce((total, length) => total + length, 0),
-    p50: percentile(lengths, 0.5) ?? 0,
-    p95: percentile(lengths, 0.95) ?? 0,
-    max: lengths.at(-1) ?? 0,
-    buckets: [...bucketCounts].map(([bucket, count]) => ({ bucket, count })),
-  };
-}
-
-async function appComputationStateSnapshot(session, projectKey) {
-  if (projectKey == null) {
-    return null;
-  }
-  const runtime = await session.runtime;
-  const generation = runtime.appAnalysisComputations.authorityFor(projectKey).current();
-  if (generation == null) {
-    return null;
-  }
-  const state = runtime.computationLifecycle.readState(generation.computationId);
-  const transition = runtime.computationLifecycle.readLatestTransition(generation.computationId);
-  if (state == null || transition == null) {
-    return null;
-  }
-  return {
-    templateFamilies: generation.emission.templates.frontDoor.plan.cohortPlan.ownerPlans.map((owner) => ({
-      locusKey: encodeLengthPrefixedParts([projectKey, owner.ownerHandle]),
-      subject: owner.definition.name,
-      cohortKeys: owner.cohorts.map((cohort) => cohort.key),
-    })),
-    templateRuntimeResources: [
-      ...generation.emission.templates.resources,
-      ...generation.emission.templates.authoringResources,
-    ].map((resource) => ({
-      localKey: resource.compilation.localKey,
-      subject: resource.compilation.definition.name,
-      analysisContextProductHandle: resource.compilation.analysisContextProductHandle,
-      milliseconds: resource.runtimeAnalysis.profile.totalMilliseconds,
-      phases: resource.runtimeAnalysis.profile.phases.map((phase) => ({
-        name: phase.name,
-        milliseconds: phase.milliseconds,
-        skipped: phase.skipped === true,
-      })),
-    })),
-    children: state.children.map((child) => ({
-      childId: child.childId,
-      locusKind: child.locus.kind,
-      locusKey: child.locus.reconciliationKey,
-      summary: child.locus.summary,
-      role: child.role,
-      sccKind: child.scc.kind,
-      reads: child.reads.map((read) => ({
-        readKey: read.readKey,
-        domain: read.domain,
-        observedRevision: read.observedRevision,
-      })),
-      candidateReads: child.candidateReads.map((read) => ({
-        surface: read.surface,
-        handle: read.handle,
-        detailKind: read.actualKind,
-        state: read.state,
-        producerChildId: read.producerChildId,
-      })),
-      structuralDependencies: child.structuralDependencies.length,
-      resultDependencies: child.resultDependencies.length,
-      openReads: child.openReads.length,
-      outputs: child.outputs.map((output) => ({
-        surface: output.surface,
-        handle: output.handle,
-        detailKind: output.detailKind,
-      })),
-    })),
-    transition: {
-      state: transition.state,
-      changedReads: transition.changedReads.map((read) => ({
-        readKey: read.readKey,
-        domain: read.domain,
-        previousRevision: read.previousRevision,
-        nextRevision: read.nextRevision,
-      })),
-      publications: transition.publications.map((publication) => ({
-        surface: publication.surface,
-        handle: publication.handle,
-        detailKind: publication.detailKind,
-        decision: publication.decision,
-      })),
-      children: transition.children.map((child) => ({
-        childId: child.childId,
-        locusKind: child.locus.kind,
-        locusKey: child.locus.reconciliationKey,
-        summary: child.locus.summary,
-        kind: child.kind,
-        hadPreviousState: child.hadPreviousState,
-      })),
-    },
-  };
-}
-
-function computationJourneySummary(previous, current) {
-  if (current == null) {
-    return null;
-  }
-  const previousByLocus = new Map((previous?.children ?? []).map((child) => [child.locusKey, child]));
-  const currentByLocus = new Map(current.children.map((child) => [child.locusKey, child]));
-  const previousFamiliesByLocus = new Map(
-    (previous?.templateFamilies ?? []).map((family) => [family.locusKey, family]),
-  );
-  const currentFamiliesByLocus = new Map(current.templateFamilies.map((family) => [family.locusKey, family]));
-  const publicationDecisions = new Map(current.transition.publications.map((publication) => [
-    `${publication.surface}\u0000${publication.handle}`,
-    publication,
-  ]));
-  return {
-    state: current.transition.state,
-    changedReads: current.transition.changedReads,
-    templateRuntimeResources: current.templateRuntimeResources,
-    children: current.transition.children.map((transition) => {
-      const prior = previousByLocus.get(transition.locusKey) ?? null;
-      const next = currentByLocus.get(transition.locusKey) ?? null;
-      const priorFamily = previousFamiliesByLocus.get(transition.locusKey) ?? null;
-      const nextFamily = currentFamiliesByLocus.get(transition.locusKey) ?? null;
-      return {
-        ...transition,
-        subject: nextFamily?.subject ?? priorFamily?.subject ?? null,
-        role: next?.role ?? prior?.role ?? null,
-        sccKind: next?.sccKind ?? prior?.sccKind ?? null,
-        cohortChanged: JSON.stringify(priorFamily?.cohortKeys ?? null)
-          !== JSON.stringify(nextFamily?.cohortKeys ?? null),
-        reads: next?.reads.length ?? prior?.reads.length ?? 0,
-        candidateReads: next?.candidateReads.length ?? prior?.candidateReads.length ?? 0,
-        candidatePublicationDecisions: computationPublicationDecisionSummary(
-          next?.candidateReads ?? prior?.candidateReads ?? [],
-          publicationDecisions,
-        ),
-        structuralDependencies: next?.structuralDependencies ?? prior?.structuralDependencies ?? 0,
-        resultDependencies: next?.resultDependencies ?? prior?.resultDependencies ?? 0,
-        openReads: next?.openReads ?? prior?.openReads ?? 0,
-        outputs: next?.outputs.length ?? prior?.outputs.length ?? 0,
-        publicationDecisions: computationPublicationDecisionSummary(
-          next?.outputs ?? prior?.outputs ?? [],
-          publicationDecisions,
-        ),
-        changedReads: changedComputationReads(prior?.reads ?? [], next?.reads ?? []),
-      };
-    }),
-  };
-}
-
-function encodeLengthPrefixedParts(parts) {
-  return parts.map((part) => `${part.length}:${part}`).join("|");
-}
-
-function computationPublicationDecisionSummary(outputs, decisions) {
-  const counts = new Map();
-  for (const output of outputs) {
-    const publication = decisions.get(`${output.surface}\u0000${output.handle}`) ?? null;
-    const decision = publication?.decision ?? "unreported";
-    const key = decision === "retain"
-      ? decision
-      : `${decision}:${publication?.detailKind ?? output.detailKind}`;
-    counts.set(key, (counts.get(key) ?? 0) + 1);
-  }
-  return [...counts]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([decision, count]) => `${decision}=${count}`)
-    .join(", ");
-}
-
-function changedComputationReads(previous, current) {
-  const previousByKey = new Map(previous.map((read) => [read.readKey, read]));
-  const currentByKey = new Map(current.map((read) => [read.readKey, read]));
-  const changed = [];
-  for (const readKey of new Set([...previousByKey.keys(), ...currentByKey.keys()])) {
-    const prior = previousByKey.get(readKey) ?? null;
-    const next = currentByKey.get(readKey) ?? null;
-    if (prior?.observedRevision === next?.observedRevision && prior?.domain === next?.domain) {
-      continue;
-    }
-    changed.push({
-      readKey,
-      domain: next?.domain ?? prior?.domain ?? "unknown",
-      previousRevision: prior?.observedRevision ?? null,
-      nextRevision: next?.observedRevision ?? null,
-    });
-  }
-  return changed.sort((left, right) => left.readKey.localeCompare(right.readKey));
 }
 
 function queryClaimSummary(profiles) {
@@ -1002,6 +814,16 @@ async function assertDirectory(directory, label) {
 }
 
 function parseArgs(argv) {
+  const supportedOptions = new Set([
+    "workspace",
+    "fixture",
+    "requests",
+    "cycles",
+    "force-gc",
+    "heap-snapshots",
+    "cpu-profiles",
+    "json",
+  ]);
   const args = {};
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -1009,6 +831,9 @@ function parseArgs(argv) {
       continue;
     }
     const [rawKey, inlineValue] = arg.slice(2).split("=", 2);
+    if (!supportedOptions.has(rawKey)) {
+      throw new Error(`Unsupported measurement option: --${rawKey}`);
+    }
     const value = inlineValue ?? argv[index + 1];
     if (inlineValue == null && value != null && !value.startsWith("--")) {
       index += 1;
@@ -1033,7 +858,7 @@ function markdownReport(report) {
       report.generations.map((row) => [
         row.label,
         String(row.workspaceGeneration),
-        String(row.sourceGeneration),
+        row.sourceWorldRevision,
         row.fingerprint,
       ]),
     ),
@@ -1071,11 +896,10 @@ function markdownReport(report) {
     "## Cache",
     "",
     table(
-      ["label", "apps", "evaluations", "kernel records", "app claims", "heap", "rss", "ts dep entries", "first app ms"],
+      ["label", "apps", "kernel records", "app claims", "heap", "rss", "ts dep entries", "first app ms"],
       report.cache.map((row) => [
         row.label,
         String(row.cachedAppCount),
-        String(row.staticProjectEvaluationCount),
         String(row.workspaceKernelRecords),
         String(row.firstCachedApp?.queryClaims.retainedRecords ?? 0),
         formatAbsoluteBytes(row.processMemory.heapUsedBytes),
@@ -1136,33 +960,6 @@ function markdownReport(report) {
         ])),
     ),
     "",
-    "## Steady Computation Transitions",
-    "",
-    table(
-      ["cycle", "source", "locus", "subject", "transition", "prior", "role", "SCC", "cohort changed", "reads", "changed read domains", "candidate", "candidate decisions", "structural", "result", "open", "outputs", "publication decisions"],
-      report.editJourneys.flatMap((journey) =>
-        (journey.computation?.children ?? []).map((child) => [
-          String(journey.index),
-          journey.kind,
-          `${child.locusKind}: ${child.summary}`,
-          child.subject ?? "",
-          child.kind,
-          child.hadPreviousState ? "yes" : "no",
-          child.role ?? "",
-          child.sccKind ?? "",
-          child.cohortChanged ? "yes" : "no",
-          String(child.reads),
-          computationReadDomainSummary(child.changedReads),
-          String(child.candidateReads),
-          child.candidatePublicationDecisions,
-          String(child.structuralDependencies),
-          String(child.resultDependencies),
-          String(child.openReads),
-          String(child.outputs),
-          child.publicationDecisions,
-        ])),
-    ),
-    "",
     "## Steady Template Phases",
     "",
     table(
@@ -1189,26 +986,6 @@ function markdownReport(report) {
           phase.milliseconds.toFixed(2),
           phase.itemCount == null ? "" : String(phase.itemCount),
         ])),
-    ),
-    "",
-    "## Steady Template Runtime Resources",
-    "",
-    table(
-      ["cycle", "source", "resource", "ms", "top phases"],
-      report.editJourneys.flatMap((journey) =>
-        (journey.computation?.templateRuntimeResources ?? []).map((resource) => [
-          String(journey.index),
-          journey.kind,
-          resource.subject,
-          resource.milliseconds.toFixed(2),
-          resource.phases
-            .filter((phase) => !phase.skipped)
-            .sort((left, right) => right.milliseconds - left.milliseconds)
-            .slice(0, 4)
-            .map((phase) => `${phase.name}=${phase.milliseconds.toFixed(2)}ms`)
-            .join(", "),
-        ]),
-      ),
     ),
     "",
     "## Steady Distributions",
@@ -1238,23 +1015,6 @@ function markdownReport(report) {
         Object.entries(row.outcomes).map(([key, value]) => `${key}=${value}`).join(", "),
       ]),
     ),
-    ...(report.referenceDensity == null ? [] : [
-      "",
-      "## Structural Reference Density",
-      "",
-      table(
-        ["surface", "entries", "references", "p50", "p95", "max", "closure buckets"],
-        report.referenceDensity.map((row) => [
-          row.kind,
-          String(row.entries),
-          String(row.references),
-          String(row.p50),
-          String(row.p95),
-          String(row.max),
-          row.buckets.map((bucket) => `${bucket.bucket}=${bucket.count}`).join(", "),
-        ]),
-      ),
-    ]),
     "",
     "## Invariants",
     "",
@@ -1275,17 +1035,6 @@ function table(headers, rows) {
 
 function escapeTableCell(value) {
   return String(value).replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
-}
-
-function computationReadDomainSummary(reads) {
-  const counts = new Map();
-  for (const read of reads) {
-    counts.set(read.domain, (counts.get(read.domain) ?? 0) + 1);
-  }
-  return [...counts]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([domain, count]) => `${domain}=${count}`)
-    .join(", ");
 }
 
 function formatBytes(value) {

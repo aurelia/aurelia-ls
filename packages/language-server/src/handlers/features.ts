@@ -6,6 +6,9 @@
  * shared request boundary classify cancellation, staleness, and failure.
  */
 import {
+  SemanticRuntimeAnswerCoverage,
+} from "@aurelia-ls/semantic-runtime";
+import {
   ResponseError,
   LSPErrorCodes,
   SemanticTokensRequest,
@@ -35,7 +38,10 @@ import { handleWorkspaceSymbols } from "./workspace-symbols.js";
 import { handleSelectionRanges } from "./selection-ranges.js";
 import { handleLinkedEditingRange } from "./linked-editing-ranges.js";
 import { handleFoldingRanges } from "./folding-ranges.js";
-import { handleInlayHints } from "./inlay-hints.js";
+import {
+  bindingModeInlayHintsEnabled,
+  handleInlayHints,
+} from "./inlay-hints.js";
 import {
   mapSemanticRuntimeTemplateCodeActions,
   mapSemanticRuntimeUnresolvedTemplateCodeActions,
@@ -54,7 +60,7 @@ import {
   runSemanticRuntimeDocumentRequest,
   runSemanticRuntimeRequest,
 } from "./request-guard.js";
-import type { SemanticRuntimeLspRequestGuard } from "../runtime/semantic-runtime-session.js";
+import type { SemanticRuntimeLspOperation } from "../runtime/semantic-runtime-session.js";
 import { isTemplateDocument } from "../utils/document-kind.js";
 
 // ============================================================================
@@ -64,21 +70,25 @@ import { isTemplateDocument } from "../utils/document-kind.js";
 export async function handleCompletion(
   ctx: ServerContext,
   params: CompletionParams,
-  guard: SemanticRuntimeLspRequestGuard,
+  operation: SemanticRuntimeLspOperation,
 ): Promise<CompletionList> {
-  const doc = ctx.ensureProgramDocument(params.textDocument.uri);
+  const doc = operation.documents.ensureProgramDocument(params.textDocument.uri);
   if (!doc) return { isIncomplete: false, items: [] };
   if (!isTemplateDocument(doc)) return { isIncomplete: false, items: [] };
 
-  const response = await ctx.semanticRuntime.templateCompletions(
+  const response = await operation.templateCompletions(
     doc,
     params.position,
-    guard,
   );
-  if (response.coverage !== "complete" || response.value.missingInputs.length > 0) {
-    ctx.logger.info(
-      `[completion] semantic coverage is ${response.coverage}; missing inputs: ${response.value.missingInputs.join(", ") || "none"}`,
-    );
+  if (
+    response.coverage !== SemanticRuntimeAnswerCoverage.Complete
+    || response.value.missingInputs.length > 0
+  ) {
+    operation.deferEffect({
+      kind: "log",
+      level: "info",
+      message: `[completion] semantic coverage is ${response.coverage}; missing inputs: ${response.value.missingInputs.join(", ") || "none"}`,
+    });
   }
   const mapping = mapSemanticRuntimeTemplateCompletions(response, {
     documentUris: ctx.documentUris,
@@ -100,16 +110,15 @@ export async function handleCompletion(
 export async function handleHover(
   ctx: ServerContext,
   params: TextDocumentPositionParams,
-  guard: SemanticRuntimeLspRequestGuard,
+  operation: SemanticRuntimeLspOperation,
 ): Promise<Hover | null> {
-  const doc = ctx.ensureProgramDocument(params.textDocument.uri);
+  const doc = operation.documents.ensureProgramDocument(params.textDocument.uri);
   if (!doc) return null;
   if (!isTemplateDocument(doc)) return null;
 
-  const response = await ctx.semanticRuntime.templateCursorInfo(
+  const response = await operation.templateCursorInfo(
     doc,
     params.position,
-    guard,
   );
   return mapSemanticRuntimeTemplateHover(response);
 }
@@ -121,17 +130,16 @@ export async function handleHover(
 export async function handleDefinition(
   ctx: ServerContext,
   params: TextDocumentPositionParams,
-  guard: SemanticRuntimeLspRequestGuard,
+  operation: SemanticRuntimeLspOperation,
 ): Promise<Definition | LocationLink[] | null> {
-  const doc = ctx.ensureProgramDocument(params.textDocument.uri);
+  const doc = operation.documents.ensureProgramDocument(params.textDocument.uri);
   if (!doc) return null;
   if (!isTemplateDocument(doc)) return null;
 
-  const lookupText: LookupTextFn = (uri) => ctx.lookupText(uri);
-  const response = await ctx.semanticRuntime.templateCursorInfo(
+  const lookupText: LookupTextFn = (uri) => operation.documents.lookupText(uri);
+  const response = await operation.templateCursorInfo(
     doc,
     params.position,
-    guard,
   );
   return mapSemanticRuntimeTemplateDefinition(response, lookupText, {
     documentUris: ctx.documentUris,
@@ -146,17 +154,16 @@ export async function handleDefinition(
 export async function handleReferences(
   ctx: ServerContext,
   params: ReferenceParams,
-  guard: SemanticRuntimeLspRequestGuard,
+  operation: SemanticRuntimeLspOperation,
 ): Promise<Location[] | null> {
-  const doc = ctx.ensureProgramDocument(params.textDocument.uri);
+  const doc = operation.documents.ensureProgramDocument(params.textDocument.uri);
   if (!doc) return null;
 
-  const lookupText: LookupTextFn = (uri) => ctx.lookupText(uri);
-  const response = await ctx.semanticRuntime.templateReferences(
+  const lookupText: LookupTextFn = (uri) => operation.documents.lookupText(uri);
+  const response = await operation.templateReferences(
     doc,
     params.position,
     params.context.includeDeclaration,
-    guard,
   );
   const mapping = mapSemanticRuntimeTemplateReferences(response, lookupText, {
     documentUris: ctx.documentUris,
@@ -164,11 +171,16 @@ export async function handleReferences(
     scope: "workspace",
   });
   if (mapping.failures.length > 0) {
-    ctx.logger.warn(`[references] omitted source-backed rows: ${mapping.failures.join(" ")}`);
+    operation.deferEffect({
+      kind: "log",
+      level: "warn",
+      message: `[references] omitted source-backed rows: ${mapping.failures.join(" ")}`,
+    });
   }
   const candidateCount = response.value.candidateRows.length;
   if (candidateCount > 0 || mapping.failures.length > 0) {
-    await ctx.connection.sendNotification("window/showMessage", {
+    operation.deferEffect({
+      kind: "show-message",
       type: mapping.failures.length > 0 ? MessageType.Warning : MessageType.Info,
       message: referenceCoverageMessage(
         mapping.value?.length ?? 0,
@@ -187,18 +199,17 @@ export async function handleReferences(
 export async function handleDocumentHighlight(
   ctx: ServerContext,
   params: TextDocumentPositionParams,
-  guard: SemanticRuntimeLspRequestGuard,
+  operation: SemanticRuntimeLspOperation,
 ): Promise<DocumentHighlight[] | null> {
-  const doc = ctx.ensureProgramDocument(params.textDocument.uri);
+  const doc = operation.documents.ensureProgramDocument(params.textDocument.uri);
   if (!doc) return null;
   if (!isTemplateDocument(doc)) return null;
 
-  const lookupText: LookupTextFn = (uri) => ctx.lookupText(uri);
-  const response = await ctx.semanticRuntime.templateReferences(
+  const lookupText: LookupTextFn = (uri) => operation.documents.lookupText(uri);
+  const response = await operation.templateReferences(
     doc,
     params.position,
     true,
-    guard,
   );
   const mapping = mapSemanticRuntimeTemplateReferences(response, lookupText, {
     documentUris: ctx.documentUris,
@@ -206,7 +217,11 @@ export async function handleDocumentHighlight(
     scope: "origin-document",
   });
   if (mapping.failures.length > 0) {
-    ctx.logger.warn(`[documentHighlight] omitted source-backed rows: ${mapping.failures.join(" ")}`);
+    operation.deferEffect({
+      kind: "log",
+      level: "warn",
+      message: `[documentHighlight] omitted source-backed rows: ${mapping.failures.join(" ")}`,
+    });
   }
   const locations = mapping.value;
   if (!locations) return null;
@@ -229,13 +244,13 @@ export async function handleDocumentHighlight(
 export function handlePrepareRename(
   ctx: ServerContext,
   params: PrepareRenameParams,
-  guard: SemanticRuntimeLspRequestGuard,
+  operation: SemanticRuntimeLspOperation,
 ): Promise<{ range: Range; placeholder: string } | null> {
-  const doc = ctx.ensureProgramDocument(params.textDocument.uri);
+  const doc = operation.documents.ensureProgramDocument(params.textDocument.uri);
   if (!doc) return Promise.resolve(null);
   if (!isTemplateDocument(doc)) return Promise.resolve(null);
 
-  return ctx.semanticRuntime.templateRename(doc, params.position, guard).then((response) => {
+  return operation.templateRename(doc, params.position).then((response) => {
     if (response.value.status !== "available") {
       return null;
     }
@@ -249,22 +264,21 @@ export function handlePrepareRename(
 export async function handleRename(
   ctx: ServerContext,
   params: RenameParams,
-  guard: SemanticRuntimeLspRequestGuard,
+  operation: SemanticRuntimeLspOperation,
 ): Promise<WorkspaceEdit | null> {
-  const doc = ctx.ensureProgramDocument(params.textDocument.uri);
+  const doc = operation.documents.ensureProgramDocument(params.textDocument.uri);
   if (!doc) return null;
   if (!isTemplateDocument(doc)) return null;
 
-  const response = await ctx.semanticRuntime.templateRename(
+  const response = await operation.templateRename(
     doc,
     params.position,
-    guard,
     params.newName,
   );
   if (response.value.status !== "available") {
     throw new ResponseError(LSPErrorCodes.RequestFailed, response.value.displayText || response.summary);
   }
-  const mapping = mapSemanticRuntimeTemplateRenameEdit(response, (uri) => ctx.lookupDocumentSnapshot(uri), {
+  const mapping = mapSemanticRuntimeTemplateRenameEdit(response, (uri) => operation.documents.lookupDocumentSnapshot(uri), {
     documentUris: ctx.documentUris,
     originDocument: doc,
   });
@@ -275,7 +289,8 @@ export async function handleRename(
     );
   }
   if (response.value.candidateRows.length > 0) {
-    await ctx.connection.sendNotification("window/showMessage", {
+    operation.deferEffect({
+      kind: "show-message",
       type: MessageType.Info,
       message: candidateRenameMessage(response.value.edits.length, response.value.candidateRows.length),
     });
@@ -315,58 +330,69 @@ function referenceCoverageMessage(
 export async function handleCodeAction(
   ctx: ServerContext,
   params: CodeActionParams,
-  guard: SemanticRuntimeLspRequestGuard,
+  operation: SemanticRuntimeLspOperation,
 ): Promise<CodeAction[] | null> {
-  const doc = ctx.ensureProgramDocument(params.textDocument.uri);
+  const doc = operation.documents.ensureProgramDocument(params.textDocument.uri);
   if (!doc) return null;
   if (!isTemplateDocument(doc)) return null;
 
-  const response = await ctx.semanticRuntime.templateCodeActions(
+  const response = await operation.templateCodeActions(
     doc,
     params.range.start,
-    guard,
   );
   const mappingOptions = {
     documentUris: ctx.documentUris,
     originDocument: doc,
     diagnostics: params.context.diagnostics,
     onMappingFailure: (row: { readonly title: string }, failures: readonly string[]) => {
-      ctx.logger.warn(`[codeAction] skipped unsafe code action "${row.title}": ${failures.join(" ")}`);
+      operation.deferEffect({
+        kind: "log",
+        level: "warn",
+        message: `[codeAction] skipped unsafe code action "${row.title}": ${failures.join(" ")}`,
+      });
     },
   };
   return ctx.clientSupportsCodeActionResolveEdit
-    ? mapSemanticRuntimeUnresolvedTemplateCodeActions(response, (uri) => ctx.lookupDocumentSnapshot(uri), {
+    ? mapSemanticRuntimeUnresolvedTemplateCodeActions(response, (uri) => operation.documents.lookupDocumentSnapshot(uri), {
         ...mappingOptions,
         position: params.range.start,
       })
-    : mapSemanticRuntimeTemplateCodeActions(response, (uri) => ctx.lookupDocumentSnapshot(uri), mappingOptions);
+    : mapSemanticRuntimeTemplateCodeActions(response, (uri) => operation.documents.lookupDocumentSnapshot(uri), mappingOptions);
 }
 
 export async function handleCodeActionResolve(
   ctx: ServerContext,
   action: CodeAction,
-  guard: SemanticRuntimeLspRequestGuard,
+  operation: SemanticRuntimeLspOperation,
 ): Promise<CodeAction> {
   const resolve = semanticRuntimeTemplateCodeActionResolveData(action.data);
   if (resolve == null) {
     return action;
   }
-  const doc = ctx.ensureProgramDocument(resolve.textDocument.uri);
+  const doc = operation.documents.ensureProgramDocument(resolve.textDocument.uri);
   if (doc == null || !isTemplateDocument(doc)) {
-    ctx.logger.warn(`[codeAction/resolve] source document is no longer available: ${resolve.textDocument.uri}`);
+    operation.deferEffect({
+      kind: "log",
+      level: "warn",
+      message: `[codeAction/resolve] source document is no longer available: ${resolve.textDocument.uri}`,
+    });
     return action;
   }
 
-  const response = await ctx.semanticRuntime.templateCodeActions(doc, resolve.position, guard);
+  const response = await operation.templateCodeActions(doc, resolve.position);
   const candidates = mapSemanticRuntimeTemplateCodeActions(
     response,
-    (uri) => ctx.lookupDocumentSnapshot(uri),
+    (uri) => operation.documents.lookupDocumentSnapshot(uri),
     {
       documentUris: ctx.documentUris,
       originDocument: doc,
       diagnostics: action.diagnostics,
       onMappingFailure: (row, failures) => {
-        ctx.logger.warn(`[codeAction/resolve] skipped unsafe code action "${row.title}": ${failures.join(" ")}`);
+        operation.deferEffect({
+          kind: "log",
+          level: "warn",
+          message: `[codeAction/resolve] skipped unsafe code action "${row.title}": ${failures.join(" ")}`,
+        });
       },
     },
   ) ?? [];
@@ -374,9 +400,11 @@ export async function handleCodeActionResolve(
     semanticRuntimeTemplateCodeActionIdentityFromData(candidate.data) === resolve.actionIdentity
   );
   if (matches.length !== 1 || matches[0]?.edit == null) {
-    ctx.logger.warn(
-      `[codeAction/resolve] action is no longer uniquely applicable: ${action.title} (${matches.length} current matches)`,
-    );
+    operation.deferEffect({
+      kind: "log",
+      level: "warn",
+      message: `[codeAction/resolve] action is no longer uniquely applicable: ${action.title} (${matches.length} current matches)`,
+    });
     return action;
   }
   return {
@@ -437,9 +465,15 @@ export function registerFeatureHandlers(ctx: ServerContext): void {
     (guard) => handleFoldingRanges(ctx, params, guard)));
 
   // Inlay hints — binding mode resolution
-  ctx.connection.languages.inlayHint.on((params, token) => documentRequest(ctx, "inlayHints", token, params.textDocument.uri,
-    () => null,
-    (guard) => handleInlayHints(ctx, params, guard)));
+  ctx.connection.languages.inlayHint.on(async (params, token) => {
+    const enabled = await bindingModeInlayHintsEnabled(ctx, params.textDocument.uri);
+    if (!enabled && !token.isCancellationRequested) {
+      return null;
+    }
+    return documentRequest(ctx, "inlayHints", token, params.textDocument.uri,
+      () => null,
+      (operation) => handleInlayHints(ctx, params, operation));
+  });
 
 
   ctx.connection.onRequest(SemanticTokensRequest.type, (params, token) =>
@@ -453,8 +487,8 @@ function documentRequest<T>(
   feature: string,
   token: CancellationToken,
   uri: string,
-  whenNotAuthored: (guard: SemanticRuntimeLspRequestGuard) => T | Promise<T>,
-  handler: (guard: SemanticRuntimeLspRequestGuard) => T | Promise<T>,
+  whenNotAuthored: (operation: SemanticRuntimeLspOperation) => T | Promise<T>,
+  handler: (operation: SemanticRuntimeLspOperation) => T | Promise<T>,
 ): Promise<T> {
   return runSemanticRuntimeDocumentRequest(
     ctx,
@@ -471,7 +505,7 @@ function request<T>(
   feature: string,
   token: CancellationToken,
   uri: string | undefined,
-  handler: (guard: SemanticRuntimeLspRequestGuard) => T | Promise<T>,
+  handler: (operation: SemanticRuntimeLspOperation) => T | Promise<T>,
 ): Promise<T> {
   return runSemanticRuntimeRequest(ctx, feature, token, handler, uri);
 }
