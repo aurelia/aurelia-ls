@@ -24,7 +24,7 @@ afterEach(() => {
 });
 
 describe('type-system root admission', () => {
-  test('keeps graph-only app sources as roots without promoting in-boundary external sources', async () => {
+  test('keeps graph-only roots exact and leaves evaluator-only virtual carriers outside the Program', async () => {
     const root = mkdtempSync(path.join(tmpdir(), 'aurelia-type-system-roots-'));
     temporaryRoots.push(root);
     const mainFile = path.join(root, 'src/main.ts');
@@ -60,6 +60,7 @@ describe('type-system root admission', () => {
       fileName: string,
       projectPath: string,
       role: SourceFileRole,
+      moduleKey = fileName,
     ): StaticProjectEvaluationSourceResult => new StaticProjectEvaluationSourceResult(
       {
         ...anchor.admission,
@@ -67,17 +68,31 @@ describe('type-system root admission', () => {
         language: SourceLanguage.TypeScript,
         role,
       },
-      fileName,
+      moduleKey,
       ts.createSourceFile(fileName, 'export const value = true;\n', ts.ScriptTarget.ES2022, true),
       anchor.evaluation,
       [],
+    );
+    const virtualModuleKey = 'semantic-runtime:aurelia-evaluation-runtime';
+    const virtualFileName = `${virtualModuleKey}.ts`;
+    const virtualSource = supplementalSource(
+      virtualFileName,
+      'virtual/test-evaluator-runtime.ts',
+      SourceFileRole.ExternalSource,
+      virtualModuleKey,
+    );
+    const graphOnlySource = supplementalSource(
+      graphOnlyFile,
+      'src/graph-only.ts',
+      SourceFileRole.AppSource,
     );
     const evaluation = new StaticProjectEvaluationResult(
       project,
       [
         ...baseline.sources,
-        supplementalSource(graphOnlyFile, 'src/graph-only.ts', SourceFileRole.AppSource),
+        graphOnlySource,
         supplementalSource(externalFile, 'src/external.ts', SourceFileRole.ExternalSource),
+        virtualSource,
       ],
       baseline.evaluationOrderModuleKeys,
       baseline.profile,
@@ -92,5 +107,21 @@ describe('type-system root admission', () => {
     expect(roots).not.toContain(canonicalTypeSystemPath(externalFile));
     expect(typeSystem.readProgramSourceFileByHostPath(graphOnlyFile)).not.toBeNull();
     expect(typeSystem.readProgramSourceFileByHostPath(externalFile)).toBeNull();
+    expect(typeSystem.readProgramSourceFileByModuleKey(graphOnlyFile)).not.toBeNull();
+    expect(typeSystem.readProgramNode(graphOnlySource.sourceFile!.statements[0]!)).not.toBeNull();
+    expect(typeSystem.readEvaluatedSourceFileByModuleKey(virtualModuleKey)).toBe(virtualSource.sourceFile);
+    expect(typeSystem.readProgramSourceFileByModuleKey(virtualModuleKey)).toBeNull();
+
+    const virtualNode = virtualSource.sourceFile!.statements[0]!;
+    const remapStatsBefore = typeSystem.readProgramNodeRemapStats();
+    expect(typeSystem.readProgramNode(virtualNode)).toBeNull();
+    expect(typeSystem.readProgramNode(virtualNode)).toBeNull();
+    const remapStatsAfter = typeSystem.readProgramNodeRemapStats();
+    expect(remapStatsAfter.requests - remapStatsBefore.requests).toBe(2);
+    expect(remapStatsAfter.cacheMisses - remapStatsBefore.cacheMisses).toBe(1);
+    expect(remapStatsAfter.cacheHits - remapStatsBefore.cacheHits).toBe(1);
+    expect(remapStatsAfter.sourceFileMisses - remapStatsBefore.sourceFileMisses).toBe(1);
+    expect(() => typeSystem.readProgramSourceFileByHostPath(virtualFileName))
+      .toThrow(/absolute host path/);
   }, 30_000);
 });

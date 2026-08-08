@@ -481,6 +481,9 @@ state-store initial-state type projection and binding-source value reduction. Ad
 local `smallestExpressionForSpan(...)` walks into evaluator, state, router, or template code.
 Evaluator-owned AST access is deliberately named `readEvaluatedSourceFileByModuleKey(...)` so call sites do not
 accidentally use an evaluation SourceFile with the checker.
+Evaluator-only virtual SourceFiles may carry logical names that are not absolute host paths. The internal
+SourceFile-to-Program bridge returns no counterpart for those carriers; it must not forward their logical names into
+the strict host-path lookup or relax that public lookup into a project/workspace guessing API.
 Checker-observed source-file addresses keep their file-role metadata in public `SemanticSourceReference.sourceFileRole`
 and owner key in `sourceWorkspaceKey`. Dependency implementation files admitted through `node_modules` classify as
 `external-source`, even when the package is source-backed, so unified diagnostics and repair planning do not route

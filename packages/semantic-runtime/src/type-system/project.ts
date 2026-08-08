@@ -290,7 +290,7 @@ export class TypeSystemProject {
   /** Read the Program-owned source file associated with an evaluator module key. */
   readProgramSourceFileByModuleKey(moduleKey: string): ts.SourceFile | null {
     const evaluatedSourceFile = this.readEvaluatedSourceFileByModuleKey(moduleKey);
-    return evaluatedSourceFile == null ? null : this.readProgramSourceFileByHostPath(evaluatedSourceFile.fileName);
+    return evaluatedSourceFile == null ? null : this.readProgramSourceFileForCarrier(evaluatedSourceFile);
   }
 
   /** Read one Program source by exact absolute host identity. */
@@ -424,7 +424,7 @@ export class TypeSystemProject {
     }
     this.programNodeRemapCacheMisses += 1;
     const sourceFile = node.getSourceFile();
-    const programSourceFile = this.readProgramSourceFileByHostPath(sourceFile.fileName);
+    const programSourceFile = this.readProgramSourceFileForCarrier(sourceFile);
     if (programSourceFile == null) {
       this.programNodeRemapSourceFileMisses += 1;
       this.programNodeRemapCache.set(node, null);
@@ -442,7 +442,7 @@ export class TypeSystemProject {
       this.programNodeRemapSpanHits += 1;
     }
     this.programNodeRemapCache.set(node, match);
-    return match as TNode | null;
+    return match;
   }
 
   /** Read a Program-owned expression counterpart and reject impossible span matches explicitly. */
@@ -545,6 +545,16 @@ export class TypeSystemProject {
     const index = typeSystemProgramNodeSpanIndex(programSourceFile);
     this.programNodeRemapSpanIndexesByPath.set(sourcePath, index);
     return index;
+  }
+
+  /**
+   * Read the Program counterpart for an AST carrier without weakening the strict public host-path API.
+   * Evaluator-only virtual SourceFiles have logical non-host names and deliberately have no Program counterpart.
+   */
+  private readProgramSourceFileForCarrier(sourceFile: ts.SourceFile): ts.SourceFile | null {
+    return path.isAbsolute(sourceFile.fileName)
+      ? this.readProgramSourceFileByHostPath(sourceFile.fileName)
+      : null;
   }
 
   /** Read the evaluator module key that owns a TypeChecker source file, when it is in the evaluated project graph. */
@@ -1278,9 +1288,10 @@ function typeSystemNodeModulePackageName(normalizedFileName: string): string | n
     const nested = packagePath.indexOf(marker);
     return nested < 0 ? '.pnpm' : typeSystemNodeModulePackageName(packagePath.slice(nested));
   }
-  return segments[0]?.startsWith('@') && segments.length > 1
-    ? `${segments[0]}/${segments[1]}`
-    : segments[0] ?? null;
+  const [scope, packageName] = segments;
+  return scope?.startsWith('@') && packageName != null
+    ? `${scope}/${packageName}`
+    : scope ?? null;
 }
 
 function sortedTypeSystemProgramSourceFileGroups(
