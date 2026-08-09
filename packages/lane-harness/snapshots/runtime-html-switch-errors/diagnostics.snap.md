@@ -36,6 +36,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-controller:AUR0815"
         ],
         "phase": "template-controller-link",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -50,7 +56,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia runtime controller AUR0815 rejects this controller input: Invalid [case] usage. The parent [switch] controller was not found..",
+      "message": "Invalid [case] usage. The parent [switch] controller was not found.",
       "range": {
         "end": {
           "character": 20,
@@ -80,6 +86,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-controller:AUR0816"
         ],
         "phase": "template-controller-link",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -94,7 +106,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia runtime controller AUR0816 rejects this controller input: Invalid [default-case] usage. Multiple default-case controllers are linked to the same [switch]..",
+      "message": "Invalid [default-case] usage. Multiple default-case controllers are linked to the same [switch].",
       "range": {
         "end": {
           "character": 24,

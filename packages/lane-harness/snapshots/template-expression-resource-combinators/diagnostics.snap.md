@@ -36,6 +36,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "expression-parse:AUR0167"
         ],
         "phase": null,
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -50,7 +56,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia expression parser AUR0167 rejects this template expression: Expected ':' in conditional expression.",
+      "message": "Expected ':' in conditional expression.",
       "range": {
         "end": {
           "character": 68,
@@ -80,6 +86,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "expression-parse:AUR0151"
         ],
         "phase": null,
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -94,7 +106,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia expression parser AUR0151 rejects this template expression: Expected iterator declaration.",
+      "message": "Expected iterator declaration.",
       "range": {
         "end": {
           "character": 47,
@@ -124,6 +136,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "expression-parse:AUR0155"
         ],
         "phase": null,
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -138,7 +156,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia expression parser AUR0155 rejects this template expression: Unexpected token EOF in primary expression.",
+      "message": "Unexpected token EOF in primary expression.",
       "range": {
         "end": {
           "character": 65,
@@ -168,6 +186,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "expression-parse:AUR0159"
         ],
         "phase": null,
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -182,7 +206,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia expression parser AUR0159 rejects this template expression: Expected identifier after '|'.",
+      "message": "Expected identifier after '|'.",
       "range": {
         "end": {
           "character": 45,
@@ -212,6 +236,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "expression-parse:AUR0159"
         ],
         "phase": null,
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -226,7 +256,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia expression parser AUR0159 rejects this template expression: Expected identifier after '|'.",
+      "message": "Expected identifier after '|'.",
       "range": {
         "end": {
           "character": 47,
@@ -256,6 +286,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "expression-parse:AUR0160"
         ],
         "phase": null,
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -270,7 +306,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia expression parser AUR0160 rejects this template expression: Expected identifier after '&'.",
+      "message": "Expected identifier after '&'.",
       "range": {
         "end": {
           "character": 44,
@@ -300,6 +336,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "expression-parse:AUR0160"
         ],
         "phase": null,
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -314,7 +356,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia expression parser AUR0160 rejects this template expression: Expected identifier after '&'.",
+      "message": "Expected identifier after '&'.",
       "range": {
         "end": {
           "character": 46,
@@ -344,6 +386,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "expression-parse:unmapped"
         ],
         "phase": null,
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -358,7 +406,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "The expression parser rejected this template expression: Expected '}' to close interpolation hole.",
+      "message": "Expected '}' to close interpolation hole.",
       "range": {
         "end": {
           "character": 61,
@@ -388,6 +436,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "expression-parse:AUR0170"
         ],
         "phase": null,
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -402,7 +456,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia expression parser AUR0170 rejects this template expression: Expected ',' or ']' in array binding pattern.",
+      "message": "Expected ',' or ']' in array binding pattern.",
       "range": {
         "end": {
           "character": 62,
@@ -432,6 +486,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "expression-parse:AUR0170"
         ],
         "phase": null,
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -446,7 +506,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia expression parser AUR0170 rejects this template expression: Array repeat declarations support identifiers and holes only.",
+      "message": "Array repeat declarations support identifiers and holes only.",
       "range": {
         "end": {
           "character": 55,
@@ -476,6 +536,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "expression-parse:AUR0170"
         ],
         "phase": null,
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -490,7 +556,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia expression parser AUR0170 rejects this template expression: Array repeat declarations support identifiers and holes only.",
+      "message": "Array repeat declarations support identifiers and holes only.",
       "range": {
         "end": {
           "character": 55,
@@ -520,6 +586,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "expression-parse:AUR0152"
         ],
         "phase": null,
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -534,7 +606,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia expression parser AUR0152 rejects this template expression: Spread syntax is not supported in binding expressions.",
+      "message": "Spread syntax is not supported in binding expressions.",
       "range": {
         "end": {
           "character": 54,
@@ -564,6 +636,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "expression-parse:AUR0158"
         ],
         "phase": null,
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -578,7 +656,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia expression parser AUR0158 rejects this template expression: Left-hand side is not assignable.",
+      "message": "Left-hand side is not assignable.",
       "range": {
         "end": {
           "character": 62,
@@ -608,6 +686,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "expression-parse:AUR0158"
         ],
         "phase": null,
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -622,7 +706,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia expression parser AUR0158 rejects this template expression: Left-hand side is not assignable.",
+      "message": "Left-hand side is not assignable.",
       "range": {
         "end": {
           "character": 78,
@@ -652,6 +736,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "expression-parse:AUR0161"
         ],
         "phase": null,
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -666,7 +756,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia expression parser AUR0161 rejects this template expression: Unexpected token after end of expression.",
+      "message": "Unexpected token after end of expression.",
       "range": {
         "end": {
           "character": 50,
@@ -696,6 +786,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "expression-parse:AUR0162"
         ],
         "phase": null,
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -710,7 +806,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia expression parser AUR0162 rejects this template expression: Bare 'import' is not allowed in binding expressions.",
+      "message": "Bare 'import' is not allowed in binding expressions.",
       "range": {
         "end": {
           "character": 54,
@@ -740,6 +836,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "expression-parse:AUR0172"
         ],
         "phase": null,
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -754,7 +856,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia expression parser AUR0172 rejects this template expression: Invalid tagged template on optional chain.",
+      "message": "Invalid tagged template on optional chain.",
       "range": {
         "end": {
           "character": 70,
@@ -784,6 +886,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "expression-parse:AUR0165"
         ],
         "phase": null,
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -798,7 +906,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia expression parser AUR0165 rejects this template expression: Unterminated string literal.",
+      "message": "Unterminated string literal.",
       "range": {
         "end": {
           "character": 51,
@@ -828,6 +936,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "expression-parse:AUR0166"
         ],
         "phase": null,
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -842,7 +956,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia expression parser AUR0166 rejects this template expression: Unterminated template literal.",
+      "message": "Unterminated template literal.",
       "range": {
         "end": {
           "character": 53,
@@ -872,6 +986,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "expression-parse:AUR0167"
         ],
         "phase": null,
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -886,7 +1006,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia expression parser AUR0167 rejects this template expression: Expected ',' or ')' in argument list.",
+      "message": "Expected ',' or ')' in argument list.",
       "range": {
         "end": {
           "character": 56,
@@ -916,6 +1036,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "expression-parse:AUR0168"
         ],
         "phase": null,
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -930,7 +1056,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia expression parser AUR0168 rejects this template expression: Unexpected character in binding expression.",
+      "message": "Unexpected character in binding expression.",
       "range": {
         "end": {
           "character": 47,
@@ -960,6 +1086,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "expression-parse:AUR0174"
         ],
         "phase": null,
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -974,7 +1106,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia expression parser AUR0174 rejects this template expression: Arrow function default parameters are not supported.",
+      "message": "Arrow function default parameters are not supported.",
       "range": {
         "end": {
           "character": 75,
@@ -1004,6 +1136,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "expression-parse:AUR0175"
         ],
         "phase": null,
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -1018,7 +1156,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia expression parser AUR0175 rejects this template expression: Arrow function destructuring parameters are not supported.",
+      "message": "Arrow function destructuring parameters are not supported.",
       "range": {
         "end": {
           "character": 74,
@@ -1048,6 +1186,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "expression-parse:AUR0176"
         ],
         "phase": null,
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -1062,7 +1206,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia expression parser AUR0176 rejects this template expression: Rest parameter must be last in arrow parameter list.",
+      "message": "Rest parameter must be last in arrow parameter list.",
       "range": {
         "end": {
           "character": 65,
@@ -1092,6 +1236,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "expression-parse:AUR0178"
         ],
         "phase": null,
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -1106,7 +1256,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia expression parser AUR0178 rejects this template expression: Arrow function bodies are not supported.",
+      "message": "Arrow function bodies are not supported.",
       "range": {
         "end": {
           "character": 60,
@@ -1174,6 +1324,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "typescript:TS2345"
         ],
         "phase": "semantic",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -1230,6 +1386,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "typescript:TS2345"
         ],
         "phase": "semantic",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -1286,6 +1448,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-ast:AUR0103"
         ],
         "phase": null,
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -1312,7 +1480,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         },
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia runtime astEvaluate AUR0103 rejects this template expression: Value converter 'missingConverter' was not resolved through the current compiler resource scope..",
+      "message": "Value converter 'missingConverter' was not resolved through the current compiler resource scope.",
       "range": {
         "end": {
           "character": 77,
@@ -1342,6 +1510,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-value-converter:AUR0103"
         ],
         "phase": "bind",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -1356,7 +1530,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia runtime value converter AUR0103 rejects this binding: Value converter 'missingConverter' was not resolved through the current compiler resource scope..",
+      "message": "Value converter 'missingConverter' was not resolved through the current compiler resource scope.",
       "range": {
         "end": {
           "character": 132,
@@ -1386,6 +1560,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "typescript:TS2345"
         ],
         "phase": "semantic",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -1442,6 +1622,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "typescript:TS2345"
         ],
         "phase": "semantic",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -1498,6 +1684,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "expression-member:selected-member-missing"
         ],
         "phase": null,
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -1554,6 +1746,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-binding-behavior:AUR0102"
         ],
         "phase": "bind",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -1568,7 +1766,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia runtime binding behavior AUR0102 rejects this binding: Binding behavior 'innerAudit' is already applied to this binding..",
+      "message": "Binding behavior 'innerAudit' is already applied to this binding.",
       "range": {
         "end": {
           "character": 57,
@@ -1598,6 +1796,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-binding-behavior:AUR0101"
         ],
         "phase": "bind",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -1612,7 +1816,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia runtime binding behavior AUR0101 rejects this binding: Binding behavior 'missingBehavior' was not resolved through the current compiler resource scope..",
+      "message": "Binding behavior 'missingBehavior' was not resolved through the current compiler resource scope.",
       "range": {
         "end": {
           "character": 100,
@@ -1642,6 +1846,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-binding-behavior:AUR0101"
         ],
         "phase": "bind",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -1656,7 +1866,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia runtime binding behavior AUR0101 rejects this binding: Binding behavior 'missingBehavior' was not resolved through the current compiler resource scope..",
+      "message": "Binding behavior 'missingBehavior' was not resolved through the current compiler resource scope.",
       "range": {
         "end": {
           "character": 92,
@@ -1686,6 +1896,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "expression-parse:AUR0156"
         ],
         "phase": null,
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -1700,7 +1916,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia expression parser AUR0156 rejects this template expression: Unexpected token after end of expression.",
+      "message": "Unexpected token after end of expression.",
       "range": {
         "end": {
           "character": 81,
@@ -1730,6 +1946,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-value-converter:AUR0103"
         ],
         "phase": "bind",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -1744,7 +1966,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia runtime value converter AUR0103 rejects this binding: Value converter 'missingConverter' was not resolved through the current compiler resource scope..",
+      "message": "Value converter 'missingConverter' was not resolved through the current compiler resource scope.",
       "range": {
         "end": {
           "character": 57,
@@ -1774,6 +1996,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-value-converter:AUR0103"
         ],
         "phase": "bind",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -1788,7 +2016,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia runtime value converter AUR0103 rejects this binding: Value converter 'missingConverter' was not resolved through the current compiler resource scope..",
+      "message": "Value converter 'missingConverter' was not resolved through the current compiler resource scope.",
       "range": {
         "end": {
           "character": 96,
@@ -1818,6 +2046,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-value-converter:AUR0103"
         ],
         "phase": "bind",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -1832,7 +2066,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia runtime value converter AUR0103 rejects this binding: Value converter 'missingConverter' was not resolved through the current compiler resource scope..",
+      "message": "Value converter 'missingConverter' was not resolved through the current compiler resource scope.",
       "range": {
         "end": {
           "character": 86,
@@ -1862,6 +2096,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-binding-behavior:AUR0101"
         ],
         "phase": "bind",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -1876,7 +2116,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia runtime binding behavior AUR0101 rejects this binding: Binding behavior 'missingBehavior' was not resolved through the current compiler resource scope..",
+      "message": "Binding behavior 'missingBehavior' was not resolved through the current compiler resource scope.",
       "range": {
         "end": {
           "character": 60,
@@ -1906,6 +2146,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-value-converter:AUR0103"
         ],
         "phase": "bind",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -1920,7 +2166,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia runtime value converter AUR0103 rejects this binding: Value converter 'missingInterpolationConverter' was not resolved through the current compiler resource scope..",
+      "message": "Value converter 'missingInterpolationConverter' was not resolved through the current compiler resource scope.",
       "range": {
         "end": {
           "character": 92,

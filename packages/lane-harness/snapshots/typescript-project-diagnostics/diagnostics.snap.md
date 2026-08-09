@@ -34,16 +34,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "phase": "semantic",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "typescript-diagnostics",
-        "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
-          "changeDomain": "inspection",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
-        },
+        "repairAffordance": null,
         "sourceRole": "app-source",
         "subject": null,
         "typeScriptDiagnosticCode": 2322
@@ -76,16 +75,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "phase": "semantic",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "typescript-diagnostics",
-        "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
-          "changeDomain": "inspection",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
-        },
+        "repairAffordance": null,
         "sourceRole": "app-source",
         "subject": null,
         "typeScriptDiagnosticCode": 2769
@@ -156,6 +154,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "phase": "semantic",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [
           {
             "code": "TS2728",
@@ -163,8 +167,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "source": {
               "end": 57,
               "kind": "typescript-diagnostic",
-              "label": "repo:///packages/semantic-runtime/fixtures/pressure/typescript-project-diagnostics/src/diagnostic-contract.ts@45..57",
-              "path": "repo:///packages/semantic-runtime/fixtures/pressure/typescript-project-diagnostics/src/diagnostic-contract.ts",
+              "label": "src/diagnostic-contract.ts@45..57",
+              "path": "src/diagnostic-contract.ts",
               "role": "line:1:character:2",
               "start": 45
             },
@@ -172,14 +176,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           }
         ],
         "relatedQueryKind": "typescript-diagnostics",
-        "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
-          "changeDomain": "inspection",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
-        },
+        "repairAffordance": null,
         "sourceRole": "app-source",
         "subject": null,
         "typeScriptDiagnosticCode": 2741

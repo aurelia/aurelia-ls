@@ -66,6 +66,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "router.default-resources"
         ],
         "phase": null,
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {

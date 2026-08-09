@@ -34,16 +34,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "phase": "resource-definition-api",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "resource-issues",
-        "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
-          "changeDomain": "inspection",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
-        },
+        "repairAffordance": null,
         "sourceRole": "app-source",
         "subject": null,
         "typeScriptDiagnosticCode": null
@@ -76,16 +75,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "phase": "resource-definition-api",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "resource-issues",
-        "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
-          "changeDomain": "inspection",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
-        },
+        "repairAffordance": null,
         "sourceRole": "app-source",
         "subject": null,
         "typeScriptDiagnosticCode": null
@@ -118,16 +116,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "phase": "resource-definition-api",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "resource-issues",
-        "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
-          "changeDomain": "inspection",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
-        },
+        "repairAffordance": null,
         "sourceRole": "app-source",
         "subject": null,
         "typeScriptDiagnosticCode": null
@@ -160,16 +157,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "phase": "resource-definition-api",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "resource-issues",
-        "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
-          "changeDomain": "inspection",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
-        },
+        "repairAffordance": null,
         "sourceRole": "app-source",
         "subject": null,
         "typeScriptDiagnosticCode": null
@@ -202,16 +198,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "phase": "resource-definition-api",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "resource-issues",
-        "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
-          "changeDomain": "inspection",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
-        },
+        "repairAffordance": null,
         "sourceRole": "app-source",
         "subject": null,
         "typeScriptDiagnosticCode": null

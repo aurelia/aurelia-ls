@@ -29,7 +29,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "diagnosticCount": 2,
+  "diagnosticCount": 1,
   "outcome": "full",
   "previousResultIdPresent": false,
   "resultIdPresent": true,
@@ -50,65 +50,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "diagnosticCount": 1,
-  "diagnostics": [
-    {
-      "anomaly": null,
-      "code": "weak-expression-member-owner",
-      "data": {
-        "diagnosticAuthority": "semantic-authoring-policy",
-        "diagnosticDomain": "template",
-        "diagnosticKind": "weak-expression-member-owner",
-        "frameworkErrorCode": null,
-        "frameworkRawErrorAuthority": null,
-        "missingInput": "expression-member-owner-type:index-signature-only",
-        "missingInputs": [
-          "expression-member-owner-type:index-signature-only"
-        ],
-        "phase": null,
-        "relatedInformation": [],
-        "relatedQueryKind": "template-diagnostics",
-        "repairAffordance": {
-          "actionKind": "declare-missing-member",
-          "actionability": "guided",
-          "changeDomain": "app-source",
-          "planKind": "source-member-declaration",
-          "readiness": "ready-to-plan",
-          "targetSourceCoverage": "all"
-        },
-        "sourceRole": "template",
-        "subject": {
-          "source": {
-            "end": 497,
-            "kind": "source-span-address",
-            "label": "src/app.html@478..497",
-            "path": "src/app.html",
-            "role": "template-member-access",
-            "start": 478
-          },
-          "span": null,
-          "subjectKind": "template-member-access",
-          "uri": null
-        },
-        "typeScriptDiagnosticCode": null
-      },
-      "message": "Member access is backed by an index signature, so completion cannot enumerate concrete property names.",
-      "range": {
-        "end": {
-          "character": 51,
-          "line": 10
-        },
-        "start": {
-          "character": 45,
-          "line": 10
-        }
-      },
-      "rangeText": "source",
-      "relatedInformation": [],
-      "severity": "information",
-      "source": "aurelia"
-    }
-  ]
+  "diagnosticCount": 0,
+  "diagnostics": []
 }
 ```
 

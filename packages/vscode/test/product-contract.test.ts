@@ -15,6 +15,10 @@ interface ExtensionManifest {
       readonly description: string;
     }[];
     readonly semanticTokenModifiers?: readonly unknown[];
+    readonly languages?: readonly {
+      readonly id: string;
+      readonly filenames?: readonly string[];
+    }[];
     readonly jsonValidation?: readonly {
       readonly fileMatch: string;
       readonly url: string;
@@ -34,9 +38,26 @@ interface ExtensionManifest {
   };
 }
 
+interface AureliaProjectSchema {
+  readonly allowComments?: boolean;
+  readonly allowTrailingCommas?: boolean;
+}
+
 const manifest = JSON.parse(
   readFileSync(new URL("../package.json", import.meta.url), "utf8"),
 ) as ExtensionManifest;
+const projectSchema = JSON.parse(
+  readFileSync(
+    new URL("../../semantic-runtime/schema/aurelia.project.schema.json", import.meta.url),
+    "utf8",
+  ),
+) as AureliaProjectSchema;
+const projectDialectSchema = JSON.parse(
+  readFileSync(
+    new URL("../src/schemas/aurelia.project.jsonc.schema.json", import.meta.url),
+    "utf8",
+  ),
+) as AureliaProjectSchema;
 
 describe("VS Code product contract", () => {
   test("does not expose the activation object as a public extension API", () => {
@@ -71,12 +92,32 @@ describe("VS Code product contract", () => {
     expect(manifest.contributes?.snippets).toBeUndefined();
   });
 
-  test("associates native project configuration with the bundled semantic-runtime schema", () => {
+  test("splits exact JSONC parsing from session-owned project semantics", () => {
     expect(manifest.activationEvents).toContain("workspaceContains:**/aurelia.project.json");
+    expect(manifest.contributes?.languages).toEqual([{
+      id: "jsonc",
+      filenames: ["aurelia.project.json"],
+    }]);
     expect(manifest.contributes?.jsonValidation).toEqual([{
       fileMatch: "**/aurelia.project.json",
-      url: "./dist/schemas/aurelia.project.schema.json",
+      url: "./dist/schemas/aurelia.project.jsonc.schema.json",
     }]);
+    expect(Object.keys(projectDialectSchema).sort()).toEqual([
+      "$id",
+      "$schema",
+      "allowComments",
+      "allowTrailingCommas",
+      "description",
+      "title",
+    ]);
+    expect(projectDialectSchema).toEqual(expect.objectContaining({
+      allowComments: true,
+      allowTrailingCommas: true,
+    }));
+    expect(projectSchema).toEqual(expect.objectContaining({
+      allowComments: true,
+      allowTrailingCommas: true,
+    }));
   });
 
   test("declares the exact custom semantic token vocabulary with native fallback types", () => {

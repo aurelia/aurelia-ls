@@ -36,6 +36,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "router:no-available-viewport-agent"
         ],
         "phase": "route-tree-viewport-resolution",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "router-issues",
         "repairAffordance": {

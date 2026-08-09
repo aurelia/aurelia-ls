@@ -25,6 +25,7 @@ import { TextDocument } from "vscode-languageserver-textdocument";
 import type {
   SemanticAppDiagnosticRow,
   SemanticAppDiagnosticsResult,
+  SemanticDiagnosticPresentationRelation,
   SemanticDiagnosticRelatedInformation,
   SemanticRuntimeAnswer,
   SemanticProjectConfigurationDiagnosticsResult,
@@ -47,6 +48,8 @@ import type { DocumentUri, WorkspaceDocumentUris } from "../utils/document-uri.j
 import { languageIdForSource } from "../utils/document-kind.js";
 import {
   AURELIA_TEMPLATE_CODE_ACTION_RESOLVE_SCHEMA,
+  templateCodeActionResolveRefusalFromValue,
+  type TemplateCodeActionResolveRefusal,
   type TemplateCodeActionResolveData,
 } from "../protocol.js";
 import { stableDigest } from "../utils/stable-digest.js";
@@ -128,9 +131,19 @@ export function mapSemanticProjectConfigurationDiagnostics(
         end: document.positionAt(row.source.end),
       },
       message: row.message,
-      severity: DiagnosticSeverity.Error,
+      severity: semanticRuntimeSeverityToLsp(row.severity),
       code: row.diagnosticKind,
       source: "aurelia",
+      data: {
+        semanticRuntime: {
+          queryKind: "project-configuration-diagnostics",
+          projectKey: row.projectKey,
+          diagnosticKind: row.diagnosticKind,
+          severity: row.severity,
+          message: row.message,
+          source: row.source,
+        },
+      },
     });
   }
 
@@ -160,51 +173,149 @@ export function mapSemanticRuntimeAppDiagnostics(
   const mapped: Diagnostic[] = [];
   const failures: string[] = [];
   const presentation = answer.value.presentation;
-  if (presentation != null) {
-    const rows = answer.value.rows;
-    for (const group of presentation.groups) {
-      const relatedInformation: DiagnosticRelatedInformation[] = [];
-      for (const related of group.related) {
-        const row = rows[related.rowIndex] ?? null;
-        if (row == null) {
-          failures.push(`Diagnostic presentation group references missing related row ${related.rowIndex}.`);
-          continue;
-        }
-        const relatedMapping = semanticRuntimeDiagnosticRelatedInformation(row, document, documentUris, lookupText);
-        relatedInformation.push(...relatedMapping.value);
-        failures.push(...relatedMapping.failures);
-      }
-      const diagnosticMapping = semanticRuntimeDiagnostic(
-        rows[group.primary.rowIndex] ?? null,
-        document,
-        documentUris,
-        lookupText,
-        relatedInformation,
-      );
-      failures.push(...diagnosticMapping.failures);
-      if (diagnosticMapping.value != null) {
-        mapped.push(diagnosticMapping.value);
-      } else {
-        const row = rows[group.primary.rowIndex] ?? null;
-        failures.push(
-          row == null
-            ? `Diagnostic presentation group references missing row ${group.primary.rowIndex}.`
-            : `Diagnostic ${row.source?.label ?? row.diagnosticKind} has no range valid for the current document.`,
-        );
-      }
-    }
-    return { value: mapped, failures };
+  if (presentation == null || presentation.complete !== true) {
+    throw new ResponseError(
+      LSPErrorCodes.RequestFailed,
+      presentation == null
+        ? "Aurelia Problems mapping requires a semantic diagnostic presentation."
+        : "Aurelia Problems mapping requires a complete semantic diagnostic presentation.",
+    );
   }
-  for (const row of answer.value.rows) {
-    const diagnosticMapping = semanticRuntimeDiagnostic(row, document, documentUris, lookupText, []);
+  const rows = answer.value.rows;
+  const presentationFailures = semanticDiagnosticPresentationFailures(presentation, rows);
+  if (presentationFailures.length > 0) {
+    throw new ResponseError(
+      LSPErrorCodes.RequestFailed,
+      `Aurelia Problems mapping rejected an invalid diagnostic presentation: ${presentationFailures.join(" ")}`,
+    );
+  }
+  for (const group of presentation.groups) {
+    const relatedInformation: DiagnosticRelatedInformation[] = [];
+    const contextual: DetachedSemanticDiagnosticPresentationContext[] = [];
+    for (const related of group.related) {
+      const row = rows[related.rowIndex]!;
+      const relatedMapping = semanticRuntimeDiagnosticRelatedInformation(row, document, documentUris, lookupText);
+      relatedInformation.push(...relatedMapping.value);
+      failures.push(...relatedMapping.failures);
+      contextual.push({
+        relation: related.relation!,
+        diagnostic: semanticRuntimeDetachedDiagnosticData(row),
+      });
+    }
+    const primaryRow = rows[group.primary.rowIndex]!;
+    const diagnosticMapping = semanticRuntimeDiagnostic(
+      primaryRow,
+      document,
+      documentUris,
+      lookupText,
+      relatedInformation,
+      group.primarySeverity,
+      {
+        rawRowCount: group.rawRowCount,
+        primarySeverity: group.primarySeverity,
+        maxRawSeverity: group.maxRawSeverity,
+        contextual,
+      },
+    );
     failures.push(...diagnosticMapping.failures);
     if (diagnosticMapping.value != null) {
       mapped.push(diagnosticMapping.value);
     } else {
-      failures.push(`Diagnostic ${row.source?.label ?? row.diagnosticKind} has no range valid for the current document.`);
+      failures.push(
+        `Diagnostic ${primaryRow.source?.label ?? primaryRow.diagnosticKind} has no range valid for the current document.`,
+      );
     }
   }
   return { value: mapped, failures };
+}
+
+interface DetachedSemanticDiagnosticPresentationContext {
+  readonly relation: SemanticDiagnosticPresentationRelation;
+  readonly diagnostic: Record<string, unknown>;
+}
+
+interface DetachedSemanticDiagnosticPresentation {
+  readonly rawRowCount: number;
+  readonly primarySeverity: SemanticAppDiagnosticRow["severity"];
+  readonly maxRawSeverity: SemanticAppDiagnosticRow["severity"];
+  readonly contextual: readonly DetachedSemanticDiagnosticPresentationContext[];
+}
+
+const semanticDiagnosticSeverityRank: Readonly<Record<SemanticAppDiagnosticRow["severity"], number>> = {
+  error: 3,
+  warning: 2,
+  information: 1,
+};
+
+function semanticDiagnosticPresentationFailures(
+  presentation: NonNullable<SemanticAppDiagnosticsResult["presentation"]>,
+  rows: readonly SemanticAppDiagnosticRow[],
+): string[] {
+  const failures: string[] = [];
+  const claimed = new Set<number>();
+  const claim = (rowIndex: number, label: string): void => {
+    if (!Number.isInteger(rowIndex) || rowIndex < 0 || rowIndex >= rows.length) {
+      failures.push(`${label} references out-of-range row ${rowIndex}.`);
+    } else if (claimed.has(rowIndex)) {
+      failures.push(`${label} reuses row ${rowIndex}.`);
+    } else {
+      claimed.add(rowIndex);
+    }
+  };
+  if (presentation.rawRowCount !== rows.length) {
+    failures.push(`rawRowCount ${presentation.rawRowCount} does not match ${rows.length} rows.`);
+  }
+  if (presentation.primaryCount !== presentation.groups.length) {
+    failures.push(`primaryCount ${presentation.primaryCount} does not match ${presentation.groups.length} groups.`);
+  }
+  const contextualCount = presentation.groups.reduce((count, group) => count + group.related.length, 0);
+  if (presentation.contextualCount !== contextualCount) {
+    failures.push(`contextualCount ${presentation.contextualCount} does not match ${contextualCount} related rows.`);
+  }
+  if (presentation.withheldCount !== presentation.withheld.length) {
+    failures.push(`withheldCount ${presentation.withheldCount} does not match ${presentation.withheld.length} rows.`);
+  }
+  for (const group of presentation.groups) {
+    claim(group.primary.rowIndex, "Diagnostic primary");
+    const primary = rows[group.primary.rowIndex];
+    if (group.primary.role !== "primary" || group.primary.relation !== null) {
+      failures.push("Diagnostic group primary has an invalid presentation role or relation.");
+    }
+    if (group.rawRowCount !== 1 + group.related.length) {
+      failures.push(`Diagnostic group rawRowCount ${group.rawRowCount} is inconsistent.`);
+    }
+    if (primary != null && group.primarySeverity !== primary.severity) {
+      failures.push("Diagnostic group primarySeverity does not match its primary row.");
+    }
+    const groupRows = [primary, ...group.related.map((related) => rows[related.rowIndex])]
+      .filter((row): row is SemanticAppDiagnosticRow => row != null);
+    if (groupRows.length === group.rawRowCount) {
+      const expectedMaxSeverity = groupRows.reduce((maximum, row) =>
+        semanticDiagnosticSeverityRank[row.severity] > semanticDiagnosticSeverityRank[maximum]
+          ? row.severity
+          : maximum
+      , "information" as SemanticAppDiagnosticRow["severity"]);
+      if (group.maxRawSeverity !== expectedMaxSeverity) {
+        failures.push("Diagnostic group maxRawSeverity does not match its raw rows.");
+      }
+    }
+    for (const related of group.related) {
+      claim(related.rowIndex, "Contextual diagnostic");
+      if (related.role !== "contextual" || related.relation == null) {
+        failures.push("Contextual diagnostic has an invalid presentation role or relation.");
+      }
+    }
+  }
+  for (const withheld of presentation.withheld) {
+    claim(withheld.rowIndex, "Withheld diagnostic");
+    if (withheld.reason !== "context-only-weak-owner") {
+      failures.push("Withheld diagnostic has an invalid presentation reason.");
+    }
+  }
+  if (claimed.size !== rows.length) {
+    failures.push(`Diagnostic presentation accounts for ${claimed.size} of ${rows.length} rows.`);
+  }
+  return failures;
 }
 
 function semanticRuntimeDiagnostic(
@@ -213,6 +324,8 @@ function semanticRuntimeDiagnostic(
   documentUris: WorkspaceDocumentUris,
   lookupText: LookupTextFn | null,
   relatedInformation: DiagnosticRelatedInformation[],
+  presentedSeverity: SemanticAppDiagnosticRow["severity"],
+  presentation: DetachedSemanticDiagnosticPresentation,
 ): SemanticRuntimeReadMapping<Diagnostic | null> {
   if (row == null) return { value: null, failures: [] };
   const range = semanticRuntimeDiagnosticRange(row.source, document, documentUris);
@@ -229,19 +342,41 @@ function semanticRuntimeDiagnostic(
     rowRelatedInformation.push(...mapping.value);
     failures.push(...mapping.failures);
   }
-  const allRelatedInformation = [...rowRelatedInformation, ...relatedInformation];
+  const allRelatedInformation = uniqueDiagnosticRelatedInformation([
+    ...rowRelatedInformation,
+    ...relatedInformation,
+  ]);
   return {
     value: {
       range,
       message: row.summary,
-      severity: semanticRuntimeSeverityToLsp(row.severity),
+      severity: semanticRuntimeSeverityToLsp(presentedSeverity),
       code: semanticRuntimeDiagnosticCode(row),
       source: row.diagnosticDomain === "typescript" ? "typescript" : "aurelia",
-      data: semanticRuntimeDiagnosticData(row),
+      data: semanticRuntimeDiagnosticData(row, presentation),
       ...(allRelatedInformation.length === 0 ? {} : { relatedInformation: allRelatedInformation }),
     },
     failures,
   };
+}
+
+function uniqueDiagnosticRelatedInformation(
+  rows: readonly DiagnosticRelatedInformation[],
+): DiagnosticRelatedInformation[] {
+  const seen = new Set<string>();
+  return rows.filter((row) => {
+    const key = JSON.stringify([
+      row.location.uri,
+      row.location.range.start.line,
+      row.location.range.start.character,
+      row.location.range.end.line,
+      row.location.range.end.character,
+      row.message,
+    ]);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 export function semanticRuntimeDiagnosticCode(row: SemanticAppDiagnosticRow): string {
@@ -257,7 +392,26 @@ function semanticRuntimeDiagnosticRelatedInformation(
   lookupText: LookupTextFn | null,
 ): SemanticRuntimeReadMapping<DiagnosticRelatedInformation[]> {
   if (row == null) return { value: [], failures: [] };
-  return semanticRuntimeRelatedInformationForSource(row.source, row.summary, document, documentUris, lookupText);
+  const direct = semanticRuntimeRelatedInformationForSource(
+    row.source,
+    row.summary,
+    document,
+    documentUris,
+    lookupText,
+  );
+  const value = [...direct.value];
+  const failures = [...direct.failures];
+  for (const related of row.relatedInformation) {
+    const nested = semanticRuntimeDiagnosticRelatedSourceInformation(
+      related,
+      document,
+      documentUris,
+      lookupText,
+    );
+    value.push(...nested.value);
+    failures.push(...nested.failures);
+  }
+  return { value, failures };
 }
 
 function semanticRuntimeDiagnosticRelatedSourceInformation(
@@ -351,8 +505,14 @@ function semanticRuntimeDiagnosticRange(
 
 export function semanticRuntimeDiagnosticData(
   row: SemanticAppDiagnosticRow,
+  presentation: DetachedSemanticDiagnosticPresentation | null = null,
 ): Record<string, unknown> {
-  return { semanticRuntime: semanticRuntimeDetachedDiagnosticData(row) };
+  return {
+    semanticRuntime: {
+      ...semanticRuntimeDetachedDiagnosticData(row),
+      ...(presentation == null ? {} : { presentation }),
+    },
+  };
 }
 
 function semanticRuntimeDetachedDiagnosticData(row: SemanticAppDiagnosticRow): Record<string, unknown> {
@@ -1259,6 +1419,7 @@ export function mapSemanticRuntimeTemplateCodeActions(
     readonly onMappingFailure?: (
       row: SemanticTemplateCodeActionsResult["rows"][number],
       failures: readonly string[],
+      actionIdentity: string,
     ) => void;
   },
 ): CodeAction[] | null {
@@ -1276,6 +1437,7 @@ export function mapSemanticRuntimeTemplateCodeActions(
     ) {
       continue;
     }
+    const actionIdentity = semanticRuntimeTemplateCodeActionIdentity(row);
     const mapping = mapSemanticRuntimeWorkspaceEditRows(row.edits, {
       documentUris: options.documentUris,
       originDocument: options.originDocument,
@@ -1283,7 +1445,7 @@ export function mapSemanticRuntimeTemplateCodeActions(
       emptyFailure: `Code action '${row.title}' has no mapped edit rows.`,
     });
     if (mapping.edit == null) {
-      options.onMappingFailure?.(row, mapping.failures);
+      options.onMappingFailure?.(row, mapping.failures, actionIdentity);
       continue;
     }
     const diagnostics = semanticRuntimeTemplateCodeActionDiagnostics(row, options.diagnostics ?? [], options.originDocument);
@@ -1297,7 +1459,7 @@ export function mapSemanticRuntimeTemplateCodeActions(
         semanticRuntime: {
           queryKind: "template-code-actions",
           repairAffordance: row.repair,
-          actionIdentity: semanticRuntimeTemplateCodeActionIdentity(row),
+          actionIdentity,
         },
       },
     });
@@ -1317,6 +1479,7 @@ export function mapSemanticRuntimeUnresolvedTemplateCodeActions(
     readonly onMappingFailure?: (
       row: SemanticTemplateCodeActionsResult["rows"][number],
       failures: readonly string[],
+      actionIdentity: string,
     ) => void;
   },
 ): CodeAction[] | null {
@@ -1366,6 +1529,7 @@ export function semanticRuntimeTemplateCodeActionResolveData(
   const character = position != null && typeof position === "object" && !Array.isArray(position)
     ? (position as Record<string, unknown>)["character"]
     : null;
+  const refusal = candidate["refusal"];
   if (
     candidate["schema"] !== AURELIA_TEMPLATE_CODE_ACTION_RESOLVE_SCHEMA
     || typeof candidate["actionIdentity"] !== "string"
@@ -1382,10 +1546,38 @@ export function semanticRuntimeTemplateCodeActionResolveData(
     || typeof character !== "number"
     || !Number.isInteger(character)
     || character < 0
+    || (refusal !== undefined && templateCodeActionResolveRefusalFromValue(refusal) == null)
   ) {
     return null;
   }
   return resolve as TemplateCodeActionResolveData;
+}
+
+export function withSemanticRuntimeTemplateCodeActionResolveRefusal(
+  action: CodeAction,
+  refusal: TemplateCodeActionResolveRefusal,
+): CodeAction {
+  const data = codeActionData(action.data);
+  const semanticRuntime = semanticRuntimeCodeActionData(data);
+  const resolve = semanticRuntime?.["resolve"];
+  if (semanticRuntime == null || semanticRuntimeTemplateCodeActionResolveData(data) == null) {
+    return action;
+  }
+  return {
+    ...action,
+    edit: undefined,
+    command: undefined,
+    data: {
+      ...data,
+      semanticRuntime: {
+        ...semanticRuntime,
+        resolve: {
+          ...(resolve as Record<string, unknown>),
+          refusal,
+        },
+      },
+    },
+  };
 }
 
 export function semanticRuntimeTemplateCodeActionIdentityFromData(data: unknown): string | null {

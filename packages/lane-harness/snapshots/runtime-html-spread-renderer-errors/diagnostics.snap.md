@@ -36,6 +36,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-renderer:AUR0820"
         ],
         "phase": "render",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -50,7 +56,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia runtime renderer AUR0820 rejects this instruction input: Invalid spread target $element..",
+      "message": "Invalid spread target $element.",
       "range": {
         "end": {
           "character": 28,

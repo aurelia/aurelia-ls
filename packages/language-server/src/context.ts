@@ -12,6 +12,7 @@ import {
   WorkspaceDocumentUris,
   type DocumentUri,
 } from "./utils/document-uri.js";
+import type { ProjectConfigurationParserDiagnosticsOwner } from "./protocol.js";
 
 /**
  * Shared server context passed to all handlers.
@@ -28,6 +29,8 @@ export interface ServerContext {
   readonly workspaceRoot: string | null;
   /** Client can preserve CodeAction.data and lazily resolve the edit property. */
   clientSupportsCodeActionResolveEdit: boolean;
+  /** Owner of native configuration parser diagnostics for this transport. */
+  projectConfigurationParserDiagnostics: ProjectConfigurationParserDiagnosticsOwner;
 
   configureWorkspace(
     rootUri: DocumentUri,
@@ -138,6 +141,7 @@ export function createServerContext(init: ServerContextInit): ServerContext {
       semanticRuntime.configureWorkspace(projectRootHints);
     },
     clientSupportsCodeActionResolveEdit: false,
+    projectConfigurationParserDiagnostics: "semantic-runtime",
 
     ownsDocument: (uri) => documentUris.ownsDocument(uri),
     openWorkspaceDocument,

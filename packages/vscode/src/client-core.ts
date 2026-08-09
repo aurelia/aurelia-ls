@@ -108,7 +108,6 @@ const ANALYZED_DOCUMENT_LANGUAGE_IDS = [
   "javascript",
   "javascriptreact",
   "css",
-  "json",
 ] as const;
 
 // vscode-languageclient defaults to two seconds, which is shorter than one cold
@@ -723,6 +722,7 @@ export class AureliaLanguageClient {
       initializationOptions: {
         excludedWorkspaceRootUris: excludedFolders.map((folder) => folder.uri.toString()),
         projectRootHintUris: projectRootHintFolders.map((folder) => folder.uri.toString()),
+        projectConfigurationParserDiagnostics: "client",
       } satisfies AureliaInitializeOptions,
       synchronize: { fileEvents },
       // The server requests one standard pull refresh after its semantic source
@@ -973,12 +973,24 @@ function workspaceDocumentSelector(
   // LanguageClientOptions uses protocol document selectors, not VS Code's
   // structurally similar RelativePattern. The client converts this URI-backed
   // protocol shape into a real vscode.RelativePattern before registration.
-  const pattern = { baseUri: folder.uri.toString(), pattern: "**/*" };
-  return ANALYZED_DOCUMENT_LANGUAGE_IDS.map((language) => ({
+  const workspacePattern = { baseUri: folder.uri.toString(), pattern: "**/*" };
+  const projectConfigurationPattern = {
+    baseUri: folder.uri.toString(),
+    pattern: "**/aurelia.project.json",
+  };
+  return [...ANALYZED_DOCUMENT_LANGUAGE_IDS.map((language) => ({
     scheme: folder.uri.scheme,
     language,
-    pattern,
-  }));
+    pattern: workspacePattern,
+  })), {
+    scheme: folder.uri.scheme,
+    language: "jsonc",
+    pattern: projectConfigurationPattern,
+  }, {
+    scheme: folder.uri.scheme,
+    language: "json",
+    pattern: projectConfigurationPattern,
+  }];
 }
 
 async function readWorkspaceStatus(

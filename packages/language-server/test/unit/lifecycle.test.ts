@@ -121,6 +121,7 @@ function createLifecycleHarness() {
     clientSupport,
     logger,
     clientSupportsCodeActionResolveEdit: false,
+    projectConfigurationParserDiagnostics: "semantic-runtime",
     get workspaceRoot() { return documentUris.workspaceRoot; },
     configureWorkspace: vi.fn((
       rootUri: string,
@@ -197,6 +198,7 @@ describe("initialization", () => {
     } as never);
 
     expect(harness.ctx.configureWorkspace).toHaveBeenCalledWith(fallbackRootUri, [], []);
+    expect(harness.ctx.projectConfigurationParserDiagnostics).toBe("semantic-runtime");
     expect(harness.clientSupport).toEqual({
       configurationPull: true,
       configurationChangeRegistration: true,
@@ -236,6 +238,7 @@ describe("initialization", () => {
       initializationOptions: {
         excludedWorkspaceRootUris: [excludedUri],
         projectRootHintUris: [projectRootHintUri],
+        projectConfigurationParserDiagnostics: "client",
       },
       capabilities: {},
     } as never);
@@ -244,6 +247,7 @@ describe("initialization", () => {
       [excludedUri],
       [projectRootHintUri],
     );
+    expect(harness.ctx.projectConfigurationParserDiagnostics).toBe("client");
 
     expect(() => handleInitialize(harness.ctx as never, {
       rootUri: workspaceUri,
@@ -254,6 +258,12 @@ describe("initialization", () => {
     expect(() => handleInitialize(harness.ctx as never, {
       rootUri: workspaceUri,
       initializationOptions: { projectRootHintUris: [42] },
+      capabilities: {},
+    } as never)).toThrowError(expect.objectContaining({ code: ErrorCodes.InvalidParams }));
+
+    expect(() => handleInitialize(harness.ctx as never, {
+      rootUri: workspaceUri,
+      initializationOptions: { projectConfigurationParserDiagnostics: "both" },
       capabilities: {},
     } as never)).toThrowError(expect.objectContaining({ code: ErrorCodes.InvalidParams }));
   });

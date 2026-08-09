@@ -56,8 +56,13 @@ import {
   mapSemanticRuntimeTemplateRenameEdit,
   semanticRuntimeTemplateCodeActionIdentityFromData,
   semanticRuntimeTemplateCodeActionResolveData,
+  withSemanticRuntimeTemplateCodeActionResolveRefusal,
   type LookupTextFn,
 } from "../mapping/lsp-types.js";
+import {
+  templateCodeActionResolveRefusal,
+  type TemplateCodeActionResolveRefusalKind,
+} from "../protocol.js";
 import { handleSemanticTokensFull } from "./semantic-tokens.js";
 import {
   runSemanticRuntimeDocumentRequest,
@@ -418,9 +423,10 @@ export async function handleCodeActionResolve(
       level: "warn",
       message: `[codeAction/resolve] source document is no longer available: ${resolve.textDocument.uri}`,
     });
-    return action;
+    return refusedResolvedCodeAction(action, "sourceDocumentUnavailable");
   }
 
+  let requestedPlanMappingFailureCount = 0;
   const response = await operation.templateCodeActions(doc.uri, resolve.position);
   const candidates = mapSemanticRuntimeTemplateCodeActions(
     response,
@@ -429,7 +435,10 @@ export async function handleCodeActionResolve(
       documentUris: ctx.documentUris,
       originDocument: doc,
       diagnostics: action.diagnostics,
-      onMappingFailure: (row, failures) => {
+      onMappingFailure: (row, failures, actionIdentity) => {
+        if (actionIdentity === resolve.actionIdentity) {
+          requestedPlanMappingFailureCount += 1;
+        }
         operation.deferEffect({
           kind: "log",
           level: "warn",
@@ -441,18 +450,36 @@ export async function handleCodeActionResolve(
   const matches = candidates.filter((candidate) =>
     semanticRuntimeTemplateCodeActionIdentityFromData(candidate.data) === resolve.actionIdentity
   );
-  if (matches.length !== 1 || matches[0]?.edit == null) {
+  const matchingPlanCount = matches.length + requestedPlanMappingFailureCount;
+  if (matchingPlanCount !== 1 || matches[0]?.edit == null) {
     operation.deferEffect({
       kind: "log",
       level: "warn",
-      message: `[codeAction/resolve] action is no longer uniquely applicable: ${action.title} (${matches.length} current matches)`,
+      message: `[codeAction/resolve] action is no longer uniquely applicable: ${action.title} (${matchingPlanCount} current matching plan(s))`,
     });
-    return action;
+    return refusedResolvedCodeAction(
+      action,
+      matchingPlanCount > 1
+        ? "semanticPlanAmbiguous"
+        : requestedPlanMappingFailureCount === 1
+          ? "editMappingFailed"
+          : "semanticPlanNoLongerMatches",
+    );
   }
   return {
     ...action,
     edit: matches[0].edit,
   };
+}
+
+function refusedResolvedCodeAction(
+  action: CodeAction,
+  kind: TemplateCodeActionResolveRefusalKind,
+): CodeAction {
+  return withSemanticRuntimeTemplateCodeActionResolveRefusal(
+    action,
+    templateCodeActionResolveRefusal(kind),
+  );
 }
 
 // ============================================================================
@@ -488,7 +515,8 @@ export function registerFeatureHandlers(ctx: ServerContext): void {
     const uri = semanticRuntimeTemplateCodeActionResolveData(action.data)?.textDocument.uri;
     return uri == null
       ? request(ctx, "codeAction/resolve", token, undefined, (guard) => handleCodeActionResolve(ctx, action, guard))
-      : documentRequest(ctx, "codeAction/resolve", token, uri, () => action,
+      : documentRequest(ctx, "codeAction/resolve", token, uri,
+          () => refusedResolvedCodeAction(action, "semanticPlanNoLongerMatches"),
           (guard) => handleCodeActionResolve(ctx, action, guard));
   });
   ctx.connection.onDocumentSymbol((params, token) => documentRequest(ctx, "documentSymbol", token, params.textDocument.uri,

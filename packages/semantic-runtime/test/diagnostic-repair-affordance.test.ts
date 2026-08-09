@@ -168,15 +168,8 @@ describe("diagnostic repair affordance", () => {
     },
   );
 
-  test("classifies a diagnostic without a suggestion as manual inspection", () => {
-    expect(diagnosticRepairAffordanceForSuggestion(null)).toEqual({
-      actionKind: DiagnosticActionKind.InspectTypeSurface,
-      planKind: DiagnosticActionPlanKind.ManualInspection,
-      changeDomain: DiagnosticActionChangeDomain.Inspection,
-      readiness: DiagnosticActionPlanReadiness.InspectionRequired,
-      targetSourceCoverage: "not-applicable",
-      actionability: DiagnosticRepairActionability.Manual,
-    });
+  test("does not invent a repair affordance for a diagnostic without a suggestion", () => {
+    expect(diagnosticRepairAffordanceForSuggestion(null)).toBeNull();
   });
 });
 

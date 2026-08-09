@@ -1,3 +1,5 @@
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
@@ -8,6 +10,7 @@ import {
   SemanticDiagnosticRelationKind,
   SemanticRuntimeDetail,
   type SemanticAppDiagnosticRow,
+  type SemanticDiagnosticPresentationResult,
 } from "../src/index.js";
 
 const packageRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
@@ -49,6 +52,57 @@ function assignmentDiagnosticRow(
     sourceRole: "template",
     relatedQueryKind: SemanticAppQueryKind.TemplateDiagnostics,
   };
+}
+
+function withDiagnosticSubject(
+  row: SemanticAppDiagnosticRow,
+  subjectKind: NonNullable<SemanticAppDiagnosticRow["subject"]>["subjectKind"],
+  subjectName: string,
+  start: number,
+  end: number,
+): SemanticAppDiagnosticRow {
+  const source = row.source;
+  if (source == null) {
+    throw new Error("A presentation test row requires an authored source.");
+  }
+  return {
+    ...row,
+    subject: {
+      subjectKind,
+      subjectName,
+      source: {
+        ...source,
+        label: `${source.path}@${start}..${end}`,
+        start,
+        end,
+      },
+    },
+  };
+}
+
+function expectExactPresentationConservation(
+  presentation: SemanticDiagnosticPresentationResult,
+): void {
+  const presented = presentation.groups.flatMap((group) => [
+    group.primary.rowIndex,
+    ...group.related.map((related) => related.rowIndex),
+  ]);
+  const withheld = presentation.withheld.map((row) => row.rowIndex);
+  expect(presentation.primaryCount).toBe(presentation.groups.length);
+  expect(presentation.contextualCount).toBe(
+    presentation.groups.reduce((count, group) => count + group.related.length, 0),
+  );
+  expect(presentation.withheldCount).toBe(presentation.withheld.length);
+  expect(presentation.rawRowCount).toBe(
+    presentation.primaryCount + presentation.contextualCount + presentation.withheldCount,
+  );
+  expect([...presented, ...withheld].sort((left, right) => left - right)).toEqual(
+    Array.from({ length: presentation.rawRowCount }, (_, index) => index),
+  );
+  expect(new Set([...presented, ...withheld]).size).toBe(presentation.rawRowCount);
+  for (const group of presentation.groups) {
+    expect(group.rawRowCount).toBe(1 + group.related.length);
+  }
 }
 
 describe("app diagnostic fact conservation", () => {
@@ -246,8 +300,63 @@ describe("app diagnostic fact conservation", () => {
 
     expect(typeScriptRow).toBeDefined();
     expect(appRow).toBeDefined();
+    expect(typeScriptRow?.source?.path).toBe(sourceFile);
+    expect(appRow?.source?.path).toBe(sourceFile);
     expect(appRow?.typeScriptDiagnosticCode).toBe(typeScriptRow?.code);
     expect(appRow?.summary).toBe(typeScriptRow?.message);
+  });
+
+  test("keeps exact nested source identity for ordinary TypeScript diagnostics with overlapping path tails", async () => {
+    const workspaceRoot = await mkdtemp(path.join(tmpdir(), "aurelia-typescript-source-identity-"));
+    try {
+      const shortSource = "a/shared.ts";
+      const nestedSource = "z/a/shared.ts";
+      await mkdir(path.join(workspaceRoot, "a"), { recursive: true });
+      await mkdir(path.join(workspaceRoot, "z", "a"), { recursive: true });
+      await writeFile(path.join(workspaceRoot, "package.json"), JSON.stringify({ name: "source-identity" }));
+      await writeFile(path.join(workspaceRoot, "tsconfig.json"), JSON.stringify({
+        compilerOptions: { strict: true },
+        files: [shortSource, nestedSource],
+      }));
+      await writeFile(path.join(workspaceRoot, shortSource), "export const shortValue = 'valid';\n");
+      await writeFile(path.join(workspaceRoot, nestedSource), "export const nestedValue: string = 123;\n");
+
+      const runtime = await createSemanticRuntime({
+        workspaceRoot,
+        storeKey: "app-diagnostic-exact-typescript-source-identity",
+        projects: [{
+          rootDir: workspaceRoot,
+          sourceFiles: [{ path: shortSource }, { path: nestedSource }],
+        }],
+      });
+      const admittedPaths = runtime.workspace.projects[0]?.sourceFiles
+        .map((source) => source.path.replaceAll("\\", "/")) ?? [];
+      expect(admittedPaths.indexOf(shortSource)).toBeLessThan(admittedPaths.indexOf(nestedSource));
+
+      const app = await runtime.openApp({
+        projectKey: runtime.workspace.projects[0]!.projectKey,
+        analysisDepth: "binding-observation",
+      });
+      const typeScriptRows = app.ask({
+        kind: SemanticAppQueryKind.TypeScriptDiagnostics,
+        page: { size: 100 },
+      }).value.rows.filter((row) => row.diagnosticKind === "TS2322");
+      const appRows = app.ask({
+        kind: SemanticAppQueryKind.AppDiagnostics,
+        diagnosticProjection: "type-projection",
+        detail: SemanticRuntimeDetail.Compact,
+        page: { size: 100 },
+      }).value.rows.filter((row) => row.diagnosticKind === "TS2322");
+
+      expect(typeScriptRows).toHaveLength(1);
+      expect(appRows).toHaveLength(1);
+      expect(typeScriptRows[0]?.source?.path).toBe(nestedSource);
+      expect(appRows[0]?.source?.path).toBe(nestedSource);
+      expect(typeScriptRows.some((row) => row.source?.path === shortSource)).toBe(false);
+      expect(appRows.some((row) => row.source?.path === shortSource)).toBe(false);
+    } finally {
+      await rm(workspaceRoot, { force: true, recursive: true });
+    }
   });
 
   test("retains semantic and checker facts while presenting exact agreement once", async () => {
@@ -420,6 +529,166 @@ describe("app diagnostic fact conservation", () => {
         relation: "checker-evidence",
       }),
     ]);
+    expectExactPresentationConservation(presentation);
+  });
+
+  test("pairs exact-source checker evidence across subjects with one-to-one ownership", () => {
+    const semantic = assignmentDiagnosticRow(
+      "missing-expression-member",
+      "semantic-authoring-policy",
+      "expression-member:selected-member-missing",
+    );
+    const checker = assignmentDiagnosticRow(
+      "template-expression-typescript-diagnostic",
+      "typescript",
+      "typescript:TS2339",
+    );
+    const rows = [
+      withDiagnosticSubject(semantic, "template-member-access", "firstMissing", 8, 27),
+      withDiagnosticSubject(semantic, "template-member-access", "secondMissing", 7, 27),
+      withDiagnosticSubject(checker, "template-member-call", "firstMissing", 5, 30),
+      withDiagnosticSubject(checker, "template-member-call", "secondMissing", 4, 31),
+    ];
+
+    const presentation = appDiagnosticPresentation(rows, true);
+    const first = presentation.groups.find((group) => group.primary.rowIndex === 0);
+    const second = presentation.groups.find((group) => group.primary.rowIndex === 1);
+
+    expect(first?.related).toEqual([
+      expect.objectContaining({ rowIndex: 2, relation: "checker-evidence" }),
+    ]);
+    expect(second?.related).toEqual([
+      expect.objectContaining({ rowIndex: 3, relation: "checker-evidence" }),
+    ]);
+    expect(first?.primarySeverity).toBe("warning");
+    expect(first?.maxRawSeverity).toBe("error");
+    expectExactPresentationConservation(presentation);
+  });
+
+  test("does not group checker evidence from a different file with the same path tail", () => {
+    const semanticBase = assignmentDiagnosticRow(
+      "missing-expression-member",
+      "semantic-authoring-policy",
+      "expression-member:selected-member-missing",
+    );
+    const checkerBase = assignmentDiagnosticRow(
+      "template-expression-typescript-diagnostic",
+      "typescript",
+      "typescript:TS2339",
+    );
+    const semantic = {
+      ...semanticBase,
+      source: { ...semanticBase.source!, path: "src/shared.ts" },
+    };
+    const checker = {
+      ...checkerBase,
+      source: { ...checkerBase.source!, path: "packages/other/src/shared.ts" },
+    };
+
+    const presentation = appDiagnosticPresentation([semantic, checker], true);
+
+    expect(presentation.groups).toHaveLength(2);
+    expect(presentation.groups.every((group) => group.related.length === 0)).toBe(true);
+    expectExactPresentationConservation(presentation);
+  });
+
+  test("withholds context-only weak owners while preserving contextual and missing-slot rows", () => {
+    const unknownOwner = assignmentDiagnosticRow(
+      "template-expression-typescript-diagnostic",
+      "typescript",
+      "typescript:TS18046",
+    );
+    const noMembers = assignmentDiagnosticRow(
+      "weak-expression-member-owner",
+      "semantic-authoring-policy",
+      "expression-member-owner-type:no-members",
+    );
+    const indexSignature = withDiagnosticSubject(
+      assignmentDiagnosticRow(
+        "weak-expression-member-owner",
+        "semantic-authoring-policy",
+        "expression-member-owner-type:index-signature-only",
+      ),
+      "template-member-access",
+      "indexedValue",
+      40,
+      52,
+    );
+    const missingSlot = withDiagnosticSubject(
+      assignmentDiagnosticRow(
+        "weak-expression-member-owner",
+        "semantic-authoring-policy",
+        "expression-member-owner-type:missing-slot-type",
+      ),
+      "template-member-access",
+      "untypedSlot",
+      60,
+      71,
+    );
+
+    const presentation = appDiagnosticPresentation([
+      unknownOwner,
+      noMembers,
+      indexSignature,
+      missingSlot,
+    ], true);
+    const unknownGroup = presentation.groups.find((group) => group.primary.rowIndex === 0);
+
+    expect(unknownGroup?.related).toEqual([
+      expect.objectContaining({
+        rowIndex: 1,
+        role: "contextual",
+        relation: "semantic-explanation",
+      }),
+    ]);
+    expect(presentation.groups.some((group) => group.primary.rowIndex === 3)).toBe(true);
+    expect(presentation.withheld).toEqual([
+      expect.objectContaining({
+        rowIndex: 2,
+        reason: "context-only-weak-owner",
+      }),
+    ]);
+    expect(presentation).toMatchObject({
+      rawRowCount: 4,
+      primaryCount: 2,
+      contextualCount: 1,
+      withheldCount: 1,
+    });
+    expectExactPresentationConservation(presentation);
+  });
+
+  test("groups only the audited resource decorator checker clusters", async () => {
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: path.join(packageRoot, "fixtures/pressure/resource-metadata-errors"),
+      storeKey: "app-diagnostic-presentation-resource-decorator-checker",
+    });
+    const app = await runtime.openApp({ analysisDepth: "binding-observation" });
+    const result = app.ask({
+      kind: SemanticAppQueryKind.AppDiagnostics,
+      sourceFile: { filePath: "src/resource-metadata-errors-app.ts" },
+      diagnosticProjection: "type-projection",
+      page: { size: 300 },
+    }).value;
+    const presentation = result.presentation;
+    if (presentation == null) {
+      throw new Error("App diagnostics did not include presentation metadata.");
+    }
+    const clusters = presentation.groups.filter((group) =>
+      group.groupKey.startsWith("resource-decorator-checker:")
+    );
+    const clusterCodes = new Map(clusters.map((group) => [
+      result.rows[group.primary.rowIndex]?.frameworkErrorCode,
+      group.related.map((related) => result.rows[related.rowIndex]?.typeScriptDiagnosticCode),
+    ]));
+
+    expect(clusters).toHaveLength(3);
+    expect(clusterCodes.get("AUR0228")).toEqual([2769]);
+    expect(clusterCodes.get("AUR0227")).toEqual([1166]);
+    expect(clusterCodes.get("AUR9990")).toEqual([1241, 1270]);
+    expect(clusters.every((group) =>
+      group.related.every((related) => related.relation === "checker-evidence")
+    )).toBe(true);
+    expectExactPresentationConservation(presentation);
   });
 
   test("preserves repeat source relations across runtime, data-flow, and checker diagnostics", async () => {
@@ -490,6 +759,16 @@ describe("app diagnostic fact conservation", () => {
           .toBe(cause.diagnosticIdentityHandle);
       }
     }
+    const contextualWeakIndices = presentation.groups.flatMap((group) =>
+      group.related
+        .filter((related) => rows[related.rowIndex]?.diagnosticKind === "weak-expression-member-owner")
+        .map((related) => related.rowIndex)
+    );
+    expect(contextualWeakIndices).not.toHaveLength(0);
+    expect(presentation.withheld.some((withheld) =>
+      contextualWeakIndices.includes(withheld.rowIndex)
+    )).toBe(false);
+    expectExactPresentationConservation(presentation);
   });
 
   test("stops repeat diagnostic relations at a later slot assignment", async () => {

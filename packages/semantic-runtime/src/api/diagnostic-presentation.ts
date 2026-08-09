@@ -5,9 +5,12 @@ import type {
   SemanticDiagnosticPresentationResult,
   SemanticDiagnosticPresentationRole,
   SemanticDiagnosticPresentationRow,
+  SemanticDiagnosticPresentationWithheldRow,
   SemanticTemplateCursorDiagnosticSeverity,
 } from './contracts.js';
 import { SemanticDiagnosticRelationKind } from './contracts.js';
+import { ResourceFrameworkErrorCode } from '../resources/framework-error-code.js';
+import { ResourceIssueKind } from '../resources/resource-issue.js';
 
 interface PresentationInputRow {
   readonly index: number;
@@ -21,6 +24,10 @@ interface RelatedPresentationInput {
 }
 
 type TemplateTypeRelationship = 'missing-member' | 'binding-assignment';
+type ResourceDecoratorCheckerRelationship =
+  | 'bindable-class-configuration'
+  | 'bindable-symbol-name'
+  | 'slotted-member-usage';
 
 const severityRank: Record<SemanticTemplateCursorDiagnosticSeverity, number> = {
   error: 3,
@@ -40,6 +47,7 @@ export function appDiagnosticPresentation(
   const groupedRows = subjectGroups(inputRows);
   const consumed = new Set<number>();
   const groups: SemanticDiagnosticPresentationGroup[] = [];
+  const withheld: SemanticDiagnosticPresentationWithheldRow[] = [];
   const relatedByPrimaryIndex = diagnosticRelationInputs(inputRows);
 
   for (const primary of inputRows) {
@@ -90,6 +98,32 @@ export function appDiagnosticPresentation(
     ));
     consumed.add(primary.index);
     for (const row of related) {
+      consumed.add(row.index);
+    }
+  }
+
+  for (const primary of inputRows) {
+    const relationship = resourceDecoratorSemanticRelationship(primary.row);
+    if (relationship == null || consumed.has(primary.index)) {
+      continue;
+    }
+    const checkerEvidence = inputRows.filter((candidate) =>
+      !consumed.has(candidate.index)
+      && checkerResourceDecoratorRelationship(candidate.row) === relationship
+      && resourceDecoratorCheckerSourceMatches(primary.row, candidate.row)
+    );
+    if (checkerEvidence.length === 0) {
+      continue;
+    }
+    groups.push(presentationGroup(
+      `resource-decorator-checker:${relationship}:${primary.rowId}`,
+      primary.row.subject,
+      primary,
+      checkerEvidence,
+      'checker-evidence',
+    ));
+    consumed.add(primary.index);
+    for (const row of checkerEvidence) {
       consumed.add(row.index);
     }
   }
@@ -156,12 +190,13 @@ export function appDiagnosticPresentation(
       if (relationship == null) {
         continue;
       }
-      const checkerEvidence = groupRows.filter((candidate) =>
-        !consumed.has(candidate.index)
+      const checkerEvidence = inputRows.find((candidate) =>
+        candidate.index !== semanticRow.index
+        && !consumed.has(candidate.index)
         && checkerTemplateTypeRelationship(candidate.row) === relationship
         && sameDiagnosticSource(semanticRow.row, candidate.row)
-      );
-      if (checkerEvidence.length === 0) {
+      ) ?? null;
+      if (checkerEvidence == null) {
         continue;
       }
 
@@ -174,21 +209,31 @@ export function appDiagnosticPresentation(
           `checker-agreement:${relationship}:${groupKey}:${semanticRow.rowId}`,
           semanticRow.row.subject,
           semanticRow,
-          checkerEvidence,
+          [checkerEvidence],
           'checker-evidence',
         ));
       } else {
         groups[existingGroupIndex] = appendPresentationRows(
           groups[existingGroupIndex]!,
-          checkerEvidence,
+          [checkerEvidence],
           'checker-evidence',
         );
       }
       consumed.add(semanticRow.index);
-      for (const row of checkerEvidence) {
-        consumed.add(row.index);
-      }
+      consumed.add(checkerEvidence.index);
     }
+  }
+
+  for (const row of inputRows) {
+    if (consumed.has(row.index) || !isContextOnlyWeakOwnerDiagnostic(row.row)) {
+      continue;
+    }
+    withheld.push({
+      rowId: row.rowId,
+      rowIndex: row.index,
+      reason: 'context-only-weak-owner',
+    });
+    consumed.add(row.index);
   }
 
   for (const row of inputRows) {
@@ -209,12 +254,15 @@ export function appDiagnosticPresentation(
     || left.groupKey.localeCompare(right.groupKey)
   );
   const contextualCount = sortedGroups.reduce((count, group) => count + group.related.length, 0);
+  assertDiagnosticPresentationConservation(rows.length, sortedGroups, withheld);
   return {
     rawRowCount: rows.length,
     primaryCount: sortedGroups.length,
     contextualCount,
+    withheldCount: withheld.length,
     complete,
     groups: sortedGroups,
+    withheld,
   };
 }
 
@@ -286,6 +334,70 @@ function isRouterRegistrationResourceConsequence(
       || row.diagnosticKind === 'custom-attribute-already-registered'
     )
     && (row.frameworkErrorCode === 'AUR0153' || row.frameworkErrorCode === 'AUR0154');
+}
+
+function resourceDecoratorSemanticRelationship(
+  row: SemanticAppDiagnosticRow,
+): ResourceDecoratorCheckerRelationship | null {
+  if (row.diagnosticDomain !== 'resource' || row.diagnosticAuthority !== 'framework-error-code') {
+    return null;
+  }
+  switch (row.diagnosticKind) {
+    case ResourceIssueKind.InvalidBindableDecoratorUsageClassWithoutConfiguration:
+      return row.frameworkErrorCode === ResourceFrameworkErrorCode.InvalidBindableDecoratorUsageClassWithoutConfiguration
+        ? 'bindable-class-configuration'
+        : null;
+    case ResourceIssueKind.InvalidBindableDecoratorUsageSymbol:
+      return row.frameworkErrorCode === ResourceFrameworkErrorCode.InvalidBindableDecoratorUsageSymbol
+        ? 'bindable-symbol-name'
+        : null;
+    case ResourceIssueKind.SlottedDecoratorInvalidUsage:
+      return row.frameworkErrorCode === ResourceFrameworkErrorCode.SlottedDecoratorInvalidUsage
+        ? 'slotted-member-usage'
+        : null;
+    default:
+      return null;
+  }
+}
+
+function checkerResourceDecoratorRelationship(
+  row: SemanticAppDiagnosticRow,
+): ResourceDecoratorCheckerRelationship | null {
+  if (row.diagnosticDomain !== 'typescript' || row.diagnosticAuthority !== 'typescript') {
+    return null;
+  }
+  switch (row.typeScriptDiagnosticCode) {
+    case 2769:
+      return 'bindable-class-configuration';
+    case 1166:
+      return 'bindable-symbol-name';
+    case 1241:
+    case 1270:
+      return 'slotted-member-usage';
+    default:
+      return null;
+  }
+}
+
+function resourceDecoratorCheckerSourceMatches(
+  semanticRow: SemanticAppDiagnosticRow,
+  checkerRow: SemanticAppDiagnosticRow,
+): boolean {
+  const semanticSource = semanticRow.source;
+  const checkerSource = checkerRow.source;
+  return semanticSource?.path != null
+    && checkerSource?.path != null
+    && normalizedDiagnosticSourcePath(semanticSource.path) === normalizedDiagnosticSourcePath(checkerSource.path)
+    && semanticSource.start != null
+    && semanticSource.end != null
+    && checkerSource.start != null
+    && checkerSource.end != null
+    && semanticSource.start <= checkerSource.start
+    && semanticSource.end >= checkerSource.end;
+}
+
+function normalizedDiagnosticSourcePath(value: string): string {
+  return value.replace(/\\/gu, '/');
 }
 
 function sameDiagnosticSource(
@@ -393,6 +505,15 @@ function isTemplateWeakNoMembersDiagnostic(
     && row.diagnosticAuthority === 'semantic-authoring-policy'
     && row.diagnosticKind === 'weak-expression-member-owner'
     && row.missingInputs.includes('expression-member-owner-type:no-members');
+}
+
+function isContextOnlyWeakOwnerDiagnostic(
+  row: SemanticAppDiagnosticRow,
+): boolean {
+  return row.diagnosticDomain === 'template'
+    && row.diagnosticAuthority === 'semantic-authoring-policy'
+    && row.diagnosticKind === 'weak-expression-member-owner'
+    && !row.missingInputs.includes('expression-member-owner-type:missing-slot-type');
 }
 
 function isTemplateMissingMemberDiagnostic(
@@ -513,4 +634,35 @@ function presentationRowSourceOrder(
     || (left?.source?.end ?? 0) - (right?.source?.end ?? 0)
     || (left?.diagnosticDomain ?? '').localeCompare(right?.diagnosticDomain ?? '')
     || (left?.diagnosticKind ?? '').localeCompare(right?.diagnosticKind ?? '');
+}
+
+function assertDiagnosticPresentationConservation(
+  rawRowCount: number,
+  groups: readonly SemanticDiagnosticPresentationGroup[],
+  withheld: readonly SemanticDiagnosticPresentationWithheldRow[],
+): void {
+  const claimed = new Set<number>();
+  const claim = (rowIndex: number): void => {
+    if (rowIndex < 0 || rowIndex >= rawRowCount) {
+      throw new Error(`Diagnostic presentation references out-of-range raw row ${rowIndex}.`);
+    }
+    if (claimed.has(rowIndex)) {
+      throw new Error(`Diagnostic presentation references raw row ${rowIndex} more than once.`);
+    }
+    claimed.add(rowIndex);
+  };
+  for (const group of groups) {
+    claim(group.primary.rowIndex);
+    for (const related of group.related) {
+      claim(related.rowIndex);
+    }
+  }
+  for (const row of withheld) {
+    claim(row.rowIndex);
+  }
+  if (claimed.size !== rawRowCount) {
+    const missing = Array.from({ length: rawRowCount }, (_, index) => index)
+      .filter((index) => !claimed.has(index));
+    throw new Error(`Diagnostic presentation omitted raw row(s): ${missing.join(', ')}.`);
+  }
 }

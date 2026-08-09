@@ -1377,13 +1377,17 @@ async function summarizeLspDiagnosticRelatedInformation(related, sourceText, fix
   };
 }
 
-function summarizeDiagnosticData(data) {
+export function summarizeDiagnosticData(data) {
   const root = data != null && typeof data === "object" && !Array.isArray(data) ? data : {};
   const semanticRuntime = root.semanticRuntime != null
       && typeof root.semanticRuntime === "object"
       && !Array.isArray(root.semanticRuntime)
     ? root.semanticRuntime
     : {};
+  return summarizeSemanticRuntimeDiagnostic(semanticRuntime, true);
+}
+
+function summarizeSemanticRuntimeDiagnostic(semanticRuntime, includePresentation) {
   return {
     diagnosticDomain: semanticRuntime.diagnosticDomain ?? null,
     diagnosticKind: semanticRuntime.diagnosticKind ?? null,
@@ -1399,6 +1403,36 @@ function summarizeDiagnosticData(data) {
     subject: summarizeDiagnosticSubject(semanticRuntime.subject ?? null),
     relatedInformation: normalizeSnapshotValue(semanticRuntime.relatedInformation ?? []),
     repairAffordance: normalizeSnapshotValue(semanticRuntime.repairAffordance ?? null),
+    ...(includePresentation && semanticRuntime.presentation != null
+      ? { presentation: summarizeDiagnosticPresentation(semanticRuntime.presentation) }
+      : {}),
+  };
+}
+
+function summarizeDiagnosticPresentation(presentation) {
+  const value = presentation != null && typeof presentation === "object" && !Array.isArray(presentation)
+    ? presentation
+    : {};
+  const contextual = Array.isArray(value.contextual) ? value.contextual : [];
+  return {
+    rawRowCount: value.rawRowCount ?? null,
+    primarySeverity: value.primarySeverity ?? null,
+    maxRawSeverity: value.maxRawSeverity ?? null,
+    contextual: contextual.map((entry) => {
+      const context = entry != null && typeof entry === "object" && !Array.isArray(entry) ? entry : {};
+      const diagnostic = context.diagnostic != null
+          && typeof context.diagnostic === "object"
+          && !Array.isArray(context.diagnostic)
+        ? context.diagnostic
+        : {};
+      return {
+        relation: context.relation ?? null,
+        diagnostic: {
+          ...summarizeSemanticRuntimeDiagnostic(diagnostic, false),
+          severity: diagnostic.severity ?? null,
+        },
+      };
+    }),
   };
 }
 

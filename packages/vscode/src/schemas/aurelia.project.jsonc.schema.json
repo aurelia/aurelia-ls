@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "vscode://aurelia/project-configuration-jsonc-dialect",
+  "title": "Aurelia Project Configuration JSONC Dialect",
+  "description": "Syntax-only JSONC dialect marker. Aurelia semantic-runtime owns project-configuration validation.",
+  "allowComments": true,
+  "allowTrailingCommas": true
+}

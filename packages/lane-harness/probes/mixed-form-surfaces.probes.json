@@ -58,8 +58,8 @@
         "id": "app-template-weakMetadata-and-shellTone",
         "file": "src/app.html",
         "verdict": "correct",
-        "reason": "Correct as a file-level diagnostics baseline: document diagnostics are resource-scoped, so the full pull should return both independent template authoring diagnostics. `weakMetadata.source` and `shellTone.label` have precise spans, separate causes, and non-blocking severity.",
-        "note": "NEW 2026-07-07. Diagnostics lane pressure for app-template weak/member authoring policy. RENAMED 2026-07-07 from app-template-missing-member-shellTone after verdict pass accepted the complete file diagnostic set: index-signature-only weak owner at `weakMetadata.source` plus primitive-owner missing member at `shellTone.label`. The missing-member row is informational because the owner is a primitive, so the policy can honestly suggest inspection but not a declaration edit."
+        "reason": "Correct as a file-level diagnostics baseline: `shellTone.label` is the sole visible Warning, with matching TS2339 checker evidence retained contextually. Broad index-signature uncertainty at `weakMetadata.source` is conserved in semantic evidence but withheld from standalone Problems.",
+        "note": "NEW 2026-07-07. Diagnostics lane pressure for the distinction between a proven missing member and open owner shape. The lack of a safe declaration edit does not lower the definite `shellTone.label` finding below Warning, while `weakMetadata.source` must not create a low-actionability Problem."
       },
       {
         "id": "loose-picklist-parent-specialized-option-label",
@@ -76,8 +76,8 @@
         "anchor": "weakMetadata.source",
         "at": "source",
         "verdict": "correct",
-        "reason": "The diagnostic target is the owner type for `weakMetadata`, not the SupportDeskApp class; until an owner-type strengthening planner exists, codeAction must return no edit.",
-        "note": "Regression canary for the pre-fix wrong action that inserted `source!: unknown;` into SupportDeskApp. The structured diagnostic repair affordance may be guided, but TemplateCodeActions is edit-backed only."
+        "reason": "Broad index-signature uncertainty at `weakMetadata.source` produces no Problem, cursor diagnostic context, repair affordance, or Quick Fix.",
+        "note": "Regression canary for the pre-fix wrong action that inserted `source!: unknown;` into SupportDeskApp. The weak-owner fact remains available to semantic inspection without manufacturing an editor repair surface."
       }
     ],
     "hover": [

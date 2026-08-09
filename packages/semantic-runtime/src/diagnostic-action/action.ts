@@ -250,7 +250,10 @@ export interface DiagnosticRepairAffordance {
 
 export function diagnosticRepairAffordanceForSuggestion(
   suggestion: DiagnosticSuggestion<unknown> | null | undefined,
-): DiagnosticRepairAffordance {
+): DiagnosticRepairAffordance | null {
+  if (suggestion == null) {
+    return null;
+  }
   const actionKind = diagnosticActionKindForSuggestion(suggestion);
   const planKind = diagnosticActionPlanKindForAction(
     actionKind,
@@ -302,7 +305,10 @@ function diagnosticRepairActionabilityForAffordance(
 function diagnosticActionKindForSuggestion(
   suggestion: DiagnosticSuggestion<unknown> | null | undefined,
 ): DiagnosticActionKind {
-  const actionKind = suggestion?.actionKind;
+  if (suggestion == null) {
+    throw new Error('A diagnostic without a suggestion has no repair action kind.');
+  }
+  const actionKind = suggestion.actionKind;
   switch (actionKind) {
     case DiagnosticSuggestionActionKind.DeclareMember:
       return DiagnosticActionKind.DeclareMissingMember;
@@ -333,7 +339,6 @@ function diagnosticActionKindForSuggestion(
     case DiagnosticSuggestionActionKind.RewriteTemplateSyntax:
       return DiagnosticActionKind.RewriteTemplateSyntax;
     case DiagnosticSuggestionActionKind.InspectOwnerType:
-    case undefined:
       return DiagnosticActionKind.InspectTypeSurface;
     default:
       return assertUnreachableSuggestionAction(actionKind);

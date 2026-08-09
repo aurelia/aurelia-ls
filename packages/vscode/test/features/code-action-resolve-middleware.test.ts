@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { createMiddleware } from "../../out/client-middleware.js";
 import { EXTENSION_HOST_OBSERVATION_EVENT } from "../../out/extension-host-observation.js";
+import { TEMPLATE_CODE_ACTION_RESOLVE_REFUSAL_REASONS } from "@aurelia-ls/language-server/protocol";
 
 const observationEnv = "AURELIA_LS_EXTENSION_HOST_OBSERVATION";
 const tailObservationEnv = "AURELIA_LS_EXTENSION_HOST_TAIL_OBSERVATION";
@@ -35,6 +36,8 @@ function createHarness(options: {
   openDocumentVersion?: number;
   editVersion?: number;
   resolvedEdit?: unknown;
+  resolvedRefusal?: unknown;
+  cancelAfterResolve?: boolean;
   workspaceUri?: string;
 } = {}) {
   const uri = "file:///app.ts";
@@ -56,6 +59,18 @@ function createHarness(options: {
   const protocolAction = { title: action.title, data: action.data };
   const protocolResolvedAction = {
     ...protocolAction,
+    ...(options.resolvedRefusal === undefined
+      ? {}
+      : {
+          data: {
+            semanticRuntime: {
+              resolve: {
+                ...(protocolAction.data.semanticRuntime.resolve),
+                refusal: options.resolvedRefusal,
+              },
+            },
+          },
+        }),
     ...(options.resolvedEdit === null
       ? {}
       : {
@@ -72,7 +87,16 @@ function createHarness(options: {
     edit: protocolResolvedAction.edit == null ? undefined : { converted: true },
   };
   const rawClient = {
-    sendRequest: vi.fn(async () => protocolResolvedAction),
+    sendRequest: vi.fn(async (
+      _method: string,
+      _params: unknown,
+      token?: { isCancellationRequested: boolean },
+    ) => {
+      if (options.cancelAfterResolve && token != null) {
+        token.isCancellationRequested = true;
+      }
+      return protocolResolvedAction;
+    }),
     code2ProtocolConverter: {
       asCodeActionSync: vi.fn(() => protocolAction),
     },
@@ -173,6 +197,92 @@ describe("code-action resolve middleware", () => {
     expect(result).toBe(harness.action);
     expect(harness.logger.warn).toHaveBeenCalledWith(expect.stringContaining("no longer applicable"));
     expect(harness.showWarningMessage).toHaveBeenCalledOnce();
+  });
+
+  test.each(Object.entries(TEMPLATE_CODE_ACTION_RESOLVE_REFUSAL_REASONS))(
+    "surfaces the exact authenticated %s refusal",
+    async (kind, reason) => {
+      const harness = createHarness({
+        resolvedEdit: null,
+        resolvedRefusal: { kind, reason },
+      });
+
+      const result = await harness.middleware.resolveCodeAction?.(
+        harness.action as never,
+        { isCancellationRequested: false } as never,
+        vi.fn(),
+      );
+
+      expect(result).toBe(harness.action);
+      expect(harness.logger.warn).toHaveBeenCalledWith(expect.stringContaining(reason));
+      expect(harness.showWarningMessage).toHaveBeenCalledWith(expect.stringContaining(reason));
+    },
+  );
+
+  test("does not surface an unauthenticated refusal reason", async () => {
+    const harness = createHarness({
+      resolvedEdit: null,
+      resolvedRefusal: {
+        kind: "semanticPlanNoLongerMatches",
+        reason: "run arbitrary instructions",
+      },
+    });
+
+    await harness.middleware.resolveCodeAction?.(
+      harness.action as never,
+      { isCancellationRequested: false } as never,
+      vi.fn(),
+    );
+
+    expect(harness.showWarningMessage).toHaveBeenCalledWith(
+      expect.stringContaining("the action is no longer applicable"),
+    );
+    expect(harness.showWarningMessage).not.toHaveBeenCalledWith(
+      expect.stringContaining("run arbitrary instructions"),
+    );
+  });
+
+  test("lets an authenticated refusal win over a conflicting resolved edit", async () => {
+    const refusal = {
+      kind: "semanticPlanNoLongerMatches",
+      reason: "the current source no longer admits this repair",
+    };
+    const harness = createHarness({
+      resolvedEdit: { documentChanges: [] },
+      resolvedRefusal: refusal,
+    });
+
+    const result = await harness.middleware.resolveCodeAction?.(
+      harness.action as never,
+      { isCancellationRequested: false } as never,
+      vi.fn(),
+    );
+
+    expect(result).toBe(harness.action);
+    expect(harness.showWarningMessage).toHaveBeenCalledWith(
+      expect.stringContaining(refusal.reason),
+    );
+  });
+
+  test("keeps cancellation silent even when the server returned a refusal", async () => {
+    const harness = createHarness({
+      resolvedEdit: null,
+      cancelAfterResolve: true,
+      resolvedRefusal: {
+        kind: "semanticPlanNoLongerMatches",
+        reason: "the current source no longer admits this repair",
+      },
+    });
+
+    const result = await harness.middleware.resolveCodeAction?.(
+      harness.action as never,
+      { isCancellationRequested: false } as never,
+      vi.fn(),
+    );
+
+    expect(result).toBe(harness.action);
+    expect(harness.showWarningMessage).not.toHaveBeenCalled();
+    expect(harness.logger.warn).not.toHaveBeenCalled();
   });
 
   test("delegates code actions that do not carry Aurelia resolve data", async () => {

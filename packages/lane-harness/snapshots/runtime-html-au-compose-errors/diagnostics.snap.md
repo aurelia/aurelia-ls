@@ -36,6 +36,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-controller:AUR0805"
         ],
         "phase": "bindable-set",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -50,7 +56,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia runtime controller AUR0805 rejects this controller input: Invalid au-compose scopeBehavior value \"global\". Expected \"scoped\" or \"auto\"..",
+      "message": "Invalid au-compose scopeBehavior value \"global\". Expected \"scoped\" or \"auto\".",
       "range": {
         "end": {
           "character": 34,
@@ -80,6 +86,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-controller:AUR0809"
         ],
         "phase": "bindable-set",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -94,7 +106,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia runtime controller AUR0809 rejects this controller input: Invalid au-compose flushMode value \"deferred\". Expected \"sync\" or \"async\"..",
+      "message": "Invalid au-compose flushMode value \"deferred\". Expected \"sync\" or \"async\".",
       "range": {
         "end": {
           "character": 56,
@@ -124,6 +136,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-controller:AUR0806"
         ],
         "phase": "composition-component-lookup",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -138,7 +156,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia runtime controller AUR0806 rejects this controller input: No au-compose custom element named \"missing-widget\" is registered in the construction hydration context container..",
+      "message": "No au-compose custom element named \"missing-widget\" is registered in the construction hydration context container.",
       "range": {
         "end": {
           "character": 37,

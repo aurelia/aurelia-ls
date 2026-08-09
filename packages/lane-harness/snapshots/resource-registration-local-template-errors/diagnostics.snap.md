@@ -36,6 +36,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "template-compiler:AUR0702"
         ],
         "phase": "compiled-template",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -50,7 +56,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia template compiler AUR0702 rejects this template syntax: Template compilation error: attribute \"id\" is invalid on element surrogate..",
+      "message": "Attribute \"id\" is invalid on element surrogate.",
       "range": {
         "end": {
           "character": 78,
@@ -118,6 +124,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "template-compiler:AUR0703"
         ],
         "phase": "compiled-template",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -132,7 +144,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia template compiler AUR0703 rejects this template syntax: Template compilation error: template controller \"if\" is invalid on element surrogate..",
+      "message": "Template controller \"if\" is invalid on element surrogate.",
       "range": {
         "end": {
           "character": 50,

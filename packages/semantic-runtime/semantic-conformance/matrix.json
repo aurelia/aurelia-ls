@@ -9743,9 +9743,17 @@
               "query": { "kind": "app-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
               "equals": {
                 "value.presentation.rawRowCount": 20,
-                "value.presentation.primaryCount": 13,
-                "value.presentation.contextualCount": 7
-              }
+                "value.presentation.primaryCount": 12,
+                "value.presentation.contextualCount": 7,
+                "value.presentation.withheldCount": 1
+              },
+              "rows": [
+                {
+                  "rowPath": "value.presentation.withheld",
+                  "fields": { "reason": "context-only-weak-owner" },
+                  "count": 1
+                }
+              ]
             }
           ]
         },

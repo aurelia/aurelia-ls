@@ -1,5 +1,6 @@
 import {
   DocumentDiagnosticReportKind,
+  LSPErrorCodes,
   type CancellationToken,
   type DocumentDiagnosticParams,
   type DocumentDiagnosticReport,
@@ -23,7 +24,21 @@ type DiagnosticHandler = (
 function createDiagnosticHarness(programDocument: TextDocument | null = document()) {
   let handler: DiagnosticHandler | undefined;
   const analysisBasis = { revision: "semantic-runtime-analysis:test" };
-  const appDiagnostics = vi.fn(async () => ({ analysisBasis, value: { rows: [] } }));
+  const appDiagnostics = vi.fn(async () => ({
+    analysisBasis,
+    value: {
+      rows: [],
+      presentation: {
+        rawRowCount: 0,
+        primaryCount: 0,
+        contextualCount: 0,
+        withheldCount: 0,
+        complete: true,
+        groups: [],
+        withheld: [],
+      },
+    },
+  }));
   const authoredSourceOwnership = vi.fn(async () => ({
     analysisBasis,
     value: {
@@ -40,9 +55,15 @@ function createDiagnosticHarness(programDocument: TextDocument | null = document
     warn: vi.fn(),
     error: vi.fn(),
   };
+  const ensureProgramDocument = vi.fn((requestedUri: string) =>
+    programDocument != null
+    && documentUris.ownsDocument(requestedUri)
+    && documentUris.sameDocument(requestedUri, programDocument.uri)
+      ? programDocument
+      : null);
   const operation = {
     documents: {
-      ensureProgramDocument: vi.fn(() => programDocument),
+      ensureProgramDocument,
       lookupText: vi.fn(() => null),
     },
     deferEffect: vi.fn((effect: { level?: "log" | "info" | "warn"; message: string }) => {
@@ -80,6 +101,7 @@ function createDiagnosticHarness(programDocument: TextDocument | null = document
       runDiagnosticRequest,
     },
     logger,
+    projectConfigurationParserDiagnostics: "semantic-runtime",
   };
 
   registerDiagnosticHandlers(ctx as never);
@@ -91,6 +113,7 @@ function createDiagnosticHarness(programDocument: TextDocument | null = document
     projectConfigurationDiagnostics,
     runDiagnosticRequest,
     logger,
+    ensureProgramDocument,
     request(params: Partial<DocumentDiagnosticParams> = {}) {
       if (handler == null) {
         throw new Error("Diagnostic handler was not registered.");
@@ -130,6 +153,30 @@ describe("document diagnostics handler", () => {
     );
   });
 
+  test("fails instead of publishing a partial Problems projection", async () => {
+    const harness = createDiagnosticHarness();
+    harness.appDiagnostics.mockResolvedValueOnce({
+      analysisBasis: { revision: "semantic-runtime-analysis:test" },
+      value: {
+        rows: [],
+        presentation: {
+          rawRowCount: 0,
+          primaryCount: 0,
+          contextualCount: 0,
+          withheldCount: 0,
+          complete: false,
+          groups: [],
+          withheld: [],
+        },
+      },
+    });
+
+    await expect(harness.request()).rejects.toMatchObject({
+      code: LSPErrorCodes.RequestFailed,
+      message: expect.stringContaining("requires a complete semantic diagnostic presentation"),
+    });
+  });
+
   test("returns unchanged only after revalidating the exact accepted answer basis", async () => {
     const harness = createDiagnosticHarness();
     const previousResultId = "diagnostic:test";
@@ -153,6 +200,48 @@ describe("document diagnostics handler", () => {
       resultId: "diagnostic:test",
       items: [],
     });
+    expect(harness.appDiagnostics).not.toHaveBeenCalled();
+  });
+
+  test("returns an empty full report for a project configuration below an excluded workspace root", async () => {
+    const configUri = "file:///C:/projects/app/packages/disabled/aurelia.project.json";
+    const configDocument = TextDocument.create(configUri, "json", 3, '{"version":2}');
+    const harness = createDiagnosticHarness(configDocument);
+    harness.ctx.documentUris.configure("file:///C:/projects/app", [
+      "file:///C:/projects/app/packages/disabled",
+    ]);
+
+    const report = await harness.request();
+
+    expect(report).toEqual({
+      kind: DocumentDiagnosticReportKind.Full,
+      resultId: "diagnostic:test",
+      items: [],
+    });
+    expect(harness.ensureProgramDocument).toHaveBeenCalledWith(configUri);
+    expect(harness.projectConfigurationDiagnostics).not.toHaveBeenCalled();
+    expect(harness.authoredSourceOwnership).not.toHaveBeenCalled();
+    expect(harness.appDiagnostics).not.toHaveBeenCalled();
+  });
+
+  test("returns an empty full report for ordinary JSON without entering Aurelia app analysis", async () => {
+    const jsonDocument = TextDocument.create(
+      "file:///C:/projects/app/src/data.json",
+      "json",
+      2,
+      '{"answer":42}',
+    );
+    const harness = createDiagnosticHarness(jsonDocument);
+
+    const report = await harness.request();
+
+    expect(report).toEqual({
+      kind: DocumentDiagnosticReportKind.Full,
+      resultId: "diagnostic:test",
+      items: [],
+    });
+    expect(harness.projectConfigurationDiagnostics).not.toHaveBeenCalled();
+    expect(harness.authoredSourceOwnership).not.toHaveBeenCalled();
     expect(harness.appDiagnostics).not.toHaveBeenCalled();
   });
 
@@ -218,6 +307,87 @@ describe("document diagnostics handler", () => {
     expect(harness.projectConfigurationDiagnostics).toHaveBeenCalledOnce();
     expect(harness.authoredSourceOwnership).not.toHaveBeenCalled();
     expect(harness.appDiagnostics).not.toHaveBeenCalled();
+  });
+
+  test("keeps configuration parser diagnostics for clients using semantic-runtime's default authority", async () => {
+    const configUri = "file:///C:/projects/app/aurelia.project.json";
+    const configText = '{"version":1,,}';
+    const configDocument = TextDocument.create(configUri, "jsonc", 10, configText);
+    const harness = createDiagnosticHarness(configDocument);
+    const start = configText.indexOf(",,") + 1;
+    harness.projectConfigurationDiagnostics.mockResolvedValue({
+      analysisBasis: { revision: "semantic-runtime-analysis:test" },
+      value: {
+        rows: [{
+          projectKey: "app",
+          diagnosticKind: "aurelia-project-config-syntax",
+          severity: "error",
+          message: "Property expected.",
+          source: {
+            filePath: harness.ctx.documentUris.hostPath(configUri)!,
+            start,
+            end: start + 1,
+            startPosition: { line: 0, character: start },
+            endPosition: { line: 0, character: start + 1 },
+          },
+        }],
+      },
+    });
+
+    const report = await harness.request();
+
+    expect(report).toEqual(expect.objectContaining({
+      kind: DocumentDiagnosticReportKind.Full,
+      items: [expect.objectContaining({ code: "aurelia-project-config-syntax" })],
+    }));
+  });
+
+  test("omits only client-owned parser rows when VS Code delegates configuration parsing", async () => {
+    const configUri = "file:///C:/projects/app/aurelia.project.json";
+    const configText = '{"version":1,"version":1,"unknown":true}';
+    const configDocument = TextDocument.create(configUri, "jsonc", 11, configText);
+    const harness = createDiagnosticHarness(configDocument);
+    harness.ctx.projectConfigurationParserDiagnostics = "client";
+    const source = (start: number, end: number) => ({
+      filePath: harness.ctx.documentUris.hostPath(configUri)!,
+      start,
+      end,
+      startPosition: configDocument.positionAt(start),
+      endPosition: configDocument.positionAt(end),
+    });
+    const duplicateStart = configText.indexOf('"version"', 2);
+    const unknownStart = configText.indexOf('"unknown"');
+    harness.projectConfigurationDiagnostics.mockResolvedValue({
+      analysisBasis: { revision: "semantic-runtime-analysis:test" },
+      value: {
+        rows: [{
+          projectKey: "app",
+          diagnosticKind: "aurelia-project-config-syntax",
+          severity: "error",
+          message: "Synthetic parser failure.",
+          source: source(0, 1),
+        }, {
+          projectKey: "app",
+          diagnosticKind: "aurelia-project-config-duplicate-property",
+          severity: "error",
+          message: "Duplicate property.",
+          source: source(duplicateStart, duplicateStart + '"version"'.length),
+        }, {
+          projectKey: "app",
+          diagnosticKind: "aurelia-project-config-unknown-property",
+          severity: "error",
+          message: "Unknown property.",
+          source: source(unknownStart, unknownStart + '"unknown"'.length),
+        }],
+      },
+    });
+
+    const report = await harness.request();
+
+    expect(report).toEqual(expect.objectContaining({
+      kind: DocumentDiagnosticReportKind.Full,
+      items: [expect.objectContaining({ code: "aurelia-project-config-unknown-property" })],
+    }));
   });
 });
 

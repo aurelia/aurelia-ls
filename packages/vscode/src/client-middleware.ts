@@ -1,7 +1,10 @@
 import type { CancellationToken, CodeAction, TextDocument, Uri } from "vscode";
 import type { Middleware } from "vscode-languageclient/node";
 import type * as LanguageClientProtocol from "vscode-languageclient/node";
-import { AURELIA_TEMPLATE_CODE_ACTION_RESOLVE_SCHEMA } from "@aurelia-ls/language-server/protocol";
+import {
+  AURELIA_TEMPLATE_CODE_ACTION_RESOLVE_SCHEMA,
+  templateCodeActionResolveRefusalFromData,
+} from "@aurelia-ls/language-server/protocol";
 import {
   emitExtensionHostObservation,
   extensionHostTailObservationEnabled,
@@ -67,8 +70,18 @@ export function createMiddleware(
       if (token.isCancellationRequested) {
         return action;
       }
+      const refusal = templateCodeActionResolveRefusalFromData(resolved.data);
+      if (refusal != null) {
+        refuseCodeAction(vscode, logger, action.title, refusal.reason);
+        return action;
+      }
       if (resolved.edit == null || converted?.edit == null) {
-        refuseCodeAction(vscode, logger, action.title, "the action is no longer applicable");
+        refuseCodeAction(
+          vscode,
+          logger,
+          action.title,
+          "the action is no longer applicable",
+        );
         return action;
       }
       const mismatches = workspaceEditVersionMismatches(vscode, resolved.edit);

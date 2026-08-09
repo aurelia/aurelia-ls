@@ -34,6 +34,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "phase": "route-context-parameter-read-ownership",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "warning",
+          "primarySeverity": "warning",
+          "rawRowCount": 1
+        },
         "relatedInformation": [
           {
             "message": "Routed component 'account-route' inherits this RouteContext parameter read.",
@@ -77,14 +83,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           }
         ],
         "relatedQueryKind": "router-issues",
-        "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
-          "changeDomain": "inspection",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
-        },
+        "repairAffordance": null,
         "sourceRole": "app-source",
         "subject": null,
         "typeScriptDiagnosticCode": null

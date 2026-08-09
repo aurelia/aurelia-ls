@@ -200,6 +200,7 @@ export function handleInitialize(ctx: ServerContext, params: InitializeParams): 
   }
   ctx.clientSupportsCodeActionResolveEdit = params.capabilities.textDocument?.codeAction?.dataSupport === true
     && params.capabilities.textDocument.codeAction.resolveSupport?.properties.includes("edit") === true;
+  ctx.projectConfigurationParserDiagnostics = options.projectConfigurationParserDiagnostics ?? "semantic-runtime";
   ctx.clientSupport.configurationPull = params.capabilities.workspace?.configuration === true;
   ctx.clientSupport.configurationChangeRegistration =
     params.capabilities.workspace?.didChangeConfiguration?.dynamicRegistration === true;
@@ -242,7 +243,11 @@ export function handleInitialize(ctx: ServerContext, params: InitializeParams): 
 
 function initializeOptions(value: unknown): AureliaInitializeOptions {
   if (value == null) {
-    return { excludedWorkspaceRootUris: [], projectRootHintUris: [] };
+    return {
+      excludedWorkspaceRootUris: [],
+      projectRootHintUris: [],
+      projectConfigurationParserDiagnostics: "semantic-runtime",
+    };
   }
   if (typeof value !== "object" || Array.isArray(value)) {
     throw new ResponseError(ErrorCodes.InvalidParams, "Aurelia initialization options must be an object.");
@@ -251,7 +256,20 @@ function initializeOptions(value: unknown): AureliaInitializeOptions {
   return {
     excludedWorkspaceRootUris: initializeUriArrayOption(options, "excludedWorkspaceRootUris"),
     projectRootHintUris: initializeUriArrayOption(options, "projectRootHintUris"),
+    projectConfigurationParserDiagnostics: initializeProjectConfigurationParserDiagnosticsOption(options),
   };
+}
+
+function initializeProjectConfigurationParserDiagnosticsOption(
+  options: Readonly<Record<string, unknown>>,
+): NonNullable<AureliaInitializeOptions["projectConfigurationParserDiagnostics"]> {
+  const value = options["projectConfigurationParserDiagnostics"];
+  if (value == null) return "semantic-runtime";
+  if (value === "semantic-runtime" || value === "client") return value;
+  throw new ResponseError(
+    ErrorCodes.InvalidParams,
+    "Aurelia projectConfigurationParserDiagnostics must be 'semantic-runtime' or 'client'.",
+  );
 }
 
 function initializeUriArrayOption(

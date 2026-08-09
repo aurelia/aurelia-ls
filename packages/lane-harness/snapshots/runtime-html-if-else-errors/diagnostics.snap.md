@@ -36,6 +36,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-controller:AUR0810"
         ],
         "phase": "template-controller-link",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -50,7 +56,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia runtime controller AUR0810 rejects this controller input: Invalid [else] usage. The previous controller sibling is not [if]..",
+      "message": "Invalid [else] usage. The previous controller sibling is not [if].",
       "range": {
         "end": {
           "character": 14,

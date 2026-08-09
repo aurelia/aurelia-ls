@@ -1191,10 +1191,23 @@ Raw template and app diagnostic tables retain admitted checker rows even when a 
 same authored relationship. Detailed rows preserve the overlay lifecycle phase, semantic product, identity and source
 address, origin key, generated file, and mapped segment label. `AppDiagnostics.presentation` is the answer-local user-facing
 join: exact missing-member or assignment agreement keeps the Aurelia-aware semantic row primary and attaches the
-TypeScript row as contextual `checker-evidence`. This avoids duplicate editor diagnostics without deleting independent
-facts needed by MCP, AOT, explanation, or future policy consumers. TypeScript-native rows such as argument mismatch,
+TypeScript row as contextual `checker-evidence`. Exact diagnostic-source equality, rather than subject-envelope equality,
+owns this join because a checker call subject can enclose the semantic member-access subject. Checker ownership remains
+one-to-one so coincident authored sources cannot consume the same checker fact twice. Resource metadata uses the same
+contextual relation only for three explicit decorator agreements: AUR0228 with TS2769, AUR0227 with TS1166, and AUR9990
+with TS1241/TS1270. It does not infer generic duplicate policy from overlapping ranges.
+This avoids duplicate editor diagnostics without deleting independent facts needed by MCP, AOT, explanation, or future
+policy consumers. TypeScript-native rows such as argument mismatch,
 arity mismatch, nullish access, and unknown-owner access remain primary. Template overlay rows share the same TypeScript
 diagnostic severity mapping as ordinary TypeScript diagnostic rows so unified diagnostic answers do not drift by lane.
+Presentation also carries explicit answer-local `withheld` references for context-only weak-owner facts that remain after
+all causal, semantic, and checker grouping passes. Index-signature, `any`, and no-members inspection facts stay in raw
+rows and may remain contextual, but do not become standalone Problems. A weak owner with
+`expression-member-owner-type:missing-slot-type` remains primary because its exact scope-slot locus supports a
+`declare-scope-slot-type` repair. Presentation conserves every raw row exactly once across group primary rows, contextual
+rows, and withheld references: `rawRowCount === primaryCount + contextualCount + withheldCount`; no raw row index may be
+missing or appear in more than one role. Problems adapters must honor a present presentation instead of republishing raw
+rows. A presentation built for an incomplete page is answer-local and must be recomputed after page reassembly.
 Raw diagnostic rows can also carry product-grounded `diagnosticRelations` independently from this presentation policy.
 Adapters must spend those answer-local identities before detaching rows. Standard LSP `Diagnostic.data` and unresolved
 `CodeAction.data` outlive one semantic answer, so they retain stable diagnostic/source facts but not kernel handles or
@@ -1215,7 +1228,12 @@ summary/orientation flows can request `available-products`, while deeper repair,
 request `type-projection` and accept the measured CPU/memory cost.
 The policy for turning weak owner and binding assignment pressure into cursor/file diagnostic rows lives in
 `template-diagnostic-policy.ts`. Keep that boundary honest: cursor/template readers should locate source and semantic
-context, while the policy module owns severity, suggestion kind, action target, and product-policy wording.
+context, while the policy module owns severity, suggestion kind, action target, and product-policy wording. A definite
+missing member on a closed owner is a warning independently from whether that owner admits a declaration edit;
+repairability changes the suggestion, not the correctness severity. Framework-derived summaries normalize the producer's
+useful sentence once and keep framework subsystem identity and AUR codes in structured fields instead of repeating generic
+`Aurelia ... rejects ...` wrappers. Native TypeScript messages remain verbatim, with their diagnostic code preserved
+separately.
 The legacy recipe-authoring catalog, guidance, orientation, and recipe-plan answers have been removed from this API.
 Do not add compatibility wrappers for them in `runtime.ts`, MCP, or query catalog rows. The preserved source artifacts
 now live as neutral fixture pressure and source-plan/app-builder substrate. Public app-generation answers grow through

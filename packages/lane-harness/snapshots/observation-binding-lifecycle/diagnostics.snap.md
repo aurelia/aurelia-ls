@@ -36,6 +36,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-binding-behavior:AUR0801"
         ],
         "phase": "bind",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -50,7 +56,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia runtime binding behavior AUR0801 rejects this binding: self can only be applied to listener bindings created by trigger or capture commands..",
+      "message": "self can only be applied to listener bindings created by trigger or capture commands.",
       "range": {
         "end": {
           "character": 85,
@@ -80,6 +86,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-binding-behavior:AUR0101"
         ],
         "phase": "bind",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -94,7 +106,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia runtime binding behavior AUR0101 rejects this binding: Binding behavior 'missingBehavior' was not resolved through the current compiler resource scope..",
+      "message": "Binding behavior 'missingBehavior' was not resolved through the current compiler resource scope.",
       "range": {
         "end": {
           "character": 96,
@@ -124,6 +136,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-binding-behavior:AUR0101"
         ],
         "phase": "bind",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -138,7 +156,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia runtime binding behavior AUR0101 rejects this binding: Binding behavior 'missingBehavior' was not resolved through the current compiler resource scope..",
+      "message": "Binding behavior 'missingBehavior' was not resolved through the current compiler resource scope.",
       "range": {
         "end": {
           "character": 98,
@@ -168,6 +186,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-binding-behavior:AUR0803"
         ],
         "phase": "bind",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -182,7 +206,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia runtime binding behavior AUR0803 rejects this binding: updateTrigger can only be applied to two-way or from-view PropertyBinding instances..",
+      "message": "updateTrigger can only be applied to two-way or from-view PropertyBinding instances.",
       "range": {
         "end": {
           "character": 95,
@@ -212,6 +236,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "binding-source-assignment:target-to-source-type-mismatch"
         ],
         "phase": null,
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "warning",
+          "primarySeverity": "warning",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -268,6 +298,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "binding-target-assignment:source-to-target-type-mismatch"
         ],
         "phase": null,
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "warning",
+          "primarySeverity": "warning",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -324,6 +360,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "binding-target-assignment:source-to-target-type-mismatch"
         ],
         "phase": null,
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "warning",
+          "primarySeverity": "warning",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -380,6 +422,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-binding-behavior:AUR0801"
         ],
         "phase": "bind",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -394,7 +442,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia runtime binding behavior AUR0801 rejects this binding: self can only be applied to listener bindings created by trigger or capture commands..",
+      "message": "self can only be applied to listener bindings created by trigger or capture commands.",
       "range": {
         "end": {
           "character": 74,

@@ -22,6 +22,10 @@ such as router expression rewrites, but must not silently become a second action
 service registration, observer configuration, and true runtime-boundary declaration have distinct action kinds and
 change domains.
 
+A diagnostic with no suggestion has no repair affordance. `inspect-type-surface` is reserved for a real
+`inspect-owner-type` suggestion; the product does not invent a generic pseudo-action merely because a diagnostic fact
+exists. Absence of an affordance still leaves the diagnostic and its evidence available for inspection.
+
 `fix-router-instruction` suggestions classify as `rewrite-router-instruction` / `router-instruction-rewrite`. An exact
 template instruction source makes that app-source repair guided and ready to plan, but no code action exists until a
 router source-operation planner can prove an edit without guessing a route, fallback, parameter value, or viewport.

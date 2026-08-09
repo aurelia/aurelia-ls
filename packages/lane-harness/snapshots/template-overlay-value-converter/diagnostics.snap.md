@@ -36,6 +36,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "typescript:TS2345"
         ],
         "phase": "semantic",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {

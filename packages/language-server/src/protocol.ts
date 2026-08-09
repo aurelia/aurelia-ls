@@ -31,11 +31,15 @@ export const AureliaProtocolNotification = {
 
 export const AURELIA_TEMPLATE_CODE_ACTION_RESOLVE_SCHEMA = "aurelia.template-code-action-resolve/1" as const;
 
+export type ProjectConfigurationParserDiagnosticsOwner = "semantic-runtime" | "client";
+
 /** Client-owned workspace topology supplied before the server admits documents or projects. */
 export interface AureliaInitializeOptions {
   readonly excludedWorkspaceRootUris: readonly string[];
   /** Existing workspace project roots offered to semantic-runtime discovery as host evidence. */
   readonly projectRootHintUris: readonly string[];
+  /** Parser-diagnostic owner; omitted clients retain semantic-runtime's complete configuration rows. */
+  readonly projectConfigurationParserDiagnostics?: ProjectConfigurationParserDiagnosticsOwner;
 }
 
 export interface WorkspaceNativeProjectConfiguration {
@@ -74,7 +78,81 @@ export type TemplateCodeActionResolveData = {
   readonly position: { readonly line: number; readonly character: number };
   /** Stable repair-plan identity; exact edit coordinates are deliberately re-planned at resolve time. */
   readonly actionIdentity: string;
+  /** Expected late refusal from re-planning; generic clients may safely ignore it. */
+  readonly refusal?: TemplateCodeActionResolveRefusal;
 };
+
+export const TEMPLATE_CODE_ACTION_RESOLVE_REFUSAL_REASONS = {
+  sourceDocumentUnavailable: "the source document is no longer available",
+  semanticPlanNoLongerMatches: "the current source no longer admits this repair",
+  semanticPlanAmbiguous: "the current source admits multiple matching repairs",
+  editMappingFailed: "the current repair could not be mapped safely",
+} as const;
+
+export type TemplateCodeActionResolveRefusalKind = keyof typeof TEMPLATE_CODE_ACTION_RESOLVE_REFUSAL_REASONS;
+
+export type TemplateCodeActionResolveRefusal<
+  Kind extends TemplateCodeActionResolveRefusalKind = TemplateCodeActionResolveRefusalKind,
+> = {
+  readonly [CurrentKind in Kind]: {
+    readonly kind: CurrentKind;
+    readonly reason: (typeof TEMPLATE_CODE_ACTION_RESOLVE_REFUSAL_REASONS)[CurrentKind];
+  };
+}[Kind];
+
+export function templateCodeActionResolveRefusal(
+  kind: TemplateCodeActionResolveRefusalKind,
+): TemplateCodeActionResolveRefusal {
+  switch (kind) {
+    case "sourceDocumentUnavailable":
+      return { kind, reason: TEMPLATE_CODE_ACTION_RESOLVE_REFUSAL_REASONS.sourceDocumentUnavailable };
+    case "semanticPlanNoLongerMatches":
+      return { kind, reason: TEMPLATE_CODE_ACTION_RESOLVE_REFUSAL_REASONS.semanticPlanNoLongerMatches };
+    case "semanticPlanAmbiguous":
+      return { kind, reason: TEMPLATE_CODE_ACTION_RESOLVE_REFUSAL_REASONS.semanticPlanAmbiguous };
+    case "editMappingFailed":
+      return { kind, reason: TEMPLATE_CODE_ACTION_RESOLVE_REFUSAL_REASONS.editMappingFailed };
+  }
+}
+
+export function templateCodeActionResolveRefusalFromData(
+  data: unknown,
+): TemplateCodeActionResolveRefusal | null {
+  if (data == null || typeof data !== "object" || Array.isArray(data)) return null;
+  const semanticRuntime = (data as Record<string, unknown>)["semanticRuntime"];
+  if (semanticRuntime == null || typeof semanticRuntime !== "object" || Array.isArray(semanticRuntime)) return null;
+  const resolve = (semanticRuntime as Record<string, unknown>)["resolve"];
+  if (resolve == null || typeof resolve !== "object" || Array.isArray(resolve)) return null;
+  return templateCodeActionResolveRefusalFromValue((resolve as Record<string, unknown>)["refusal"]);
+}
+
+export function templateCodeActionResolveRefusalFromValue(
+  refusal: unknown,
+): TemplateCodeActionResolveRefusal | null {
+  if (refusal == null || typeof refusal !== "object" || Array.isArray(refusal)) return null;
+  const kind = (refusal as Record<string, unknown>)["kind"];
+  const reason = (refusal as Record<string, unknown>)["reason"];
+  switch (kind) {
+    case "sourceDocumentUnavailable":
+      return reason === TEMPLATE_CODE_ACTION_RESOLVE_REFUSAL_REASONS.sourceDocumentUnavailable
+        ? { kind, reason }
+        : null;
+    case "semanticPlanNoLongerMatches":
+      return reason === TEMPLATE_CODE_ACTION_RESOLVE_REFUSAL_REASONS.semanticPlanNoLongerMatches
+        ? { kind, reason }
+        : null;
+    case "semanticPlanAmbiguous":
+      return reason === TEMPLATE_CODE_ACTION_RESOLVE_REFUSAL_REASONS.semanticPlanAmbiguous
+        ? { kind, reason }
+        : null;
+    case "editMappingFailed":
+      return reason === TEMPLATE_CODE_ACTION_RESOLVE_REFUSAL_REASONS.editMappingFailed
+        ? { kind, reason }
+        : null;
+    default:
+      return null;
+  }
+}
 
 type RuntimeAnswerTransportFields = Pick<
   SemanticRuntimeAnswer<unknown>,

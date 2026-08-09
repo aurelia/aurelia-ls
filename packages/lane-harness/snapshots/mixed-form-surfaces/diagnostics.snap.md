@@ -20,64 +20,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "diagnosticCount": 2,
+  "diagnosticCount": 1,
   "diagnostics": [
-    {
-      "anomaly": null,
-      "code": "weak-expression-member-owner",
-      "data": {
-        "diagnosticAuthority": "semantic-authoring-policy",
-        "diagnosticDomain": "template",
-        "diagnosticKind": "weak-expression-member-owner",
-        "frameworkErrorCode": null,
-        "frameworkRawErrorAuthority": null,
-        "missingInput": "expression-member-owner-type:index-signature-only",
-        "missingInputs": [
-          "expression-member-owner-type:index-signature-only"
-        ],
-        "phase": null,
-        "relatedInformation": [],
-        "relatedQueryKind": "template-diagnostics",
-        "repairAffordance": {
-          "actionKind": "declare-missing-member",
-          "actionability": "guided",
-          "changeDomain": "app-source",
-          "planKind": "source-member-declaration",
-          "readiness": "ready-to-plan",
-          "targetSourceCoverage": "all"
-        },
-        "sourceRole": "template",
-        "subject": {
-          "source": {
-            "end": 497,
-            "kind": "source-span-address",
-            "label": "src/app.html@478..497",
-            "path": "src/app.html",
-            "role": "template-member-access",
-            "start": 478
-          },
-          "span": null,
-          "subjectKind": "template-member-access",
-          "uri": null
-        },
-        "typeScriptDiagnosticCode": null
-      },
-      "message": "Member access is backed by an index signature, so completion cannot enumerate concrete property names.",
-      "range": {
-        "end": {
-          "character": 51,
-          "line": 10
-        },
-        "start": {
-          "character": 45,
-          "line": 10
-        }
-      },
-      "rangeText": "source",
-      "relatedInformation": [],
-      "severity": "information",
-      "source": "aurelia"
-    },
     {
       "anomaly": null,
       "code": "missing-expression-member",
@@ -92,6 +36,54 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "expression-member:selected-member-missing"
         ],
         "phase": null,
+        "presentation": {
+          "contextual": [
+            {
+              "diagnostic": {
+                "diagnosticAuthority": "typescript",
+                "diagnosticDomain": "template",
+                "diagnosticKind": "template-expression-typescript-diagnostic",
+                "frameworkErrorCode": null,
+                "frameworkRawErrorAuthority": null,
+                "missingInput": "typescript:TS2339",
+                "missingInputs": [
+                  "typescript:TS2339"
+                ],
+                "phase": "semantic",
+                "relatedInformation": [],
+                "relatedQueryKind": "template-diagnostics",
+                "repairAffordance": {
+                  "actionKind": "inspect-type-surface",
+                  "actionability": "manual",
+                  "changeDomain": "inspection",
+                  "planKind": "manual-inspection",
+                  "readiness": "inspection-required",
+                  "targetSourceCoverage": "all"
+                },
+                "severity": "error",
+                "sourceRole": "template",
+                "subject": {
+                  "source": {
+                    "end": 527,
+                    "kind": "source-span-address",
+                    "label": "src/app.html@512..527",
+                    "path": "src/app.html",
+                    "role": "template-member-access",
+                    "start": 512
+                  },
+                  "span": null,
+                  "subjectKind": "template-member-access",
+                  "uri": null
+                },
+                "typeScriptDiagnosticCode": 2339
+              },
+              "relation": "checker-evidence"
+            }
+          ],
+          "maxRawSeverity": "error",
+          "primarySeverity": "warning",
+          "rawRowCount": 2
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -149,7 +141,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "uri": "fixtures://pressure/mixed-form-surfaces/src/app.html"
         }
       ],
-      "severity": "information",
+      "severity": "warning",
       "source": "aurelia"
     }
   ],

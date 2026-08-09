@@ -73,6 +73,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-controller:AUR0755"
         ],
         "phase": "controller-activation",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -87,7 +93,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia runtime controller AUR0755 rejects this controller input: Resource view model resolves IViewFactory where runtime-html has not prepared a template-controller view factory provider..",
+      "message": "Resource view model resolves IViewFactory where runtime-html has not prepared a template-controller view factory provider.",
       "range": {
         "end": {
           "character": 54,

@@ -46,10 +46,18 @@
     "workspaceContains:node_modules/aurelia/package.json"
   ],
   "contributes": {
+    "languages": [
+      {
+        "id": "jsonc",
+        "filenames": [
+          "aurelia.project.json"
+        ]
+      }
+    ],
     "jsonValidation": [
       {
         "fileMatch": "**/aurelia.project.json",
-        "url": "./dist/schemas/aurelia.project.schema.json"
+        "url": "./dist/schemas/aurelia.project.jsonc.schema.json"
       }
     ],
     "semanticTokenTypes": [

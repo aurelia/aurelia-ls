@@ -36,6 +36,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-binding-behavior:AUR0101"
         ],
         "phase": "bind",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -50,7 +56,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia runtime binding behavior AUR0101 rejects this binding: Binding behavior 'missingSpreadBehavior' was not resolved through the current compiler resource scope..",
+      "message": "Binding behavior 'missingSpreadBehavior' was not resolved through the current compiler resource scope.",
       "range": {
         "end": {
           "character": 65,
@@ -80,6 +86,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "binding-target-assignment:source-nullish-to-required-target"
         ],
         "phase": null,
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "warning",
+          "primarySeverity": "warning",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -136,6 +148,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "binding-target-assignment:source-nullish-to-required-target"
         ],
         "phase": null,
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "warning",
+          "primarySeverity": "warning",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -192,6 +210,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "template-compiler:AUR0720"
         ],
         "phase": "attribute-classification",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -206,7 +230,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia template compiler AUR0720 rejects this template syntax: Spreading syntax \"...xxx\" is reserved. Encountered \"...$element\"..",
+      "message": "Spreading syntax \"...xxx\" is reserved. Encountered \"...$element\".",
       "range": {
         "end": {
           "character": 26,
@@ -236,6 +260,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-renderer:AUR0820"
         ],
         "phase": "render",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -250,7 +280,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia runtime renderer AUR0820 rejects this instruction input: Invalid spread target $element..",
+      "message": "Invalid spread target $element.",
       "range": {
         "end": {
           "character": 23,
@@ -280,6 +310,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "template-compiler:AUR0720"
         ],
         "phase": "attribute-classification",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -294,7 +330,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia template compiler AUR0720 rejects this template syntax: Spreading syntax \"...xxx\" is reserved. Encountered \"...$bindables\"..",
+      "message": "Spreading syntax \"...xxx\" is reserved. Encountered \"...$bindables\".",
       "range": {
         "end": {
           "character": 20,
@@ -324,6 +360,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-binding:AUR9999"
         ],
         "phase": "spread-bind",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -338,7 +380,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia runtime binding AUR9999 rejects this binding input: SpreadBinding.bind requires the hydration-context controller scope to have a parent scope..",
+      "message": "SpreadBinding.bind requires the hydration-context controller scope to have a parent scope.",
       "range": {
         "end": {
           "character": 16,
@@ -368,6 +410,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-binding:AUR9998"
         ],
         "phase": "spread-child-admission",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -382,7 +430,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia runtime binding AUR9998 rejects this binding input: SpreadBinding.addChild cannot admit captured template controller \"inner-gate\" on \"input\"..",
+      "message": "SpreadBinding.addChild cannot admit captured template controller \"inner-gate\" on \"input\".",
       "range": {
         "end": {
           "character": 33,

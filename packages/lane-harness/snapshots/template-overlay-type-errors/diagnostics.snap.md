@@ -36,6 +36,54 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "expression-member:selected-member-missing"
         ],
         "phase": null,
+        "presentation": {
+          "contextual": [
+            {
+              "diagnostic": {
+                "diagnosticAuthority": "typescript",
+                "diagnosticDomain": "template",
+                "diagnosticKind": "template-expression-typescript-diagnostic",
+                "frameworkErrorCode": null,
+                "frameworkRawErrorAuthority": null,
+                "missingInput": "typescript:TS2339",
+                "missingInputs": [
+                  "typescript:TS2339"
+                ],
+                "phase": "semantic",
+                "relatedInformation": [],
+                "relatedQueryKind": "template-diagnostics",
+                "repairAffordance": {
+                  "actionKind": "inspect-type-surface",
+                  "actionability": "manual",
+                  "changeDomain": "inspection",
+                  "planKind": "manual-inspection",
+                  "readiness": "inspection-required",
+                  "targetSourceCoverage": "all"
+                },
+                "severity": "error",
+                "sourceRole": "template",
+                "subject": {
+                  "source": {
+                    "end": 79,
+                    "kind": "source-span-address",
+                    "label": "src/template-overlay-type-errors-app.html@62..79",
+                    "path": "src/template-overlay-type-errors-app.html",
+                    "role": "template-member-access",
+                    "start": 62
+                  },
+                  "span": null,
+                  "subjectKind": "template-member-access",
+                  "uri": null
+                },
+                "typeScriptDiagnosticCode": 2339
+              },
+              "relation": "checker-evidence"
+            }
+          ],
+          "maxRawSeverity": "error",
+          "primarySeverity": "warning",
+          "rawRowCount": 2
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -110,6 +158,54 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "typescript:TS18046"
         ],
         "phase": "semantic",
+        "presentation": {
+          "contextual": [
+            {
+              "diagnostic": {
+                "diagnosticAuthority": "semantic-authoring-policy",
+                "diagnosticDomain": "template",
+                "diagnosticKind": "weak-expression-member-owner",
+                "frameworkErrorCode": null,
+                "frameworkRawErrorAuthority": null,
+                "missingInput": "expression-member-owner-type:no-members",
+                "missingInputs": [
+                  "expression-member-owner-type:no-members"
+                ],
+                "phase": null,
+                "relatedInformation": [],
+                "relatedQueryKind": "template-diagnostics",
+                "repairAffordance": {
+                  "actionKind": "inspect-type-surface",
+                  "actionability": "manual",
+                  "changeDomain": "inspection",
+                  "planKind": "manual-inspection",
+                  "readiness": "inspection-required",
+                  "targetSourceCoverage": "all"
+                },
+                "severity": "information",
+                "sourceRole": "template",
+                "subject": {
+                  "source": {
+                    "end": 166,
+                    "kind": "source-span-address",
+                    "label": "src/template-overlay-type-errors-app.html@149..166",
+                    "path": "src/template-overlay-type-errors-app.html",
+                    "role": "template-member-access",
+                    "start": 149
+                  },
+                  "span": null,
+                  "subjectKind": "template-member-access",
+                  "uri": null
+                },
+                "typeScriptDiagnosticCode": null
+              },
+              "relation": "semantic-explanation"
+            }
+          ],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 2
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -184,6 +280,54 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "expression-member:selected-member-missing"
         ],
         "phase": null,
+        "presentation": {
+          "contextual": [
+            {
+              "diagnostic": {
+                "diagnosticAuthority": "typescript",
+                "diagnosticDomain": "template",
+                "diagnosticKind": "template-expression-typescript-diagnostic",
+                "frameworkErrorCode": null,
+                "frameworkRawErrorAuthority": null,
+                "missingInput": "typescript:TS2339",
+                "missingInputs": [
+                  "typescript:TS2339"
+                ],
+                "phase": "semantic",
+                "relatedInformation": [],
+                "relatedQueryKind": "template-diagnostics",
+                "repairAffordance": {
+                  "actionKind": "inspect-type-surface",
+                  "actionability": "manual",
+                  "changeDomain": "inspection",
+                  "planKind": "manual-inspection",
+                  "readiness": "inspection-required",
+                  "targetSourceCoverage": "all"
+                },
+                "severity": "error",
+                "sourceRole": "template",
+                "subject": {
+                  "source": {
+                    "end": 254,
+                    "kind": "source-span-address",
+                    "label": "src/template-overlay-type-errors-app.html@228..254",
+                    "path": "src/template-overlay-type-errors-app.html",
+                    "role": "template-member-access",
+                    "start": 228
+                  },
+                  "span": null,
+                  "subjectKind": "template-member-access",
+                  "uri": null
+                },
+                "typeScriptDiagnosticCode": 2339
+              },
+              "relation": "checker-evidence"
+            }
+          ],
+          "maxRawSeverity": "error",
+          "primarySeverity": "warning",
+          "rawRowCount": 2
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -258,6 +402,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "typescript:TS18047"
         ],
         "phase": "semantic",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -314,6 +464,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "typescript:TS2345"
         ],
         "phase": "semantic",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -370,6 +526,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "typescript:TS2554"
         ],
         "phase": "semantic",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {

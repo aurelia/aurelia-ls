@@ -6,8 +6,8 @@
         "id": "typechecking-read-expressions",
         "file": "src/read-expressions.html",
         "verdict": "correct",
-        "reason": "The full document-diagnostic pull returns authored-source semantic and overlay-checker diagnostics for missing members, nullish access, call arguments and arity, overload rejection, non-callable values, callback returns, globals, and object literals without leaking generated TypeScript loci.",
-        "note": "NEW 2026-07-12. Representative standard document-pull adapter replay for the dedicated expression/typechecking corpus. Dense semantic truth remains in semantic-conformance."
+        "reason": "The full document-diagnostic pull returns proven missing members as semantic Warning primaries with matching TS2339 facts contextual, while independent nullish, call, overload, return, global, and object-literal checker failures remain direct Errors on authored spans.",
+        "note": "NEW 2026-07-12. Representative standard document-pull adapter replay for the dedicated expression/typechecking corpus. The callback `missingLabel` duplicate joins the existing causal groups, conserving 17 raw facts as 13 visible Problems without leaking generated TypeScript loci; dense semantic truth remains in semantic-conformance."
       },
       {
         "id": "typechecking-write-bindings",

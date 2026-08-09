@@ -8,6 +8,7 @@ const packageDir = resolve(__dirname);
 const distDir = resolve(packageDir, "dist");
 const tsSource = join(__dirname, "node_modules/typescript");
 const projectSchemaSource = join(__dirname, "../semantic-runtime/schema/aurelia.project.schema.json");
+const projectDialectSchemaSource = join(__dirname, "src/schemas/aurelia.project.jsonc.schema.json");
 
 function resetDistDir() {
   const expectedDistDir = resolve(packageDir, "../..", "packages", "vscode", "dist");
@@ -74,6 +75,7 @@ function copyRuntimeAssets() {
   const projectSchemaDest = join(distDir, "schemas/aurelia.project.schema.json");
   mkdirSync(dirname(projectSchemaDest), { recursive: true });
   cpSync(projectSchemaSource, projectSchemaDest);
+  cpSync(projectDialectSchemaSource, join(distDir, "schemas/aurelia.project.jsonc.schema.json"));
 }
 
 // Validate required runtime assets before replacing a previously usable bundle.
@@ -82,6 +84,9 @@ if (!existsSync(tsSource)) {
 }
 if (!existsSync(projectSchemaSource)) {
   throw new Error(`Required Aurelia project schema is missing: ${projectSchemaSource}`);
+}
+if (!existsSync(projectDialectSchemaSource)) {
+  throw new Error(`Required Aurelia project JSONC dialect schema is missing: ${projectDialectSchemaSource}`);
 }
 
 resetDistDir();

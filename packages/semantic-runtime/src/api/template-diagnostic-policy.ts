@@ -6,7 +6,7 @@ import {
 import type { ProductHandle } from '../kernel/handles.js';
 import type { KernelStore } from '../kernel/store.js';
 import {
-  RuntimeBindingDataFlow,
+  type RuntimeBindingDataFlow,
   RuntimeBindingDataFlowSourceAssignmentKind,
   RuntimeBindingDataFlowSourceAssignmentReasonKind,
   RuntimeBindingDataFlowTypeMismatchKind,
@@ -18,7 +18,7 @@ import {
   runtimeAssignmentTargetAstForProduct,
 } from '../template/expression-parse-product.js';
 import {
-  RuntimeBindingScopeIssue,
+  type RuntimeBindingScopeIssue,
   RuntimeBindingScopeIssueCertainty,
   RuntimeBindingScopeIssueKind,
 } from '../template/runtime-binding-scope-issue.js';
@@ -46,7 +46,6 @@ import {
 import { TypeSystemProductDetails } from '../type-system/product-details.js';
 import {
   CheckerTypeMemberKind,
-  type CheckerTypeShape,
   CheckerTypeShapeKind,
 } from '../type-system/type-shape.js';
 import {
@@ -278,12 +277,12 @@ export function bindingDataFlowFrameworkErrorDiagnostic(
     frameworkErrorCode,
     severity: 'error',
     summary: selectArrayOnSingleSelect
-      ? `Aurelia SelectValueObserver ${frameworkErrorCode} rejects an array-valued source update on a non-multiple <select>.`
+      ? 'An array-valued source cannot update a non-multiple <select>.'
       : readonlyCollectionSize
-        ? `Aurelia CollectionSizeObserver ${frameworkErrorCode} rejects writes to Map/Set size.`
+        ? 'Map/Set size is read-only.'
         : readonlyComputedProperty
-          ? `Aurelia ComputedObserver ${frameworkErrorCode} rejects writes to a getter-only target property.`
-      : `Aurelia runtime binding ${frameworkErrorCode} rejects this binding data flow.`,
+          ? 'A getter-only target property is read-only.'
+          : 'The runtime cannot apply this binding data flow.',
     missingInput: `binding-data-flow:${frameworkErrorCode}`,
     missingInputs: [`binding-data-flow:${frameworkErrorCode}`],
     source,
@@ -641,9 +640,7 @@ export function expressionParseErrorDiagnostic(
       : 'framework-error-code',
     frameworkErrorCode,
     severity: 'error',
-    summary: frameworkErrorCode == null
-      ? `The expression parser rejected this template expression: ${message}.`
-      : `Aurelia expression parser ${frameworkErrorCode} rejects this template expression: ${message}.`,
+    summary: diagnosticSentence(message),
     missingInput: frameworkErrorCode == null
       ? 'expression-parse:unmapped'
       : `expression-parse:${frameworkErrorCode}`,
@@ -683,9 +680,7 @@ export function templateCompilerErrorDiagnostic(
       : 'framework-error-code',
     frameworkErrorCode,
     severity,
-    summary: frameworkErrorCode == null
-      ? `The template compiler rejected this template syntax: ${message}.`
-      : `Aurelia template compiler ${frameworkErrorCode} rejects this template syntax: ${message}.`,
+    summary: templateCompilerDiagnosticSentence(message),
     missingInput: frameworkErrorCode == null
       ? 'template-compiler:unmapped'
       : `template-compiler:${frameworkErrorCode}`,
@@ -798,7 +793,7 @@ export function runtimeControllerIssueDiagnostic(
     diagnosticAuthority: 'framework-error-code',
     frameworkErrorCode: issue.frameworkErrorCode,
     severity: 'error',
-    summary: `Aurelia runtime controller ${issue.frameworkErrorCode ?? ''} rejects this controller input: ${issue.message}.`,
+    summary: diagnosticSentence(issue.message),
     missingInput: issue.frameworkErrorCode == null
       ? `runtime-controller:${issue.issueKind}`
       : `runtime-controller:${issue.frameworkErrorCode}`,
@@ -873,7 +868,7 @@ export function runtimeBindingIssueDiagnostic(
     diagnosticAuthority: 'framework-error-code',
     frameworkErrorCode: issue.frameworkErrorCode,
     severity: 'error',
-    summary: `Aurelia runtime binding ${issue.frameworkErrorCode ?? ''} rejects this binding input: ${issue.message}.`,
+    summary: diagnosticSentence(issue.message),
     missingInput: issue.frameworkErrorCode == null
       ? `runtime-binding:${issue.issueKind}`
       : `runtime-binding:${issue.frameworkErrorCode}`,
@@ -926,7 +921,7 @@ export function runtimeRendererIssueDiagnostic(
     diagnosticAuthority: 'framework-error-code',
     frameworkErrorCode: issue.frameworkErrorCode,
     severity: 'error',
-    summary: `Aurelia runtime renderer ${issue.frameworkErrorCode ?? ''} rejects this instruction input: ${issue.message}.`,
+    summary: diagnosticSentence(issue.message),
     missingInput: issue.frameworkErrorCode == null
       ? `runtime-renderer:${issue.issueKind}`
       : `runtime-renderer:${issue.frameworkErrorCode}`,
@@ -988,7 +983,7 @@ export function runtimeBindingBehaviorIssueDiagnostic(
     diagnosticAuthority: 'framework-error-code',
     frameworkErrorCode: issue.frameworkErrorCode,
     severity: 'error',
-    summary: `Aurelia runtime binding behavior ${issue.frameworkErrorCode ?? ''} rejects this binding: ${issue.message}.`,
+    summary: diagnosticSentence(issue.message),
     missingInput: issue.frameworkErrorCode == null
       ? `runtime-binding-behavior:${issue.issueKind}`
       : `runtime-binding-behavior:${issue.frameworkErrorCode}`,
@@ -1066,7 +1061,7 @@ export function runtimeValueConverterIssueDiagnostic(
     diagnosticAuthority: 'framework-error-code',
     frameworkErrorCode: issue.frameworkErrorCode,
     severity: 'error',
-    summary: `Aurelia runtime value converter ${issue.frameworkErrorCode} rejects this binding: ${issue.message}.`,
+    summary: diagnosticSentence(issue.message),
     missingInput: `runtime-value-converter:${issue.frameworkErrorCode}`,
     missingInputs: [`runtime-value-converter:${issue.frameworkErrorCode}`],
     source,
@@ -1101,7 +1096,7 @@ export function expressionRuntimeEvaluationErrorDiagnostic(
     diagnosticAuthority: 'framework-error-code',
     frameworkErrorCode,
     severity: 'error',
-    summary: `Aurelia runtime astEvaluate ${frameworkErrorCode} rejects this template expression: ${message}.`,
+    summary: diagnosticSentence(message),
     missingInput: `runtime-ast:${frameworkErrorCode}`,
     missingInputs: [`runtime-ast:${frameworkErrorCode}`],
     source,
@@ -1259,9 +1254,7 @@ export function runtimeBindingScopeIssueDiagnostic(
     diagnosticAuthority: 'framework-error-code',
     frameworkErrorCode: issue.frameworkErrorCode,
     severity: issue.certainty === RuntimeBindingScopeIssueCertainty.Definite ? 'error' : 'warning',
-    summary: issue.certainty === RuntimeBindingScopeIssueCertainty.Definite
-      ? `Aurelia runtime astAssign ${issue.frameworkErrorCode ?? ''} rejects this repeat destructuring source: ${issue.message}.`
-      : `Aurelia runtime astAssign ${issue.frameworkErrorCode ?? ''} may reject this repeat destructuring source: ${issue.message}.`,
+    summary: diagnosticSentence(issue.message),
     missingInput: issue.frameworkErrorCode == null
       ? `runtime-binding-scope:${issue.issueKind}`
       : `runtime-binding-scope:${issue.frameworkErrorCode}`,
@@ -1360,7 +1353,7 @@ export function routerIssueDiagnostic(
     diagnosticAuthority: routerIssueDiagnosticAuthority(issue),
     frameworkErrorCode: issue.frameworkErrorCode,
     severity: issue.severity,
-    summary: issue.message,
+    summary: diagnosticSentence(issue.message),
     missingInput: repair?.missingInput ?? null,
     missingInputs: repair?.missingInputs ?? [],
     source,
@@ -1381,9 +1374,7 @@ function repeatNonIterableDiagnostic(
     diagnosticAuthority: 'framework-error-code',
     frameworkErrorCode: issue.frameworkErrorCode,
     severity: issue.certainty === RuntimeBindingScopeIssueCertainty.Definite ? 'error' : 'warning',
-    summary: issue.certainty === RuntimeBindingScopeIssueCertainty.Definite
-      ? `Aurelia runtime repeat ${issue.frameworkErrorCode ?? ''} rejects this repeat source: ${issue.message}.`
-      : `Aurelia runtime repeat ${issue.frameworkErrorCode ?? ''} may reject this repeat source unless an app IRepeatableHandler handles it: ${issue.message}.`,
+    summary: diagnosticSentence(issue.message),
     missingInput: issue.frameworkErrorCode == null
       ? `runtime-repeat:${issue.issueKind}`
       : `runtime-repeat:${issue.frameworkErrorCode}`,
@@ -1422,8 +1413,9 @@ export function bindingTargetAccessFrameworkErrorDiagnostic(
     diagnosticAuthority: 'framework-error-code',
     frameworkErrorCode: targetAccess.frameworkErrorCode,
     severity: 'error',
-    summary: targetAccess.diagnosticReason
-      ?? `Aurelia runtime ${targetAccess.frameworkErrorCode} rejects this binding target observer lookup.`,
+    summary: targetAccess.diagnosticReason == null
+      ? 'The runtime could not resolve a target observer for this binding target.'
+      : diagnosticSentence(targetAccess.diagnosticReason),
     missingInput: `binding-target-access:${targetAccess.frameworkErrorCode}`,
     missingInputs: [`binding-target-access:${targetAccess.frameworkErrorCode}`],
     source,
@@ -1746,7 +1738,7 @@ function missingMemberDiagnostic(
     diagnosticKind: 'missing-expression-member',
     diagnosticAuthority: 'semantic-authoring-policy',
     frameworkErrorCode: null,
-    severity: declareMember ? 'warning' : 'information',
+    severity: 'warning',
     summary: `Member "${selectedMemberName}" is not projected on the owner type, so semantic tooling cannot validate or navigate it.`,
     missingInput: 'expression-member:selected-member-missing',
     missingInputs: ['expression-member:selected-member-missing'],
@@ -1988,6 +1980,26 @@ function frameworkCapabilityConfigurationSuggestion(
     default:
       return `Change the admitted framework configuration so it includes "${demand.authoredName}".`;
   }
+}
+
+function templateCompilerDiagnosticSentence(message: string): string {
+  const detail = message.trim()
+    .replace(/^Template compilation error:\s*/u, '')
+    .replace(/^Template compilation error in\s+/u, 'In ');
+  return diagnosticSentence(detail.length === 0
+    ? detail
+    : `${detail[0]!.toUpperCase()}${detail.slice(1)}`);
+}
+
+function diagnosticSentence(message: string): string {
+  const trimmed = message.trim();
+  if (trimmed.length === 0) {
+    return 'The diagnostic producer did not provide a message.';
+  }
+  const withoutTrailingPeriods = trimmed.replace(/\.+$/u, '');
+  return /[!?]$/u.test(withoutTrailingPeriods)
+    ? withoutTrailingPeriods
+    : `${withoutTrailingPeriods}.`;
 }
 
 function suggestionActionTarget(

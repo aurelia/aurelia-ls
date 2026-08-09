@@ -2083,12 +2083,16 @@ function declareViewModelMemberCodeActionForDiagnostic(
   if (edit == null) {
     return null;
   }
+  const repair = diagnosticRepairAffordanceForSuggestion(suggestion);
+  if (repair == null) {
+    return null;
+  }
 
   return {
     title: `Declare member '${memberName}' on ${resource.compilation.definition.target.localName ?? resource.compilation.definition.name}`,
     kind: 'quickfix',
     diagnostics: [diagnostic],
-    repair: diagnosticRepairAffordanceForSuggestion(suggestion),
+    repair,
     edits: [edit],
     isPreferred: true,
   };
@@ -2136,11 +2140,15 @@ function registerFrameworkCapabilityCodeActionForDiagnostic(
     .filter((expression) => expression.length > 0)
     .join(', ');
   const suggestion = diagnostic.suggestion;
+  const repair = diagnosticRepairAffordanceForSuggestion(suggestion);
+  if (repair == null) {
+    return null;
+  }
   return {
     title: `Register ${registrationLabel} for ${demand.requiredCapability}`,
     kind: 'quickfix',
     diagnostics: [diagnostic],
-    repair: diagnosticRepairAffordanceForSuggestion(suggestion),
+    repair,
     edits,
     isPreferred: true,
   };

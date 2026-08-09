@@ -218,6 +218,21 @@ describe("AureliaLanguageClient workspace ownership", () => {
         scheme: "file",
         pattern: expect.objectContaining({ baseUri: client.workspaceUri, pattern: "**/*" }),
       }));
+      for (const language of ["jsonc", "json"]) {
+        expect(client.options.documentSelector).not.toContainEqual(expect.objectContaining({
+          scheme: "file",
+          language,
+          pattern: expect.objectContaining({ baseUri: client.workspaceUri, pattern: "**/*" }),
+        }));
+        expect(client.options.documentSelector).toContainEqual(expect.objectContaining({
+          scheme: "file",
+          language,
+          pattern: expect.objectContaining({
+            baseUri: client.workspaceUri,
+            pattern: "**/aurelia.project.json",
+          }),
+        }));
+      }
       expect(client.options.synchronize?.fileEvents).toEqual([
         expect.objectContaining({
           globPattern: expect.objectContaining({
@@ -265,6 +280,7 @@ describe("AureliaLanguageClient workspace ownership", () => {
     expect(harness.clients[0]?.options.initializationOptions).toEqual({
       excludedWorkspaceRootUris: ["file:///work/repo/packages/disabled"],
       projectRootHintUris: ["file:///work/repo"],
+      projectConfigurationParserDiagnostics: "client",
     });
     expect(manager.clientForUri("file:///work/repo/src/main.ts")).toBe(harness.clients[0]?.raw);
     expect(manager.clientForUri("file:///work/repo/packages/disabled/src/main.ts")).toBeUndefined();
@@ -287,6 +303,7 @@ describe("AureliaLanguageClient workspace ownership", () => {
         "file:///work/repo/packages/disabled",
         "file:///work/repo/packages/disabled/examples/reentry",
       ],
+      projectConfigurationParserDiagnostics: "client",
     });
     expect(manager.clientForUri("file:///work/repo/packages/disabled/src/main.ts")).toBe(harness.clients[1]?.raw);
     await manager.stop();
@@ -316,6 +333,7 @@ describe("AureliaLanguageClient workspace ownership", () => {
     expect(harness.clients[0]?.options.initializationOptions).toEqual({
       excludedWorkspaceRootUris: [],
       projectRootHintUris: ["file:///work/repo"],
+      projectConfigurationParserDiagnostics: "client",
     });
     await manager.stop();
   });

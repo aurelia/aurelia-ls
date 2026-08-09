@@ -189,6 +189,10 @@ function prepareTestWorkspace(shard) {
   mkdirSync(extensionsDirectory, { recursive: true });
   cpSync(sourceWorkspace, aureliaWorkspace, { recursive: true });
   cpSync(sourceWorkspace, secondaryAureliaWorkspace, { recursive: true });
+  writeFileSync(
+    join(aureliaWorkspace, "aurelia.project.json"),
+    "{\n  // JSONC syntax is intentional.\n  \"version\": 1,\n}\n",
+  );
   mkdirSync(join(excludedAureliaWorkspace, ".vscode"), { recursive: true });
   mkdirSync(join(excludedAureliaWorkspace, "src"), { recursive: true });
   writeFileSync(join(excludedAureliaWorkspace, ".vscode", "settings.json"), JSON.stringify({

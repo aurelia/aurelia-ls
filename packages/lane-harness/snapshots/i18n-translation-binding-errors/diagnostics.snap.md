@@ -36,6 +36,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-binding:AUR4000"
         ],
         "phase": "translation-bind",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -50,7 +56,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia runtime binding AUR4000 rejects this binding input: TranslationBinding.bind would run with parameters but without a translation-key expression on the same element..",
+      "message": "TranslationBinding.bind would run with parameters but without a translation-key expression on the same element.",
       "range": {
         "end": {
           "character": 45,
@@ -80,6 +86,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-binding:AUR4002"
         ],
         "phase": "translation-bind",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -94,7 +106,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia runtime binding AUR4002 rejects this binding input: TranslationBinding._ensureKeyExpression would reject this key expression because its TypeChecker type is not assignable to string..",
+      "message": "TranslationBinding._ensureKeyExpression would reject this key expression because its TypeChecker type is not assignable to string.",
       "range": {
         "end": {
           "character": 24,
@@ -124,6 +136,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-binding:AUR4002"
         ],
         "phase": "translation-bind",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -138,7 +156,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia runtime binding AUR4002 rejects this binding input: TranslationBinding._ensureKeyExpression would reject this key expression because its TypeChecker type is not assignable to string..",
+      "message": "TranslationBinding._ensureKeyExpression would reject this key expression because its TypeChecker type is not assignable to string.",
       "range": {
         "end": {
           "character": 32,
@@ -168,6 +186,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-binding:AUR4001"
         ],
         "phase": "translation-create",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -182,7 +206,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia runtime binding AUR4001 rejects this binding input: TranslationBinding.useParameter can only attach one t-params binding to the same translated element..",
+      "message": "TranslationBinding.useParameter can only attach one t-params binding to the same translated element.",
       "range": {
         "end": {
           "character": 40,

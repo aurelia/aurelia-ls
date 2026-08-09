@@ -36,6 +36,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-controller:AUR0779"
         ],
         "phase": "template-controller-activation",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -50,7 +56,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia runtime controller AUR0779 rejects this controller input: Invalid portal insertion position \"middle\"..",
+      "message": "Invalid portal insertion position \"middle\".",
       "range": {
         "end": {
           "character": 51,
@@ -80,6 +86,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-controller:AUR0811"
         ],
         "phase": "template-controller-activation",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -94,7 +106,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia runtime controller AUR0811 rejects this controller input: Invalid strict portal target query: empty query..",
+      "message": "Invalid strict portal target query: empty query.",
       "range": {
         "end": {
           "character": 26,
@@ -124,6 +136,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-controller:AUR0812"
         ],
         "phase": "template-controller-activation",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -138,7 +156,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia runtime controller AUR0812 rejects this controller input: Invalid strict portal target resolution: no static target was supplied..",
+      "message": "Invalid strict portal target resolution: no static target was supplied.",
       "range": {
         "end": {
           "character": 30,

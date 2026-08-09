@@ -29,7 +29,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "diagnosticCount": 4,
+  "diagnosticCount": 3,
   "outcome": "full",
   "previousResultIdPresent": false,
   "resultIdPresent": true,
@@ -76,6 +76,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "expression-member:selected-member-missing"
         ],
         "phase": null,
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -258,7 +264,7 @@ diff --git a/src/guidance-truth-canary-app.ts b/src/guidance-truth-canary-app.ts
 
 ```json
 {
-  "diagnosticCount": 4,
+  "diagnosticCount": 3,
   "outcome": "full",
   "previousResultIdPresent": false,
   "resultIdPresent": true,
@@ -295,6 +301,12 @@ diff --git a/src/guidance-truth-canary-app.ts b/src/guidance-truth-canary-app.ts
           "expression-global:not-admitted"
         ],
         "phase": null,
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -388,7 +400,7 @@ _No in-memory diff._
 
 ```json
 {
-  "diagnosticCount": 4,
+  "diagnosticCount": 3,
   "outcome": "full",
   "previousResultIdPresent": false,
   "resultIdPresent": true,
@@ -435,6 +447,54 @@ _No in-memory diff._
           "expression-member:selected-member-missing"
         ],
         "phase": null,
+        "presentation": {
+          "contextual": [
+            {
+              "diagnostic": {
+                "diagnosticAuthority": "semantic-runtime-product",
+                "diagnosticDomain": "template",
+                "diagnosticKind": "binding-source-assignment-strictness",
+                "frameworkErrorCode": null,
+                "frameworkRawErrorAuthority": null,
+                "missingInput": "binding-source-assignment:owner-member-not-projected",
+                "missingInputs": [
+                  "binding-source-assignment:owner-member-not-projected"
+                ],
+                "phase": null,
+                "relatedInformation": [],
+                "relatedQueryKind": "template-diagnostics",
+                "repairAffordance": {
+                  "actionKind": "declare-missing-member",
+                  "actionability": "guided",
+                  "changeDomain": "app-source",
+                  "planKind": "template-scope-slot-typing",
+                  "readiness": "ready-to-plan",
+                  "targetSourceCoverage": "all"
+                },
+                "severity": "warning",
+                "sourceRole": "template",
+                "subject": {
+                  "source": {
+                    "end": 170,
+                    "kind": "source-span-address",
+                    "label": "src/guidance-truth-canary-app.html@159..170",
+                    "path": "src/guidance-truth-canary-app.html",
+                    "role": "binding-source-assignment",
+                    "start": 159
+                  },
+                  "span": null,
+                  "subjectKind": "template-expression",
+                  "uri": null
+                },
+                "typeScriptDiagnosticCode": null
+              },
+              "relation": "same-subject"
+            }
+          ],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 2
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {

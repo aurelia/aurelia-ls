@@ -2914,12 +2914,24 @@ export interface SemanticDiagnosticPresentationGroup {
   readonly maxRawSeverity: SemanticTemplateCursorDiagnosticSeverity;
 }
 
+export type SemanticDiagnosticPresentationWithheldReason =
+  | 'context-only-weak-owner';
+
+/** Answer-local reference to a raw diagnostic fact intentionally withheld from user-facing primary groups. */
+export interface SemanticDiagnosticPresentationWithheldRow {
+  readonly rowId: string;
+  readonly rowIndex: number;
+  readonly reason: SemanticDiagnosticPresentationWithheldReason;
+}
+
 export interface SemanticDiagnosticPresentationResult {
   readonly rawRowCount: number;
   readonly primaryCount: number;
   readonly contextualCount: number;
+  readonly withheldCount: number;
   readonly complete: boolean;
   readonly groups: readonly SemanticDiagnosticPresentationGroup[];
+  readonly withheld: readonly SemanticDiagnosticPresentationWithheldRow[];
 }
 
 export interface SemanticAppDiagnosticsResult {

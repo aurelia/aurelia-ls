@@ -4,7 +4,9 @@ Language intelligence for Aurelia 2 templates, powered by the shared Aurelia sem
 
 The extension analyzes your Aurelia project to understand what your components are, what they accept, where they came from, and how templates connect to TypeScript. It handles decorators, conventions, `static $au`, `.define()` calls, third-party packages, and Aurelia binding syntax.
 
-When it cannot prove a fact, it preserves that uncertainty in diagnostics, hover details, and resource evidence instead of fabricating a confident answer.
+When it cannot prove a fact, it preserves that uncertainty in semantic evidence instead of fabricating a confident
+answer. Broad or non-actionable uncertainty stays out of Problems and remains available through focused hover and
+resource evidence.
 
 ## Features
 
@@ -17,11 +19,22 @@ expressions include resolved types, including bare `$this`; and template control
 
 ### Diagnostics — catch real problems
 
-Real-time, source-linked diagnostics for unknown elements, unknown attributes, expression errors, and binding mismatches. Diagnostics are backed by the same semantic facts used by MCP and other runtime consumers.
+Real-time, source-linked diagnostics for unknown elements, unknown attributes, expression errors, and binding
+mismatches. Errors are definite correctness or configuration failures; warnings are high-confidence risks that Aurelia
+may still tolerate at runtime; Information is reserved for exact, actionable incomplete-analysis loci. Broad weak-owner
+or admission uncertainty and operational failures do not become standalone Problems.
+
+When Aurelia's semantic diagnosis and generated TypeScript checker evidence describe the same authored problem, the
+semantic diagnosis owns the squiggle and the checker fact appears as related information. The extension does not expose
+severity overrides, inline suppression, or a blanket strict mode in the 0.5 release line; those controls would need a
+separate, evidence-backed policy.
 
 ### Quick fixes — apply only current plans
 
-Edit-backed diagnostics offer conservative quick fixes for source operations the semantic runtime can prove, such as declaring a missing view-model member or registering an available framework capability. Edits are re-planned when selected and refused if an open target document changed before application.
+Edit-backed diagnostics offer conservative quick fixes for source operations the semantic runtime can prove, such as
+declaring a missing view-model member or registering an available framework capability. A diagnostic without a proved
+edit plan does not advertise a generic repair. Edits are re-planned when selected; if the source changed, VS Code reports
+the exact refusal reason and applies nothing.
 
 ### Completions — discover what's available
 
@@ -98,8 +111,9 @@ given target. They are disabled by default and can be enabled per workspace fold
 Most framework tooling either achieves complete knowledge by restricting what you can write, or provides incomplete knowledge without telling you.
 
 This extension takes a different approach: it analyzes what it can analyze, and when it reaches a limit (a dynamic
-registration pattern or a complex third-party package), it keeps the uncertainty visible. Diagnostics, hover, and the
-Aurelia Resources view all prefer source-linked facts and provenance over guessed results.
+registration pattern or a complex third-party package), it keeps the uncertainty explicit in the semantic evidence.
+Problems stays focused on source-linked, actionable findings; hover and the Aurelia Resources view can disclose broader
+context and provenance without turning every open seam into a squiggle.
 
 The goal is that you can trust what the extension tells you.
 
@@ -118,8 +132,12 @@ validity, and applying its authored-source exclusions remain semantic-runtime re
 then asks semantic-runtime for the workspace's project shape; it keeps shape-confirmed Aurelia app,
 resource-library-authoring, and package-inspection sessions, and may also retain a config-only session when
 semantic-runtime confirms the exact native configuration. Unrelated HTML and TypeScript workspaces remain inactive.
-VS Code validates `aurelia.project.json` against the schema bundled with the extension; semantic-runtime remains the
-authority for its project meaning and exclusions.
+The exact `aurelia.project.json` filename uses VS Code's built-in JSONC language mode. A syntax-only dialect schema
+allows the same comments and trailing commas as the runtime parser without defining any project properties. VS Code
+therefore owns malformed JSONC and duplicate-key parser diagnostics, while semantic-runtime remains the sole authority
+for schema, project meaning, filesystem checks, and exclusions. The language server publishes those semantic
+configuration diagnostics only from an admitted session; the canonical full schema is shipped but is not statically
+associated with files.
 
 Set `aurelia.activationMode` per workspace folder when automatic admission is not appropriate:
 

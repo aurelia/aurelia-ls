@@ -24,6 +24,47 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "diagnostics": [
     {
       "anomaly": null,
+      "code": "AUR4101",
+      "data": {
+        "diagnosticAuthority": "framework-runtime-behavior",
+        "diagnosticDomain": "validation",
+        "diagnosticKind": "rule-provider-no-rule-found",
+        "frameworkErrorCode": "AUR4101",
+        "frameworkRawErrorAuthority": null,
+        "missingInput": null,
+        "missingInputs": [],
+        "phase": "fluent-rule-construction",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
+        "relatedInformation": [],
+        "relatedQueryKind": "validation-issues",
+        "repairAffordance": null,
+        "sourceRole": "app-source",
+        "subject": null,
+        "typeScriptDiagnosticCode": null
+      },
+      "message": "withMessage(...) is called before this PropertyRule chain has added a validation rule.",
+      "range": {
+        "end": {
+          "character": 90,
+          "line": 18
+        },
+        "start": {
+          "character": 6,
+          "line": 16
+        }
+      },
+      "rangeText": "rules\n        .ensure('app-task-root')\n        .withMessage('AppTask declared service-key callbacks should be framework-rooted.')",
+      "relatedInformation": [],
+      "severity": "error",
+      "source": "aurelia"
+    },
+    {
+      "anomaly": null,
       "code": "TS2449",
       "data": {
         "diagnosticAuthority": "typescript",
@@ -34,6 +75,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "phase": "semantic",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [
           {
             "code": "TS2728",
@@ -41,8 +88,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "source": {
               "end": 1048,
               "kind": "typescript-diagnostic",
-              "label": "repo:///packages/semantic-runtime/fixtures/pressure/validation-rule-source-errors/src/main.ts@1025..1048",
-              "path": "repo:///packages/semantic-runtime/fixtures/pressure/validation-rule-source-errors/src/main.ts",
+              "label": "src/main.ts@1025..1048",
+              "path": "src/main.ts",
               "role": "line:32:character:6",
               "start": 1025
             },
@@ -50,14 +97,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           }
         ],
         "relatedQueryKind": "typescript-diagnostics",
-        "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
-          "changeDomain": "inspection",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
-        },
+        "repairAffordance": null,
         "sourceRole": "app-source",
         "subject": null,
         "typeScriptDiagnosticCode": 2449
@@ -95,48 +135,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       ],
       "severity": "error",
       "source": "typescript"
-    },
-    {
-      "anomaly": null,
-      "code": "AUR4101",
-      "data": {
-        "diagnosticAuthority": "framework-runtime-behavior",
-        "diagnosticDomain": "validation",
-        "diagnosticKind": "rule-provider-no-rule-found",
-        "frameworkErrorCode": "AUR4101",
-        "frameworkRawErrorAuthority": null,
-        "missingInput": null,
-        "missingInputs": [],
-        "phase": "fluent-rule-construction",
-        "relatedInformation": [],
-        "relatedQueryKind": "validation-issues",
-        "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
-          "changeDomain": "inspection",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
-        },
-        "sourceRole": "app-source",
-        "subject": null,
-        "typeScriptDiagnosticCode": null
-      },
-      "message": "withMessage(...) is called before this PropertyRule chain has added a validation rule.",
-      "range": {
-        "end": {
-          "character": 90,
-          "line": 18
-        },
-        "start": {
-          "character": 6,
-          "line": 16
-        }
-      },
-      "rangeText": "rules\n        .ensure('app-task-root')\n        .withMessage('AppTask declared service-key callbacks should be framework-rooted.')",
-      "relatedInformation": [],
-      "severity": "error",
-      "source": "aurelia"
     }
   ],
   "outcome": "full",
@@ -188,16 +186,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "phase": "fluent-rule-construction",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "validation-issues",
-        "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
-          "changeDomain": "inspection",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
-        },
+        "repairAffordance": null,
         "sourceRole": "app-source",
         "subject": null,
         "typeScriptDiagnosticCode": null
@@ -230,16 +227,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "phase": "accessor-parsing",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "validation-issues",
-        "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
-          "changeDomain": "inspection",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
-        },
+        "repairAffordance": null,
         "sourceRole": "app-source",
         "subject": null,
         "typeScriptDiagnosticCode": null
@@ -272,16 +268,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "phase": "group-rule-execution",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "validation-issues",
-        "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
-          "changeDomain": "inspection",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
-        },
+        "repairAffordance": null,
         "sourceRole": "app-source",
         "subject": null,
         "typeScriptDiagnosticCode": null
@@ -314,16 +309,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "phase": "fluent-rule-construction",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "validation-issues",
-        "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
-          "changeDomain": "inspection",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
-        },
+        "repairAffordance": null,
         "sourceRole": "app-source",
         "subject": null,
         "typeScriptDiagnosticCode": null
@@ -356,16 +350,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "phase": "model-rule-hydration",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "validation-issues",
-        "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
-          "changeDomain": "inspection",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
-        },
+        "repairAffordance": null,
         "sourceRole": "app-source",
         "subject": null,
         "typeScriptDiagnosticCode": null
@@ -398,16 +391,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "phase": "model-rule-hydration",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "validation-issues",
-        "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
-          "changeDomain": "inspection",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
-        },
+        "repairAffordance": null,
         "sourceRole": "app-source",
         "subject": null,
         "typeScriptDiagnosticCode": null

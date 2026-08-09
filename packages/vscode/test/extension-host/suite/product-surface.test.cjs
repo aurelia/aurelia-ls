@@ -205,6 +205,54 @@ suite("extension-host product surface", () => {
     );
   });
 
+  test("splits project-config JSONC parsing from Aurelia semantic diagnostics", async () => {
+    const uri = vscode.Uri.file(path.join(aureliaWorkspace, "aurelia.project.json"));
+    const document = await vscode.workspace.openTextDocument(uri);
+    const baseline = document.getText();
+    assert.strictEqual(document.languageId, "jsonc", "The exact native config filename should use JSONC syntax.");
+
+    try {
+      await replaceDocumentText(document, '{"version":1,"unknown":true,}\n');
+      await waitFor(() => {
+        const diagnostics = vscode.languages.getDiagnostics(uri);
+        return diagnostics.length === 1
+          && diagnostics[0].source === "aurelia"
+          && diagnostics[0].code === "aurelia-project-config-unknown-property";
+      }, "valid JSONC with an unknown config property should have one Aurelia semantic diagnostic", 60_000);
+
+      let observedProjectConfigurationDiagnostics = [];
+      await replaceDocumentText(document, '{"version":1,"version":1}\n');
+      await waitFor(() => {
+        observedProjectConfigurationDiagnostics = vscode.languages.getDiagnostics(uri);
+        return observedProjectConfigurationDiagnostics.length > 0
+          && observedProjectConfigurationDiagnostics.every((diagnostic) => diagnostic.source === "jsonc");
+      }, () => `duplicate JSONC properties should remain owned only by VS Code's JSONC parser; observed ${diagnosticSummary(observedProjectConfigurationDiagnostics)}`, 60_000);
+
+      await replaceDocumentText(document, '{"version":1,,}\n');
+      await waitFor(() => {
+        const diagnostics = vscode.languages.getDiagnostics(uri);
+        return diagnostics.length > 0
+          && diagnostics.every((diagnostic) => diagnostic.source === "jsonc");
+      }, "malformed JSONC should remain owned only by VS Code's JSONC parser", 60_000);
+
+      await replaceDocumentText(document, baseline);
+      await waitFor(
+        () => vscode.languages.getDiagnostics(uri).length === 0,
+        "comments and trailing commas should be accepted by both config diagnostic owners",
+        60_000,
+      );
+    } finally {
+      if (document.getText() !== baseline) {
+        await replaceDocumentText(document, baseline);
+      }
+      await waitFor(
+        () => vscode.languages.getDiagnostics(uri).length === 0,
+        "project-config cleanup should restore the accepted JSONC baseline",
+        60_000,
+      );
+    }
+  });
+
   test("leaves TypeScript rename outside owned roots to VS Code's native provider", async () => {
     const uri = vscode.Uri.file(path.join(plainTypeScriptWorkspace, "src", "plain.ts"));
     const document = await vscode.workspace.openTextDocument(uri);
@@ -354,6 +402,16 @@ async function showAureliaDocument(relativePath, workspaceRoot = aureliaWorkspac
 async function inlayHints(uri, range) {
   const hints = await vscode.commands.executeCommand("vscode.executeInlayHintProvider", uri, range);
   return Array.isArray(hints) ? hints : [];
+}
+
+async function replaceDocumentText(document, text) {
+  const edit = new vscode.WorkspaceEdit();
+  edit.replace(
+    document.uri,
+    new vscode.Range(document.positionAt(0), document.positionAt(document.getText().length)),
+    text,
+  );
+  assert.strictEqual(await vscode.workspace.applyEdit(edit), true, "Expected project-config edit to apply.");
 }
 
 async function hoverMarkdown(document, anchor, token = anchor) {
@@ -594,5 +652,20 @@ async function waitFor(predicate, message, timeoutMs = 20_000) {
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   if (lastError) throw lastError;
-  throw new Error(message);
+  throw new Error(typeof message === "function" ? message() : message);
+}
+
+function diagnosticSummary(diagnostics) {
+  return JSON.stringify(diagnostics.map((diagnostic) => ({
+    source: diagnostic.source ?? null,
+    code: diagnostic.code ?? null,
+    severity: diagnostic.severity,
+    message: diagnostic.message,
+    range: [
+      diagnostic.range.start.line,
+      diagnostic.range.start.character,
+      diagnostic.range.end.line,
+      diagnostic.range.end.character,
+    ],
+  })));
 }

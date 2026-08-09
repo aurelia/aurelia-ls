@@ -3,6 +3,8 @@
   "$id": "https://aurelia.io/schemas/aurelia.project.schema.json",
   "title": "Aurelia Project Configuration",
   "description": "Static semantic project configuration consumed by Aurelia tooling.",
+  "allowComments": true,
+  "allowTrailingCommas": true,
   "type": "object",
   "additionalProperties": false,
   "required": ["version"],

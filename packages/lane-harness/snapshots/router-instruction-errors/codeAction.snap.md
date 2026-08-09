@@ -66,6 +66,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "router:instruction-no-fallback"
         ],
         "phase": "route-recognition",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "router-issues",
         "repairAffordance": {

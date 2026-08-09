@@ -20,6 +20,11 @@ import {
 import { SemanticRuntimeLspRequestAbortedError } from "../../src/runtime/semantic-runtime-session.js";
 import { workspaceEditChanges } from "../../src/mapping/lsp-types.js";
 import {
+  templateCodeActionResolveRefusalFromData,
+  templateCodeActionResolveRefusalFromValue,
+  type TemplateCodeActionResolveRefusal,
+} from "../../src/protocol.js";
+import {
   createContextTestOperation,
   createTestOperation,
 } from "./test-request-guard.js";
@@ -44,6 +49,7 @@ function createInlayRegistrationHarness(operationOverrides: Record<string, unkno
   let inlayHandler: ((params: unknown, token: unknown) => Promise<unknown>) | null = null;
   let semanticTokensHandler: ((params: unknown, token: unknown) => Promise<unknown>) | null = null;
   let codeActionHandler: ((params: unknown, token: unknown) => Promise<unknown>) | null = null;
+  let codeActionResolveHandler: ((action: unknown, token: unknown) => Promise<unknown>) | null = null;
   const managedAdmission = vi.fn();
   const getConfiguration = vi.fn(async () => false);
   const semanticRuntime = {
@@ -74,7 +80,9 @@ function createInlayRegistrationHarness(operationOverrides: Record<string, unkno
     onCodeAction: vi.fn((handler: (params: unknown, token: unknown) => Promise<unknown>) => {
       codeActionHandler = handler;
     }),
-    onCodeActionResolve: vi.fn(),
+    onCodeActionResolve: vi.fn((handler: (action: unknown, token: unknown) => Promise<unknown>) => {
+      codeActionResolveHandler = handler;
+    }),
     onDocumentSymbol: vi.fn(),
     onWorkspaceSymbol: vi.fn(),
     onSelectionRanges: vi.fn(),
@@ -108,6 +116,7 @@ function createInlayRegistrationHarness(operationOverrides: Record<string, unkno
   if (inlayHandler == null) throw new Error("Inlay-hint registration was not captured.");
   if (semanticTokensHandler == null) throw new Error("Semantic-token registration was not captured.");
   if (codeActionHandler == null) throw new Error("Code-action registration was not captured.");
+  if (codeActionResolveHandler == null) throw new Error("Code-action resolve registration was not captured.");
   return {
     ctx,
     getConfiguration,
@@ -116,6 +125,7 @@ function createInlayRegistrationHarness(operationOverrides: Record<string, unkno
     inlayHandler,
     semanticTokensHandler,
     codeActionHandler,
+    codeActionResolveHandler,
   };
 }
 
@@ -826,6 +836,37 @@ describe("inlay-hint request admission", () => {
 });
 
 describe("registered code-action failure boundary", () => {
+  test("returns an exact refusal when a listed action loses authored ownership", async () => {
+    const harness = createInlayRegistrationHarness();
+    harness.ctx.ownsDocument.mockReturnValueOnce(false);
+    const action = {
+      title: "Declare member",
+      kind: "quickfix",
+      edit: { changes: {} },
+      data: {
+        semanticRuntime: {
+          resolve: {
+            schema: "aurelia.template-code-action-resolve/1",
+            textDocument: { uri: templateUri },
+            position: { line: 0, character: codeActionStart },
+            actionIdentity: "template-code-action:sha256:test",
+          },
+        },
+      },
+    };
+
+    const resolved = await harness.codeActionResolveHandler(action, {
+      isCancellationRequested: false,
+      onCancellationRequested: vi.fn(),
+    }) as typeof action;
+
+    expect(resolved.edit).toBeUndefined();
+    expect(templateCodeActionResolveRefusalFromData(resolved.data)).toEqual({
+      kind: "semanticPlanNoLongerMatches",
+      reason: "the current source no longer admits this repair",
+    });
+  });
+
   test("preserves a semantic non-answer as RequestFailed", async () => {
     const document = TextDocument.create(templateUri, "html", 1, codeActionText);
     const harness = createInlayRegistrationHarness({
@@ -1078,6 +1119,21 @@ describe("handleCodeAction", () => {
     context: { diagnostics: [] },
   };
 
+  test("correlates each typed refusal kind with its authenticated reason", () => {
+    const valid: TemplateCodeActionResolveRefusal = {
+      kind: "semanticPlanAmbiguous",
+      reason: "the current source admits multiple matching repairs",
+    };
+    // @ts-expect-error A known reason belonging to another kind is not a valid typed refusal.
+    const mismatched: TemplateCodeActionResolveRefusal = {
+      kind: "semanticPlanAmbiguous",
+      reason: "the current source no longer admits this repair",
+    };
+
+    expect(templateCodeActionResolveRefusalFromValue(valid)).toEqual(valid);
+    expect(templateCodeActionResolveRefusalFromValue(mismatched)).toBeNull();
+  });
+
   test("maps semantic-runtime template code actions to unresolved LSP quickfixes", async () => {
     const ctx = createMockCodeActionContext();
 
@@ -1184,14 +1240,157 @@ describe("handleCodeAction", () => {
 
     const resolved = await handleCodeActionResolve(
       ctx as never,
+      {
+        ...actions![0]!,
+        edit: { changes: {} },
+        command: { title: "stale command", command: "aurelia.stale" },
+      },
+      createContextTestOperation(ctx),
+    );
+
+    expect(resolved.edit).toBeUndefined();
+    expect(resolved.command).toBeUndefined();
+    expect(templateCodeActionResolveRefusalFromData(resolved.data)).toEqual({
+      kind: "semanticPlanNoLongerMatches",
+      reason: "the current source no longer admits this repair",
+    });
+    expect(ctx.logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining("no longer uniquely applicable"),
+    );
+  });
+
+  test("does not attribute an unrelated candidate's mapping failure to the selected plan", async () => {
+    const ctx = createMockCodeActionContext();
+    const actions = await handleCodeAction(
+      ctx as never,
+      params,
+      createContextTestOperation(ctx),
+    );
+    const baseRow = (await createMockCodeActionContext().semanticRuntime.templateCodeActions())
+      .value.rows[0] as Record<string, unknown>;
+    const unrelated = {
+      ...baseRow,
+      title: "Declare unrelated member",
+      edits: [{
+        editKind: "declare-view-model-member",
+        source: {
+          kind: "typescript-node",
+          label: "file:///C:/outside.ts@0..0",
+          path: "file:///C:/outside.ts",
+          start: 0,
+          end: 0,
+        },
+        oldText: null,
+        newText: "unrelated",
+      }],
+    };
+    ctx.semanticRuntime.templateCodeActions.mockResolvedValueOnce({
+      schemaVersion: "0.2",
+      result: "answered",
+      selection: "not-applicable",
+      coverage: "complete",
+      summary: "mock semantic-runtime code actions answer",
+      value: { displayText: "1 template code action(s).", rows: [unrelated] },
+    });
+
+    const resolved = await handleCodeActionResolve(
+      ctx as never,
       actions![0]!,
       createContextTestOperation(ctx),
     );
 
     expect(resolved.edit).toBeUndefined();
-    expect(ctx.logger.warn).toHaveBeenCalledWith(
-      expect.stringContaining("no longer uniquely applicable"),
+    expect(templateCodeActionResolveRefusalFromData(resolved.data)).toEqual({
+      kind: "semanticPlanNoLongerMatches",
+      reason: "the current source no longer admits this repair",
+    });
+  });
+
+  test("returns an exact refusal when the source document disappeared", async () => {
+    const ctx = createMockCodeActionContext();
+    const actions = await handleCodeAction(ctx as never, params, createContextTestOperation(ctx));
+    ctx.ensureProgramDocument.mockReturnValueOnce(null);
+
+    const resolved = await handleCodeActionResolve(
+      ctx as never,
+      actions![0]!,
+      createContextTestOperation(ctx),
     );
+
+    expect(resolved.edit).toBeUndefined();
+    expect(templateCodeActionResolveRefusalFromData(resolved.data)).toEqual({
+      kind: "sourceDocumentUnavailable",
+      reason: "the source document is no longer available",
+    });
+  });
+
+  test("returns an exact refusal when multiple current plans match", async () => {
+    const row = createMockCodeActionContext().semanticRuntime.templateCodeActions()
+      .then((answer) => answer.value.rows[0]);
+    const duplicated = await row;
+    const ctx = createMockCodeActionContext({ actions: [duplicated, duplicated] });
+    const actions = await handleCodeAction(ctx as never, params, createContextTestOperation(ctx));
+
+    const resolved = await handleCodeActionResolve(
+      ctx as never,
+      actions![0]!,
+      createContextTestOperation(ctx),
+    );
+
+    expect(resolved.edit).toBeUndefined();
+    expect(templateCodeActionResolveRefusalFromData(resolved.data)).toEqual({
+      kind: "semanticPlanAmbiguous",
+      reason: "the current source admits multiple matching repairs",
+    });
+  });
+
+  test("counts a matching unmappable plan when deciding late ambiguity", async () => {
+    const baseRow = (await createMockCodeActionContext().semanticRuntime.templateCodeActions())
+      .value.rows[0] as Record<string, unknown>;
+    const badEdits = (baseRow["edits"] as readonly Record<string, unknown>[]).map((edit) => ({
+      ...edit,
+      source: {
+        kind: "typescript-node",
+        label: "file:///C:/outside.ts@0..0",
+        path: "file:///C:/outside.ts",
+        start: 0,
+        end: 0,
+      },
+    }));
+    const ctx = createMockCodeActionContext({
+      actions: [baseRow, { ...baseRow, edits: badEdits }],
+    });
+    const actions = await handleCodeAction(ctx as never, params, createContextTestOperation(ctx));
+
+    const resolved = await handleCodeActionResolve(
+      ctx as never,
+      actions![0]!,
+      createContextTestOperation(ctx),
+    );
+
+    expect(resolved.edit).toBeUndefined();
+    expect(templateCodeActionResolveRefusalFromData(resolved.data)).toEqual({
+      kind: "semanticPlanAmbiguous",
+      reason: "the current source admits multiple matching repairs",
+    });
+  });
+
+  test("returns an exact refusal when a current edit cannot be mapped safely", async () => {
+    const ctx = createMockCodeActionContext();
+    const actions = await handleCodeAction(ctx as never, params, createContextTestOperation(ctx));
+    ctx.lookupDocumentSnapshot.mockReturnValue(null);
+
+    const resolved = await handleCodeActionResolve(
+      ctx as never,
+      actions![0]!,
+      createContextTestOperation(ctx),
+    );
+
+    expect(resolved.edit).toBeUndefined();
+    expect(templateCodeActionResolveRefusalFromData(resolved.data)).toEqual({
+      kind: "editMappingFailed",
+      reason: "the current repair could not be mapped safely",
+    });
   });
 
   test("returns null when semantic-runtime has no applicable code actions", async () => {

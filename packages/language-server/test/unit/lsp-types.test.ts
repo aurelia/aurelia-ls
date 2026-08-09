@@ -8,6 +8,7 @@ import {
   ResponseError,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
+import { appDiagnosticPresentation } from "@aurelia-ls/semantic-runtime";
 import {
   codeActionKindMatchesOnly,
   mapSemanticRuntimeAppDiagnostics,
@@ -35,6 +36,18 @@ const textByUri = new Map<DocumentUri, string>([
 ]);
 
 const lookupText: LookupTextFn = (uri) => textByUri.get(uri) ?? null;
+
+function completeDiagnosticAnswer<T extends { readonly value: { readonly rows: readonly unknown[] } }>(
+  answer: T,
+): T {
+  return {
+    ...answer,
+    value: {
+      ...answer.value,
+      presentation: appDiagnosticPresentation(answer.value.rows as never, true),
+    },
+  } as T;
+}
 
 function sourceReference(sourcePath: string, start: number, end: number) {
   return {
@@ -116,6 +129,22 @@ describe("mapSemanticProjectConfigurationDiagnostics", () => {
         severity: DiagnosticSeverity.Error,
         code: "aurelia-project-config-unsupported-version",
         source: "aurelia",
+        data: {
+          semanticRuntime: {
+            queryKind: "project-configuration-diagnostics",
+            projectKey: "app",
+            diagnosticKind: "aurelia-project-config-unsupported-version",
+            severity: "error",
+            message: "Unsupported project configuration version.",
+            source: {
+              filePath: "C:/projects/app/aurelia.project.json",
+              start,
+              end: start + 1,
+              startPosition: { line: 1, character: 13 },
+              endPosition: { line: 1, character: 14 },
+            },
+          },
+        },
       }],
       failures: [],
     });
@@ -207,7 +236,7 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
       "alpha\nbeta\ngamma",
     );
     const mapped = mapSemanticRuntimeAppDiagnostics(
-      {
+      completeDiagnosticAnswer({
         value: {
           rows: [
             {
@@ -215,7 +244,7 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
               diagnosticDomain: "template",
               phase: null,
               diagnosticKind: "missing-expression-member",
-              diagnosticAuthority: "type-checker",
+              diagnosticAuthority: "semantic-authoring-policy",
               frameworkErrorCode: null,
               frameworkRawErrorAuthority: null,
               severity: "warning",
@@ -271,7 +300,7 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
             },
           ],
         },
-      } as never,
+      } as never),
       doc,
       appDocumentUris,
     );
@@ -308,6 +337,181 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
     ]);
   });
 
+  test.each(["warning", "information"] as const)(
+    "keeps a %s semantic primary visible while conserving contextual checker severity and facts",
+    (primarySeverity) => {
+      const doc = TextDocument.create(
+        "file:///C:/projects/app/src/component.html",
+        "html",
+        1,
+        "alpha\nbeta\ngamma",
+      );
+      const source = sourceReference("src/component.html", 6, 10);
+      const rows = [
+        {
+          projectKey: "app",
+          diagnosticDomain: "template",
+          phase: "binding",
+          diagnosticKind: "missing-expression-member",
+          diagnosticAuthority: "semantic-authoring-policy",
+          typeScriptDiagnosticCode: null,
+          frameworkErrorCode: null,
+          frameworkRawErrorAuthority: null,
+          severity: primarySeverity,
+          summary: "Member 'beta' is not projected on the owner type.",
+          missingInput: "expression-member:selected-member-missing",
+          missingInputs: ["expression-member:selected-member-missing"],
+          source,
+          subject: { subjectKind: "template-member-access", subjectName: "beta", source },
+          diagnosticIdentityHandle: null,
+          relatedInformation: [{
+            relationKind: "subject-declaration",
+            code: null,
+            message: "Owner is declared here.",
+            source: sourceReference("src/component.html", 0, 5),
+          }],
+          suggestion: null,
+          sourceRole: "template",
+          relatedQueryKind: "template-diagnostics",
+        },
+        {
+          projectKey: "app",
+          diagnosticDomain: "template",
+          phase: "semantic",
+          diagnosticKind: "template-expression-typescript-diagnostic",
+          diagnosticAuthority: "typescript",
+          typeScriptDiagnosticCode: 2339,
+          frameworkErrorCode: null,
+          frameworkRawErrorAuthority: null,
+          severity: "error",
+          summary: "TS2339: Property 'beta' does not exist on type 'Owner'.",
+          missingInput: "typescript:TS2339",
+          missingInputs: ["typescript:TS2339"],
+          source,
+          subject: { subjectKind: "template-member-access", subjectName: "beta", source },
+          diagnosticIdentityHandle: null,
+          relatedInformation: [{
+            relationKind: "subject-declaration",
+            code: null,
+            message: "Owner is declared here.",
+            source: sourceReference("src/component.html", 0, 5),
+          }],
+          suggestion: null,
+          sourceRole: "template",
+          relatedQueryKind: "template-diagnostics",
+        },
+      ];
+
+      const mapped = mapSemanticRuntimeAppDiagnostics(
+        completeDiagnosticAnswer({ value: { rows } } as never),
+        doc,
+        appDocumentUris,
+      );
+
+      expect(mapped.failures).toEqual([]);
+      expect(mapped.value).toHaveLength(1);
+      expect(mapped.value[0]?.severity).toBe(
+        primarySeverity === "warning" ? DiagnosticSeverity.Warning : DiagnosticSeverity.Information,
+      );
+      expect(mapped.value[0]?.relatedInformation?.map((entry) => entry.message)).toEqual([
+        "Owner is declared here.",
+        "TS2339: Property 'beta' does not exist on type 'Owner'.",
+      ]);
+      expect(mapped.value[0]?.data).toMatchObject({
+        semanticRuntime: {
+          severity: primarySeverity,
+          presentation: {
+            rawRowCount: 2,
+            primarySeverity,
+            maxRawSeverity: "error",
+            contextual: [{
+              relation: "checker-evidence",
+              diagnostic: {
+                diagnosticDomain: "template",
+                diagnosticKind: "template-expression-typescript-diagnostic",
+                diagnosticAuthority: "typescript",
+                typeScriptDiagnosticCode: 2339,
+                severity: "error",
+                repairAffordance: null,
+              },
+            }],
+          },
+        },
+      });
+      expect(mapped.value[0]?.data).not.toHaveProperty(
+        "semanticRuntime.presentation.contextual.0.diagnostic.handles",
+      );
+      expect(mapped.value[0]?.data).not.toHaveProperty(
+        "semanticRuntime.presentation.contextual.0.diagnostic.diagnosticIdentityHandle",
+      );
+    },
+  );
+
+  test("honors an explicit context-only weak-owner withholding decision", () => {
+    const doc = TextDocument.create(
+      "file:///C:/projects/app/src/component.html",
+      "html",
+      1,
+      "alpha\nbeta\ngamma",
+    );
+    const source = sourceReference("src/component.html", 6, 10);
+    const rows = [{
+      projectKey: "app",
+      diagnosticDomain: "template",
+      phase: "binding",
+      diagnosticKind: "weak-expression-member-owner",
+      diagnosticAuthority: "semantic-authoring-policy",
+      typeScriptDiagnosticCode: null,
+      frameworkErrorCode: null,
+      frameworkRawErrorAuthority: null,
+      severity: "information",
+      summary: "The index-signature owner does not expose a concrete member inventory.",
+      missingInput: "expression-member-owner-type:index-signature-only",
+      missingInputs: ["expression-member-owner-type:index-signature-only"],
+      source,
+      subject: { subjectKind: "template-member-access", subjectName: "beta", source },
+      diagnosticIdentityHandle: null,
+      relatedInformation: [],
+      suggestion: null,
+      sourceRole: "template",
+      relatedQueryKind: "template-diagnostics",
+    }];
+
+    const mapped = mapSemanticRuntimeAppDiagnostics(
+      completeDiagnosticAnswer({ value: { rows } } as never),
+      doc,
+      appDocumentUris,
+    );
+
+    expect(mapped).toEqual({ value: [], failures: [] });
+  });
+
+  test("fails the pull boundary when semantic presentation is missing or incomplete", () => {
+    const doc = TextDocument.create(
+      "file:///C:/projects/app/src/component.html",
+      "html",
+      1,
+      "value",
+    );
+    const rows: never[] = [];
+
+    expect(() => mapSemanticRuntimeAppDiagnostics(
+      { value: { rows } } as never,
+      doc,
+      appDocumentUris,
+    )).toThrowError(/requires a semantic diagnostic presentation/u);
+    expect(() => mapSemanticRuntimeAppDiagnostics(
+      {
+        value: {
+          rows,
+          presentation: appDiagnosticPresentation(rows, false),
+        },
+      } as never,
+      doc,
+      appDocumentUris,
+    )).toThrowError(/requires a complete semantic diagnostic presentation/u);
+  });
+
   test("uses structured TypeScript codes for template overlay diagnostics without legacy inference", () => {
     const doc = TextDocument.create(
       "file:///C:/projects/app/src/component.html",
@@ -316,7 +520,7 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
       "alpha\nbeta\ngamma",
     );
     const mapped = mapSemanticRuntimeAppDiagnostics(
-      {
+      completeDiagnosticAnswer({
         value: {
           rows: [
             {
@@ -349,7 +553,7 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
             },
           ],
         },
-      } as never,
+      } as never),
       doc,
       appDocumentUris,
     );
@@ -380,7 +584,7 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
     );
     const start = text.lastIndexOf("1");
     const mapped = mapSemanticRuntimeAppDiagnostics(
-      {
+      completeDiagnosticAnswer({
         value: {
           rows: [
             {
@@ -413,7 +617,7 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
             },
           ],
         },
-      } as never,
+      } as never),
       doc,
       appDocumentUris,
     );
@@ -460,7 +664,7 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
       1,
       "short",
     );
-    const mapped = mapSemanticRuntimeAppDiagnostics({
+    const mapped = mapSemanticRuntimeAppDiagnostics(completeDiagnosticAnswer({
       value: {
         rows: [{
           diagnosticDomain: "template",
@@ -483,7 +687,7 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
           suggestion: null,
         }],
       },
-    } as never, doc, appDocumentUris);
+    } as never), doc, appDocumentUris);
 
     expect(mapped.value).toEqual([]);
     expect(mapped.failures).toEqual([
@@ -498,7 +702,7 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
       1,
       "value",
     );
-    const mapped = mapSemanticRuntimeAppDiagnostics({
+    const mapped = mapSemanticRuntimeAppDiagnostics(completeDiagnosticAnswer({
       value: {
         rows: [{
           diagnosticDomain: "template",
@@ -521,7 +725,7 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
           suggestion: null,
         }],
       },
-    } as never, doc, appDocumentUris);
+    } as never), doc, appDocumentUris);
 
     expect(mapped.value).toEqual([]);
     expect(mapped.failures).toEqual([
@@ -536,7 +740,7 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
       1,
       "value",
     );
-    const mapped = mapSemanticRuntimeAppDiagnostics({
+    const mapped = mapSemanticRuntimeAppDiagnostics(completeDiagnosticAnswer({
       value: {
         rows: [{
           diagnosticDomain: "template",
@@ -579,7 +783,7 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
           suggestion: null,
         }],
       },
-    } as never, doc, appDocumentUris, () => null);
+    } as never), doc, appDocumentUris, () => null);
 
     expect(mapped.value[0]?.relatedInformation).toEqual([{
       location: {

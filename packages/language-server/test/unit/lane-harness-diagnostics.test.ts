@@ -18,6 +18,7 @@ interface LaneHarnessDiagnosticsModule {
   requireUnchangedDiagnosticPullForCycle(pull: DiagnosticPull, previousResultId: string): void;
   requireFullDiagnosticPullForCodeAction(pull: DiagnosticPull): readonly unknown[];
   settledAnalysisSequence(events: readonly unknown[]): { readonly outcome: string; readonly reason?: string } | null;
+  summarizeDiagnosticData(data: unknown): Record<string, unknown>;
 }
 
 const scriptUrl = new URL(
@@ -154,6 +155,53 @@ describe("lane-harness pull diagnostics contract", () => {
       expect(() => harness.requireFullDiagnosticPullForCodeAction({ outcome, items: [] }))
         .toThrow("requires a full diagnostic report");
     }
+  });
+
+  test("retains contextual diagnostic policy evidence without answer-local handles", async () => {
+    const harness = await loadLaneHarnessDiagnostics();
+    const summarized = harness.summarizeDiagnosticData({
+      semanticRuntime: {
+        diagnosticKind: "missing-expression-member",
+        severity: "warning",
+        presentation: {
+          rawRowCount: 2,
+          primarySeverity: "warning",
+          maxRawSeverity: "error",
+          contextual: [{
+            relation: "checker-evidence",
+            diagnostic: {
+              diagnosticDomain: "template",
+              diagnosticKind: "template-expression-typescript-diagnostic",
+              diagnosticAuthority: "typescript",
+              typeScriptDiagnosticCode: 2339,
+              severity: "error",
+              repairAffordance: null,
+              handles: { productHandle: 42 },
+            },
+          }],
+        },
+      },
+    });
+
+    expect(summarized).toMatchObject({
+      diagnosticKind: "missing-expression-member",
+      presentation: {
+        rawRowCount: 2,
+        primarySeverity: "warning",
+        maxRawSeverity: "error",
+        contextual: [{
+          relation: "checker-evidence",
+          diagnostic: {
+            diagnosticKind: "template-expression-typescript-diagnostic",
+            diagnosticAuthority: "typescript",
+            typeScriptDiagnosticCode: 2339,
+            severity: "error",
+            repairAffordance: null,
+          },
+        }],
+      },
+    });
+    expect(summarized).not.toHaveProperty("presentation.contextual.0.diagnostic.handles");
   });
 
   test("requires a fresh ordered analysisChanged then acknowledged diagnostic refresh sequence", async () => {

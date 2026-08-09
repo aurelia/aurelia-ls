@@ -36,6 +36,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "template-compiler:AUR0723"
         ],
         "phase": "binding-command-lowering",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -50,7 +56,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia template compiler AUR0723 rejects this template syntax: Invalid class binding syntax..",
+      "message": "Invalid class binding syntax.",
       "range": {
         "end": {
           "character": 22,
@@ -80,6 +86,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "template-compiler:AUR0720"
         ],
         "phase": "attribute-classification",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -94,7 +106,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia template compiler AUR0720 rejects this template syntax: Spreading syntax \"...xxx\" is reserved. Encountered \"...$element.bind\"..",
+      "message": "Spreading syntax \"...xxx\" is reserved. Encountered \"...$element.bind\".",
       "range": {
         "end": {
           "character": 21,
@@ -124,6 +136,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "template-compiler:AUR0721"
         ],
         "phase": "attribute-classification",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -138,7 +156,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia template compiler AUR0721 rejects this template syntax: Usage of $bindables is only allowed on custom elements. Encountered \"$bindables.bind\"..",
+      "message": "Usage of $bindables is only allowed on custom elements. Encountered \"$bindables.bind\".",
       "range": {
         "end": {
           "character": 15,
@@ -168,6 +186,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "template-compiler:AUR0706"
         ],
         "phase": "compiled-template",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -182,7 +206,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia template compiler AUR0706 rejects this template syntax: Template compilation error: detected projection with [au-slot=\"details\"] attempted on a non custom element div..",
+      "message": "Detected projection with [au-slot=\"details\"] attempted on a non custom element div.",
       "range": {
         "end": {
           "character": 28,
@@ -212,6 +236,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "template-compiler:AUR0717"
         ],
         "phase": "compiled-template",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -226,7 +256,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia template compiler AUR0717 rejects this template syntax: Template compilation error: detected a usage of \"<slot>\" element without specifying shadow DOM options in element: template-compiler-errors-app.",
+      "message": "Detected a usage of \"<slot>\" element without specifying shadow DOM options in element: template-compiler-errors-app.",
       "range": {
         "end": {
           "character": 13,
@@ -256,6 +286,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "binding-target-assignment:source-to-target-type-mismatch"
         ],
         "phase": null,
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "warning",
+          "primarySeverity": "warning",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -312,6 +348,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "template-compiler:AUR0707"
         ],
         "phase": "binding-command-lowering",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -326,7 +368,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia template compiler AUR0707 rejects this template syntax: Template compilation error in custom attribute \"template-probe\": property \"missing\" is not bindable..",
+      "message": "In custom attribute \"template-probe\": property \"missing\" is not bindable.",
       "range": {
         "end": {
           "character": 49,
@@ -356,6 +398,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "template-compiler:AUR0704"
         ],
         "phase": "compiled-template",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -370,7 +418,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia template compiler AUR0704 rejects this template syntax: Template compilation error: Invalid command \".trigger\" for <let>. Use .bind or remove the command.",
+      "message": "Invalid command \".trigger\" for <let>. Use .bind or remove the command.",
       "range": {
         "end": {
           "character": 17,
@@ -400,6 +448,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "template-compiler:AUR0713"
         ],
         "phase": "attribute-classification",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -414,7 +468,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia template compiler AUR0713 rejects this template syntax: Template compilation error: unknown binding command: \"delegate\". The \".delegate\" binding command has been removed in v2. Binding command \".trigger\" should be used instead. If you are migrating v1 application, install compat package to add back the \".delegate\" binding command for ease of migration..",
+      "message": "Unknown binding command: \"delegate\". The \".delegate\" binding command has been removed in v2. Binding command \".trigger\" should be used instead. If you are migrating v1 application, install compat package to add back the \".delegate\" binding command for ease of migration.",
       "range": {
         "end": {
           "character": 22,
@@ -444,6 +498,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "template-compiler:AUR0713"
         ],
         "phase": "attribute-classification",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -458,7 +518,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia template compiler AUR0713 rejects this template syntax: Template compilation error: unknown binding command: \"call\". The \".call\" binding command has been removed in v2. If you want to pass a callback that preserves the context of the function call, you can use lambda instead. Refer to lambda expression doc for more details..",
+      "message": "Unknown binding command: \"call\". The \".call\" binding command has been removed in v2. If you want to pass a callback that preserves the context of the function call, you can use lambda instead. Refer to lambda expression doc for more details.",
       "range": {
         "end": {
           "character": 18,
@@ -526,6 +586,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "template-compiler:AUR0711"
         ],
         "phase": "compiled-template",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -540,7 +606,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia template compiler AUR0711 rejects this template syntax: Template compilation error: the attribute 'property' is missing in <bindable> in local element \"bindable-child\"..",
+      "message": "The attribute 'property' is missing in <bindable> in local element \"bindable-child\".",
       "range": {
         "end": {
           "character": 25,
@@ -570,6 +636,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "template-compiler:AUR0710"
         ],
         "phase": "compiled-template",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -584,7 +656,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia template compiler AUR0710 rejects this template syntax: Template compilation error: bindable properties of local element \"bindable-child\" template needs to be defined directly under <template>..",
+      "message": "Bindable properties of local element \"bindable-child\" template needs to be defined directly under <template>.",
       "range": {
         "end": {
           "character": 41,
@@ -614,6 +686,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "template-compiler:AUR0712"
         ],
         "phase": "compiled-template",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -628,7 +706,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia template compiler AUR0712 rejects this template syntax: Template compilation error: Bindable property and attribute needs to be unique; found property: title, attribute: (none)..",
+      "message": "Bindable property and attribute needs to be unique; found property: title, attribute: (none).",
       "range": {
         "end": {
           "character": 25,
@@ -658,6 +736,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "template-compiler:AUR0712"
         ],
         "phase": "compiled-template",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -672,7 +756,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia template compiler AUR0712 rejects this template syntax: Template compilation error: Bindable property and attribute needs to be unique; found property: other, attribute: label..",
+      "message": "Bindable property and attribute needs to be unique; found property: other, attribute: label.",
       "range": {
         "end": {
           "character": 43,
@@ -702,6 +786,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "template-compiler:AUR0715"
         ],
         "phase": "compiled-template",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -716,7 +806,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia template compiler AUR0715 rejects this template syntax: Template compilation error: the value of \"as-custom-element\" attribute cannot be empty for local element in element \"local-bindable-probe\"..",
+      "message": "The value of \"as-custom-element\" attribute cannot be empty for local element in element \"local-bindable-probe\".",
       "range": {
         "end": {
           "character": 32,
@@ -746,6 +836,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "template-compiler:AUR0716"
         ],
         "phase": "compiled-template",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -760,7 +856,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia template compiler AUR0716 rejects this template syntax: Template compilation error: duplicate definition of the local template named \"duplicate-child\" in element local-bindable-probe..",
+      "message": "Duplicate definition of the local template named \"duplicate-child\" in element local-bindable-probe.",
       "range": {
         "end": {
           "character": 46,
@@ -828,6 +924,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "template-compiler:AUR0709"
         ],
         "phase": "compiled-template",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -842,7 +944,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia template compiler AUR0709 rejects this template syntax: Template compilation error: local element template needs to be defined directly under root of element \"local-nested-probe\"..",
+      "message": "Local element template needs to be defined directly under root of element \"local-nested-probe\".",
       "range": {
         "end": {
           "character": 15,
@@ -910,6 +1012,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "template-compiler:AUR0708"
         ],
         "phase": "compiled-template",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -924,7 +1032,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia template compiler AUR0708 rejects this template syntax: Template compilation error: the custom element \"local-only-probe\" does not have any content other than local template(s)..",
+      "message": "The custom element \"local-only-probe\" does not have any content other than local template(s).",
       "range": {
         "end": {
           "character": 0,
@@ -992,6 +1100,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "template-compiler:AUR0701"
         ],
         "phase": "compiled-template",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -1006,7 +1120,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia template compiler AUR0701 rejects this template syntax: Template compilation error in element \"local-root-probe\": the root <template> cannot be a local element template..",
+      "message": "In element \"local-root-probe\": the root <template> cannot be a local element template.",
       "range": {
         "end": {
           "character": 46,
@@ -1074,6 +1188,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "template-compiler:AUR0702"
         ],
         "phase": "compiled-template",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -1088,7 +1208,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia template compiler AUR0702 rejects this template syntax: Template compilation error: attribute \"id\" is invalid on element surrogate..",
+      "message": "Attribute \"id\" is invalid on element surrogate.",
       "range": {
         "end": {
           "character": 32,
@@ -1156,6 +1276,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "template-compiler:AUR0703"
         ],
         "phase": "compiled-template",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -1170,7 +1296,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia template compiler AUR0703 rejects this template syntax: Template compilation error: template controller \"if\" is invalid on element surrogate..",
+      "message": "Template controller \"if\" is invalid on element surrogate.",
       "range": {
         "end": {
           "character": 12,

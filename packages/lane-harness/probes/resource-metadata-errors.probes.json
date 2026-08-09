@@ -6,8 +6,8 @@
         "id": "resource-metadata-app-source",
         "file": "src/resource-metadata-errors-app.ts",
         "verdict": "correct",
-        "reason": "The full document-diagnostic pull returns resource, template, and TypeScript diagnostics from the open source document with exact file scoping and authority preservation.",
-        "note": "NEW 2026-07-07. Resource metadata/API diagnostics plus ordinary TypeScript diagnostics on the same TS source file; pressure for authority preservation and exact source filtering. VERDICT 2026-07-07: flipped wrong -> correct after the TypeSystemProject remapped heritage nodes to the active Program before checker symbol resolution, preserving project-input/open-document diagnostics."
+        "reason": "The full document-diagnostic pull conserves 26 resource, template, and TypeScript facts as 22 Problems with exact file scoping: AUR0228 owns TS2769, computed-name AUR0227 owns TS1166, and AUR9990 owns TS1241 plus TS1270 as contextual checker evidence, while unrelated TypeScript failures remain direct Problems.",
+        "note": "NEW 2026-07-07. Resource metadata/API diagnostics plus ordinary TypeScript diagnostics on the same TS source file; pressure for authority preservation, causal grouping, and exact source filtering. VERDICT 2026-07-07: flipped wrong -> correct after the TypeSystemProject remapped heritage nodes to the active Program before checker symbol resolution, preserving project-input/open-document diagnostics."
       }
     ]
   }

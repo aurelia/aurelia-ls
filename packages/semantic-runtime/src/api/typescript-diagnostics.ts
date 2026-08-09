@@ -5,7 +5,7 @@ import {
 } from '../type-system/diagnostics.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import { sourcePathMatchesFileName } from '../kernel/source-address.js';
-import type { SourceFileAdmission } from '../boot/frames.js';
+import { projectSourceAdmissionForHostPath } from '../boot/source-ownership.js';
 import {
   answer,
   COMPLETE_COLLECTION_ANSWER_OPTIONS,
@@ -181,14 +181,14 @@ function semanticTypeScriptDiagnosticRow(
     severity: semanticTypeScriptDiagnosticSeverity(diagnostic.category),
     message: diagnostic.message,
     typescriptSource: diagnostic.typescriptSource,
-    source: sourceReferenceForTypeSystemDiagnostic(diagnostic.source),
+    source: sourceReferenceForTypeSystemDiagnostic(typeSystem, diagnostic.source),
     sourceRole,
     relatedInformation: diagnostic.relatedInformation.map((related): SemanticTypeScriptDiagnosticRelatedInformationRow => ({
       category: related.category,
       code: related.code,
       message: related.message,
       typescriptSource: related.typescriptSource,
-      source: sourceReferenceForTypeSystemDiagnostic(related.source),
+      source: sourceReferenceForTypeSystemDiagnostic(typeSystem, related.source),
       sourceRole: sourceRoleForTypeSystemDiagnostic(typeSystem, related.source),
     })),
   };
@@ -201,27 +201,23 @@ function sourceRoleForTypeSystemDiagnostic(
   if (source == null) {
     return null;
   }
-  return sourceAdmissionForDiagnosticFileName(typeSystem.project.sourceFiles, source.fileName)?.role
+  return projectSourceAdmissionForHostPath(typeSystem.project, source.fileName)?.role
     ?? typeSystem.readProgramSourceFileRoleByHostPath(source.fileName);
 }
 
-function sourceAdmissionForDiagnosticFileName(
-  sources: readonly SourceFileAdmission[],
-  fileName: string,
-): SourceFileAdmission | null {
-  return sources.find((source) => sourcePathMatchesFileName(source.path, fileName)) ?? null;
-}
-
 function sourceReferenceForTypeSystemDiagnostic(
+  typeSystem: TypeSystemProject,
   source: TypeSystemDiagnostic['source'],
 ): SemanticSourceReference | null {
   if (source == null) {
     return null;
   }
+  const canonicalPath = projectSourceAdmissionForHostPath(typeSystem.project, source.fileName)?.path
+    ?? source.fileName;
   return {
     kind: 'typescript-diagnostic',
-    label: `${source.fileName}@${source.start}..${source.end}`,
-    path: source.fileName,
+    label: `${canonicalPath}@${source.start}..${source.end}`,
+    path: canonicalPath,
     start: source.start,
     end: source.end,
     role: `line:${source.line}:character:${source.character}`,

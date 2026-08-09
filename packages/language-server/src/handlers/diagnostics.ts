@@ -7,6 +7,8 @@ import path from "node:path";
 import {
   AURELIA_PROJECT_CONFIGURATION_FILE_NAME,
   canonicalTypeSystemPath,
+  inferSourceLanguage,
+  SourceLanguage,
 } from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
 import {
@@ -40,7 +42,18 @@ async function documentDiagnostics(
 
     if (isNativeProjectConfiguration(ctx, document.uri)) {
       const answer = await operation.projectConfigurationDiagnostics(document.uri);
-      const mapped = mapSemanticProjectConfigurationDiagnostics(answer, document, ctx.documentUris);
+      const visibleAnswer = ctx.projectConfigurationParserDiagnostics === "client"
+        ? {
+            ...answer,
+            value: {
+              ...answer.value,
+              rows: answer.value.rows.filter((row) => !isClientOwnedProjectConfigurationParserDiagnostic(
+                row.diagnosticKind,
+              )),
+            },
+          }
+        : answer;
+      const mapped = mapSemanticProjectConfigurationDiagnostics(visibleAnswer, document, ctx.documentUris);
       if (mapped.failures.length > 0) {
         operation.deferEffect({
           kind: "log",
@@ -49,6 +62,13 @@ async function documentDiagnostics(
         });
       }
       return mapped.value;
+    }
+
+    // JSON participates in the client selector only so native project configuration can
+    // reach this session-owned validator. Other JSON documents keep their native editor
+    // behavior and never enter Aurelia app-diagnostic projection.
+    if (inferSourceLanguage(document.uri) === SourceLanguage.Json) {
+      return [];
     }
 
     const ownership = await operation.authoredSourceOwnership(document.uri);
@@ -72,6 +92,13 @@ async function documentDiagnostics(
     }
     return mapped.value;
   });
+}
+
+function isClientOwnedProjectConfigurationParserDiagnostic(
+  diagnosticKind: string,
+): boolean {
+  return diagnosticKind === "aurelia-project-config-syntax"
+    || diagnosticKind === "aurelia-project-config-duplicate-property";
 }
 
 function isNativeProjectConfiguration(ctx: ServerContext, uri: string): boolean {

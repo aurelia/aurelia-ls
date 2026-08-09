@@ -49,6 +49,7 @@ const bundleOutputs = Object.freeze([
   "dist/server/main.cjs.map",
 ]);
 const projectSchemaRelativePath = "dist/schemas/aurelia.project.schema.json";
+const projectDialectSchemaRelativePath = "dist/schemas/aurelia.project.jsonc.schema.json";
 const utf8Decoder = new TextDecoder("utf-8", { fatal: true });
 
 export function sha256(value) {
@@ -140,6 +141,18 @@ export function expectedArchiveEntries(root = extensionRoot, options = {}) {
   expectedDistFiles.set(
     projectSchemaRelativePath,
     sourceEntry(path.join(root, ...projectSchemaRelativePath.split("/")), "generated", schemaAuthority),
+  );
+  const dialectSchemaAuthority = path.resolve(
+    options.projectDialectSchemaSource ?? path.join(root, "src/schemas/aurelia.project.jsonc.schema.json"),
+  );
+  assertRegularUnlinkedFile(dialectSchemaAuthority, "Aurelia project JSONC dialect schema authority");
+  expectedDistFiles.set(
+    projectDialectSchemaRelativePath,
+    sourceEntry(
+      path.join(root, ...projectDialectSchemaRelativePath.split("/")),
+      "generated",
+      dialectSchemaAuthority,
+    ),
   );
 
   const typescriptRoot = realpathSync(options.typescriptRoot ?? path.join(root, "node_modules/typescript"));

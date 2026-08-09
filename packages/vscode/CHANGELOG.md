@@ -20,7 +20,8 @@ source and disclose partial, refused, or failed results instead of filling seman
 ### Workspace and resource discovery
 
 - Added resource-scoped `auto`, `on`, and `off` activation for multi-root workspaces. Automatic activation requires semantic-runtime project-shape confirmation, and an excluded parent subtree cannot be re-enabled by a nested folder.
-- Added bundled schema validation for `aurelia.project.json`.
+- Added exact JSONC parsing for `aurelia.project.json`, with parser diagnostics owned by VS Code and admitted semantic
+  configuration diagnostics owned by semantic-runtime; the canonical full schema remains packaged but unassociated.
 - Rebuilt **Aurelia Resources** in VS Code's built-in Explorer over exact project inventory, aliases, bindables, origin, ambiguity, and partial or failed analysis state.
 - Replaced **Find Resource** and **Show Available Resources** with **Go to Resource...** and **Go to Resource Available to Active Template...**, using exact workspace inventory and active-template compiler scope.
 - Scoped settled Resource Explorer refreshes to the workspace whose analysis changed while retaining full refreshes for topology, session, and explicit user-refresh events.

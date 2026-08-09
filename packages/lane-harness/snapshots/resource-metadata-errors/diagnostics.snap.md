@@ -20,7 +20,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "diagnosticCount": 26,
+  "diagnosticCount": 22,
   "diagnostics": [
     {
       "anomaly": null,
@@ -34,16 +34,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "phase": "semantic",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "typescript-diagnostics",
-        "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
-          "changeDomain": "inspection",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
-        },
+        "repairAffordance": null,
         "sourceRole": "app-source",
         "subject": null,
         "typeScriptDiagnosticCode": 2769
@@ -66,300 +65,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     },
     {
       "anomaly": null,
-      "code": "TS2769",
-      "data": {
-        "diagnosticAuthority": "typescript",
-        "diagnosticDomain": "typescript",
-        "diagnosticKind": "TS2769",
-        "frameworkErrorCode": null,
-        "frameworkRawErrorAuthority": null,
-        "missingInput": null,
-        "missingInputs": [],
-        "phase": "semantic",
-        "relatedInformation": [],
-        "relatedQueryKind": "typescript-diagnostics",
-        "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
-          "changeDomain": "inspection",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
-        },
-        "sourceRole": "app-source",
-        "subject": null,
-        "typeScriptDiagnosticCode": 2769
-      },
-      "message": "No overload matches this call.\nOverload 1 of 3, '(expressionOrPropertyAccessFn: PropertyKey, changeHandlerOrCallback: \"nameChanged\" | IWatcherCallback<ResourceMetadataErrorsApp, unknown>, options?: IWatchOptions | undefined): WatchClassDecorator<...>', gave the following error.\nArgument of type '\"missingPrototypeHandler\"' is not assignable to parameter of type '\"nameChanged\" | IWatcherCallback<ResourceMetadataErrorsApp, unknown>'.\nOverload 2 of 3, '(expressionOrPropertyAccessFn: IDepCollectionFn<ResourceMetadataErrorsApp, unknown>, changeHandlerOrCallback: \"nameChanged\" | IWatcherCallback<ResourceMetadataErrorsApp, unknown>, options?: IWatchOptions | undefined): WatchClassDecorator<...>', gave the following error.\nArgument of type 'string' is not assignable to parameter of type 'IDepCollectionFn<ResourceMetadataErrorsApp, unknown>'.\nOverload 3 of 3, '(expressionOrPropertyAccessFn: PropertyKey | IDepCollectionFn<typeof ResourceMetadataErrorsApp, unknown>, options?: IWatchOptions | undefined): WatchMethodDecorator<...>', gave the following error.\nType '\"missingPrototypeHandler\"' has no properties in common with type 'IWatchOptions'.",
-      "range": {
-        "end": {
-          "character": 6,
-          "line": 19
-        },
-        "start": {
-          "character": 1,
-          "line": 19
-        }
-      },
-      "rangeText": "watch",
-      "relatedInformation": [],
-      "severity": "error",
-      "source": "typescript"
-    },
-    {
-      "anomaly": null,
-      "code": "TS1240",
-      "data": {
-        "diagnosticAuthority": "typescript",
-        "diagnosticDomain": "typescript",
-        "diagnosticKind": "TS1240",
-        "frameworkErrorCode": null,
-        "frameworkRawErrorAuthority": null,
-        "missingInput": null,
-        "missingInputs": [],
-        "phase": "semantic",
-        "relatedInformation": [],
-        "relatedQueryKind": "typescript-diagnostics",
-        "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
-          "changeDomain": "inspection",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
-        },
-        "sourceRole": "app-source",
-        "subject": null,
-        "typeScriptDiagnosticCode": 1240
-      },
-      "message": "Unable to resolve signature of property decorator when called as an expression.\nArgument of type 'undefined' is not assignable to parameter of type 'never'.",
-      "range": {
-        "end": {
-          "character": 16,
-          "line": 36
-        },
-        "start": {
-          "character": 3,
-          "line": 36
-        }
-      },
-      "rangeText": "watch('name')",
-      "relatedInformation": [],
-      "severity": "error",
-      "source": "typescript"
-    },
-    {
-      "anomaly": null,
-      "code": "TS2769",
-      "data": {
-        "diagnosticAuthority": "typescript",
-        "diagnosticDomain": "typescript",
-        "diagnosticKind": "TS2769",
-        "frameworkErrorCode": null,
-        "frameworkRawErrorAuthority": null,
-        "missingInput": null,
-        "missingInputs": [],
-        "phase": "semantic",
-        "relatedInformation": [],
-        "relatedQueryKind": "typescript-diagnostics",
-        "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
-          "changeDomain": "inspection",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
-        },
-        "sourceRole": "app-source",
-        "subject": null,
-        "typeScriptDiagnosticCode": 2769
-      },
-      "message": "No overload matches this call.\nOverload 1 of 4, '(config?: Omit<PartialBindableDefinition, \"name\"> | undefined): (target: unknown, context: ClassDecoratorContext<abstract new (...args: any) => any> | ClassFieldDecoratorContext<...> | ClassGetterDecoratorContext<...>) => void', gave the following error.\nType '{ name: string; }' has no properties in common with type 'Omit<PartialBindableDefinition, \"name\">'.\nOverload 2 of 4, '(prop: string): (target: Constructable, context: ClassDecoratorContext<abstract new (...args: any) => any>) => void', gave the following error.\nArgument of type '{ name: string; }' is not assignable to parameter of type 'string'.",
-      "range": {
-        "end": {
-          "character": 45,
-          "line": 59
-        },
-        "start": {
-          "character": 10,
-          "line": 59
-        }
-      },
-      "rangeText": "null as unknown as { name: string }",
-      "relatedInformation": [],
-      "severity": "error",
-      "source": "typescript"
-    },
-    {
-      "anomaly": null,
-      "code": "TS2769",
-      "data": {
-        "diagnosticAuthority": "typescript",
-        "diagnosticDomain": "typescript",
-        "diagnosticKind": "TS2769",
-        "frameworkErrorCode": null,
-        "frameworkRawErrorAuthority": null,
-        "missingInput": null,
-        "missingInputs": [],
-        "phase": "semantic",
-        "relatedInformation": [],
-        "relatedQueryKind": "typescript-diagnostics",
-        "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
-          "changeDomain": "inspection",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
-        },
-        "sourceRole": "app-source",
-        "subject": null,
-        "typeScriptDiagnosticCode": 2769
-      },
-      "message": "No overload matches this call.\nOverload 1 of 4, '(config?: Omit<PartialBindableDefinition, \"name\"> | undefined): (target: unknown, context: ClassDecoratorContext<abstract new (...args: any) => any> | ClassFieldDecoratorContext<...> | ClassGetterDecoratorContext<...>) => void', gave the following error.\nObject literal may only specify known properties, and 'name' does not exist in type 'Omit<PartialBindableDefinition, \"name\">'.\nOverload 2 of 4, '(prop: string): (target: Constructable, context: ClassDecoratorContext<abstract new (...args: any) => any>) => void', gave the following error.\nArgument of type '{ name: string; }' is not assignable to parameter of type 'string'.",
-      "range": {
-        "end": {
-          "character": 9,
-          "line": 73
-        },
-        "start": {
-          "character": 1,
-          "line": 73
-        }
-      },
-      "rangeText": "bindable",
-      "relatedInformation": [],
-      "severity": "error",
-      "source": "typescript"
-    },
-    {
-      "anomaly": null,
-      "code": "TS1166",
-      "data": {
-        "diagnosticAuthority": "typescript",
-        "diagnosticDomain": "typescript",
-        "diagnosticKind": "TS1166",
-        "frameworkErrorCode": null,
-        "frameworkRawErrorAuthority": null,
-        "missingInput": null,
-        "missingInputs": [],
-        "phase": "semantic",
-        "relatedInformation": [],
-        "relatedQueryKind": "typescript-diagnostics",
-        "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
-          "changeDomain": "inspection",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
-        },
-        "sourceRole": "app-source",
-        "subject": null,
-        "typeScriptDiagnosticCode": 1166
-      },
-      "message": "A computed property name in a class property declaration must have a simple literal type or a 'unique symbol' type.",
-      "range": {
-        "end": {
-          "character": 56,
-          "line": 86
-        },
-        "start": {
-          "character": 2,
-          "line": 86
-        }
-      },
-      "rangeText": "[Symbol.for('semantic-runtime.invalid-bindable-name')]",
-      "relatedInformation": [],
-      "severity": "error",
-      "source": "typescript"
-    },
-    {
-      "anomaly": null,
-      "code": "TS1241",
-      "data": {
-        "diagnosticAuthority": "typescript",
-        "diagnosticDomain": "typescript",
-        "diagnosticKind": "TS1241",
-        "frameworkErrorCode": null,
-        "frameworkRawErrorAuthority": null,
-        "missingInput": null,
-        "missingInputs": [],
-        "phase": "semantic",
-        "relatedInformation": [],
-        "relatedQueryKind": "typescript-diagnostics",
-        "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
-          "changeDomain": "inspection",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
-        },
-        "sourceRole": "app-source",
-        "subject": null,
-        "typeScriptDiagnosticCode": 1241
-      },
-      "message": "Unable to resolve signature of method decorator when called as an expression.\nArgument of type '() => void' is not assignable to parameter of type 'undefined'.",
-      "range": {
-        "end": {
-          "character": 12,
-          "line": 119
-        },
-        "start": {
-          "character": 3,
-          "line": 119
-        }
-      },
-      "rangeText": "slotted()",
-      "relatedInformation": [],
-      "severity": "error",
-      "source": "typescript"
-    },
-    {
-      "anomaly": null,
-      "code": "TS1270",
-      "data": {
-        "diagnosticAuthority": "typescript",
-        "diagnosticDomain": "typescript",
-        "diagnosticKind": "TS1270",
-        "frameworkErrorCode": null,
-        "frameworkRawErrorAuthority": null,
-        "missingInput": null,
-        "missingInputs": [],
-        "phase": "semantic",
-        "relatedInformation": [],
-        "relatedQueryKind": "typescript-diagnostics",
-        "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
-          "changeDomain": "inspection",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
-        },
-        "sourceRole": "app-source",
-        "subject": null,
-        "typeScriptDiagnosticCode": 1270
-      },
-      "message": "Decorator function return type '(initialValue: any) => any' is not assignable to type 'void | (() => void)'.\nType '(initialValue: any) => any' is not assignable to type '() => void'.\nTarget signature provides too few arguments. Expected 1 or more, but got 0.",
-      "range": {
-        "end": {
-          "character": 12,
-          "line": 119
-        },
-        "start": {
-          "character": 3,
-          "line": 119
-        }
-      },
-      "rangeText": "slotted()",
-      "relatedInformation": [],
-      "severity": "error",
-      "source": "typescript"
-    },
-    {
-      "anomaly": null,
       "code": "AUR0507",
       "data": {
         "diagnosticAuthority": "framework-error-code",
@@ -372,6 +77,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-controller:AUR0507"
         ],
         "phase": "observer-setup",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -386,7 +97,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia runtime controller AUR0507 rejects this controller input: Observer for bindable property length does not support coercion..",
+      "message": "Observer for bindable property length does not support coercion.",
       "range": {
         "end": {
           "character": 46,
@@ -414,16 +125,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "phase": "watch-decorator",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "resource-issues",
-        "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
-          "changeDomain": "inspection",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
-        },
+        "repairAffordance": null,
         "sourceRole": "app-source",
         "subject": {
           "source": {
@@ -458,6 +168,47 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     },
     {
       "anomaly": null,
+      "code": "TS2769",
+      "data": {
+        "diagnosticAuthority": "typescript",
+        "diagnosticDomain": "typescript",
+        "diagnosticKind": "TS2769",
+        "frameworkErrorCode": null,
+        "frameworkRawErrorAuthority": null,
+        "missingInput": null,
+        "missingInputs": [],
+        "phase": "semantic",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
+        "relatedInformation": [],
+        "relatedQueryKind": "typescript-diagnostics",
+        "repairAffordance": null,
+        "sourceRole": "app-source",
+        "subject": null,
+        "typeScriptDiagnosticCode": 2769
+      },
+      "message": "No overload matches this call.\nOverload 1 of 3, '(expressionOrPropertyAccessFn: PropertyKey, changeHandlerOrCallback: \"nameChanged\" | IWatcherCallback<ResourceMetadataErrorsApp, unknown>, options?: IWatchOptions | undefined): WatchClassDecorator<...>', gave the following error.\nArgument of type '\"missingPrototypeHandler\"' is not assignable to parameter of type '\"nameChanged\" | IWatcherCallback<ResourceMetadataErrorsApp, unknown>'.\nOverload 2 of 3, '(expressionOrPropertyAccessFn: IDepCollectionFn<ResourceMetadataErrorsApp, unknown>, changeHandlerOrCallback: \"nameChanged\" | IWatcherCallback<ResourceMetadataErrorsApp, unknown>, options?: IWatchOptions | undefined): WatchClassDecorator<...>', gave the following error.\nArgument of type 'string' is not assignable to parameter of type 'IDepCollectionFn<ResourceMetadataErrorsApp, unknown>'.\nOverload 3 of 3, '(expressionOrPropertyAccessFn: PropertyKey | IDepCollectionFn<typeof ResourceMetadataErrorsApp, unknown>, options?: IWatchOptions | undefined): WatchMethodDecorator<...>', gave the following error.\nType '\"missingPrototypeHandler\"' has no properties in common with type 'IWatchOptions'.",
+      "range": {
+        "end": {
+          "character": 6,
+          "line": 19
+        },
+        "start": {
+          "character": 1,
+          "line": 19
+        }
+      },
+      "rangeText": "watch",
+      "relatedInformation": [],
+      "severity": "error",
+      "source": "typescript"
+    },
+    {
+      "anomaly": null,
       "code": "AUR0773",
       "data": {
         "diagnosticAuthority": "framework-error-code",
@@ -468,16 +219,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "phase": "watch-decorator",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "resource-issues",
-        "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
-          "changeDomain": "inspection",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
-        },
+        "repairAffordance": null,
         "sourceRole": "app-source",
         "subject": {
           "source": {
@@ -522,16 +272,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "phase": "watch-metadata",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "resource-issues",
-        "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
-          "changeDomain": "inspection",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
-        },
+        "repairAffordance": null,
         "sourceRole": "app-source",
         "subject": {
           "source": {
@@ -576,16 +325,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "phase": "watch-metadata",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "resource-issues",
-        "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
-          "changeDomain": "inspection",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
-        },
+        "repairAffordance": null,
         "sourceRole": "app-source",
         "subject": {
           "source": {
@@ -620,6 +368,47 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     },
     {
       "anomaly": null,
+      "code": "TS1240",
+      "data": {
+        "diagnosticAuthority": "typescript",
+        "diagnosticDomain": "typescript",
+        "diagnosticKind": "TS1240",
+        "frameworkErrorCode": null,
+        "frameworkRawErrorAuthority": null,
+        "missingInput": null,
+        "missingInputs": [],
+        "phase": "semantic",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
+        "relatedInformation": [],
+        "relatedQueryKind": "typescript-diagnostics",
+        "repairAffordance": null,
+        "sourceRole": "app-source",
+        "subject": null,
+        "typeScriptDiagnosticCode": 1240
+      },
+      "message": "Unable to resolve signature of property decorator when called as an expression.\nArgument of type 'undefined' is not assignable to parameter of type 'never'.",
+      "range": {
+        "end": {
+          "character": 16,
+          "line": 36
+        },
+        "start": {
+          "character": 3,
+          "line": 36
+        }
+      },
+      "rangeText": "watch('name')",
+      "relatedInformation": [],
+      "severity": "error",
+      "source": "typescript"
+    },
+    {
+      "anomaly": null,
       "code": "AUR0774",
       "data": {
         "diagnosticAuthority": "framework-error-code",
@@ -630,16 +419,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "phase": "watch-decorator",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "resource-issues",
-        "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
-          "changeDomain": "inspection",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
-        },
+        "repairAffordance": null,
         "sourceRole": "app-source",
         "subject": {
           "source": {
@@ -684,16 +472,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "phase": "watch-decorator",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "resource-issues",
-        "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
-          "changeDomain": "inspection",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
-        },
+        "repairAffordance": null,
         "sourceRole": "app-source",
         "subject": {
           "source": {
@@ -738,16 +525,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "phase": "custom-element-definition",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "resource-issues",
-        "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
-          "changeDomain": "inspection",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
-        },
+        "repairAffordance": null,
         "sourceRole": "app-source",
         "subject": {
           "source": {
@@ -794,6 +580,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "template-compiler:AUR0717"
         ],
         "phase": "compiled-template",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -808,7 +600,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia template compiler AUR0717 rejects this template syntax: Template compilation error: detected a usage of \"<slot>\" element without specifying shadow DOM options in element: containerless-slot-conflict.",
+      "message": "Detected a usage of \"<slot>\" element without specifying shadow DOM options in element: containerless-slot-conflict.",
       "range": {
         "end": {
           "character": 36,
@@ -836,16 +628,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "phase": "custom-element-definition",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "resource-issues",
-        "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
-          "changeDomain": "inspection",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
-        },
+        "repairAffordance": null,
         "sourceRole": "app-source",
         "subject": {
           "source": {
@@ -890,16 +681,36 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "phase": "bindable-decorator",
+        "presentation": {
+          "contextual": [
+            {
+              "diagnostic": {
+                "diagnosticAuthority": "typescript",
+                "diagnosticDomain": "typescript",
+                "diagnosticKind": "TS2769",
+                "frameworkErrorCode": null,
+                "frameworkRawErrorAuthority": null,
+                "missingInput": null,
+                "missingInputs": [],
+                "phase": "semantic",
+                "relatedInformation": [],
+                "relatedQueryKind": "typescript-diagnostics",
+                "repairAffordance": null,
+                "severity": "error",
+                "sourceRole": "app-source",
+                "subject": null,
+                "typeScriptDiagnosticCode": 2769
+              },
+              "relation": "checker-evidence"
+            }
+          ],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 2
+        },
         "relatedInformation": [],
         "relatedQueryKind": "resource-issues",
-        "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
-          "changeDomain": "inspection",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
-        },
+        "repairAffordance": null,
         "sourceRole": "app-source",
         "subject": {
           "source": {
@@ -928,7 +739,25 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         }
       },
       "rangeText": "null as unknown as { name: string }",
-      "relatedInformation": [],
+      "relatedInformation": [
+        {
+          "anomaly": null,
+          "file": "src/resource-metadata-errors-app.ts",
+          "message": "No overload matches this call.\nOverload 1 of 4, '(config?: Omit<PartialBindableDefinition, \"name\"> | undefined): (target: unknown, context: ClassDecoratorContext<abstract new (...args: any) => any> | ClassFieldDecoratorContext<...> | ClassGetterDecoratorContext<...>) => void', gave the following error.\nType '{ name: string; }' has no properties in common with type 'Omit<PartialBindableDefinition, \"name\">'.\nOverload 2 of 4, '(prop: string): (target: Constructable, context: ClassDecoratorContext<abstract new (...args: any) => any>) => void', gave the following error.\nArgument of type '{ name: string; }' is not assignable to parameter of type 'string'.",
+          "range": {
+            "end": {
+              "character": 45,
+              "line": 59
+            },
+            "start": {
+              "character": 10,
+              "line": 59
+            }
+          },
+          "rangeText": "null as unknown as { name: string }",
+          "uri": "fixtures://pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts"
+        }
+      ],
       "severity": "error",
       "source": "aurelia"
     },
@@ -944,16 +773,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "phase": "bindable-decorator",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "resource-issues",
-        "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
-          "changeDomain": "inspection",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
-        },
+        "repairAffordance": null,
         "sourceRole": "app-source",
         "subject": {
           "source": {
@@ -988,6 +816,47 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     },
     {
       "anomaly": null,
+      "code": "TS2769",
+      "data": {
+        "diagnosticAuthority": "typescript",
+        "diagnosticDomain": "typescript",
+        "diagnosticKind": "TS2769",
+        "frameworkErrorCode": null,
+        "frameworkRawErrorAuthority": null,
+        "missingInput": null,
+        "missingInputs": [],
+        "phase": "semantic",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
+        "relatedInformation": [],
+        "relatedQueryKind": "typescript-diagnostics",
+        "repairAffordance": null,
+        "sourceRole": "app-source",
+        "subject": null,
+        "typeScriptDiagnosticCode": 2769
+      },
+      "message": "No overload matches this call.\nOverload 1 of 4, '(config?: Omit<PartialBindableDefinition, \"name\"> | undefined): (target: unknown, context: ClassDecoratorContext<abstract new (...args: any) => any> | ClassFieldDecoratorContext<...> | ClassGetterDecoratorContext<...>) => void', gave the following error.\nObject literal may only specify known properties, and 'name' does not exist in type 'Omit<PartialBindableDefinition, \"name\">'.\nOverload 2 of 4, '(prop: string): (target: Constructable, context: ClassDecoratorContext<abstract new (...args: any) => any>) => void', gave the following error.\nArgument of type '{ name: string; }' is not assignable to parameter of type 'string'.",
+      "range": {
+        "end": {
+          "character": 9,
+          "line": 73
+        },
+        "start": {
+          "character": 1,
+          "line": 73
+        }
+      },
+      "rangeText": "bindable",
+      "relatedInformation": [],
+      "severity": "error",
+      "source": "typescript"
+    },
+    {
+      "anomaly": null,
       "code": "AUR0227",
       "data": {
         "diagnosticAuthority": "framework-error-code",
@@ -998,16 +867,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "phase": "bindable-decorator",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "resource-issues",
-        "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
-          "changeDomain": "inspection",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
-        },
+        "repairAffordance": null,
         "sourceRole": "app-source",
         "subject": {
           "source": {
@@ -1052,16 +920,36 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "phase": "bindable-decorator",
+        "presentation": {
+          "contextual": [
+            {
+              "diagnostic": {
+                "diagnosticAuthority": "typescript",
+                "diagnosticDomain": "typescript",
+                "diagnosticKind": "TS1166",
+                "frameworkErrorCode": null,
+                "frameworkRawErrorAuthority": null,
+                "missingInput": null,
+                "missingInputs": [],
+                "phase": "semantic",
+                "relatedInformation": [],
+                "relatedQueryKind": "typescript-diagnostics",
+                "repairAffordance": null,
+                "severity": "error",
+                "sourceRole": "app-source",
+                "subject": null,
+                "typeScriptDiagnosticCode": 1166
+              },
+              "relation": "checker-evidence"
+            }
+          ],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 2
+        },
         "relatedInformation": [],
         "relatedQueryKind": "resource-issues",
-        "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
-          "changeDomain": "inspection",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
-        },
+        "repairAffordance": null,
         "sourceRole": "app-source",
         "subject": {
           "source": {
@@ -1090,7 +978,25 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         }
       },
       "rangeText": "[Symbol.for('semantic-runtime.invalid-bindable-name')]",
-      "relatedInformation": [],
+      "relatedInformation": [
+        {
+          "anomaly": null,
+          "file": "src/resource-metadata-errors-app.ts",
+          "message": "A computed property name in a class property declaration must have a simple literal type or a 'unique symbol' type.",
+          "range": {
+            "end": {
+              "character": 56,
+              "line": 86
+            },
+            "start": {
+              "character": 2,
+              "line": 86
+            }
+          },
+          "rangeText": "[Symbol.for('semantic-runtime.invalid-bindable-name')]",
+          "uri": "fixtures://pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts"
+        }
+      ],
       "severity": "error",
       "source": "aurelia"
     },
@@ -1106,16 +1012,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "phase": "process-content-decorator",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "resource-issues",
-        "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
-          "changeDomain": "inspection",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
-        },
+        "repairAffordance": null,
         "sourceRole": "app-source",
         "subject": {
           "source": {
@@ -1160,16 +1065,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "phase": "process-content-decorator",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "resource-issues",
-        "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
-          "changeDomain": "inspection",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
-        },
+        "repairAffordance": null,
         "sourceRole": "app-source",
         "subject": {
           "source": {
@@ -1214,16 +1118,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "phase": "children-decorator",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "resource-issues",
-        "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
-          "changeDomain": "inspection",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
-        },
+        "repairAffordance": null,
         "sourceRole": "app-source",
         "subject": {
           "source": {
@@ -1268,16 +1171,56 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "phase": "slotted-decorator",
+        "presentation": {
+          "contextual": [
+            {
+              "diagnostic": {
+                "diagnosticAuthority": "typescript",
+                "diagnosticDomain": "typescript",
+                "diagnosticKind": "TS1241",
+                "frameworkErrorCode": null,
+                "frameworkRawErrorAuthority": null,
+                "missingInput": null,
+                "missingInputs": [],
+                "phase": "semantic",
+                "relatedInformation": [],
+                "relatedQueryKind": "typescript-diagnostics",
+                "repairAffordance": null,
+                "severity": "error",
+                "sourceRole": "app-source",
+                "subject": null,
+                "typeScriptDiagnosticCode": 1241
+              },
+              "relation": "checker-evidence"
+            },
+            {
+              "diagnostic": {
+                "diagnosticAuthority": "typescript",
+                "diagnosticDomain": "typescript",
+                "diagnosticKind": "TS1270",
+                "frameworkErrorCode": null,
+                "frameworkRawErrorAuthority": null,
+                "missingInput": null,
+                "missingInputs": [],
+                "phase": "semantic",
+                "relatedInformation": [],
+                "relatedQueryKind": "typescript-diagnostics",
+                "repairAffordance": null,
+                "severity": "error",
+                "sourceRole": "app-source",
+                "subject": null,
+                "typeScriptDiagnosticCode": 1270
+              },
+              "relation": "checker-evidence"
+            }
+          ],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 3
+        },
         "relatedInformation": [],
         "relatedQueryKind": "resource-issues",
-        "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
-          "changeDomain": "inspection",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
-        },
+        "repairAffordance": null,
         "sourceRole": "app-source",
         "subject": {
           "source": {
@@ -1306,7 +1249,42 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         }
       },
       "rangeText": "@slotted()",
-      "relatedInformation": [],
+      "relatedInformation": [
+        {
+          "anomaly": null,
+          "file": "src/resource-metadata-errors-app.ts",
+          "message": "Unable to resolve signature of method decorator when called as an expression.\nArgument of type '() => void' is not assignable to parameter of type 'undefined'.",
+          "range": {
+            "end": {
+              "character": 12,
+              "line": 119
+            },
+            "start": {
+              "character": 3,
+              "line": 119
+            }
+          },
+          "rangeText": "slotted()",
+          "uri": "fixtures://pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts"
+        },
+        {
+          "anomaly": null,
+          "file": "src/resource-metadata-errors-app.ts",
+          "message": "Decorator function return type '(initialValue: any) => any' is not assignable to type 'void | (() => void)'.\nType '(initialValue: any) => any' is not assignable to type '() => void'.\nTarget signature provides too few arguments. Expected 1 or more, but got 0.",
+          "range": {
+            "end": {
+              "character": 12,
+              "line": 119
+            },
+            "start": {
+              "character": 3,
+              "line": 119
+            }
+          },
+          "rangeText": "slotted()",
+          "uri": "fixtures://pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts"
+        }
+      ],
       "severity": "error",
       "source": "aurelia"
     }

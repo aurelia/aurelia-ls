@@ -54,6 +54,7 @@ interface VsixArtifactModule {
       readonly repoRoot?: string;
       readonly typescriptRoot?: string;
       readonly projectSchemaSource?: string;
+      readonly projectDialectSchemaSource?: string;
       readonly expectedTypeScriptVersion?: string;
     },
   ) => Map<string, ExpectedEntry>;
@@ -129,6 +130,7 @@ const defaultPayloads = Object.freeze({
   "extension/dist/extension.cjs": "exports.activate = () => {};\n",
   "extension/dist/server/main.cjs": "exports.main = () => {};\n",
   "extension/dist/schemas/aurelia.project.schema.json": "{}\n",
+  "extension/dist/schemas/aurelia.project.jsonc.schema.json": "{}\n",
   "extension/dist/node_modules/typescript/package.json": "{\"name\":\"typescript\",\"version\":\"6.0.3\"}\n",
   "extension/dist/node_modules/typescript/lib/typescript.js": "exports.version = '6.0.3';\n",
 });
@@ -651,6 +653,7 @@ describe("VSIX release surface", () => {
       "extension/dist/extension.cjs",
       "extension/dist/server/main.cjs",
       "extension/dist/schemas/aurelia.project.schema.json",
+      "extension/dist/schemas/aurelia.project.jsonc.schema.json",
       "extension/dist/node_modules/typescript/package.json",
       "extension/dist/node_modules/typescript/lib/typescript.js",
     ]) {
@@ -879,6 +882,12 @@ function canonicalInputFixture() {
     "schema",
     "aurelia.project.schema.json",
   );
+  const projectDialectSchemaSource = path.join(
+    extensionRoot,
+    "src",
+    "schemas",
+    "aurelia.project.jsonc.schema.json",
+  );
   const packageJson = {
     ...packageManifest,
     dependencies: { typescript: "6.0.3" },
@@ -905,6 +914,16 @@ function canonicalInputFixture() {
   const copiedSchema = path.join(extensionRoot, "dist", "schemas", "aurelia.project.schema.json");
   mkdirSync(path.dirname(copiedSchema), { recursive: true });
   writeFileSync(copiedSchema, schema);
+  const dialectSchema = '{"allowComments":true,"allowTrailingCommas":true}\n';
+  mkdirSync(path.dirname(projectDialectSchemaSource), { recursive: true });
+  writeFileSync(projectDialectSchemaSource, dialectSchema);
+  const copiedDialectSchema = path.join(
+    extensionRoot,
+    "dist",
+    "schemas",
+    "aurelia.project.jsonc.schema.json",
+  );
+  writeFileSync(copiedDialectSchema, dialectSchema);
 
   const typescriptFiles: Record<string, string> = {
     "package.json": "{\"name\":\"typescript\",\"version\":\"6.0.3\"}\n",
@@ -929,10 +948,12 @@ function canonicalInputFixture() {
     extensionRoot,
     typescriptRoot,
     projectSchemaSource,
+    projectDialectSchemaSource,
     options: {
       repoRoot,
       typescriptRoot,
       projectSchemaSource,
+      projectDialectSchemaSource,
       expectedTypeScriptVersion: "6.0.3",
     },
   };

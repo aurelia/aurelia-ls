@@ -76,6 +76,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-html.short-hand-binding-syntax"
         ],
         "phase": null,
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {

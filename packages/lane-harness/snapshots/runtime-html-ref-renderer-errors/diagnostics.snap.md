@@ -36,6 +36,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-renderer:AUR0750"
         ],
         "phase": "render",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -62,7 +68,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         },
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia runtime renderer AUR0750 rejects this instruction input: view.ref is not supported by runtime-html..",
+      "message": "view.ref is not supported by runtime-html.",
       "range": {
         "end": {
           "character": 9,
@@ -92,6 +98,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-renderer:AUR0762"
         ],
         "phase": "render",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -118,7 +130,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         },
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia runtime renderer AUR0762 rejects this instruction input: controller.ref requires a custom element or containerless host..",
+      "message": "controller.ref requires a custom element or containerless host.",
       "range": {
         "end": {
           "character": 15,
@@ -148,6 +160,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-renderer:AUR0763"
         ],
         "phase": "render",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -174,7 +192,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         },
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia runtime renderer AUR0763 rejects this instruction input: Ref target 'ghost' could not fall back to a custom element controller because the ref host is not a custom element..",
+      "message": "Ref target 'ghost' could not fall back to a custom element controller because the ref host is not a custom element.",
       "range": {
         "end": {
           "character": 10,
@@ -204,6 +222,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-renderer:AUR0751"
         ],
         "phase": "render",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
@@ -230,7 +254,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         },
         "typeScriptDiagnosticCode": null
       },
-      "message": "Aurelia runtime renderer AUR0751 rejects this instruction input: Ref target 'ghost' was not found amongst the target API..",
+      "message": "Ref target 'ghost' was not found amongst the target API.",
       "range": {
         "end": {
           "character": 24,
