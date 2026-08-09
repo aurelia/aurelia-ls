@@ -641,7 +641,100 @@ describe('SemanticRuntimeProjectInputAuthority', () => {
     expect(scriptConsumer.tryRebaseCurrent(second)).toBe(true);
     expect(host.fileReadCount(scriptFile)).toBe(0);
     expect(templateConsumer.tryRebaseCurrent(second)).toBe(false);
-    expect(host.fileReadCount(templateFile)).toBe(1);
+    expect(host.fileReadCount(templateFile)).toBe(0);
+  });
+
+  test('does not transfer a revoked PushObserved proof after content cycles back to the same revision', () => {
+    const rootDir = normalize('C:/workspace/app');
+    const sourceFile = normalize(`${rootDir}/src/app.ts`);
+    const host = new MutableProjectInputHost();
+    const original = 'export const value = 1;';
+    host.write(sourceFile, original);
+    const authority = new SemanticRuntimeProjectInputAuthority(
+      host,
+      pushObservedFileContentPolicy(sourceFile),
+    );
+    const first = authority.capture({ projectKey: 'app', rootDir });
+    const retained = first.createReadScope('retained-computation');
+    expect(retained.host.readFile(sourceFile)).toBe(original);
+
+    host.write(sourceFile, 'export const value = 2;');
+    authority.advance([new SemanticRuntimeProjectInputChange(
+      SemanticRuntimeProjectInputChangeKind.FileValue,
+      sourceFile,
+    )]);
+    host.write(sourceFile, original);
+    authority.advance([new SemanticRuntimeProjectInputChange(
+      SemanticRuntimeProjectInputChangeKind.FileValue,
+      sourceFile,
+    )]);
+    const restored = authority.capture({ projectKey: 'app', rootDir });
+    const current = restored.createReadScope('current-computation');
+    expect(current.host.readFile(sourceFile)).toBe(original);
+    host.resetFileReadCounts();
+
+    // The target generation already owns an equivalent read. Rebase must still refuse the older event capability;
+    // accepting the cached value would leave a retained computation closure with an immediately stale receipt.
+    expect(retained.tryRebaseCurrent(restored)).toBe(false);
+    expect(host.fileReadCount(sourceFile)).toBe(0);
+    expect(retained.belongsTo(first)).toBe(true);
+  });
+
+  test('does not poll while refusing a no-op PushObserved file event', () => {
+    const rootDir = normalize('C:/workspace/app');
+    const sourceFile = normalize(`${rootDir}/src/app.ts`);
+    const host = new MutableProjectInputHost();
+    host.write(sourceFile, 'export const value = 1;');
+    const authority = new SemanticRuntimeProjectInputAuthority(
+      host,
+      pushObservedFileContentPolicy(sourceFile),
+    );
+    const first = authority.capture({ projectKey: 'app', rootDir });
+    const retained = first.createReadScope('retained-computation');
+    retained.host.readFile(sourceFile);
+
+    authority.advance([new SemanticRuntimeProjectInputChange(
+      SemanticRuntimeProjectInputChangeKind.FileValue,
+      sourceFile,
+    )]);
+    const second = authority.capture({ projectKey: 'app', rootDir });
+    host.resetFileReadCounts();
+
+    expect(retained.tryRebaseCurrent(second)).toBe(false);
+    expect(host.fileReadCount(sourceFile)).toBe(0);
+    expect(retained.belongsTo(first)).toBe(true);
+  });
+
+  test('does not publish a read-scope rebase when host validation revokes the target generation', () => {
+    const rootDir = normalize('C:/workspace/app');
+    const sourceFile = normalize(`${rootDir}/src/app.ts`);
+    const host = new MutableProjectInputHost();
+    host.write(sourceFile, 'export const value = 1;');
+    const authority = new SemanticRuntimeProjectInputAuthority(host);
+    const first = authority.capture({ projectKey: 'app', rootDir });
+    const retained = first.createReadScope('retained-computation');
+    retained.host.readFile(sourceFile);
+
+    authority.advance();
+    const second = authority.capture({ projectKey: 'app', rootDir });
+    const readFile = host.readFile.bind(host);
+    let advanced = false;
+    vi.spyOn(host, 'readFile').mockImplementation((fileName) => {
+      const value = readFile(fileName);
+      if (!advanced) {
+        advanced = true;
+        authority.advance();
+      }
+      return value;
+    });
+
+    expectGenerationCurrentnessChanged(
+      () => retained.tryRebaseCurrent(second),
+      ['project-input-generation:app'],
+    );
+    expect(advanced).toBe(true);
+    expect(second.readRegisteredInputs()).toEqual([]);
+    expect(retained.belongsTo(first)).toBe(true);
   });
 
   test('retains narrow product reads inside one synchronous owner scope', () => {

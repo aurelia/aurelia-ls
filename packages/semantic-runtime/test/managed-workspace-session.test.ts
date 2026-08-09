@@ -1,6 +1,7 @@
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import {
@@ -749,6 +750,64 @@ describe('managed semantic workspace session', () => {
     const after = await captureRuntime(session);
     expect(after.sourceWorldRevision).toBe(baseline.sourceWorldRevision);
     expect(after.runtimeIdentity).toBe(baseline.runtimeIdentity);
+  });
+
+  test.each([
+    {
+      name: 'a restored value with no query in the transient generation',
+      transitions: (original: string, renamed: string) => [renamed, original],
+    },
+    {
+      name: 'an explicit no-op file-value event',
+      transitions: (original: string) => [original],
+    },
+  ])('converges fresh PushObserved answers after $name', async ({ transitions }) => {
+    const workspaceRoot = fileURLToPath(new URL('../../../fixtures/hello-world/', import.meta.url));
+    const sourceFile = path.join(workspaceRoot, 'src/components/product-card.ts');
+    const original = await readFile(sourceFile, 'utf8');
+    const renamed = original.replace('@bindable item:', '@bindable item2:');
+    expect(renamed).not.toBe(original);
+    const overlay = new MutableSourceOverlay();
+    overlay.write(sourceFile, original);
+    const authority = new SemanticRuntimeProjectInputAuthority(
+      new NodeSemanticRuntimeProjectInputHost(overlay),
+      {
+        authorityForRead: (descriptor) =>
+          descriptor.kind === SemanticRuntimeProjectInputReadKind.FileContent
+          && path.resolve(descriptor.fileName) === path.resolve(sourceFile)
+            ? { mode: SemanticRuntimeProjectInputCurrentnessMode.PushObserved }
+            : null,
+      },
+    );
+    const session = new ManagedSemanticWorkspaceSession({
+      workspaceRoot,
+      projects: [{ rootDir: workspaceRoot }],
+      projectInputAuthority: authority,
+    });
+    sessions.push(session);
+    const baseline = await captureRuntime(session);
+    const request = {
+      projectKey: baseline.projectKey,
+      inquiryProfile: 'mcp-orientation',
+      appRetention: 'retain-app',
+      includeAppProfile: true,
+      queries: [{ kind: SemanticAppQueryKind.Summary }],
+    } as const;
+    await expect(session.run(({ runtime }) => runtime.answerAppQueries(request)))
+      .resolves.toMatchObject({ result: 'answered' });
+
+    for (const sourceText of transitions(original, renamed)) {
+      overlay.write(sourceFile, sourceText);
+      authority.advance([new SemanticRuntimeProjectInputChange(
+        SemanticRuntimeProjectInputChangeKind.FileValue,
+        sourceFile,
+      )]);
+    }
+
+    await expect(session.run(({ runtime }) => runtime.answerAppQueries(request)))
+      .resolves.toMatchObject({ result: 'answered' });
+    await expect(session.run(({ runtime }) => runtime.answerAppQueries(request)))
+      .resolves.toMatchObject({ result: 'answered' });
   });
 
   test('preserves an arbitrary mapper failure even when its composed answer receipt later becomes stale', async () => {

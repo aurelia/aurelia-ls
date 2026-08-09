@@ -378,6 +378,9 @@ export class SemanticRuntimeProjectInputRead implements ComputationRead {
     eventSequence: number,
     currentnessAuthority: SemanticRuntimeProjectInputReadCurrentness,
   ): SemanticRuntimeProjectInputRead | null {
+    if (!this.canAttemptRebaseForGeneration(currentnessAuthority)) {
+      return null;
+    }
     const canReuseObservedValue = sameProjectInputReadCurrentness(
       this.currentnessAuthority,
       currentnessAuthority,
@@ -403,6 +406,22 @@ export class SemanticRuntimeProjectInputRead implements ComputationRead {
           eventSequence,
         )
       : null;
+  }
+
+  /**
+   * Whether this exact read provenance permits attempting a move into a later input generation.
+   *
+   * A relevant event permanently revokes a PushObserved capability even when the observed value later cycles back to
+   * the same revision. Reusing that value would leave immutable computation closures carrying the older revoked event
+   * witness. Pull validation, immutable snapshots, and currentness-authority transitions retain their existing
+   * exact-read rebase behavior.
+   */
+  canAttemptRebaseForGeneration(currentnessAuthority: SemanticRuntimeProjectInputReadCurrentness): boolean {
+    return !(
+      sameProjectInputReadCurrentness(this.currentnessAuthority, currentnessAuthority)
+      && currentnessAuthority.mode === SemanticRuntimeProjectInputCurrentnessMode.PushObserved
+      && this.authority.mayHaveChanged(this.descriptor, this.observedEventSequence)
+    );
   }
 
   /** Owning authority, exposed only for generation-coherence assertions. */
@@ -516,6 +535,7 @@ export class SemanticRuntimeInputReadScope {
       }
       rebasedReads.push(rebased);
     }
+    generation.requireCurrent();
     this.readsByKey.clear();
     for (const read of rebasedReads) {
       this.readsByKey.set(read.readKey, read);
@@ -623,21 +643,28 @@ class CapturedSemanticRuntimeProjectInputHost implements SemanticRuntimeProjectI
       throw new Error(`Project-input read ${read.readKey} belongs to another input authority.`);
     }
     let current = this.readsByKey.get(read.readKey);
+    if (current != null && !sameProjectInputReadDescriptor(current.descriptor, read.descriptor)) {
+      throw new Error(`Project-input read key collision for ${read.readKey}.`);
+    }
+    const currentnessAuthority = current?.currentnessAuthority
+      ?? this.authority.currentnessForRead(read.descriptor);
+    this.generation.requireCurrent();
+    if (!read.canAttemptRebaseForGeneration(currentnessAuthority)) {
+      return null;
+    }
     if (current == null) {
-      const currentnessAuthority = this.authority.currentnessForRead(read.descriptor);
       const rebased = read.tryRebaseForGeneration(
         this.generation.currentnessWitness,
         this.authority.currentEventSequence,
         currentnessAuthority,
       );
+      this.generation.requireCurrent();
       if (rebased == null) {
         return null;
       }
       current = rebased;
       this.valuesByReadKey.set(read.readKey, current.value);
       this.registerRead(current);
-    } else if (!sameProjectInputReadDescriptor(current.descriptor, read.descriptor)) {
-      throw new Error(`Project-input read key collision for ${read.readKey}.`);
     }
     this.generation.observeScopedRead(current);
     this.observeRead?.(current);
