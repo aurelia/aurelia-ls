@@ -16,6 +16,8 @@
     "build": "tsc -b",
     "build:ide:types": "tsc -b packages/semantic-runtime packages/language-server packages/vscode",
     "build:ide": "pnpm run build:ide:types && pnpm --filter aurelia-2 run bundle",
+    "package:ide:vsix": "tsc -b --force packages/semantic-runtime packages/language-server packages/vscode && pnpm --filter aurelia-2 run release:pack",
+    "verify:ide:vsix": "pnpm --filter aurelia-2 run release:verify",
     "watch": "tsc -b -w",
     "watch:ide": "pnpm run build:ide && pnpm --parallel --include-workspace-root --filter aurelia-ls --filter aurelia-2 run watch:ide:process",
     "watch:ide:process": "tsc -b packages/semantic-runtime packages/language-server packages/vscode --watch --preserveWatchOutput",

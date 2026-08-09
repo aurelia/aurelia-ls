@@ -1,19 +1,18 @@
-# Source and build artifacts
+# Package-root development and release evidence. Keep dist/node_modules/typescript.
+.vscode-test/**
+.release/**
+scripts/**
 src/**
 out/**
 test/**
-
-# Exclude root node_modules (TypeScript is copied to dist/node_modules by esbuild.mjs)
-# Leading / anchors to root — without it, dist/node_modules/ is also excluded
-/node_modules/**
-
-# Config files
-tsconfig.json
-tsconfig.tsbuildinfo
+node_modules/**
+**/*.vsix
+*.tsbuildinfo
+tsconfig*.json
 esbuild.mjs
-.eslintrc*
+.vscodeignore
 
-# Development files
+# Bundles ship without source maps.
 **/*.map
 
-# Keep dist, images, package.json, README, CHANGELOG, LICENSE
+# Keep dist, images/logo.png, package.json, README, CHANGELOG, and LICENSE.

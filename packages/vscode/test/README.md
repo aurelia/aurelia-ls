@@ -117,3 +117,12 @@ Guidelines:
   owns medium-volume LSP projection, so do not reproduce either corpus here.
   Add a host journey when the expected result depends on VS Code state or API
   spending rather than on a single semantic answer.
+- The VSIX release gate is package-once, attest-once, and exact-byte reuse.
+  `pnpm package:ide:vsix` lets the pinned package-local VSCE 3.9.2 invocation
+  run the minified prepublish lifecycle exactly once, validates raw ZIP
+  structure plus JSZip CRCs and the exact local release inventory, and writes
+  a fixed `.release/aurelia-2-<version>.vsix` with an immutable manifest and
+  SHA-256 sidecar. `pnpm verify:ide:vsix` only revalidates those existing bytes,
+  their clean Git HEAD and inputs; it never packages again. Archive contract
+  tests use synthetic in-memory ZIPs and dependency-injected lifecycle seams,
+  so they perform no packaging, download, network request, or Electron launch.

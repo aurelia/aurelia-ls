@@ -161,10 +161,12 @@
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run bundle",
+    "vscode:prepublish": "pnpm run bundle:minify",
     "bundle": "node esbuild.mjs",
     "bundle:watch": "node esbuild.mjs --watch",
     "bundle:minify": "node esbuild.mjs --minify",
+    "release:pack": "node scripts/vsix-artifact.mjs pack",
+    "release:verify": "node scripts/vsix-artifact.mjs verify",
     "watch:ide:process": "pnpm run bundle:watch",
     "test:extension-host": "pnpm -w build && pnpm run bundle && node scripts/run-extension-host-tests.mjs --worker --current-stable",
     "test:extension-host:worker": "pnpm run test:extension-host",
@@ -176,7 +178,7 @@
     "typecheck:test": "tsc --noEmit -p tsconfig.test.json"
   },
   "dependencies": {
-    "typescript": "^6.0.3",
+    "typescript": "6.0.3",
     "vscode-jsonrpc": "^9.0.1",
     "vscode-languageclient": "^10.1.0",
     "vscode-languageserver-protocol": "^3.18.2"
@@ -184,8 +186,10 @@
   "devDependencies": {
     "@aurelia-ls/language-server": "workspace:*",
     "@types/vscode": "1.91.0",
-    "@vscode/test-electron": "^3.0.0",
-    "esbuild": "^0.24.0",
+    "@vscode/test-electron": "3.0.0",
+    "@vscode/vsce": "3.9.2",
+    "esbuild": "0.24.2",
+    "jszip": "3.10.1",
     "mocha": "^11.7.6"
   }
 }
