@@ -1,5 +1,16 @@
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { createMiddleware } from "../../out/client-middleware.js";
+import { EXTENSION_HOST_OBSERVATION_EVENT } from "../../out/extension-host-observation.js";
+
+const observationEnv = "AURELIA_LS_EXTENSION_HOST_OBSERVATION";
+const tailObservationEnv = "AURELIA_LS_EXTENSION_HOST_TAIL_OBSERVATION";
+const previousObservationEnv = process.env[observationEnv];
+const previousTailObservationEnv = process.env[tailObservationEnv];
+
+afterEach(() => {
+  restoreEnvironment(observationEnv, previousObservationEnv);
+  restoreEnvironment(tailObservationEnv, previousTailObservationEnv);
+});
 
 class StubUri {
   readonly scheme: string;
@@ -181,3 +192,222 @@ describe("code-action resolve middleware", () => {
     expect(harness.rawClient.sendRequest).not.toHaveBeenCalled();
   });
 });
+
+describe("Extension Host tail observation middleware", () => {
+  test("installs no provider wrappers unless both private test gates are enabled", () => {
+    process.env[observationEnv] = "1";
+    delete process.env[tailObservationEnv];
+    let middleware = createHarness().middleware;
+    expect(middleware.provideDiagnostics).toBeUndefined();
+    expect(middleware.provideCompletionItem).toBeUndefined();
+
+    delete process.env[observationEnv];
+    process.env[tailObservationEnv] = "1";
+    middleware = createHarness().middleware;
+    expect(middleware.provideDiagnostics).toBeUndefined();
+    expect(middleware.provideCompletionItem).toBeUndefined();
+
+    process.env[observationEnv] = "1";
+    middleware = createHarness().middleware;
+    expect(middleware.provideDiagnostics).toBeTypeOf("function");
+    expect(middleware.provideCompletionItem).toBeTypeOf("function");
+  });
+
+  test("observes one converted full diagnostic response without changing it", async () => {
+    enableTailObservation();
+    const events: Record<string, unknown>[] = [];
+    const record = (event: Record<string, unknown>) => events.push(event);
+    process.on(EXTENSION_HOST_OBSERVATION_EVENT, record);
+    try {
+      const middleware = createHarness().middleware;
+      const document = {
+        uri: new StubUri("file:///work/src/app.html"),
+        version: 1,
+      };
+      const token = { isCancellationRequested: false };
+      const report = {
+        kind: "full",
+        resultId: "diagnostics:1",
+        items: [{ message: "not callable" }],
+      };
+      const next = vi.fn(async () => report);
+
+      const result = await middleware.provideDiagnostics?.(
+        document as never,
+        undefined,
+        token as never,
+        next as never,
+      );
+
+      expect(result).toBe(report);
+      expect(next).toHaveBeenCalledOnce();
+      expect(events).toHaveLength(2);
+      expect(events[0]).toMatchObject({
+        source: "language-client-provider",
+        phase: "request",
+        operation: "diagnostics",
+        uri: document.uri.toString(),
+        documentVersion: 1,
+        previousResultIdPresent: false,
+        epochMilliseconds: expect.any(Number),
+        monotonicMilliseconds: expect.any(Number),
+      });
+      expect(events[1]).toMatchObject({
+        source: "language-client-provider",
+        observationId: events[0]?.["observationId"],
+        phase: "response",
+        operation: "diagnostics",
+        reportKind: "full",
+        itemCount: 1,
+        resultIdPresent: true,
+        cancellationRequested: false,
+        epochMilliseconds: expect.any(Number),
+        monotonicMilliseconds: expect.any(Number),
+      });
+    } finally {
+      process.off(EXTENSION_HOST_OBSERVATION_EVENT, record);
+    }
+  });
+
+  test("distinguishes server retriggers from client-token diagnostic cancellation", async () => {
+    enableTailObservation();
+    const events: Record<string, unknown>[] = [];
+    const record = (event: Record<string, unknown>) => events.push(event);
+    process.on(EXTENSION_HOST_OBSERVATION_EVENT, record);
+    try {
+      const middleware = createHarness().middleware;
+      const document = {
+        uri: new StubUri("file:///work/src/app.html"),
+        version: 1,
+      };
+      const token = { isCancellationRequested: false };
+      const failure = Object.assign(new Error("Aurelia diagnostics changed"), {
+        name: "Canceled",
+        data: { retriggerRequest: true },
+      });
+
+      await expect(middleware.provideDiagnostics?.(
+        document as never,
+        undefined,
+        token as never,
+        vi.fn(async () => { throw failure; }) as never,
+      )).rejects.toBe(failure);
+
+      expect(events).toHaveLength(2);
+      expect(events[1]).toMatchObject({
+        source: "language-client-provider",
+        observationId: events[0]?.["observationId"],
+        phase: "failed",
+        operation: "diagnostics",
+        uri: document.uri.toString(),
+        documentVersion: 1,
+        cancellationRequested: false,
+        errorName: "Canceled",
+        serverRetriggerRequested: true,
+        epochMilliseconds: expect.any(Number),
+        monotonicMilliseconds: expect.any(Number),
+      });
+
+      token.isCancellationRequested = true;
+      const clientCancellation = Object.assign(new Error("Diagnostic request canceled"), {
+        name: "Canceled",
+      });
+      await expect(middleware.provideDiagnostics?.(
+        document as never,
+        undefined,
+        token as never,
+        vi.fn(async () => { throw clientCancellation; }) as never,
+      )).rejects.toBe(clientCancellation);
+      expect(events[3]).toMatchObject({
+        source: "language-client-provider",
+        observationId: events[2]?.["observationId"],
+        phase: "failed",
+        operation: "diagnostics",
+        cancellationRequested: true,
+        errorName: "Canceled",
+        serverRetriggerRequested: false,
+      });
+    } finally {
+      process.off(EXTENSION_HOST_OBSERVATION_EVENT, record);
+    }
+  });
+
+  test("observes one completion response and preserves provider failures", async () => {
+    enableTailObservation();
+    const events: Record<string, unknown>[] = [];
+    const record = (event: Record<string, unknown>) => events.push(event);
+    process.on(EXTENSION_HOST_OBSERVATION_EVENT, record);
+    try {
+      const middleware = createHarness().middleware;
+      const document = {
+        uri: new StubUri("file:///work/src/app.html"),
+        version: 1,
+      };
+      const position = { line: 3, character: 18 };
+      const token = { isCancellationRequested: false };
+      const completion = {
+        items: [{ label: "searchText" }],
+        isIncomplete: true,
+      };
+      const result = await middleware.provideCompletionItem?.(
+        document as never,
+        position as never,
+        {} as never,
+        token as never,
+        vi.fn(async () => completion) as never,
+      );
+
+      expect(result).toBe(completion);
+      expect(events.slice(0, 2)).toEqual([
+        expect.objectContaining({
+          source: "language-client-provider",
+          phase: "request",
+          operation: "completion",
+          uri: document.uri.toString(),
+          documentVersion: 1,
+          line: 3,
+          character: 18,
+          epochMilliseconds: expect.any(Number),
+          monotonicMilliseconds: expect.any(Number),
+        }),
+        expect.objectContaining({
+          source: "language-client-provider",
+          phase: "response",
+          operation: "completion",
+          itemCount: 1,
+          isIncomplete: true,
+          cancellationRequested: false,
+          epochMilliseconds: expect.any(Number),
+          monotonicMilliseconds: expect.any(Number),
+        }),
+      ]);
+      expect(events[1]?.["observationId"]).toBe(events[0]?.["observationId"]);
+
+      const failure = new Error("provider failed");
+      await expect(middleware.provideCompletionItem?.(
+        document as never,
+        position as never,
+        {} as never,
+        token as never,
+        vi.fn(async () => { throw failure; }) as never,
+      )).rejects.toBe(failure);
+      expect(events.at(-1)).toMatchObject({
+        phase: "failed",
+        operation: "completion",
+        errorName: "Error",
+      });
+    } finally {
+      process.off(EXTENSION_HOST_OBSERVATION_EVENT, record);
+    }
+  });
+});
+
+function enableTailObservation(): void {
+  process.env[observationEnv] = "1";
+  process.env[tailObservationEnv] = "1";
+}
+
+function restoreEnvironment(name: string, value: string | undefined): void {
+  if (value == null) delete process.env[name];
+  else process.env[name] = value;
+}

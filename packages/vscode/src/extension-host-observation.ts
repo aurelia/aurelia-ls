@@ -1,4 +1,5 @@
 const EXTENSION_HOST_OBSERVATION_ENV = "AURELIA_LS_EXTENSION_HOST_OBSERVATION";
+const EXTENSION_HOST_TAIL_OBSERVATION_ENV = "AURELIA_LS_EXTENSION_HOST_TAIL_OBSERVATION";
 
 export const EXTENSION_HOST_OBSERVATION_EVENT = "aurelia-ls:extension-host-observation";
 
@@ -18,6 +19,12 @@ export function nextExtensionHostObservationId(prefix: string): string | undefin
   if (!extensionHostObservationEnabled()) return undefined;
   nextObservationOrdinal += 1;
   return `${prefix}:${nextObservationOrdinal}`;
+}
+
+/** Keep provider-tail measurement hooks out of production and ordinary host acceptance. */
+export function extensionHostTailObservationEnabled(): boolean {
+  return extensionHostObservationEnabled()
+    && process.env[EXTENSION_HOST_TAIL_OBSERVATION_ENV] === "1";
 }
 
 /** Publish detached test evidence without adding a public extension API surface. */

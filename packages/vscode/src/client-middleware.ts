@@ -1,7 +1,12 @@
-import type { CancellationToken, CodeAction } from "vscode";
+import type { CancellationToken, CodeAction, TextDocument, Uri } from "vscode";
 import type { Middleware } from "vscode-languageclient/node";
 import type * as LanguageClientProtocol from "vscode-languageclient/node";
 import { AURELIA_TEMPLATE_CODE_ACTION_RESOLVE_SCHEMA } from "@aurelia-ls/language-server/protocol";
+import {
+  emitExtensionHostObservation,
+  extensionHostTailObservationEnabled,
+  nextExtensionHostObservationId,
+} from "./extension-host-observation.js";
 import type { ClientLogger } from "./log.js";
 import type { VscodeApi } from "./vscode-api.js";
 import {
@@ -28,6 +33,7 @@ export function createMiddleware(
   client: MiddlewareLanguageClient,
 ): Middleware {
   return {
+    ...extensionHostTailMiddleware(),
     workspace: {
       didChangeWatchedFile: async (event, next) => {
         const uri = vscode.Uri.parse(event.uri);
@@ -73,6 +79,125 @@ export function createMiddleware(
       return converted;
     },
   };
+}
+
+function extensionHostTailMiddleware(): Pick<Middleware, "provideDiagnostics" | "provideCompletionItem"> {
+  if (!extensionHostTailObservationEnabled()) return {};
+  return {
+    provideDiagnostics: async (document, previousResultId, token, next) => {
+      const observationId = nextExtensionHostObservationId("host-tail-diagnostics");
+      if (observationId == null) return next(document, previousResultId, token);
+      const documentIdentity = observedDocumentIdentity(document);
+      emitExtensionHostObservation({
+        source: "language-client-provider",
+        observationId,
+        phase: "request",
+        operation: "diagnostics",
+        epochMilliseconds: Date.now(),
+        monotonicMilliseconds: performance.now(),
+        ...documentIdentity,
+        previousResultIdPresent: previousResultId !== undefined,
+      });
+      try {
+        const report = await next(document, previousResultId, token);
+        emitExtensionHostObservation({
+          source: "language-client-provider",
+          observationId,
+          phase: "response",
+          operation: "diagnostics",
+          epochMilliseconds: Date.now(),
+          monotonicMilliseconds: performance.now(),
+          ...documentIdentity,
+          reportKind: report?.kind ?? "null",
+          itemCount: report != null && "items" in report ? report.items.length : null,
+          resultIdPresent: report?.resultId != null,
+          cancellationRequested: token.isCancellationRequested,
+        });
+        return report;
+      } catch (error) {
+        emitExtensionHostObservation({
+          source: "language-client-provider",
+          observationId,
+          phase: "failed",
+          operation: "diagnostics",
+          epochMilliseconds: Date.now(),
+          monotonicMilliseconds: performance.now(),
+          ...documentIdentity,
+          cancellationRequested: token.isCancellationRequested,
+          errorName: error instanceof Error ? error.name : "Error",
+          serverRetriggerRequested: diagnosticServerRetriggerRequested(error),
+        });
+        throw error;
+      }
+    },
+    provideCompletionItem: async (document, position, context, token, next) => {
+      const observationId = nextExtensionHostObservationId("host-tail-completion");
+      if (observationId == null) return next(document, position, context, token);
+      const documentIdentity = observedDocumentIdentity(document);
+      emitExtensionHostObservation({
+        source: "language-client-provider",
+        observationId,
+        phase: "request",
+        operation: "completion",
+        epochMilliseconds: Date.now(),
+        monotonicMilliseconds: performance.now(),
+        ...documentIdentity,
+        line: position.line,
+        character: position.character,
+      });
+      try {
+        const result = await next(document, position, context, token);
+        emitExtensionHostObservation({
+          source: "language-client-provider",
+          observationId,
+          phase: "response",
+          operation: "completion",
+          epochMilliseconds: Date.now(),
+          monotonicMilliseconds: performance.now(),
+          ...documentIdentity,
+          itemCount: Array.isArray(result) ? result.length : result?.items.length ?? 0,
+          isIncomplete: Array.isArray(result) || result == null ? false : result.isIncomplete,
+          cancellationRequested: token.isCancellationRequested,
+        });
+        return result;
+      } catch (error) {
+        emitExtensionHostObservation({
+          source: "language-client-provider",
+          observationId,
+          phase: "failed",
+          operation: "completion",
+          epochMilliseconds: Date.now(),
+          monotonicMilliseconds: performance.now(),
+          ...documentIdentity,
+          cancellationRequested: token.isCancellationRequested,
+          errorName: error instanceof Error ? error.name : "Error",
+        });
+        throw error;
+      }
+    },
+  };
+}
+
+function observedDocumentIdentity(document: TextDocument | Uri): {
+  readonly uri: string;
+  readonly documentVersion: number | null;
+} {
+  return "uri" in document
+    ? { uri: document.uri.toString(), documentVersion: document.version }
+    : { uri: document.toString(), documentVersion: null };
+}
+
+function diagnosticServerRetriggerRequested(error: unknown): boolean {
+  try {
+    if (error == null || typeof error !== "object" || !("data" in error)) return false;
+    const data = error.data;
+    return data != null
+      && typeof data === "object"
+      && "retriggerRequest" in data
+      && data.retriggerRequest === true;
+  } catch {
+    return false;
+  }
 }
 
 function isAureliaTemplateCodeAction(action: CodeAction): boolean {
