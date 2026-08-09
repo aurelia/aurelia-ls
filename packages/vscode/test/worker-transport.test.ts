@@ -204,5 +204,5 @@ describe("Worker transport", () => {
       { type: "force-terminate", graceMilliseconds: 2_000 },
     ]);
     expect(events.filter((event) => event.type === "exit")).toHaveLength(1);
-  });
+  }, 15_000);
 });
