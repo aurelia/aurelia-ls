@@ -2,7 +2,7 @@
 
 Language intelligence for Aurelia 2 templates, powered by the shared Aurelia semantic runtime.
 
-The extension analyzes your Aurelia project to understand what your components are, what they accept, where they came from, and how templates connect to TypeScript. It handles decorators, conventions, `static $au`, `.define()` calls, third-party packages, and the full binding syntax.
+The extension analyzes your Aurelia project to understand what your components are, what they accept, where they came from, and how templates connect to TypeScript. It handles decorators, conventions, `static $au`, `.define()` calls, third-party packages, and Aurelia binding syntax.
 
 When it cannot prove a fact, it preserves that uncertainty in diagnostics, hover details, and resource evidence instead of fabricating a confident answer.
 
@@ -10,7 +10,10 @@ When it cannot prove a fact, it preserves that uncertainty in diagnostics, hover
 
 ### Hover — understand your templates
 
-Hover over any Aurelia construct to see what it is, what it accepts, and where it came from. Custom elements show their bindable interface with types and binding modes. Expressions show resolved types. Template controllers show their contextual variables ($index, $first, $even, etc.).
+Hover over supported Aurelia constructs to see what they are, what they accept, and where they came from. Hover uses
+the exact authored range. Custom elements show their bindable interface with types, nullability, and binding modes;
+expressions include resolved types, including bare `$this`; and template controllers show contextual variables such as
+`$index`, `$first`, and `$even`.
 
 ### Diagnostics — catch real problems
 
@@ -22,11 +25,16 @@ Edit-backed diagnostics offer conservative quick fixes for source operations the
 
 ### Completions — discover what's available
 
-Context-aware suggestions that reflect your actual project. Element tags, bindable attributes, binding commands, expression members, value converters, binding behaviors — all filtered by what's registered and visible in scope.
+Context-aware suggestions that reflect your actual project. Element tags, bindable attributes, binding commands,
+expression members, value converters, and binding behaviors are filtered by what is registered and visible in scope.
+Completions carry exact authored replacement ranges and safely compose `.bind` for bindables and `.for` for the
+framework `repeat` controller without duplicating an existing command.
 
 ### Go to Definition — navigate across boundaries
 
-Jump from template usage to source definition. Works for custom elements, attributes, template controllers, bindables, expression identifiers, and local scope variables. Crosses the HTML/TypeScript boundary.
+Jump from template usage to source definition. This works for custom elements, attributes, template controllers,
+bindables, expression identifiers, local scope variables, and source-resolvable router `load` paths and route ids. It
+crosses the HTML/TypeScript boundary.
 
 ### Find References
 
@@ -36,11 +44,21 @@ request returns the verified subset and reports the omitted count instead of pre
 
 ### Rename — refactor safely
 
-Rename source-backed template expression members across TypeScript and HTML. The extension only applies edits when semantic-runtime can prove the affected template references.
+Rename source-backed template members, bindables and attribute aliases, custom elements, custom attributes, template
+controllers, value converters, and binding behaviors when semantic-runtime can prove editable declarations and
+verified references. Renames initiated from TypeScript, TSX, JavaScript, or JSX members are extended atomically into
+admitted templates. Unverified same-name candidates are left unchanged and reported.
 
 ### Semantic Tokens — see the meaning
 
-Templates are colored by semantic meaning: custom elements look different from HTML elements, bindable attributes look different from plain attributes, resolved expressions look different from unresolved ones.
+The server emits semantic classifications for Aurelia elements, attributes, bindables, controllers, commands,
+converters, behaviors, metadata elements, events, listener modifiers, and interpolation delimiters. The extension
+declares native fallback token types, while the active VS Code theme determines their final appearance.
+
+### Native structure and editing
+
+Document and workspace symbols, document highlights, selection ranges, paired-tag linked editing, and folding ranges
+stay in VS Code's native UI and use the same source-backed semantic answers as navigation.
 
 ### Resource Discovery
 
@@ -66,11 +84,13 @@ given target. They are disabled by default and can be enabled per workspace fold
 
 - Custom elements (decorator, convention, `static $au`, and `.define()` forms)
 - Custom attributes
-- Template controllers (`if`, `else`, `repeat`, `switch`/`case`, `promise`/`pending`/`then`/`catch`, `with`, `portal`, `au-slot`, `au-compose`, and custom TCs)
+- Template controllers (`if`, `else`, `repeat`, `switch`/`case`/`default-case`, `promise`/`pending`/`then`/`catch`, `with`, `portal`, and custom template controllers)
+- Framework template elements (`<au-compose>`, `<au-slot>`, and router `<au-viewport>`)
 - Value converters
 - Binding behaviors
 - All standard binding commands (`.bind`, `.to-view`, `.from-view`, `.two-way`, `.one-time`, `.trigger`, `.capture`, `.attr`, `.class`, `.style`, `.ref`)
 - Template expressions (property access, member chains, optional chaining, pipes, behaviors)
+- Static router instructions and route-parameter object keys when route topology is source-resolvable
 - Third-party package resources
 
 ## How it handles uncertainty
@@ -85,6 +105,7 @@ The goal is that you can trust what the extension tells you.
 
 ## Requirements
 
+- VS Code 1.91 or newer
 - An Aurelia 2 project identifiable from framework dependencies, source evidence, explicit activation, or native
   `aurelia.project.json` configuration
 - A workspace filesystem accessible to the VS Code extension host
@@ -97,6 +118,8 @@ validity, and applying its authored-source exclusions remain semantic-runtime re
 then asks semantic-runtime for the workspace's project shape; it keeps shape-confirmed Aurelia app,
 resource-library-authoring, and package-inspection sessions, and may also retain a config-only session when
 semantic-runtime confirms the exact native configuration. Unrelated HTML and TypeScript workspaces remain inactive.
+VS Code validates `aurelia.project.json` against the schema bundled with the extension; semantic-runtime remains the
+authority for its project meaning and exclusions.
 
 Set `aurelia.activationMode` per workspace folder when automatic admission is not appropriate:
 
@@ -109,15 +132,22 @@ excluded subtree when ordinary imports make it a dependency, but the extension w
 publish its diagnostics, or include it as authored project source. Disjoint multi-root folders receive independent
 language-server sessions. Enabled nested workspace folders are supplied as project-root hints to the same shared
 semantic-runtime discovery; the extension does not reinterpret them as projects. Semantic-runtime owns admitted nested projects inside each root, while untitled and
-out-of-workspace documents remain unclaimed. Remote folders are supported when the extension host can access their
-filesystem; virtual workspaces are not currently supported.
+out-of-workspace documents remain unclaimed. The declared `0.5.0` support envelope covers filesystem-backed local
+workspaces. Virtual workspaces are unsupported, and remote development is not yet a release-tested promise.
+
+## Settings
+
+| Setting | Default | Scope | Purpose |
+|---------|---------|-------|---------|
+| `aurelia.activationMode` | `auto` | Workspace folder | Use project-shape-confirmed automatic activation, explicit `on`, or hard subtree exclusion with `off` |
+| `aurelia.inlayHints.bindingMode` | `false` | Workspace folder | Show the resolved mode of implicit `.bind` bindings |
 
 ## Getting Started
 
 1. Install this extension
 2. Open an Aurelia 2 project
 3. The language server activates after semantic-runtime confirms the workspace project shape
-4. Check the "Aurelia Language Server" output channel for status
+4. Check **Aurelia LS (Client)** for activation and session status; each active root also has an **Aurelia Language Server (`<workspace-folder-name>`)** channel
 
 ## Commands
 
@@ -135,9 +165,9 @@ these commands are part of your workflow.
 
 If features aren't working:
 
-1. Check the "Aurelia Language Server" output channel for errors
-2. Ensure your project has a `tsconfig.json`
-3. Verify `aurelia` is in your `package.json` dependencies
+1. Check **Aurelia LS (Client)** and the active root's **Aurelia Language Server (`<workspace-folder-name>`)** channel for errors
+2. Check that relevant source files are included by the project's TypeScript or JavaScript configuration, when one is present
+3. Confirm automatic activation has Aurelia dependency, source, or native-configuration evidence; use `aurelia.activationMode: on` for unusual layouts
 4. Try reloading the VS Code window
 
 The extension normally runs one language-server Worker per admitted workspace root. To diagnose a Worker-specific

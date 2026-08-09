@@ -2,7 +2,7 @@
   "name": "aurelia-2",
   "displayName": "Aurelia 2",
   "description": "Language tooling for Aurelia 2 templates — diagnostics, completions, go-to-definition, and more.",
-  "version": "0.4.4",
+  "version": "0.5.0",
   "publisher": "AureliaEffect",
   "icon": "images/logo.png",
   "type": "module",
@@ -50,6 +50,63 @@
       {
         "fileMatch": "**/aurelia.project.json",
         "url": "./dist/schemas/aurelia.project.schema.json"
+      }
+    ],
+    "semanticTokenTypes": [
+      {
+        "id": "aureliaElement",
+        "superType": "class",
+        "description": "An Aurelia custom or framework element."
+      },
+      {
+        "id": "aureliaAttribute",
+        "superType": "decorator",
+        "description": "An Aurelia custom attribute."
+      },
+      {
+        "id": "aureliaBindable",
+        "superType": "property",
+        "description": "An Aurelia bindable attribute."
+      },
+      {
+        "id": "aureliaController",
+        "superType": "macro",
+        "description": "An Aurelia template controller."
+      },
+      {
+        "id": "aureliaCommand",
+        "superType": "keyword",
+        "description": "An Aurelia binding command."
+      },
+      {
+        "id": "aureliaConverter",
+        "superType": "function",
+        "description": "An Aurelia value converter."
+      },
+      {
+        "id": "aureliaBehavior",
+        "superType": "decorator",
+        "description": "An Aurelia binding behavior."
+      },
+      {
+        "id": "aureliaMetaElement",
+        "superType": "keyword",
+        "description": "An Aurelia template metadata element."
+      },
+      {
+        "id": "aureliaEvent",
+        "superType": "event",
+        "description": "An event name in Aurelia listener syntax."
+      },
+      {
+        "id": "aureliaModifier",
+        "superType": "keyword",
+        "description": "An Aurelia listener modifier."
+      },
+      {
+        "id": "aureliaExpression",
+        "superType": "operator",
+        "description": "A delimiter in an Aurelia template expression."
       }
     ],
     "views": {
@@ -121,7 +178,7 @@
         },
         {
           "command": "aurelia.goToAvailableResource",
-          "when": "aurelia.active && aurelia.documentOwned"
+          "when": "aurelia.active && aurelia.documentOwned && editorLangId == html"
         },
         {
           "command": "aurelia.openRelatedFile",
@@ -142,7 +199,7 @@
           ],
           "enumDescriptions": [
             "Start a candidate server from cheap Aurelia evidence, then require semantic-runtime project-shape confirmation.",
-            "Always run Aurelia tooling for this workspace folder.",
+            "Enable Aurelia tooling for this workspace folder without requiring automatic project-shape confirmation; an excluded parent subtree still wins.",
             "Exclude this workspace folder and its complete subtree from Aurelia tooling."
           ],
           "default": "auto",

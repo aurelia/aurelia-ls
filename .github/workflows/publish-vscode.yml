@@ -3,90 +3,282 @@ name: Publish VS Code Extension
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Version type (patch, minor, major) or "skip" to use current version'
+      publish:
+        description: Publish the verified VSIX to the VS Code Marketplace
         required: true
-        default: 'skip'
-        type: choice
-        options:
-          - skip
-          - patch
-          - minor
-          - major
-      dry_run:
-        description: 'Dry run (package but do not publish)'
-        required: false
         default: false
         type: boolean
 
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+  artifact-metadata: write
+
+concurrency:
+  group: vscode-release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  publish:
-    runs-on: ubuntu-latest
+  release:
+    name: Verify and publish the exact VSIX
+    runs-on: windows-latest
+    timeout-minutes: 90
     defaults:
       run:
-        working-directory: packages/vscode
+        shell: pwsh
+        working-directory: .
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Checkout the release commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
+          fetch-depth: 0
+          persist-credentials: false
           submodules: recursive
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22.x
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+      - name: Set up pnpm 11.5.2
+        uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
         with:
           version: 11.5.2
+          run_install: false
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-        working-directory: .
+      - name: Set up Node.js 22.19.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.19.0
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Validate the committed release identity
+        id: release
         env:
-          # Allow esbuild postinstall script
+          PUBLISH_REQUESTED: ${{ inputs.publish }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $package = Get-Content -LiteralPath 'packages/vscode/package.json' -Raw | ConvertFrom-Json
+          if ($package.name -ne 'aurelia-2') {
+            throw "Unexpected extension package name: $($package.name)"
+          }
+          $version = [string]$package.version
+          if ($version -notmatch '^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$') {
+            throw "Extension version is not a supported committed semver: $version"
+          }
+
+          $head = (git rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $head -notmatch '^[0-9a-f]{40}$') {
+            throw 'Unable to resolve one full lowercase Git commit.'
+          }
+          if ($head -ne $env:GITHUB_SHA) {
+            throw "Checked-out HEAD $head does not match GITHUB_SHA $env:GITHUB_SHA."
+          }
+          $status = git status --porcelain=v1 --untracked-files=all --ignore-submodules=none
+          if ($LASTEXITCODE -ne 0 -or $status) {
+            throw "Release checkout is not clean:`n$($status -join "`n")"
+          }
+
+          $releaseTag = "refs/tags/vscode-v$version"
+          if ($env:PUBLISH_REQUESTED -eq 'true') {
+            if ($env:GITHUB_REF -ne $releaseTag) {
+              throw "Marketplace publication requires workflow dispatch from $releaseTag; received $env:GITHUB_REF."
+            }
+            $tagCommitOutput = git rev-parse "$releaseTag^{commit}"
+            if ($LASTEXITCODE -ne 0) {
+              throw "Unable to resolve release tag $releaseTag to a commit."
+            }
+            $tagCommit = ([string]$tagCommitOutput).Trim()
+            if ($tagCommit -notmatch '^[0-9a-f]{40}$') {
+              throw "Release tag $releaseTag did not resolve to one full lowercase Git commit: $tagCommit"
+            }
+            if ($tagCommit -ne $head) {
+              throw "Release tag $releaseTag resolves to $tagCommit instead of checked-out HEAD $head."
+            }
+          }
+
+          $shortHead = $head.Substring(0, 12)
+          $stem = "aurelia-2-$version-$shortHead"
+          $releaseRoot = Join-Path $env:GITHUB_WORKSPACE 'packages/vscode/.release'
+          $evidenceRoot = Join-Path $env:GITHUB_WORKSPACE ".temp/vscode-vsix-installed/$shortHead"
+          $outputs = [ordered]@{
+            version = $version
+            head = $head
+            short_head = $shortHead
+            artifact_name = "$stem-release-evidence"
+            vsix_path = Join-Path $releaseRoot "$stem.vsix"
+            receipt_path = Join-Path $releaseRoot "$stem.manifest.json"
+            checksum_path = Join-Path $releaseRoot "$stem.sha256"
+            installed_evidence_path = Join-Path $evidenceRoot 'installed.evidence.json'
+            driver_report_path = Join-Path $evidenceRoot 'driver.report.json'
+            install_stdout_path = Join-Path $evidenceRoot 'install.stdout.txt'
+            install_stderr_path = Join-Path $evidenceRoot 'install.stderr.txt'
+            host_stdout_path = Join-Path $evidenceRoot 'host.stdout.txt'
+            host_stderr_path = Join-Path $evidenceRoot 'host.stderr.txt'
+          }
+          foreach ($entry in $outputs.GetEnumerator()) {
+            $value = ([string]$entry.Value).Replace('\', '/')
+            Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "$($entry.Key)=$value"
+          }
+
+      - name: Verify exact submodules
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $rows = @(git submodule status --recursive)
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Unable to inspect recursive submodules.'
+          }
+          $invalid = @($rows | Where-Object { $_ -notmatch '^ ' })
+          if ($invalid.Count -ne 0) {
+            throw "Submodules are not initialized at exact commits:`n$($invalid -join "`n")"
+          }
+          foreach ($required in @(
+            'aurelia/package.json',
+            'aurelia2-plugins/packages/aurelia2-table/package.json'
+          )) {
+            if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
+              throw "Required submodule file is missing: $required"
+            }
+          }
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+        env:
           PNPM_APPROVE_BUILDS: esbuild
 
-      - name: Build packages
-        run: npx tsc -b packages/compiler packages/semantic-workspace packages/language-server packages/vscode
-        working-directory: .
+      - name: Bootstrap linked Aurelia dependencies
+        run: pnpm bootstrap:aurelia
 
-      - name: Bump version
-        if: ${{ inputs.version != 'skip' }}
-        run: npm version ${{ inputs.version }} --no-git-tag-version
-
-      - name: Bundle extension
-        run: npm run bundle:minify
-
-      - name: Package extension
-        run: npx @vscode/vsce package --no-dependencies
-
-      - name: Upload VSIX artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: aurelia-2-vsix
-          path: packages/vscode/*.vsix
-
-      - name: Publish to VS Code Marketplace
-        if: ${{ !inputs.dry_run }}
-        run: npx @vscode/vsce publish --no-dependencies --pat ${{ secrets.VSCE_PAT }}
-
-      - name: Get version
-        id: version
-        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
-
-      - name: Create commit and tag
-        if: ${{ inputs.version != 'skip' && !inputs.dry_run }}
+      - name: Verify pinned release tools
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add package.json
-          git commit -m "Release VS Code extension v${{ steps.version.outputs.version }}"
-          git tag "vscode-v${{ steps.version.outputs.version }}"
-          git push origin HEAD --tags
-        working-directory: .
+          $ErrorActionPreference = 'Stop'
+          $nodeVersion = (node --version).Trim()
+          $pnpmVersion = (pnpm --version).Trim()
+          $vsceVersion = (pnpm --filter aurelia-2 exec vsce --version).Trim()
+          if ($nodeVersion -ne 'v22.19.0') { throw "Expected Node v22.19.0; received $nodeVersion." }
+          if ($pnpmVersion -ne '11.5.2') { throw "Expected pnpm 11.5.2; received $pnpmVersion." }
+          if ($vsceVersion -ne '3.9.2') { throw "Expected VSCE 3.9.2; received $vsceVersion." }
 
-    outputs:
-      version: ${{ steps.version.outputs.version }}
+      - name: Build the IDE packages
+        run: pnpm build:ide
+
+      - name: Lint the shipping IDE packages
+        run: |
+          pnpm lint:language-server
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm lint:vscode
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Test the IDE packages
+        run: node scripts/run-vitest.mjs packages/language-server/test packages/vscode/test
+
+      - name: Test the bounded IDE support contracts
+        run: pnpm test:ide:support
+
+      - name: Package the extension exactly once
+        run: pnpm package:ide:vsix
+
+      - name: Verify the packaged VSIX
+        run: pnpm verify:ide:vsix
+
+      - name: Require the exact release packet
+        env:
+          VSIX_PATH: ${{ steps.release.outputs.vsix_path }}
+          RECEIPT_PATH: ${{ steps.release.outputs.receipt_path }}
+          CHECKSUM_PATH: ${{ steps.release.outputs.checksum_path }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($entry in @(
+            @{ Label = 'VSIX'; Path = $env:VSIX_PATH },
+            @{ Label = 'receipt'; Path = $env:RECEIPT_PATH },
+            @{ Label = 'checksum'; Path = $env:CHECKSUM_PATH }
+          )) {
+            if (-not (Test-Path -LiteralPath $entry.Path -PathType Leaf)) {
+              throw "Exact $($entry.Label) is missing: $($entry.Path)"
+            }
+            if ((Get-Item -LiteralPath $entry.Path -Force).Attributes.HasFlag([IO.FileAttributes]::ReparsePoint)) {
+              throw "Exact $($entry.Label) must not be a reparse point: $($entry.Path)"
+            }
+          }
+
+      - name: Install and accept the exact VSIX
+        id: installed
+        run: pnpm verify:ide:vsix:installed
+
+      - name: Resolve retained installed evidence
+        id: evidence
+        if: ${{ always() }}
+        env:
+          ACCEPTANCE_OUTCOME: ${{ steps.installed.outcome }}
+          INSTALLED_EVIDENCE_PATH: ${{ steps.release.outputs.installed_evidence_path }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not (Test-Path -LiteralPath $env:INSTALLED_EVIDENCE_PATH -PathType Leaf)) {
+            if ($env:ACCEPTANCE_OUTCOME -eq 'success') {
+              throw "Installed acceptance succeeded without its immutable evidence: $env:INSTALLED_EVIDENCE_PATH"
+            }
+            Write-Warning 'Installed evidence was not allocated before the earlier failure.'
+            exit 0
+          }
+
+          $evidence = Get-Content -LiteralPath $env:INSTALLED_EVIDENCE_PATH -Raw | ConvertFrom-Json
+          if ($env:ACCEPTANCE_OUTCOME -eq 'success' -and $evidence.status -ne 'passed') {
+            throw "Installed acceptance succeeded but evidence status is $($evidence.status)."
+          }
+          $retainedLogs = [ordered]@{
+            client_log_path = $evidence.logs.client.evidence.path
+            extension_host_log_path = $evidence.logs.extensionHost.evidence.path
+          }
+          foreach ($entry in $retainedLogs.GetEnumerator()) {
+            if ([string]::IsNullOrWhiteSpace([string]$entry.Value)) { continue }
+            $absolute = Join-Path $env:GITHUB_WORKSPACE ([string]$entry.Value)
+            if (-not (Test-Path -LiteralPath $absolute -PathType Leaf)) {
+              throw "Retained evidence path is missing: $absolute"
+            }
+            Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "$($entry.Key)=$($absolute.Replace('\', '/'))"
+          }
+
+      - name: Re-verify the installed artifact bytes
+        run: pnpm verify:ide:vsix
+
+      - name: Attest the exact VSIX provenance
+        id: provenance
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
+        with:
+          subject-path: ${{ steps.release.outputs.vsix_path }}
+
+      - name: Publish the exact accepted VSIX
+        if: ${{ inputs.publish }}
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+          VSIX_PATH: ${{ steps.release.outputs.vsix_path }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ([string]::IsNullOrWhiteSpace($env:VSCE_PAT)) {
+            throw 'VSCE_PAT is required for an opted-in Marketplace publication.'
+          }
+          pnpm --filter aurelia-2 exec vsce publish --packagePath "$env:VSIX_PATH"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Final verification of the published-or-ready bytes
+        run: pnpm verify:ide:vsix
+
+      - name: Upload the exact release packet and acceptance evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ steps.release.outputs.artifact_name }}
+          path: |
+            ${{ steps.release.outputs.vsix_path }}
+            ${{ steps.release.outputs.receipt_path }}
+            ${{ steps.release.outputs.checksum_path }}
+            ${{ steps.release.outputs.installed_evidence_path }}
+            ${{ steps.release.outputs.driver_report_path }}
+            ${{ steps.release.outputs.install_stdout_path }}
+            ${{ steps.release.outputs.install_stderr_path }}
+            ${{ steps.release.outputs.host_stdout_path }}
+            ${{ steps.release.outputs.host_stderr_path }}
+            ${{ steps.evidence.outputs.client_log_path }}
+            ${{ steps.evidence.outputs.extension_host_log_path }}
+          if-no-files-found: warn
+          include-hidden-files: true
+          compression-level: 0
+          retention-days: 90

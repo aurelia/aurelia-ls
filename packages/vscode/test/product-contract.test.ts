@@ -9,6 +9,12 @@ interface ExtensionManifest {
     readonly commands?: readonly { readonly command: string }[];
     readonly keybindings?: readonly unknown[];
     readonly snippets?: readonly unknown[];
+    readonly semanticTokenTypes?: readonly {
+      readonly id: string;
+      readonly superType: string;
+      readonly description: string;
+    }[];
+    readonly semanticTokenModifiers?: readonly unknown[];
     readonly jsonValidation?: readonly {
       readonly fileMatch: string;
       readonly url: string;
@@ -21,6 +27,7 @@ interface ExtensionManifest {
     readonly configuration?: {
       readonly properties?: Readonly<Record<string, {
         readonly default?: unknown;
+        readonly enumDescriptions?: readonly string[];
         readonly scope?: string;
       }>>;
     };
@@ -72,6 +79,31 @@ describe("VS Code product contract", () => {
     }]);
   });
 
+  test("declares the exact custom semantic token vocabulary with native fallback types", () => {
+    expect(manifest.contributes?.semanticTokenTypes).toEqual([
+      { id: "aureliaElement", superType: "class", description: "An Aurelia custom or framework element." },
+      { id: "aureliaAttribute", superType: "decorator", description: "An Aurelia custom attribute." },
+      { id: "aureliaBindable", superType: "property", description: "An Aurelia bindable attribute." },
+      { id: "aureliaController", superType: "macro", description: "An Aurelia template controller." },
+      { id: "aureliaCommand", superType: "keyword", description: "An Aurelia binding command." },
+      { id: "aureliaConverter", superType: "function", description: "An Aurelia value converter." },
+      { id: "aureliaBehavior", superType: "decorator", description: "An Aurelia binding behavior." },
+      { id: "aureliaMetaElement", superType: "keyword", description: "An Aurelia template metadata element." },
+      { id: "aureliaEvent", superType: "event", description: "An event name in Aurelia listener syntax." },
+      { id: "aureliaModifier", superType: "keyword", description: "An Aurelia listener modifier." },
+      { id: "aureliaExpression", superType: "operator", description: "A delimiter in an Aurelia template expression." },
+    ]);
+    expect(manifest.contributes?.semanticTokenModifiers).toBeUndefined();
+  });
+
+  test("offers template-scope resource navigation only from an owned HTML document", () => {
+    for (const menuName of ["editor/context", "commandPalette"]) {
+      const menu = manifest.contributes?.menus?.[menuName]
+        ?.find((entry) => entry.command === AureliaCommand.GoToAvailableResource);
+      expect(menu?.when).toBe("aurelia.active && aurelia.documentOwned && editorLangId == html");
+    }
+  });
+
   test("offers related-file navigation for every supported script language", () => {
     const menu = manifest.contributes?.menus?.["editor/context"]
       ?.find((entry) => entry.command === AureliaCommand.OpenRelatedFile);
@@ -99,6 +131,9 @@ describe("VS Code product contract", () => {
       default: "auto",
       scope: "resource",
     }));
+    expect(properties["aurelia.activationMode"]?.enumDescriptions?.[1]).toBe(
+      "Enable Aurelia tooling for this workspace folder without requiring automatic project-shape confirmation; an excluded parent subtree still wins.",
+    );
     expect(properties["aurelia.inlayHints.bindingMode"]).toEqual(expect.objectContaining({
       default: false,
       scope: "resource",

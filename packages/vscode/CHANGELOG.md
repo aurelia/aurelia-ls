@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.5.0
+
+The extension and language server now use the shared Aurelia semantic runtime. Editor answers preserve exact authored
+source and disclose partial, refused, or failed results instead of filling semantic gaps with guesses.
+
+### Language intelligence
+
+- Reworked hover to preserve the exact authored range and show resource origin, bindable type and nullability, binding mode, contextual variables, and typed bare `$this`.
+- Made completions carry exact replacement edits, including safe `.bind` composition for bindables and `.for` for the framework `repeat` controller, without duplicating an existing command or inferring framework behavior from spelling alone.
+- Added exact Go to Definition targets from static router `load` paths and route ids to their owning route-configuration declarations.
+- Made Find References report unverified or unmappable candidates instead of presenting a verified subset as complete.
+- Made template rename cover source-backed members, bindables and aliases, custom elements, custom attributes, template controllers, value converters, and binding behaviors when their declarations and references are editable and verified.
+- Extended TypeScript, TSX, JavaScript, and JSX member renames atomically into admitted templates, while leaving unverified same-name candidates unchanged and reporting them.
+- Made Quick Fixes re-plan against the current document and reject stale, overlapping, or otherwise unsafe workspace edits.
+- Preserved framework and structured TypeScript diagnostic codes through VS Code Problems, and hardened native symbols, highlights, selection ranges, paired-tag linked editing, folding ranges, inlay hints, and semantic-token source ranges.
+- Semantic-token responses now require complete, source-backed, non-overlapping single-line classifications, and the extension declares native fallback types for its Aurelia token vocabulary.
+
+### Workspace and resource discovery
+
+- Added resource-scoped `auto`, `on`, and `off` activation for multi-root workspaces. Automatic activation requires semantic-runtime project-shape confirmation, and an excluded parent subtree cannot be re-enabled by a nested folder.
+- Added bundled schema validation for `aurelia.project.json`.
+- Rebuilt **Aurelia Resources** in VS Code's built-in Explorer over exact project inventory, aliases, bindables, origin, ambiguity, and partial or failed analysis state.
+- Replaced **Find Resource** and **Show Available Resources** with **Go to Resource...** and **Go to Resource Available to Active Template...**, using exact workspace inventory and active-template compiler scope.
+- Scoped settled Resource Explorer refreshes to the workspace whose analysis changed while retaining full refreshes for topology, session, and explicit user-refresh events.
+- Made an isolated Worker-backed language server the default transport for active roots, with IPC retained for debugging and explicit fallback.
+
+### Compatibility and product changes
+
+- Requires VS Code 1.91 or newer and a filesystem-backed workspace. Virtual workspaces are unsupported; remote development is not yet a declared release promise.
+- Moved the resource view from a dedicated Activity Bar container into VS Code's built-in Explorer.
+- Removed approximate CodeLens, global snippets, default keybindings, Diagnostics Report and suppressed-diagnostics commands, Inspect at Cursor, status and inline-confidence presentation, public debug and observability surfaces, dead feature toggles, and the experimental AI setting.
+- **Open Related File** remains available without a bundled keyboard shortcut.
+
 ## 0.4.4
 
 ### Fixes
