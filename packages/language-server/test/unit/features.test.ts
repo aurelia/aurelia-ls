@@ -40,8 +40,10 @@ const codeActionText = "<template>${titel}</template>";
 const codeActionStart = codeActionText.indexOf("titel");
 const codeActionInsertionOffset = definitionText.lastIndexOf("\n}");
 
-function createInlayRegistrationHarness() {
+function createInlayRegistrationHarness(operationOverrides: Record<string, unknown> = {}) {
   let inlayHandler: ((params: unknown, token: unknown) => Promise<unknown>) | null = null;
+  let semanticTokensHandler: ((params: unknown, token: unknown) => Promise<unknown>) | null = null;
+  let codeActionHandler: ((params: unknown, token: unknown) => Promise<unknown>) | null = null;
   const managedAdmission = vi.fn();
   const getConfiguration = vi.fn(async () => false);
   const semanticRuntime = {
@@ -57,6 +59,7 @@ function createInlayRegistrationHarness() {
         authoredSourceOwnership: vi.fn(async () => ({
           value: { owners: [{ projectKey: "app" }] },
         })),
+        ...operationOverrides,
       }));
     }),
   };
@@ -68,13 +71,20 @@ function createInlayRegistrationHarness() {
     onDocumentHighlight: vi.fn(),
     onPrepareRename: vi.fn(),
     onRenameRequest: vi.fn(),
-    onCodeAction: vi.fn(),
+    onCodeAction: vi.fn((handler: (params: unknown, token: unknown) => Promise<unknown>) => {
+      codeActionHandler = handler;
+    }),
     onCodeActionResolve: vi.fn(),
     onDocumentSymbol: vi.fn(),
     onWorkspaceSymbol: vi.fn(),
     onSelectionRanges: vi.fn(),
     onFoldingRanges: vi.fn(),
-    onRequest: vi.fn(),
+    onRequest: vi.fn((
+      _type: unknown,
+      handler: (params: unknown, token: unknown) => Promise<unknown>,
+    ) => {
+      semanticTokensHandler = handler;
+    }),
     sendNotification: vi.fn(async () => undefined),
     workspace: { getConfiguration },
     languages: {
@@ -90,17 +100,22 @@ function createInlayRegistrationHarness() {
     connection,
     semanticRuntime,
     clientSupport: { configurationPull: true },
+    documentUris,
     logger: { log: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
     ownsDocument: vi.fn(() => true),
   };
   registerFeatureHandlers(ctx as never);
   if (inlayHandler == null) throw new Error("Inlay-hint registration was not captured.");
+  if (semanticTokensHandler == null) throw new Error("Semantic-token registration was not captured.");
+  if (codeActionHandler == null) throw new Error("Code-action registration was not captured.");
   return {
     ctx,
     getConfiguration,
     managedAdmission,
     semanticRuntime,
     inlayHandler,
+    semanticTokensHandler,
+    codeActionHandler,
   };
 }
 
@@ -286,12 +301,11 @@ function createMockCompletionContext(input: {
 }
 
 function createMockHoverContext() {
-  const document = {
-    uri: templateUri,
-    languageId: "html",
-    offsetAt: vi.fn(() => 14),
-  };
+  const text = "<template>${message}</template>";
+  const start = text.indexOf("message");
+  const document = TextDocument.create(templateUri, "html", 1, text);
   return {
+    documentUris,
     logger: { log: vi.fn(), info: vi.fn(), error: vi.fn(), warn: vi.fn() },
     ensureProgramDocument: vi.fn(() => document),
     semanticRuntime: {
@@ -305,6 +319,13 @@ function createMockHoverContext() {
           value: {
             displayText: "mock",
             siteKind: "expression",
+            activeSource: {
+              kind: "source-span-address",
+              label: `src/my-app.html@${start}..${start + "message".length}`,
+              path: "src/my-app.html",
+              start,
+              end: start + "message".length,
+            },
             expressionFrontier: null,
             missingInputs: [],
             template: { compilationLane: "authoring", source: null },
@@ -347,6 +368,7 @@ function createMockDefinitionContext(
   options: {
     readonly selectedMemberSource?: unknown;
     readonly selectedRouteTarget?: unknown;
+    readonly readableDefinition?: boolean;
   } = {},
 ) {
   const messageStart = definitionText.indexOf("message");
@@ -416,13 +438,14 @@ function createMockDefinitionContext(
       ),
     },
     lookupText: vi.fn((uri: string) =>
-      uri === definitionUri ? definitionText : null,
+      uri === definitionUri && options.readableDefinition !== false ? definitionText : null,
     ),
   };
 }
 
 function createMockReferencesContext(options: {
   readonly candidateRows?: readonly unknown[];
+  readonly coverage?: "complete" | "open";
   readonly readableDefinition?: boolean;
 } = {}) {
   const messageStart = testText.indexOf("my-el");
@@ -450,7 +473,7 @@ function createMockReferencesContext(options: {
           schemaVersion: "0.2",
           result: "answered",
           selection: "not-applicable",
-          coverage: options.candidateRows?.length ? "open" : "complete",
+          coverage: options.coverage ?? (options.candidateRows?.length ? "open" : "complete"),
           summary: "mock semantic-runtime references answer",
           value: {
             displayText: "mock",
@@ -746,6 +769,94 @@ describe("inlay-hint request admission", () => {
     expect(harness.semanticRuntime.runRequest).toHaveBeenCalledOnce();
     expect(harness.managedAdmission).not.toHaveBeenCalled();
   });
+
+  test("preserves an inlay semantic-envelope failure through the registered request boundary", async () => {
+    const document = TextDocument.create(templateUri, "html", 1, testText);
+    const harness = createInlayRegistrationHarness({
+      documents: { ensureProgramDocument: () => document },
+      templateInlayHints: vi.fn(async () => ({
+        schemaVersion: "0.2",
+        result: "failed",
+        selection: "not-applicable",
+        coverage: "complete",
+        summary: "failed test answer",
+        value: { displayText: "0 rows", rows: [] },
+        page: null,
+      })),
+    });
+    harness.getConfiguration.mockResolvedValueOnce(true);
+    const token = {
+      isCancellationRequested: false,
+      onCancellationRequested: vi.fn(),
+    };
+
+    await expect(harness.inlayHandler(params, token)).rejects.toMatchObject({
+      code: LSPErrorCodes.RequestFailed,
+      message: expect.stringContaining("inlay hint mapping was blocked"),
+    });
+  });
+
+  test("preserves a semantic-token envelope failure through the registered request boundary", async () => {
+    const document = TextDocument.create(templateUri, "html", 1, testText);
+    const harness = createInlayRegistrationHarness({
+      documents: { ensureProgramDocument: () => document },
+      templateSemanticTokens: vi.fn(async () => ({
+        schemaVersion: "0.2",
+        result: "answered",
+        selection: "not-applicable",
+        coverage: "open",
+        summary: "open test answer",
+        value: { displayText: "0 rows", rows: [] },
+        page: null,
+      })),
+    });
+    const token = {
+      isCancellationRequested: false,
+      onCancellationRequested: vi.fn(),
+    };
+
+    await expect(harness.semanticTokensHandler(
+      { textDocument: { uri: templateUri } },
+      token,
+    )).rejects.toMatchObject({
+      code: LSPErrorCodes.RequestFailed,
+      message: expect.stringContaining("semantic token mapping was blocked"),
+    });
+  });
+});
+
+describe("registered code-action failure boundary", () => {
+  test("preserves a semantic non-answer as RequestFailed", async () => {
+    const document = TextDocument.create(templateUri, "html", 1, codeActionText);
+    const harness = createInlayRegistrationHarness({
+      documents: { ensureProgramDocument: () => document },
+      templateCodeActions: vi.fn(async () => ({
+        schemaVersion: "0.2",
+        result: "invalid",
+        selection: "not-applicable",
+        coverage: "not-applicable",
+        summary: "invalid test answer",
+        value: { displayText: "0 rows", rows: [] },
+        page: null,
+      })),
+    });
+    const token = {
+      isCancellationRequested: false,
+      onCancellationRequested: vi.fn(),
+    };
+
+    await expect(harness.codeActionHandler({
+      textDocument: { uri: templateUri },
+      range: {
+        start: { line: 0, character: codeActionStart },
+        end: { line: 0, character: codeActionStart },
+      },
+      context: { diagnostics: [] },
+    }, token)).rejects.toMatchObject({
+      code: LSPErrorCodes.RequestFailed,
+      message: expect.stringContaining("semantic runtime returned result=invalid"),
+    });
+  });
 });
 
 function deferredValue<T>(): {
@@ -854,6 +965,21 @@ describe("handleReferences", () => {
     );
   });
 
+  test("discloses open semantic coverage without concrete candidate rows", async () => {
+    const ctx = createMockReferencesContext({ coverage: "open" });
+
+    const result = await handleReferences(ctx as never, params, createContextTestOperation(ctx));
+
+    expect(result).toHaveLength(2);
+    expect(ctx.connection.sendNotification).toHaveBeenCalledWith(
+      "window/showMessage",
+      expect.objectContaining({
+        type: 3,
+        message: expect.stringContaining("full reference coverage could not be proven"),
+      }),
+    );
+  });
+
   test("returns the mapped subset and warns when a source-backed row cannot be transported", async () => {
     const ctx = createMockReferencesContext({ readableDefinition: false });
 
@@ -870,6 +996,25 @@ describe("handleReferences", () => {
         message: expect.stringContaining("1 source-backed reference could not be mapped"),
       }),
     );
+  });
+
+  test("does not disguise a failed semantic answer as no references", async () => {
+    const ctx = createMockReferencesContext();
+    ctx.semanticRuntime.templateReferences.mockResolvedValue({
+      result: "failed",
+      value: {},
+    } as never);
+
+    const error = await handleReferences(
+      ctx as never,
+      params,
+      createContextTestOperation(ctx),
+    ).then(() => null, (failure: unknown) => failure);
+
+    expect(error).toBeInstanceOf(ResponseError);
+    expect((error as ResponseError<unknown>).code).toBe(LSPErrorCodes.RequestFailed);
+    expect((error as Error).message).toContain("Semantic runtime returned references result=failed");
+    expect(ctx.connection.sendNotification).not.toHaveBeenCalled();
   });
 });
 
@@ -902,6 +1047,24 @@ describe("handleDocumentHighlight", () => {
         kind: 1,
       },
     ]);
+  });
+
+  test("does not disguise an unsupported semantic answer as no highlights", async () => {
+    const ctx = createMockReferencesContext();
+    ctx.semanticRuntime.templateReferences.mockResolvedValue({
+      result: "unsupported",
+      value: {},
+    } as never);
+
+    const error = await handleDocumentHighlight(
+      ctx as never,
+      params,
+      createContextTestOperation(ctx),
+    ).then(() => null, (failure: unknown) => failure);
+
+    expect(error).toBeInstanceOf(ResponseError);
+    expect((error as ResponseError<unknown>).code).toBe(LSPErrorCodes.RequestFailed);
+    expect((error as Error).message).toContain("Semantic runtime returned references result=unsupported");
   });
 });
 
@@ -1037,6 +1200,38 @@ describe("handleCodeAction", () => {
     await expect(
       handleCodeAction(ctx as never, params, createContextTestOperation(ctx)),
     ).resolves.toBeNull();
+  });
+
+  test("does not disguise a non-answer as no applicable code actions", async () => {
+    const ctx = createMockCodeActionContext({ actions: [] });
+    ctx.semanticRuntime.templateCodeActions.mockResolvedValueOnce({
+      schemaVersion: "0.2",
+      result: "failed",
+      selection: "not-applicable",
+      coverage: "not-applicable",
+      summary: "failed test answer",
+      value: { displayText: "0 template code action(s).", rows: [] },
+    });
+
+    await expect(
+      handleCodeAction(ctx as never, params, createContextTestOperation(ctx)),
+    ).rejects.toMatchObject({
+      code: LSPErrorCodes.RequestFailed,
+      message: expect.stringContaining("semantic runtime returned result=failed"),
+    });
+  });
+
+  test("does not query semantic-runtime when context.only excludes exact quickfixes", async () => {
+    const ctx = createMockCodeActionContext();
+
+    await expect(
+      handleCodeAction(
+        ctx as never,
+        { ...params, context: { diagnostics: [], only: ["refactor"] } },
+        createContextTestOperation(ctx),
+      ),
+    ).resolves.toBeNull();
+    expect(ctx.semanticRuntime.templateCodeActions).not.toHaveBeenCalled();
   });
 
   test("does not offer a code action when any edit row cannot be mapped", async () => {
@@ -1242,6 +1437,24 @@ describe("handleCompletion", () => {
       createContextTestOperation(ctx),
     )).rejects.toThrow("completion failed");
   });
+
+  test("does not read completion payload fields from an unsupported answer", async () => {
+    const ctx = createMockCompletionContext({ completions: [] });
+    ctx.semanticRuntime.templateCompletions.mockResolvedValue({
+      result: "unsupported",
+      value: {},
+    } as never);
+
+    const error = await handleCompletion(
+      ctx as never,
+      params,
+      createContextTestOperation(ctx),
+    ).then(() => null, (failure: unknown) => failure);
+
+    expect(error).toBeInstanceOf(ResponseError);
+    expect((error as ResponseError<unknown>).code).toBe(LSPErrorCodes.RequestFailed);
+    expect((error as Error).message).toContain("Semantic runtime returned completion result=unsupported");
+  });
 });
 
 describe("handleHover", () => {
@@ -1262,6 +1475,27 @@ describe("handleHover", () => {
     const contents = result?.contents as { value?: string };
     expect(contents.value).toContain("message: string");
     expect(contents.value).toContain("owner: `MyApp`");
+    expect(result?.range).toEqual({
+      start: { line: 0, character: 12 },
+      end: { line: 0, character: 19 },
+    });
+  });
+
+  test("does not disguise a non-answer as an absent hover", async () => {
+    const ctx = createMockHoverContext();
+    ctx.semanticRuntime.templateCursorInfo.mockResolvedValue({
+      result: "failed",
+      value: {},
+    } as never);
+
+    const error = await handleHover(
+      ctx as never,
+      params,
+      createContextTestOperation(ctx),
+    ).then(() => null, (failure: unknown) => failure);
+    expect(error).toBeInstanceOf(ResponseError);
+    expect((error as ResponseError<unknown>).code).toBe(LSPErrorCodes.RequestFailed);
+    expect((error as Error).message).toContain("Semantic runtime returned hover result=failed");
   });
 });
 
@@ -1348,5 +1582,41 @@ describe("handleDefinition", () => {
       start: { line: 1, character: 2 },
       end: { line: 1, character: 9 },
     });
+  });
+
+  test("reports source-backed mapping failures as deliberate request failures", async () => {
+    const ctx = createMockDefinitionContext({ readableDefinition: false });
+
+    const error = await handleDefinition(
+      ctx as never,
+      params,
+      createContextTestOperation(ctx),
+    ).then(() => null, (failure: unknown) => failure);
+
+    expect(error).toBeInstanceOf(ResponseError);
+    expect((error as ResponseError<unknown>).code).toBe(LSPErrorCodes.RequestFailed);
+    expect((error as Error).message).toContain("no readable document text");
+  });
+
+  test("does not interpret an invalid semantic answer as an absent definition", async () => {
+    const ctx = createMockDefinitionContext();
+    ctx.semanticRuntime.templateCursorInfo.mockResolvedValue({
+      result: "invalid",
+      value: {
+        selectedMember: null,
+        selectedBindable: null,
+        selectedDefinition: null,
+      },
+    } as never);
+
+    const error = await handleDefinition(
+      ctx as never,
+      params,
+      createContextTestOperation(ctx),
+    ).then(() => null, (failure: unknown) => failure);
+
+    expect(error).toBeInstanceOf(ResponseError);
+    expect((error as ResponseError<unknown>).code).toBe(LSPErrorCodes.RequestFailed);
+    expect((error as Error).message).toContain("Semantic runtime returned definition result=invalid");
   });
 });

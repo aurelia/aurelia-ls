@@ -7,8 +7,10 @@
  */
 import {
   SemanticRuntimeAnswerCoverage,
+  SemanticRuntimeAnswerResult,
 } from "@aurelia-ls/semantic-runtime";
 import {
+  CodeActionKind,
   ResponseError,
   LSPErrorCodes,
   SemanticTokensRequest,
@@ -43,6 +45,7 @@ import {
   handleInlayHints,
 } from "./inlay-hints.js";
 import {
+  codeActionKindMatchesOnly,
   mapSemanticRuntimeTemplateCodeActions,
   mapSemanticRuntimeUnresolvedTemplateCodeActions,
   mapSemanticRuntimeTemplateDefinition,
@@ -80,16 +83,6 @@ export async function handleCompletion(
     doc.uri,
     params.position,
   );
-  if (
-    response.coverage !== SemanticRuntimeAnswerCoverage.Complete
-    || response.value.missingInputs.length > 0
-  ) {
-    operation.deferEffect({
-      kind: "log",
-      level: "info",
-      message: `[completion] semantic coverage is ${response.coverage}; missing inputs: ${response.value.missingInputs.join(", ") || "none"}`,
-    });
-  }
   const mapping = mapSemanticRuntimeTemplateCompletions(response, {
     documentUris: ctx.documentUris,
     originDocument: doc,
@@ -99,6 +92,16 @@ export async function handleCompletion(
       LSPErrorCodes.RequestFailed,
       `Aurelia completion edit mapping was blocked: ${mapping.failures.join(" ")}`,
     );
+  }
+  if (
+    response.coverage !== SemanticRuntimeAnswerCoverage.Complete
+    || response.value.missingInputs.length > 0
+  ) {
+    operation.deferEffect({
+      kind: "log",
+      level: "info",
+      message: `[completion] semantic coverage is ${response.coverage}; missing inputs: ${response.value.missingInputs.join(", ") || "none"}`,
+    });
   }
   return mapping.value;
 }
@@ -120,7 +123,17 @@ export async function handleHover(
     doc.uri,
     params.position,
   );
-  return mapSemanticRuntimeTemplateHover(response);
+  const mapping = mapSemanticRuntimeTemplateHover(response, {
+    documentUris: ctx.documentUris,
+    originDocument: doc,
+  });
+  if (mapping.failures.length > 0) {
+    throw new ResponseError(
+      LSPErrorCodes.RequestFailed,
+      `Aurelia hover mapping was blocked: ${mapping.failures.join(" ")}`,
+    );
+  }
+  return mapping.value;
 }
 
 // ============================================================================
@@ -141,10 +154,17 @@ export async function handleDefinition(
     doc.uri,
     params.position,
   );
-  return mapSemanticRuntimeTemplateDefinition(response, lookupText, {
+  const mapping = mapSemanticRuntimeTemplateDefinition(response, lookupText, {
     documentUris: ctx.documentUris,
     originDocument: doc,
   });
+  if (mapping.failures.length > 0) {
+    throw new ResponseError(
+      LSPErrorCodes.RequestFailed,
+      `Aurelia definition mapping was blocked: ${mapping.failures.join(" ")}`,
+    );
+  }
+  return mapping.value;
 }
 
 // ============================================================================
@@ -170,6 +190,12 @@ export async function handleReferences(
     originDocument: doc,
     scope: "workspace",
   });
+  if (response.result !== SemanticRuntimeAnswerResult.Answered) {
+    throw new ResponseError(
+      LSPErrorCodes.RequestFailed,
+      `Aurelia references mapping was blocked: ${mapping.failures.join(" ")}`,
+    );
+  }
   if (mapping.failures.length > 0) {
     operation.deferEffect({
       kind: "log",
@@ -178,7 +204,8 @@ export async function handleReferences(
     });
   }
   const candidateCount = response.value.candidateRows.length;
-  if (candidateCount > 0 || mapping.failures.length > 0) {
+  const coverageOpen = response.coverage !== SemanticRuntimeAnswerCoverage.Complete;
+  if (coverageOpen || candidateCount > 0 || mapping.failures.length > 0) {
     operation.deferEffect({
       kind: "show-message",
       type: mapping.failures.length > 0 ? MessageType.Warning : MessageType.Info,
@@ -186,6 +213,7 @@ export async function handleReferences(
         mapping.value?.length ?? 0,
         candidateCount,
         mapping.failures.length,
+        coverageOpen,
       ),
     });
   }
@@ -216,6 +244,12 @@ export async function handleDocumentHighlight(
     originDocument: doc,
     scope: "origin-document",
   });
+  if (response.result !== SemanticRuntimeAnswerResult.Answered) {
+    throw new ResponseError(
+      LSPErrorCodes.RequestFailed,
+      `Aurelia document highlight mapping was blocked: ${mapping.failures.join(" ")}`,
+    );
+  }
   if (mapping.failures.length > 0) {
     operation.deferEffect({
       kind: "log",
@@ -308,6 +342,7 @@ function referenceCoverageMessage(
   verifiedLocationCount: number,
   candidateCount: number,
   mappingFailureCount: number,
+  coverageOpen: boolean,
 ): string {
   const qualifications: string[] = [];
   if (candidateCount > 0) {
@@ -319,6 +354,9 @@ function referenceCoverageMessage(
     qualifications.push(
       `${mappingFailureCount} source-backed ${mappingFailureCount === 1 ? "reference could" : "references could"} not be mapped`,
     );
+  }
+  if (coverageOpen && candidateCount === 0) {
+    qualifications.push("full reference coverage could not be proven");
   }
   return `Aurelia found ${verifiedLocationCount} verified ${verifiedLocationCount === 1 ? "reference" : "references"}; ${qualifications.join("; ")}.`;
 }
@@ -332,6 +370,9 @@ export async function handleCodeAction(
   params: CodeActionParams,
   operation: SemanticRuntimeLspOperation,
 ): Promise<CodeAction[] | null> {
+  if (!codeActionKindMatchesOnly(CodeActionKind.QuickFix, params.context.only)) {
+    return null;
+  }
   const doc = operation.documents.ensureProgramDocument(params.textDocument.uri);
   if (!doc) return null;
   if (!isTemplateDocument(doc)) return null;
@@ -343,6 +384,7 @@ export async function handleCodeAction(
   const mappingOptions = {
     documentUris: ctx.documentUris,
     originDocument: doc,
+    only: params.context.only,
     diagnostics: params.context.diagnostics,
     onMappingFailure: (row: { readonly title: string }, failures: readonly string[]) => {
       operation.deferEffect({

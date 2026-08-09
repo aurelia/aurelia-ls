@@ -13,19 +13,31 @@
  */
 import {
   InlayHintKind,
+  LSPErrorCodes,
+  ResponseError,
   type InlayHint,
   type InlayHintParams,
 } from "vscode-languageserver/node";
-import type {
-  SemanticTemplateInlayHintRow,
+import {
+  SemanticRuntimeAnswerCoverage,
+  SemanticRuntimeAnswerResult,
+  SemanticRuntimeAnswerSelection,
+  SemanticTemplateInlayHintKind,
+  semanticExactSourceReference,
+  type SemanticRuntimeAnswer,
+  type SemanticTemplateInlayHintsResult,
+  type SemanticTemplateInlayHintRow,
 } from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
-import { semanticSourceOffsetRangeForDocument } from "../mapping/source-locations.js";
+import {
+  semanticSourceOffsetRangeForDocument,
+  semanticSourceReferenceMatchesDocument,
+} from "../mapping/source-locations.js";
 import type { SemanticRuntimeLspOperation } from "../runtime/semantic-runtime-session.js";
 import { isTemplateDocument } from "../utils/document-kind.js";
 
 export async function handleInlayHints(
-  _ctx: ServerContext,
+  ctx: ServerContext,
   params: InlayHintParams,
   operation: SemanticRuntimeLspOperation,
 ): Promise<InlayHint[] | null> {
@@ -35,8 +47,9 @@ export async function handleInlayHints(
   if (!isTemplateDocument(doc)) return null;
 
   const answer = await operation.templateInlayHints(doc);
+  assertCompleteInlayHintAnswer(answer);
   const hints = answer.value.rows
-    .map((row) => mapSemanticRuntimeTemplateInlayHint(row, doc, params))
+    .map((row) => mapSemanticRuntimeTemplateInlayHint(row, doc, params, ctx))
     .filter((hint): hint is InlayHint => hint != null);
 
   return hints.length > 0 ? hints : null;
@@ -63,13 +76,35 @@ export async function bindingModeInlayHintsEnabled(
 
 function mapSemanticRuntimeTemplateInlayHint(
   row: SemanticTemplateInlayHintRow,
-  doc: { readonly getText: () => string; readonly positionAt: (offset: number) => { line: number; character: number } },
+  doc: {
+    readonly uri: string;
+    readonly getText: () => string;
+    readonly positionAt: (offset: number) => { line: number; character: number };
+  },
   params: InlayHintParams,
+  ctx: ServerContext,
 ): InlayHint | null {
-  const source = semanticSourceOffsetRangeForDocument(row.source, doc);
-  if (source == null) return null;
+  switch (row.hintKind) {
+    case SemanticTemplateInlayHintKind.BindingModeResolution:
+      break;
+    default:
+      throw inlayHintRequestFailure(
+        `semantic row uses unsupported hint kind ${JSON.stringify(row.hintKind)}.`,
+      );
+  }
+  const exactSource = semanticExactSourceReference(row.source);
+  if (exactSource == null) {
+    throw inlayHintRequestFailure("semantic row has no exact authored insertion anchor.");
+  }
+  if (!semanticSourceReferenceMatchesDocument(exactSource, ctx.documentUris, doc.uri)) {
+    throw inlayHintRequestFailure("semantic row does not target the requesting document.");
+  }
+  const source = semanticSourceOffsetRangeForDocument(exactSource, doc);
+  if (source == null) {
+    throw inlayHintRequestFailure("semantic row insertion anchor is outside the current document text.");
+  }
   const position = doc.positionAt(source.end);
-  if (position.line < params.range.start.line || position.line > params.range.end.line) {
+  if (!positionIsWithinRange(position, params.range)) {
     return null;
   }
   return {
@@ -79,4 +114,40 @@ function mapSemanticRuntimeTemplateInlayHint(
     paddingLeft: false,
     paddingRight: true,
   };
+}
+
+function assertCompleteInlayHintAnswer(
+  answer: SemanticRuntimeAnswer<SemanticTemplateInlayHintsResult>,
+): void {
+  if (
+    answer.result !== SemanticRuntimeAnswerResult.Answered
+    || answer.selection !== SemanticRuntimeAnswerSelection.NotApplicable
+    || answer.coverage !== SemanticRuntimeAnswerCoverage.Complete
+  ) {
+    throw inlayHintRequestFailure(
+      `semantic runtime returned result=${answer.result}; selection=${answer.selection}; coverage=${answer.coverage}.`,
+    );
+  }
+}
+
+function inlayHintRequestFailure(detail: string): ResponseError<unknown> {
+  return new ResponseError(
+    LSPErrorCodes.RequestFailed,
+    `Aurelia inlay hint mapping was blocked: ${detail}`,
+  );
+}
+
+function positionIsWithinRange(
+  position: { readonly line: number; readonly character: number },
+  range: InlayHintParams["range"],
+): boolean {
+  return comparePositions(position, range.start) >= 0
+    && comparePositions(position, range.end) < 0;
+}
+
+function comparePositions(
+  left: { readonly line: number; readonly character: number },
+  right: { readonly line: number; readonly character: number },
+): number {
+  return left.line - right.line || left.character - right.character;
 }

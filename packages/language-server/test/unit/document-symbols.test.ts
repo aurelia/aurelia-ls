@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { SymbolKind } from "vscode-languageserver/node";
+import { LSPErrorCodes, ResponseError, SymbolKind } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { handleDocumentSymbols } from "../../src/handlers/document-symbols.js";
 import { createTestOperation } from "./test-request-guard.js";
@@ -19,6 +19,15 @@ function source(filePath: string, start: number, end: number) {
     start,
     end,
     role: "range",
+  };
+}
+
+function sourceCarrier(filePath: string, anchor: ReturnType<typeof source>) {
+  return {
+    kind: "source-file-address",
+    label: filePath,
+    path: filePath,
+    anchor,
   };
 }
 
@@ -84,6 +93,8 @@ describe("runtime-backed document symbols", () => {
         {
           resourceKind: "custom-element",
           name: "product-card",
+          aliases: [],
+          patterns: [],
           targetName: "ProductCard",
           targetSource: source(
             "src/resources.ts",
@@ -124,6 +135,8 @@ describe("runtime-backed document symbols", () => {
         {
           resourceKind: "value-converter",
           name: "currency",
+          aliases: [],
+          patterns: [],
           targetName: "CurrencyValueConverter",
           targetSource: source(
             "src/resources.ts",
@@ -179,7 +192,7 @@ describe("runtime-backed document symbols", () => {
     expect(result?.[1]).toMatchObject({
       name: "CurrencyValueConverter",
       detail: "value-converter: currency",
-      kind: SymbolKind.Function,
+      kind: SymbolKind.Class,
       range: {
         start: { line: 3, character: 0 },
         end: { line: 3, character: 38 },
@@ -190,6 +203,141 @@ describe("runtime-backed document symbols", () => {
       },
     });
     expect(ctx.resourceDefinitions).toHaveBeenCalledTimes(1);
+  });
+
+  test("projects every resource kind through one declaration-oriented policy", async () => {
+    const resources = [
+      ["custom-element", "ElementResource", "element-resource"],
+      ["custom-attribute", "AttributeResource", "attribute-resource"],
+      ["template-controller", "ControllerResource", "controller-resource"],
+      ["value-converter", "ConverterResource", "converter-resource"],
+      ["binding-behavior", "BehaviorResource", "behavior-resource"],
+      ["binding-command", "CommandResource", "command-resource"],
+      ["attribute-pattern", "PatternResource", null],
+    ] as const;
+    const text = resources.map(([, targetName]) => `export class ${targetName} {}`).join("\n");
+    const ctx = createMockContext({
+      text,
+      definitions: resources.map(([resourceKind, targetName, name]) => {
+        const start = text.indexOf(targetName);
+        const declarationStart = text.lastIndexOf("export class", start);
+        const declarationEnd = text.indexOf("}", start) + 1;
+        return {
+          resourceKind,
+          name,
+          aliases: [],
+          patterns: resourceKind === "attribute-pattern"
+            ? [{ pattern: "PART.example", symbols: ".", source: null }]
+            : [],
+          targetName,
+          targetSource: source("src/resources.ts", start, start + targetName.length),
+          targetDeclarationSource: source("src/resources.ts", declarationStart, declarationEnd),
+          source: source("src/resources.ts", start, start + targetName.length),
+          bindables: [],
+        };
+      }),
+    });
+
+    const result = await handleDocumentSymbols(
+      ctx as never,
+      { textDocument: { uri: resourceUri } },
+      ctx.operation,
+    );
+
+    expect(result?.map((symbol) => symbol.name)).toEqual(resources.map(([, targetName]) => targetName));
+    expect(result?.every((symbol) => symbol.kind === SymbolKind.Class)).toBe(true);
+    expect(result?.at(-1)?.detail).toBe("attribute-pattern: PART.example");
+  });
+
+  test("uses the exact authored anchor, not its outer carrier path, for document identity", async () => {
+    const text = [
+      "export class ProductCard {}",
+      "export class ForeignResource {}",
+    ].join("\n");
+    const productStart = text.indexOf("ProductCard");
+    const foreignStart = text.indexOf("ForeignResource");
+    const ctx = createMockContext({
+      text,
+      definitions: [{
+        resourceKind: "custom-element",
+        name: "product-card",
+        aliases: [],
+        patterns: [],
+        targetName: "ProductCard",
+        targetSource: sourceCarrier(
+          "src/generated-carrier.ts",
+          source("src/resources.ts", productStart, productStart + "ProductCard".length),
+        ),
+        targetDeclarationSource: null,
+        source: null,
+        bindables: [],
+      }, {
+        resourceKind: "custom-element",
+        name: "foreign-resource",
+        aliases: [],
+        patterns: [],
+        targetName: "ForeignResource",
+        targetSource: sourceCarrier(
+          "src/resources.ts",
+          source("src/other.ts", foreignStart, foreignStart + "ForeignResource".length),
+        ),
+        targetDeclarationSource: null,
+        source: null,
+        bindables: [],
+      }],
+    });
+
+    const result = await handleDocumentSymbols(
+      ctx as never,
+      { textDocument: { uri: resourceUri } },
+      ctx.operation,
+    );
+
+    expect(result?.map((symbol) => symbol.name)).toEqual(["ProductCard"]);
+  });
+
+  test("fails loudly for a non-answer or an authoritative span outside current text", async () => {
+    const failed = createMockContext({ text: "export class ProductCard {}", definitions: [] });
+    failed.resourceDefinitions.mockResolvedValue({
+      schemaVersion: "0.2",
+      result: "failed",
+      selection: "not-applicable",
+      coverage: "not-applicable",
+      summary: "failed",
+      value: { rows: [] },
+      page: null,
+    });
+    const answerError = await handleDocumentSymbols(
+      failed as never,
+      { textDocument: { uri: resourceUri } },
+      failed.operation,
+    ).then(() => null, (failure: unknown) => failure);
+    expect(answerError).toBeInstanceOf(ResponseError);
+    expect((answerError as ResponseError<unknown>).code).toBe(LSPErrorCodes.RequestFailed);
+    expect((answerError as Error).message).toContain("result=failed");
+
+    const invalid = createMockContext({
+      text: "export class ProductCard {}",
+      definitions: [{
+        resourceKind: "custom-element",
+        name: "product-card",
+        aliases: [],
+        patterns: [],
+        targetName: "ProductCard",
+        targetSource: source("src/resources.ts", 13, 999),
+        targetDeclarationSource: null,
+        source: source("src/resources.ts", 13, 999),
+        bindables: [],
+      }],
+    });
+    const mappingError = await handleDocumentSymbols(
+      invalid as never,
+      { textDocument: { uri: resourceUri } },
+      invalid.operation,
+    ).then(() => null, (failure: unknown) => failure);
+    expect(mappingError).toBeInstanceOf(ResponseError);
+    expect((mappingError as ResponseError<unknown>).code).toBe(LSPErrorCodes.RequestFailed);
+    expect((mappingError as Error).message).toContain("outside the current document text");
   });
 
   test("does not query runtime rows for non-TypeScript files", async () => {

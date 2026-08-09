@@ -5,7 +5,8 @@
  * "Go to Symbol in Workspace" surface without adding a custom command.
  */
 import {
-  SymbolKind,
+  LSPErrorCodes,
+  ResponseError,
   type SymbolInformation,
   type WorkspaceSymbolParams,
 } from "vscode-languageserver/node";
@@ -22,24 +23,20 @@ import {
   semanticSourceReferenceUri,
 } from "../mapping/source-locations.js";
 import type { SemanticRuntimeLspOperation } from "../runtime/semantic-runtime-session.js";
-
-const WORKSPACE_SYMBOL_RESOURCE_KINDS = new Set<string>([
-  "custom-element",
-  "template-controller",
-  "custom-attribute",
-  "value-converter",
-  "binding-behavior",
-]);
-
-const RESOURCE_SYMBOL_KIND: Readonly<Record<string, SymbolKind>> = {
-  "custom-element": SymbolKind.Class,
-  "template-controller": SymbolKind.Class,
-  "custom-attribute": SymbolKind.Class,
-  "value-converter": SymbolKind.Function,
-  "binding-behavior": SymbolKind.Function,
-};
+import {
+  resourceSymbolAnswerFailure,
+  resourceSymbolDetail,
+  resourceSymbolKind,
+  resourceSymbolName,
+  resourceSymbolQueryTerms,
+} from "../mapping/resource-symbol-policy.js";
 
 const MAX_WORKSPACE_SYMBOLS = 100;
+
+interface WorkspaceSymbolProjection {
+  readonly value: SymbolInformation | null;
+  readonly failures: readonly string[];
+}
 
 export async function handleWorkspaceSymbols(
   ctx: ServerContext,
@@ -48,20 +45,31 @@ export async function handleWorkspaceSymbols(
 ): Promise<SymbolInformation[] | null> {
   const query = params.query.trim().toLowerCase();
   const definitions = await operation.resourceDefinitions();
+  const answerFailure = resourceSymbolAnswerFailure(definitions);
+  if (answerFailure != null) {
+    throw new ResponseError(
+      LSPErrorCodes.RequestFailed,
+      `Cannot map Aurelia workspace symbols: ${answerFailure}.`,
+    );
+  }
   const symbols: SymbolInformation[] = [];
+  const failures: string[] = [];
 
   for (const definition of definitions.value.rows) {
-    const symbol = workspaceSymbolForResource(ctx, operation, query, definition);
-    if (!symbol) continue;
-    symbols.push(symbol);
-    if (symbols.length >= MAX_WORKSPACE_SYMBOLS) break;
+    const projection = workspaceSymbolForResource(ctx, operation, query, definition);
+    if (projection.value != null) symbols.push(projection.value);
+    failures.push(...projection.failures);
+  }
+
+  if (failures.length > 0) {
+    throw new ResponseError(
+      LSPErrorCodes.RequestFailed,
+      `Cannot map Aurelia workspace symbols: ${failures.join(" ")}`,
+    );
   }
 
   return symbols.length > 0
-    ? symbols.sort((left, right) =>
-        left.location.uri.localeCompare(right.location.uri)
-        || compareRanges(left.location.range, right.location.range)
-      )
+    ? symbols.sort(compareWorkspaceSymbols).slice(0, MAX_WORKSPACE_SYMBOLS)
     : null;
 }
 
@@ -70,23 +78,44 @@ function workspaceSymbolForResource(
   operation: SemanticRuntimeLspOperation,
   query: string,
   definition: SemanticResourceDefinitionRow,
-): SymbolInformation | null {
-  if (definition.name == null || !WORKSPACE_SYMBOL_RESOURCE_KINDS.has(definition.resourceKind)) {
-    return null;
-  }
+): WorkspaceSymbolProjection {
+  const name = resourceSymbolName(definition);
+  if (name == null) return { value: null, failures: [] };
   if (!matchesQuery(definition, query)) {
-    return null;
+    return { value: null, failures: [] };
   }
 
-  const source = semanticExactSourceReference(definition.targetSource ?? definition.source);
-  if (source == null) return null;
+  const sourceCandidate = definition.targetSource ?? definition.source;
+  if (sourceCandidate == null) return { value: null, failures: [] };
+
+  const candidateUri = semanticSourceReferenceUri(sourceCandidate, ctx.documentUris);
+  if (candidateUri == null || ctx.documentUris.workspaceHostPath(candidateUri) == null) {
+    return { value: null, failures: [] };
+  }
+  const source = semanticExactSourceReference(sourceCandidate);
+  if (source == null) {
+    return {
+      value: null,
+      failures: [`Resource '${name}' has no exact target span in the workspace.`],
+    };
+  }
 
   const uri = semanticSourceReferenceUri(source, ctx.documentUris);
-  if (uri == null) return null;
+  if (uri == null) {
+    return {
+      value: null,
+      failures: [`Resource '${name}' target cannot be projected into the workspace URI space.`],
+    };
+  }
 
   const canonicalUri = ctx.documentUris.resolve(uri).uri;
   const snapshot = operation.documents.lookupWorkspaceDocumentSnapshot(canonicalUri);
-  if (snapshot == null) return null;
+  if (snapshot == null) {
+    return {
+      value: null,
+      failures: [`Resource '${name}' target document is unavailable in the current operation.`],
+    };
+  }
 
   const document = TextDocument.create(
     snapshot.uri,
@@ -95,31 +124,28 @@ function workspaceSymbolForResource(
     snapshot.text,
   );
   const range = semanticSourceRangeForDocument(source, document);
-  if (range == null) return null;
+  if (range == null) {
+    return {
+      value: null,
+      failures: [`Resource '${name}' has a target span outside its current document text.`],
+    };
+  }
 
   return {
-    name: definition.targetName ?? definition.name,
-    kind: RESOURCE_SYMBOL_KIND[definition.resourceKind] ?? SymbolKind.Class,
-    location: { uri: snapshot.uri, range },
-    containerName: resourceContainer(definition),
+    value: {
+      name,
+      kind: resourceSymbolKind(definition),
+      location: { uri: snapshot.uri, range },
+      containerName: resourceSymbolDetail(definition),
+    },
+    failures: [],
   };
 }
 
 function matchesQuery(definition: SemanticResourceDefinitionRow, query: string): boolean {
   if (query.length === 0) return true;
-  return [
-    definition.targetName,
-    definition.name,
-    definition.key,
-    definition.resourceKind,
-    ...definition.aliases.map((alias) => alias.name),
-  ].some((value) => value != null && value.toLowerCase().includes(query));
-}
-
-function resourceContainer(definition: SemanticResourceDefinitionRow): string {
-  return definition.name == null
-    ? definition.resourceKind
-    : `${definition.resourceKind}: ${definition.name}`;
+  return resourceSymbolQueryTerms(definition)
+    .some((value) => value.toLowerCase().includes(query));
 }
 
 function compareRanges(
@@ -127,6 +153,14 @@ function compareRanges(
   right: { start: { line: number; character: number }; end: { line: number; character: number } },
 ): number {
   return comparePositions(left.start, right.start) || comparePositions(left.end, right.end);
+}
+
+function compareWorkspaceSymbols(left: SymbolInformation, right: SymbolInformation): number {
+  return left.location.uri.localeCompare(right.location.uri)
+    || compareRanges(left.location.range, right.location.range)
+    || left.name.localeCompare(right.name)
+    || left.kind - right.kind
+    || (left.containerName ?? "").localeCompare(right.containerName ?? "");
 }
 
 function comparePositions(

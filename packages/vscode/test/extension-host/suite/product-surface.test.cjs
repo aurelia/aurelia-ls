@@ -100,6 +100,75 @@ suite("extension-host product surface", () => {
     assert(definitions.some((uri) =>
       normalize(uri.fsPath) === normalize(path.join(aureliaWorkspace, "src", "components", "product-card.ts"))
     ), "Expected product-card to resolve to its authored definition.");
+
+    const completions = await completionsAt(document, "state.searchText", "searchText");
+    const searchTextCompletion = completions.find((item) => completionLabel(item) === "searchText");
+    assert(searchTextCompletion, "Expected state member completion through the native completion provider.");
+    assert.strictEqual(searchTextCompletion.kind, vscode.CompletionItemKind.Property);
+    assert.match(searchTextCompletion.detail ?? "", /type-member/);
+    assert.strictEqual(completionInsertText(searchTextCompletion), "searchText");
+    const completionRange = completionReplacementRange(searchTextCompletion);
+    assert.strictEqual(
+      completionRange == null ? null : document.getText(completionRange),
+      "searchText",
+      "Expected completion to preserve its authored replacement range.",
+    );
+
+    const references = await referencesAt(document, "<product-card", "item.bind");
+    const referencePaths = new Set(references.map((location) => normalize(location.uri.fsPath)));
+    for (const expectedPath of [
+      path.join(aureliaWorkspace, "src", "my-app.html"),
+      path.join(aureliaWorkspace, "src", "components", "product-card.html"),
+      path.join(aureliaWorkspace, "src", "components", "product-card.ts"),
+    ]) {
+      assert(
+        referencePaths.has(normalize(expectedPath)),
+        `Expected native references to include ${expectedPath}.`,
+      );
+    }
+  });
+
+  test("preserves hover ranges and resource symbols through native editor commands", async () => {
+    const templateDocument = await showAureliaDocument("src/my-app.html");
+    const memberHovers = await hoversAt(templateDocument, "state.searchText", "searchText");
+    const memberHover = memberHovers.find((hover) => hoverMarkdownText(hover).includes("searchText"));
+    assert(memberHover, "Expected an Aurelia member hover through the native hover provider.");
+    assert(memberHover.range instanceof vscode.Range, "Expected the native hover to retain its authored range.");
+    assert.strictEqual(templateDocument.getText(memberHover.range), "searchText");
+
+    const resourceDocument = await showAureliaDocument("src/components/product-card.ts");
+    let resourceDocumentSymbols = [];
+    let productCardSymbol;
+    await waitFor(async () => {
+      resourceDocumentSymbols = await documentSymbols(resourceDocument.uri);
+      productCardSymbol = resourceDocumentSymbols.find((symbol) =>
+        symbol?.name === "ProductCard" && symbol?.detail === "custom-element: product-card"
+      );
+      return productCardSymbol != null;
+    }, "the native document-symbol provider should expose the authored ProductCard resource", 60_000);
+    assert.strictEqual(productCardSymbol.kind, vscode.SymbolKind.Class);
+    assert(productCardSymbol.selectionRange instanceof vscode.Range);
+    assert.strictEqual(resourceDocument.getText(productCardSymbol.selectionRange), "ProductCard");
+    const itemSymbol = productCardSymbol.children?.find((symbol) => symbol.name === "item");
+    assert(itemSymbol, "Expected the resource document symbol to retain its bindable child.");
+    assert.strictEqual(itemSymbol.kind, vscode.SymbolKind.Field);
+    assert(itemSymbol.selectionRange instanceof vscode.Range);
+    assert.strictEqual(resourceDocument.getText(itemSymbol.selectionRange), "item");
+
+    let productCardWorkspaceSymbol;
+    await waitFor(async () => {
+      const symbols = await workspaceSymbols("ProductCard");
+      productCardWorkspaceSymbol = symbols.find((symbol) =>
+        symbol?.name === "ProductCard"
+        && symbol?.containerName === "custom-element: product-card"
+        && normalize(symbol?.location?.uri?.fsPath ?? "")
+          === normalize(path.join(aureliaWorkspace, "src", "components", "product-card.ts"))
+      );
+      return productCardWorkspaceSymbol != null;
+    }, "the native workspace-symbol provider should expose the authored ProductCard resource", 60_000);
+    assert.strictEqual(productCardWorkspaceSymbol.kind, vscode.SymbolKind.Class);
+    assert(productCardWorkspaceSymbol.location.range instanceof vscode.Range);
+    assert.strictEqual(resourceDocument.getText(productCardWorkspaceSymbol.location.range), "ProductCard");
   });
 
   test("opens related files through the retained topology command", async () => {
@@ -288,10 +357,17 @@ async function inlayHints(uri, range) {
 }
 
 async function hoverMarkdown(document, anchor, token = anchor) {
+  return (await hoversAt(document, anchor, token)).map(hoverMarkdownText).join("\n");
+}
+
+async function hoversAt(document, anchor, token = anchor) {
   const position = positionIn(document, anchor, token);
   const hovers = await vscode.commands.executeCommand("vscode.executeHoverProvider", document.uri, position);
-  if (!Array.isArray(hovers)) return "";
-  return hovers.flatMap((hover) => hover.contents ?? []).map((content) =>
+  return Array.isArray(hovers) ? hovers : [];
+}
+
+function hoverMarkdownText(hover) {
+  return (hover?.contents ?? []).map((content) =>
     typeof content === "string" ? content : content?.value ?? ""
   ).join("\n");
 }
@@ -308,6 +384,50 @@ async function definitionsAt(document, anchor, token = anchor) {
     const uri = definition?.targetUri ?? definition?.uri;
     return uri == null ? [] : [uri];
   });
+}
+
+async function completionsAt(document, anchor, token = anchor) {
+  const position = positionIn(document, anchor, token);
+  const completions = await vscode.commands.executeCommand(
+    "vscode.executeCompletionItemProvider",
+    document.uri,
+    position,
+  );
+  if (Array.isArray(completions)) return completions;
+  return Array.isArray(completions?.items) ? completions.items : [];
+}
+
+function completionLabel(item) {
+  return typeof item?.label === "string" ? item.label : item?.label?.label ?? null;
+}
+
+function completionInsertText(item) {
+  return typeof item?.insertText === "string" ? item.insertText : item?.insertText?.value ?? null;
+}
+
+function completionReplacementRange(item) {
+  if (item?.range instanceof vscode.Range) return item.range;
+  return item?.range?.replacing ?? item?.range?.inserting ?? null;
+}
+
+async function referencesAt(document, anchor, token = anchor) {
+  const position = positionIn(document, anchor, token);
+  const references = await vscode.commands.executeCommand(
+    "vscode.executeReferenceProvider",
+    document.uri,
+    position,
+  );
+  return Array.isArray(references) ? references : [];
+}
+
+async function documentSymbols(uri) {
+  const symbols = await vscode.commands.executeCommand("vscode.executeDocumentSymbolProvider", uri);
+  return Array.isArray(symbols) ? symbols : [];
+}
+
+async function workspaceSymbols(query) {
+  const symbols = await vscode.commands.executeCommand("vscode.executeWorkspaceSymbolProvider", query);
+  return Array.isArray(symbols) ? symbols : [];
 }
 
 async function assertWorkspaceAnswer(document, workspaceRoot) {

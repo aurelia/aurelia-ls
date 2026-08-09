@@ -231,6 +231,26 @@ test("rename and references remain coherent after live TypeScript offset churn",
       normalizedUriPath(productCardHtml.uri),
       normalizedUriPath(productCardTs.uri),
     ]));
+
+    const resourceReferences = await connection.sendRequest("textDocument/references", {
+      textDocument: { uri: productCardTs.uri },
+      position: positionAtNeedle(productCardTs, "export class ProductCard", "ProductCard"),
+      context: { includeDeclaration: true },
+    }) as Array<{ uri: string; range: LspRange }>;
+    const myAppResourceReferences = resourceReferences.filter((location) =>
+      normalizedUriPath(location.uri) === normalizedUriPath(myApp.uri)
+    );
+    const myAppResourceReferenceRanges = new Set(
+      myAppResourceReferences.map((location) => JSON.stringify(location.range)),
+    );
+    expect(myAppResourceReferenceRanges.size).toBeGreaterThanOrEqual(2);
+    expect(myAppResourceReferences.every((location) =>
+      textForRange(myApp.text, location.range) === "product-card"
+    )).toBe(true);
+    expect(resourceReferences.some((location) =>
+      normalizedUriPath(location.uri) === normalizedUriPath(productCardTs.uri)
+      && textForRange(productCardTs.text, location.range) === "product-card"
+    )).toBe(true);
   } finally {
     diagnostics.dispose();
     dispose();

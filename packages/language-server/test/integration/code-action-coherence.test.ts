@@ -50,6 +50,13 @@ test("code-action resolve re-plans shifted targets and refuses an obsolete prepa
     expect(actions).toHaveLength(1);
     expect(actions[0]?.edit).toBeUndefined();
 
+    const refactorActions = await connection.sendRequest("textDocument/codeAction", {
+      textDocument: { uri: template.uri },
+      range: { start: position, end: position },
+      context: { diagnostics: [], only: ["refactor"] },
+    }) as ProtocolCodeAction[] | null;
+    expect(refactorActions).toBeNull();
+
     viewModel.text = `// unsaved offset pressure\n${viewModel.text}`;
     viewModel.version += 1;
     fs.writeFileSync(fileURLToPath(viewModel.uri), viewModel.text, "utf8");

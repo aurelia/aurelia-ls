@@ -5,6 +5,7 @@ import {
   SemanticSourceWorldCurrentnessKind,
 } from "@aurelia-ls/semantic-runtime";
 import {
+  CodeActionKind,
   ErrorCodes,
   FileChangeType,
 } from "vscode-languageserver/node";
@@ -208,6 +209,12 @@ describe("initialization", () => {
       interFileDependencies: true,
       workspaceDiagnostics: false,
     });
+    expect(result.capabilities.codeActionProvider).toEqual({
+      codeActionKinds: [CodeActionKind.QuickFix],
+      resolveProvider: true,
+    });
+    expect(result.capabilities.inlayHintProvider).toBe(true);
+    expect(result.capabilities.semanticTokensProvider).toEqual(expect.objectContaining({ full: true }));
   });
 
   test("rejects initialization without a filesystem-backed workspace root", () => {
@@ -334,6 +341,7 @@ describe("document source authority", () => {
     try {
       const harness = createLifecycleHarness();
       harness.clientSupport.diagnosticRefresh = true;
+      harness.clientSupport.inlayHintRefresh = true;
       harness.clientSupport.semanticTokensRefresh = true;
       const doc = document();
 
@@ -355,6 +363,7 @@ describe("document source authority", () => {
         },
       );
       expect(harness.connection.languages.semanticTokens.refresh).toHaveBeenCalledOnce();
+      expect(harness.connection.languages.inlayHint.refresh).toHaveBeenCalledOnce();
       expect(harness.connection.languages.diagnostics.refresh).toHaveBeenCalledOnce();
     } finally {
       vi.clearAllTimers();
@@ -367,6 +376,7 @@ describe("document source authority", () => {
     try {
       const harness = createLifecycleHarness();
       harness.clientSupport.diagnosticRefresh = true;
+      harness.clientSupport.inlayHintRefresh = true;
       harness.clientSupport.semanticTokensRefresh = true;
       const egress = deferred<void>();
       harness.semanticRuntime.runRequest.mockImplementationOnce(async (_probe, request) => {
@@ -382,6 +392,7 @@ describe("document source authority", () => {
       expect(harness.semanticRuntime.runRequest).toHaveBeenCalledOnce();
       expect(harness.connection.sendNotification).not.toHaveBeenCalled();
       expect(harness.connection.languages.diagnostics.refresh).not.toHaveBeenCalled();
+      expect(harness.connection.languages.inlayHint.refresh).not.toHaveBeenCalled();
       expect(harness.connection.languages.semanticTokens.refresh).not.toHaveBeenCalled();
 
       egress.resolve(undefined);
@@ -389,6 +400,7 @@ describe("document source authority", () => {
 
       expect(harness.connection.sendNotification).toHaveBeenCalledOnce();
       expect(harness.connection.languages.diagnostics.refresh).toHaveBeenCalledOnce();
+      expect(harness.connection.languages.inlayHint.refresh).toHaveBeenCalledOnce();
       expect(harness.connection.languages.semanticTokens.refresh).toHaveBeenCalledOnce();
     } finally {
       vi.clearAllTimers();

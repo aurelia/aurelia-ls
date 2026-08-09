@@ -6,6 +6,7 @@
  */
 import { describe, test, expect } from "vitest";
 import fs from "node:fs";
+import { CodeActionKind } from "vscode-languageserver/node";
 import {
   createFixture,
   startServer,
@@ -71,7 +72,10 @@ describe("Server initialization", () => {
       expect(capabilities.documentHighlightProvider).toBe(true);
       expect(capabilities.referencesProvider).toBe(true);
       expect(capabilities.renameProvider).toBeTruthy();
-      expect(capabilities.codeActionProvider).toEqual({ resolveProvider: true });
+      expect(capabilities.codeActionProvider).toEqual({
+        codeActionKinds: [CodeActionKind.QuickFix],
+        resolveProvider: true,
+      });
       expect(capabilities.documentSymbolProvider).toBe(true);
       expect(capabilities.workspaceSymbolProvider).toBe(true);
       expect(capabilities.codeLensProvider).toBeUndefined();

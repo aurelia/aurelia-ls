@@ -1,8 +1,15 @@
 import path from "node:path";
 import { describe, test, expect } from "vitest";
-import { CompletionItemKind, DiagnosticSeverity } from "vscode-languageserver/node";
+import {
+  CodeActionKind,
+  CompletionItemKind,
+  DiagnosticSeverity,
+  LSPErrorCodes,
+  ResponseError,
+} from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import {
+  codeActionKindMatchesOnly,
   mapSemanticRuntimeAppDiagnostics,
   mapSemanticProjectConfigurationDiagnostics,
   mapSemanticRuntimeTemplateCodeActions,
@@ -11,6 +18,7 @@ import {
   mapSemanticRuntimeTemplateCompletions,
   mapSemanticRuntimeTemplateReferences,
   mapSemanticRuntimeTemplateRenameEdit,
+  semanticRuntimeDiagnosticCode,
   type LookupTextFn,
 } from "../../src/mapping/lsp-types.js";
 import { languageIdForSource } from "../../src/utils/document-kind.js";
@@ -27,6 +35,39 @@ const textByUri = new Map<DocumentUri, string>([
 ]);
 
 const lookupText: LookupTextFn = (uri) => textByUri.get(uri) ?? null;
+
+function sourceReference(sourcePath: string, start: number, end: number) {
+  return {
+    kind: "source-span-address",
+    label: `${sourcePath}@${start}..${end}`,
+    path: sourcePath,
+    start,
+    end,
+    role: "name",
+  };
+}
+
+function semanticEditAt(
+  uri: string,
+  text: string,
+  start: number,
+  end: number,
+  newText: string,
+) {
+  return {
+    editKind: "typescript-reference",
+    source: {
+      kind: "source-span-address",
+      label: `${uri}@${start}..${end}`,
+      path: uri,
+      start,
+      end,
+      role: start === end ? "insertion" : "reference",
+    },
+    oldText: text.slice(start, end),
+    newText,
+  };
+}
 
 describe("languageIdForSource", () => {
   test("returns typescript for .ts and .js files", () => {
@@ -267,7 +308,7 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
     ]);
   });
 
-  test("uses TypeScript codes for template overlay diagnostics without losing runtime identity", () => {
+  test("uses structured TypeScript codes for template overlay diagnostics without legacy inference", () => {
     const doc = TextDocument.create(
       "file:///C:/projects/app/src/component.html",
       "html",
@@ -284,13 +325,14 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
               phase: null,
               diagnosticKind: "template-expression-typescript-diagnostic",
               diagnosticAuthority: "typescript",
+              typeScriptDiagnosticCode: 2345,
               frameworkErrorCode: null,
               frameworkRawErrorAuthority: null,
               severity: "error",
               summary:
                 "TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.",
-              missingInput: "typescript:TS2345",
-              missingInputs: ["typescript:TS2345"],
+              missingInput: "typescript:TS9999",
+              missingInputs: [],
               source: {
                 kind: "source-span-address",
                 label: "src/component.html@6..10",
@@ -321,9 +363,94 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
         diagnosticDomain: "template",
         diagnosticKind: "template-expression-typescript-diagnostic",
         diagnosticAuthority: "typescript",
-        missingInput: "typescript:TS2345",
+        typeScriptDiagnosticCode: 2345,
+        missingInput: "typescript:TS9999",
+        missingInputs: [],
       },
     });
+  });
+
+  test("maps direct TypeScript codes structurally into the wire diagnostic and detached data", () => {
+    const text = "const count: string = 1;";
+    const doc = TextDocument.create(
+      "file:///C:/projects/app/src/component.ts",
+      "typescript",
+      1,
+      text,
+    );
+    const start = text.lastIndexOf("1");
+    const mapped = mapSemanticRuntimeAppDiagnostics(
+      {
+        value: {
+          rows: [
+            {
+              projectKey: "app",
+              diagnosticDomain: "typescript",
+              phase: "semantic",
+              diagnosticKind: "TS2322",
+              diagnosticAuthority: "typescript",
+              typeScriptDiagnosticCode: 2322,
+              frameworkErrorCode: null,
+              frameworkRawErrorAuthority: null,
+              severity: "error",
+              summary: "Type 'number' is not assignable to type 'string'.",
+              missingInput: "typescript:TS9999",
+              missingInputs: [],
+              source: {
+                kind: "typescript-diagnostic",
+                label: `src/component.ts@${start}..${start + 1}`,
+                path: "src/component.ts",
+                start,
+                end: start + 1,
+                role: "line:0:character:22",
+              },
+              subject: null,
+              diagnosticIdentityHandle: null,
+              relatedInformation: [],
+              suggestion: null,
+              sourceRole: "app-source",
+              relatedQueryKind: "typescript-diagnostics",
+            },
+          ],
+        },
+      } as never,
+      doc,
+      appDocumentUris,
+    );
+
+    expect(mapped.failures).toEqual([]);
+    expect(mapped.value).toHaveLength(1);
+    expect(mapped.value[0]?.source).toBe("typescript");
+    expect(mapped.value[0]?.code).toBe("TS2322");
+    expect(mapped.value[0]?.data).toMatchObject({
+      semanticRuntime: {
+        diagnosticDomain: "typescript",
+        diagnosticKind: "TS2322",
+        diagnosticAuthority: "typescript",
+        typeScriptDiagnosticCode: 2322,
+        missingInput: "typescript:TS9999",
+        missingInputs: [],
+      },
+    });
+  });
+
+  test("prefers framework and structured TypeScript codes before the diagnostic-kind fallback", () => {
+    expect(semanticRuntimeDiagnosticCode({
+      diagnosticKind: "fallback-diagnostic",
+      frameworkErrorCode: "AUR9999",
+      typeScriptDiagnosticCode: 2345,
+    } as never)).toBe("AUR9999");
+    expect(semanticRuntimeDiagnosticCode({
+      diagnosticKind: "fallback-diagnostic",
+      frameworkErrorCode: null,
+      typeScriptDiagnosticCode: 2345,
+    } as never)).toBe("TS2345");
+    expect(semanticRuntimeDiagnosticCode({
+      diagnosticKind: "fallback-diagnostic",
+      frameworkErrorCode: null,
+      missingInput: "typescript:TS9999",
+      missingInputs: ["typescript:TS9998"],
+    } as never)).toBe("fallback-diagnostic");
   });
 
   test("reports a source-backed diagnostic whose authored span cannot be mapped", () => {
@@ -471,6 +598,40 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
 });
 
 describe("mapSemanticRuntimeTemplateCodeActions", () => {
+  test("applies hierarchical context.only matching and treats an explicit empty list as no requested actions", () => {
+    expect(codeActionKindMatchesOnly(CodeActionKind.QuickFix, undefined)).toBe(true);
+    expect(codeActionKindMatchesOnly(CodeActionKind.QuickFix, [CodeActionKind.Empty])).toBe(true);
+    expect(codeActionKindMatchesOnly(CodeActionKind.QuickFix, [CodeActionKind.QuickFix])).toBe(true);
+    expect(codeActionKindMatchesOnly(CodeActionKind.QuickFix, [])).toBe(false);
+    expect(codeActionKindMatchesOnly(CodeActionKind.QuickFix, [CodeActionKind.Refactor])).toBe(false);
+    expect(codeActionKindMatchesOnly(CodeActionKind.QuickFix, ["quickfix.aurelia"])).toBe(false);
+  });
+
+  test("classifies a non-answer before reading code-action rows", () => {
+    let failure: unknown = null;
+    try {
+      mapSemanticRuntimeTemplateCodeActions(
+        { result: "failed", value: {} } as never,
+        expect.unreachable,
+        {
+          documentUris: appDocumentUris,
+          originDocument: TextDocument.create(
+            "file:///C:/projects/app/src/component.html",
+            "html",
+            1,
+            "<template></template>",
+          ),
+        },
+      );
+    } catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toBeInstanceOf(ResponseError);
+    expect((failure as ResponseError<unknown>).code).toBe(LSPErrorCodes.RequestFailed);
+    expect((failure as Error).message).toContain("semantic runtime returned result=failed");
+  });
+
   test("attaches every LSP diagnostic contributing to one semantic edit plan", () => {
     const doc = TextDocument.create(
       "file:///C:/projects/app/src/component.html",
@@ -515,6 +676,7 @@ describe("mapSemanticRuntimeTemplateCodeActions", () => {
 
     const actions = mapSemanticRuntimeTemplateCodeActions(
       {
+        result: "answered",
         value: {
           rows: [
             {
@@ -553,9 +715,200 @@ describe("mapSemanticRuntimeTemplateCodeActions", () => {
     expect(actions).toHaveLength(1);
     expect(actions?.[0]?.diagnostics).toEqual(diagnostics);
   });
+
+  test("keeps same-range checker diagnostics distinct by structured TypeScript code", () => {
+    const doc = TextDocument.create(
+      "file:///C:/projects/app/src/component.html",
+      "html",
+      7,
+      "alpha\nbeta\ngamma",
+    );
+    const source = {
+      kind: "source-span-address",
+      label: "src/component.html@6..10",
+      path: doc.uri,
+      start: 6,
+      end: 10,
+      role: "expression",
+    };
+    const range = {
+      start: { line: 1, character: 0 },
+      end: { line: 1, character: 4 },
+    };
+    const checkerDiagnostic = (typeScriptDiagnosticCode: number) => ({
+      diagnosticKind: "template-expression-typescript-diagnostic",
+      diagnosticAuthority: "typescript",
+      typeScriptDiagnosticCode,
+      missingInput: null,
+      missingInputs: [],
+      selectedMemberName: null,
+      source,
+    });
+    const lspDiagnostic = (typeScriptDiagnosticCode: number, detachedCode: boolean) => ({
+      range,
+      message: `TS${typeScriptDiagnosticCode}: checker diagnostic`,
+      code: `TS${typeScriptDiagnosticCode}`,
+      data: {
+        semanticRuntime: {
+          diagnosticKind: "template-expression-typescript-diagnostic",
+          diagnosticAuthority: "typescript",
+          ...(detachedCode ? { typeScriptDiagnosticCode } : {}),
+        },
+      },
+    });
+    const row = (typeScriptDiagnosticCode: number) => ({
+      title: "Inspect checker diagnostic",
+      kind: "quickfix",
+      diagnostics: [checkerDiagnostic(typeScriptDiagnosticCode)],
+      repair: {},
+      edits: [semanticEditAt(doc.uri, doc.getText(), 0, 0, "declared")],
+      isPreferred: false,
+    });
+    const diagnostics = [
+      lspDiagnostic(2339, false),
+      lspDiagnostic(2322, true),
+    ];
+
+    const actions = mapSemanticRuntimeTemplateCodeActions(
+      { result: "answered", value: { rows: [row(2339), row(2322)] } } as never,
+      () => null,
+      {
+        documentUris: appDocumentUris,
+        originDocument: doc,
+        diagnostics,
+      },
+    );
+
+    expect(actions).toHaveLength(2);
+    expect(actions?.[0]?.diagnostics).toEqual([diagnostics[0]]);
+    expect(actions?.[1]?.diagnostics).toEqual([diagnostics[1]]);
+    const identities = actions?.map((action) =>
+      (action.data as { semanticRuntime?: { actionIdentity?: unknown } } | undefined)
+        ?.semanticRuntime?.actionIdentity
+    );
+    expect(identities?.every((identity) => typeof identity === "string")).toBe(true);
+    expect(new Set(identities).size).toBe(2);
+  });
+
+  test("filters context-excluded and non-exact quickfix kinds before mapping edits", () => {
+    const text = "abcdef";
+    const doc = TextDocument.create(
+      "file:///C:/projects/app/src/component.ts",
+      "typescript",
+      7,
+      text,
+    );
+    const row = {
+      title: "Excluded quickfix",
+      kind: "quickfix",
+      diagnostics: [],
+      repair: {},
+      edits: [semanticEditAt(doc.uri, text, 0, 1, "A")],
+      isPreferred: false,
+    };
+
+    const actions = mapSemanticRuntimeTemplateCodeActions(
+      {
+        result: "answered",
+        value: {
+          rows: [row],
+        },
+      } as never,
+      expect.unreachable,
+      {
+        documentUris: appDocumentUris,
+        originDocument: doc,
+        only: [CodeActionKind.Refactor],
+      },
+    );
+
+    expect(actions).toBeNull();
+
+    const nonExactKindActions = mapSemanticRuntimeTemplateCodeActions(
+      {
+        result: "answered",
+        value: { rows: [{ ...row, kind: "quickfix.aurelia" }] },
+      } as never,
+      expect.unreachable,
+      {
+        documentUris: appDocumentUris,
+        originDocument: doc,
+        only: [CodeActionKind.Empty],
+      },
+    );
+    expect(nonExactKindActions).toBeNull();
+  });
+
+  test("skips only the action whose same-document edits overlap", () => {
+    const text = "abcdef";
+    const doc = TextDocument.create(
+      "file:///C:/projects/app/src/component.ts",
+      "typescript",
+      7,
+      text,
+    );
+    const skipped: { title: string; failures: readonly string[] }[] = [];
+
+    const actions = mapSemanticRuntimeTemplateCodeActions(
+      {
+        result: "answered",
+        value: {
+          rows: [
+            {
+              title: "Unsafe overlapping quickfix",
+              kind: "quickfix",
+              diagnostics: [],
+              repair: {},
+              edits: [
+                semanticEditAt(doc.uri, text, 0, 4, "ABCD"),
+                semanticEditAt(doc.uri, text, 2, 5, "CDE"),
+              ],
+              isPreferred: false,
+            },
+            {
+              title: "Safe quickfix",
+              kind: "quickfix",
+              diagnostics: [],
+              repair: {},
+              edits: [semanticEditAt(doc.uri, text, 4, 6, "EF")],
+              isPreferred: true,
+            },
+          ],
+        },
+      } as never,
+      () => null,
+      {
+        documentUris: appDocumentUris,
+        originDocument: doc,
+        onMappingFailure: (row, failures) => skipped.push({ title: row.title, failures }),
+      },
+    );
+
+    expect(actions?.map((action) => action.title)).toEqual(["Safe quickfix"]);
+    expect(skipped).toEqual([{
+      title: "Unsafe overlapping quickfix",
+      failures: [expect.stringContaining("overlap")],
+    }]);
+  });
 });
 
 describe("source-backed edit mapping", () => {
+  function mapRenameEdits(document: TextDocument, edits: readonly unknown[]) {
+    return mapSemanticRuntimeTemplateRenameEdit(
+      {
+        value: {
+          status: "available",
+          edits,
+        },
+      } as never,
+      () => null,
+      {
+        documentUris: appDocumentUris,
+        originDocument: document,
+      },
+    );
+  }
+
   test("rejects edits outside the workspace URI boundary before reading target text", () => {
     const doc = TextDocument.create(
       "file:///C:/projects/app/src/component.ts",
@@ -637,6 +990,67 @@ describe("source-backed edit mapping", () => {
     expect(mapping.edit).toBeNull();
     expect(mapping.failures).toEqual([
       expect.stringContaining("span outside the current document text"),
+    ]);
+  });
+
+  test("rejects true overlap as an all-or-nothing rename failure", () => {
+    const text = "abcdef";
+    const doc = TextDocument.create(
+      "file:///C:/projects/app/src/component.ts",
+      "typescript",
+      7,
+      text,
+    );
+
+    const mapping = mapRenameEdits(doc, [
+      semanticEditAt(doc.uri, text, 0, 4, "ABCD"),
+      semanticEditAt(doc.uri, text, 2, 5, "CDE"),
+    ]);
+
+    expect(mapping.edit).toBeNull();
+    expect(mapping.failures).toEqual([expect.stringContaining("overlap")]);
+  });
+
+  test("rejects duplicate insertions at the same document offset", () => {
+    const text = "abcdef";
+    const doc = TextDocument.create(
+      "file:///C:/projects/app/src/component.ts",
+      "typescript",
+      7,
+      text,
+    );
+
+    const mapping = mapRenameEdits(doc, [
+      semanticEditAt(doc.uri, text, 2, 2, "first"),
+      semanticEditAt(doc.uri, text, 2, 2, "second"),
+    ]);
+
+    expect(mapping.edit).toBeNull();
+    expect(mapping.failures).toEqual([expect.stringContaining("duplicate insertions")]);
+  });
+
+  test("allows adjacent half-open edits and insertions at edit boundaries", () => {
+    const text = "abcdef";
+    const doc = TextDocument.create(
+      "file:///C:/projects/app/src/component.ts",
+      "typescript",
+      7,
+      text,
+    );
+
+    const mapping = mapRenameEdits(doc, [
+      semanticEditAt(doc.uri, text, 0, 2, "AB"),
+      semanticEditAt(doc.uri, text, 2, 2, "inserted"),
+      semanticEditAt(doc.uri, text, 2, 4, "CD"),
+    ]);
+
+    expect(mapping.failures).toEqual([]);
+    expect(mapping.edit?.documentChanges).toEqual([
+      expect.objectContaining({ edits: expect.arrayContaining([
+        expect.objectContaining({ newText: "AB" }),
+        expect.objectContaining({ newText: "inserted" }),
+        expect.objectContaining({ newText: "CD" }),
+      ]) }),
     ]);
   });
 });
@@ -753,6 +1167,7 @@ describe("mapSemanticRuntimeTemplateCompletions", () => {
 
   test("maps zero-width semantic insertion plans without widening them", () => {
     const mapped = mapSemanticRuntimeTemplateCompletions({
+      result: "answered",
       value: {
         candidates: [{
           name: "message",
@@ -774,6 +1189,7 @@ describe("mapSemanticRuntimeTemplateCompletions", () => {
 
   test("refuses the whole completion list when an edit plan targets another document", () => {
     const mapped = mapSemanticRuntimeTemplateCompletions({
+      result: "answered",
       value: {
         candidates: [{
           name: "message",
@@ -790,13 +1206,48 @@ describe("mapSemanticRuntimeTemplateCompletions", () => {
     expect(mapped.value).toBeNull();
     expect(mapped.failures).toEqual([expect.stringContaining("does not edit the requesting document")]);
   });
+
+  test("classifies a non-answered envelope before reading completion candidates", () => {
+    const mapped = mapSemanticRuntimeTemplateCompletions({
+      result: "unsupported",
+      value: {},
+    } as never, completionOptions);
+
+    expect(mapped).toEqual({
+      value: null,
+      failures: ["Semantic runtime returned completion result=unsupported."],
+    });
+  });
 });
 
 describe("mapSemanticRuntimeTemplateHover", () => {
+  const hoverText = "<template><product-card item.bind=\"message\">${message}</product-card></template>";
+  const hoverUri = appDocumentUris.uriForWorkspaceRelativePath("src/component.html")!;
+  const hoverDocument = TextDocument.create(hoverUri, "html", 7, hoverText);
+  const messageStart = hoverText.lastIndexOf("message");
+  const messageSource = {
+    kind: "source-span-address",
+    label: `src/component.html@${messageStart}..${messageStart + "message".length}`,
+    path: "src/component.html",
+    start: messageStart,
+    end: messageStart + "message".length,
+  };
+  const hoverOptions = {
+    documentUris: appDocumentUris,
+    originDocument: hoverDocument,
+  };
+
   test("maps selected runtime member facts to markdown hover", () => {
     const mapped = mapSemanticRuntimeTemplateHover({
+      schemaVersion: "0.2",
+      result: "answered",
+      selection: "exact",
+      coverage: "complete",
+      summary: "mock",
       value: {
+        displayText: "must not be copied into native hover",
         siteKind: "expression",
+        activeSource: messageSource,
         expressionFrontier: null,
         missingInputs: [],
         template: { compilationLane: "authoring", source: null },
@@ -829,17 +1280,31 @@ describe("mapSemanticRuntimeTemplateHover", () => {
         },
         diagnostics: [],
       },
-    } as never);
+    } as never, hoverOptions);
 
-    const value = (mapped?.contents as { value?: string }).value ?? "";
+    const value = (mapped.value?.contents as { value?: string }).value ?? "";
     expect(value).toContain("message: string");
     expect(value).toContain("owner: `Component`");
+    expect(value).toContain("owner origin: `typescript`");
+    expect(value).not.toContain("must not be copied");
+    expect(mapped.value?.range).toEqual({
+      start: hoverDocument.positionAt(messageStart),
+      end: hoverDocument.positionAt(messageStart + "message".length),
+    });
+    expect(mapped.failures).toEqual([]);
   });
 
   test("qualifies an exact hover only when concrete semantic inputs are missing", () => {
     const mapped = mapSemanticRuntimeTemplateHover({
+      schemaVersion: "0.2",
+      result: "answered",
+      selection: "exact",
+      coverage: "open",
+      summary: "mock",
       value: {
+        displayText: "mock",
         siteKind: "expression",
+        activeSource: messageSource,
         expressionFrontier: null,
         missingInputs: [
           "expression-member-owner-type:dynamic",
@@ -870,13 +1335,196 @@ describe("mapSemanticRuntimeTemplateHover", () => {
         memberOwnerType: null,
         diagnostics: [],
       },
-    } as never);
+    } as never, hoverOptions);
 
-    const value = (mapped?.contents as { value?: string }).value ?? "";
+    const value = (mapped.value?.contents as { value?: string }).value ?? "";
     expect(value).toContain("message: string");
     expect(value).toContain("Analysis is incomplete because");
     expect(value).toContain("`expression-member-owner-type:dynamic`");
     expect(value).toContain("and 1 more input");
+  });
+
+  test("preserves the exact active range plus bindable type and every cursor diagnostic", () => {
+    const start = hoverText.indexOf("item.bind");
+    const mapped = mapSemanticRuntimeTemplateHover({
+      schemaVersion: "0.2",
+      result: "answered",
+      selection: "exact",
+      coverage: "complete",
+      summary: "mock",
+      value: {
+        displayText: "mock",
+        siteKind: "attribute-name",
+        activeSource: {
+          kind: "source-span-address",
+          label: `src/component.html@${start}..${start + "item.bind".length}`,
+          path: "src/component.html",
+          start,
+          end: start + "item.bind".length,
+        },
+        expressionFrontier: null,
+        missingInputs: [],
+        template: { compilationLane: "authoring", source: null },
+        html: {
+          nodeKind: "element",
+          tagName: "product-card",
+          attributeName: "item.bind",
+          attributeValue: "message",
+          source: null,
+          attributeSource: null,
+        },
+        valueSite: null,
+        selectedDefinition: {
+          resourceKind: "custom-element",
+          name: "product-card",
+          matchedName: "product-card",
+          targetName: "ProductCard",
+          source: null,
+          nameSource: null,
+          matchedNameSource: null,
+          targetSource: null,
+        },
+        selectedBindable: {
+          name: "item",
+          attribute: "item",
+          callback: "itemChanged",
+          mode: "toView",
+          setterKind: "property",
+          setterTargetName: "item",
+          nullable: false,
+          valueType: "CatalogItem | null",
+        },
+        selectedMemberName: null,
+        selectedMember: null,
+        memberOwnerType: null,
+        diagnostics: [{
+          diagnosticKind: "missing-expression-member",
+          diagnosticAuthority: "semantic-authoring-policy",
+          frameworkErrorCode: null,
+          severity: "error",
+          summary: "First diagnostic.",
+        }, {
+          diagnosticKind: "template-compiler-error",
+          diagnosticAuthority: "framework-error-code",
+          frameworkErrorCode: "AUR0701",
+          severity: "warning",
+          summary: "Second diagnostic.",
+        }, {
+          diagnosticKind: "template-expression-typescript-diagnostic",
+          diagnosticAuthority: "typescript",
+          typeScriptDiagnosticCode: 2345,
+          frameworkErrorCode: null,
+          severity: "error",
+          summary: "Third diagnostic.",
+          missingInput: "typescript:TS9999",
+          missingInputs: [],
+        }],
+      },
+    } as never, hoverOptions);
+
+    const markdown = (mapped.value?.contents as { value?: string }).value ?? "";
+    expect(mapped.value?.range).toEqual({
+      start: hoverDocument.positionAt(start),
+      end: hoverDocument.positionAt(start + "item.bind".length),
+    });
+    expect(markdown).toContain("type: `CatalogItem | null`");
+    expect(markdown).toContain("nullable: `false`");
+    expect(markdown).toContain("First diagnostic.");
+    expect(markdown).toContain("error: missing-expression-member");
+    expect(markdown).toContain("Second diagnostic.");
+    expect(markdown).toContain("warning: AUR0701");
+    expect(markdown).toContain("Third diagnostic.");
+    expect(markdown).toContain("error: TS2345");
+    expect(markdown).not.toContain("error: TS9999");
+    expect(markdown).not.toContain("error: template-expression-typescript-diagnostic");
+    expect(mapped.failures).toEqual([]);
+  });
+
+  test("fails closed for non-answers and invalid active spans", () => {
+    const nonAnswer = mapSemanticRuntimeTemplateHover({
+      result: "failed",
+      value: {},
+    } as never, hoverOptions);
+    expect(nonAnswer).toEqual({
+      value: null,
+      failures: ["Semantic runtime returned hover result=failed."],
+    });
+
+    const missingRange = mapSemanticRuntimeTemplateHover({
+      schemaVersion: "0.2",
+      result: "answered",
+      selection: "exact",
+      coverage: "complete",
+      summary: "mock",
+      value: {
+        displayText: "mock",
+        siteKind: "expression",
+        activeSource: null,
+        expressionFrontier: null,
+        missingInputs: [],
+        template: { compilationLane: "authoring", source: null },
+        html: { nodeKind: "element", tagName: "div", attributeName: null, attributeValue: null },
+        valueSite: null,
+        selectedDefinition: null,
+        selectedBindable: null,
+        selectedMemberName: "message",
+        selectedMember: {
+          name: "message",
+          memberKind: "property",
+          typeDisplay: "string",
+          isOptional: false,
+          isReadonly: false,
+          source: null,
+        },
+        memberOwnerType: null,
+        diagnostics: [],
+      },
+    } as never, hoverOptions);
+    expect(missingRange).toEqual({
+      value: null,
+      failures: ["Hover active source has no exact authored span."],
+    });
+
+    const invalidRange = mapSemanticRuntimeTemplateHover({
+      schemaVersion: "0.2",
+      result: "answered",
+      selection: "exact",
+      coverage: "complete",
+      summary: "mock",
+      value: {
+        displayText: "mock",
+        siteKind: "expression",
+        activeSource: {
+          kind: "source-span-address",
+          label: "src/component.html@0..9999",
+          path: "src/component.html",
+          start: 0,
+          end: 9999,
+        },
+        expressionFrontier: null,
+        missingInputs: [],
+        template: { compilationLane: "authoring", source: null },
+        html: { nodeKind: "element", tagName: "div", attributeName: null, attributeValue: null },
+        valueSite: null,
+        selectedDefinition: null,
+        selectedBindable: null,
+        selectedMemberName: "message",
+        selectedMember: {
+          name: "message",
+          memberKind: "property",
+          typeDisplay: "string",
+          isOptional: false,
+          isReadonly: false,
+          source: null,
+        },
+        memberOwnerType: null,
+        diagnostics: [],
+      },
+    } as never, hoverOptions);
+    expect(invalidRange).toEqual({
+      value: null,
+      failures: ["Hover active source is outside the current document text."],
+    });
   });
 });
 
@@ -890,6 +1538,7 @@ describe("mapSemanticRuntimeTemplateReferences", () => {
     );
     const messageStart = originDocument.getText().indexOf("message");
     const mapping = mapSemanticRuntimeTemplateReferences({
+      result: "answered",
       value: {
         rows: [
           {
@@ -939,6 +1588,7 @@ describe("mapSemanticRuntimeTemplateReferences", () => {
       "<template>${message}</template>",
     );
     const mapping = mapSemanticRuntimeTemplateReferences({
+      result: "answered",
       value: {
         rows: [{
           referenceKind: "typescript-usage",
@@ -962,9 +1612,59 @@ describe("mapSemanticRuntimeTemplateReferences", () => {
     expect(mapping.value).toBeNull();
     expect(mapping.failures).toEqual([]);
   });
+
+  test("classifies a non-answered envelope before reading reference rows", () => {
+    const originDocument = TextDocument.create(
+      "file:///C:/projects/app/src/component.html",
+      "html",
+      1,
+      "<template>${message}</template>",
+    );
+    const mapping = mapSemanticRuntimeTemplateReferences({
+      result: "failed",
+      value: {},
+    } as never, () => null, {
+      documentUris: appDocumentUris,
+      originDocument,
+      scope: "workspace",
+    });
+
+    expect(mapping).toEqual({
+      value: null,
+      failures: ["Semantic runtime returned references result=failed."],
+    });
+  });
 });
 
 describe("mapSemanticRuntimeTemplateDefinition", () => {
+  test.each(["unsupported", "invalid", "failed"] as const)(
+    "classifies a %s envelope before interpreting no-target as ordinary absence",
+    (result) => {
+      const originDocument = TextDocument.create(
+        "file:///C:/projects/app/src/component.html",
+        "html",
+        1,
+        "<template>${message}</template>",
+      );
+      const mapped = mapSemanticRuntimeTemplateDefinition({
+        result,
+        value: {
+          selectedMember: null,
+          selectedBindable: null,
+          selectedDefinition: null,
+        },
+      } as never, lookupText, {
+        documentUris: appDocumentUris,
+        originDocument,
+      });
+
+      expect(mapped).toEqual({
+        value: null,
+        failures: [`Semantic runtime returned definition result=${result}.`],
+      });
+    },
+  );
+
   test("prefers reached member declarations over scope-introduction sources", () => {
     const componentStart = definitionText.indexOf("Component");
     const messageStart = definitionText.indexOf("message");
@@ -977,6 +1677,7 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
 
     const mapped = mapSemanticRuntimeTemplateDefinition(
       {
+        result: "answered",
         value: {
           selectedMember: {
             source: {
@@ -1009,7 +1710,7 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
       },
     );
 
-    expect(mapped?.[0]?.targetSelectionRange).toEqual({
+    expect(mapped.value?.[0]?.targetSelectionRange).toEqual({
       start: { line: 1, character: 2 },
       end: { line: 1, character: 9 },
     });
@@ -1027,6 +1728,7 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
 
     const mapped = mapSemanticRuntimeTemplateDefinition(
       {
+        result: "answered",
         value: {
           selectedMember: null,
           selectedBindable: {
@@ -1059,9 +1761,124 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
       },
     );
 
-    expect(mapped?.[0]?.targetSelectionRange).toEqual({
+    expect(mapped.value?.[0]?.targetSelectionRange).toEqual({
       start: { line: 1, character: 2 },
       end: { line: 1, character: 9 },
+    });
+  });
+
+  test("matches contextual bindable callback sources across URI spellings", () => {
+    const template = '<bindable name="item" callback="itemChanged"></bindable>';
+    const templateUri = "file:///C:/projects/app/src/callback-component.html";
+    const callbackStart = template.indexOf("itemChanged");
+    const targetText = [
+      "export class CallbackComponent {",
+      "  item = null;",
+      "  itemChanged() {}",
+      "}",
+    ].join("\n");
+    const targetLspUri = "file:///C:/projects/app/src/callback-component.ts";
+    const targetUri = appDocumentUris.resolve(targetLspUri).uri;
+    const propertyStart = targetText.indexOf("item =");
+    const callbackTargetStart = targetText.indexOf("itemChanged");
+    const originDocument = TextDocument.create(templateUri, "html", 1, template);
+    const targetDocument = TextDocument.create(targetUri, "typescript", 1, targetText);
+
+    const mapped = mapSemanticRuntimeTemplateDefinition(
+      {
+        result: "answered",
+        value: {
+          activeSource: sourceReference(
+            templateUri,
+            callbackStart,
+            callbackStart + "itemChanged".length,
+          ),
+          selectedMember: null,
+          selectedDefinition: null,
+          selectedBindable: {
+            source: sourceReference("src/callback-component.html", 0, template.length),
+            callbackSource: sourceReference(
+              "src/callback-component.html",
+              callbackStart,
+              callbackStart + "itemChanged".length,
+            ),
+            callbackTargetSource: sourceReference(
+              "src/callback-component.ts",
+              callbackTargetStart,
+              callbackTargetStart + "itemChanged".length,
+            ),
+            propertySource: sourceReference(
+              "src/callback-component.ts",
+              propertyStart,
+              propertyStart + "item".length,
+            ),
+          },
+        },
+      } as never,
+      (uri) => (uri === targetUri ? targetText : null),
+      {
+        documentUris: appDocumentUris,
+        originDocument,
+      },
+    );
+
+    expect(mapped.failures).toEqual([]);
+    expect(mapped.value?.[0]?.targetUri).toBe(targetUri);
+    expect(mapped.value?.[0]?.targetSelectionRange).toEqual({
+      start: targetDocument.positionAt(callbackTargetStart),
+      end: targetDocument.positionAt(callbackTargetStart + "itemChanged".length),
+    });
+  });
+
+  test("routes contextual bindable set metadata to its setter target", () => {
+    const template = '<bindable name="item" set="normalizeItem"></bindable>';
+    const templateUri = "file:///C:/projects/app/src/setter-component.html";
+    const setStart = template.indexOf("normalizeItem");
+    const targetText = [
+      "export function normalizeItem(value: unknown) {",
+      "  return value;",
+      "}",
+    ].join("\n");
+    const targetLspUri = "file:///C:/projects/app/src/setter-component.ts";
+    const targetUri = appDocumentUris.resolve(targetLspUri).uri;
+    const setterTargetStart = targetText.indexOf("normalizeItem");
+    const originDocument = TextDocument.create(templateUri, "html", 1, template);
+    const targetDocument = TextDocument.create(targetUri, "typescript", 1, targetText);
+
+    const mapped = mapSemanticRuntimeTemplateDefinition(
+      {
+        result: "answered",
+        value: {
+          activeSource: sourceReference(templateUri, setStart, setStart + "normalizeItem".length),
+          selectedMember: null,
+          selectedDefinition: null,
+          selectedBindable: {
+            source: sourceReference("src/setter-component.html", 0, template.length),
+            setSource: sourceReference(
+              "src/setter-component.html",
+              setStart,
+              setStart + "normalizeItem".length,
+            ),
+            setterTargetSource: sourceReference(
+              "src/setter-component.ts",
+              setterTargetStart,
+              setterTargetStart + "normalizeItem".length,
+            ),
+          },
+        },
+      } as never,
+      (uri) => (uri === targetUri ? targetText : null),
+      {
+        documentUris: appDocumentUris,
+        originDocument,
+      },
+    );
+
+    expect(mapped.failures).toEqual([]);
+    expect(mapped.value?.[0]?.targetUri).toBe(targetUri);
+    expect(mapped.value?.[0]?.targetSelectionRange).toEqual({
+      start: targetDocument.positionAt(setterTargetStart),
+      end: targetDocument.positionAt(setterTargetStart + "normalizeItem".length),
     });
   });
 
@@ -1076,6 +1893,7 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
 
     const mapped = mapSemanticRuntimeTemplateDefinition(
       {
+        result: "answered",
         value: {
           displayText: "mock",
           siteKind: "expression",
@@ -1121,7 +1939,7 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
       },
     );
 
-    expect(mapped).toEqual([
+    expect(mapped.value).toEqual([
       {
         targetUri: definitionUri,
         targetRange: {
@@ -1157,6 +1975,7 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
 
     const mapped = mapSemanticRuntimeTemplateDefinition(
       {
+        result: "answered",
         value: {
           activeSource: null,
           selectedMember: null,
@@ -1180,7 +1999,7 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
       },
     );
 
-    expect(mapped?.[0]?.targetSelectionRange).toEqual({
+    expect(mapped.value?.[0]?.targetSelectionRange).toEqual({
       start: { line: 1, character: 13 },
       end: { line: 1, character: 22 },
     });
@@ -1215,6 +2034,7 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
 
     const mapped = mapSemanticRuntimeTemplateDefinition(
       {
+        result: "answered",
         value: {
           activeSource: nameSource,
           selectedMember: null,
@@ -1238,11 +2058,11 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
       },
     );
 
-    expect(mapped?.[0]?.targetRange).toEqual({
+    expect(mapped.value?.[0]?.targetRange).toEqual({
       start: { line: 0, character: 0 },
       end: { line: 0, character: template.length },
     });
-    expect(mapped?.[0]?.targetSelectionRange).toEqual({
+    expect(mapped.value?.[0]?.targetSelectionRange).toEqual({
       start: { line: 0, character: nameStart },
       end: { line: 0, character: nameStart + "mode-panel".length },
     });
@@ -1277,6 +2097,7 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
 
     const mapped = mapSemanticRuntimeTemplateDefinition(
       {
+        result: "answered",
         value: {
           activeSource: {
             kind: "source-span-address",
@@ -1309,11 +2130,11 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
       },
     );
 
-    expect(mapped?.[0]?.targetRange).toEqual({
+    expect(mapped.value?.[0]?.targetRange).toEqual({
       start: { line: 0, character: 0 },
       end: { line: 0, character: template.length },
     });
-    expect(mapped?.[0]?.targetSelectionRange).toEqual({
+    expect(mapped.value?.[0]?.targetSelectionRange).toEqual({
       start: { line: 0, character: aliasStart },
       end: { line: 0, character: aliasStart + "card-item".length },
     });
@@ -1329,6 +2150,7 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
 
     const mapped = mapSemanticRuntimeTemplateDefinition(
       {
+        result: "answered",
         value: {
           displayText: "mock",
           siteKind: "expression",
@@ -1368,6 +2190,61 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
       },
     );
 
-    expect(mapped).toBeNull();
+    expect(mapped).toEqual({ value: null, failures: [] });
+  });
+
+  test("names URI, document-text, and selection-range mapping failures", () => {
+    const originDocument = TextDocument.create(
+      "file:///C:/projects/app/src/component.html",
+      "html",
+      1,
+      "<template>${message}</template>",
+    );
+    const source = (end: number) => ({
+      kind: "typescript-node",
+      label: `${definitionLspUri}@0..${end}`,
+      path: definitionLspUri,
+      start: 0,
+      end,
+    });
+    const answer = (memberSource: ReturnType<typeof source>) => ({
+      result: "answered",
+      value: {
+        selectedMember: { source: memberSource },
+        selectedBindable: null,
+        selectedDefinition: null,
+      },
+    }) as never;
+
+    const unconfiguredDocumentUris = new WorkspaceDocumentUris();
+    const uriFailure = mapSemanticRuntimeTemplateDefinition(
+      answer({ ...source(1), path: "src/component.ts" }),
+      () => null,
+      { documentUris: unconfiguredDocumentUris, originDocument },
+    );
+    expect(uriFailure).toEqual({
+      value: null,
+      failures: [expect.stringContaining("workspace document URI")],
+    });
+
+    const textFailure = mapSemanticRuntimeTemplateDefinition(
+      answer(source(1)),
+      () => null,
+      { documentUris: appDocumentUris, originDocument },
+    );
+    expect(textFailure).toEqual({
+      value: null,
+      failures: [expect.stringContaining("no readable document text")],
+    });
+
+    const rangeFailure = mapSemanticRuntimeTemplateDefinition(
+      answer(source(definitionText.length + 1)),
+      () => definitionText,
+      { documentUris: appDocumentUris, originDocument },
+    );
+    expect(rangeFailure).toEqual({
+      value: null,
+      failures: [expect.stringContaining("selection span outside the current document text")],
+    });
   });
 });

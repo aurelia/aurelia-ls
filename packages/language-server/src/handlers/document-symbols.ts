@@ -2,9 +2,11 @@
  * Document symbols for source-backed Aurelia resource declarations.
  *
  * The outline is intentionally conservative: it only emits symbols when
- * semantic-runtime can point at authored TypeScript source.
+ * semantic-runtime can point at authored script source.
  */
 import {
+  LSPErrorCodes,
+  ResponseError,
   SymbolKind,
   type DocumentSymbol,
   type DocumentSymbolParams,
@@ -28,22 +30,22 @@ import {
 } from "../mapping/source-locations.js";
 import type { SemanticRuntimeLspOperation } from "../runtime/semantic-runtime-session.js";
 import { isScriptDocument } from "../utils/document-kind.js";
+import {
+  resourceSymbolAnswerFailure,
+  resourceSymbolDetail,
+  resourceSymbolKind,
+  resourceSymbolName,
+} from "../mapping/resource-symbol-policy.js";
 
-const DOCUMENT_SYMBOL_RESOURCE_KINDS = new Set<string>([
-  "custom-element",
-  "template-controller",
-  "custom-attribute",
-  "value-converter",
-  "binding-behavior",
-]);
+interface DocumentSymbolProjection {
+  readonly value: DocumentSymbol | null;
+  readonly failures: readonly string[];
+}
 
-const RESOURCE_SYMBOL_KIND: Readonly<Record<string, SymbolKind>> = {
-  "custom-element": SymbolKind.Class,
-  "template-controller": SymbolKind.Class,
-  "custom-attribute": SymbolKind.Class,
-  "value-converter": SymbolKind.Function,
-  "binding-behavior": SymbolKind.Function,
-};
+interface DocumentSymbolListProjection {
+  readonly value: DocumentSymbol[];
+  readonly failures: readonly string[];
+}
 
 export async function handleDocumentSymbols(
   ctx: ServerContext,
@@ -58,15 +60,31 @@ export async function handleDocumentSymbols(
   if (requestedPath == null) return null;
   const requested = canonicalTypeSystemPath(requestedPath);
   const definitions = await operation.resourceDefinitions();
+  const answerFailure = resourceSymbolAnswerFailure(definitions);
+  if (answerFailure != null) {
+    throw new ResponseError(
+      LSPErrorCodes.RequestFailed,
+      `Cannot map Aurelia document symbols: ${answerFailure}.`,
+    );
+  }
   const symbols: DocumentSymbol[] = [];
+  const failures: string[] = [];
 
   for (const definition of definitions.value.rows) {
-    const symbol = documentSymbolForResource(ctx.documentUris, requested, doc, definition);
-    if (symbol) symbols.push(symbol);
+    const projection = documentSymbolForResource(ctx.documentUris, requested, doc, definition);
+    if (projection.value != null) symbols.push(projection.value);
+    failures.push(...projection.failures);
+  }
+
+  if (failures.length > 0) {
+    throw new ResponseError(
+      LSPErrorCodes.RequestFailed,
+      `Cannot map Aurelia document symbols: ${failures.join(" ")}`,
+    );
   }
 
   return symbols.length > 0
-    ? symbols.sort((left, right) => compareRanges(left.range, right.range))
+    ? symbols.sort(compareDocumentSymbols)
     : null;
 }
 
@@ -75,31 +93,62 @@ function documentSymbolForResource(
   requested: string,
   doc: Pick<TextDocument, "getText" | "positionAt">,
   definition: SemanticResourceDefinitionRow,
-): DocumentSymbol | null {
-  if (definition.name == null || !DOCUMENT_SYMBOL_RESOURCE_KINDS.has(definition.resourceKind)) {
-    return null;
+): DocumentSymbolProjection {
+  const name = resourceSymbolName(definition);
+  if (name == null) return { value: null, failures: [] };
+
+  const selectionCandidate = definition.targetSource ?? definition.source;
+  const selectionSource = semanticExactSourceReference(selectionCandidate);
+  if (selectionSource == null) {
+    return sourceMatches(documentUris, requested, selectionCandidate)
+      ? {
+          value: null,
+          failures: [`Resource '${name}' has no exact target span in the requesting document.`],
+        }
+      : { value: null, failures: [] };
   }
-  const selectionSource = semanticExactSourceReference(definition.targetSource ?? definition.source);
-  const declarationSource = semanticExactSourceReference(definition.targetDeclarationSource);
   if (!sourceMatches(documentUris, requested, selectionSource)) {
-    return null;
+    return { value: null, failures: [] };
   }
   const selectionRange = semanticSourceRangeForDocument(selectionSource, doc);
-  const declarationRange = sourceMatches(documentUris, requested, declarationSource)
-    ? semanticSourceRangeForDocument(declarationSource, doc)
-    : null;
-  const className = definition.targetName ?? definition.name;
   if (selectionRange == null) {
-    return null;
+    return {
+      value: null,
+      failures: [`Resource '${name}' has a target span outside the current document text.`],
+    };
   }
 
+  let declarationRange: Range | null = null;
+  const declarationCandidate = definition.targetDeclarationSource;
+  const declarationSource = semanticExactSourceReference(declarationCandidate);
+  if (declarationSource == null) {
+    if (sourceMatches(documentUris, requested, declarationCandidate)) {
+      return {
+        value: null,
+        failures: [`Resource '${name}' has no exact declaration span in the requesting document.`],
+      };
+    }
+  } else if (sourceMatches(documentUris, requested, declarationSource)) {
+    declarationRange = semanticSourceRangeForDocument(declarationSource, doc);
+    if (declarationRange == null) {
+      return {
+        value: null,
+        failures: [`Resource '${name}' has a declaration span outside the current document text.`],
+      };
+    }
+  }
+
+  const bindables = bindableSymbols(documentUris, requested, doc, definition.bindables);
   return {
-    name: className,
-    detail: resourceDetail(definition),
-    kind: RESOURCE_SYMBOL_KIND[definition.resourceKind] ?? SymbolKind.Class,
-    range: declarationRange ?? selectionRange,
-    selectionRange,
-    children: bindableSymbols(documentUris, requested, doc, definition.bindables),
+    value: {
+      name,
+      detail: resourceSymbolDetail(definition),
+      kind: resourceSymbolKind(definition),
+      range: declarationRange ?? selectionRange,
+      selectionRange,
+      children: bindables.value,
+    },
+    failures: bindables.failures,
   };
 }
 
@@ -108,17 +157,26 @@ function bindableSymbols(
   requested: string,
   doc: Pick<TextDocument, "getText" | "positionAt">,
   bindables: readonly SemanticResourceDefinitionBindableRow[],
-): DocumentSymbol[] {
+): DocumentSymbolListProjection {
   const symbols: DocumentSymbol[] = [];
+  const failures: string[] = [];
   for (const bindable of bindables) {
-    const source = semanticExactSourceReference(
-      bindable.propertySource ?? bindable.nameSource ?? bindable.source,
-    );
+    const candidate = bindable.propertySource ?? bindable.nameSource ?? bindable.source;
+    const source = semanticExactSourceReference(candidate);
+    if (source == null) {
+      if (sourceMatches(documentUris, requested, candidate)) {
+        failures.push(`Bindable '${bindable.name}' has no exact declaration span in the requesting document.`);
+      }
+      continue;
+    }
     if (!sourceMatches(documentUris, requested, source)) {
       continue;
     }
     const range = semanticSourceRangeForDocument(source, doc);
-    if (range == null) continue;
+    if (range == null) {
+      failures.push(`Bindable '${bindable.name}' has a declaration span outside the current document text.`);
+      continue;
+    }
     symbols.push({
       name: bindable.name,
       detail: bindableDetail(bindable),
@@ -128,13 +186,10 @@ function bindableSymbols(
       children: [],
     });
   }
-  return symbols.sort((left, right) => compareRanges(left.range, right.range));
-}
-
-function resourceDetail(definition: SemanticResourceDefinitionRow): string {
-  const parts: string[] = [definition.resourceKind];
-  if (definition.name) parts.push(definition.name);
-  return parts.join(": ");
+  return {
+    value: symbols.sort(compareDocumentSymbols),
+    failures,
+  };
 }
 
 function bindableDetail(bindable: SemanticResourceDefinitionBindableRow): string {
@@ -155,6 +210,12 @@ function sourceMatches(
 
 function compareRanges(left: Range, right: Range): number {
   return comparePositions(left.start, right.start) || comparePositions(left.end, right.end);
+}
+
+function compareDocumentSymbols(left: DocumentSymbol, right: DocumentSymbol): number {
+  return compareRanges(left.range, right.range)
+    || left.name.localeCompare(right.name)
+    || left.kind - right.kind;
 }
 
 function comparePositions(

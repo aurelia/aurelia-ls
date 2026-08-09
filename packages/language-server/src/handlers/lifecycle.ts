@@ -6,6 +6,7 @@ import {
   SemanticSourceWorldCurrentnessKind,
 } from "@aurelia-ls/semantic-runtime";
 import {
+  CodeActionKind,
   TextDocumentSyncKind,
   FileChangeType,
   DidChangeConfigurationNotification,
@@ -216,7 +217,10 @@ export function handleInitialize(ctx: ServerContext, params: InitializeParams): 
       documentHighlightProvider: true,
       referencesProvider: true,
       renameProvider: { prepareProvider: true },
-      codeActionProvider: { resolveProvider: true },
+      codeActionProvider: {
+        codeActionKinds: [CodeActionKind.QuickFix],
+        resolveProvider: true,
+      },
       documentSymbolProvider: true,
       workspaceSymbolProvider: true,
       selectionRangeProvider: true,
@@ -416,6 +420,10 @@ async function notifyAnalysisChanged(
   if (ctx.clientSupport.diagnosticRefresh) {
     requestClientRefresh(ctx, "diagnostics", () =>
       ctx.connection.languages.diagnostics.refresh());
+  }
+  if (ctx.clientSupport.inlayHintRefresh) {
+    requestClientRefresh(ctx, "inlay hints", () =>
+      ctx.connection.languages.inlayHint.refresh());
   }
   if (ctx.clientSupport.semanticTokensRefresh) {
     requestClientRefresh(ctx, "semantic tokens", () =>
