@@ -1,4 +1,5 @@
 import {
+  SemanticRuntimeAnalysisCurrentnessError,
   ManagedSemanticWorkspaceOperationStaleError,
 } from "@aurelia-ls/semantic-runtime";
 import {
@@ -81,6 +82,11 @@ describe("semantic-runtime request boundary", () => {
 
     await expect(request).rejects.toMatchObject({ code });
     expect(ctx.logger.log).toHaveBeenCalledWith(expect.stringContaining(reason));
+    if (reason === "stale") {
+      expect(ctx.logger.log).toHaveBeenCalledWith(expect.stringContaining(
+        '"staleOrigin":"request-generation"',
+      ));
+    }
   });
 
   test("preserves deliberate protocol errors without logging or reclassification", () => {
@@ -195,6 +201,18 @@ describe("semantic-runtime request boundary", () => {
     );
 
     await expect(staleRequest).rejects.toMatchObject({ code: LSPErrorCodes.ContentModified });
+    expect(ctx.logger.log).toHaveBeenCalledWith(expect.stringContaining(
+      '"staleOrigin":"managed-operation"',
+    ));
+    expect(ctx.logger.log).toHaveBeenCalledWith(expect.stringContaining(
+      '"managedReason":"analysis-currentness-changed"',
+    ));
+    expect(ctx.logger.log).toHaveBeenCalledWith(expect.stringContaining(
+      '"changedSemanticFactKeys":["semantic-domain:test"]',
+    ));
+    expect(ctx.logger.log).toHaveBeenCalledWith(expect.stringContaining(
+      '"changedSemanticFactKeyCount":1',
+    ));
 
     const shapedRequest = runSemanticRuntimeRequest(
       ctx as never,
@@ -209,6 +227,98 @@ describe("semantic-runtime request boundary", () => {
       },
     );
     await expect(shapedRequest).rejects.toMatchObject({ code: LSPErrorCodes.RequestFailed });
+  });
+
+  test("logs the nominal managed cause wrapped by the LSP request generation", () => {
+    const ctx = context();
+
+    const failure = requestFailure(
+      ctx as never,
+      "prepareRename",
+      new SemanticRuntimeLspRequestAbortedError("stale", managedStaleError()),
+      "file:///app/src/app.html",
+    );
+
+    expect(failure).toMatchObject({ code: LSPErrorCodes.ContentModified });
+    expect(ctx.logger.log).toHaveBeenCalledWith(expect.stringContaining(
+      '"staleOrigin":"managed-operation"',
+    ));
+    expect(ctx.logger.log).toHaveBeenCalledWith(expect.stringContaining(
+      '"analysisBasisRevision":"analysis-basis:1"',
+    ));
+  });
+
+  test("distinguishes nominal analysis currentness from request-generation staleness", () => {
+    const ctx = context();
+    const currentness = new SemanticRuntimeAnalysisCurrentnessError({
+      message: "Analysis changed.",
+      reason: "answer-proof-changed",
+      answerLeaseKind: "app-query",
+      invalidGenerationKeys: ["generation:test"],
+      changedReadKeys: ["read:test"],
+      changedFacets: ["facet:test"],
+      changedSemanticFactKeys: ["semantic:test"],
+    });
+
+    const failure = requestFailure(
+      ctx as never,
+      "prepareRename",
+      new SemanticRuntimeLspRequestAbortedError("stale", currentness),
+    );
+
+    expect(failure).toMatchObject({ code: LSPErrorCodes.ContentModified });
+    expect(ctx.logger.log).toHaveBeenCalledWith(expect.stringContaining(
+      '"staleOrigin":"analysis-currentness"',
+    ));
+    expect(ctx.logger.log).toHaveBeenCalledWith(expect.stringContaining(
+      '"analysisReason":"answer-proof-changed"',
+    ));
+    expect(ctx.logger.log).toHaveBeenCalledWith(expect.stringContaining(
+      '"invalidGenerationKeys":["generation:test"]',
+    ));
+    expect(ctx.logger.log).toHaveBeenCalledWith(expect.stringContaining(
+      '"invalidGenerationKeyCount":1',
+    ));
+    expect(ctx.logger.log).toHaveBeenCalledWith(expect.stringContaining(
+      '"changedReadKeys":["read:test"]',
+    ));
+    expect(ctx.logger.log).toHaveBeenCalledWith(expect.stringContaining(
+      '"changedReadKeyCount":1',
+    ));
+    expect(ctx.logger.log).toHaveBeenCalledWith(expect.stringContaining(
+      '"changedFacets":["facet:test"]',
+    ));
+    expect(ctx.logger.log).toHaveBeenCalledWith(expect.stringContaining(
+      '"changedFacetCount":1',
+    ));
+  });
+
+  test("bounds logged stale evidence while retaining its total count", () => {
+    const ctx = context();
+    const changedReadKeys = Array.from({ length: 10 }, (_, index) => `read:${index}`);
+    const currentness = new SemanticRuntimeAnalysisCurrentnessError({
+      message: "Analysis changed.",
+      reason: "answer-proof-changed",
+      answerLeaseKind: "app-query",
+      invalidGenerationKeys: [],
+      changedReadKeys,
+      changedFacets: [],
+      changedSemanticFactKeys: [],
+    });
+
+    requestFailure(
+      ctx as never,
+      "prepareRename",
+      new SemanticRuntimeLspRequestAbortedError("stale", currentness),
+    );
+
+    const message = String(ctx.logger.log.mock.calls[0]?.[0]);
+    expect(message).toContain(
+      '"changedReadKeys":["read:0","read:1","read:2","read:3","read:4","read:5","read:6","read:7"]',
+    );
+    expect(message).toContain('"changedReadKeyCount":10');
+    expect(message).not.toContain("read:8");
+    expect(message).not.toContain("read:9");
   });
 
   test("asks diagnostic clients to retrigger work invalidated by a newer source generation", async () => {

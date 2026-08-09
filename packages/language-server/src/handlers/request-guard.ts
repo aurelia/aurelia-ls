@@ -1,4 +1,5 @@
 import {
+  isSemanticRuntimeAnalysisCurrentnessError,
   ManagedSemanticWorkspaceOperationStaleError,
 } from "@aurelia-ls/semantic-runtime";
 import {
@@ -98,7 +99,9 @@ export async function runSemanticRuntimeDiagnosticRequest<TItem>(
   } catch (error) {
     const failure = cancellationPrecedence(error, token);
     if (isSemanticRuntimeRequestStale(failure)) {
-      ctx.logger.log(`[diagnostics] stale semantic-runtime request for ${request.uri}`);
+      ctx.logger.log(
+        `[diagnostics] stale semantic-runtime request for ${request.uri}${semanticRuntimeStaleFacts(failure)}`,
+      );
       throw new ResponseError<DiagnosticServerCancellationData>(
         LSPErrorCodes.ServerCancelled,
         "Aurelia diagnostics changed while the request was running.",
@@ -123,13 +126,17 @@ export function requestFailure(
     const code = error.reason === "cancelled"
       ? LSPErrorCodes.RequestCancelled
       : LSPErrorCodes.ContentModified;
-    ctx.logger.log(`[${feature}] ${error.reason} semantic-runtime request${location}`);
+    ctx.logger.log(
+      `[${feature}] ${error.reason} semantic-runtime request${location}${semanticRuntimeStaleFacts(error)}`,
+    );
     return new ResponseError(code, error.reason === "cancelled"
       ? `Aurelia ${feature} request was cancelled.`
       : `Aurelia ${feature} request used stale document content.`);
   }
   if (error instanceof ManagedSemanticWorkspaceOperationStaleError) {
-    ctx.logger.log(`[${feature}] stale semantic-runtime request${location}`);
+    ctx.logger.log(
+      `[${feature}] stale semantic-runtime request${location}${semanticRuntimeStaleFacts(error)}`,
+    );
     return new ResponseError(
       LSPErrorCodes.ContentModified,
       `Aurelia ${feature} request used stale document content.`,
@@ -147,6 +154,79 @@ export function requestFailure(
 function isSemanticRuntimeRequestStale(error: unknown): boolean {
   return error instanceof ManagedSemanticWorkspaceOperationStaleError
     || (isSemanticRuntimeLspRequestAborted(error) && error.reason === "stale");
+}
+
+const STALE_EVIDENCE_ITEM_LIMIT = 8;
+
+function semanticRuntimeStaleFacts(error: unknown): string {
+  if (error instanceof ManagedSemanticWorkspaceOperationStaleError) {
+    return formattedStaleFacts(managedOperationStaleFacts(error));
+  }
+  if (!isSemanticRuntimeLspRequestAborted(error) || error.reason !== "stale") {
+    return "";
+  }
+  if (error.cause instanceof ManagedSemanticWorkspaceOperationStaleError) {
+    return formattedStaleFacts(managedOperationStaleFacts(error.cause));
+  }
+  if (isSemanticRuntimeAnalysisCurrentnessError(error.cause)) {
+    return formattedStaleFacts({
+      staleOrigin: "analysis-currentness",
+      analysisReason: error.cause.reason,
+      answerLeaseKind: error.cause.answerLeaseKind,
+      invalidGenerationKeys: boundedStaleEvidence(error.cause.invalidGenerationKeys),
+      invalidGenerationKeyCount: error.cause.invalidGenerationKeys.length,
+      changedReadKeys: boundedStaleEvidence(error.cause.changedReadKeys),
+      changedReadKeyCount: error.cause.changedReadKeys.length,
+      changedFacets: boundedStaleEvidence(error.cause.changedFacets),
+      changedFacetCount: error.cause.changedFacets.length,
+      changedSemanticFactKeys: boundedStaleEvidence(error.cause.changedSemanticFactKeys),
+      changedSemanticFactKeyCount: error.cause.changedSemanticFactKeys.length,
+    });
+  }
+  return formattedStaleFacts({
+    staleOrigin: "request-generation",
+    causeName: nominalCauseName(error.cause),
+  });
+}
+
+function managedOperationStaleFacts(
+  error: ManagedSemanticWorkspaceOperationStaleError,
+): Readonly<Record<string, string | number | null | readonly string[]>> {
+  const invalidGenerationKeys = error.analysisCurrentness?.invalidGenerationKeys ?? [];
+  return {
+    staleOrigin: "managed-operation",
+    managedReason: error.reason,
+    currentnessKind: error.currentnessKind,
+    previousSourceWorldRevision: error.previousSourceWorldRevision,
+    nextSourceWorldRevision: error.nextSourceWorldRevision,
+    analysisBasisRevision: error.analysisBasisRevision,
+    changedReadKeys: boundedStaleEvidence(error.changedReadKeys),
+    changedReadKeyCount: error.changedReadKeys.length,
+    changedFacets: boundedStaleEvidence(error.changedFacets),
+    changedFacetCount: error.changedFacets.length,
+    changedSemanticFactKeys: boundedStaleEvidence(error.changedSemanticFactKeys),
+    changedSemanticFactKeyCount: error.changedSemanticFactKeys.length,
+    analysisReason: error.analysisCurrentness?.reason ?? null,
+    answerLeaseKind: error.analysisCurrentness?.answerLeaseKind ?? null,
+    invalidGenerationKeys: boundedStaleEvidence(invalidGenerationKeys),
+    invalidGenerationKeyCount: invalidGenerationKeys.length,
+  };
+}
+
+function boundedStaleEvidence(values: readonly string[]): readonly string[] {
+  return values.length <= STALE_EVIDENCE_ITEM_LIMIT
+    ? values
+    : values.slice(0, STALE_EVIDENCE_ITEM_LIMIT);
+}
+
+function nominalCauseName(cause: unknown): string | null {
+  return cause instanceof Error ? cause.name : null;
+}
+
+function formattedStaleFacts(
+  facts: Readonly<Record<string, string | number | null | readonly string[]>>,
+): string {
+  return `; stale-facts=${JSON.stringify(facts)}`;
 }
 
 function cancellationPrecedence(
