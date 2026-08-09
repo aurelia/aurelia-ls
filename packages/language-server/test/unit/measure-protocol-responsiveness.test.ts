@@ -91,6 +91,25 @@ interface ProtocolResponsivenessMeasurementModule {
     startedAt: number,
     now?: () => number,
   ): Promise<TimedProtocolSettlement>;
+  measureUncontendedWarmCompletion(options: {
+    readonly connection: {
+      sendRequest(method: string, params: unknown): Promise<unknown>;
+    };
+    readonly targetUri: string;
+    readonly position: { readonly line: number; readonly character: number };
+    readonly documentVersion: number;
+    readonly now?: () => number;
+  }): Promise<{
+    readonly documentVersion: number;
+    readonly milliseconds: number;
+    readonly outcome: { readonly status: string };
+    readonly currentness: {
+      readonly requiredLabel: string;
+      readonly requiredLabelPresent: boolean;
+      readonly forbiddenLabel: string;
+      readonly forbiddenLabelAbsent: boolean;
+    };
+  }>;
   measureCancellationCycle(options: {
     readonly connection: {
       sendNotification(method: string, params: unknown): void;
@@ -133,7 +152,7 @@ describe("protocol responsiveness measurement", () => {
       protocolResponsivenessSchemaVersion,
     } = await loadMeasurementModule();
 
-    expect(protocolResponsivenessSchemaVersion).toBe("aurelia-ls/protocol-responsiveness/v2");
+    expect(protocolResponsivenessSchemaVersion).toBe("aurelia-ls/protocol-responsiveness/v3");
     expect(parseProtocolResponsivenessArgs([])).toEqual({
       fixture: null,
       workspace: null,
@@ -291,6 +310,47 @@ describe("protocol responsiveness measurement", () => {
 
     expect(secondResult).toMatchObject({ settledAt: 20, milliseconds: 20 });
     expect(firstResult).toMatchObject({ settledAt: 40, milliseconds: 40 });
+  });
+
+  test("measures an uncontended fulfilled completion with a current semantic witness", async () => {
+    const { measureUncontendedWarmCompletion } = await loadMeasurementModule();
+    const sendRequest = vi.fn().mockResolvedValue({
+      items: [{ label: "itemCount" }, { label: "selectedItemIds" }],
+    });
+    const timestamps = [100, 124];
+
+    const measurement = await measureUncontendedWarmCompletion({
+      connection: { sendRequest },
+      targetUri: "file:///workspace/src/app.html",
+      position: { line: 3, character: 17 },
+      documentVersion: 9,
+      now: () => timestamps.shift() ?? 124,
+    });
+
+    expect(sendRequest).toHaveBeenCalledWith("textDocument/completion", {
+      textDocument: { uri: "file:///workspace/src/app.html" },
+      position: { line: 3, character: 17 },
+    });
+    expect(measurement).toEqual({
+      documentVersion: 9,
+      milliseconds: 24,
+      outcome: { status: "fulfilled" },
+      currentness: {
+        requiredLabel: "itemCount",
+        requiredLabelPresent: true,
+        forbiddenLabel: "searchText",
+        forbiddenLabelAbsent: true,
+      },
+    });
+
+    await expect(measureUncontendedWarmCompletion({
+      connection: {
+        sendRequest: () => Promise.reject(new Error("not fulfilled")),
+      },
+      targetUri: "file:///workspace/src/app.html",
+      position: { line: 3, character: 17 },
+      documentVersion: 9,
+    })).rejects.toThrow("must fulfill before its currentness can be verified");
   });
 
   test("dispatches replacement and probe before the observational old completion settles", async () => {

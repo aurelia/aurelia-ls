@@ -27,7 +27,7 @@ const oldCompletionBase = "state.items.";
 const replacementCompletionBase = "state.selection.";
 const replacementRequiredLabel = "itemCount";
 const replacementForbiddenLabel = "searchText";
-export const protocolResponsivenessSchemaVersion = "aurelia-ls/protocol-responsiveness/v2";
+export const protocolResponsivenessSchemaVersion = "aurelia-ls/protocol-responsiveness/v3";
 
 async function main() {
   const args = parseProtocolResponsivenessArgs(process.argv.slice(2));
@@ -81,6 +81,7 @@ async function main() {
     previousResultIdUnchangedMilliseconds: 0,
     preEditDiagnosticReports: null,
     cycles: [],
+    warmSameGenerationCompletion: null,
     diagnosticRefreshRequests: 0,
     serverLogs,
     stderr,
@@ -139,6 +140,17 @@ async function main() {
       version = measured.version;
       report.cycles.push({ index: index + 1, ...measured.cycle });
     }
+    const warmCompletionVariant = createProtocolCompletionVariant(
+      originalText,
+      cycles * 2 - 1,
+      "replacement",
+    );
+    report.warmSameGenerationCompletion = await measureUncontendedWarmCompletion({
+      connection,
+      targetUri,
+      position: warmCompletionVariant.position,
+      documentVersion: version,
+    });
     report.replacementDispatchedDuringContention = report.cycles.every(
       (cycle) => cycle.replacementDispatchedDuringContention,
     );
@@ -322,6 +334,34 @@ export function timedSettlement(promise, startedAt, now = () => performance.now(
       milliseconds: settledAt - startedAt,
       outcome,
     });
+  });
+}
+
+/**
+ * Measure one uncontended completion after the cancellation cycles, against their final replacement document.
+ * This comparison request cannot affect the already-recorded cancellation/supersession timings.
+ */
+export async function measureUncontendedWarmCompletion(options) {
+  const now = options.now ?? (() => performance.now());
+  const startedAt = now();
+  const measurement = await withTimeout(
+    timedSettlement(
+      options.connection.sendRequest("textDocument/completion", {
+        textDocument: { uri: options.targetUri },
+        position: options.position,
+      }),
+      startedAt,
+      now,
+    ),
+    30_000,
+    "uncontended warm same-generation completion",
+  );
+  const currentness = requireCurrentReplacementCompletion(measurement.outcome);
+  return Object.freeze({
+    documentVersion: options.documentVersion,
+    milliseconds: measurement.milliseconds,
+    outcome: outcomeSummary(measurement.outcome),
+    currentness,
   });
 }
 
@@ -564,6 +604,7 @@ function strictBoolean(value, label) {
 }
 
 function markdownReport(report) {
+  const warmCompletion = report.warmSameGenerationCompletion;
   return [
     "# Protocol Responsiveness Measurement",
     "",
@@ -577,6 +618,9 @@ function markdownReport(report) {
     `Cold full diagnostics (no previousResultId): ${report.coldFullWithoutPreviousResultIdMilliseconds.toFixed(2)}ms`,
     `Warm full diagnostics (no previousResultId): ${report.warmFullWithoutPreviousResultIdMilliseconds.toFixed(2)}ms`,
     `Warm unchanged diagnostics (previousResultId): ${report.previousResultIdUnchangedMilliseconds.toFixed(2)}ms`,
+    warmCompletion == null
+      ? "Warm same-generation completion: not measured"
+      : `Warm same-generation completion (document v${warmCompletion.documentVersion}): ${warmCompletion.milliseconds.toFixed(2)}ms; ${describeOutcome(warmCompletion.outcome)}; current semantic witness: ${warmCompletion.currentness.requiredLabelPresent && warmCompletion.currentness.forbiddenLabelAbsent ? "yes" : "no"}`,
     `Diagnostic refresh requests: ${report.diagnosticRefreshRequests}`,
     "",
     table(
