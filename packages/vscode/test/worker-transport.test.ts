@@ -1,15 +1,18 @@
-import { once } from "node:events";
 import path from "node:path";
+import { Worker } from "node:worker_threads";
 import {
   CancellationTokenSource,
   createMessageConnection,
+  type RequestMessage,
 } from "vscode-jsonrpc/node";
 import { describe, expect, test } from "vitest";
 import {
   createExperimentalWorkerCancellationStrategy,
   createExperimentalWorkerMessageTransports,
   EXPERIMENTAL_WORKER_TRANSPORT_ENV,
+  FORCE_IPC_TRANSPORT_ENV,
   shouldUseExperimentalWorkerTransport,
+  type ExperimentalWorkerTransportEvent,
 } from "../out/worker-transport.js";
 
 const WORKER_FIXTURE = path.resolve(
@@ -29,6 +32,10 @@ describe("experimental Worker transport", () => {
     expect(shouldUseExperimentalWorkerTransport({
       [EXPERIMENTAL_WORKER_TRANSPORT_ENV]: "1",
     }, ["--inspect-brk"])).toBe(false);
+    expect(shouldUseExperimentalWorkerTransport({
+      [EXPERIMENTAL_WORKER_TRANSPORT_ENV]: "1",
+      [FORCE_IPC_TRANSPORT_ENV]: "1",
+    }, [])).toBe(false);
   });
 
   test("flips a shared token during a synchronous worker loop and exits gracefully", async () => {
@@ -73,16 +80,106 @@ describe("experimental Worker transport", () => {
       expect(response.elapsedMilliseconds).toBeLessThan(maximumBusyMilliseconds / 2);
 
       await connection.sendRequest("shutdown");
-      const exited = once(transports.worker, "exit");
       await connection.sendNotification("exit");
-      const [exitCode] = await exited;
+      const exitCode = await transports.exited;
       expect(exitCode).toBe(0);
     } finally {
       connection.end();
       connection.dispose();
-      if (transports.worker.threadId !== -1) {
-        await transports.worker.terminate();
-      }
+      await transports.terminate();
     }
+  });
+
+  test("reports an abnormal crash once, closes once, and permits a fresh transport", async () => {
+    const events: ExperimentalWorkerTransportEvent[] = [];
+    const transports = createExperimentalWorkerMessageTransports("unused", {
+      createWorker: () => new Worker(
+        [
+          "console.log('intentional Worker stdout');",
+          "console.error('intentional Worker stderr');",
+          "setImmediate(() => { throw new Error('intentional Worker crash'); });",
+        ].join("\n"),
+        { eval: true, stdout: true, stderr: true },
+      ),
+      onEvent: (event) => events.push(event),
+    });
+    const connection = createMessageConnection(transports.reader, transports.writer);
+    const errors: Array<readonly [Error, unknown, number | undefined]> = [];
+    let closes = 0;
+    connection.onError((error) => errors.push(error));
+    connection.onClose(() => { closes += 1; });
+    connection.listen();
+
+    const exitCode = await transports.exited;
+
+    expect(exitCode).not.toBe(0);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.[0].message).toContain("intentional Worker crash");
+    expect(errors[0]?.[2]).toBe(1);
+    expect(closes).toBe(1);
+    expect(events.some((event) => (
+      event.type === "stdout" && event.text.includes("intentional Worker stdout")
+    ))).toBe(true);
+    expect(events.some((event) => (
+      event.type === "stderr" && event.text.includes("intentional Worker stderr")
+    ))).toBe(true);
+    expect(events.filter((event) => event.type === "error")).toHaveLength(1);
+    expect(events.filter((event) => event.type === "exit")).toHaveLength(1);
+    connection.dispose();
+
+    const replacement = createExperimentalWorkerMessageTransports(WORKER_FIXTURE);
+    const replacementConnection = createMessageConnection(
+      replacement.reader,
+      replacement.writer,
+      undefined,
+      { cancellationStrategy: createExperimentalWorkerCancellationStrategy() },
+    );
+    replacementConnection.listen();
+    try {
+      const initializeResult = await replacementConnection.sendRequest<{ capabilities: unknown }>(
+        "initialize",
+        { processId: process.pid, rootUri: null, capabilities: {} },
+      );
+      expect(initializeResult.capabilities).toBeDefined();
+      await replacementConnection.sendRequest("shutdown");
+      await replacementConnection.sendNotification("exit");
+      expect(await replacement.exited).toBe(0);
+    } finally {
+      replacementConnection.end();
+      replacementConnection.dispose();
+      await replacement.terminate();
+    }
+  });
+
+  test("force-terminates a noncooperative Worker after the configured grace", async () => {
+    const events: ExperimentalWorkerTransportEvent[] = [];
+    let online!: () => void;
+    const onlinePromise = new Promise<void>((resolve) => { online = resolve; });
+    const transports = createExperimentalWorkerMessageTransports("unused", {
+      shutdownGraceMilliseconds: 25,
+      createWorker: () => new Worker("setInterval(() => undefined, 1_000);", { eval: true }),
+      onEvent: (event) => {
+        events.push(event);
+        if (event.type === "online") online();
+      },
+    });
+
+    await onlinePromise;
+    const startedAt = performance.now();
+    const shutdownRequest: RequestMessage = {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "shutdown",
+    };
+    await transports.writer.write(shutdownRequest);
+    const exitCode = await transports.exited;
+    const elapsedMilliseconds = performance.now() - startedAt;
+
+    expect(exitCode).not.toBe(0);
+    expect(elapsedMilliseconds).toBeLessThan(500);
+    expect(events.filter((event) => event.type === "force-terminate")).toEqual([
+      { type: "force-terminate", graceMilliseconds: 25 },
+    ]);
+    expect(events.filter((event) => event.type === "exit")).toHaveLength(1);
   });
 });

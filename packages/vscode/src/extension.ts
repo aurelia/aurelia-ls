@@ -22,7 +22,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const outputChannel = vscode.window.createOutputChannel("Aurelia LS (Client)", { log: true });
   const logger = new ClientLogger(outputChannel);
   const languageClient = new AureliaLanguageClient(logger, vscode, {
-    createClient: createLanguageClient,
+    createClient: createLanguageClient(logger.child("worker-transport")),
   });
   app = new ClientApp(context, {
     vscode,
@@ -39,7 +39,7 @@ export async function deactivate(): Promise<void> {
   app = undefined;
 }
 
-const createLanguageClient: LanguageClientFactory = (
+const createLanguageClient = (logger: ClientLogger): LanguageClientFactory => (
   id: string,
   name: string,
   serverModule: string,
@@ -49,7 +49,36 @@ const createLanguageClient: LanguageClientFactory = (
     return new LanguageClient(
       id,
       name,
-      () => Promise.resolve(createExperimentalWorkerMessageTransports(serverModule)),
+      () => Promise.resolve(createExperimentalWorkerMessageTransports(serverModule, {
+        onEvent: (event) => {
+          switch (event.type) {
+            case "online":
+              logger.debug("Experimental Worker transport is online");
+              break;
+            case "stdout":
+              logger.debug("Experimental Worker stdout", { text: event.text.trimEnd() });
+              break;
+            case "stderr":
+              logger.warn("Experimental Worker stderr", { text: event.text.trimEnd() });
+              break;
+            case "error":
+              logger.error("Experimental Worker transport failed", undefined, event.error);
+              break;
+            case "exit":
+              if (event.code === 0) {
+                logger.debug("Experimental Worker transport exited", { code: event.code });
+              } else {
+                logger.warn("Experimental Worker transport exited abnormally", { code: event.code });
+              }
+              break;
+            case "force-terminate":
+              logger.warn("Experimental Worker transport exceeded its shutdown grace", {
+                graceMilliseconds: event.graceMilliseconds,
+              });
+              break;
+          }
+        },
+      })),
       {
         ...clientOptions,
         connectionOptions: {

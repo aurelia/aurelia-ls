@@ -9,7 +9,6 @@
  * This catches bundle configuration issues, missing dependencies, etc.
  */
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { once } from "node:events";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -201,17 +200,14 @@ test("bundled server initializes over Worker transport and exits cleanly", async
     );
 
     await connection.sendRequest("shutdown", null);
-    const exited = once(transports.worker, "exit");
     await connection.sendNotification("exit");
-    const [exitCode] = await exited as [number];
+    const exitCode = await transports.exited;
 
     expect(exitCode, "Worker server should exit cleanly").toBe(0);
   } finally {
     connection.end();
     connection.dispose();
-    if (transports.worker.threadId !== -1) {
-      await transports.worker.terminate();
-    }
+    await transports.terminate();
   }
 }, 20000);
 
