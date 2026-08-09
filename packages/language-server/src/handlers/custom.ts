@@ -148,7 +148,7 @@ export async function handleTemplateResourceAvailability(
 
   const answer = await operation.templateResourceAvailability(
     selectedOwner.projectKey,
-    document,
+    document.uri,
     params.position,
     params.templateResourceScopeIdentityKey ?? null,
   );
@@ -222,7 +222,7 @@ export async function handleRenameFromTs(
     return renameFromTsBlocked("document-unavailable", "Aurelia cross-domain rename could not read the TypeScript document.");
   }
   const answer = await operation.templateRenameFromTypeScript(
-    doc,
+    doc.uri,
     params.position,
     params.newName ?? null,
   );

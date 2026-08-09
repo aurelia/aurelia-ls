@@ -30,6 +30,7 @@ import {
   type SemanticRuntimeContinuationRow,
   type SemanticRuntimeSessionAnalysisCacheOverviewRequest,
   type SemanticRuntimeSessionAnalysisCacheOverviewResult,
+  type SemanticRuntimeSourceCursorInput,
   type SemanticRuntimeSummary,
   type SemanticNativeProjectConfigurationsResult,
   type SemanticAuthoredSourceOwnershipResult,
@@ -93,19 +94,19 @@ export interface SemanticRuntimeLspOperation {
   authoredSourceOwnership(uri: DocumentUri): Promise<SemanticRuntimeAnswer<SemanticAuthoredSourceOwnershipResult>>;
   nativeProjectConfigurations(sourceUris: readonly DocumentUri[]): Promise<SemanticRuntimeAnswer<SemanticNativeProjectConfigurationsResult>>;
   projectConfigurationDiagnostics(uri: DocumentUri): Promise<SemanticRuntimeAnswer<SemanticProjectConfigurationDiagnosticsResult>>;
-  templateCompletions(document: TextDocument, position: Position): Promise<SemanticRuntimeAnswer<SemanticTemplateCompletionResult>>;
+  templateCompletions(uri: DocumentUri, position: Position): Promise<SemanticRuntimeAnswer<SemanticTemplateCompletionResult>>;
   appDiagnostics(document: TextDocument): Promise<SemanticRuntimeAnswer<SemanticAppDiagnosticsResult>>;
-  templateCursorInfo(document: TextDocument, position: Position): Promise<SemanticRuntimeAnswer<SemanticTemplateCursorInfoResult>>;
-  templateReferences(document: TextDocument, position: Position, includeDeclaration: boolean): Promise<SemanticRuntimeAnswer<SemanticTemplateReferencesResult>>;
-  templateRename(document: TextDocument, position: Position, newName?: string | null): Promise<SemanticRuntimeAnswer<SemanticTemplateRenameResult>>;
-  templateRenameFromTypeScript(document: TextDocument, position: Position, newName?: string | null): Promise<SemanticRuntimeAnswer<SemanticTemplateRenameResult>>;
-  templateCodeActions(document: TextDocument, position: Position): Promise<SemanticRuntimeAnswer<SemanticTemplateCodeActionsResult>>;
+  templateCursorInfo(uri: DocumentUri, position: Position): Promise<SemanticRuntimeAnswer<SemanticTemplateCursorInfoResult>>;
+  templateReferences(uri: DocumentUri, position: Position, includeDeclaration: boolean): Promise<SemanticRuntimeAnswer<SemanticTemplateReferencesResult>>;
+  templateRename(uri: DocumentUri, position: Position, newName?: string | null): Promise<SemanticRuntimeAnswer<SemanticTemplateRenameResult>>;
+  templateRenameFromTypeScript(uri: DocumentUri, position: Position, newName?: string | null): Promise<SemanticRuntimeAnswer<SemanticTemplateRenameResult>>;
+  templateCodeActions(uri: DocumentUri, position: Position): Promise<SemanticRuntimeAnswer<SemanticTemplateCodeActionsResult>>;
   resourceDefinitions(): Promise<SemanticRuntimeAnswer<SemanticResourceDefinitionsResult>>;
   resourceInventory(projectKey: string, includeTypeSurfaces: boolean): Promise<SemanticRuntimeAnswer<SemanticResourceInventoryResult>>;
   projectsOwningDocument(document: TextDocument, projects: readonly SemanticProjectCandidateSummary[]): Promise<readonly SemanticProjectCandidateSummary[]>;
   templateResourceAvailability(
     projectKey: string,
-    document: TextDocument,
+    uri: DocumentUri,
     position: Position,
     templateResourceScopeIdentityKey: string | null,
   ): Promise<SemanticRuntimeAnswer<SemanticTemplateResourceAvailabilityResult>>;
@@ -906,23 +907,23 @@ export class SemanticRuntimeLspSession {
       authoredSourceOwnership: (uri) => this.authoredSourceOwnership(uri, token),
       nativeProjectConfigurations: (sourceUris) => this.nativeProjectConfigurations(sourceUris, token),
       projectConfigurationDiagnostics: (uri) => this.projectConfigurationDiagnostics(uri, token),
-      templateCompletions: (document, position) => this.templateCompletions(document, position, token),
+      templateCompletions: (uri, position) => this.templateCompletions(uri, position, token),
       appDiagnostics: (document) => this.appDiagnostics(document, token),
-      templateCursorInfo: (document, position) => this.templateCursorInfo(document, position, token),
-      templateReferences: (document, position, includeDeclaration) =>
-        this.templateReferences(document, position, includeDeclaration, token),
-      templateRename: (document, position, newName) => this.templateRename(document, position, token, newName),
-      templateRenameFromTypeScript: (document, position, newName) =>
-        this.templateRenameFromTypeScript(document, position, token, newName),
-      templateCodeActions: (document, position) => this.templateCodeActions(document, position, token),
+      templateCursorInfo: (uri, position) => this.templateCursorInfo(uri, position, token),
+      templateReferences: (uri, position, includeDeclaration) =>
+        this.templateReferences(uri, position, includeDeclaration, token),
+      templateRename: (uri, position, newName) => this.templateRename(uri, position, token, newName),
+      templateRenameFromTypeScript: (uri, position, newName) =>
+        this.templateRenameFromTypeScript(uri, position, token, newName),
+      templateCodeActions: (uri, position) => this.templateCodeActions(uri, position, token),
       resourceDefinitions: () => this.resourceDefinitions(token),
       resourceInventory: (projectKey, includeTypeSurfaces) =>
         this.resourceInventory(projectKey, includeTypeSurfaces, token),
       projectsOwningDocument: (document, projects) => this.projectsOwningDocument(document, projects, token),
-      templateResourceAvailability: (projectKey, document, position, templateResourceScopeIdentityKey) =>
+      templateResourceAvailability: (projectKey, uri, position, templateResourceScopeIdentityKey) =>
         this.templateResourceAvailability(
           projectKey,
-          document,
+          uri,
           position,
           templateResourceScopeIdentityKey,
           token,
@@ -1061,24 +1062,19 @@ export class SemanticRuntimeLspSession {
   }
 
   private async templateCompletions(
-    document: TextDocument,
+    uri: DocumentUri,
     position: Position,
     token: SemanticRuntimeLspRequestToken,
   ): Promise<SemanticRuntimeAnswer<SemanticTemplateCompletionResult>> {
     const runtime = this.runtimeForOperation(token);
-    const filePath = this.documentHostPath(document);
+    const cursorInput = this.operationSourceCursor(uri, position, token);
     return drainSemanticRuntimePages({
       label: "template completion",
       assertActive: () => this.assertRequestTokenActive(token),
       readPage: (cursor) => runtime.answerAppQuery({
         kind: SemanticAppQueryKind.TemplateCompletions,
-        sourceFilePath: filePath,
-        cursor: {
-          filePath,
-          line: position.line,
-          character: position.character,
-          offset: document.offsetAt(position),
-        },
+        sourceFilePath: cursorInput.filePath,
+        cursor: cursorInput,
         page: { size: 100, cursor },
         inquiryProfile: "lsp-cursor",
         appRetention: "retain-app",
@@ -1122,21 +1118,16 @@ export class SemanticRuntimeLspSession {
   }
 
   private async templateCursorInfo(
-    document: TextDocument,
+    uri: DocumentUri,
     position: Position,
     token: SemanticRuntimeLspRequestToken,
   ): Promise<SemanticRuntimeAnswer<SemanticTemplateCursorInfoResult>> {
     const runtime = this.runtimeForOperation(token);
-    const filePath = this.documentHostPath(document);
+    const cursorInput = this.operationSourceCursor(uri, position, token);
     const answer = await runtime.answerAppQuery({
       kind: SemanticAppQueryKind.TemplateCursorInfo,
-      sourceFilePath: filePath,
-      cursor: {
-        filePath,
-        line: position.line,
-        character: position.character,
-        offset: document.offsetAt(position),
-      },
+      sourceFilePath: cursorInput.filePath,
+      cursor: cursorInput,
       inquiryProfile: "lsp-cursor",
       diagnosticProjection: "type-projection",
       analysisDepth: "binding-observation",
@@ -1148,25 +1139,20 @@ export class SemanticRuntimeLspSession {
   }
 
   private async templateReferences(
-    document: TextDocument,
+    uri: DocumentUri,
     position: Position,
     includeDeclaration: boolean,
     token: SemanticRuntimeLspRequestToken,
   ): Promise<SemanticRuntimeAnswer<SemanticTemplateReferencesResult>> {
     const runtime = this.runtimeForOperation(token);
-    const filePath = this.documentHostPath(document);
+    const cursorInput = this.operationSourceCursor(uri, position, token);
     return drainSemanticRuntimePages({
       label: "template reference",
       assertActive: () => this.assertRequestTokenActive(token),
       readPage: (cursor) => runtime.answerAppQuery({
         kind: SemanticAppQueryKind.TemplateReferences,
-        sourceFilePath: filePath,
-        cursor: {
-          filePath,
-          line: position.line,
-          character: position.character,
-          offset: document.offsetAt(position),
-        },
+        sourceFilePath: cursorInput.filePath,
+        cursor: cursorInput,
         includeDeclaration,
         page: { size: 200, cursor },
         inquiryProfile: "lsp-cursor",
@@ -1185,22 +1171,17 @@ export class SemanticRuntimeLspSession {
   }
 
   private async templateRename(
-    document: TextDocument,
+    uri: DocumentUri,
     position: Position,
     token: SemanticRuntimeLspRequestToken,
     newName?: string | null,
   ): Promise<SemanticRuntimeAnswer<SemanticTemplateRenameResult>> {
     const runtime = this.runtimeForOperation(token);
-    const filePath = this.documentHostPath(document);
+    const cursorInput = this.operationSourceCursor(uri, position, token);
     const answer = await runtime.answerAppQuery({
       kind: SemanticAppQueryKind.TemplateRename,
-      sourceFilePath: filePath,
-      cursor: {
-        filePath,
-        line: position.line,
-        character: position.character,
-        offset: document.offsetAt(position),
-      },
+      sourceFilePath: cursorInput.filePath,
+      cursor: cursorInput,
       ...(newName == null ? {} : { newName }),
       inquiryProfile: "lsp-cursor",
       diagnosticProjection: "type-projection",
@@ -1213,22 +1194,17 @@ export class SemanticRuntimeLspSession {
   }
 
   private async templateRenameFromTypeScript(
-    document: TextDocument,
+    uri: DocumentUri,
     position: Position,
     token: SemanticRuntimeLspRequestToken,
     newName?: string | null,
   ): Promise<SemanticRuntimeAnswer<SemanticTemplateRenameResult>> {
     const runtime = this.runtimeForOperation(token);
-    const filePath = this.documentHostPath(document);
+    const cursorInput = this.operationSourceCursor(uri, position, token);
     const answer = await runtime.answerAppQuery({
       kind: SemanticAppQueryKind.TemplateRenameFromTypeScript,
-      sourceFilePath: filePath,
-      cursor: {
-        filePath,
-        line: position.line,
-        character: position.character,
-        offset: document.offsetAt(position),
-      },
+      sourceFilePath: cursorInput.filePath,
+      cursor: cursorInput,
       ...(newName == null ? {} : { newName }),
       inquiryProfile: "lsp-cursor",
       diagnosticProjection: "type-projection",
@@ -1241,21 +1217,16 @@ export class SemanticRuntimeLspSession {
   }
 
   private async templateCodeActions(
-    document: TextDocument,
+    uri: DocumentUri,
     position: Position,
     token: SemanticRuntimeLspRequestToken,
   ): Promise<SemanticRuntimeAnswer<SemanticTemplateCodeActionsResult>> {
     const runtime = this.runtimeForOperation(token);
-    const filePath = this.documentHostPath(document);
+    const cursorInput = this.operationSourceCursor(uri, position, token);
     const answer = await runtime.answerAppQuery({
       kind: SemanticAppQueryKind.TemplateCodeActions,
-      sourceFilePath: filePath,
-      cursor: {
-        filePath,
-        line: position.line,
-        character: position.character,
-        offset: document.offsetAt(position),
-      },
+      sourceFilePath: cursorInput.filePath,
+      cursor: cursorInput,
       inquiryProfile: "lsp-cursor",
       diagnosticProjection: "type-projection",
       analysisDepth: "binding-observation",
@@ -1326,23 +1297,18 @@ export class SemanticRuntimeLspSession {
 
   private async templateResourceAvailability(
     projectKey: string,
-    document: TextDocument,
+    uri: DocumentUri,
     position: Position,
     templateResourceScopeIdentityKey: string | null,
     token: SemanticRuntimeLspRequestToken,
   ): Promise<SemanticRuntimeAnswer<SemanticTemplateResourceAvailabilityResult>> {
     const runtime = this.runtimeForOperation(token);
-    const filePath = this.documentHostPath(document);
+    const cursorInput = this.operationSourceCursor(uri, position, token);
     const answer = await runtime.answerAppQuery({
       kind: SemanticAppQueryKind.TemplateResourceAvailability,
       projectKey,
-      sourceFilePath: filePath,
-      cursor: {
-        filePath,
-        line: position.line,
-        character: position.character,
-        offset: document.offsetAt(position),
-      },
+      sourceFilePath: cursorInput.filePath,
+      cursor: cursorInput,
       ...(templateResourceScopeIdentityKey == null ? {} : { templateResourceScopeIdentityKey }),
       inquiryProfile: "lsp-cursor",
       includeAuthoringTemplates: true,
@@ -1453,6 +1419,24 @@ export class SemanticRuntimeLspSession {
   private runtimeForOperation(token: SemanticRuntimeLspRequestToken): ManagedSemanticWorkspaceRuntimeReadFacade {
     this.assertRequestTokenActive(token);
     return token.runtime;
+  }
+
+  private operationSourceCursor(
+    uri: DocumentUri,
+    position: Position,
+    token: SemanticRuntimeLspRequestToken,
+  ): SemanticRuntimeSourceCursorInput {
+    const document = token.documents.ensureProgramDocument(uri);
+    if (document == null) {
+      throw new Error(`Cannot resolve an operation-owned document for cursor input: ${uri}`);
+    }
+    const filePath = this.documentHostPath(document);
+    return {
+      filePath,
+      line: position.line,
+      character: position.character,
+      offset: document.offsetAt(position),
+    };
   }
 
   private documentHostPath(document: TextDocument): string {

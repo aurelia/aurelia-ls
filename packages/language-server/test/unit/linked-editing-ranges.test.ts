@@ -122,7 +122,7 @@ describe("runtime-backed linked editing ranges", () => {
     );
 
     expect(ctx.templateCursorInfo).toHaveBeenCalledWith(
-      doc,
+      doc.uri,
       position,
     );
     expect(result).toEqual({

@@ -120,7 +120,7 @@ describe("SemanticRuntimeLspSession", () => {
 
     const session = createSession(fixtureRoot, documents);
     const answer = await session.runRequest(null, (operation) => operation.templateCompletions(
-      htmlDocument,
+      htmlDocument.uri,
       positionAfter(htmlText, "${t"),
     ));
     const candidateNames = answer.value.candidates.map(
@@ -130,6 +130,71 @@ describe("SemanticRuntimeLspSession", () => {
     expect(answer.result).toBe("answered");
     expect(candidateNames).toContain("title");
     expect(candidateNames).not.toContain("message");
+  });
+
+  test("derives cursor offsets from managed text instead of a stale external document", async () => {
+    const fixtureRoot = minimalFixtureRoot();
+    const htmlPath = path.join(fixtureRoot, "src/app.html");
+    const tsPath = path.join(fixtureRoot, "src/app.ts");
+    const htmlUri = pathToFileURL(htmlPath).toString();
+    const tsUri = pathToFileURL(tsPath).toString();
+    const diskHtmlText = fs.readFileSync(htmlPath, "utf8");
+    const managedHtmlText = diskHtmlText.replace(
+      "  <h1>${message}</h1>",
+      "  <h1>\n    ${t}\n  </h1>",
+    );
+    const managedTsText = fs.readFileSync(tsPath, "utf8").replace(
+      "message = 'Hello semantic runtime'",
+      "title = 'Edited in memory'",
+    );
+    const position = positionAfter(managedHtmlText, "${t");
+    const staleExternalDocument = TextDocument.create(htmlUri, "html", 1, diskHtmlText);
+    const managedDocument = TextDocument.create(htmlUri, "html", 2, managedHtmlText);
+    const documents = new TestDocumentStore();
+    documents.add(managedDocument);
+    documents.add(TextDocument.create(tsUri, "typescript", 2, managedTsText));
+    const session = createSession(fixtureRoot, documents);
+
+    expect(staleExternalDocument.offsetAt(position)).not.toBe(managedDocument.offsetAt(position));
+    const answer = await session.runRequest(null, (operation) =>
+      operation.templateCompletions(htmlUri, position));
+
+    expect(answer.value.candidates.map((candidate) => candidate.name)).toContain("title");
+  });
+
+  test("pins one managed document basis and rejects a conflicting underlying edit", async () => {
+    const fixtureRoot = minimalFixtureRoot();
+    const htmlPath = path.join(fixtureRoot, "src/app.html");
+    const tsPath = path.join(fixtureRoot, "src/app.ts");
+    const htmlUri = pathToFileURL(htmlPath).toString();
+    const tsUri = pathToFileURL(tsPath).toString();
+    const pinnedHtmlText = fs.readFileSync(htmlPath, "utf8").replace(
+      "  <h1>${message}</h1>",
+      "  <h1>\n    ${t}\n  </h1>",
+    );
+    const replacementHtmlText = "<main>\n  <h1>Closed after pinning</h1>\n</main>\n";
+    const managedTsText = fs.readFileSync(tsPath, "utf8").replace(
+      "message = 'Hello semantic runtime'",
+      "title = 'Edited in memory'",
+    );
+    const position = positionAfter(pinnedHtmlText, "${t");
+    const documents = new TestDocumentStore();
+    documents.add(TextDocument.create(htmlUri, "html", 2, pinnedHtmlText));
+    documents.add(TextDocument.create(tsUri, "typescript", 2, managedTsText));
+    const session = createSession(fixtureRoot, documents);
+
+    await expect(session.runRequest(null, async (operation) => {
+      const firstDocument = operation.documents.ensureProgramDocument(htmlUri);
+      expect(firstDocument?.version).toBe(2);
+      expect(firstDocument?.getText()).toBe(pinnedHtmlText);
+
+      documents.add(TextDocument.create(htmlUri, "html", 3, replacementHtmlText));
+      const repeatedDocument = operation.documents.ensureProgramDocument(htmlUri);
+      expect(repeatedDocument?.version).toBe(2);
+      expect(repeatedDocument?.getText()).toBe(pinnedHtmlText);
+
+      return operation.templateCompletions(htmlUri, position);
+    })).rejects.toMatchObject({ reason: "stale" });
   });
 
   test("answers from changed open document text after a source generation change", async () => {
@@ -159,7 +224,7 @@ describe("SemanticRuntimeLspSession", () => {
 
     const session = createSession(fixtureRoot, documents);
     const firstAnswer = await session.runRequest(null, (operation) => operation.templateCompletions(
-      documents.get(htmlUri)!,
+      htmlUri,
       positionAfter(htmlText, "${t"),
     ));
     expect(
@@ -179,7 +244,7 @@ describe("SemanticRuntimeLspSession", () => {
     documents.add(TextDocument.create(tsUri, "typescript", 3, nextTsText));
     session.recordSourceTextChanged([htmlPath, tsPath]);
     const secondAnswer = await session.runRequest(null, (operation) => operation.templateCompletions(
-      documents.get(htmlUri)!,
+      htmlUri,
       positionAfter(nextHtmlText, "${h"),
     ));
     const candidateNames = secondAnswer.value.candidates.map(
@@ -281,7 +346,7 @@ describe("SemanticRuntimeLspSession", () => {
     const session = createSession(fixtureRoot, documents);
 
     const answer = await session.runRequest(null, (operation) => operation.templateCompletions(
-      htmlDocument,
+      htmlDocument.uri,
       positionAfter(htmlText, "${candidate"),
     ));
     const names = answer.value.candidates.map((candidate) => candidate.name);
@@ -402,7 +467,7 @@ describe("SemanticRuntimeLspSession", () => {
     await expect(
       session.runRequest(null, (operation) => {
         session.recordSourceTextChanged([path.join(fixtureRoot, "src/app.html")]);
-        return operation.templateCompletions(document, { line: 0, character: 13 });
+        return operation.templateCompletions(document.uri, { line: 0, character: 13 });
       }),
     ).rejects.toMatchObject({ reason: "stale" });
   });

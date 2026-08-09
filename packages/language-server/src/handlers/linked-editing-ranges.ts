@@ -38,7 +38,7 @@ export async function handleLinkedEditingRange(
   if (!isTemplateDocument(doc)) return null;
 
   const answer = await operation.templateCursorInfo(
-    doc,
+    doc.uri,
     params.position,
   );
   return linkedEditingRangesForCursor(ctx, doc, params.position, answer.value);

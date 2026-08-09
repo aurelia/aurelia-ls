@@ -792,7 +792,7 @@ describe("handlePrepareRename", () => {
     );
 
     expect(ctx.semanticRuntime.templateRename).toHaveBeenCalledWith(
-      expect.objectContaining({ uri: templateUri }),
+      templateUri,
       params.position,
     );
     expect(result).toEqual({
@@ -822,7 +822,7 @@ describe("handleReferences", () => {
     );
 
     expect(ctx.semanticRuntime.templateReferences).toHaveBeenCalledWith(
-      expect.objectContaining({ uri: templateUri }),
+      templateUri,
       params.position,
       true,
     );
@@ -889,7 +889,7 @@ describe("handleDocumentHighlight", () => {
     );
 
     expect(ctx.semanticRuntime.templateReferences).toHaveBeenCalledWith(
-      expect.objectContaining({ uri: templateUri }),
+      templateUri,
       params.position,
       true,
     );
@@ -925,7 +925,7 @@ describe("handleCodeAction", () => {
     );
 
     expect(ctx.semanticRuntime.templateCodeActions).toHaveBeenCalledWith(
-      expect.objectContaining({ uri: templateUri }),
+      templateUri,
       params.range.start,
     );
     expect(result).toHaveLength(1);
@@ -1159,6 +1159,10 @@ describe("handleCompletion", () => {
       params,
       createContextTestOperation(ctx),
     );
+    expect(ctx.semanticRuntime.templateCompletions).toHaveBeenCalledWith(
+      templateUri,
+      params.position,
+    );
     expect(result.isIncomplete).toBe(false);
     expect(result.items).toHaveLength(2);
     expect(result.items[0]).toEqual(
@@ -1252,7 +1256,7 @@ describe("handleHover", () => {
     const result = await handleHover(ctx as never, params, createContextTestOperation(ctx));
 
     expect(ctx.semanticRuntime.templateCursorInfo).toHaveBeenCalledWith(
-      expect.objectContaining({ uri: templateUri }),
+      templateUri,
       params.position,
     );
     const contents = result?.contents as { value?: string };
@@ -1277,7 +1281,7 @@ describe("handleDefinition", () => {
     );
 
     expect(ctx.semanticRuntime.templateCursorInfo).toHaveBeenCalledWith(
-      expect.objectContaining({ uri: templateUri }),
+      templateUri,
       params.position,
     );
     expect(Array.isArray(result)).toBe(true);

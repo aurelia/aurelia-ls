@@ -40,7 +40,7 @@ export async function handleSelectionRanges(
   const ranges: SelectionRange[] = [];
   for (const position of params.positions) {
     const answer = await operation.templateCursorInfo(
-      doc,
+      doc.uri,
       position,
     );
     const range = selectionRangeForCursor(ctx, doc, position, answer.value);

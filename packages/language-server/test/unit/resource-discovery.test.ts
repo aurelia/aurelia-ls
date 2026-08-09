@@ -149,7 +149,7 @@ describe("resource discovery protocol boundary", () => {
 
     expect(templateResourceAvailability).toHaveBeenCalledWith(
       owner.projectKey,
-      expect.objectContaining({ uri: componentUri }),
+      componentUri,
       { line: 0, character: 2 },
       "scope:my-app:v1",
     );

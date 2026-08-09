@@ -307,7 +307,7 @@ describe("handleRenameFromTs", () => {
     expect(
       ctx.semanticRuntime.templateRenameFromTypeScript,
     ).toHaveBeenCalledWith(
-      tsDocument,
+      tsDocument.uri,
       { line: 0, character: 12 },
       "heading",
     );
@@ -403,7 +403,7 @@ describe("handleRenameFromTs", () => {
       candidateCount: 0,
     });
     expect(ctx.semanticRuntime.templateRenameFromTypeScript).toHaveBeenCalledWith(
-      tsDocument,
+      tsDocument.uri,
       { line: 0, character: 13 },
       null,
     );

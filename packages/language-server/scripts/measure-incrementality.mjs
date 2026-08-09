@@ -292,7 +292,7 @@ async function main() {
 
   const cursorInfo = await timed("warm same-generation templateCursorInfo", measurement, () =>
     runDocumentRequest(session, targetHtml, null, (operation, document) =>
-      operation.templateCursorInfo(document, cursorPositions.member)));
+      operation.templateCursorInfo(document.uri, cursorPositions.member)));
   report.timings.push(timingSummary(cursorInfo));
 
   const initialEditedPaths = editOpenDocuments(documents, fixtureRoot, sourceFiles);
@@ -310,7 +310,7 @@ async function main() {
 
   const afterEditCompletion = await timed("post-edit templateCompletions", measurement, () =>
     runDocumentRequest(session, targetHtml, null, (operation, document) =>
-      operation.templateCompletions(document, cursorPositions.completion)));
+      operation.templateCompletions(document.uri, cursorPositions.completion)));
   report.timings.push(timingSummary(afterEditCompletion));
   const postEditCompletionCache = await cacheSnapshot("after post-edit completion", session, forceGc);
   report.cache.push(postEditCompletionCache);
@@ -402,7 +402,7 @@ async function measureCompletionFirstEditJourney(options) {
         options.session,
         options.targetHtml,
         options.editedDocument,
-        (operation, document) => operation.templateCompletions(document, options.cursorPositions.completion),
+        (operation, document) => operation.templateCompletions(document.uri, options.cursorPositions.completion),
       ),
     ),
   );
@@ -415,7 +415,7 @@ async function measureCompletionFirstEditJourney(options) {
         options.session,
         options.targetHtml,
         options.editedDocument,
-        (operation, document) => operation.templateCompletions(document, options.cursorPositions.completion),
+        (operation, document) => operation.templateCompletions(document.uri, options.cursorPositions.completion),
       ),
     ),
   );
@@ -489,7 +489,7 @@ async function staleAbortPressure(session, document, position, requestCount) {
       await session.runRequest(null, async (operation) => {
         session.invalidateRequests();
         const managedDocument = requireOperationDocument(operation, document.uri);
-        return operation.templateCursorInfo(managedDocument, position);
+        return operation.templateCursorInfo(managedDocument.uri, position);
       });
       return "completed";
     } catch (error) {
@@ -505,7 +505,7 @@ async function cancelledAbortPressure(session, document, position, requestCount)
   return abortPressure("cancelled managed templateCursorInfo", requestCount, async () => {
     try {
       await runDocumentRequest(session, document, () => true, (operation, managedDocument) =>
-        operation.templateCursorInfo(managedDocument, position));
+        operation.templateCursorInfo(managedDocument.uri, position));
       return "completed";
     } catch (error) {
       if (isSemanticRuntimeLspRequestAborted(error)) {

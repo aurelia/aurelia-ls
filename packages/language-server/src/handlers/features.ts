@@ -77,7 +77,7 @@ export async function handleCompletion(
   if (!isTemplateDocument(doc)) return { isIncomplete: false, items: [] };
 
   const response = await operation.templateCompletions(
-    doc,
+    doc.uri,
     params.position,
   );
   if (
@@ -117,7 +117,7 @@ export async function handleHover(
   if (!isTemplateDocument(doc)) return null;
 
   const response = await operation.templateCursorInfo(
-    doc,
+    doc.uri,
     params.position,
   );
   return mapSemanticRuntimeTemplateHover(response);
@@ -138,7 +138,7 @@ export async function handleDefinition(
 
   const lookupText: LookupTextFn = (uri) => operation.documents.lookupText(uri);
   const response = await operation.templateCursorInfo(
-    doc,
+    doc.uri,
     params.position,
   );
   return mapSemanticRuntimeTemplateDefinition(response, lookupText, {
@@ -161,7 +161,7 @@ export async function handleReferences(
 
   const lookupText: LookupTextFn = (uri) => operation.documents.lookupText(uri);
   const response = await operation.templateReferences(
-    doc,
+    doc.uri,
     params.position,
     params.context.includeDeclaration,
   );
@@ -207,7 +207,7 @@ export async function handleDocumentHighlight(
 
   const lookupText: LookupTextFn = (uri) => operation.documents.lookupText(uri);
   const response = await operation.templateReferences(
-    doc,
+    doc.uri,
     params.position,
     true,
   );
@@ -250,7 +250,7 @@ export function handlePrepareRename(
   if (!doc) return Promise.resolve(null);
   if (!isTemplateDocument(doc)) return Promise.resolve(null);
 
-  return operation.templateRename(doc, params.position).then((response) => {
+  return operation.templateRename(doc.uri, params.position).then((response) => {
     if (response.value.status !== "available") {
       return null;
     }
@@ -271,7 +271,7 @@ export async function handleRename(
   if (!isTemplateDocument(doc)) return null;
 
   const response = await operation.templateRename(
-    doc,
+    doc.uri,
     params.position,
     params.newName,
   );
@@ -337,7 +337,7 @@ export async function handleCodeAction(
   if (!isTemplateDocument(doc)) return null;
 
   const response = await operation.templateCodeActions(
-    doc,
+    doc.uri,
     params.range.start,
   );
   const mappingOptions = {
@@ -379,7 +379,7 @@ export async function handleCodeActionResolve(
     return action;
   }
 
-  const response = await operation.templateCodeActions(doc, resolve.position);
+  const response = await operation.templateCodeActions(doc.uri, resolve.position);
   const candidates = mapSemanticRuntimeTemplateCodeActions(
     response,
     (uri) => operation.documents.lookupDocumentSnapshot(uri),

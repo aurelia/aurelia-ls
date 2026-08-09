@@ -53,7 +53,7 @@ export function createTestOperation(
   } as unknown as SemanticRuntimeLspOperation;
 }
 
-function unsupportedTestOperationMethod(): never {
+function unsupportedTestOperationMethod(..._args: readonly unknown[]): never {
   throw new Error("Test semantic-runtime LSP operation method was not configured.");
 }
 

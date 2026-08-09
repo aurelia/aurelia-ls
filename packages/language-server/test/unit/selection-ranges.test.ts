@@ -120,7 +120,7 @@ describe("runtime-backed selection ranges", () => {
     );
 
     expect(ctx.templateCursorInfo).toHaveBeenCalledWith(
-      doc,
+      doc.uri,
       position,
     );
     expect(result).toHaveLength(1);
