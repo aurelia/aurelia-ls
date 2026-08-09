@@ -13,10 +13,7 @@ import {
   waitForExit,
 } from "./helpers/lsp-harness.js";
 import { URI } from "vscode-uri";
-import {
-  WORKSPACE_TOKEN_MODIFIER_GAP_AWARE,
-  WORKSPACE_TOKEN_MODIFIER_GAP_CONSERVATIVE,
-} from "../../src/handlers/semantic-tokens.js";
+import { SEMANTIC_TOKENS_LEGEND } from "../../src/handlers/semantic-tokens.js";
 
 describe("Server initialization", () => {
   test("responds to initialize request with capabilities", async () => {
@@ -91,10 +88,7 @@ describe("Server initialization", () => {
       expect(semanticTokensProvider).toBeDefined();
       expect(semanticTokensProvider?.full).toBe(true);
       const legend = semanticTokensProvider?.legend as { tokenTypes: string[]; tokenModifiers: string[] } | undefined;
-      expect(legend?.tokenTypes).toContain("aureliaElement");
-      expect(legend?.tokenModifiers).toContain("declaration");
-      expect(legend?.tokenModifiers).toContain(WORKSPACE_TOKEN_MODIFIER_GAP_AWARE);
-      expect(legend?.tokenModifiers).toContain(WORKSPACE_TOKEN_MODIFIER_GAP_CONSERVATIVE);
+      expect(legend).toEqual(SEMANTIC_TOKENS_LEGEND);
     } finally {
       dispose();
       child.kill("SIGKILL");

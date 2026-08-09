@@ -4664,7 +4664,6 @@ export const SEMANTIC_TEMPLATE_SEMANTIC_TOKEN_TYPES = [
   'aureliaConverter',
   'aureliaBehavior',
   'aureliaMetaElement',
-  'aureliaMetaAttribute',
   'aureliaEvent',
   'aureliaModifier',
   'aureliaExpression',
@@ -4672,7 +4671,6 @@ export const SEMANTIC_TEMPLATE_SEMANTIC_TOKEN_TYPES = [
   'property',
   'function',
   'keyword',
-  'string',
 ] as const;
 
 export type SemanticTemplateSemanticTokenType = typeof SEMANTIC_TEMPLATE_SEMANTIC_TOKEN_TYPES[number];
@@ -4682,9 +4680,6 @@ export const SEMANTIC_TEMPLATE_SEMANTIC_TOKEN_MODIFIERS = [
   'definition',
   'defaultLibrary',
   'deprecated',
-  'readonly',
-  'aureliaGapAware',
-  'aureliaGapConservative',
 ] as const;
 
 export type SemanticTemplateSemanticTokenModifier =

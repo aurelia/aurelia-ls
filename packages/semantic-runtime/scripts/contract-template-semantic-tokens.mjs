@@ -5,6 +5,8 @@ import { fileURLToPath } from 'node:url';
 import {
   createSemanticRuntime,
   readSemanticAppQueryCatalog,
+  SEMANTIC_TEMPLATE_SEMANTIC_TOKEN_MODIFIERS,
+  SEMANTIC_TEMPLATE_SEMANTIC_TOKEN_TYPES,
   SemanticAppQueryKind,
 } from '../out/index.js';
 import { readFieldProvenance } from '../out/kernel/provenance.js';
@@ -15,6 +17,30 @@ const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/app-builder-part-source-gallery');
 const templatePath = path.join(fixtureRoot, 'src/my-app.html');
 const templateText = fs.readFileSync(templatePath, 'utf8');
+
+assert.deepEqual(SEMANTIC_TEMPLATE_SEMANTIC_TOKEN_TYPES, [
+  'aureliaElement',
+  'aureliaAttribute',
+  'aureliaBindable',
+  'aureliaController',
+  'aureliaCommand',
+  'aureliaConverter',
+  'aureliaBehavior',
+  'aureliaMetaElement',
+  'aureliaEvent',
+  'aureliaModifier',
+  'aureliaExpression',
+  'variable',
+  'property',
+  'function',
+  'keyword',
+], 'The public semantic-token types must contain only runtime-emittable vocabulary.');
+assert.deepEqual(SEMANTIC_TEMPLATE_SEMANTIC_TOKEN_MODIFIERS, [
+  'declaration',
+  'definition',
+  'defaultLibrary',
+  'deprecated',
+], 'The public semantic-token modifiers must contain only runtime-emittable vocabulary.');
 
 const catalog = readSemanticAppQueryCatalog({ queryKind: SemanticAppQueryKind.TemplateSemanticTokens });
 assert.equal(catalog.value.rows.length, 1, 'TemplateSemanticTokens should be in the public app-query catalog.');
@@ -48,6 +74,15 @@ do {
 } while (cursor != null);
 
 assert.ok(rows.length >= 100, `Expected many gallery semantic tokens, got ${rows.length}.`);
+
+const advertisedTypes = new Set(SEMANTIC_TEMPLATE_SEMANTIC_TOKEN_TYPES);
+const advertisedModifiers = new Set(SEMANTIC_TEMPLATE_SEMANTIC_TOKEN_MODIFIERS);
+for (const row of rows) {
+  assert.ok(advertisedTypes.has(row.tokenType), `Runtime emitted unadvertised token type ${row.tokenType}.`);
+  for (const modifier of row.tokenModifiers) {
+    assert.ok(advertisedModifiers.has(modifier), `Runtime emitted unadvertised token modifier ${modifier}.`);
+  }
+}
 
 expectToken('<input value.bind="draft.title">', 'bind', 'aureliaCommand');
 expectToken('<label repeat.for="option of options">', 'repeat', 'aureliaController');

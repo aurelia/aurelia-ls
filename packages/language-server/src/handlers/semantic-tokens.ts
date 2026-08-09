@@ -31,9 +31,6 @@ import {
 import type { SemanticRuntimeLspOperation } from "../runtime/semantic-runtime-session.js";
 import { isTemplateDocument } from "../utils/document-kind.js";
 
-export const WORKSPACE_TOKEN_MODIFIER_GAP_AWARE = "aureliaGapAware" as const;
-export const WORKSPACE_TOKEN_MODIFIER_GAP_CONSERVATIVE = "aureliaGapConservative" as const;
-
 export const TOKEN_TYPES = SEMANTIC_TEMPLATE_SEMANTIC_TOKEN_TYPES;
 export const TOKEN_MODIFIERS = SEMANTIC_TEMPLATE_SEMANTIC_TOKEN_MODIFIERS;
 

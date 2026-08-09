@@ -6,8 +6,6 @@ import type { ServerContext } from "../../src/context.js";
 import {
   handleSemanticTokensFull,
   SEMANTIC_TOKENS_LEGEND,
-  WORKSPACE_TOKEN_MODIFIER_GAP_AWARE,
-  WORKSPACE_TOKEN_MODIFIER_GAP_CONSERVATIVE,
 } from "../../src/handlers/semantic-tokens.js";
 import { testWorkspaceDocumentUris } from "./test-document-uris.js";
 import { createTestOperation } from "./test-request-guard.js";
@@ -69,11 +67,32 @@ function createContext(
 }
 
 describe("semantic tokens handler", () => {
-  it("exposes aurelia token types in the legend", () => {
-    expect(SEMANTIC_TOKENS_LEGEND.tokenTypes).toContain("aureliaElement");
-    expect(SEMANTIC_TOKENS_LEGEND.tokenModifiers).toContain("declaration");
-    expect(SEMANTIC_TOKENS_LEGEND.tokenModifiers).toContain(WORKSPACE_TOKEN_MODIFIER_GAP_AWARE);
-    expect(SEMANTIC_TOKENS_LEGEND.tokenModifiers).toContain(WORKSPACE_TOKEN_MODIFIER_GAP_CONSERVATIVE);
+  it("exposes exactly the semantic-runtime token vocabulary", () => {
+    expect(SEMANTIC_TOKENS_LEGEND).toEqual({
+      tokenTypes: [
+        "aureliaElement",
+        "aureliaAttribute",
+        "aureliaBindable",
+        "aureliaController",
+        "aureliaCommand",
+        "aureliaConverter",
+        "aureliaBehavior",
+        "aureliaMetaElement",
+        "aureliaEvent",
+        "aureliaModifier",
+        "aureliaExpression",
+        "variable",
+        "property",
+        "function",
+        "keyword",
+      ],
+      tokenModifiers: [
+        "declaration",
+        "definition",
+        "defaultLibrary",
+        "deprecated",
+      ],
+    });
   });
 
   it("encodes semantic-runtime tokens into LSP delta format", async () => {
@@ -90,27 +109,6 @@ describe("semantic tokens handler", () => {
       0, 1, 7, 0, 0,
       0, 10, 7, 0, 0,
     ]);
-  });
-
-  it("encodes gap-aware modifiers using legend bitmasks", async () => {
-    const text = "<div repeat.for=\"item of items\"></div>";
-    const tokens: SemanticTemplateSemanticTokenRow[] = [
-      {
-        tokenType: "aureliaController",
-        tokenModifiers: [
-          WORKSPACE_TOKEN_MODIFIER_GAP_AWARE,
-          WORKSPACE_TOKEN_MODIFIER_GAP_CONSERVATIVE,
-        ],
-        definitionName: "app",
-        source: source(5, 11),
-      },
-    ];
-
-    const { ctx, operation } = createContext(text, tokens);
-    const result = await handleSemanticTokensFull(ctx, { textDocument: { uri: templateUri } }, operation);
-
-    // type index 3 = aureliaController; modifier bits 5+6 => 32 + 64 = 96
-    expect(result?.data).toEqual([0, 5, 6, 3, 96]);
   });
 
   it.each([
@@ -174,8 +172,8 @@ describe("semantic tokens handler", () => {
       operation,
     )).resolves.toEqual({
       data: [
-        0, 0, 3, 11, 0,
-        0, 3, 3, 13, 0,
+        0, 0, 3, 10, 0,
+        0, 3, 3, 12, 0,
       ],
     });
   });
