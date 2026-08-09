@@ -95,6 +95,124 @@ describe("Completions", () => {
     }
   });
 
+  test("authors composed binding commands only at safe top-level attribute-name loci", async () => {
+    const fixture = createAureliaAppFixture({
+      "src/app.ts": [
+        "import { customElement } from 'aurelia';",
+        "import template from './app.html';",
+        "import { ItemCard } from './item-card';",
+        "import { ShadowHost } from './shadow-host';",
+        "@customElement({ name: 'app-root', template, dependencies: [ItemCard, ShadowHost] })",
+        "export class AppRoot { value: unknown = null; }",
+      ].join("\n"),
+      "src/app.html": [
+        "<template>",
+        "  <item-card ite></item-card>",
+        "  <li rep></li>",
+        "  <item-card ></item-card>",
+        "  <item-card item.bind=\"value\"></item-card>",
+        "  <shadow-host></shadow-host>",
+        "</template>",
+      ].join("\n"),
+      "src/item-card.ts": [
+        "import { bindable, customElement } from 'aurelia';",
+        "@customElement({ name: 'item-card', template: '<template></template>' })",
+        "export class ItemCard {",
+        "  @bindable item: unknown = null;",
+        "}",
+      ].join("\n"),
+      "src/shadow-host.ts": [
+        "import { customElement } from 'aurelia';",
+        "import template from './shadow-host.html';",
+        "import { ShadowRepeat } from './shadow-repeat';",
+        "@customElement({ name: 'shadow-host', template, dependencies: [ShadowRepeat] })",
+        "export class ShadowHost {}",
+      ].join("\n"),
+      "src/shadow-host.html": "<template><li rep></li></template>",
+      "src/shadow-repeat.ts": [
+        "import { templateController } from 'aurelia';",
+        "@templateController('repeat')",
+        "export class ShadowRepeat {}",
+      ].join("\n"),
+    });
+
+    const appUri = fileUri(fixture, "src/app.html");
+    const shadowUri = fileUri(fixture, "src/shadow-host.html");
+    const server = startServer(fixture);
+
+    try {
+      await initialize(server.connection, server.child, () => server.getStderr(), fixture);
+      const appText = fs.readFileSync(path.join(fixture, "src/app.html"), "utf8");
+      const shadowText = fs.readFileSync(path.join(fixture, "src/shadow-host.html"), "utf8");
+      openDocument(server.connection, appUri, "html", appText);
+      openDocument(server.connection, shadowUri, "html", shadowText);
+      await waitForDiagnostics(server.connection, server.child, () => server.getStderr(), appUri, 5000);
+      await waitForDiagnostics(server.connection, server.child, () => server.getStderr(), shadowUri, 5000);
+
+      const completionAt = async (
+        uri: string,
+        text: string,
+        offset: number,
+        label: string,
+      ): Promise<CompletionListItem & { textEdit: NonNullable<CompletionListItem["textEdit"]> }> => {
+        const response = await server.connection.sendRequest("textDocument/completion", {
+          textDocument: { uri },
+          position: positionAt(text, offset),
+        });
+        const item = expectCompletionList(response).items.find((candidate) => candidate.label === label);
+        if (item?.textEdit == null) {
+          throw new Error(`Expected '${label}' completion to carry an authored text edit.`);
+        }
+        return item as CompletionListItem & { textEdit: NonNullable<CompletionListItem["textEdit"]> };
+      };
+      const apply = (
+        uri: string,
+        text: string,
+        item: CompletionListItem & { textEdit: NonNullable<CompletionListItem["textEdit"]> },
+      ): string => {
+        const document = TextDocument.create(uri, "html", 1, text);
+        return text.slice(0, document.offsetAt(item.textEdit.range.start))
+          + item.textEdit.newText
+          + text.slice(document.offsetAt(item.textEdit.range.end));
+      };
+
+      const bindableOffset = appText.indexOf("<item-card ite") + "<item-card ite".length;
+      const bindable = await completionAt(appUri, appText, bindableOffset, "item");
+      expect(TextDocument.create(appUri, "html", 1, appText).getText(bindable.textEdit.range)).toBe("ite");
+      expect(bindable.textEdit.newText).toBe("item.bind");
+      expect(apply(appUri, appText, bindable)).toContain("<item-card item.bind></item-card>");
+
+      const repeatOffset = appText.indexOf("<li rep") + "<li rep".length;
+      const repeat = await completionAt(appUri, appText, repeatOffset, "repeat");
+      expect(TextDocument.create(appUri, "html", 1, appText).getText(repeat.textEdit.range)).toBe("rep");
+      expect(repeat.textEdit.newText).toBe("repeat.for");
+      expect(apply(appUri, appText, repeat)).toContain("<li repeat.for></li>");
+
+      const insertionOffset = appText.indexOf("<item-card >") + "<item-card ".length;
+      const insertion = await completionAt(appUri, appText, insertionOffset, "item");
+      expect(TextDocument.create(appUri, "html", 1, appText).getText(insertion.textEdit.range)).toBe("");
+      expect(insertion.textEdit.newText).toBe("item.bind");
+      expect(apply(appUri, appText, insertion)).toContain("<item-card item.bind></item-card>");
+
+      const existingCommandStart = appText.lastIndexOf("item.bind");
+      const existing = await completionAt(appUri, appText, existingCommandStart + 2, "item");
+      expect(TextDocument.create(appUri, "html", 1, appText).getText(existing.textEdit.range)).toBe("item");
+      expect(existing.textEdit.newText).toBe("item");
+      expect(apply(appUri, appText, existing)).toBe(appText);
+
+      const shadowOffset = shadowText.indexOf("<li rep") + "<li rep".length;
+      const shadowRepeat = await completionAt(shadowUri, shadowText, shadowOffset, "repeat");
+      expect(TextDocument.create(shadowUri, "html", 1, shadowText).getText(shadowRepeat.textEdit.range)).toBe("rep");
+      expect(shadowRepeat.textEdit.newText).toBe("repeat");
+      expect(apply(shadowUri, shadowText, shadowRepeat)).toContain("<li repeat></li>");
+    } finally {
+      server.dispose();
+      server.child.kill("SIGKILL");
+      await waitForExit(server.child);
+      fs.rmSync(fixture, { recursive: true, force: true });
+    }
+  });
+
   test("uses open editor buffers instead of stale disk text", async () => {
     const fixture = createAureliaAppFixture({
       "src/app.ts": [

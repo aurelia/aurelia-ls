@@ -133,6 +133,7 @@ import { TemplateValueSiteKind } from '../template/value-site.js';
 import type { TemplateSource } from '../template/compilation-unit.js';
 import {
   AttributeClassificationKind,
+  AttributeSyntaxKind,
   type AttributeClassification,
   type AttributeSyntax,
 } from '../template/attribute-syntax.js';
@@ -515,6 +516,8 @@ export class TemplateCompletionCursorContext {
     readonly bindingSourceContextOpenReason: string | null,
     /** Exact route id/path declaration selected through a router-resource value, when closed and unambiguous. */
     readonly selectedRouteTarget: TemplateCompletionRouteTargetSelection | null,
+    /** Whether this exact top-level attribute-name locus can safely accept a candidate-authored binding command. */
+    readonly canComposeAttributeCommand: boolean,
     /** Extra context gaps found while turning a cursor into product handles. */
     readonly missingInputs: readonly string[] = [],
   ) {}
@@ -556,6 +559,7 @@ interface TemplateCompletionAnswerFrame {
   readonly bindingScope: BindingScope | null;
   readonly selectedScopeSlot: TemplateCompletionScopeSlotSelection | null;
   readonly resourceScope: TemplateResourceScope | null;
+  readonly canComposeAttributeCommand: boolean;
   readonly frameworkHookBasisProductHandles: ProductHandle[];
   memberOwnerTypeProductHandle: ProductHandle | null;
 }
@@ -651,6 +655,7 @@ class TemplateCompletionCursorContextBuilder {
       null,
       null,
       null,
+      false,
       ['source-offset'],
     );
   }
@@ -677,6 +682,12 @@ class TemplateCompletionCursorContextBuilder {
     const multiBindingSegment = this.multiBindingSegmentForCursor(offset, valueSite, nestedSyntax);
     const activeElement = elementForCursorContext(this.input.resource.compilation.html.nodes, htmlNode, classification);
     const siteKind = this.siteKindForCursor(offset, htmlNode, activeElement, htmlAttribute, syntax, valueSite, expressionResult);
+    const canComposeAttributeCommand = canComposeAttributeCommandAtCursor(
+      siteKind,
+      htmlAttribute,
+      topLevelSyntax,
+      nestedSyntax,
+    );
     const expressionSemanticsOpen = siteKindUsesExpressionParse(siteKind)
       && expressionParse != null
       && effectiveExpressionParse == null;
@@ -868,6 +879,7 @@ class TemplateCompletionCursorContextBuilder {
       activeExpressionSpan,
       bindingEnvironment?.openReason ?? null,
       selectedRouteTarget,
+      canComposeAttributeCommand,
       uniqueValues(missingInputs),
     );
   }
@@ -1732,6 +1744,7 @@ function createTemplateCompletionAnswerFrame(
     bindingScope,
     selectedScopeSlot: context.selectedScopeSlot,
     resourceScope,
+    canComposeAttributeCommand: context.canComposeAttributeCommand,
     frameworkHookBasisProductHandles: [],
     memberOwnerTypeProductHandle: query.memberOwnerTypeProductHandle,
   };
@@ -1996,7 +2009,13 @@ function collectResourceScopeCandidates(
   if (!shouldReadResourceScope(frame.query.siteKind, frame.expressionFrontier) || frame.resourceScope == null) {
     return;
   }
-  frame.candidates.push(...resourceScopeCandidates(frame.resourceScope, frame.query.siteKind, frame.expressionFrontier));
+  frame.candidates.push(...resourceScopeCandidates(
+    frame.store,
+    frame.resourceScope,
+    frame.query.siteKind,
+    frame.expressionFrontier,
+    frame.canComposeAttributeCommand,
+  ));
 }
 
 function collectBindableCandidates(
@@ -2007,7 +2026,7 @@ function collectBindableCandidates(
   }
   const selectedDefinition = readSelectedDefinition(frame.store, frame.query.selectedDefinitionProductHandle, frame.missingInputs);
   if (selectedDefinition != null) {
-    frame.candidates.push(...bindableCandidates(selectedDefinition));
+    frame.candidates.push(...bindableCandidates(selectedDefinition, frame.canComposeAttributeCommand));
   }
 }
 
@@ -2783,7 +2802,7 @@ function inlineMultiBindingTargetCandidates(
     return [];
   }
   const definition = valueSiteResourceDefinition(store, site);
-  return definition == null ? [] : bindableCandidates(definition);
+  return definition == null ? [] : bindableCandidates(definition, false);
 }
 
 function bindableAttributeValueCandidates(
@@ -3128,9 +3147,11 @@ function shouldOfferBindableCandidates(siteKind: TemplateCompletionSiteKind): bo
 }
 
 function resourceScopeCandidates(
+  store: KernelStore,
   scope: TemplateResourceScope,
   siteKind: TemplateCompletionSiteKind,
   frontier: TemplateExpressionCompletionFrontier | null,
+  canComposeAttributeCommand: boolean,
 ): readonly TemplateCompletionCandidate[] {
   const candidates: TemplateCompletionCandidate[] = [];
   for (const resource of [...scope.resources, ...scope.syntaxResources]) {
@@ -3138,7 +3159,7 @@ function resourceScopeCandidates(
     if (candidateKind == null) {
       continue;
     }
-    candidates.push(visibleResourceCandidate(resource, candidateKind));
+    candidates.push(visibleResourceCandidate(store, resource, candidateKind, canComposeAttributeCommand));
   }
   return candidates;
 }
@@ -3201,8 +3222,10 @@ function shouldOfferBindingBehavior(
 }
 
 function visibleResourceCandidate(
+  store: KernelStore,
   resource: TemplateVisibleResource,
   candidateKind: TemplateCompletionCandidateKind,
+  canComposeAttributeCommand: boolean,
 ): TemplateCompletionCandidate {
   return new TemplateCompletionCandidate(
     candidateKind,
@@ -3212,11 +3235,30 @@ function visibleResourceCandidate(
     resource.resourceIdentityHandle,
     resource.sourceAddressHandle,
     `Visible ${resource.resourceKind} from compiler resource scope.`,
+    null,
+    null,
+    visibleResourceInsertionText(store, resource, candidateKind, canComposeAttributeCommand),
   );
+}
+
+function visibleResourceInsertionText(
+  store: KernelStore,
+  resource: TemplateVisibleResource,
+  candidateKind: TemplateCompletionCandidateKind,
+  canComposeAttributeCommand: boolean,
+): string | null {
+  if (!canComposeAttributeCommand || candidateKind !== TemplateCompletionCandidateKind.TemplateController) {
+    return null;
+  }
+  const semantics = frameworkTemplateControllerSemanticsForResource(store, resource);
+  return semantics?.valueDomainKind === BuiltInTemplateControllerValueDomainKind.Iterator
+    ? `${resource.name}.for`
+    : null;
 }
 
 function bindableCandidates(
   definition: FullResourceDefinition,
+  canComposeAttributeCommand: boolean,
 ): readonly TemplateCompletionCandidate[] {
   if (!('bindables' in definition)) {
     return [];
@@ -3229,6 +3271,9 @@ function bindableCandidates(
     definition.identityHandle,
     bindable.sourceAddressHandle ?? definition.sourceAddressHandle,
     `Bindable attribute for ${definition.type}.`,
+    null,
+    null,
+    canComposeAttributeCommand ? `${bindable.attribute}.bind` : null,
   ));
 }
 
@@ -3696,6 +3741,23 @@ function classifyTemplateCompletionSite(
     return TemplateCompletionSiteKind.Unknown;
   }
   return TemplateCompletionSiteKind.Unknown;
+}
+
+function canComposeAttributeCommandAtCursor(
+  siteKind: TemplateCompletionSiteKind,
+  attribute: HtmlAttribute | null,
+  topLevelSyntax: AttributeSyntax | null,
+  nestedSyntax: AttributeSyntax | null,
+): boolean {
+  if (siteKind !== TemplateCompletionSiteKind.AttributeName || nestedSyntax != null) {
+    return false;
+  }
+  if (attribute == null) {
+    return true;
+  }
+  return topLevelSyntax?.syntaxKind === AttributeSyntaxKind.Plain
+    && topLevelSyntax.command == null
+    && topLevelSyntax.rawName === topLevelSyntax.target;
 }
 
 function siteKindUsesExpressionParse(siteKind: TemplateCompletionSiteKind): boolean {
