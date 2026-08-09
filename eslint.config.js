@@ -7,7 +7,9 @@ module.exports = [
   {
     ignores: [
       "**/node_modules/**",
+      "**/.vscode-test/**",
       "packages/**/out/**",
+      "packages/**/dist/**",
       "packages/**/test/**",
       "coverage/**",
       "dist/**",

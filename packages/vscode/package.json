@@ -165,6 +165,7 @@
     "bundle": "node esbuild.mjs",
     "bundle:watch": "node esbuild.mjs --watch",
     "bundle:minify": "node esbuild.mjs --minify",
+    "watch:ide:process": "pnpm run bundle:watch",
     "test:extension-host": "pnpm -w build && pnpm run bundle && node scripts/run-extension-host-tests.mjs --worker --current-stable",
     "test:extension-host:worker": "pnpm run test:extension-host",
     "test:extension-host:ipc": "pnpm -w build && pnpm run bundle && node scripts/run-extension-host-tests.mjs --ipc --current-stable",
