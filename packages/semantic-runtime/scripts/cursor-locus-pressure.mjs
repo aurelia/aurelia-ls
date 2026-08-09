@@ -534,6 +534,15 @@ function recordCursorInfoSourceCoverage(aggregate, value) {
     `route-target:${value.selectedRouteTarget == null ? 'none' : sourceReferenceState(value.selectedRouteTarget.targetSource)}`,
   );
   increment(aggregate.apiCursorInfoSourceCoverage, `selected-member:${selectedMemberSourceState(value)}`);
+  increment(aggregate.apiCursorInfoSourceCoverage, `selected-expression:${rowSourceState(value.selectedExpression)}`);
+  increment(
+    aggregate.apiCursorInfoSourceCoverage,
+    `selected-expression-type:${value.selectedExpression == null ? 'none' : sourceReferenceState(value.selectedExpression.typeSource)}`,
+  );
+  increment(
+    aggregate.apiCursorInfoSourceCoverage,
+    `selected-expression-declaration:${value.selectedExpression == null ? 'none' : sourceReferenceState(value.selectedExpression.typeDeclarationSource)}`,
+  );
   increment(aggregate.apiCursorInfoSourceCoverage, `member-owner:${rowSourceState(value.memberOwnerType)}`);
   increment(aggregate.apiCursorInfoSourceCoverage, `member-owner-declaration:${memberOwnerDeclarationSourceState(value)}`);
   increment(aggregate.apiCursorInfoSelectedMemberCoverage, selectedMemberCoverageState(value));
@@ -623,6 +632,15 @@ function recordCursorInfoFeaturePressure(aggregate, value, completionAnswer, val
 
 function cursorInfoHoverTargets(value) {
   const targets = [];
+  if (value.selectedExpression != null) {
+    targets.push(
+      `selected-expression:${value.selectedExpression.expressionKind}:` +
+      `projection=${value.selectedExpression.typeShapeKind ?? 'unknown'}:` +
+      `origin=${value.selectedExpression.typeOrigin ?? 'unknown'}:` +
+      `analysis=${value.selectedExpression.openKind ?? 'closed'}:` +
+      `source=${sourceReferenceState(value.selectedExpression.source)}`,
+    );
+  }
   if (value.selectedBindable != null) {
     targets.push(`bindable:${sourceReferenceState(value.selectedBindable.source)}`);
   }

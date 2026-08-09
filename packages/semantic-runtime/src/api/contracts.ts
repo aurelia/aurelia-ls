@@ -323,6 +323,7 @@ import type {
 import type {
   CheckerTypeMemberKind,
   CheckerTypeMemberVisibilityKind,
+  CheckerTypeProjectionOrigin,
   CheckerTypeShapeKind,
 } from '../type-system/type-shape.js';
 import type { ExpressionParseResultKind } from '../expression/parse-result-algebra.js';
@@ -4304,6 +4305,28 @@ export interface SemanticTemplateCursorMemberRow {
   };
 }
 
+/** Exact bare template expression selected by the cursor and its best closed or open checker projection. */
+export interface SemanticTemplateCursorExpressionRow {
+  readonly expressionKind: 'AccessThis';
+  readonly typeDisplay: string | null;
+  readonly typeShapeKind: CheckerTypeShapeKind | `${CheckerTypeShapeKind}` | null;
+  readonly typeOrigin: CheckerTypeProjectionOrigin | `${CheckerTypeProjectionOrigin}` | null;
+  readonly openKind: CheckerExpressionTypeOpenKind | `${CheckerExpressionTypeOpenKind}` | null;
+  readonly openReason: string | null;
+  /** Exact authored token selected by the cursor. */
+  readonly source: SemanticSourceReference;
+  /** Source route that produced the type, when narrower than the reusable type product. */
+  readonly typeSource: SemanticSourceReference | null;
+  /** Best TypeScript declaration source for the projected type. */
+  readonly typeDeclarationSource: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly typeProductHandle: ProductHandle | null;
+    readonly typeIdentityHandle: IdentityHandle | null;
+    readonly typeSourceAddressHandle: AddressHandle | null;
+    readonly typeDeclarationSourceAddressHandle: AddressHandle | null;
+  };
+}
+
 export type SemanticTemplateCursorDiagnosticSeverity =
   | 'information'
   | 'warning'
@@ -4745,6 +4768,8 @@ export interface SemanticTemplateCursorInfoResult {
   readonly selectedRouteTarget: SemanticTemplateCursorRouteTargetRow | null;
   readonly selectedMemberName: string | null;
   readonly selectedMember: SemanticTemplateCursorMemberRow | null;
+  /** Typed presentation for a selected bare expression such as standalone `$this`. */
+  readonly selectedExpression: SemanticTemplateCursorExpressionRow | null;
   readonly memberOwnerType: {
     readonly display: string | null;
     readonly shapeKind: string | null;

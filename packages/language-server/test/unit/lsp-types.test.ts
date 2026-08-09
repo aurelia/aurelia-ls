@@ -1236,6 +1236,73 @@ describe("mapSemanticRuntimeTemplateHover", () => {
     documentUris: appDocumentUris,
     originDocument: hoverDocument,
   };
+  const expressionText = "<template>${$this}</template>";
+  const expressionUri = appDocumentUris.uriForWorkspaceRelativePath("src/expression.html")!;
+  const expressionDocument = TextDocument.create(expressionUri, "html", 3, expressionText);
+  const expressionStart = expressionText.indexOf("$this");
+  const expressionSource = {
+    kind: "source-span-address",
+    label: `src/expression.html@${expressionStart}..${expressionStart + "$this".length}`,
+    path: "src/expression.html",
+    start: expressionStart,
+    end: expressionStart + "$this".length,
+    role: "expression",
+  };
+  const expressionOptions = {
+    documentUris: appDocumentUris,
+    originDocument: expressionDocument,
+  };
+
+  function expressionHoverAnswer(
+    expressionOverrides: Record<string, unknown> = {},
+    valueOverrides: Record<string, unknown> = {},
+    answerOverrides: Record<string, unknown> = {},
+  ) {
+    return {
+      schemaVersion: "0.2",
+      result: "answered",
+      selection: "exact",
+      coverage: "complete",
+      summary: "mock",
+      ...answerOverrides,
+      value: {
+        displayText: "mock",
+        siteKind: "expression",
+        activeSource: expressionSource,
+        expressionFrontier: null,
+        missingInputs: [],
+        template: { compilationLane: "authoring", source: null },
+        html: {
+          nodeKind: "text",
+          tagName: null,
+          attributeName: null,
+          attributeValue: null,
+          source: null,
+          attributeSource: null,
+        },
+        valueSite: null,
+        selectedDefinition: null,
+        selectedBindable: null,
+        selectedMemberName: null,
+        selectedMember: null,
+        selectedExpression: {
+          expressionKind: "AccessThis",
+          typeDisplay: "ExpressionApp",
+          typeShapeKind: "class",
+          typeOrigin: "type-checker",
+          openKind: null,
+          openReason: null,
+          source: expressionSource,
+          typeSource: null,
+          typeDeclarationSource: null,
+          ...expressionOverrides,
+        },
+        memberOwnerType: null,
+        diagnostics: [],
+        ...valueOverrides,
+      },
+    } as never;
+  }
 
   test("maps selected runtime member facts to markdown hover", () => {
     const mapped = mapSemanticRuntimeTemplateHover({
@@ -1342,6 +1409,165 @@ describe("mapSemanticRuntimeTemplateHover", () => {
     expect(value).toContain("Analysis is incomplete because");
     expect(value).toContain("`expression-member-owner-type:dynamic`");
     expect(value).toContain("and 1 more input");
+  });
+
+  test("maps closed and open bare current-context expressions with exact range and pressure", () => {
+    const closed = mapSemanticRuntimeTemplateHover(
+      expressionHoverAnswer(),
+      expressionOptions,
+    );
+    const closedMarkdown = (closed.value?.contents as { value?: string }).value ?? "";
+    expect(closed.value?.range).toEqual({
+      start: expressionDocument.positionAt(expressionStart),
+      end: expressionDocument.positionAt(expressionStart + "$this".length),
+    });
+    expect(closedMarkdown).toContain("**Expression** `$this`");
+    expect(closedMarkdown).toContain("$this: ExpressionApp");
+    expect(closedMarkdown).toContain("type shape: `class`");
+    expect(closedMarkdown).toContain("type origin: `type-checker`");
+    expect(closedMarkdown).not.toContain("Analysis is incomplete");
+    expect(closed.failures).toEqual([]);
+
+    const open = mapSemanticRuntimeTemplateHover(
+      expressionHoverAnswer({
+        typeDisplay: "{ item: AccessUseItem; }",
+        typeShapeKind: "object",
+        typeOrigin: "synthetic-template-type",
+        openKind: "missing-context-type",
+        openReason: "The repeated binding context has no closed aggregate context type.",
+      }, {
+        missingInputs: ["selected-expression-type:missing-context-type"],
+      }, {
+        coverage: "open",
+      }),
+      expressionOptions,
+    );
+    const openMarkdown = (open.value?.contents as { value?: string }).value ?? "";
+    expect(open.value?.range).toEqual(closed.value?.range);
+    expect(openMarkdown).toContain("$this: { item: AccessUseItem; }");
+    expect(openMarkdown).toContain("analysis: `missing-context-type`");
+    expect(openMarkdown).toContain("The repeated binding context has no closed aggregate context type.");
+    expect(openMarkdown).toContain("Analysis is incomplete because");
+    expect(openMarkdown).toContain("`selected-expression-type:missing-context-type`");
+    expect(open.failures).toEqual([]);
+  });
+
+  test("fails closed when a bare expression is co-selected with member evidence", () => {
+    const conflicts: Array<Record<string, unknown>> = [{
+      selectedMemberName: "value",
+    }, {
+      selectedMember: {
+        name: "value",
+        memberKind: "property",
+        typeDisplay: "string",
+        isOptional: false,
+        isReadonly: false,
+        source: null,
+      },
+    }, {
+      memberOwnerType: {
+        display: "ExpressionApp",
+        shapeKind: "class",
+        origin: "type-checker",
+        source: null,
+        declarationSource: null,
+      },
+    }];
+
+    for (const conflict of conflicts) {
+      expect(mapSemanticRuntimeTemplateHover(
+        expressionHoverAnswer({}, conflict),
+        expressionOptions,
+      )).toEqual({
+        value: null,
+        failures: ["Hover cannot select both a member and a bare expression."],
+      });
+    }
+  });
+
+  test("fails closed for non-exact, foreign, mismatched, and out-of-bounds expression sources", () => {
+    const nonExact = {
+      kind: "source-file-address",
+      label: "src/expression.html",
+      path: "src/expression.html",
+    };
+    expect(mapSemanticRuntimeTemplateHover(
+      expressionHoverAnswer({ source: nonExact }),
+      expressionOptions,
+    ).failures).toEqual(["Hover selected expression source has no exact authored span."]);
+
+    const foreign = {
+      ...expressionSource,
+      label: `src/foreign.html@${expressionStart}..${expressionStart + "$this".length}`,
+      path: "src/foreign.html",
+    };
+    expect(mapSemanticRuntimeTemplateHover(
+      expressionHoverAnswer({ source: foreign }),
+      expressionOptions,
+    ).failures).toEqual(["Hover selected expression source does not target the requesting document."]);
+
+    const mismatched = {
+      ...expressionSource,
+      label: `src/expression.html@${expressionStart + 1}..${expressionStart + "$this".length}`,
+      start: expressionStart + 1,
+    };
+    expect(mapSemanticRuntimeTemplateHover(
+      expressionHoverAnswer({ source: mismatched }),
+      expressionOptions,
+    ).failures).toEqual(["Hover selected expression source does not match the active authored range."]);
+
+    const outOfBounds = {
+      ...expressionSource,
+      label: "src/expression.html@999..1004",
+      start: 999,
+      end: 1004,
+    };
+    expect(mapSemanticRuntimeTemplateHover(
+      expressionHoverAnswer({ source: outOfBounds }, { activeSource: outOfBounds }),
+      expressionOptions,
+    ).failures).toEqual(["Hover selected expression source is outside the current document text."]);
+  });
+
+  test("fails closed for invalid expression text, kind, type closure, and open pressure", () => {
+    const wrongText = "<template>${$that}</template>";
+    const wrongTextDocument = TextDocument.create(expressionUri, "html", 4, wrongText);
+    const wrongTextStart = wrongText.indexOf("$that");
+    const wrongTextSource = {
+      ...expressionSource,
+      label: `src/expression.html@${wrongTextStart}..${wrongTextStart + "$that".length}`,
+      start: wrongTextStart,
+      end: wrongTextStart + "$that".length,
+    };
+    expect(mapSemanticRuntimeTemplateHover(
+      expressionHoverAnswer({ source: wrongTextSource }, { activeSource: wrongTextSource }),
+      { ...expressionOptions, originDocument: wrongTextDocument },
+    ).failures).toEqual([
+      "Hover selected expression is not the exact authored current-context `$this` token.",
+    ]);
+
+    expect(mapSemanticRuntimeTemplateHover(
+      expressionHoverAnswer({ expressionKind: "AccessBoundary" }),
+      expressionOptions,
+    ).failures).toEqual([
+      "Hover selected expression is not the exact authored current-context `$this` token.",
+    ]);
+
+    expect(mapSemanticRuntimeTemplateHover(
+      expressionHoverAnswer({ typeDisplay: null }),
+      expressionOptions,
+    ).failures).toEqual(["Hover selected expression is closed but has no type display."]);
+
+    expect(mapSemanticRuntimeTemplateHover(
+      expressionHoverAnswer({
+        openKind: "missing-context-type",
+        openReason: "Missing aggregate context type.",
+      }, {
+        missingInputs: [],
+      }, {
+        coverage: "open",
+      }),
+      expressionOptions,
+    ).failures).toEqual(["Hover selected expression is open without matching analysis pressure."]);
   });
 
   test("preserves the exact active range plus bindable type and every cursor diagnostic", () => {

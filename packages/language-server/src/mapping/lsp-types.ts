@@ -531,6 +531,73 @@ export function mapSemanticRuntimeTemplateHover(
   }
 
   const value = answer.value;
+  let selectedExpressionText: string | null = null;
+  if (value.selectedExpression != null) {
+    const expression = value.selectedExpression;
+    if (
+      value.selectedMember != null
+      || value.selectedMemberName != null
+      || value.memberOwnerType != null
+    ) {
+      return {
+        value: null,
+        failures: ["Hover cannot select both a member and a bare expression."],
+      };
+    }
+    const activeSource = semanticExactSourceReference(value.activeSource);
+    const expressionSource = semanticExactSourceReference(expression.source);
+    if (activeSource == null || expressionSource == null) {
+      return {
+        value: null,
+        failures: ["Hover selected expression source has no exact authored span."],
+      };
+    }
+    const expressionSourceUri = semanticSourceReferenceUri(expressionSource, options.documentUris);
+    if (
+      expressionSourceUri == null
+      || !options.documentUris.sameDocument(expressionSourceUri, options.originDocument.uri)
+    ) {
+      return {
+        value: null,
+        failures: ["Hover selected expression source does not target the requesting document."],
+      };
+    }
+    if (!sameExactSourceReference(activeSource, expressionSource, options.documentUris)) {
+      return {
+        value: null,
+        failures: ["Hover selected expression source does not match the active authored range."],
+      };
+    }
+    const expressionRange = semanticSourceRangeForDocument(expressionSource, options.originDocument);
+    if (expressionRange == null) {
+      return {
+        value: null,
+        failures: ["Hover selected expression source is outside the current document text."],
+      };
+    }
+    selectedExpressionText = options.originDocument.getText(expressionRange);
+    if (expression.expressionKind !== "AccessThis" || selectedExpressionText !== "$this") {
+      return {
+        value: null,
+        failures: ["Hover selected expression is not the exact authored current-context `$this` token."],
+      };
+    }
+    if (expression.openKind == null && expression.typeDisplay == null) {
+      return {
+        value: null,
+        failures: ["Hover selected expression is closed but has no type display."],
+      };
+    }
+    if (
+      expression.openKind != null
+      && !value.missingInputs.includes(`selected-expression-type:${expression.openKind}`)
+    ) {
+      return {
+        value: null,
+        failures: ["Hover selected expression is open without matching analysis pressure."],
+      };
+    }
+  }
   const lines: string[] = [];
 
   if (value.selectedMember != null || value.selectedMemberName != null || value.memberOwnerType != null) {
@@ -549,6 +616,28 @@ export function mapSemanticRuntimeTemplateHover(
     ].filter((part): part is string => part != null);
     if (details.length > 0) {
       lines.push("", details.join("  \n"));
+    }
+  }
+
+  if (value.selectedExpression != null) {
+    const expression = value.selectedExpression;
+    addSectionBreak(lines);
+    lines.push(`**Expression** \`${escapeMarkdownCode(selectedExpressionText ?? "$this")}\``);
+    if (expression.typeDisplay != null) {
+      lines.push("", "```ts", `${selectedExpressionText ?? "$this"}: ${expression.typeDisplay}`, "```");
+    } else {
+      lines.push("", "type: unavailable");
+    }
+    const details = [
+      expression.typeShapeKind == null ? null : `type shape: \`${expression.typeShapeKind}\``,
+      expression.typeOrigin == null ? null : `type origin: \`${expression.typeOrigin}\``,
+      expression.openKind == null ? null : `analysis: \`${expression.openKind}\``,
+    ].filter((part): part is string => part != null);
+    if (details.length > 0) {
+      lines.push("", details.join("  \n"));
+    }
+    if (expression.openReason != null) {
+      lines.push("", expression.openReason);
     }
   }
 

@@ -121,6 +121,7 @@ import type {
   SemanticTemplateDiagnosticPhase,
   SemanticTemplateDiagnosticsResult,
   SemanticTemplateCursorDefinitionRow,
+  SemanticTemplateCursorExpressionRow,
   SemanticTemplateCursorHtmlRow,
   SemanticTemplateCursorInfoResult,
   SemanticTemplateCursorMemberRow,
@@ -548,6 +549,11 @@ function semanticTemplateCursorInfoDisplayText(
   }
   if (value.selectedRouteTarget != null) {
     lines.push(`Selected route target: ${value.selectedRouteTarget.targetKind} ${value.selectedRouteTarget.matchedName}.`);
+  }
+  if (value.selectedExpression != null) {
+    lines.push(
+      `Selected expression: ${value.selectedExpression.expressionKind}; type=${value.selectedExpression.typeDisplay ?? 'unknown'}; open=${value.selectedExpression.openKind ?? 'none'}.`,
+    );
   }
   if (value.selectedMember != null || value.memberOwnerType != null || value.selectedMemberName != null) {
     lines.push(`Selected member: ${value.selectedMemberName ?? value.selectedMember?.name ?? 'none'}; owner=${value.memberOwnerType?.display ?? 'unknown'}; memberType=${value.selectedMember?.typeDisplay ?? 'unknown'}.`);
@@ -2384,6 +2390,7 @@ function missingTemplateCursorInfo(
     selectedRouteTarget: null,
     selectedMemberName: null,
     selectedMember: null,
+    selectedExpression: null,
     memberOwnerType: null,
     diagnostics: [],
   };
@@ -2428,6 +2435,12 @@ function templateCursorInfoResult(
           'active-template-token',
         )
       : null;
+  const selectedExpression = cursorSelectedExpressionRow(
+    store,
+    cursorContext,
+    activeSource,
+    includeHandles,
+  );
   const value: Omit<SemanticTemplateCursorInfoResult, 'displayText'> = {
     siteKind: query.siteKind,
     activeSource,
@@ -2459,6 +2472,7 @@ function templateCursorInfoResult(
     selectedRouteTarget: cursorRouteTargetRow(store, cursorContext, includeHandles),
     selectedMemberName: cursorContext.selectedMemberName,
     selectedMember,
+    selectedExpression,
     memberOwnerType,
     diagnostics: cursorDiagnosticRows(
       store,
@@ -2721,6 +2735,48 @@ function cursorMemberOwnerTypeRow(
         identityHandle: typeShape.identityHandle,
         sourceAddressHandle: sourceAddressHandle ?? typeShape.sourceAddressHandle,
         declarationSourceAddressHandle: typeShape.declarationSourceAddressHandle,
+      },
+    } : {}),
+  };
+}
+
+function cursorSelectedExpressionRow(
+  store: KernelStore,
+  cursorContext: TemplateCompletionCursorContext,
+  activeSource: SemanticTemplateCursorInfoResult['activeSource'],
+  includeHandles: boolean,
+): SemanticTemplateCursorExpressionRow | null {
+  const selection = cursorContext.selectedExpression;
+  const source = semanticExactSourceReference(activeSource);
+  const span = cursorContext.activeExpressionSpan;
+  if (selection == null || source == null || span == null) {
+    return null;
+  }
+  const typeReference = selection.typeReference;
+  const typeShape = typeReference?.productHandle == null
+    ? null
+    : store.productDetails.read(TypeSystemProductDetails.TypeShape, typeReference.productHandle);
+  const typeSourceAddressHandle = selection.typeSourceAddressHandle
+    ?? typeReference?.sourceAddressHandle
+    ?? typeShape?.sourceAddressHandle
+    ?? null;
+  const typeDeclarationSourceAddressHandle = typeShape?.declarationSourceAddressHandle ?? null;
+  return {
+    expressionKind: selection.expressionKind,
+    typeDisplay: typeShape?.display ?? typeReference?.display ?? null,
+    typeShapeKind: typeShape?.shapeKind ?? typeReference?.shapeKind ?? null,
+    typeOrigin: typeShape?.origin ?? typeReference?.origin ?? null,
+    openKind: selection.openKind,
+    openReason: selection.openReason,
+    source,
+    typeSource: describeAddress(store, typeSourceAddressHandle),
+    typeDeclarationSource: describeAddress(store, typeDeclarationSourceAddressHandle),
+    ...(includeHandles ? {
+      handles: {
+        typeProductHandle: typeShape?.productHandle ?? typeReference?.productHandle ?? null,
+        typeIdentityHandle: typeShape?.identityHandle ?? typeReference?.identityHandle ?? null,
+        typeSourceAddressHandle,
+        typeDeclarationSourceAddressHandle,
       },
     } : {}),
   };

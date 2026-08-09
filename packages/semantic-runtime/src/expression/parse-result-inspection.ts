@@ -1,6 +1,7 @@
 import type {
   AccessMemberExpression,
   AccessScopeExpression,
+  AccessThisExpression,
   AuthoredScopePath,
   BindingIdentifier,
   CallScopeExpression,
@@ -9,6 +10,7 @@ import type {
   ExpressionType,
   ObjectLiteralExpression,
 } from './ast.js';
+import { AuthoredScopePathKind } from './ast.js';
 import {
   ExpressionCompanionFrameKind,
   ExpressionExpectedContinuationClass,
@@ -193,6 +195,16 @@ export class ExpressionParseResultInspector {
   ): ExpressionScopeAccess | null {
     return this.hasCanonicalAst(result)
       ? scopeAccessExpressionForNodeOffset(result.ast, offset)
+      : null;
+  }
+
+  /** Exact authored `$this` occurrence selecting the current binding context. */
+  static currentBindingContextAccessAtOffset(
+    result: ExpressionParseResult,
+    offset: number,
+  ): AccessThisExpression | null {
+    return this.hasCanonicalAst(result)
+      ? currentBindingContextAccessExpressionForNodeOffset(result.ast, offset)
       : null;
   }
 
@@ -446,6 +458,19 @@ function scopeAccessExpressionForNodeOffset(
       ? candidate
       : null
   );
+}
+
+function currentBindingContextAccessExpressionForNodeOffset(
+  expression: ExpressionAstNode,
+  offset: number,
+): AccessThisExpression | null {
+  return findInExpressionAtOffset(expression, offset, (candidate) => {
+    return candidate.$kind === 'AccessThis'
+      && candidate.authoredScopePath?.pathKind === AuthoredScopePathKind.CurrentBindingContext
+      && scopeQualifierSpanAtOffset(candidate.authoredScopePath, offset) != null
+        ? candidate
+        : null;
+  });
 }
 
 function bindingIdentifierForNodeOffset(

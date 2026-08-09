@@ -7,7 +7,7 @@ import {
 } from '../expression/parse-result-algebra.js';
 import ts from 'typescript';
 import { ExpressionParser } from '../expression/expression-parser.js';
-import type { ExpressionAstNode } from '../expression/ast.js';
+import type { AccessThisExpression, ExpressionAstNode } from '../expression/ast.js';
 import {
   ExpressionParseResultInspector,
   type ExpressionObjectLiteralKeyContext,
@@ -37,6 +37,7 @@ import {
 } from '../configuration/controller.js';
 import {
   BindingContextKind,
+  BindingContextSlotAssignmentAccessKind,
   BindingContextSlot,
   BindingScope,
   BindingScopeOwnerKind,
@@ -51,6 +52,7 @@ import {
 import { TypeSystemHotDetails, TypeSystemProductDetails } from '../type-system/product-details.js';
 import {
   CheckerExpressionTypeEvaluationResultKind,
+  CheckerExpressionTypeOpenKind,
   type CheckerExpressionTypeOpenSubject,
   type CheckerExpressionTypeEvaluation,
 } from '../type-system/expression-type-evaluation.js';
@@ -67,7 +69,7 @@ import type {
 import {
   CheckerTypeProjectionOrigin,
   CheckerTypeShapeKind,
-  type CheckerTypeMemberKind,
+  CheckerTypeMemberKind,
   type CheckerTypeMemberVisibilityKind,
   checkerIndexedAccessSupportsString,
   checkerTypeMemberReachableIdentityHandle,
@@ -497,6 +499,8 @@ export class TemplateCompletionCursorContext {
     readonly selectedScopeSlot: TemplateCompletionScopeSlotSelection | null,
     /** Closed member token selected by the cursor, when the cursor is on an authored member name. */
     readonly selectedMemberName: string | null,
+    /** Exact bare expression selected by the cursor and its closed or open checker projection. */
+    readonly selectedExpression: TemplateCompletionCursorExpressionSelection | null,
     /** Parser frontier under the cursor, when the cursor selected an expression parse. */
     readonly expressionFrontier: TemplateExpressionCompletionFrontier | null,
     /** Evaluator-owned subject for an open member-owner type, when narrower than the selected member token. */
@@ -525,6 +529,18 @@ export class TemplateCompletionScopeSlotSelection {
     readonly declarationSourceAddressHandle: AddressHandle | null = null,
     /** Durable scope, type-shape, or expression-parse product that owns the selected local. */
     readonly ownerProductHandle: ProductHandle | null = null,
+  ) {}
+}
+
+/** Closed or open TypeChecker evidence for one exact bare expression token such as standalone `$this`. */
+export class TemplateCompletionCursorExpressionSelection {
+  constructor(
+    readonly expressionKind: 'AccessThis',
+    /** Full handle-sized checker reference, including open/partial display and identity evidence. */
+    readonly typeReference: CheckerTypeReference | null,
+    readonly typeSourceAddressHandle: AddressHandle | null,
+    readonly openKind: CheckerExpressionTypeOpenKind | null,
+    readonly openReason: string | null,
   ) {}
 }
 
@@ -620,6 +636,7 @@ class TemplateCompletionCursorContextBuilder {
         this.input.i18nTranslationKeyProductHandles ?? [],
       ),
       this.expressionWorld,
+      null,
       null,
       null,
       null,
@@ -781,6 +798,24 @@ class TemplateCompletionCursorContextBuilder {
               effectiveExpressionParse.result,
               offset,
             ));
+    const selectedExpression = selectedScopeSlot == null && selectedMemberName == null
+      ? selectedBareExpressionForCursor({
+          store: this.store,
+          locusKey: this.input.locus.key,
+          offset,
+          expressionResult: semanticExpressionResult,
+          expressionParse: effectiveExpressionParse,
+          activeExpressionSpan,
+          bindingScope,
+          bindingEnvironment,
+          contextualType,
+          expressionWorld: this.expressionWorld,
+          missingInputs,
+        })
+      : null;
+    const selectedMemberOwnerType = selectedExpression == null
+      ? memberOwnerType
+      : missingDerivedMemberOwnerType();
     const activeSourceAddressHandle = activeExpressionSpan == null
       ? activeTemplateSourceAddressHandle(
           this.store,
@@ -809,7 +844,7 @@ class TemplateCompletionCursorContextBuilder {
           : bindingEnvironment?.resourceScope?.productHandle ?? null,
         selectedDefinition?.productHandle ?? null,
         siteKindUsesExpressionParse(siteKind) ? effectiveExpressionParse?.productHandle ?? null : null,
-        memberOwnerType.productHandle,
+        selectedMemberOwnerType.productHandle,
         semanticValueSite?.productHandle ?? null,
         this.projection,
         this.input.router.routeConfigProductHandles,
@@ -825,9 +860,10 @@ class TemplateCompletionCursorContextBuilder {
       selectedDefinition?.matchedName ?? null,
       selectedScopeSlot,
       selectedMemberName,
+      selectedExpression,
       expressionFrontier,
-      memberOwnerType.openSubject,
-      memberOwnerType.sourceAddressHandle,
+      selectedMemberOwnerType.openSubject,
+      selectedMemberOwnerType.sourceAddressHandle,
       activeSourceAddressHandle,
       activeExpressionSpan,
       bindingEnvironment?.openReason ?? null,
@@ -1336,6 +1372,167 @@ function selectedScopeSlotForCursor(
   }
 
   return null;
+}
+
+interface TemplateBareExpressionCursorSelectionRequest {
+  readonly store: KernelStore;
+  readonly locusKey: string;
+  readonly offset: number;
+  readonly expressionResult: ExpressionParseResult | null;
+  readonly expressionParse: TemplateExpressionParse | null;
+  readonly activeExpressionSpan: SourceSpan | null;
+  readonly bindingScope: BindingScope | null;
+  readonly bindingEnvironment: TemplateCursorBindingEnvironment | null;
+  readonly contextualType: CheckerTypeReference | null;
+  readonly expressionWorld: CheckerExpressionTypeWorld;
+  readonly missingInputs: string[];
+}
+
+function selectedBareExpressionForCursor(
+  input: TemplateBareExpressionCursorSelectionRequest,
+): TemplateCompletionCursorExpressionSelection | null {
+  const expressionParse = input.expressionParse;
+  const expression = input.expressionResult == null
+    ? null
+    : ExpressionParseResultInspector.currentBindingContextAccessAtOffset(
+        input.expressionResult,
+        input.offset,
+      )
+      ?? (expressionParse == null
+        ? null
+        : ExpressionParseResultInspector.currentBindingContextAccessAtOffset(
+            expressionParse.result,
+            input.offset,
+          ));
+  if (
+    expression == null
+    || expressionParse == null
+    || input.activeExpressionSpan == null
+  ) {
+    return null;
+  }
+
+  if (input.bindingEnvironment?.openReason != null) {
+    input.missingInputs.push(
+      `selected-expression-type:${CheckerExpressionTypeOpenKind.MissingContext}`,
+    );
+    return new TemplateCompletionCursorExpressionSelection(
+      expression.$kind,
+      null,
+      expressionParse.sourceAddressHandle,
+      CheckerExpressionTypeOpenKind.MissingContext,
+      input.bindingEnvironment.openReason,
+    );
+  }
+  if (input.bindingScope == null) {
+    input.missingInputs.push(
+      `selected-expression-type:${CheckerExpressionTypeOpenKind.MissingBindingScope}`,
+    );
+    return new TemplateCompletionCursorExpressionSelection(
+      expression.$kind,
+      null,
+      expressionParse.sourceAddressHandle,
+      CheckerExpressionTypeOpenKind.MissingBindingScope,
+      'No binding scope was available for the selected bare expression.',
+    );
+  }
+
+  const context = memberOwnerEvaluationContextForCursorExpression(
+    input.store,
+    `${input.locusKey}:selected-expression`,
+    input.expressionResult,
+    expressionParse,
+    input.offset,
+    expressionParse.sourceAddressHandle,
+    input.bindingScope,
+    input.bindingEnvironment?.sourceProjection ?? null,
+    input.contextualType,
+  );
+  if (context == null) {
+    input.missingInputs.push(
+      `selected-expression-type:${CheckerExpressionTypeOpenKind.MissingContext}`,
+    );
+    return new TemplateCompletionCursorExpressionSelection(
+      expression.$kind,
+      null,
+      expressionParse.sourceAddressHandle,
+      CheckerExpressionTypeOpenKind.MissingContext,
+      'No checker evaluation context was available for the selected bare expression.',
+    );
+  }
+
+  const evaluator = input.expressionWorld.evaluator(
+    input.bindingEnvironment?.resourceScope ?? null,
+  );
+  const selectedContext = evaluator.evaluationContextForExpression(context, expression);
+  if (selectedContext == null) {
+    input.missingInputs.push(
+      `selected-expression-type:${CheckerExpressionTypeOpenKind.MissingContext}`,
+    );
+    return new TemplateCompletionCursorExpressionSelection(
+      expression.$kind,
+      null,
+      expressionParse.sourceAddressHandle,
+      CheckerExpressionTypeOpenKind.MissingContext,
+      'The exact bare expression occurrence had no derived checker evaluation context.',
+    );
+  }
+  const evaluation = evaluator.evaluate(selectedContext);
+  const evaluatedTypeReference = evaluation.kind === CheckerExpressionTypeEvaluationResultKind.Type
+    ? evaluation.typeReference
+    : evaluation.partialTypeReference ?? evaluation.subject?.typeReference ?? null;
+  const typeReference = evaluatedTypeReference
+    ?? (evaluation.kind === CheckerExpressionTypeEvaluationResultKind.Open
+      && evaluation.openKind === CheckerExpressionTypeOpenKind.MissingContextType
+      ? selectedRepeatBindingContextAggregateType(input, expression, selectedContext)
+      : null);
+  if (evaluation.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
+    input.missingInputs.push(`selected-expression-type:${evaluation.openKind}`);
+  }
+  return new TemplateCompletionCursorExpressionSelection(
+    expression.$kind,
+    typeReference,
+    evaluation.kind === CheckerExpressionTypeEvaluationResultKind.Type
+      ? evaluation.sourceAddressHandle
+      : evaluation.subject?.sourceAddressHandle ?? typeReference?.sourceAddressHandle ?? null,
+    evaluation.kind === CheckerExpressionTypeEvaluationResultKind.Open ? evaluation.openKind : null,
+    evaluation.kind === CheckerExpressionTypeEvaluationResultKind.Open ? evaluation.summary : null,
+  );
+}
+
+function selectedRepeatBindingContextAggregateType(
+  input: TemplateBareExpressionCursorSelectionRequest,
+  expression: AccessThisExpression,
+  context: CheckerExpressionTypeEvaluationContext,
+): CheckerTypeReference | null {
+  const located = context.scope.locateThis(expression.ancestor);
+  const bindingContext = located.context;
+  if (
+    located.scope?.ownerKind !== BindingScopeOwnerKind.RepeatedItem
+    || bindingContext == null
+    || bindingContext.contextType != null
+    || bindingContext.slots.length === 0
+  ) {
+    return null;
+  }
+  const members = bindingContext.slots.map((slot) => ({
+    name: slot.name,
+    valueType: slot.targetType,
+    memberKind: CheckerTypeMemberKind.Property,
+    isReadonly: slot.assignmentAccessKind === BindingContextSlotAssignmentAccessKind.FrameworkManagedReadOnly,
+    sourceAddressHandle: slot.sourceAddressHandle,
+  }));
+  const display = `{ ${members
+    .map((member) => `${member.name}: ${member.valueType?.display ?? 'unknown'}`)
+    .join('; ')}; }`;
+  return input.expressionWorld.projector.ensureSyntheticProjection({
+    localKey: `${input.locusKey}:selected-expression:repeat-context:${input.activeExpressionSpan?.start ?? 'unknown'}`,
+    shapeKind: CheckerTypeShapeKind.Object,
+    display,
+    members,
+    origin: CheckerTypeProjectionOrigin.SyntheticTemplateType,
+    sourceAddressHandle: bindingContext.sourceAddressHandle,
+  }).toReference();
 }
 
 interface TemplateCallbackLocalCursorAuthority {
