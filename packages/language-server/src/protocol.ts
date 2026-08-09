@@ -124,7 +124,7 @@ export interface ResourceInventoryParams {
 export type ResourceInventoryKind = `${SemanticResourceInventoryKind}`;
 
 /** Source roles are wire vocabulary, not labels inferred by the client. */
-export const ResourceLocationRole = {
+export const ResourceLocationRoles = {
   PublicName: "public-name",
   Declaration: "declaration",
   Implementation: "implementation",
@@ -138,7 +138,7 @@ export const ResourceLocationRole = {
   Template: "template",
 } as const;
 
-export type ResourceLocationRole = typeof ResourceLocationRole[keyof typeof ResourceLocationRole];
+export type ResourceLocationRole = typeof ResourceLocationRoles[keyof typeof ResourceLocationRoles];
 
 export interface ResourceSourceLocation {
   readonly uri: string;

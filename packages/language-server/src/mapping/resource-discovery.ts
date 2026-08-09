@@ -11,6 +11,7 @@ import { semanticExactSourceReference } from "@aurelia-ls/semantic-runtime";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import type {
   ResourceInventoryItem,
+  ResourceLocationRole,
   ResourceNavigationTarget,
   ResourceProject,
   ResourceSourceUnavailableReason,
@@ -19,7 +20,7 @@ import type {
   TemplateResourceAvailabilityItem,
   TemplateResourceScopeCandidate,
 } from "../protocol.js";
-import { ResourceLocationRole } from "../protocol.js";
+import { ResourceLocationRoles } from "../protocol.js";
 import type { WorkspaceDocumentUris } from "../utils/document-uri.js";
 import { languageIdForSource } from "../utils/document-kind.js";
 import {
@@ -65,8 +66,8 @@ export function mapResourceInventoryItem(
       identityKey: alias.identityKey,
       registrationKey: alias.registrationKey,
       name: alias.name,
-      source: mapSourceTarget(alias.source, ResourceLocationRole.Alias, context),
-      navigation: mapNavigationTarget(alias.source, ResourceLocationRole.Alias, "no-authored-source", context),
+      source: mapSourceTarget(alias.source, ResourceLocationRoles.Alias, context),
+      navigation: mapNavigationTarget(alias.source, ResourceLocationRoles.Alias, "no-authored-source", context),
     })),
     bindables: row.bindables.map((bindable) => ({
       identityKey: bindable.identityKey,
@@ -77,10 +78,10 @@ export function mapResourceInventoryItem(
       valueType: bindable.valueType,
       primary: bindable.primary,
       sources: {
-        name: mapSourceTarget(bindable.nameSource, ResourceLocationRole.BindableName, context),
-        attribute: mapSourceTarget(bindable.attributeSource, ResourceLocationRole.BindableAttribute, context),
-        property: mapSourceTarget(bindable.propertySource, ResourceLocationRole.BindableProperty, context),
-        declaration: mapSourceTarget(bindable.source, ResourceLocationRole.BindableDeclaration, context),
+        name: mapSourceTarget(bindable.nameSource, ResourceLocationRoles.BindableName, context),
+        attribute: mapSourceTarget(bindable.attributeSource, ResourceLocationRoles.BindableAttribute, context),
+        property: mapSourceTarget(bindable.propertySource, ResourceLocationRoles.BindableProperty, context),
+        declaration: mapSourceTarget(bindable.source, ResourceLocationRoles.BindableDeclaration, context),
       },
       navigation: mapNavigationTarget(
         bindable.navigationSource,
@@ -99,12 +100,12 @@ export function mapResourceInventoryItem(
       kind: `${row.locality.kind}`,
       ownerIdentityKey: row.locality.ownerIdentityKey,
       ownerName: row.locality.ownerName,
-      ownerSource: mapSourceTarget(row.locality.ownerSource, ResourceLocationRole.LocalOwner, context),
+      ownerSource: mapSourceTarget(row.locality.ownerSource, ResourceLocationRoles.LocalOwner, context),
     },
     sources: {
-      publicName: mapSourceTarget(row.sources.publicName, ResourceLocationRole.PublicName, context),
-      declaration: mapSourceTarget(row.sources.declaration, ResourceLocationRole.Declaration, context),
-      implementation: mapSourceTarget(row.sources.implementation, ResourceLocationRole.Implementation, context),
+      publicName: mapSourceTarget(row.sources.publicName, ResourceLocationRoles.PublicName, context),
+      declaration: mapSourceTarget(row.sources.declaration, ResourceLocationRoles.Declaration, context),
+      implementation: mapSourceTarget(row.sources.implementation, ResourceLocationRoles.Implementation, context),
     },
     navigation,
   };
@@ -114,12 +115,12 @@ function mapNavigationRole(
   role: SemanticResourceInventoryNavigationRole | `${SemanticResourceInventoryNavigationRole}` | null,
 ): ResourceLocationRole | null {
   switch (role) {
-    case "public-name": return ResourceLocationRole.PublicName;
-    case "implementation": return ResourceLocationRole.Implementation;
-    case "bindable-name": return ResourceLocationRole.BindableName;
-    case "bindable-attribute": return ResourceLocationRole.BindableAttribute;
-    case "bindable-property": return ResourceLocationRole.BindableProperty;
-    case "bindable-declaration": return ResourceLocationRole.BindableDeclaration;
+    case "public-name": return ResourceLocationRoles.PublicName;
+    case "implementation": return ResourceLocationRoles.Implementation;
+    case "bindable-name": return ResourceLocationRoles.BindableName;
+    case "bindable-attribute": return ResourceLocationRoles.BindableAttribute;
+    case "bindable-property": return ResourceLocationRoles.BindableProperty;
+    case "bindable-declaration": return ResourceLocationRoles.BindableDeclaration;
     case null: return null;
     default: throw new Error(`Unknown semantic resource navigation role '${String(role)}'.`);
   }
@@ -134,7 +135,7 @@ export function mapTemplateResourceScopeCandidate(
     scopeIdentityKey: candidate.scopeIdentityKey,
     definitionName: candidate.definitionName,
     compilationLane: candidate.compilationLane,
-    source: mapSourceTarget(candidate.source, ResourceLocationRole.Template, context),
+    source: mapSourceTarget(candidate.source, ResourceLocationRoles.Template, context),
   };
 }
 
@@ -146,7 +147,7 @@ export function mapTemplateResourceAvailabilityItem(
     resource: mapResourceInventoryItem(row.resource, context),
     state: `${row.state}`,
     visibilityKind: `${row.visibilityKind}`,
-    availabilitySource: mapSourceTarget(row.availabilitySource, ResourceLocationRole.Availability, context),
+    availabilitySource: mapSourceTarget(row.availabilitySource, ResourceLocationRoles.Availability, context),
   };
 }
 
