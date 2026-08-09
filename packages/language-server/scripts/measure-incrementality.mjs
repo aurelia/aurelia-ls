@@ -9,10 +9,11 @@ import path from "node:path";
 import { performance } from "node:perf_hooks";
 import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { getHeapStatistics, writeHeapSnapshot } from "node:v8";
+import { writeHeapSnapshot } from "node:v8";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import {
   NodeSemanticRuntimeProjectInputHost,
+  readSemanticRuntimeMemorySample,
   semanticRuntimeProcessTypeSystemCacheOverview,
 } from "@aurelia-ls/semantic-runtime";
 import {
@@ -28,6 +29,9 @@ const pressureFixtureRoot = path.join(repoRoot, "packages/semantic-runtime/fixtu
 
 const sourceExtensions = new Set([".ts", ".js", ".html"]);
 const fixtureStatExtensions = new Set([".ts", ".js", ".html", ".json", ".css"]);
+const incrementalityJourneys = new Set(["completion-first", "diagnostics-first"]);
+
+export const incrementalityMeasurementSchemaVersion = "aurelia-ls/incrementality/v1";
 
 class MeasurementDocumentStore {
   documents = new Map();
@@ -172,33 +176,27 @@ class MeasurementCpuProfiler {
 }
 
 async function main() {
-  const args = parseArgs(process.argv.slice(2));
+  const args = parseIncrementalityArgs(process.argv.slice(2));
   const fixtureName = args.workspace == null
     ? args.fixture === "largest" || args.fixture == null
       ? await largestPressureFixtureName()
       : args.fixture
     : path.basename(path.resolve(args.workspace));
-  const requestCount = Number.parseInt(args.requests ?? "20", 10);
-  if (!Number.isFinite(requestCount) || requestCount < 1) {
-    throw new Error("--requests must be a positive integer.");
-  }
-  const editCycles = Number.parseInt(args.cycles ?? "8", 10);
-  if (!Number.isFinite(editCycles) || editCycles < 0) {
-    throw new Error("--cycles must be a non-negative integer.");
-  }
-  const forceGc = args["force-gc"] === "true";
+  const requestCount = args.requests;
+  const editCycles = args.cycles;
+  const forceGc = args.forceGc;
   if (forceGc && typeof globalThis.gc !== "function") {
     throw new Error("--force-gc requires running Node with --expose-gc.");
   }
-  const heapSnapshotDirectory = args["heap-snapshots"] == null
+  const heapSnapshotDirectory = args.heapSnapshots == null
     ? null
-    : path.resolve(args["heap-snapshots"]);
+    : path.resolve(args.heapSnapshots);
   if (heapSnapshotDirectory != null) {
     await fs.mkdir(heapSnapshotDirectory, { recursive: true });
   }
-  const cpuProfileDirectory = args["cpu-profiles"] == null
+  const cpuProfileDirectory = args.cpuProfiles == null
     ? null
-    : path.resolve(args["cpu-profiles"]);
+    : path.resolve(args.cpuProfiles);
   if (cpuProfileDirectory != null) {
     await fs.mkdir(cpuProfileDirectory, { recursive: true });
   }
@@ -253,6 +251,7 @@ async function main() {
     publishEffect: () => {},
   });
   const report = {
+    schemaVersion: incrementalityMeasurementSchemaVersion,
     fixture: {
       name: fixtureName,
       root: fixtureRoot,
@@ -271,6 +270,10 @@ async function main() {
     measurement: {
       editCycles,
       forceGc,
+      journey: args.journey,
+      memoryBoundary: forceGc
+        ? "cache-overview-derived-then-forced-gc-immediate-sample"
+        : "cache-overview-derived-then-unforced-sample",
     },
   };
 
@@ -314,52 +317,55 @@ async function main() {
   writeMeasurementHeapSnapshot(heapSnapshotDirectory, "steady-baseline");
 
   const editTargets = measurementEditTargets(fixtureRoot, sourceFiles);
+  let previousOperationGeneration = await managedGeneration(session);
   for (let index = 0; index < editCycles; index += 1) {
     const target = index % 2 === 0 ? editTargets.html : editTargets.typeScript;
     if (target == null) {
       continue;
     }
-    applyMeasurementMarker(documents, target.filePath, target.kind, index);
+    const editedDocument = applyMeasurementMarker(documents, target.filePath, target.kind, index);
     const change = await timed(
       `steady ${target.kind} edit ${index + 1}: recordSourceTextChanged`,
       measurement,
       () => session.recordSourceTextChanged([target.filePath]),
     );
-    const completion = await cpuProfiler.captureOnce(
-      `${target.kind}-first-completion`,
-      () => timed(
-        `steady ${target.kind} edit ${index + 1}: first completion`,
-        measurement,
-        () => runDocumentRequest(session, targetHtml, null, (operation, document) =>
-          operation.templateCompletions(document, cursorPositions.completion)),
-      ),
-    );
-    const warmCompletion = await cpuProfiler.captureOnce(
-      `${target.kind}-warm-completion`,
-      () => timed(
-        `steady ${target.kind} edit ${index + 1}: warm completion`,
-        measurement,
-        () => runDocumentRequest(session, targetHtml, null, (operation, document) =>
-          operation.templateCompletions(document, cursorPositions.completion)),
-      ),
-    );
-    const diagnostics = await cpuProfiler.captureOnce(
-      `${target.kind}-warm-diagnostics`,
-      () => timed(
-        `steady ${target.kind} edit ${index + 1}: warm diagnostics`,
-        measurement,
-        () => runDocumentRequest(session, targetHtml, null, (operation, document) =>
-          operation.appDiagnostics(document)),
-      ),
-    );
+    const operationTimings = args.journey === "diagnostics-first"
+      ? await measureDiagnosticsFirstEditJourney({
+          session,
+          targetHtml,
+          editedDocument,
+          cursorPositions,
+          measurement,
+          cpuProfiler,
+          kind: target.kind,
+          index,
+        })
+      : await measureCompletionFirstEditJourney({
+          session,
+          targetHtml,
+          editedDocument,
+          cursorPositions,
+          measurement,
+          cpuProfiler,
+          kind: target.kind,
+          index,
+        });
+    const currentness = editJourneyCurrentness({
+      expectedEditedDocument: editedDocument,
+      expectedQueryDocument: requireMeasurementDocument(documents, targetHtmlPath),
+      previousGeneration: previousOperationGeneration,
+      operations: operationTimings.currentnessOperations,
+    });
+    previousOperationGeneration = operationTimings.currentnessOperations.at(-1).generation;
     const cache = await cacheSnapshot(`after steady edit ${index + 1}`, session, forceGc);
     report.editJourneys.push({
       index: index + 1,
       kind: target.kind,
       change: timingSummary(change),
-      firstQuery: timingSummary(completion),
-      warmQuery: timingSummary(warmCompletion),
-      warmDiagnostics: timingSummary(diagnostics),
+      journey: args.journey,
+      editedDocument: documentEvidence(editedDocument),
+      ...operationTimings.report,
+      currentness,
       cache,
     });
   }
@@ -374,7 +380,7 @@ async function main() {
 
   addInvariants(report);
 
-  if (args.json === "true") {
+  if (args.json) {
     console.log(JSON.stringify(report, null, 2));
   } else {
     console.log(markdownReport(report));
@@ -384,6 +390,97 @@ async function main() {
   if (failed.length > 0) {
     process.exitCode = 1;
   }
+}
+
+async function measureCompletionFirstEditJourney(options) {
+  const firstCompletion = await options.cpuProfiler.captureOnce(
+    `${options.kind}-first-completion`,
+    () => timed(
+      `steady ${options.kind} edit ${options.index + 1}: first completion`,
+      options.measurement,
+      () => runMeasuredDocumentRequest(
+        options.session,
+        options.targetHtml,
+        options.editedDocument,
+        (operation, document) => operation.templateCompletions(document, options.cursorPositions.completion),
+      ),
+    ),
+  );
+  const warmCompletion = await options.cpuProfiler.captureOnce(
+    `${options.kind}-warm-completion`,
+    () => timed(
+      `steady ${options.kind} edit ${options.index + 1}: warm completion`,
+      options.measurement,
+      () => runMeasuredDocumentRequest(
+        options.session,
+        options.targetHtml,
+        options.editedDocument,
+        (operation, document) => operation.templateCompletions(document, options.cursorPositions.completion),
+      ),
+    ),
+  );
+  const warmDiagnostics = await options.cpuProfiler.captureOnce(
+    `${options.kind}-warm-diagnostics`,
+    () => timed(
+      `steady ${options.kind} edit ${options.index + 1}: warm diagnostics`,
+      options.measurement,
+      () => runMeasuredDocumentRequest(
+        options.session,
+        options.targetHtml,
+        options.editedDocument,
+        (operation, document) => operation.appDiagnostics(document),
+      ),
+    ),
+  );
+  const firstCompletionSummary = operationTimingSummary(firstCompletion);
+  const warmCompletionSummary = operationTimingSummary(warmCompletion);
+  const warmDiagnosticsSummary = operationTimingSummary(warmDiagnostics);
+  return {
+    report: {
+      firstQuery: firstCompletionSummary,
+      warmQuery: warmCompletionSummary,
+      warmDiagnostics: warmDiagnosticsSummary,
+    },
+    currentnessOperations: [firstCompletionSummary, warmCompletionSummary, warmDiagnosticsSummary],
+  };
+}
+
+async function measureDiagnosticsFirstEditJourney(options) {
+  const firstDiagnostics = await options.cpuProfiler.captureOnce(
+    `${options.kind}-first-diagnostics`,
+    () => timed(
+      `steady ${options.kind} edit ${options.index + 1}: first diagnostics`,
+      options.measurement,
+      () => runMeasuredDocumentRequest(
+        options.session,
+        options.targetHtml,
+        options.editedDocument,
+        (operation, document) => operation.appDiagnostics(document),
+      ),
+    ),
+  );
+  const warmDiagnostics = await options.cpuProfiler.captureOnce(
+    `${options.kind}-warm-diagnostics`,
+    () => timed(
+      `steady ${options.kind} edit ${options.index + 1}: warm diagnostics`,
+      options.measurement,
+      () => runMeasuredDocumentRequest(
+        options.session,
+        options.targetHtml,
+        options.editedDocument,
+        (operation, document) => operation.appDiagnostics(document),
+      ),
+    ),
+  );
+  const firstDiagnosticsSummary = operationTimingSummary(firstDiagnostics);
+  const warmDiagnosticsSummary = operationTimingSummary(warmDiagnostics);
+  return {
+    report: {
+      firstDiagnostics: firstDiagnosticsSummary,
+      warmDiagnostics: warmDiagnosticsSummary,
+    },
+    currentnessOperations: [firstDiagnosticsSummary, warmDiagnosticsSummary],
+  };
 }
 
 async function staleAbortPressure(session, document, position, requestCount) {
@@ -428,12 +525,43 @@ function runDocumentRequest(session, document, isCancellationRequested, run) {
     run(operation, requireOperationDocument(operation, document.uri)));
 }
 
+function runMeasuredDocumentRequest(session, document, editedDocument, run) {
+  return session.runRequest(null, async (operation) => {
+    const operationDocument = requireOperationDocument(operation, document.uri);
+    const operationEditedDocument = requireOperationDocument(operation, editedDocument.uri);
+    const answer = await run(operation, operationDocument);
+    return {
+      answer,
+      generation: { ...operation.generation },
+      document: documentEvidence(operationDocument),
+      editedDocument: documentEvidence(operationEditedDocument),
+    };
+  });
+}
+
 function requireOperationDocument(operation, uri) {
   const document = operation.documents.openDocument(uri);
   if (document == null) {
     throw new Error(`Managed semantic-runtime operation could not read open document '${uri}'.`);
   }
   return document;
+}
+
+function requireMeasurementDocument(documents, filePath) {
+  const uri = pathToFileURL(filePath).toString();
+  const document = documents.get(uri);
+  if (document == null) {
+    throw new Error(`Measurement document store could not read '${uri}'.`);
+  }
+  return document;
+}
+
+function documentEvidence(document) {
+  return {
+    uri: document.uri,
+    languageId: document.languageId,
+    version: document.version,
+  };
 }
 
 async function abortPressure(label, requestCount, run) {
@@ -483,7 +611,7 @@ function applyMeasurementMarker(documents, filePath, kind, sequence) {
   const marker = kind === "html"
     ? `\n<!-- interactive performance marker: ${state} -->\n`
     : `\n// interactive performance marker: ${state}\n`;
-  replaceDocumentText(documents, filePath, (text) => pattern.test(text)
+  return replaceDocumentText(documents, filePath, (text) => pattern.test(text)
     ? text.replace(pattern, marker)
     : `${text.replace(/\s*$/, "")}\n${marker}`);
 }
@@ -492,9 +620,11 @@ function replaceDocumentText(documents, filePath, edit) {
   const uri = pathToFileURL(filePath).toString();
   const current = documents.get(uri);
   if (current == null) {
-    return;
+    throw new Error(`Measurement document store could not edit '${uri}'.`);
   }
-  documents.add(TextDocument.create(uri, current.languageId, current.version + 1, edit(current.getText())));
+  const updated = TextDocument.create(uri, current.languageId, current.version + 1, edit(current.getText()));
+  documents.add(updated);
+  return updated;
 }
 
 async function timed(label, measurement, run) {
@@ -520,16 +650,67 @@ function timingSummary(timing) {
   };
 }
 
-function memorySnapshot() {
-  const memory = process.memoryUsage();
-  const heap = getHeapStatistics();
+function operationTimingSummary(timing) {
+  const answer = timing.value.answer;
   return {
-    rssBytes: memory.rss,
-    heapUsedBytes: memory.heapUsed,
-    externalBytes: memory.external,
-    arrayBuffersBytes: memory.arrayBuffers,
-    v8DetachedContextCount: heap.number_of_detached_contexts,
+    label: timing.label,
+    elapsedMilliseconds: timing.elapsedMilliseconds,
+    measurement: timing.measurement,
+    summary: answer?.summary ?? null,
+    outcome: answer?.outcome ?? null,
+    projectInput: projectInputSummary(timing.measurement),
+    generation: { ...timing.value.generation },
+    document: { ...timing.value.document },
+    editedDocument: { ...timing.value.editedDocument },
   };
+}
+
+export function editJourneyCurrentness(input) {
+  const operations = Array.isArray(input.operations) ? input.operations : [];
+  const first = operations[0] ?? null;
+  const expectedEditedDocument = documentEvidence(input.expectedEditedDocument);
+  const expectedQueryDocument = documentEvidence(input.expectedQueryDocument);
+  const requestEpochAdvanced = first != null
+    && Number.isSafeInteger(first.generation?.requestEpoch)
+    && Number.isSafeInteger(input.previousGeneration?.requestEpoch)
+    && first.generation.requestEpoch > input.previousGeneration.requestEpoch;
+  const queryDocumentCurrent = operations.length > 0 && operations.every((operation) =>
+    operation.document?.uri === expectedQueryDocument.uri
+      && operation.document?.languageId === expectedQueryDocument.languageId
+      && operation.document?.version === expectedQueryDocument.version);
+  const editedDocumentCurrent = operations.length > 0 && operations.every((operation) =>
+    operation.editedDocument?.uri === expectedEditedDocument.uri
+      && operation.editedDocument?.languageId === expectedEditedDocument.languageId
+      && operation.editedDocument?.version === expectedEditedDocument.version);
+  const sameGeneration = operations.length > 0 && operations.every((operation) =>
+    sameOperationGeneration(operation.generation, first?.generation));
+  const status = requestEpochAdvanced && queryDocumentCurrent && editedDocumentCurrent && sameGeneration
+    ? "pass"
+    : "fail";
+  return {
+    status,
+    requestEpochAdvanced,
+    queryDocumentCurrent,
+    editedDocumentCurrent,
+    sameGeneration,
+    editedDocument: expectedEditedDocument,
+    queryDocument: expectedQueryDocument,
+    previousGeneration: { ...input.previousGeneration },
+    operationGeneration: first == null ? null : { ...first.generation },
+  };
+}
+
+function sameOperationGeneration(left, right) {
+  return left != null
+    && right != null
+    && left.requestEpoch === right.requestEpoch
+    && left.workspaceGeneration === right.workspaceGeneration
+    && left.sourceWorldRevision === right.sourceWorldRevision
+    && left.fingerprint === right.fingerprint;
+}
+
+function memorySnapshot() {
+  return readSemanticRuntimeMemorySample();
 }
 
 function counterMapDelta(before, after) {
@@ -568,9 +749,17 @@ function projectInputSummary(measurement) {
 }
 
 async function cacheSnapshot(label, session, forceGc) {
-  if (forceGc) {
-    globalThis.gc();
-  }
+  const structure = await cacheStructureSnapshot(label, session);
+  // The primary live-memory boundary is immediately after collection. Derive the telemetry projection first so the
+  // overview's temporary answer graph is no longer retained on this stack when GC runs.
+  if (forceGc) globalThis.gc();
+  return {
+    ...structure,
+    processMemory: memorySnapshot(),
+  };
+}
+
+async function cacheStructureSnapshot(label, session) {
   const overview = await session.analysisCacheOverview({ rowLimit: 10 });
   const typeSystemDependencyCache = semanticRuntimeProcessTypeSystemCacheOverview({ rowLimit: 10 });
   const firstApp = overview.cachedApps[0] ?? null;
@@ -582,7 +771,6 @@ async function cacheSnapshot(label, session, forceGc) {
     workspaceKernelHandleCharacters: overview.workspaceKernel.handleCharacters,
     runtimeQueryClaimProfiles: overview.runtimeQueryClaimProfiles.length,
     runtimeQueryClaims: queryClaimSummary(overview.runtimeQueryClaimProfiles),
-    processMemory: memorySnapshot(),
     typeSystemDependencyCache: {
       entries: typeSystemDependencyCache.entries,
       hits: typeSystemDependencyCache.hits,
@@ -611,8 +799,8 @@ async function cacheSnapshot(label, session, forceGc) {
             milliseconds: phase.milliseconds,
             itemCount: phase.itemCount ?? null,
           })),
-          staticEvaluationAcquisitions: firstApp.profile.staticEvaluationAcquisitions,
-          typeSystemAcquisition: firstApp.profile.typeSystemAcquisition,
+          staticEvaluationAcquisitions: firstApp.profile.staticEvaluationAcquisitions.map((entry) => ({ ...entry })),
+          typeSystemAcquisition: { ...firstApp.profile.typeSystemAcquisition },
           queryClaims: queryClaimSummary(firstApp.queryClaimProfiles),
         },
   };
@@ -679,12 +867,17 @@ function addInvariants(report) {
       journey.change,
       journey.firstQuery,
       journey.warmQuery,
+      journey.firstDiagnostics,
       journey.warmDiagnostics,
-    ]),
+    ].filter((operation) => operation != null)),
   ];
   report.invariants.push({
     name: "measurement never falls back to full open-document scans",
     status: allMeasuredOperations.every((operation) => operation.measurement.documents.allCalls === 0) ? "pass" : "fail",
+  });
+  report.invariants.push({
+    name: "steady edit operations prove current query and edited documents in one exact generation",
+    status: report.editJourneys.every((journey) => journey.currentness.status === "pass") ? "pass" : "fail",
   });
   report.invariants.push({
     name: "steady edit cycles retain at most one app epoch",
@@ -813,40 +1006,109 @@ async function assertDirectory(directory, label) {
   }
 }
 
-function parseArgs(argv) {
-  const supportedOptions = new Set([
-    "workspace",
-    "fixture",
-    "requests",
-    "cycles",
-    "force-gc",
-    "heap-snapshots",
-    "cpu-profiles",
-    "json",
+export function parseIncrementalityArgs(argv) {
+  const valueOptions = new Set([
+    "workspace", "fixture", "requests", "cycles", "journey", "heap-snapshots", "cpu-profiles",
   ]);
-  const args = {};
+  const booleanOptions = new Set(["force-gc", "json"]);
+  const values = new Map();
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (!arg.startsWith("--")) {
+      throw new Error(`Unexpected positional argument '${arg}'.`);
+    }
+    const body = arg.slice(2);
+    const separator = body.indexOf("=");
+    const key = separator < 0 ? body : body.slice(0, separator);
+    const inlineValue = separator < 0 ? null : body.slice(separator + 1);
+    if (!valueOptions.has(key) && !booleanOptions.has(key)) {
+      throw new Error(`Unknown argument '--${key}'.`);
+    }
+    if (values.has(key)) {
+      throw new Error(`Argument '--${key}' may only be supplied once.`);
+    }
+    if (booleanOptions.has(key)) {
+      let value = inlineValue;
+      const next = argv[index + 1];
+      if (value == null && next != null && !next.startsWith("--")) {
+        value = next;
+        index += 1;
+      }
+      values.set(key, value == null ? true : strictBoolean(value, `--${key}`));
       continue;
     }
-    const [rawKey, inlineValue] = arg.slice(2).split("=", 2);
-    if (!supportedOptions.has(rawKey)) {
-      throw new Error(`Unsupported measurement option: --${rawKey}`);
-    }
-    const value = inlineValue ?? argv[index + 1];
-    if (inlineValue == null && value != null && !value.startsWith("--")) {
+    let value = inlineValue;
+    if (value == null) {
+      const next = argv[index + 1];
+      if (next == null || next.startsWith("--")) {
+        throw new Error(`Argument '--${key}' requires a value.`);
+      }
+      value = next;
       index += 1;
     }
-    args[rawKey] = value == null || value.startsWith("--") ? "true" : value;
+    if (value.length === 0) {
+      throw new Error(`Argument '--${key}' requires a non-empty value.`);
+    }
+    values.set(key, value);
   }
-  return args;
+
+  const fixture = values.get("fixture") ?? null;
+  const workspace = values.get("workspace") ?? null;
+  if (fixture != null && workspace != null) {
+    throw new Error("Arguments '--fixture' and '--workspace' are mutually exclusive.");
+  }
+  const journey = values.get("journey") ?? "completion-first";
+  if (!incrementalityJourneys.has(journey)) {
+    throw new Error("--journey must be 'completion-first' or 'diagnostics-first'.");
+  }
+  return Object.freeze({
+    fixture,
+    workspace,
+    requests: positiveInteger(values.get("requests") ?? "20", "--requests"),
+    cycles: nonNegativeInteger(values.get("cycles") ?? "8", "--cycles"),
+    journey,
+    forceGc: values.get("force-gc") ?? false,
+    heapSnapshots: values.get("heap-snapshots") ?? null,
+    cpuProfiles: values.get("cpu-profiles") ?? null,
+    json: values.get("json") ?? false,
+  });
+}
+
+function positiveInteger(value, label) {
+  if (!/^[1-9]\d*$/.test(value)) {
+    throw new Error(`${label} must be a positive integer.`);
+  }
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed)) {
+    throw new Error(`${label} must be a safe positive integer.`);
+  }
+  return parsed;
+}
+
+function nonNegativeInteger(value, label) {
+  if (!/^\d+$/.test(value)) {
+    throw new Error(`${label} must be a non-negative integer.`);
+  }
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed)) {
+    throw new Error(`${label} must be a safe non-negative integer.`);
+  }
+  return parsed;
+}
+
+function strictBoolean(value, label) {
+  if (value !== "true" && value !== "false") {
+    throw new Error(`${label} must be 'true' or 'false'.`);
+  }
+  return value === "true";
 }
 
 function markdownReport(report) {
   return [
     "# Interactive Performance Measurement",
     "",
+    `Schema: \`${report.schemaVersion}\``,
+    `Journey: \`${report.measurement.journey}\``,
     `Fixture: \`${report.fixture.name}\``,
     `Target: \`${report.fixture.targetDocument}\``,
     `Files: ${report.fixture.measuredFiles} measured fixture file(s), ${report.fixture.sourceFiles} opened source document(s), ${report.fixture.measuredBytes} byte(s).`,
@@ -911,21 +1173,7 @@ function markdownReport(report) {
     "",
     "## Steady Edit Journeys",
     "",
-    table(
-      ["cycle", "source", "first completion ms", "app build ms", "warm completion ms", "warm diagnostics ms", "kernel records", "app claims", "heap", "rss"],
-      report.editJourneys.map((journey) => [
-        String(journey.index),
-        journey.kind,
-        journey.firstQuery.elapsedMilliseconds.toFixed(2),
-        journey.cache.firstCachedApp?.totalMilliseconds.toFixed(2) ?? "",
-        journey.warmQuery.elapsedMilliseconds.toFixed(2),
-        journey.warmDiagnostics.elapsedMilliseconds.toFixed(2),
-        String(journey.cache.workspaceKernelRecords),
-        String(journey.cache.firstCachedApp?.queryClaims.retainedRecords ?? 0),
-        formatAbsoluteBytes(journey.cache.processMemory.heapUsedBytes),
-        formatAbsoluteBytes(journey.cache.processMemory.rssBytes),
-      ]),
-    ),
+    table(...steadyEditJourneyTable(report)),
     "",
     "## Steady Compiler Acquisitions",
     "",
@@ -991,13 +1239,14 @@ function markdownReport(report) {
     "## Steady Distributions",
     "",
     table(
-      ["source", "operation", "samples", "min ms", "p50 ms", "p95 ms", "max ms"],
+      ["source", "operation", "samples", "min ms", "p50 ms", "p90 ms", "p95 ms", "max ms"],
       editJourneyDistributions(report.editJourneys).map((row) => [
         row.kind,
         row.operation,
         String(row.samples),
         row.min.toFixed(2),
         row.p50.toFixed(2),
+        row.p90.toFixed(2),
         row.p95.toFixed(2),
         row.max.toFixed(2),
       ]),
@@ -1023,6 +1272,47 @@ function markdownReport(report) {
       report.invariants.map((row) => [row.status, row.name]),
     ),
   ].join("\n");
+}
+
+function steadyEditJourneyTable(report) {
+  const shared = (journey) => [
+    String(journey.index),
+    journey.kind,
+  ];
+  const suffix = (journey) => [
+    journey.cache.firstCachedApp?.totalMilliseconds.toFixed(2) ?? "",
+    journey.warmDiagnostics.elapsedMilliseconds.toFixed(2),
+    journey.currentness.status,
+    String(journey.cache.workspaceKernelRecords),
+    String(journey.cache.firstCachedApp?.queryClaims.retainedRecords ?? 0),
+    formatAbsoluteBytes(journey.cache.processMemory.heapUsedBytes),
+    formatAbsoluteBytes(journey.cache.processMemory.rssBytes),
+  ];
+  if (report.measurement.journey === "diagnostics-first") {
+    return [[
+      "cycle", "source", "first diagnostics ms", "app build ms", "warm diagnostics ms", "current", "kernel records",
+      "app claims", "heap", "rss",
+    ], report.editJourneys.map((journey) => [
+      ...shared(journey),
+      journey.firstDiagnostics.elapsedMilliseconds.toFixed(2),
+      ...suffix(journey),
+    ])];
+  }
+  return [[
+    "cycle", "source", "first completion ms", "app build ms", "warm completion ms", "warm diagnostics ms", "current",
+    "kernel records", "app claims", "heap", "rss",
+  ], report.editJourneys.map((journey) => [
+    ...shared(journey),
+    journey.firstQuery.elapsedMilliseconds.toFixed(2),
+    journey.cache.firstCachedApp?.totalMilliseconds.toFixed(2) ?? "",
+    journey.warmQuery.elapsedMilliseconds.toFixed(2),
+    journey.warmDiagnostics.elapsedMilliseconds.toFixed(2),
+    journey.currentness.status,
+    String(journey.cache.workspaceKernelRecords),
+    String(journey.cache.firstCachedApp?.queryClaims.retainedRecords ?? 0),
+    formatAbsoluteBytes(journey.cache.processMemory.heapUsedBytes),
+    formatAbsoluteBytes(journey.cache.processMemory.rssBytes),
+  ])];
 }
 
 function table(headers, rows) {
@@ -1053,16 +1343,17 @@ function formatAbsoluteBytes(value) {
   return formatBytes(value).replace(/^\+/, "");
 }
 
-function editJourneyDistributions(journeys) {
+export function editJourneyDistributions(journeys) {
   const rows = [];
   for (const kind of ["html", "typescript"]) {
     const selected = journeys.filter((journey) => journey.kind === kind);
     for (const [operation, read] of [
-      ["first completion", (journey) => journey.firstQuery.elapsedMilliseconds],
-      ["warm completion", (journey) => journey.warmQuery.elapsedMilliseconds],
-      ["warm diagnostics", (journey) => journey.warmDiagnostics.elapsedMilliseconds],
+      ["first completion", (journey) => journey.firstQuery?.elapsedMilliseconds],
+      ["warm completion", (journey) => journey.warmQuery?.elapsedMilliseconds],
+      ["first diagnostics", (journey) => journey.firstDiagnostics?.elapsedMilliseconds],
+      ["warm diagnostics", (journey) => journey.warmDiagnostics?.elapsedMilliseconds],
     ]) {
-      const values = selected.map(read).sort((left, right) => left - right);
+      const values = selected.map(read).filter(Number.isFinite).sort((left, right) => left - right);
       if (values.length === 0) {
         continue;
       }
@@ -1072,6 +1363,7 @@ function editJourneyDistributions(journeys) {
         samples: values.length,
         min: values[0],
         p50: percentile(values, 0.5),
+        p90: percentile(values, 0.9),
         p95: percentile(values, 0.95),
         max: values[values.length - 1],
       });
@@ -1089,7 +1381,9 @@ function relativePath(root, filePath) {
   return path.relative(root, filePath).replace(/\\/g, "/");
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.stack ?? error.message : String(error));
-  process.exitCode = 1;
-});
+if (process.argv[1] != null && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.stack ?? error.message : String(error));
+    process.exitCode = 1;
+  });
+}
