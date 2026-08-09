@@ -18,62 +18,79 @@ export const ViewsFeature: ClientFeature = {
     // folds any invalidations received during an active refresh into one
     // trailing refresh.
     let acceptingRefreshes = true;
-    let dirty = true;
+    let dirtyAll = true;
+    const dirtyWorkspaceKeys = new Set<string>();
     let forceWhileHidden = false;
     let refreshDrain: Promise<void> | null = null;
+    const hasDirtyRefresh = (): boolean => dirtyAll || dirtyWorkspaceKeys.size > 0;
     const drainRefresh = (): Promise<void> => {
       if (!acceptingRefreshes) return Promise.resolve();
       if (refreshDrain != null) return refreshDrain;
-      if (!dirty || (!view.visible && !forceWhileHidden)) return Promise.resolve();
+      if (!hasDirtyRefresh() || (!view.visible && !forceWhileHidden)) return Promise.resolve();
 
       const operation = (async () => {
-        while (acceptingRefreshes && dirty && (view.visible || forceWhileHidden)) {
-          dirty = false;
+        while (acceptingRefreshes && hasDirtyRefresh() && (view.visible || forceWhileHidden)) {
           forceWhileHidden = false;
-          await explorer.refresh();
+          if (dirtyAll) {
+            dirtyAll = false;
+            dirtyWorkspaceKeys.clear();
+            await explorer.refresh();
+            continue;
+          }
+          const workspaceKey = dirtyWorkspaceKeys.values().next().value;
+          if (workspaceKey == null) continue;
+          dirtyWorkspaceKeys.delete(workspaceKey);
+          await explorer.refreshWorkspace(workspaceKey);
         }
       })();
       refreshDrain = operation.finally(() => {
         refreshDrain = null;
-        if (acceptingRefreshes && dirty && (view.visible || forceWhileHidden)) {
+        if (acceptingRefreshes && hasDirtyRefresh() && (view.visible || forceWhileHidden)) {
           void drainRefresh();
         }
       });
       return refreshDrain;
     };
-    const invalidate = (): void => {
-      dirty = true;
-      void drainRefresh();
+    const invalidateAll = (force = false): Promise<void> => {
+      dirtyAll = true;
+      dirtyWorkspaceKeys.clear();
+      if (force) forceWhileHidden = true;
+      return drainRefresh();
+    };
+    const invalidateWorkspace = (workspaceKey: string): Promise<void> => {
+      if (!dirtyAll) dirtyWorkspaceKeys.add(workspaceKey);
+      return drainRefresh();
     };
 
     own(view.onDidChangeVisibility((event) => {
       if (event.visible) void drainRefresh();
     }));
     // The server publishes only after a newer semantic generation has settled.
-    own(ctx.lsp.onAnalysisChanged(() => {
-      invalidate();
+    own(ctx.lsp.onAnalysisChanged((payload) => {
+      if (payload.changeKind === "source-text") {
+        void invalidateWorkspace(payload.workspace.key);
+      } else {
+        void invalidateAll();
+      }
     }));
 
     // Contribution registration is extension-scoped; workspace sessions are
     // dynamic inputs, so the visible inventory follows session ownership.
     own(ctx.languageClient.onDidChangeSessions(() => {
-      invalidate();
+      void invalidateAll();
     }));
 
     own(ctx.vscode.commands.registerCommand(
       AureliaCommand.RefreshResourceExplorer,
-      () => {
-        dirty = true;
-        forceWhileHidden = true;
-        return drainRefresh();
-      },
+      () => invalidateAll(true),
     ));
     // Registered last so deactivation closes the drain before disposing the
     // view and provider that an already-running refresh still references.
     own({
       dispose: () => {
         acceptingRefreshes = false;
-        dirty = false;
+        dirtyAll = false;
+        dirtyWorkspaceKeys.clear();
         forceWhileHidden = false;
       },
     });

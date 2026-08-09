@@ -873,15 +873,30 @@ describe("LspFacade workspace routing", () => {
       undefined,
     );
 
+    const workspaceAInventoryCalls = harness.clients[0]!.sendRequest.mock.calls
+      .filter(([method]) => method === "aurelia/resourceInventory").length;
+    const workspaceBInventoryCalls = harness.clients[1]!.sendRequest.mock.calls
+      .filter(([method]) => method === "aurelia/resourceInventory").length;
     await facade.getResourceInventory({
       workspaceKey: "file:///work/b",
       includeTypeSurfaces: true,
     });
+    expect(harness.clients[0]!.sendRequest.mock.calls
+      .filter(([method]) => method === "aurelia/resourceInventory")).toHaveLength(workspaceAInventoryCalls);
+    expect(harness.clients[1]!.sendRequest.mock.calls
+      .filter(([method]) => method === "aurelia/resourceInventory")).toHaveLength(workspaceBInventoryCalls + 1);
     expect(harness.clients[1]?.sendRequest).toHaveBeenLastCalledWith(
       "aurelia/resourceInventory",
       { includeTypeSurfaces: true },
       undefined,
     );
+
+    const missingInventory = await facade.getResourceInventory({ workspaceKey: "file:///work/missing" });
+    expect(missingInventory).toBeNull();
+    expect(harness.clients[0]!.sendRequest.mock.calls
+      .filter(([method]) => method === "aurelia/resourceInventory")).toHaveLength(workspaceAInventoryCalls);
+    expect(harness.clients[1]!.sendRequest.mock.calls
+      .filter(([method]) => method === "aurelia/resourceInventory")).toHaveLength(workspaceBInventoryCalls + 1);
 
     const converted = await facade.convertWorkspaceEdit(
       "file:///work/b/src/card.ts",

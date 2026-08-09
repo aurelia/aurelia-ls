@@ -137,6 +137,10 @@ function response(projects: readonly unknown[], owner = workspace(), fingerprint
   return { workspaces: [{ ...owner, status: "ready", response: { fingerprint, projects } }] };
 }
 
+function combinedResponse(...responses: readonly ReturnType<typeof response>[]) {
+  return { workspaces: responses.flatMap((entry) => entry.workspaces) };
+}
+
 function createHarness(getResourceInventory: (_options?: unknown) => Promise<unknown>) {
   const { vscode: stubVscode } = createVscodeApi();
   const vscode = stubVscode as unknown as VscodeApi;
@@ -154,6 +158,15 @@ function createHarness(getResourceInventory: (_options?: unknown) => Promise<unk
 
 async function roots(provider: ResourceExplorerProvider): Promise<Node[]> {
   return await Promise.resolve(provider.getChildren()) as Node[];
+}
+
+function findNode(nodes: readonly Node[], label: string): Node | undefined {
+  for (const node of nodes) {
+    if (node.label === label) return node;
+    const nested = findNode(node.children ?? [], label);
+    if (nested != null) return nested;
+  }
+  return undefined;
 }
 
 describe("ResourceExplorerProvider", () => {
@@ -229,6 +242,142 @@ describe("ResourceExplorerProvider", () => {
       ["shop · admin-app", "analysis failed"],
     ]);
     expect(harness.view.message).toBe("Showing 1 known resources — incomplete");
+  });
+
+  test("replaces one workspace snapshot while preserving another root and its navigation fingerprint", async () => {
+    const workspaceA = workspace("file:///repo/a");
+    const workspaceB = workspace("file:///repo/b");
+    const oldA = resource({
+      identityKey: "resource:a:old",
+      name: "old-a-card",
+      uri: "file:///repo/a/old.ts",
+    });
+    const currentA = resource({
+      identityKey: "resource:a:current",
+      name: "current-a-card",
+      uri: "file:///repo/a/current.ts",
+    });
+    const stableB = resource({
+      identityKey: "resource:b:stable",
+      name: "stable-b-card",
+      uri: "file:///repo/b/stable.ts",
+    });
+    const getResourceInventory = vi.fn()
+      .mockResolvedValueOnce(combinedResponse(
+        response([readyProject([oldA])], workspaceA, "a:old"),
+        response([readyProject([stableB])], workspaceB, "b:stable"),
+      ))
+      .mockResolvedValueOnce(response([readyProject([currentA])], workspaceA, "a:current"));
+    const harness = createHarness(getResourceInventory);
+
+    await harness.provider.refresh();
+    await harness.provider.refreshWorkspace(workspaceA.key);
+
+    const tree = await roots(harness.provider);
+    expect(JSON.stringify(tree)).toContain("current-a-card");
+    expect(JSON.stringify(tree)).not.toContain("old-a-card");
+    expect(JSON.stringify(tree)).toContain("stable-b-card");
+    const stableNode = findNode(tree, "stable-b-card");
+    expect(stableNode).toBeDefined();
+    expect(harness.provider.getTreeItem(stableNode as never).command?.arguments?.[0]).toMatchObject({
+      workspaceKey: workspaceB.key,
+      fingerprint: "b:stable",
+    });
+    expect(harness.getResourceInventory).toHaveBeenLastCalledWith({
+      workspaceKey: workspaceA.key,
+      includeTypeSurfaces: true,
+    });
+  });
+
+  test("scoped error and retirement update only the requested workspace", async () => {
+    const workspaceA = workspace("file:///repo/a");
+    const workspaceB = workspace("file:///repo/b");
+    const stableB = resource({
+      identityKey: "resource:b:stable",
+      name: "stable-b-card",
+      uri: "file:///repo/b/stable.ts",
+    });
+    const getResourceInventory = vi.fn()
+      .mockResolvedValueOnce(combinedResponse(
+        response([readyProject([])], workspaceA, "a:old"),
+        response([readyProject([stableB])], workspaceB, "b:stable"),
+      ))
+      .mockResolvedValueOnce({ workspaces: [{
+        ...workspaceA,
+        status: "error",
+        error: "workspace a failed",
+      }] })
+      .mockResolvedValueOnce(null);
+    const harness = createHarness(getResourceInventory);
+
+    await harness.provider.refresh();
+    await harness.provider.refreshWorkspace(workspaceA.key);
+    let tree = await roots(harness.provider);
+    expect(JSON.stringify(tree)).toContain("Couldn't load Aurelia resources");
+    expect(JSON.stringify(tree)).toContain("stable-b-card");
+
+    await harness.provider.refreshWorkspace(workspaceA.key);
+    tree = await roots(harness.provider);
+    expect(JSON.stringify(tree)).not.toContain("workspace a failed");
+    expect(JSON.stringify(tree)).toContain("stable-b-card");
+    expect(harness.view.description).toBe("1 resources");
+  });
+
+  test("escalates a scoped request to a full refresh without a coherent baseline", async () => {
+    const workspaceA = workspace("file:///repo/a");
+    const workspaceB = workspace("file:///repo/b");
+    const harness = createHarness(async () => combinedResponse(
+      response([readyProject([])], workspaceA, "a:current"),
+      response([readyProject([])], workspaceB, "b:current"),
+    ));
+
+    await harness.provider.refreshWorkspace(workspaceA.key);
+
+    expect(harness.getResourceInventory).toHaveBeenCalledWith({ includeTypeSurfaces: true });
+    expect((await roots(harness.provider)).map((node) => node.label)).toEqual([
+      "a · app",
+      "b · app",
+    ]);
+  });
+
+  test("does not publish a late scoped result after a newer full refresh", async () => {
+    const workspaceA = workspace("file:///repo/a");
+    const workspaceB = workspace("file:///repo/b");
+    let resolveLateScoped!: (value: unknown) => void;
+    const lateScoped = new Promise<unknown>((resolve) => {
+      resolveLateScoped = resolve;
+    });
+    const fullCurrent = resource({
+      identityKey: "resource:b:current",
+      name: "full-current-card",
+      uri: "file:///repo/b/current.ts",
+    });
+    const getResourceInventory = vi.fn()
+      .mockResolvedValueOnce(combinedResponse(
+        response([readyProject([])], workspaceA, "a:baseline"),
+        response([readyProject([])], workspaceB, "b:baseline"),
+      ))
+      .mockImplementationOnce(() => lateScoped)
+      .mockResolvedValueOnce(combinedResponse(
+        response([readyProject([])], workspaceA, "a:current"),
+        response([readyProject([fullCurrent])], workspaceB, "b:current"),
+      ));
+    const harness = createHarness(getResourceInventory);
+    await harness.provider.refresh();
+
+    const scopedRefresh = harness.provider.refreshWorkspace(workspaceA.key);
+    const fullRefresh = harness.provider.refresh();
+    await fullRefresh;
+    resolveLateScoped(response([readyProject([resource({
+      identityKey: "resource:a:late",
+      name: "late-scoped-card",
+      uri: "file:///repo/a/late.ts",
+    })])], workspaceA, "a:late"));
+    await scopedRefresh;
+
+    const tree = await roots(harness.provider);
+    expect(JSON.stringify(tree)).toContain("full-current-card");
+    expect(JSON.stringify(tree)).not.toContain("late-scoped-card");
   });
 
   test("publishes only the latest refresh and retains the current snapshot while updating", async () => {

@@ -318,22 +318,39 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Dis
   }
 
   async refresh(): Promise<void> {
+    return this.#refresh(null);
+  }
+
+  async refreshWorkspace(workspaceKey: string): Promise<void> {
+    return this.#refresh(workspaceKey);
+  }
+
+  async #refresh(requestedWorkspaceKey: string | null): Promise<void> {
     const generation = ++this.#refreshGeneration;
     const hasPrevious = this.#response != null;
+    // A scoped row is meaningful only as a replacement inside a coherent
+    // aggregate snapshot. Recover the full baseline after an initial failure
+    // instead of publishing one workspace as though it were the whole tree.
+    const workspaceKey = hasPrevious ? requestedWorkspaceKey : null;
     this.#setMessage(hasPrevious
       ? "Updating — showing previous results"
       : "Discovering Aurelia resources...");
     try {
       this.#logger.debug("resourceExplorer.refresh.start");
-      const response = await this.#lsp.getResourceInventory({ includeTypeSurfaces: true });
+      const response = await this.#lsp.getResourceInventory({
+        ...(workspaceKey == null ? {} : { workspaceKey }),
+        includeTypeSurfaces: true,
+      });
       if (generation !== this.#refreshGeneration) return;
-      this.#response = response;
-      this.#tree = response == null
+      this.#response = workspaceKey == null
+        ? response
+        : mergeWorkspaceSnapshot(this.#response, workspaceKey, response);
+      this.#tree = this.#response == null
         ? [infoNode("no-session", "No active Aurelia workspace", "info")]
-        : buildTree(response);
+        : buildTree(this.#response);
       this.#changeEmitter.fire();
       this.#publishViewState();
-      this.#logger.debug("resourceExplorer.refresh.complete", resourceResponseCounts(response));
+      this.#logger.debug("resourceExplorer.refresh.complete", resourceResponseCounts(this.#response));
     } catch (error) {
       if (generation !== this.#refreshGeneration) return;
       this.#logger.warn("resourceExplorer.refresh.failed", {
@@ -366,6 +383,25 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Dis
   #setMessage(message: string | undefined): void {
     if (this.#view != null) this.#view.message = message;
   }
+}
+
+function mergeWorkspaceSnapshot(
+  current: ResourceInventorySnapshot | null,
+  workspaceKey: string,
+  scoped: ResourceInventorySnapshot | null,
+): ResourceInventorySnapshot | null {
+  const replacement = scoped?.workspaces.find((workspace) => workspace.key === workspaceKey);
+  const workspaces = [...(current?.workspaces ?? [])];
+  const index = workspaces.findIndex((workspace) => workspace.key === workspaceKey);
+  if (replacement == null) {
+    if (index >= 0) workspaces.splice(index, 1);
+  } else if (index >= 0) {
+    workspaces[index] = replacement;
+  } else {
+    workspaces.push(replacement);
+    workspaces.sort((left, right) => left.uri.localeCompare(right.uri) || left.key.localeCompare(right.key));
+  }
+  return workspaces.length === 0 ? null : { workspaces };
 }
 
 function resourceResponseCounts(response: ResourceInventorySnapshot | null): {

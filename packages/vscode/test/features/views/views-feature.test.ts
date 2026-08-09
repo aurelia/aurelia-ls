@@ -29,9 +29,21 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
+function inventorySnapshot(...workspaceKeys: readonly string[]) {
+  return {
+    workspaces: workspaceKeys.map((key) => ({
+      key,
+      name: key.split("/").at(-1) ?? key,
+      uri: key,
+      status: "ready" as const,
+      response: { fingerprint: `${key}:current`, projects: [] },
+    })),
+  };
+}
+
 function createHarness(options: {
   readonly visible?: boolean;
-  readonly getResourceInventory?: () => Promise<null>;
+  readonly getResourceInventory?: (options?: unknown) => Promise<unknown>;
 } = {}) {
   const { vscode: stubVscode, recorded } = createVscodeApi();
   const visibility = createEmitter<{ readonly visible: boolean }>();
@@ -68,7 +80,14 @@ function createHarness(options: {
 
   return {
     getResourceInventory,
-    fireAnalysisChanged: () => analysisChanged.fire({}),
+    fireAnalysisChanged: (
+      workspaceKey = "file:///work/a",
+      changeKind: "source-text" | "topology" = "source-text",
+    ) => analysisChanged.fire({
+      fingerprint: `${workspaceKey}:next`,
+      changeKind,
+      workspace: { key: workspaceKey, name: workspaceKey.split("/").at(-1) ?? workspaceKey, uri: workspaceKey },
+    }),
     fireSessionsChanged: () => sessionsChanged.fire({}),
     setVisible(next: boolean) {
       visible = next;
@@ -82,6 +101,105 @@ function createHarness(options: {
 }
 
 describe("ViewsFeature resource inventory lifecycle", () => {
+  test("scopes settled source invalidation to its workspace and keeps topology refresh aggregate", async () => {
+    const first = inventorySnapshot("file:///work/a", "file:///work/b");
+    const getResourceInventory = vi.fn(async (options?: { readonly workspaceKey?: string }) =>
+      options?.workspaceKey == null ? first : inventorySnapshot(options.workspaceKey));
+    const harness = createHarness({ visible: true, getResourceInventory });
+
+    await vi.waitFor(() => expect(harness.getResourceInventory).toHaveBeenCalledOnce());
+    expect(harness.getResourceInventory).toHaveBeenLastCalledWith({ includeTypeSurfaces: true });
+
+    harness.fireAnalysisChanged("file:///work/a");
+    await vi.waitFor(() => expect(harness.getResourceInventory).toHaveBeenCalledTimes(2));
+    expect(harness.getResourceInventory).toHaveBeenLastCalledWith({
+      workspaceKey: "file:///work/a",
+      includeTypeSurfaces: true,
+    });
+
+    harness.fireAnalysisChanged("file:///work/a", "topology");
+    await vi.waitFor(() => expect(harness.getResourceInventory).toHaveBeenCalledTimes(3));
+    expect(harness.getResourceInventory).toHaveBeenLastCalledWith({ includeTypeSurfaces: true });
+    harness.dispose();
+  });
+
+  test("lets a queued full invalidation dominate hidden workspace keys", async () => {
+    const getResourceInventory = vi.fn(async () => inventorySnapshot("file:///work/a", "file:///work/b"));
+    const harness = createHarness({ visible: true, getResourceInventory });
+    await vi.waitFor(() => expect(harness.getResourceInventory).toHaveBeenCalledOnce());
+
+    harness.setVisible(false);
+    harness.fireAnalysisChanged("file:///work/a");
+    harness.fireAnalysisChanged("file:///work/b");
+    harness.fireAnalysisChanged("file:///work/a", "topology");
+    harness.setVisible(true);
+
+    await vi.waitFor(() => expect(harness.getResourceInventory).toHaveBeenCalledTimes(2));
+    expect(harness.getResourceInventory).toHaveBeenLastCalledWith({ includeTypeSurfaces: true });
+    harness.dispose();
+  });
+
+  test("coalesces repeated workspace invalidations without dropping an independent root", async () => {
+    const firstWorkspaceRefresh = deferred<unknown>();
+    let workspaceACalls = 0;
+    const getResourceInventory = vi.fn((options?: { readonly workspaceKey?: string }) => {
+      if (options?.workspaceKey === "file:///work/a" && workspaceACalls++ === 0) {
+        return firstWorkspaceRefresh.promise;
+      }
+      return Promise.resolve(options?.workspaceKey == null
+        ? inventorySnapshot("file:///work/a", "file:///work/b")
+        : inventorySnapshot(options.workspaceKey));
+    });
+    const harness = createHarness({ visible: true, getResourceInventory });
+    await vi.waitFor(() => expect(harness.getResourceInventory).toHaveBeenCalledOnce());
+
+    harness.fireAnalysisChanged("file:///work/a");
+    await vi.waitFor(() => expect(harness.getResourceInventory).toHaveBeenCalledTimes(2));
+    harness.fireAnalysisChanged("file:///work/a");
+    harness.fireAnalysisChanged("file:///work/a");
+    harness.fireAnalysisChanged("file:///work/b");
+    expect(harness.getResourceInventory).toHaveBeenCalledTimes(2);
+
+    firstWorkspaceRefresh.resolve(inventorySnapshot("file:///work/a"));
+    await vi.waitFor(() => expect(harness.getResourceInventory).toHaveBeenCalledTimes(4));
+    expect(harness.getResourceInventory.mock.calls.map(([options]) => options)).toEqual([
+      { includeTypeSurfaces: true },
+      { workspaceKey: "file:///work/a", includeTypeSurfaces: true },
+      { workspaceKey: "file:///work/a", includeTypeSurfaces: true },
+      { workspaceKey: "file:///work/b", includeTypeSurfaces: true },
+    ]);
+    harness.dispose();
+  });
+
+  test("lets an in-flight workspace refresh finish before one full invalidation clears its scoped tail", async () => {
+    const workspaceARefresh = deferred<unknown>();
+    let workspaceACalls = 0;
+    const getResourceInventory = vi.fn((options?: { readonly workspaceKey?: string }) => {
+      if (options?.workspaceKey === "file:///work/a" && workspaceACalls++ === 0) {
+        return workspaceARefresh.promise;
+      }
+      return Promise.resolve(inventorySnapshot("file:///work/a", "file:///work/b"));
+    });
+    const harness = createHarness({ visible: true, getResourceInventory });
+    await vi.waitFor(() => expect(harness.getResourceInventory).toHaveBeenCalledOnce());
+
+    harness.fireAnalysisChanged("file:///work/a");
+    await vi.waitFor(() => expect(harness.getResourceInventory).toHaveBeenCalledTimes(2));
+    harness.fireAnalysisChanged("file:///work/b");
+    harness.fireAnalysisChanged("file:///work/a", "topology");
+    expect(harness.getResourceInventory).toHaveBeenCalledTimes(2);
+
+    workspaceARefresh.resolve(inventorySnapshot("file:///work/a"));
+    await vi.waitFor(() => expect(harness.getResourceInventory).toHaveBeenCalledTimes(3));
+    await Promise.resolve();
+    expect(harness.getResourceInventory.mock.calls.map(([options]) => options)).toEqual([
+      { includeTypeSurfaces: true },
+      { workspaceKey: "file:///work/a", includeTypeSurfaces: true },
+      { includeTypeSurfaces: true },
+    ]);
+    harness.dispose();
+  });
+
   test("defers hidden work and folds hidden invalidations into one rich refresh on reveal", async () => {
     const harness = createHarness();
 
