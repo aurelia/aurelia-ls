@@ -197,6 +197,7 @@ function typeScriptAppDiagnosticRow(
     phase: row.phase,
     diagnosticKind: row.diagnosticKind,
     diagnosticAuthority: 'typescript',
+    typeScriptDiagnosticCode: row.code,
     frameworkErrorCode: null,
     frameworkRawErrorAuthority: null,
     severity: row.severity,
@@ -435,6 +436,9 @@ function templateAppDiagnosticRow(
     phase: row.phase,
     diagnosticKind: row.diagnosticKind,
     diagnosticAuthority: row.diagnosticAuthority,
+    ...(row.typeScriptDiagnosticCode == null
+      ? {}
+      : { typeScriptDiagnosticCode: row.typeScriptDiagnosticCode }),
     frameworkErrorCode: row.frameworkErrorCode,
     frameworkRawErrorAuthority: null,
     severity: row.severity,

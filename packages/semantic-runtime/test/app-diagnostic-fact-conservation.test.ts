@@ -224,6 +224,32 @@ describe("app diagnostic fact conservation", () => {
     expect(compact?.handles).toBeUndefined();
   });
 
+  test("preserves direct TypeScript diagnostic codes through app aggregation", async () => {
+    const sourceFile = "src/typescript-project-diagnostics-state.ts";
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: path.join(packageRoot, "fixtures/pressure/typescript-project-diagnostics"),
+      storeKey: "app-diagnostic-fact-conservation-typescript-code",
+    });
+    const app = await runtime.openApp({ analysisDepth: "binding-observation" });
+    const typeScriptRow = app.ask({
+      kind: SemanticAppQueryKind.TypeScriptDiagnostics,
+      sourceFile: { filePath: sourceFile },
+      page: { size: 100 },
+    }).value.rows.find((row) => row.diagnosticKind === "TS2322");
+    const appRow = app.ask({
+      kind: SemanticAppQueryKind.AppDiagnostics,
+      sourceFile: { filePath: sourceFile },
+      diagnosticProjection: "type-projection",
+      detail: SemanticRuntimeDetail.Compact,
+      page: { size: 100 },
+    }).value.rows.find((row) => row.diagnosticKind === "TS2322");
+
+    expect(typeScriptRow).toBeDefined();
+    expect(appRow).toBeDefined();
+    expect(appRow?.typeScriptDiagnosticCode).toBe(typeScriptRow?.code);
+    expect(appRow?.summary).toBe(typeScriptRow?.message);
+  });
+
   test("retains semantic and checker facts while presenting exact agreement once", async () => {
     const sourceFile = "src/template-overlay-type-errors-app.html";
     const runtime = await createSemanticRuntime({
@@ -273,6 +299,11 @@ describe("app diagnostic fact conservation", () => {
       && row.source?.start === detailed.rows[semanticAppIndex]?.source?.start
       && row.source?.end === detailed.rows[semanticAppIndex]?.source?.end
     );
+    const compactCheckerRow = compactRows.find((row) =>
+      row.diagnosticKind === "template-expression-typescript-diagnostic"
+      && row.source?.start === checkerTemplateRow?.source?.start
+      && row.source?.end === checkerTemplateRow?.source?.end
+    );
     const presentationGroup = detailed.presentation?.groups.find((group) =>
       group.primary.rowIndex === semanticAppIndex
     );
@@ -283,6 +314,7 @@ describe("app diagnostic fact conservation", () => {
     expect(semanticTemplateRow?.handles?.semanticIdentityHandle).not.toBeNull();
     expect(semanticTemplateRow?.handles?.sourceAddressHandle).not.toBeNull();
     expect(checkerTemplateRow?.phase).toBe("semantic");
+    expect(checkerTemplateRow?.typeScriptDiagnosticCode).toBe(2339);
     expect(checkerTemplateRow?.handles?.semanticProductHandle).not.toBeNull();
     expect(checkerTemplateRow?.handles?.semanticIdentityHandle).not.toBeNull();
     expect(checkerTemplateRow?.handles?.sourceAddressHandle).not.toBeNull();
@@ -294,6 +326,8 @@ describe("app diagnostic fact conservation", () => {
     expect(detailed.rows[semanticAppIndex]?.handles?.productHandle).toBe(semanticTemplateRow?.handles?.semanticProductHandle);
     expect(detailed.rows[semanticAppIndex]?.handles?.identityHandle).toBe(semanticTemplateRow?.handles?.semanticIdentityHandle);
     expect(detailed.rows[checkerAppIndex]?.phase).toBe(checkerTemplateRow?.phase);
+    expect(detailed.rows[checkerAppIndex]?.typeScriptDiagnosticCode).toBe(checkerTemplateRow?.typeScriptDiagnosticCode);
+    expect(detailed.rows[checkerAppIndex]?.summary).toBe(checkerTemplateRow?.summary);
     expect(detailed.rows[checkerAppIndex]?.handles?.productHandle).toBe(checkerTemplateRow?.handles?.semanticProductHandle);
     expect(detailed.rows[checkerAppIndex]?.handles?.identityHandle).toBe(checkerTemplateRow?.handles?.semanticIdentityHandle);
     expect(detailed.rows[checkerAppIndex]?.handles?.overlayOriginKey).toBe(checkerTemplateRow?.handles?.overlayOriginKey);
@@ -307,10 +341,8 @@ describe("app diagnostic fact conservation", () => {
         relation: "checker-evidence",
       }),
     ]);
-    expect(compactRows.find((row) =>
-      row.diagnosticKind === "template-expression-typescript-diagnostic"
-      && row.source?.start === checkerTemplateRow?.source?.start
-    )?.handles).toBeUndefined();
+    expect(compactCheckerRow?.typeScriptDiagnosticCode).toBe(2339);
+    expect(compactCheckerRow?.handles).toBeUndefined();
   });
 
   test("preserves a template capability demand's owning product through app aggregation", async () => {

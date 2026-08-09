@@ -903,6 +903,7 @@ function templateOverlayDiagnosticRow(
   return {
     diagnosticKind: 'template-expression-typescript-diagnostic',
     diagnosticAuthority: 'typescript',
+    typeScriptDiagnosticCode: diagnostic.diagnostic.code,
     frameworkErrorCode: null,
     severity: semanticTypeScriptDiagnosticSeverity(diagnostic.diagnostic.category),
     summary: `TS${diagnostic.diagnostic.code}: ${diagnostic.diagnostic.message}`,

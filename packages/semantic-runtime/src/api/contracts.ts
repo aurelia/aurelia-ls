@@ -2849,6 +2849,8 @@ export interface SemanticAppDiagnosticRow {
   readonly phase: SemanticAppDiagnosticPhase | null;
   readonly diagnosticKind: SemanticAppDiagnosticKind;
   readonly diagnosticAuthority: SemanticTemplateCursorDiagnosticAuthority | 'semantic-runtime-product' | 'typescript';
+  /** TypeScript checker code retained structurally for direct and template-overlay diagnostics. */
+  readonly typeScriptDiagnosticCode?: number;
   readonly frameworkErrorCode: string | null;
   readonly frameworkRawErrorAuthority: string | null;
   readonly severity: SemanticTemplateCursorDiagnosticSeverity;
@@ -4361,6 +4363,8 @@ export type SemanticTemplateCursorSuggestionRow =
 export interface SemanticTemplateCursorDiagnosticRow {
   readonly diagnosticKind: SemanticTemplateCursorDiagnosticKind;
   readonly diagnosticAuthority: SemanticTemplateCursorDiagnosticAuthority;
+  /** TypeScript checker code when this diagnostic was projected from a generated template overlay. */
+  readonly typeScriptDiagnosticCode?: number;
   readonly frameworkErrorCode: string | null;
   readonly severity: SemanticTemplateCursorDiagnosticSeverity;
   readonly summary: string;
