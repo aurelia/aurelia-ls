@@ -25,6 +25,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 }
 ```
 
+### Diagnostic pull
+
+```json
+{
+  "diagnosticCount": 4,
+  "outcome": "full",
+  "previousResultIdPresent": false,
+  "resultIdPresent": true,
+  "uri": "fixtures://pressure/guidance-truth-canaries/src/guidance-truth-canary-app.html"
+}
+```
+
 ### codeAction
 
 ```json
@@ -51,6 +63,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "diagnosticCount": 1,
   "diagnostics": [
     {
+      "anomaly": null,
       "code": "missing-expression-member",
       "data": {
         "diagnosticAuthority": "semantic-authoring-policy",
@@ -87,13 +100,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "subjectKind": "template-expression",
           "uri": null
         },
-        "taxonomy": {
-          "actionability": "guided",
-          "category": "template-syntax",
-          "confidence": null,
-          "impact": "blocking",
-          "schema": "diagnostics-taxonomy/1"
-        }
+        "typeScriptDiagnosticCode": null
       },
       "message": "Template expression root \"titel\" is not available on the current binding scope.",
       "range": {
@@ -106,6 +113,9 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "line": 0
         }
       },
+      "rangeText": "titel",
+      "relatedInformation": [],
+      "severity": "error",
       "source": "aurelia"
     }
   ]
@@ -244,6 +254,18 @@ diff --git a/src/guidance-truth-canary-app.ts b/src/guidance-truth-canary-app.ts
 }
 ```
 
+### Diagnostic pull
+
+```json
+{
+  "diagnosticCount": 4,
+  "outcome": "full",
+  "previousResultIdPresent": false,
+  "resultIdPresent": true,
+  "uri": "fixtures://pressure/guidance-truth-canaries/src/guidance-truth-canary-app.html"
+}
+```
+
 ### codeAction
 
 ```json
@@ -260,6 +282,7 @@ diff --git a/src/guidance-truth-canary-app.ts b/src/guidance-truth-canary-app.ts
   "diagnosticCount": 1,
   "diagnostics": [
     {
+      "anomaly": null,
       "code": "unsupported-expression-global",
       "data": {
         "diagnosticAuthority": "semantic-authoring-policy",
@@ -296,13 +319,7 @@ diff --git a/src/guidance-truth-canary-app.ts b/src/guidance-truth-canary-app.ts
           "subjectKind": "template-member-call",
           "uri": null
         },
-        "taxonomy": {
-          "actionability": "guided",
-          "category": "template-syntax",
-          "confidence": null,
-          "impact": "blocking",
-          "schema": "diagnostics-taxonomy/1"
-        }
+        "typeScriptDiagnosticCode": null
       },
       "message": "Aurelia expression syntax does not admit host global \"console\" as an expression global in this template.",
       "range": {
@@ -315,6 +332,9 @@ diff --git a/src/guidance-truth-canary-app.ts b/src/guidance-truth-canary-app.ts
           "line": 1
         }
       },
+      "rangeText": "console",
+      "relatedInformation": [],
+      "severity": "error",
       "source": "aurelia"
     }
   ]
@@ -364,6 +384,18 @@ _No in-memory diff._
 }
 ```
 
+### Diagnostic pull
+
+```json
+{
+  "diagnosticCount": 4,
+  "outcome": "full",
+  "previousResultIdPresent": false,
+  "resultIdPresent": true,
+  "uri": "fixtures://pressure/guidance-truth-canaries/src/guidance-truth-canary-app.html"
+}
+```
+
 ### codeAction
 
 ```json
@@ -390,6 +422,7 @@ _No in-memory diff._
   "diagnosticCount": 1,
   "diagnostics": [
     {
+      "anomaly": null,
       "code": "missing-expression-member",
       "data": {
         "diagnosticAuthority": "semantic-authoring-policy",
@@ -426,13 +459,7 @@ _No in-memory diff._
           "subjectKind": "template-expression",
           "uri": null
         },
-        "taxonomy": {
-          "actionability": "guided",
-          "category": "template-syntax",
-          "confidence": null,
-          "impact": "blocking",
-          "schema": "diagnostics-taxonomy/1"
-        }
+        "typeScriptDiagnosticCode": null
       },
       "message": "Template expression root \"$ghostLocal\" is not available on the current binding scope.",
       "range": {
@@ -445,6 +472,27 @@ _No in-memory diff._
           "line": 3
         }
       },
+      "rangeText": "$ghostLocal",
+      "relatedInformation": [
+        {
+          "anomaly": null,
+          "file": "src/guidance-truth-canary-app.html",
+          "message": "Owner type 'GuidanceTruthCanaryApp' did not project member '$ghostLocal'; Aurelia astAssign can still write to runtime objects.",
+          "range": {
+            "end": {
+              "character": 33,
+              "line": 3
+            },
+            "start": {
+              "character": 22,
+              "line": 3
+            }
+          },
+          "rangeText": "$ghostLocal",
+          "uri": "fixtures://pressure/guidance-truth-canaries/src/guidance-truth-canary-app.html"
+        }
+      ],
+      "severity": "error",
       "source": "aurelia"
     }
   ]

@@ -138,7 +138,7 @@ export function mapSemanticProjectConfigurationDiagnostics(
 }
 
 // ============================================================================
-// Severity Mapping — L2 demotion table produces 4 severity levels
+// Severity Mapping — preserve the semantic runtime's authored severity.
 // ============================================================================
 
 function semanticRuntimeSeverityToLsp(

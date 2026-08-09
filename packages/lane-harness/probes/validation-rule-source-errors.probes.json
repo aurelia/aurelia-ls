@@ -6,14 +6,14 @@
         "id": "validation-main-source",
         "file": "src/main.ts",
         "verdict": "correct",
-        "reason": "Publishes the ordinary TS2449 row and the source-owned AUR4101 validation row on `main.ts`, preserving both TypeScript and validation authorities without hiding either fact.",
+        "reason": "The full document-diagnostic pull returns the ordinary TS2449 row and the source-owned AUR4101 validation row on `main.ts`, preserving both TypeScript and validation authorities without hiding either fact.",
         "note": "NEW 2026-07-07. Validation source diagnostics whose true source is app boot/configuration code, plus any ordinary TypeScript diagnostics on the same file. VERDICT 2026-07-07: correct."
       },
       {
         "id": "validation-app-source",
         "file": "src/validation-rule-source-errors-app.ts",
         "verdict": "correct",
-        "reason": "Publishes the six expected validation framework-runtime rows on the fluent/model-rule source expressions that cause them, with no LSP/custom drift.",
+        "reason": "The full document-diagnostic pull returns the six expected validation framework-runtime rows on the fluent/model-rule source expressions that cause them with exact authored loci and validation authority.",
         "note": "NEW 2026-07-07. Validation fluent/model-rule source diagnostics on the app component source. VERDICT 2026-07-07: correct."
       }
     ]

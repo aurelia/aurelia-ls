@@ -13,7 +13,7 @@ const SERVER_PATH = path.resolve(REPO_ROOT, "packages/language-server/out/main.j
 const REQUEST_TIMEOUT_MS = 30000;
 const STARTUP_TIMEOUT_MS = 10000;
 const SHUTDOWN_TIMEOUT_MS = 5000;
-const OPEN_SETTLE_TIMEOUT_MS = 5000;
+const ANALYSIS_SETTLE_TIMEOUT_MS = 30000;
 const DIAGNOSTICS_TIMEOUT_MS = 30000;
 const SUPPORTED_LANES = new Set(["rename", "references", "hover", "completions", "definition", "documentHighlight", "diagnostics", "codeAction"]);
 
@@ -27,6 +27,18 @@ const COMPLETION_ITEM_KIND_NAMES = {
   19: "folder", 20: "enum-member", 21: "constant", 22: "struct", 23: "event",
   24: "operator", 25: "type-parameter",
 };
+
+export function laneDiagnosticClientCapabilities() {
+  return {
+    relatedInformation: true,
+    tagSupport: { valueSet: [1, 2] },
+    codeDescriptionSupport: true,
+    dataSupport: true,
+    dynamicRegistration: true,
+    relatedDocumentSupport: false,
+    markupMessageSupport: false,
+  };
+}
 
 class HarnessError extends Error {
   constructor(message) {
@@ -50,7 +62,8 @@ class LspClient {
   #buffer = Buffer.alloc(0);
   #stderr = [];
   #notifications = [];
-  #notificationWaiters = [];
+  #inboundMethodEvents = [];
+  #inboundEventWaiters = [];
   #exit = null;
 
   constructor(serverPath) {
@@ -120,48 +133,37 @@ class LspClient {
     this.#send({ jsonrpc: "2.0", method, params });
   }
 
-  async waitForNotifications(method, count, predicate, timeoutMs) {
-    const matches = [];
-    const collectExisting = () => {
-      for (const notification of this.#notifications) {
-        if (notification.method === method && predicate(notification)) {
-          matches.push(notification);
-        }
-      }
-      return matches.length >= count;
-    };
+  notificationCursor() {
+    return this.#notifications.length;
+  }
 
-    if (collectExisting()) {
-      return matches.slice(0, count);
+  inboundEventCursor() {
+    return this.#inboundMethodEvents.length;
+  }
+
+  async waitForInboundState(cursor, evaluate, timeoutMs) {
+    const evaluateCurrent = () => evaluate(this.#inboundMethodEvents.slice(cursor));
+    const current = evaluateCurrent();
+    if (current != null) {
+      return current;
     }
 
     return new Promise((resolve) => {
       const timeout = setTimeout(() => {
-        this.#notificationWaiters = this.#notificationWaiters.filter((w) => w !== waiter);
-        resolve(matches.slice(0, count));
+        this.#inboundEventWaiters = this.#inboundEventWaiters.filter((w) => w !== waiter);
+        resolve(null);
       }, timeoutMs);
-
       const waiter = {
-        method,
-        notify: (notification) => {
-          if (notification.method !== method || !predicate(notification)) {
-            return;
-          }
-          matches.push(notification);
-          if (matches.length >= count) {
-            clearTimeout(timeout);
-            this.#notificationWaiters = this.#notificationWaiters.filter((w) => w !== waiter);
-            resolve(matches.slice(0, count));
-          }
+        notify: () => {
+          const state = evaluateCurrent();
+          if (state == null) return;
+          clearTimeout(timeout);
+          this.#inboundEventWaiters = this.#inboundEventWaiters.filter((w) => w !== waiter);
+          resolve(state);
         },
       };
-
-      this.#notificationWaiters.push(waiter);
+      this.#inboundEventWaiters.push(waiter);
     });
-  }
-
-  notificationCursor() {
-    return this.#notifications.length;
   }
 
   notificationsSince(cursor, method, predicate = () => true) {
@@ -236,7 +238,9 @@ class LspClient {
     // JSON-RPC request IDs are scoped to each direction. A server request may legally reuse the ID of a pending
     // client request, so the presence of `method` must win over numeric ID matching.
     if (Object.prototype.hasOwnProperty.call(message, "id") && typeof message.method === "string") {
-      this.#sendResponse(message.id, defaultClientResponse(message));
+      const result = defaultClientResponse(message);
+      this.#recordInboundMethodEvent({ kind: "request", message, response: result });
+      this.#sendResponse(message.id, result);
       return;
     }
 
@@ -249,10 +253,15 @@ class LspClient {
     }
 
     if (typeof message.method === "string") {
+      this.#recordInboundMethodEvent({ kind: "notification", message });
       this.#notifications.push(message);
-      for (const waiter of [...this.#notificationWaiters]) {
-        waiter.notify(message);
-      }
+    }
+  }
+
+  #recordInboundMethodEvent(event) {
+    this.#inboundMethodEvents.push(event);
+    for (const waiter of [...this.#inboundEventWaiters]) {
+      waiter.notify(event);
     }
   }
 }
@@ -261,6 +270,9 @@ function defaultClientResponse(message) {
   if (message.method === "workspace/configuration") {
     const items = Array.isArray(message.params?.items) ? message.params.items : [];
     return items.map(() => null);
+  }
+  if (message.method === "workspace/diagnostic/refresh") {
+    return null;
   }
   return null;
 }
@@ -328,15 +340,9 @@ async function main() {
   const client = new LspClient(SERVER_PATH);
   try {
     await initializeServer(client, fixtureRoot, fixtureName);
+    const settledAnalysisCursor = client.inboundEventCursor();
     await openProbeDocuments(client, fixtureRoot, probes, readFixtureText);
-
-    const openUris = new Set(probes.map((probe) => pathToFileURL(resolveFixturePath(fixtureRoot, probe.file)).href));
-    await client.waitForNotifications(
-      "aurelia/analysisReady",
-      openUris.size,
-      (notification) => openUris.has(notification.params?.uri),
-      OPEN_SETTLE_TIMEOUT_MS,
-    );
+    await waitForSettledAnalysis(client, settledAnalysisCursor);
 
     const results = [];
     for (const probe of probes) {
@@ -428,10 +434,10 @@ function requireValue(args, index, flag) {
 function usage() {
   return [
     "Usage:",
-    "  pnpm --filter @aurelia-ls/lane-harness lane -- --fixture <fixture-name> --lane <rename|references|hover|completions|definition|documentHighlight|diagnostics|codeAction> [--probe <id>] [--update]",
+    "  pnpm --filter @aurelia-ls/lane-harness run lane -- --fixture <fixture-name> --lane <rename|references|hover|completions|definition|documentHighlight|diagnostics|codeAction> [--probe <id>] [--update]",
     "",
     "Example:",
-    "  pnpm --filter @aurelia-ls/lane-harness lane -- --fixture app-pattern-routed-catalog-storefront --lane rename --update",
+    "  pnpm --filter @aurelia-ls/lane-harness run lane -- --fixture app-pattern-routed-catalog-storefront --lane rename --update",
   ].join("\n");
 }
 
@@ -467,18 +473,15 @@ async function initializeServer(client, fixtureRoot, fixtureName) {
             dynamicRegistration: false,
             prepareSupport: true,
           },
+          diagnostic: laneDiagnosticClientCapabilities(),
         },
         workspace: {
           applyEdit: true,
           configuration: true,
-          workspaceFolders: true,
-        },
-      },
-      initializationOptions: {
-        aurelia: {
-          workspace: {
-            trusted: true,
+          diagnostics: {
+            refreshSupport: true,
           },
+          workspaceFolders: true,
         },
       },
     },
@@ -487,6 +490,15 @@ async function initializeServer(client, fixtureRoot, fixtureName) {
 
   if (response.error) {
     throw new HarnessError(`initialize failed: ${JSON.stringify(response.error)}`);
+  }
+  const diagnosticProvider = response.result?.capabilities?.diagnosticProvider;
+  if (diagnosticProvider?.identifier !== "aurelia"
+      || diagnosticProvider.interFileDependencies !== true
+      || diagnosticProvider.workspaceDiagnostics !== false) {
+    throw new HarnessError(
+      "initialize did not advertise the required Aurelia document diagnostic provider: " +
+        JSON.stringify(diagnosticProvider ?? null),
+    );
   }
   client.notify("initialized", {});
 }
@@ -510,6 +522,61 @@ async function openProbeDocuments(client, fixtureRoot, probes, readFixtureText) 
       },
     });
   }
+}
+
+async function waitForSettledAnalysis(client, cursor) {
+  const sequence = await client.waitForInboundState(
+    cursor,
+    settledAnalysisSequence,
+    ANALYSIS_SETTLE_TIMEOUT_MS,
+  );
+  if (sequence == null) {
+    throw new HarnessError(
+      `Timed out after ${ANALYSIS_SETTLE_TIMEOUT_MS}ms waiting for a fresh ordered ` +
+        "aurelia/analysisChanged -> workspace/diagnostic/refresh sequence.\n" +
+        client.stderrText,
+    );
+  }
+  if (sequence.outcome !== "settled") {
+    throw new HarnessError(`Invalid settled-analysis sequence: ${sequence.reason}.\n${client.stderrText}`);
+  }
+}
+
+export function settledAnalysisSequence(events) {
+  let analysisIndex = -1;
+  for (let index = 0; index < events.length; index += 1) {
+    const event = events[index];
+    if (event.kind === "notification" && event.message?.method === "aurelia/analysisChanged") {
+      if (!isSettledAnalysisChangedPayload(event.message.params)) {
+        return { outcome: "invalid-sequence", reason: "analysisChanged payload is malformed or URI-scoped" };
+      }
+      if (analysisIndex < 0) analysisIndex = index;
+      continue;
+    }
+    if (event.kind === "request" && event.message?.method === "workspace/diagnostic/refresh") {
+      if (analysisIndex < 0) {
+        return { outcome: "invalid-sequence", reason: "diagnostic refresh arrived before analysisChanged" };
+      }
+      if (event.message.params != null) {
+        return { outcome: "invalid-sequence", reason: "diagnostic refresh request must not carry params" };
+      }
+      if (event.response !== null) {
+        return { outcome: "invalid-sequence", reason: "diagnostic refresh acknowledgement must be null" };
+      }
+      return { outcome: "settled" };
+    }
+  }
+  return null;
+}
+
+function isSettledAnalysisChangedPayload(params) {
+  return params != null
+    && typeof params === "object"
+    && !Array.isArray(params)
+    && typeof params.fingerprint === "string"
+    && params.fingerprint.length > 0
+    && !Object.prototype.hasOwnProperty.call(params, "uri")
+    && (params.changeKind === "source-text" || params.changeKind === "topology");
 }
 
 function languageIdForPath(file) {
@@ -839,32 +906,30 @@ async function runDiagnosticsProbe(client, fixtureRoot, probe, readFixtureText) 
   const absoluteFile = resolveFixturePath(fixtureRoot, relativeFile);
   const uri = pathToFileURL(absoluteFile).href;
 
-  const publishNotifications = await client.waitForNotifications(
-    "textDocument/publishDiagnostics",
-    1,
-    (notification) => notification.params?.uri === uri,
-    DIAGNOSTICS_TIMEOUT_MS,
-  );
-  const publishNotification = publishNotifications.at(-1) ?? null;
-  const publishSummary = await summarizePublishDiagnosticsNotification(
-    publishNotification,
+  const initialPull = await pullDocumentDiagnostics(
+    client,
+    uri,
     sourceText,
     fixtureRoot,
     readFixtureText,
   );
-
-  const customResponse = await client.request("aurelia/getDiagnostics", { uri });
-  const customSummary = await summarizeCustomDiagnosticsResponse(customResponse, fixtureRoot, readFixtureText);
+  const previousResultId = requireInitialDiagnosticPullForCycle(initialPull);
+  const reusePull = await pullDocumentDiagnostics(
+    client,
+    uri,
+    sourceText,
+    fixtureRoot,
+    readFixtureText,
+    previousResultId,
+  );
+  requireUnchangedDiagnosticPullForCycle(reusePull, previousResultId);
 
   return {
     lane: "diagnostics",
     probe,
     relativeFile,
-    publishNotification,
-    publishSummary,
-    customResponse,
-    customSummary,
-    alignment: summarizeDiagnosticsAlignment(publishSummary, customSummary),
+    initialPull: initialPull.summary,
+    reusePull: reusePull.summary,
   };
 }
 
@@ -875,16 +940,21 @@ async function runCodeActionProbe(client, fixtureRoot, probe, readFixtureText) {
   const absoluteFile = resolveFixturePath(fixtureRoot, relativeFile);
   const uri = pathToFileURL(absoluteFile).href;
   const range = { start: anchor.position, end: anchor.position };
-  const publishNotifications = await client.waitForNotifications(
-    "textDocument/publishDiagnostics",
-    1,
-    (notification) => notification.params?.uri === uri,
-    DIAGNOSTICS_TIMEOUT_MS,
+  const diagnosticPull = await pullDocumentDiagnostics(
+    client,
+    uri,
+    sourceText,
+    fixtureRoot,
+    readFixtureText,
   );
+  const pulledDiagnostics = requireFullDiagnosticPullForCodeAction(diagnosticPull);
   const codeActionDiagnostics = codeActionContextDiagnostics(
-    publishNotifications.at(-1)?.params?.diagnostics,
+    pulledDiagnostics,
     range,
   );
+  const codeActionDiagnosticSummary = await Promise.all(codeActionDiagnostics.map((diagnostic) =>
+    summarizeLspDiagnostic(diagnostic, sourceText, fixtureRoot, readFixtureText)
+  ));
 
   const codeActionResponse = await client.request("textDocument/codeAction", {
     textDocument: { uri },
@@ -937,11 +1007,51 @@ async function runCodeActionProbe(client, fixtureRoot, probe, readFixtureText) {
     relativeFile,
     anchor,
     range,
+    diagnosticPull: diagnosticPull.summary,
     codeActionResponse,
     codeActionDiagnostics,
+    codeActionDiagnosticSummary,
     expectedOldTexts,
     actions: actionResults,
   };
+}
+
+export function requireInitialDiagnosticPullForCycle(pull) {
+  if (pull?.outcome !== "full") {
+    throw new HarnessError(
+      `Diagnostic cycle requires an initial full report, got ${diagnosticPullFailureDetail(pull)}.`,
+    );
+  }
+  if (typeof pull.resultId !== "string" || pull.resultId.length === 0) {
+    throw new HarnessError("Diagnostic cycle requires the initial full report to carry a non-empty resultId.");
+  }
+  return pull.resultId;
+}
+
+export function requireUnchangedDiagnosticPullForCycle(pull, previousResultId) {
+  if (pull?.outcome !== "unchanged") {
+    throw new HarnessError(
+      `Diagnostic cycle requires an unchanged reuse report, got ${diagnosticPullFailureDetail(pull)}.`,
+    );
+  }
+  if (pull.resultId !== previousResultId) {
+    throw new HarnessError("Diagnostic cycle unchanged resultId does not match the initial full report.");
+  }
+}
+
+export function requireFullDiagnosticPullForCodeAction(pull) {
+  if (pull?.outcome !== "full" || !Array.isArray(pull.items)) {
+    throw new HarnessError(
+      `Code-action context requires a full diagnostic report, got ${diagnosticPullFailureDetail(pull)}.`,
+    );
+  }
+  return pull.items;
+}
+
+function diagnosticPullFailureDetail(pull) {
+  return pull?.summary == null
+    ? pull?.outcome ?? "missing"
+    : stableStringify(pull.summary);
 }
 
 function summarizeCodeActionResolution(response, action) {
@@ -1009,24 +1119,198 @@ function summarizeDocumentHighlights(result, sourceText) {
   });
 }
 
-async function summarizePublishDiagnosticsNotification(notification, sourceText, fixtureRoot, readFixtureText) {
-  if (notification == null) {
+async function pullDocumentDiagnostics(
+  client,
+  uri,
+  sourceText,
+  fixtureRoot,
+  readFixtureText,
+  previousResultId = null,
+) {
+  const response = await client.request(
+    "textDocument/diagnostic",
+    documentDiagnosticParams(uri, previousResultId),
+    DIAGNOSTICS_TIMEOUT_MS,
+  );
+  const report = decodeDocumentDiagnosticResponse(response, previousResultId);
+  return {
+    outcome: report.outcome,
+    resultId: report.outcome === "full" || report.outcome === "unchanged"
+      ? report.resultId
+      : null,
+    items: report.outcome === "full" ? report.items : [],
+    summary: await summarizeDocumentDiagnosticReport(
+      report,
+      uri,
+      previousResultId,
+      sourceText,
+      fixtureRoot,
+      readFixtureText,
+    ),
+  };
+}
+
+export function documentDiagnosticParams(uri, previousResultId = null) {
+  return {
+    textDocument: { uri },
+    identifier: "aurelia",
+    ...(typeof previousResultId === "string" ? { previousResultId } : {}),
+  };
+}
+
+export function decodeDocumentDiagnosticResponse(response, previousResultId = null) {
+  if (response != null && typeof response === "object" && response.error != null) {
+    if (response.error.code === -32800) {
+      if (response.error.data?.retriggerRequest === true) {
+        return {
+          outcome: "invalid-error",
+          error: response.error,
+          reason: "RequestCancelled must not request an automatic retry",
+        };
+      }
+      return {
+        outcome: "cancelled",
+        error: response.error,
+        retriggerRequest: false,
+      };
+    }
+    if (response.error.code === -32802) {
+      if (typeof response.error.data?.retriggerRequest !== "boolean") {
+        return {
+          outcome: "invalid-error",
+          error: response.error,
+          reason: "ServerCancelled must carry a boolean data.retriggerRequest",
+        };
+      }
+      return {
+        outcome: "server-cancelled",
+        error: response.error,
+        retriggerRequest: response.error.data.retriggerRequest,
+      };
+    }
     return {
-      outcome: "missing-notification",
-      uri: null,
-      diagnosticCount: 0,
-      diagnostics: [],
+      outcome: "error",
+      error: response.error,
     };
   }
 
-  const diagnostics = Array.isArray(notification.params?.diagnostics)
-    ? notification.params.diagnostics
-    : [];
+  const result = response != null && typeof response === "object" && !Array.isArray(response)
+    ? response.result
+    : undefined;
+  if (result == null || typeof result !== "object" || Array.isArray(result)) {
+    return invalidDocumentDiagnosticReport(result, "response result must be a diagnostic report object");
+  }
+
+  const resultIdPresent = Object.prototype.hasOwnProperty.call(result, "resultId");
+  if (resultIdPresent && typeof result.resultId !== "string") {
+    return invalidDocumentDiagnosticReport(result, "resultId must be a string when present");
+  }
+  if (Object.prototype.hasOwnProperty.call(result, "relatedDocuments")) {
+    return invalidDocumentDiagnosticReport(
+      result,
+      "relatedDocuments must be absent because the client advertised relatedDocumentSupport=false",
+    );
+  }
+
+  if (result.kind === "full") {
+    if (!Array.isArray(result.items)) {
+      return invalidDocumentDiagnosticReport(result, "full report items must be an array");
+    }
+    return {
+      outcome: "full",
+      resultIdPresent,
+      resultId: resultIdPresent ? result.resultId : null,
+      items: result.items,
+    };
+  }
+
+  if (result.kind === "unchanged") {
+    if (!resultIdPresent) {
+      return invalidDocumentDiagnosticReport(result, "unchanged report must include a resultId");
+    }
+    if (typeof previousResultId !== "string") {
+      return invalidDocumentDiagnosticReport(result, "unchanged report requires a previousResultId request");
+    }
+    if (result.resultId !== previousResultId) {
+      return invalidDocumentDiagnosticReport(result, "unchanged report resultId must match previousResultId");
+    }
+    return {
+      outcome: "unchanged",
+      resultIdPresent: true,
+      resultId: result.resultId,
+      matchesPreviousResultId: true,
+      items: [],
+    };
+  }
+
+  return invalidDocumentDiagnosticReport(result, "report kind must be 'full' or 'unchanged'");
+}
+
+function invalidDocumentDiagnosticReport(result, reason) {
+  const report = result != null && typeof result === "object" && !Array.isArray(result)
+    ? result
+    : null;
   return {
-    outcome: "published",
-    uri: normalizeSnapshotString(notification.params?.uri ?? ""),
-    diagnosticCount: diagnostics.length,
-    diagnostics: await Promise.all(diagnostics.map((diagnostic) =>
+    outcome: "invalid-report",
+    reportKind: normalizeSnapshotValue(report?.kind ?? null),
+    resultIdPresent: report == null
+      ? false
+      : Object.prototype.hasOwnProperty.call(report, "resultId"),
+    reason,
+  };
+}
+
+async function summarizeDocumentDiagnosticReport(
+  report,
+  uri,
+  previousResultId,
+  sourceText,
+  fixtureRoot,
+  readFixtureText,
+) {
+  const base = {
+    outcome: report.outcome,
+    uri: normalizeSnapshotString(uri),
+    previousResultIdPresent: typeof previousResultId === "string",
+  };
+  if (report.outcome === "error"
+      || report.outcome === "cancelled"
+      || report.outcome === "server-cancelled"
+      || report.outcome === "invalid-error") {
+    return {
+      ...base,
+      resultIdPresent: null,
+      diagnosticCount: null,
+      diagnostics: [],
+      error: normalizeSnapshotValue(report.error),
+      ...(report.retriggerRequest == null ? {} : { retriggerRequest: report.retriggerRequest }),
+      ...(report.reason == null ? {} : { reason: report.reason }),
+    };
+  }
+  if (report.outcome === "invalid-report") {
+    return {
+      ...base,
+      reportKind: report.reportKind,
+      resultIdPresent: report.resultIdPresent,
+      diagnosticCount: null,
+      diagnostics: [],
+      reason: report.reason,
+    };
+  }
+  if (report.outcome === "unchanged") {
+    return {
+      ...base,
+      resultIdPresent: report.resultIdPresent,
+      matchesPreviousResultId: report.matchesPreviousResultId,
+      diagnosticCount: null,
+      diagnostics: [],
+    };
+  }
+  return {
+    ...base,
+    resultIdPresent: report.resultIdPresent,
+    diagnosticCount: report.items.length,
+    diagnostics: await Promise.all(report.items.map((diagnostic) =>
       summarizeLspDiagnostic(diagnostic, sourceText, fixtureRoot, readFixtureText)
     )),
   };
@@ -1093,242 +1377,28 @@ async function summarizeLspDiagnosticRelatedInformation(related, sourceText, fix
   };
 }
 
-async function summarizeCustomDiagnosticsResponse(response, fixtureRoot, readFixtureText) {
-  if (response.error) {
-    return {
-      outcome: "error",
-      error: normalizeSnapshotValue(response.error),
-    };
-  }
-
-  if (response.result == null) {
-    return {
-      outcome: "result",
-      result: null,
-    };
-  }
-
-  const diagnostics = response.result.diagnostics ?? {};
-  const bySurface = diagnostics.bySurface ?? {};
-  const surfaces = {};
-  for (const surface of Object.keys(bySurface).sort()) {
-    const items = Array.isArray(bySurface[surface]) ? bySurface[surface] : [];
-    surfaces[surface] = {
-      diagnosticCount: items.length,
-      diagnostics: await Promise.all(items.map((item) =>
-        summarizeCustomDiagnosticsItem(item, fixtureRoot, readFixtureText)
-      )),
-    };
-  }
-
-  const raw = Array.isArray(diagnostics.raw) ? diagnostics.raw : [];
-  return {
-    outcome: "result",
-    uri: normalizeSnapshotString(response.result.uri ?? ""),
-    answer: summarizeCustomDiagnosticsAnswer(response.result.answer),
-    surfaces,
-    raw: {
-      diagnosticCount: raw.length,
-      diagnostics: await Promise.all(raw.map((item) =>
-        summarizeCustomDiagnosticsItem(item, fixtureRoot, readFixtureText)
-      )),
-    },
-    presentation: await summarizeCustomDiagnosticsPresentation(diagnostics.presentation, fixtureRoot, readFixtureText),
-  };
-}
-
-function summarizeCustomDiagnosticsAnswer(answer) {
-  if (answer == null || typeof answer !== "object" || Array.isArray(answer)) {
-    return null;
-  }
-  return normalizeSnapshotValue({
-    schemaVersion: answer.schemaVersion ?? null,
-    result: answer.result ?? null,
-    selection: answer.selection ?? null,
-    coverage: answer.coverage ?? null,
-    summary: answer.summary ?? null,
-    page: answer.page ?? null,
-    analysisDepth: answer.analysisDepth ?? null,
-    continuations: Array.isArray(answer.continuations) ? answer.continuations : [],
-  });
-}
-
-async function summarizeCustomDiagnosticsPresentation(presentation, fixtureRoot, readFixtureText) {
-  if (presentation == null || typeof presentation !== "object" || Array.isArray(presentation)) {
-    return null;
-  }
-  const groups = Array.isArray(presentation.groups) ? presentation.groups : [];
-  return {
-    rawRowCount: presentation.rawRowCount ?? null,
-    primaryCount: presentation.primaryCount ?? null,
-    contextualCount: presentation.contextualCount ?? null,
-    complete: presentation.complete ?? null,
-    groups: await Promise.all(groups.map((group) =>
-      summarizeCustomDiagnosticsPresentationGroup(group, fixtureRoot, readFixtureText)
-    )),
-  };
-}
-
-async function summarizeCustomDiagnosticsPresentationGroup(group, fixtureRoot, readFixtureText) {
-  return {
-    groupKey: normalizeSnapshotString(String(group?.groupKey ?? "")),
-    subject: summarizeDiagnosticSubject(group?.subject),
-    rawRowCount: group?.rawRowCount ?? null,
-    primarySeverity: group?.primarySeverity ?? null,
-    maxRawSeverity: group?.maxRawSeverity ?? null,
-    primary: await summarizeCustomDiagnosticsPresentationItem(group?.primary, fixtureRoot, readFixtureText),
-    related: await Promise.all((Array.isArray(group?.related) ? group.related : []).map((item) =>
-      summarizeCustomDiagnosticsPresentationItem(item, fixtureRoot, readFixtureText)
-    )),
-  };
-}
-
-async function summarizeCustomDiagnosticsPresentationItem(item, fixtureRoot, readFixtureText) {
-  return {
-    rowId: normalizeSnapshotString(String(item?.rowId ?? "")),
-    role: item?.role ?? null,
-    relation: item?.relation ?? null,
-    diagnostic: await summarizeCustomDiagnosticsItem(item?.diagnostic ?? {}, fixtureRoot, readFixtureText),
-  };
-}
-
-async function summarizeCustomDiagnosticsItem(item, fixtureRoot, readFixtureText) {
-  const uri = typeof item?.uri === "string" ? item.uri : null;
-  const file = uri == null ? null : uriToFixtureRelativePath(uri, fixtureRoot);
-  const span = isSourceSpan(item?.span) ? item.span : null;
-  let spanText = null;
-  let anomaly = null;
-
-  if (uri != null && file == null) {
-    anomaly = "outside-fixture";
-  } else if (file != null && span != null) {
-    try {
-      const text = await readFixtureText(file);
-      spanText = text.slice(span.start, span.end);
-    } catch (error) {
-      anomaly = error instanceof Error ? error.message : String(error);
-    }
-  }
-
-  return {
-    code: normalizeSnapshotValue(item?.code ?? null),
-    message: normalizeSnapshotString(String(item?.message ?? "")),
-    severity: item?.severity ?? null,
-    impact: item?.impact ?? null,
-    actionability: item?.actionability ?? null,
-    category: item?.category ?? null,
-    status: item?.status ?? null,
-    source: item?.source ?? null,
-    uri: uri == null ? null : normalizeSnapshotString(uri),
-    file,
-    span: span == null ? normalizeSnapshotValue(item?.span ?? null) : { start: span.start, end: span.end },
-    spanText,
-    anomaly,
-    data: summarizeDiagnosticData(item?.data),
-    related: await Promise.all((Array.isArray(item?.related) ? item.related : []).map((related) =>
-      summarizeCustomDiagnosticsRelatedItem(related, fixtureRoot, readFixtureText)
-    )),
-    issues: normalizeSnapshotValue(item?.issues ?? []),
-  };
-}
-
-async function summarizeCustomDiagnosticsRelatedItem(related, fixtureRoot, readFixtureText) {
-  const uri = typeof related?.uri === "string" ? related.uri : null;
-  const file = uri == null ? null : uriToFixtureRelativePath(uri, fixtureRoot);
-  const span = isSourceSpan(related?.span) ? related.span : null;
-  let spanText = null;
-  let anomaly = null;
-  if (uri != null && file == null) {
-    anomaly = "outside-fixture";
-  } else if (file != null && span != null) {
-    try {
-      const text = await readFixtureText(file);
-      spanText = text.slice(span.start, span.end);
-    } catch (error) {
-      anomaly = error instanceof Error ? error.message : String(error);
-    }
-  }
-  return {
-    code: normalizeSnapshotValue(related?.code ?? null),
-    message: normalizeSnapshotString(String(related?.message ?? "")),
-    uri: uri == null ? null : normalizeSnapshotString(uri),
-    file,
-    span: span == null ? normalizeSnapshotValue(related?.span ?? null) : { start: span.start, end: span.end },
-    spanText,
-    sourceRole: related?.sourceRole ?? null,
-    anomaly,
-  };
-}
-
-function summarizeDiagnosticsAlignment(publishSummary, customSummary) {
-  const lspDiagnostics = publishSummary.diagnostics ?? [];
-  const customLspDiagnostics = customSummary?.surfaces?.lsp?.diagnostics ?? [];
-  const lspKeys = new Map(lspDiagnostics.map((diagnostic) => [diagnosticComparisonKey(diagnostic), diagnostic]));
-  const customKeys = new Map(customLspDiagnostics.map((diagnostic) => [diagnosticComparisonKey(diagnostic), diagnostic]));
-  const lspOnly = [...lspKeys.keys()].filter((key) => !customKeys.has(key)).sort();
-  const customOnly = [...customKeys.keys()].filter((key) => !lspKeys.has(key)).sort();
-
-  return {
-    lspPublishCount: lspDiagnostics.length,
-    customLspSurfaceCount: customLspDiagnostics.length,
-    suppressedCount: customSummary?.suppressed?.diagnosticCount ?? 0,
-    countsMatch: lspDiagnostics.length === customLspDiagnostics.length,
-    comparisonKey: "domain/kind/code/severity/text/message",
-    lspOnly,
-    customOnly,
-  };
-}
-
-function diagnosticComparisonKey(diagnostic) {
-  const data = diagnostic.data ?? {};
-  return [
-    data.diagnosticDomain ?? "unknown-domain",
-    data.diagnosticKind ?? "unknown-kind",
-    String(diagnostic.code ?? "no-code"),
-    comparableDiagnosticSeverity(diagnostic.severity),
-    diagnostic.rangeText ?? diagnostic.spanText ?? "no-text",
-    diagnostic.message ?? "",
-  ].join("|");
-}
-
-function comparableDiagnosticSeverity(severity) {
-  return severity === "info"
-    ? "information"
-    : severity ?? "unknown-severity";
-}
-
 function summarizeDiagnosticData(data) {
-  const root = data && typeof data === "object" && !Array.isArray(data) ? data : {};
-  const semanticRuntime = root.semanticRuntime && typeof root.semanticRuntime === "object"
+  const root = data != null && typeof data === "object" && !Array.isArray(data) ? data : {};
+  const semanticRuntime = root.semanticRuntime != null
+      && typeof root.semanticRuntime === "object"
+      && !Array.isArray(root.semanticRuntime)
     ? root.semanticRuntime
-    : root.semanticRuntime === true
-      ? root
-      : {};
-  const taxonomyRoot = root.__aurelia && typeof root.__aurelia === "object" && root.__aurelia.diagnostics
-    ? root.__aurelia.diagnostics
     : {};
-
   return {
-    diagnosticDomain: semanticRuntime.diagnosticDomain ?? root.diagnosticDomain ?? null,
-    diagnosticKind: semanticRuntime.diagnosticKind ?? root.diagnosticKind ?? null,
-    diagnosticAuthority: semanticRuntime.diagnosticAuthority ?? root.diagnosticAuthority ?? null,
-    frameworkErrorCode: semanticRuntime.frameworkErrorCode ?? root.frameworkErrorCode ?? null,
-    frameworkRawErrorAuthority: semanticRuntime.frameworkRawErrorAuthority ?? root.frameworkRawErrorAuthority ?? null,
-    phase: semanticRuntime.phase ?? root.phase ?? null,
-    relatedQueryKind: semanticRuntime.relatedQueryKind ?? root.relatedQueryKind ?? null,
-    sourceRole: semanticRuntime.sourceRole ?? root.sourceRole ?? null,
-    missingInput: semanticRuntime.missingInput ?? root.missingInput ?? null,
-    missingInputs: normalizeSnapshotValue(semanticRuntime.missingInputs ?? root.missingInputs ?? []),
-    subject: summarizeDiagnosticSubject(semanticRuntime.subject ?? root.subject ?? null),
-    relatedInformation: normalizeSnapshotValue(semanticRuntime.relatedInformation ?? root.relatedInformation ?? []),
-    repairAffordance: normalizeSnapshotValue(semanticRuntime.repairAffordance ?? root.repairAffordance ?? null),
-    taxonomy: {
-      schema: taxonomyRoot.schema ?? null,
-      impact: taxonomyRoot.impact ?? null,
-      actionability: taxonomyRoot.actionability ?? null,
-      category: taxonomyRoot.category ?? null,
-      confidence: taxonomyRoot.confidence ?? null,
-    },
+    diagnosticDomain: semanticRuntime.diagnosticDomain ?? null,
+    diagnosticKind: semanticRuntime.diagnosticKind ?? null,
+    diagnosticAuthority: semanticRuntime.diagnosticAuthority ?? null,
+    typeScriptDiagnosticCode: semanticRuntime.typeScriptDiagnosticCode ?? null,
+    frameworkErrorCode: semanticRuntime.frameworkErrorCode ?? null,
+    frameworkRawErrorAuthority: semanticRuntime.frameworkRawErrorAuthority ?? null,
+    phase: semanticRuntime.phase ?? null,
+    relatedQueryKind: semanticRuntime.relatedQueryKind ?? null,
+    sourceRole: semanticRuntime.sourceRole ?? null,
+    missingInput: semanticRuntime.missingInput ?? null,
+    missingInputs: normalizeSnapshotValue(semanticRuntime.missingInputs ?? []),
+    subject: summarizeDiagnosticSubject(semanticRuntime.subject ?? null),
+    relatedInformation: normalizeSnapshotValue(semanticRuntime.relatedInformation ?? []),
+    repairAffordance: normalizeSnapshotValue(semanticRuntime.repairAffordance ?? null),
   };
 }
 
@@ -1340,7 +1410,9 @@ function summarizeDiagnosticSubject(subject) {
     subjectKind: subject.subjectKind ?? null,
     source: summarizeSourceReference(subject.source ?? null),
     uri: subject.uri ?? null,
-    span: isSourceSpan(subject.span) ? { start: subject.span.start, end: subject.span.end } : normalizeSnapshotValue(subject.span ?? null),
+    span: isSourceSpan(subject.span)
+      ? { start: subject.span.start, end: subject.span.end }
+      : normalizeSnapshotValue(subject.span ?? null),
   };
 }
 
@@ -1377,14 +1449,12 @@ function diagnosticSeverityName(severity) {
 }
 
 function isSourceSpan(value) {
-  return (
-    value &&
-    typeof value === "object" &&
-    Number.isInteger(value.start) &&
-    Number.isInteger(value.end) &&
-    value.start >= 0 &&
-    value.end >= value.start
-  );
+  return value != null
+    && typeof value === "object"
+    && Number.isInteger(value.start)
+    && Number.isInteger(value.end)
+    && value.start >= 0
+    && value.end >= value.start;
 }
 
 function documentHighlightKindName(kind) {
@@ -2030,19 +2100,19 @@ function renderLaneSnapshotSections(lines, result) {
       return;
     }
     case "diagnostics":
-      lines.push("### publishDiagnostics");
+      lines.push("### textDocument/diagnostic — full pull");
       lines.push("");
-      lines.push(fencedJson(result.publishSummary));
+      lines.push(fencedJson(result.initialPull));
       lines.push("");
-      lines.push("### aurelia/getDiagnostics");
+      lines.push("### textDocument/diagnostic — previousResultId reuse");
       lines.push("");
-      lines.push(fencedJson(result.customSummary));
-      lines.push("");
-      lines.push("### Alignment");
-      lines.push("");
-      lines.push(fencedJson(result.alignment));
+      lines.push(fencedJson(result.reusePull));
       return;
     case "codeAction":
+      lines.push("### Diagnostic pull");
+      lines.push("");
+      lines.push(fencedJson(diagnosticPullEnvelope(result.diagnosticPull)));
+      lines.push("");
       lines.push("### codeAction");
       lines.push("");
       lines.push(fencedJson(summarizeCodeActionResponse(result.codeActionResponse)));
@@ -2051,13 +2121,7 @@ function renderLaneSnapshotSections(lines, result) {
       lines.push("");
       lines.push(fencedJson({
         diagnosticCount: result.codeActionDiagnostics.length,
-        diagnostics: result.codeActionDiagnostics.map((diagnostic) => ({
-          code: normalizeSnapshotValue(diagnostic?.code ?? null),
-          message: normalizeSnapshotString(String(diagnostic?.message ?? "")),
-          source: diagnostic?.source ?? null,
-          range: isRange(diagnostic?.range) ? normalizeRangeForSnapshot(diagnostic.range) : normalizeSnapshotValue(diagnostic?.range ?? null),
-          data: summarizeDiagnosticData(diagnostic?.data),
-        })),
+        diagnostics: result.codeActionDiagnosticSummary,
       }));
       lines.push("");
       lines.push("### Actions");
@@ -2104,6 +2168,12 @@ function renderLaneSnapshotSections(lines, result) {
     default:
       throw new HarnessError(`Unsupported result lane: ${result.lane}`);
   }
+}
+
+function diagnosticPullEnvelope(summary) {
+  const envelope = { ...summary };
+  delete envelope.diagnostics;
+  return envelope;
 }
 
 function probeSummary(result) {
@@ -2613,12 +2683,10 @@ function summaryRowForResult(result) {
     case "diagnostics":
       return {
         id: result.probe.id,
-        outcome: result.publishSummary.outcome === "published"
-          ? result.alignment.countsMatch
-            ? "published"
-            : "alignment-mismatch"
-          : result.publishSummary.outcome,
-        count: String(result.publishSummary.diagnosticCount ?? 0),
+        outcome: diagnosticPullCycleOutcome(result.initialPull, result.reusePull),
+        count: result.initialPull.diagnosticCount == null
+          ? "-"
+          : String(result.initialPull.diagnosticCount),
         files: result.relativeFile,
         verdict: result.probe.verdict ?? "undecided",
       };
@@ -2644,11 +2712,25 @@ function summaryRowForResult(result) {
   }
 }
 
+function diagnosticPullCycleOutcome(initialPull, reusePull) {
+  if (initialPull.outcome !== "full") {
+    return initialPull.outcome;
+  }
+  if (reusePull.outcome === "unchanged") {
+    return "full+unchanged";
+  }
+  return `full/reuse-${reusePull.outcome}`;
+}
+
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exitCode = 1;
-});
+const isDirectEntry = process.argv[1] != null
+  && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url;
+if (isDirectEntry) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  });
+}

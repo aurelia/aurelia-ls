@@ -25,6 +25,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 }
 ```
 
+### Diagnostic pull
+
+```json
+{
+  "diagnosticCount": 4,
+  "outcome": "full",
+  "previousResultIdPresent": false,
+  "resultIdPresent": true,
+  "uri": "fixtures://pressure/router-instruction-errors/src/router-instruction-errors-app.html"
+}
+```
+
 ### codeAction
 
 ```json
@@ -41,6 +53,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "diagnosticCount": 1,
   "diagnostics": [
     {
+      "anomaly": null,
       "code": "AUR3401",
       "data": {
         "diagnosticAuthority": "framework-error-code",
@@ -65,13 +78,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         },
         "sourceRole": "template",
         "subject": null,
-        "taxonomy": {
-          "actionability": "guided",
-          "category": "project",
-          "confidence": null,
-          "impact": "blocking",
-          "schema": "diagnostics-taxonomy/1"
-        }
+        "typeScriptDiagnosticCode": null
       },
       "message": "Neither the route 'missing-route' matched any configured route nor is a fallback configured for the active route context.",
       "range": {
@@ -84,6 +91,9 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "line": 0
         }
       },
+      "rangeText": "missing-route",
+      "relatedInformation": [],
+      "severity": "error",
       "source": "aurelia"
     }
   ]

@@ -244,7 +244,7 @@
         "id": "valid-local-template",
         "file": "src/template-local-template-semantics-app.html",
         "verdict": "correct",
-        "reason": "Use-before-declaration, generated bindables, nested locals, host surrogate class, and inner switch lowering are all valid and should publish no diagnostics."
+        "reason": "Use-before-declaration, generated bindables, nested locals, host surrogate class, and inner switch lowering are all valid and should return an empty full document-diagnostic report."
       }
     ]
   }

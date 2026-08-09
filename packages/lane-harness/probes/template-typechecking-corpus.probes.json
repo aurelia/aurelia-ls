@@ -6,21 +6,21 @@
         "id": "typechecking-read-expressions",
         "file": "src/read-expressions.html",
         "verdict": "correct",
-        "reason": "Publishes authored-source semantic and overlay-checker diagnostics for missing members, nullish access, call arguments and arity, overload rejection, non-callable values, callback returns, globals, and object literals without leaking generated TypeScript loci.",
-        "note": "NEW 2026-07-12. Representative LSP/custom adapter replay for the dedicated expression/typechecking corpus. Dense semantic truth remains in semantic-conformance."
+        "reason": "The full document-diagnostic pull returns authored-source semantic and overlay-checker diagnostics for missing members, nullish access, call arguments and arity, overload rejection, non-callable values, callback returns, globals, and object literals without leaking generated TypeScript loci.",
+        "note": "NEW 2026-07-12. Representative standard document-pull adapter replay for the dedicated expression/typechecking corpus. Dense semantic truth remains in semantic-conformance."
       },
       {
         "id": "typechecking-write-bindings",
         "file": "src/write-bindings.html",
         "verdict": "correct",
-        "reason": "Publishes distinct assignment-policy diagnostics for non-writable sources, source-to-target mismatch, nullish-to-required targets, and target-to-source writeback mismatch at the authored binding expressions, with exact LSP/custom alignment.",
+        "reason": "The full document-diagnostic pull returns distinct assignment-policy diagnostics for non-writable sources, source-to-target mismatch, nullish-to-required targets, and target-to-source writeback mismatch at the authored binding expressions.",
         "note": "NEW 2026-07-12. Representative adapter replay for binding direction, writeability, and bidirectional type compatibility."
       },
       {
         "id": "typechecking-resource-boundaries",
         "file": "src/resource-boundaries.html",
         "verdict": "correct",
-        "reason": "Publishes converter call/type diagnostics, missing converter and behavior bind-phase errors, duplicate behavior application, semantic member evidence, and child-bindable assignment mismatch at their authored loci with exact LSP/custom alignment.",
+        "reason": "The full document-diagnostic pull returns converter call/type diagnostics, missing converter and behavior bind-phase errors, duplicate behavior application, semantic member evidence, and child-bindable assignment mismatch at their authored loci.",
         "note": "NEW 2026-07-12. Representative adapter replay for the framework astBind resource lifecycle and typed child-resource boundary."
       }
     ],

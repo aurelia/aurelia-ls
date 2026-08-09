@@ -6,7 +6,7 @@
         "id": "runtime-controller-au-compose-template",
         "file": "src/runtime-html-au-compose-errors-app.html",
         "verdict": "correct",
-        "reason": "Publishes au-compose controller diagnostics on the invalid option values and unresolved component name, with exact source spans and aligned LSP/custom output.",
+        "reason": "The full document-diagnostic pull returns au-compose controller diagnostics on the invalid option values and unresolved component name with exact source spans.",
         "note": "NEW 2026-07-07. Runtime-html au-compose diagnostics for invalid scope behavior, invalid flush mode, and unresolved component name. VERDICT 2026-07-07: correct."
       }
     ]

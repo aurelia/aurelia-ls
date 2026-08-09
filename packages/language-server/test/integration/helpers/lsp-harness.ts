@@ -60,6 +60,10 @@ export async function initialize(
   options: {
     readonly configuration?: Readonly<Record<string, unknown>>;
     readonly onInlayHintRefresh?: () => void;
+    readonly diagnostics?: {
+      readonly onAnalysisChanged?: (params: unknown) => void;
+      readonly onRefresh?: () => void;
+    };
     /** Client-authored workspace URI when the test is exercising a non-file URI namespace. */
     readonly rootUri?: string;
   } = {},
@@ -76,8 +80,17 @@ export async function initialize(
       return null;
     });
   }
+  if (options.diagnostics != null) {
+    connection.onNotification("aurelia/analysisChanged", (params: unknown) => {
+      options.diagnostics?.onAnalysisChanged?.(params);
+    });
+    connection.onRequest("workspace/diagnostic/refresh", () => {
+      options.diagnostics?.onRefresh?.();
+      return null;
+    });
+  }
   const rootUri = options.rootUri ?? pathToFileURL(workspaceRoot).toString();
-  await new Promise<void>((resolve, reject) => {
+  return await new Promise<unknown>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(`initialize timeout; stderr=${getStderr()}`)), 5000);
     const onExit = (code: number | null, signal: string | null) => {
       clearTimeout(timer);
@@ -88,24 +101,42 @@ export async function initialize(
       processId: process.pid,
       rootUri,
       capabilities: {
-        workspace: options.configuration == null ? undefined : {
-          configuration: true,
-          didChangeConfiguration: { dynamicRegistration: true },
-          inlayHint: { refreshSupport: true },
-        },
+        workspace: options.configuration == null && options.diagnostics == null
+          ? undefined
+          : {
+              ...(options.configuration == null ? {} : {
+                configuration: true,
+                didChangeConfiguration: { dynamicRegistration: true },
+                inlayHint: { refreshSupport: true },
+              }),
+              ...(options.diagnostics == null ? {} : {
+                diagnostics: { refreshSupport: true },
+              }),
+            },
         textDocument: {
           codeAction: {
             dataSupport: true,
             resolveSupport: { properties: ["edit"] },
           },
+          ...(options.diagnostics == null ? {} : {
+            diagnostic: {
+              relatedInformation: true,
+              tagSupport: { valueSet: [1, 2] },
+              codeDescriptionSupport: true,
+              dataSupport: true,
+              dynamicRegistration: true,
+              relatedDocumentSupport: false,
+              markupMessageSupport: false,
+            },
+          }),
         },
       },
     }).then(
-      () => {
+      (result: unknown) => {
         clearTimeout(timer);
         child.off("exit", onExit);
         connection.sendNotification("initialized", {});
-        resolve();
+        resolve(result);
       },
       (err) => {
         clearTimeout(timer);

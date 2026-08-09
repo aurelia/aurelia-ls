@@ -81,7 +81,7 @@
         "file": "src/invalid-expression-gallery.html",
         "verdict": "correct",
         "reason": "Framework parser errors and stricter auto-fixable authoring-policy diagnostics retain exact authored loci and distinct authority.",
-        "note": "NEW 2026-07-13. Representative LSP/custom projection for parser recovery and resource-tail gaps."
+        "note": "NEW 2026-07-13. Representative standard document-pull projection for parser recovery and resource-tail gaps."
       },
       {
         "id": "resource-lifecycle-and-argument-errors",

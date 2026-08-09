@@ -6,7 +6,7 @@
         "id": "registered-plugin-state-store-template",
         "file": "src/registered-plugin-capabilities-app.html",
         "verdict": "correct",
-        "reason": "Publishes zero diagnostics because every plugin is admitted and the `main` state store used by `click.dispatch:main` is explicitly configured through `withStore`.",
+        "reason": "The full document-diagnostic pull is empty because every plugin is admitted and the `main` state store used by `click.dispatch:main` is explicitly configured through `withStore`.",
         "note": "UPDATED 2026-08-01. The fixture became a positive registration/admission control when named-store configuration was added; a store-not-found row here would now be a container-ownership or configuration-projection regression."
       }
     ]

@@ -477,8 +477,8 @@
         "id": "clean-item-list-route-template",
         "file": "src/routes/item-list-route.html",
         "verdict": "correct",
-        "reason": "Clean storefront route template publishes zero diagnostics and the custom diagnostics report matches the LSP publish surface exactly.",
-        "note": "VERDICT 2026-07-07. This is a transport/custom-report alignment baseline, not a semantic pressure fixture."
+        "reason": "The clean storefront route template returns an empty full document-diagnostic report, and reusing its result ID returns unchanged.",
+        "note": "VERDICT 2026-07-07. This is a standard full/unchanged pull-transport baseline, not a semantic pressure fixture."
       }
     ],
     "completions": [

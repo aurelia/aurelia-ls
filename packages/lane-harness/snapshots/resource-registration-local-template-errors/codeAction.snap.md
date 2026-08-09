@@ -25,6 +25,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 }
 ```
 
+### Diagnostic pull
+
+```json
+{
+  "diagnosticCount": 1,
+  "outcome": "full",
+  "previousResultIdPresent": false,
+  "resultIdPresent": true,
+  "uri": "fixtures://pressure/resource-registration-local-template-errors/src/local-surrogate-invalid-attribute.html"
+}
+```
+
 ### codeAction
 
 ```json
@@ -41,6 +53,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "diagnosticCount": 1,
   "diagnostics": [
     {
+      "anomaly": null,
       "code": "AUR0702",
       "data": {
         "diagnosticAuthority": "framework-error-code",
@@ -65,13 +78,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         },
         "sourceRole": "template",
         "subject": null,
-        "taxonomy": {
-          "actionability": "guided",
-          "category": "template-syntax",
-          "confidence": null,
-          "impact": "blocking",
-          "schema": "diagnostics-taxonomy/1"
-        }
+        "typeScriptDiagnosticCode": null
       },
       "message": "Aurelia template compiler AUR0702 rejects this template syntax: Template compilation error: attribute \"id\" is invalid on element surrogate..",
       "range": {
@@ -84,6 +91,9 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "line": 3
         }
       },
+      "rangeText": "id=\"forbidden-host-id\"",
+      "relatedInformation": [],
+      "severity": "error",
       "source": "aurelia"
     }
   ]
@@ -133,6 +143,18 @@ _No in-memory diff._
 }
 ```
 
+### Diagnostic pull
+
+```json
+{
+  "diagnosticCount": 1,
+  "outcome": "full",
+  "previousResultIdPresent": false,
+  "resultIdPresent": true,
+  "uri": "fixtures://pressure/resource-registration-local-template-errors/src/local-surrogate-template-controller.html"
+}
+```
+
 ### codeAction
 
 ```json
@@ -149,6 +171,7 @@ _No in-memory diff._
   "diagnosticCount": 1,
   "diagnostics": [
     {
+      "anomaly": null,
       "code": "AUR0703",
       "data": {
         "diagnosticAuthority": "framework-error-code",
@@ -173,13 +196,7 @@ _No in-memory diff._
         },
         "sourceRole": "template",
         "subject": null,
-        "taxonomy": {
-          "actionability": "guided",
-          "category": "template-syntax",
-          "confidence": null,
-          "impact": "blocking",
-          "schema": "diagnostics-taxonomy/1"
-        }
+        "typeScriptDiagnosticCode": null
       },
       "message": "Aurelia template compiler AUR0703 rejects this template syntax: Template compilation error: template controller \"if\" is invalid on element surrogate..",
       "range": {
@@ -192,6 +209,9 @@ _No in-memory diff._
           "line": 1
         }
       },
+      "rangeText": "if",
+      "relatedInformation": [],
+      "severity": "error",
       "source": "aurelia"
     }
   ]

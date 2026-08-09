@@ -7,7 +7,7 @@
         "file": "src/route-parameters/shared-route-parameters.ts",
         "verdict": "correct",
         "reason": "Reports one router authoring warning at the inherited getRouteParameters call and preserves both concrete routed descendants as cross-file related information.",
-        "note": "NEW 2026-07-11. Adapter canary for one-to-many RouteContext read ownership. Correct means LSP and the custom diagnostics report agree on the primary base-class source, semantic-authoring-policy authority, warning severity, and AccountRoute/ProjectRoute related locations."
+        "note": "NEW 2026-07-11. Adapter canary for one-to-many RouteContext read ownership. Correct means the standard pull projection preserves the primary base-class source, semantic-authoring-policy authority, warning severity, and AccountRoute/ProjectRoute related locations."
       },
       {
         "id": "single-descendant-base-route-context-read",

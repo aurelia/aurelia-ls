@@ -25,6 +25,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 }
 ```
 
+### Diagnostic pull
+
+```json
+{
+  "diagnosticCount": 8,
+  "outcome": "full",
+  "previousResultIdPresent": false,
+  "resultIdPresent": true,
+  "uri": "fixtures://pressure/unregistered-plugin-resources/src/unregistered-plugin-resources-app.html"
+}
+```
+
 ### codeAction
 
 ```json
@@ -51,6 +63,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "diagnosticCount": 1,
   "diagnostics": [
     {
+      "anomaly": null,
       "code": "framework-capability-not-registered",
       "data": {
         "diagnosticAuthority": "semantic-authoring-policy",
@@ -75,13 +88,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         },
         "sourceRole": "template",
         "subject": null,
-        "taxonomy": {
-          "actionability": "guided",
-          "category": "template-syntax",
-          "confidence": null,
-          "impact": "blocking",
-          "schema": "diagnostics-taxonomy/1"
-        }
+        "typeScriptDiagnosticCode": null
       },
       "message": "Attribute \"load\" uses Aurelia router default resources, but that framework capability is not registered in this app world.",
       "range": {
@@ -94,6 +101,9 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "line": 0
         }
       },
+      "rangeText": "load=\"orders\"",
+      "relatedInformation": [],
+      "severity": "error",
       "source": "aurelia"
     }
   ]

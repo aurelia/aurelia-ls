@@ -25,6 +25,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 }
 ```
 
+### Diagnostic pull
+
+```json
+{
+  "diagnosticCount": 1,
+  "outcome": "full",
+  "previousResultIdPresent": false,
+  "resultIdPresent": true,
+  "uri": "fixtures://pressure/unregistered-plugin-no-package-evidence/src/unregistered-plugin-no-package-evidence-app.html"
+}
+```
+
 ### codeAction
 
 ```json
@@ -41,6 +53,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "diagnosticCount": 1,
   "diagnostics": [
     {
+      "anomaly": null,
       "code": "framework-capability-not-registered",
       "data": {
         "diagnosticAuthority": "semantic-authoring-policy",
@@ -65,13 +78,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         },
         "sourceRole": "template",
         "subject": null,
-        "taxonomy": {
-          "actionability": "guided",
-          "category": "template-syntax",
-          "confidence": null,
-          "impact": "blocking",
-          "schema": "diagnostics-taxonomy/1"
-        }
+        "typeScriptDiagnosticCode": null
       },
       "message": "Element \"au-viewport\" uses Aurelia router default resources, but that framework capability is not registered in this app world.",
       "range": {
@@ -84,6 +91,9 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "line": 0
         }
       },
+      "rangeText": "<au-viewport></au-viewport>",
+      "relatedInformation": [],
+      "severity": "error",
       "source": "aurelia"
     }
   ]

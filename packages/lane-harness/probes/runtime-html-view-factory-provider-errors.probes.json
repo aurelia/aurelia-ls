@@ -29,14 +29,14 @@
         "id": "runtime-html-view-factory-template-html",
         "file": "src/runtime-html-view-factory-provider-errors-app.html",
         "verdict": "correct",
-        "reason": "AUR0755 is source-owned by the ordinary custom-attribute view-model activation site, not by the template invocation; the HTML push path should stay clean.",
+        "reason": "AUR0755 is source-owned by the ordinary custom-attribute view-model activation site, not by the template invocation; the HTML document pull should stay empty.",
         "note": "UPDATED 2026-07-07. Framework grounding: ordinary custom attributes receive the not-ready IViewFactory provider, while template controllers receive a prepared provider. The diagnostic source is the TS resolve(IViewFactory) call."
       },
       {
         "id": "runtime-html-view-factory-template-ts",
         "file": "src/runtime-html-view-factory-provider-errors-app.ts",
         "verdict": "correct",
-        "reason": "Publishes one AUR0755 runtime-controller diagnostic on the ordinary custom attribute's activation-time resolve(IViewFactory) call, while excluding the legitimate template-controller resolve and nested class expression.",
+        "reason": "The TypeScript document pull returns one AUR0755 runtime-controller diagnostic on the ordinary custom attribute's activation-time resolve(IViewFactory) call, while excluding the legitimate template-controller resolve and nested class expression.",
         "note": "UPDATED 2026-07-07. Fixed app-diagnostics source-file projection so template-domain diagnostics with TS declaration sources are discovered before row-source filtering."
       }
     ],

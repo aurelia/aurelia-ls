@@ -6,7 +6,7 @@
         "id": "runtime-controller-if-else-template",
         "file": "src/runtime-html-if-else-errors-app.html",
         "verdict": "correct",
-        "reason": "Publishes AUR0810 on the orphan `else` controller token, which is the correct repair locus.",
+        "reason": "The full document-diagnostic pull returns AUR0810 on the orphan `else` controller token, which is the correct repair locus.",
         "note": "NEW 2026-07-07. Runtime-html controller diagnostic for orphan else template. VERDICT 2026-07-07: correct."
       }
     ]

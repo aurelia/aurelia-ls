@@ -25,6 +25,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 }
 ```
 
+### Diagnostic pull
+
+```json
+{
+  "diagnosticCount": 8,
+  "outcome": "full",
+  "previousResultIdPresent": false,
+  "resultIdPresent": true,
+  "uri": "fixtures://pressure/template-spread-capture-semantics/src/template-spread-capture-semantics-app.html"
+}
+```
+
 ### codeAction
 
 ```json
@@ -41,6 +53,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "diagnosticCount": 1,
   "diagnostics": [
     {
+      "anomaly": null,
       "code": "AUR0720",
       "data": {
         "diagnosticAuthority": "framework-error-code",
@@ -65,13 +78,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         },
         "sourceRole": "template",
         "subject": null,
-        "taxonomy": {
-          "actionability": "guided",
-          "category": "template-syntax",
-          "confidence": null,
-          "impact": "blocking",
-          "schema": "diagnostics-taxonomy/1"
-        }
+        "typeScriptDiagnosticCode": null
       },
       "message": "Aurelia template compiler AUR0720 rejects this template syntax: Spreading syntax \"...xxx\" is reserved. Encountered \"...$element\"..",
       "range": {
@@ -84,6 +91,9 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "line": 23
         }
       },
+      "rangeText": "...$element",
+      "relatedInformation": [],
+      "severity": "error",
       "source": "aurelia"
     }
   ]
@@ -133,6 +143,18 @@ _No in-memory diff._
 }
 ```
 
+### Diagnostic pull
+
+```json
+{
+  "diagnosticCount": 8,
+  "outcome": "full",
+  "previousResultIdPresent": false,
+  "resultIdPresent": true,
+  "uri": "fixtures://pressure/template-spread-capture-semantics/src/template-spread-capture-semantics-app.html"
+}
+```
+
 ### codeAction
 
 ```json
@@ -149,6 +171,7 @@ _No in-memory diff._
   "diagnosticCount": 1,
   "diagnostics": [
     {
+      "anomaly": null,
       "code": "AUR9999",
       "data": {
         "diagnosticAuthority": "framework-error-code",
@@ -173,13 +196,7 @@ _No in-memory diff._
         },
         "sourceRole": "template",
         "subject": null,
-        "taxonomy": {
-          "actionability": "guided",
-          "category": "template-syntax",
-          "confidence": null,
-          "impact": "blocking",
-          "schema": "diagnostics-taxonomy/1"
-        }
+        "typeScriptDiagnosticCode": null
       },
       "message": "Aurelia runtime binding AUR9999 rejects this binding input: SpreadBinding.bind requires the hydration-context controller scope to have a parent scope..",
       "range": {
@@ -192,6 +209,9 @@ _No in-memory diff._
           "line": 26
         }
       },
+      "rangeText": "...$attrs",
+      "relatedInformation": [],
+      "severity": "error",
       "source": "aurelia"
     }
   ]
@@ -241,6 +261,18 @@ _No in-memory diff._
 }
 ```
 
+### Diagnostic pull
+
+```json
+{
+  "diagnosticCount": 8,
+  "outcome": "full",
+  "previousResultIdPresent": false,
+  "resultIdPresent": true,
+  "uri": "fixtures://pressure/template-spread-capture-semantics/src/template-spread-capture-semantics-app.html"
+}
+```
+
 ### codeAction
 
 ```json
@@ -257,6 +289,7 @@ _No in-memory diff._
   "diagnosticCount": 1,
   "diagnostics": [
     {
+      "anomaly": null,
       "code": "AUR9998",
       "data": {
         "diagnosticAuthority": "framework-error-code",
@@ -281,13 +314,7 @@ _No in-memory diff._
         },
         "sourceRole": "template",
         "subject": null,
-        "taxonomy": {
-          "actionability": "guided",
-          "category": "template-syntax",
-          "confidence": null,
-          "impact": "blocking",
-          "schema": "diagnostics-taxonomy/1"
-        }
+        "typeScriptDiagnosticCode": null
       },
       "message": "Aurelia runtime binding AUR9998 rejects this binding input: SpreadBinding.addChild cannot admit captured template controller \"inner-gate\" on \"input\"..",
       "range": {
@@ -300,6 +327,9 @@ _No in-memory diff._
           "line": 45
         }
       },
+      "rangeText": "inner-gate.bind=\"showCapture\"",
+      "relatedInformation": [],
+      "severity": "error",
       "source": "aurelia"
     }
   ]

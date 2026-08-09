@@ -319,7 +319,7 @@
         "id": "spread-capture-app-template",
         "file": "src/template-spread-capture-semantics-app.html",
         "verdict": "correct",
-        "reason": "The app template should publish the missing spread behavior, two exact nullish-to-required bindable warnings, and five framework-grounded spread/capture failures at authored loci, with no false captured-listener $event diagnostics."
+        "reason": "The app template's full document-diagnostic pull should return the missing spread behavior, two exact nullish-to-required bindable warnings, and five framework-grounded spread/capture failures at authored loci, with no false captured-listener $event diagnostics."
       },
       {
         "id": "capture-shell-reusable-template",

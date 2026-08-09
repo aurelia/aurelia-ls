@@ -58,7 +58,7 @@
         "id": "app-template-weakMetadata-and-shellTone",
         "file": "src/app.html",
         "verdict": "correct",
-        "reason": "Correct as a file-level diagnostics baseline: LSP diagnostics are resource-scoped, so the full file should publish both independent template authoring diagnostics. `weakMetadata.source` and `shellTone.label` have precise spans, separate causes, non-blocking severity, and matching LSP/custom surfaces.",
+        "reason": "Correct as a file-level diagnostics baseline: document diagnostics are resource-scoped, so the full pull should return both independent template authoring diagnostics. `weakMetadata.source` and `shellTone.label` have precise spans, separate causes, and non-blocking severity.",
         "note": "NEW 2026-07-07. Diagnostics lane pressure for app-template weak/member authoring policy. RENAMED 2026-07-07 from app-template-missing-member-shellTone after verdict pass accepted the complete file diagnostic set: index-signature-only weak owner at `weakMetadata.source` plus primitive-owner missing member at `shellTone.label`. The missing-member row is informational because the owner is a primitive, so the policy can honestly suggest inspection but not a declaration edit."
       },
       {

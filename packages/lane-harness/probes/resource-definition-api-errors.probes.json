@@ -6,7 +6,7 @@
         "id": "resource-definition-api-main",
         "file": "src/main.ts",
         "verdict": "correct",
-        "reason": "Publishes the five framework-code resource API diagnostics on the exact offending call expressions, with blocking severity and matching LSP/custom surfaces.",
+        "reason": "The full document-diagnostic pull returns the five framework-code resource API diagnostics on the exact offending call expressions with blocking severity.",
         "note": "NEW 2026-07-07. Static resource-definition API diagnostics for CustomElementDefinition.create/getDefinition and resource getDefinition calls. VERDICT 2026-07-07: correct."
       }
     ]

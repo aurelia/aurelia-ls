@@ -125,7 +125,7 @@
         "id": "valid-runtime-access-algebra",
         "file": "src/runtime-expression-access-uses-app.html",
         "verdict": "correct",
-        "reason": "Conditional, optional, callback, assignment, resource-argument, and repeat-auxiliary access forms in this fixture are valid Aurelia and should publish no diagnostics."
+        "reason": "Conditional, optional, callback, assignment, resource-argument, and repeat-auxiliary access forms in this fixture are valid Aurelia and should return an empty full document-diagnostic report."
       }
     ]
   }

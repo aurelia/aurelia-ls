@@ -6,7 +6,7 @@
         "id": "runtime-renderer-ref-template",
         "file": "src/runtime-html-ref-renderer-errors-app.html",
         "verdict": "correct",
-        "reason": "Publishes the expected runtime-renderer framework-code rows on the ref attributes that cause them, with exact spans and LSP/custom alignment.",
+        "reason": "The full document-diagnostic pull returns the expected runtime-renderer framework-code rows on the ref attributes that cause them with exact spans.",
         "note": "NEW 2026-07-07. Runtime-html ref renderer diagnostics for unsupported view/controller refs and unresolved custom ref targets. VERDICT 2026-07-07: correct."
       }
     ]

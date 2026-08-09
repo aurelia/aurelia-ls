@@ -25,6 +25,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 }
 ```
 
+### Diagnostic pull
+
+```json
+{
+  "diagnosticCount": 2,
+  "outcome": "full",
+  "previousResultIdPresent": false,
+  "resultIdPresent": true,
+  "uri": "fixtures://pressure/mixed-form-surfaces/src/app.html"
+}
+```
+
 ### codeAction
 
 ```json
@@ -41,6 +53,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "diagnosticCount": 1,
   "diagnostics": [
     {
+      "anomaly": null,
       "code": "weak-expression-member-owner",
       "data": {
         "diagnosticAuthority": "semantic-authoring-policy",
@@ -77,13 +90,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "subjectKind": "template-member-access",
           "uri": null
         },
-        "taxonomy": {
-          "actionability": "guided",
-          "category": "template-syntax",
-          "confidence": null,
-          "impact": "informational",
-          "schema": "diagnostics-taxonomy/1"
-        }
+        "typeScriptDiagnosticCode": null
       },
       "message": "Member access is backed by an index signature, so completion cannot enumerate concrete property names.",
       "range": {
@@ -96,6 +103,9 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "line": 10
         }
       },
+      "rangeText": "source",
+      "relatedInformation": [],
+      "severity": "information",
       "source": "aurelia"
     }
   ]
