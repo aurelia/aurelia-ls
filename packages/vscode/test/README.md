@@ -121,8 +121,8 @@ Guidelines:
   `pnpm package:ide:vsix` lets the pinned package-local VSCE 3.9.2 invocation
   run the minified prepublish lifecycle exactly once, validates raw ZIP
   structure plus JSZip CRCs and the exact local release inventory, and writes
-  a fixed `.release/aurelia-2-<version>.vsix` with an immutable manifest and
-  SHA-256 sidecar. `pnpm verify:ide:vsix` only revalidates those existing bytes,
+  a commit-addressed `.release/aurelia-2-<version>-<head12>.vsix` with an
+  immutable manifest and SHA-256 sidecar. `pnpm verify:ide:vsix` only revalidates those existing bytes,
   their clean Git HEAD and inputs; it never packages again. Archive contract
   tests use synthetic in-memory ZIPs and dependency-injected lifecycle seams,
   so they perform no packaging, download, network request, or Electron launch.

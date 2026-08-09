@@ -560,8 +560,11 @@ export function gitState(dependencies = {}, context = {}) {
   return Object.freeze({ head, status, submodules });
 }
 
-export function artifactPaths(packageJson, root = releaseRoot) {
-  const stem = `${packageJson.name}-${packageJson.version}`;
+export function artifactPaths(packageJson, root = releaseRoot, repositoryHead) {
+  if (typeof repositoryHead !== "string" || !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u.test(repositoryHead)) {
+    throw new Error("VSIX artifact paths require a full lowercase hexadecimal repository HEAD.");
+  }
+  const stem = `${packageJson.name}-${packageJson.version}-${repositoryHead.slice(0, 12)}`;
   return Object.freeze({
     releaseRoot: root,
     vsix: path.join(root, `${stem}.vsix`),
@@ -724,8 +727,8 @@ function removeOwnStagingDirectory(stagingDirectory, paths) {
 
 export async function packVsix(dependencies = {}) {
   const context = releaseContext(dependencies);
-  const paths = artifactPaths(context.packageJson, context.releaseRoot);
   const before = readRepositoryState(dependencies, context);
+  const paths = artifactPaths(context.packageJson, context.releaseRoot, before.head);
   const toolsAndInputs = inputEvidence(context, dependencies);
   ensureReleaseRoot(context);
   for (const [label, candidate] of [["VSIX artifact", paths.vsix], ["VSIX receipt", paths.receipt], ["VSIX checksum", paths.checksum]]) {
@@ -805,8 +808,8 @@ export async function packVsix(dependencies = {}) {
 
 export async function verifyVsix(dependencies = {}) {
   const context = releaseContext(dependencies);
-  const paths = artifactPaths(context.packageJson, context.releaseRoot);
   const before = readRepositoryState(dependencies, context);
+  const paths = artifactPaths(context.packageJson, context.releaseRoot, before.head);
   const toolsAndInputs = inputEvidence(context, dependencies);
   for (const [label, candidate] of [["VSIX artifact", paths.vsix], ["VSIX receipt", paths.receipt], ["VSIX checksum", paths.checksum]]) {
     assertReleasePath(paths, candidate, label);

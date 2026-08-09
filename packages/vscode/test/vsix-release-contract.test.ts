@@ -69,7 +69,11 @@ interface VsixArtifactModule {
       readonly loadZip?: (buffer: Buffer, options: Record<string, unknown>) => Promise<any>;
     },
   ) => Promise<ArchiveInspection>;
-  readonly artifactPaths: (packageJson: Record<string, string>, root?: string) => ArtifactPaths;
+  readonly artifactPaths: (
+    packageJson: Record<string, any>,
+    root: string | undefined,
+    repositoryHead: string,
+  ) => ArtifactPaths;
   readonly gitState: (
     dependencies?: { readonly execFileSync?: (...args: any[]) => string },
     context?: { readonly repoRoot?: string },
@@ -534,6 +538,18 @@ describe("VSIX package-once lifecycle", () => {
 });
 
 describe("VSIX release surface", () => {
+  test("addresses immutable artifact names by the clean repository HEAD", async () => {
+    const artifact = await loadArtifactModule();
+    const root = temporaryRoot("aurelia-vsix-paths-");
+    const first = artifact.artifactPaths(packageManifest, root, "0123456789abcdef0123456789abcdef01234567");
+    const second = artifact.artifactPaths(packageManifest, root, "fedcba9876543210fedcba9876543210fedcba98");
+
+    expect(path.basename(first.vsix)).toBe("aurelia-2-0.4.4-0123456789ab.vsix");
+    expect(second.vsix).not.toBe(first.vsix);
+    expect(() => artifact.artifactPaths(packageManifest, root, "0123456789ab")).toThrow(/repository HEAD/u);
+    expect(() => artifact.artifactPaths(packageManifest, root, "not-a-head")).toThrow(/repository HEAD/u);
+  });
+
   test("pins the package-local tools and keeps VSCE's minified prepublish lifecycle", async () => {
     const rootPackage = JSON.parse(readFileSync(rootPackageUrl, "utf8"));
     const vscodePackage = JSON.parse(readFileSync(vscodePackageUrl, "utf8"));
@@ -676,7 +692,7 @@ describe("VSIX release surface", () => {
     const calls: { readonly command: string; readonly args: readonly string[] }[] = [];
     const execFileSync = (command: string, args: readonly string[]): string => {
       calls.push({ command, args });
-      if (args[0] === "rev-parse") return "0123456789abcdef\n";
+      if (args[0] === "rev-parse") return "0123456789abcdef0123456789abcdef01234567\n";
       if (args[0] === "status") return "?? untracked-release-input\n";
       throw new Error(`Unexpected Git call: ${args.join(" ")}`);
     };
@@ -692,7 +708,7 @@ describe("VSIX release surface", () => {
     expect(() => artifact.gitState({
       execFileSync: (_command: string, args: string[]) => {
         (submoduleCalls as string[][]).push(args);
-        if (args[0] === "rev-parse") return "0123456789abcdef\n";
+        if (args[0] === "rev-parse") return "0123456789abcdef0123456789abcdef01234567\n";
         if (args[0] === "status") return "";
         if (args[0] === "submodule") return "-deadbeef external\n";
         throw new Error(`Unexpected Git call: ${args.join(" ")}`);
@@ -747,12 +763,16 @@ async function lifecycleHarness(artifact: VsixArtifactModule, label: string) {
   mkdirSync(extensionRoot, { recursive: true });
   const fixture = syntheticFixture();
   const archive = await archiveForFixture(fixture);
-  const paths = artifact.artifactPaths(fixture.packageJson, releaseRoot);
+  const paths = artifact.artifactPaths(
+    fixture.packageJson,
+    releaseRoot,
+    "0123456789abcdef0123456789abcdef01234567",
+  );
   const vsceCalls: Record<string, any>[] = [];
   let repositoryReads = 0;
   const evidenceHash = artifact.sha256(`synthetic-${label}`);
   const repository = Object.freeze({
-    head: "0123456789abcdef",
+    head: "0123456789abcdef0123456789abcdef01234567",
     status: "",
     submodules: " deadbeef aurelia\n deadbeef aurelia2-plugins\n",
   });
