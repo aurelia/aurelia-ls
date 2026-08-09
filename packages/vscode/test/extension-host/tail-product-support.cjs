@@ -10,7 +10,7 @@ const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const vscode = require("vscode");
 
-const schemaVersion = "aurelia-ls/extension-host-tail-sample/v3";
+const schemaVersion = "aurelia-ls/extension-host-tail-sample/v4";
 const extensionId = "AureliaEffect.aurelia-2";
 const observationEvent = "aurelia-ls:extension-host-observation";
 const targetRelativePath = "src/routes/service-plan-list-route.html";
@@ -262,6 +262,17 @@ function createReportState(raw) {
       targetUnopenedAtTestEntry: false,
       targetUnshownAtTestEntry: false,
       zeroObservedDocumentProviderRequestsBeforeTrigger: false,
+      diagnosticReschedulePolicy: {
+        suiteTriggerCount: 1,
+        suiteRetryCount: 0,
+        receiptTimeoutMilliseconds: observationTimeoutMilliseconds,
+        hostInclusiveMaximumMillisecondsExclusive: 30_000,
+        timeoutBoundary: "before sole suite trigger through full response",
+        attemptCardinalityLimit: null,
+        sequence: "[request, authenticated Canceled failure]* then [request, full response]",
+        timing: "first request through final response",
+        cancellationCountAcceptanceThreshold: null,
+      },
     },
     document: null,
     timing: {
@@ -339,13 +350,11 @@ function recordDiagnosticObservation(state, event, targetUri) {
 
   if (event.phase === "request") {
     witness.providerRequestCount += 1;
-    if (witness.diagnosticAttempts.length < 2) {
-      witness.diagnosticAttempts.push({
-        observationId: diagnosticLedgerString(event.observationId),
-        request: diagnosticRequestLedgerEvent(event),
-        terminal: null,
-      });
-    }
+    witness.diagnosticAttempts.push({
+      observationId: diagnosticLedgerString(event.observationId),
+      request: diagnosticRequestLedgerEvent(event),
+      terminal: null,
+    });
     if (state.timing.requestEpochMilliseconds == null) {
       state.timing.requestEpochMilliseconds = diagnosticLedgerNumber(event.epochMilliseconds);
       state.timing.requestMonotonicMilliseconds = diagnosticLedgerNumber(event.monotonicMilliseconds);
@@ -363,7 +372,7 @@ function recordDiagnosticObservation(state, event, targetUri) {
   let attempt = witness.diagnosticAttempts.find((candidate) =>
     candidate.observationId === observationId && candidate.terminal == null
   );
-  if (attempt == null && witness.diagnosticAttempts.length < 2) {
+  if (attempt == null) {
     attempt = { observationId, request: null, terminal: null };
     witness.diagnosticAttempts.push(attempt);
   }
@@ -465,10 +474,7 @@ function validateDiagnosticJourney(state, observations, response, targetUri) {
   assert.strictEqual(witness.kind, "diagnostics");
   assert.strictEqual(response.phase, "response");
   assert.strictEqual(witness.observationId, response.observationId);
-  assert(
-    witness.diagnosticAttempts.length === 1 || witness.diagnosticAttempts.length === 2,
-    "Expected one successful diagnostic attempt or one canceled attempt followed by success.",
-  );
+  assert(witness.diagnosticAttempts.length >= 1, "Expected a final successful diagnostic attempt.");
   const canceledAttempts = witness.diagnosticAttempts.length - 1;
   assert.deepStrictEqual(
     [witness.providerRequestCount, witness.providerResponseCount, witness.providerFailureCount],
@@ -477,26 +483,31 @@ function validateDiagnosticJourney(state, observations, response, targetUri) {
   assert.strictEqual(witness.canceledAttemptsBeforeReceipt, canceledAttempts);
 
   const providerTrace = providerEvents(observationsThrough(observations, response));
-  assert.strictEqual(providerTrace.length, canceledAttempts === 0 ? 2 : 4);
+  assert.strictEqual(providerTrace.length, witness.diagnosticAttempts.length * 2);
   assert.deepStrictEqual(
     providerTrace.map((event) => event.phase),
-    canceledAttempts === 0
-      ? ["request", "response"]
-      : ["request", "failed", "request", "response"],
+    witness.diagnosticAttempts.flatMap((_attempt, index) => [
+      "request",
+      index < canceledAttempts ? "failed" : "response",
+    ]),
   );
   assert(providerTrace.every((event) => event.operation === "diagnostics" && event.uri === targetUri));
 
   const documentVersion = state.document.version;
   for (const [index, attempt] of witness.diagnosticAttempts.entries()) {
     validateDiagnosticAttempt(attempt, index, targetUri, documentVersion);
+    const traceRequest = providerTrace[index * 2];
+    const traceTerminal = providerTrace[index * 2 + 1];
+    assert.strictEqual(traceRequest.observationId, attempt.observationId);
+    assert.strictEqual(traceTerminal.observationId, attempt.observationId);
   }
-  if (canceledAttempts === 1) {
-    assert.notStrictEqual(
-      witness.diagnosticAttempts[0].observationId,
-      witness.diagnosticAttempts[1].observationId,
-      "The native diagnostic reschedule must allocate a new observation id.",
-    );
-    validateCanceledDiagnosticTerminal(witness.diagnosticAttempts[0].terminal);
+  assert.strictEqual(
+    new Set(witness.diagnosticAttempts.map((attempt) => attempt.observationId)).size,
+    witness.diagnosticAttempts.length,
+    "Every diagnostic attempt must allocate a globally unique observation id.",
+  );
+  for (const attempt of witness.diagnosticAttempts.slice(0, -1)) {
+    validateCanceledDiagnosticTerminal(attempt.terminal);
   }
   validateSuccessfulDiagnosticTerminal(witness.diagnosticAttempts.at(-1).terminal);
   const ledgerEpochSequence = witness.diagnosticAttempts.flatMap((attempt) => [
@@ -768,8 +779,7 @@ function createDiagnosticReceiptWaiter(uri) {
   let resolvePromise;
   let rejectPromise;
   let activeObservationId = null;
-  let requestCount = 0;
-  let canceledCount = 0;
+  const observationIds = new Set();
   const finish = (callback, value) => {
     if (settled) return;
     settled = true;
@@ -782,12 +792,12 @@ function createDiagnosticReceiptWaiter(uri) {
     if (settled || !isProviderEvent(event, "diagnostics", event?.phase, uri)) return;
     const observationId = event.observationId;
     if (event.phase === "request") {
-      requestCount += 1;
-      if (requestCount > 2) {
-        fail("Observed more than two diagnostic attempts before the first successful receipt.");
-      } else if (activeObservationId != null) {
+      if (activeObservationId != null) {
         fail("Observed overlapping diagnostic attempts instead of a terminal reschedule boundary.");
+      } else if (observationIds.has(observationId)) {
+        fail("Diagnostic reschedule reused an observation id.");
       } else {
+        observationIds.add(observationId);
         activeObservationId = observationId;
       }
       return;
@@ -802,13 +812,10 @@ function createDiagnosticReceiptWaiter(uri) {
       finish(resolvePromise, event);
       return;
     }
-    canceledCount += 1;
     if (event.errorName !== "Canceled") {
       fail(`Diagnostic provider failed before receipt (${event.errorName ?? "Error"}).`);
     } else if (event.cancellationRequested !== true && event.serverRetriggerRequested !== true) {
       fail("Canceled diagnostic attempt had neither client-token nor server-retrigger evidence.");
-    } else if (canceledCount > 1) {
-      fail("Observed more than one canceled diagnostic attempt before receipt.");
     }
   };
   const promise = new Promise((resolve, reject) => {

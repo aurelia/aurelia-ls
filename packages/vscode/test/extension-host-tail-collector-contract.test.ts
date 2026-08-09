@@ -35,6 +35,7 @@ interface CollectorPlan {
 
 interface CollectorModule {
   readonly cohortSchemaVersion: string;
+  readonly diagnosticReschedulePolicy: Readonly<Record<string, unknown>>;
   readonly processSchemaVersion: string;
   readonly sampleSchemaVersion: string;
   readonly hostLocalReviewGuards: readonly Record<string, any>[];
@@ -88,11 +89,24 @@ describe("Extension Host tail collector", () => {
     const collector = await loadCollector();
     const plan = collector.parseCollectorArguments(["--cohort=contract"]);
 
-    expect(collector.sampleSchemaVersion).toBe("aurelia-ls/extension-host-tail-sample/v3");
-    expect(collector.processSchemaVersion).toBe("aurelia-ls/extension-host-tail-process/v4");
-    expect(collector.cohortSchemaVersion).toBe("aurelia-ls/extension-host-tail-cohort/v4");
+    expect(collector.sampleSchemaVersion).toBe("aurelia-ls/extension-host-tail-sample/v4");
+    expect(collector.processSchemaVersion).toBe("aurelia-ls/extension-host-tail-process/v5");
+    expect(collector.cohortSchemaVersion).toBe("aurelia-ls/extension-host-tail-cohort/v5");
     expect(collector.publicPlan(plan).schemaVersion)
-      .toBe("aurelia-ls/extension-host-tail-plan/v2");
+      .toBe("aurelia-ls/extension-host-tail-plan/v3");
+    expect(collector.publicPlan(plan).diagnosticReschedulePolicy)
+      .toEqual(collector.diagnosticReschedulePolicy);
+    expect(collector.diagnosticReschedulePolicy).toEqual({
+      suiteTriggerCount: 1,
+      suiteRetryCount: 0,
+      receiptTimeoutMilliseconds: 25_000,
+      hostInclusiveMaximumMillisecondsExclusive: 30_000,
+      timeoutBoundary: "before sole suite trigger through full response",
+      attemptCardinalityLimit: null,
+      sequence: "[request, authenticated Canceled failure]* then [request, full response]",
+      timing: "first request through final response",
+      cancellationCountAcceptanceThreshold: null,
+    });
     expect(plan.versionResolutionCount).toBe(2);
     expect(plan.launchCount).toBe(50);
     expect(countRows(plan.rows, "current-stable", "cold-full-diagnostics")).toBe(20);
@@ -267,7 +281,13 @@ describe("Extension Host tail collector", () => {
     const collector = await loadCollector();
     const plan = collector.parseCollectorArguments(["--cohort=contract"]);
     const outputRoot = temporaryRoot("aurelia-host-tail-valid-");
-    const harness = fakeHarness(collector, outputRoot);
+    const harness = fakeHarness(collector, outputRoot, {
+      mutateReport: (report) => {
+        if (report.witness.kind === "diagnostics") {
+          addNativeDiagnosticCancellations(report, (report.pair - 1) % 4);
+        }
+      },
+    });
 
     const summary = await collector.collectExtensionHostTails(plan, harness.dependencies);
 
@@ -328,6 +348,7 @@ describe("Extension Host tail collector", () => {
       readiness: "already-active-api-readiness-check",
       providerObservationScope: "test-entry-through-receipt",
       metric: "fresh-host first-target-provider tail under automatic admission",
+      diagnosticReschedulePolicy: collector.diagnosticReschedulePolicy,
     });
     expect(summary.integrity).toMatchObject({
       plannedCaptures: 50,
@@ -358,6 +379,28 @@ describe("Extension Host tail collector", () => {
           .not.toHaveProperty("completionSettledHostInclusiveMilliseconds.p95NearestRank");
       }
     }
+    expect(summary.lanes["current-stable"]["cold-full-diagnostics"].metrics)
+      .toMatchObject({
+        diagnosticCancellationCount: {
+          descriptiveOnly: true,
+          acceptanceThreshold: null,
+          n: 20,
+          totalCanceledAttempts: 30,
+          median: 1.5,
+          min: 0,
+          max: 3,
+          valuesInAcquisitionOrder: [
+            0, 1, 2, 3, 0, 1, 2, 3, 0, 1,
+            2, 3, 0, 1, 2, 3, 0, 1, 2, 3,
+          ],
+          frequency: [
+            { canceledAttempts: 0, count: 5 },
+            { canceledAttempts: 1, count: 5 },
+            { canceledAttempts: 2, count: 5 },
+            { canceledAttempts: 3, count: 5 },
+          ],
+        },
+      });
 
     const first = summary.integrity.captures[0];
     expect(first).toMatchObject({
@@ -392,7 +435,7 @@ describe("Extension Host tail collector", () => {
       }),
     });
     expect(processEvidence).toMatchObject({
-      schemaVersion: "aurelia-ls/extension-host-tail-process/v4",
+      schemaVersion: "aurelia-ls/extension-host-tail-process/v5",
       artifactName: "current-stable-pair-01-position-1-cold-full-diagnostics",
       sampleId: "s01",
       workspaceDependencies: {
@@ -813,9 +856,13 @@ describe("Extension Host tail collector", () => {
     expect(readinessAwaitIndex).toBeGreaterThanOrEqual(0);
     expect(activeAtEntryIndex).toBeLessThan(readinessAwaitIndex);
     expect(suiteSource).not.toContain("extension.isActive, false");
+    expect(suiteSource.match(/vscode\.window\.showTextDocument\(targetUri,/gu) ?? [])
+      .toHaveLength(1);
+    expect(suiteSource).not.toContain("requestCount > 2");
+    expect(suiteSource).not.toContain("canceledCount > 1");
   });
 
-  test("accepts one authenticated native diagnostic reschedule and rejects malformed ledgers", async () => {
+  test("accepts finite serialized diagnostic reschedules and rejects malformed ledgers", async () => {
     const collector = await loadCollector();
     const plan = collector.parseCollectorArguments([
       "--lane=current-stable",
@@ -837,7 +884,7 @@ describe("Extension Host tail collector", () => {
     const launchEpochMilliseconds = Date.now();
     const env = collector.sampleEnvironment({ row, resolution, workspace, launchEpochMilliseconds });
     const valid = fakeReport(collector, env);
-    addNativeDiagnosticCancellation(valid);
+    addNativeDiagnosticCancellations(valid, 3);
 
     expect(collector.validateSampleReport({
       report: valid,
@@ -846,6 +893,18 @@ describe("Extension Host tail collector", () => {
       workspace,
       launchEpochMilliseconds,
     })).toEqual([]);
+
+    const cappedPolicy = structuredClone(valid);
+    cappedPolicy.method.diagnosticReschedulePolicy.attemptCardinalityLimit = 2;
+    expect(collector.validateSampleReport({
+      report: cappedPolicy,
+      row,
+      resolution,
+      workspace,
+      launchEpochMilliseconds,
+    })).toEqual(expect.arrayContaining([
+      expect.stringContaining("diagnosticReschedulePolicy.attemptCardinalityLimit"),
+    ]));
 
     const serverRetriggered = structuredClone(valid);
     serverRetriggered.witness.diagnosticAttempts[0].terminal.cancellationRequested = false;
@@ -872,9 +931,16 @@ describe("Extension Host tail collector", () => {
     ]));
 
     const reusedId = structuredClone(valid);
-    reusedId.witness.diagnosticAttempts[1].observationId =
+    reusedId.witness.diagnosticAttempts[2].observationId =
       reusedId.witness.diagnosticAttempts[0].observationId;
-    reusedId.witness.observationId = reusedId.witness.diagnosticAttempts[1].observationId;
+    expect(reusedId.witness.diagnosticAttempts.map((attempt) => attempt.observationId))
+      .toEqual([
+        valid.witness.diagnosticAttempts[0].observationId,
+        valid.witness.diagnosticAttempts[1].observationId,
+        valid.witness.diagnosticAttempts[0].observationId,
+        valid.witness.diagnosticAttempts[3].observationId,
+      ]);
+    expect(reusedId.witness.observationId).toBe(valid.witness.observationId);
     expect(collector.validateSampleReport({
       report: reusedId,
       row,
@@ -885,23 +951,56 @@ describe("Extension Host tail collector", () => {
       expect.stringContaining("reschedule reused its observation id"),
     ]));
 
-    const twoCancellations = structuredClone(valid);
-    twoCancellations.witness.diagnosticAttempts.splice(
-      1,
-      0,
-      structuredClone(twoCancellations.witness.diagnosticAttempts[0]),
-    );
-    twoCancellations.witness.providerRequestCount = 3;
-    twoCancellations.witness.providerFailureCount = 2;
-    twoCancellations.witness.canceledAttemptsBeforeReceipt = 2;
+    const overlap = structuredClone(valid);
+    overlap.witness.diagnosticAttempts[1].request.epochMilliseconds =
+      overlap.witness.diagnosticAttempts[0].terminal.epochMilliseconds - 1;
+    overlap.witness.diagnosticAttempts[1].request.monotonicMilliseconds =
+      overlap.witness.diagnosticAttempts[0].terminal.monotonicMilliseconds - 1;
     expect(collector.validateSampleReport({
-      report: twoCancellations,
+      report: overlap,
       row,
       resolution,
       workspace,
       launchEpochMilliseconds,
     })).toEqual(expect.arrayContaining([
-      expect.stringContaining("must contain one success or one cancellation followed by success"),
+      expect.stringContaining("diagnostic reschedule boundary 1 epoch order was inverted"),
+      expect.stringContaining("diagnostic reschedule boundary 1 monotonic order was inverted"),
+    ]));
+
+    const nonCanceled = structuredClone(valid);
+    nonCanceled.witness.diagnosticAttempts[1].terminal.errorName = "Failure";
+    expect(collector.validateSampleReport({
+      report: nonCanceled,
+      row,
+      resolution,
+      workspace,
+      launchEpochMilliseconds,
+    })).toEqual(expect.arrayContaining([
+      expect.stringContaining("diagnosticAttempts[1].terminal.errorName"),
+    ]));
+
+    const uncorrelated = structuredClone(valid);
+    uncorrelated.witness.observationId = "unrelated-final-receipt";
+    expect(collector.validateSampleReport({
+      report: uncorrelated,
+      row,
+      resolution,
+      workspace,
+      launchEpochMilliseconds,
+    })).toEqual(expect.arrayContaining([
+      expect.stringContaining("witness.observationId"),
+    ]));
+
+    const missingFinal = structuredClone(valid);
+    missingFinal.witness.diagnosticAttempts.at(-1)!.terminal = null;
+    expect(collector.validateSampleReport({
+      report: missingFinal,
+      row,
+      resolution,
+      workspace,
+      launchEpochMilliseconds,
+    })).toEqual(expect.arrayContaining([
+      expect.stringContaining("diagnosticAttempts[3].terminal must be an object"),
     ]));
   });
 
@@ -1233,6 +1332,17 @@ function fakeReport(collector: CollectorModule, env: Record<string, string>) {
       targetUnopenedAtTestEntry: true,
       targetUnshownAtTestEntry: true,
       zeroObservedDocumentProviderRequestsBeforeTrigger: true,
+      diagnosticReschedulePolicy: {
+        suiteTriggerCount: 1,
+        suiteRetryCount: 0,
+        receiptTimeoutMilliseconds: 25_000,
+        hostInclusiveMaximumMillisecondsExclusive: 30_000,
+        timeoutBoundary: "before sole suite trigger through full response",
+        attemptCardinalityLimit: null,
+        sequence: "[request, authenticated Canceled failure]* then [request, full response]",
+        timing: "first request through final response",
+        cancellationCountAcceptanceThreshold: null,
+      },
     },
     document: {
       uri: pathToFileURL(path.join(workspace, "src", "routes", "service-plan-list-route.html")).href,
@@ -1331,30 +1441,47 @@ function fakeReport(collector: CollectorModule, env: Record<string, string>) {
   };
 }
 
-function addNativeDiagnosticCancellation(report: ReturnType<typeof fakeReport>): void {
-  const first = report.witness.diagnosticAttempts[0];
-  const finalObservationId = `${first.observationId}:rescheduled`;
-  const final = structuredClone(first);
-  first.terminal = {
-    ...first.terminal,
-    phase: "failed",
-    epochMilliseconds: first.request.epochMilliseconds + 1,
-    monotonicMilliseconds: first.request.monotonicMilliseconds + 1,
-    cancellationRequested: true,
-    errorName: "Canceled",
-    serverRetriggerRequested: false,
-    reportKind: null,
-    itemCount: null,
-    resultIdPresent: null,
-  };
-  final.observationId = finalObservationId;
-  final.request.epochMilliseconds = first.terminal.epochMilliseconds + 1;
-  final.request.monotonicMilliseconds = first.terminal.monotonicMilliseconds + 1;
-  report.witness.observationId = finalObservationId;
-  report.witness.providerRequestCount = 2;
-  report.witness.providerFailureCount = 1;
-  report.witness.canceledAttemptsBeforeReceipt = 1;
-  report.witness.diagnosticAttempts = [first, final];
+function addNativeDiagnosticCancellations(
+  report: ReturnType<typeof fakeReport>,
+  canceledAttempts: number,
+): void {
+  const template = report.witness.diagnosticAttempts[0];
+  const attempts = Array.from({ length: canceledAttempts + 1 }, (_, index) => {
+    const attempt = structuredClone(template);
+    attempt.observationId = `${template.observationId}:attempt-${index + 1}`;
+    attempt.request.epochMilliseconds = template.request.epochMilliseconds + index * 2;
+    attempt.request.monotonicMilliseconds = template.request.monotonicMilliseconds + index * 2;
+    attempt.terminal.epochMilliseconds = attempt.request.epochMilliseconds + 1;
+    attempt.terminal.monotonicMilliseconds = attempt.request.monotonicMilliseconds + 1;
+    if (index < canceledAttempts) {
+      attempt.terminal = {
+        ...attempt.terminal,
+        phase: "failed",
+        cancellationRequested: index % 2 === 0,
+        errorName: "Canceled",
+        serverRetriggerRequested: index % 2 === 1,
+        reportKind: null,
+        itemCount: null,
+        resultIdPresent: null,
+      };
+    }
+    return attempt;
+  });
+  const final = attempts.at(-1)!;
+  report.witness.observationId = final.observationId;
+  report.witness.providerRequestCount = attempts.length;
+  report.witness.providerResponseCount = 1;
+  report.witness.providerFailureCount = canceledAttempts;
+  report.witness.canceledAttemptsBeforeReceipt = canceledAttempts;
+  report.witness.diagnosticAttempts = attempts;
+  report.timing.requestEpochMilliseconds = attempts[0]!.request.epochMilliseconds;
+  report.timing.requestMonotonicMilliseconds = attempts[0]!.request.monotonicMilliseconds;
+  report.timing.receiptEpochMilliseconds = final.terminal.epochMilliseconds;
+  report.timing.receiptMonotonicMilliseconds = final.terminal.monotonicMilliseconds;
+  report.timing.hostInclusiveMilliseconds =
+    final.terminal.epochMilliseconds - report.timing.launchEpochMilliseconds;
+  report.timing.requestLocalMilliseconds =
+    final.terminal.monotonicMilliseconds - attempts[0]!.request.monotonicMilliseconds;
 }
 
 function workspaceArgument(launch: LaunchRecord): string {

@@ -65,9 +65,9 @@ Guidelines:
   sample, workspace, and link target paths, rejects layouts that escape the
   isolated output tree or point anywhere except that exact dependency target,
   and requires both `aurelia` and `@aurelia/router` to resolve identically from
-  the copied workspace before Electron launches. Process/cohort v4 evidence
+  the copied workspace before Electron launches. Process/cohort v5 evidence
   records the link strategy, exact target, and both resolved modules; the
-  dedicated suite emits sample v3 and `--plan` emits plan v2.
+  dedicated suite emits sample v4 and `--plan` emits plan v3.
   Any invalid preregistered sample aborts
   the cohort without retry, replacement, or exclusion. Use `--plan` for a
   zero-launch plan or `--smoke` for one explicitly discarded sample per
@@ -87,11 +87,20 @@ Guidelines:
   exactly one Aurelia `startup:true` activation record from either accepted
   package-manifest `workspaceContains` event; `api`, `onLanguage`, non-startup,
   missing, and duplicate activation evidence invalidate the cohort. VS Code may
-  natively cancel the first diagnostics pull when its open/focus pull is
-  superseded; the v3 evidence
-  accepts at most one authenticated native cancellation followed by one full
-  response in the same host and includes that attempt in request-local timing.
-  The suite never manually retries. Raw child stderr is retained and hashed as
+  natively cancel and reschedule diagnostics pulls as open/focus state settles.
+  Sample v4 therefore requires one suite trigger with no suite retry and accepts
+  any finite serialized sequence of request/authenticated-Canceled-failure pairs
+  followed by exactly one request/full-response pair in the same host. Every
+  attempt must retain one globally unique correlated ID, the same target URI and
+  document version, no previous result ID, and no overlap; each canceled attempt
+  must carry client-token or server-retrigger evidence, and the final response
+  must be full, uncanceled, and carry a result ID. The 25-second receipt timeout
+  starts before the sole suite trigger and ends at the full response, while
+  request-local timing spans the first provider request through that final
+  response and the host-inclusive guard remains strictly below 30 seconds. Plan
+  v3 preregisters this policy. Cohort v5 reports each lane's diagnostic
+  cancellation-count acquisition order and distribution as descriptive evidence
+  with no post-hoc acceptance threshold. Raw child stderr is retained and hashed as
   descriptive VS Code evidence, while structural Worker health comes from the
   exact isolated workspace start/stop and Worker-fault markers in the
   extension's own Client log. Complete structurally valid authoritative

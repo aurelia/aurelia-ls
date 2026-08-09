@@ -21,10 +21,21 @@ import { Writable } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { minimumVSCodeVersion } from "./run-extension-host-tests.mjs";
 
-export const sampleSchemaVersion = "aurelia-ls/extension-host-tail-sample/v3";
-export const processSchemaVersion = "aurelia-ls/extension-host-tail-process/v4";
-export const cohortSchemaVersion = "aurelia-ls/extension-host-tail-cohort/v4";
+export const sampleSchemaVersion = "aurelia-ls/extension-host-tail-sample/v4";
+export const processSchemaVersion = "aurelia-ls/extension-host-tail-process/v5";
+export const cohortSchemaVersion = "aurelia-ls/extension-host-tail-cohort/v5";
 export const windowsClientLogPathCharacterBudget = 259;
+export const diagnosticReschedulePolicy = Object.freeze({
+  suiteTriggerCount: 1,
+  suiteRetryCount: 0,
+  receiptTimeoutMilliseconds: 25_000,
+  hostInclusiveMaximumMillisecondsExclusive: 30_000,
+  timeoutBoundary: "before sole suite trigger through full response",
+  attemptCardinalityLimit: null,
+  sequence: "[request, authenticated Canceled failure]* then [request, full response]",
+  timing: "first request through final response",
+  cancellationCountAcceptanceThreshold: null,
+});
 export const journeys = Object.freeze([
   "cold-full-diagnostics",
   "first-completion",
@@ -216,7 +227,7 @@ export function buildAcquisitionRows(selectedLanes, smoke) {
 
 export function publicPlan(plan) {
   return {
-    schemaVersion: "aurelia-ls/extension-host-tail-plan/v2",
+    schemaVersion: "aurelia-ls/extension-host-tail-plan/v3",
     lanes: plan.lanes.map((lane) => ({
       lane,
       requestedVersion: laneDefinitions[lane].requestedVersion,
@@ -232,6 +243,7 @@ export function publicPlan(plan) {
     versionResolutionCount: plan.versionResolutionCount,
     effectiveCohort: plan.effectiveCohort,
     cliArguments: plan.cliArguments,
+    diagnosticReschedulePolicy,
     latencyGuardScope,
     hostLocalReviewGuards: hostLocalReviewGuards.filter((entry) => plan.lanes.includes(entry.lane)),
     rows: plan.rows,
@@ -544,6 +556,11 @@ export function validateSampleReport({
       true,
       "method.zeroObservedDocumentProviderRequestsBeforeTrigger",
     );
+    validateDiagnosticReschedulePolicy(
+      issues,
+      report.method.diagnosticReschedulePolicy,
+      "method.diagnosticReschedulePolicy",
+    );
     for (const legacyField of [
       "zeroPriorDocumentProviderRequests",
       "extensionActiveAtTestEntry",
@@ -551,7 +568,7 @@ export function validateSampleReport({
       "zeroObservedDocumentProviderRequestsSinceTestEntry",
     ]) {
       if (Object.hasOwn(report.method, legacyField)) {
-        issues.push(`method.${legacyField} is not permitted by the v3 sample schema`);
+        issues.push(`method.${legacyField} is not permitted by the v4 sample schema`);
       }
     }
   }
@@ -582,6 +599,21 @@ export function validateSampleReport({
   }
   expectEqual(issues, report.error, null, "error");
   return issues;
+}
+
+function validateDiagnosticReschedulePolicy(issues, policy, label) {
+  if (!isRecord(policy)) {
+    issues.push(`${label} must be an object`);
+    return;
+  }
+  const expectedKeys = Object.keys(diagnosticReschedulePolicy).sort();
+  const actualKeys = Object.keys(policy).sort();
+  if (JSON.stringify(actualKeys) !== JSON.stringify(expectedKeys)) {
+    issues.push(`${label} keys did not match the preregistered policy`);
+  }
+  for (const [field, expected] of Object.entries(diagnosticReschedulePolicy)) {
+    expectEqual(issues, policy[field], expected, `${label}.${field}`);
+  }
 }
 
 function validateDocumentIdentity(issues, document, workspaceRoot) {
@@ -621,7 +653,7 @@ function validateTiming(issues, timing, launchEpochMilliseconds, journey) {
     "suiteReadinessAwaitMilliseconds",
   ]) {
     if (Object.hasOwn(timing, legacyField)) {
-      issues.push(`timing.${legacyField} is not permitted by the v3 sample schema`);
+      issues.push(`timing.${legacyField} is not permitted by the v4 sample schema`);
     }
   }
   for (const field of [
@@ -794,8 +826,10 @@ function validateWitness(issues, witness, journey, document, timing) {
 
 function validateDiagnosticAttempts(issues, witness, document, timing) {
   const attempts = witness.diagnosticAttempts;
-  if (!Array.isArray(attempts) || (attempts.length !== 1 && attempts.length !== 2)) {
-    issues.push("witness.diagnosticAttempts must contain one success or one cancellation followed by success");
+  if (!Array.isArray(attempts) || attempts.length < 1) {
+    issues.push(
+      "witness.diagnosticAttempts must contain serialized cancellations followed by one success",
+    );
     return;
   }
   const canceledAttempts = attempts.length - 1;
@@ -821,6 +855,7 @@ function validateDiagnosticAttempts(issues, witness, document, timing) {
 
   const expectedUri = document?.uri;
   const expectedVersion = document?.version;
+  const observationIds = new Set();
   for (let index = 0; index < attempts.length; index += 1) {
     const attempt = attempts[index];
     const label = `witness.diagnosticAttempts[${index}]`;
@@ -830,6 +865,10 @@ function validateDiagnosticAttempts(issues, witness, document, timing) {
     }
     if (typeof attempt.observationId !== "string" || attempt.observationId.length === 0) {
       issues.push(`${label}.observationId must be non-empty`);
+    } else if (observationIds.has(attempt.observationId)) {
+      issues.push("witness diagnostic reschedule reused its observation id");
+    } else {
+      observationIds.add(attempt.observationId);
     }
     validateDiagnosticRequestLedger(
       issues,
@@ -849,21 +888,17 @@ function validateDiagnosticAttempts(issues, witness, document, timing) {
     if (isRecord(attempt.request) && isRecord(attempt.terminal)) {
       validateAttemptOrder(issues, attempt.request, attempt.terminal, label);
     }
-  }
-  if (
-    attempts.length === 2
-    && isRecord(attempts[0])
-    && isRecord(attempts[1])
-  ) {
-    if (attempts[0].observationId === attempts[1].observationId) {
-      issues.push("witness diagnostic reschedule reused its observation id");
-    }
-    if (isRecord(attempts[0].terminal) && isRecord(attempts[1].request)) {
+    if (
+      index > 0
+      && isRecord(attempts[index - 1])
+      && isRecord(attempts[index - 1].terminal)
+      && isRecord(attempt.request)
+    ) {
       validateAttemptOrder(
         issues,
-        attempts[0].terminal,
-        attempts[1].request,
-        "witness diagnostic reschedule boundary",
+        attempts[index - 1].terminal,
+        attempt.request,
+        `witness diagnostic reschedule boundary ${index}`,
       );
     }
   }
@@ -1037,6 +1072,11 @@ export function buildCohortSummary(input) {
             expected === 20,
           ),
         };
+        if (journey === "cold-full-diagnostics") {
+          metrics.diagnosticCancellationCount = summarizeCancellationCounts(
+            rows.map((capture) => capture.report.witness.canceledAttemptsBeforeReceipt),
+          );
+        }
         if (journey === "first-completion") {
           metrics.completionSettledHostInclusiveMilliseconds = summarize(
             rows.map((capture) => (
@@ -1084,6 +1124,7 @@ export function buildCohortSummary(input) {
       activation: "shipping-workspaceContains-eager-activation",
       readiness: "already-active-api-readiness-check",
       providerObservationScope: "test-entry-through-receipt",
+      diagnosticReschedulePolicy,
       pairOrder: "odd=diagnostics/completion; even=completion/diagnostics",
       exclusionsPermitted: false,
       excludedSamples: 0,
@@ -1220,6 +1261,29 @@ export function summarize(values, includeP95) {
   };
   if (includeP95) result.p95NearestRank = sorted[Math.ceil(0.95 * sorted.length) - 1];
   return result;
+}
+
+export function summarizeCancellationCounts(values) {
+  if (values.length === 0 || !values.every((value) => Number.isSafeInteger(value) && value >= 0)) {
+    throw new Error("Cannot summarize empty or invalid diagnostic cancellation counts.");
+  }
+  const sorted = [...values].sort((left, right) => left - right);
+  const frequencies = new Map();
+  for (const value of sorted) frequencies.set(value, (frequencies.get(value) ?? 0) + 1);
+  return {
+    descriptiveOnly: true,
+    acceptanceThreshold: null,
+    n: values.length,
+    totalCanceledAttempts: values.reduce((total, value) => total + value, 0),
+    median: median(sorted),
+    min: sorted[0],
+    max: sorted.at(-1),
+    valuesInAcquisitionOrder: [...values],
+    frequency: Array.from(frequencies, ([canceledAttempts, count]) => ({
+      canceledAttempts,
+      count,
+    })),
+  };
 }
 
 export function sampleWorkspacePaths(row, outputRoot) {
