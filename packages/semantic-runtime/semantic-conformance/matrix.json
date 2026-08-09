@@ -634,7 +634,7 @@
             "fields": {
               "group": "resources",
               "resultRole": "row-table",
-              "materializationPolicy": "projection-only",
+              "materializationPolicy": "query-type-projection",
               "minimumAnalysisDepth": "runtime-topology",
               "supportsPaging": true,
               "supportsSourceFile": false
@@ -3211,9 +3211,10 @@
               "name": "property references",
               "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 100 } } },
               "coverage": "complete",
-              "equals": { "value.selectedMemberName": "value", "value.rows.length": 4, "value.candidateRows.length": 0 },
+              "equals": { "value.selectedMemberName": "value", "value.rows.length": 5, "value.candidateRows.length": 0 },
               "rows": [
                 { "fields": { "referenceKind": "declaration" }, "source": { "marker": "{ name: 'value', attribute: 'definition-value', mode: BindingMode.oneTime }", "token": "value" }, "count": 1 },
+                { "fields": { "referenceKind": "declaration" }, "source": { "marker": "}) value = ''", "token": "value" }, "count": 1 },
                 { "fields": { "referenceKind": "declaration" }, "source": { "marker": "override value = ''", "token": "value" }, "count": 1 },
                 { "fields": { "referenceKind": "template-usage" }, "source": { "marker": "template: '<span>${value}:${inheritedOnly}:${staticOnly}:${definitionOnly}</span>'", "token": "value" }, "count": 1 },
                 { "fields": { "referenceKind": "bindable-attribute", "bindableAttributeSourceKind": "explicit-alias" }, "source": { "sourceFile": "src/bindable-lab-app.html", "marker": "definition-value.bind=\"precedenceValue\"", "token": "definition-value" }, "count": 1 }
@@ -3365,12 +3366,19 @@
             {
               "name": "property rename",
               "query": { "kind": "template-rename", "options": { "newName": "currentValue" } },
-              "equals": { "value.status": "available", "value.edits.length": 3 },
+              "equals": { "value.status": "available", "value.edits.length": 4 },
               "rows": [
                 {
                   "rowPath": "value.edits",
                   "fields": { "oldText": "value", "newText": "currentValue" },
                   "source": { "marker": "{ name: 'value', attribute: 'definition-value', mode: BindingMode.oneTime }", "token": "value" },
+                  "oldTextMatchesSource": true,
+                  "count": 1
+                },
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "typescript-reference", "oldText": "value", "newText": "currentValue" },
+                  "source": { "marker": "}) value = ''", "token": "value" },
                   "oldTextMatchesSource": true,
                   "count": 1
                 },
@@ -3405,8 +3413,15 @@
             {
               "name": "TypeScript-origin property rename",
               "query": { "kind": "template-rename-from-typescript", "options": { "newName": "totalCount" } },
-              "equals": { "value.status": "available", "value.edits.length": 3 },
+              "equals": { "value.status": "available", "value.edits.length": 4 },
               "rows": [
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "typescript-reference", "oldText": "count", "newText": "totalCount" },
+                  "source": { "marker": "count = 0", "token": "count" },
+                  "oldTextMatchesSource": true,
+                  "count": 1
+                },
                 {
                   "rowPath": "value.edits",
                   "fields": { "editKind": "typescript-reference", "oldText": "countChanged", "newText": "totalCountChanged" },
@@ -3439,8 +3454,15 @@
             {
               "name": "TypeScript-origin property rename",
               "query": { "kind": "template-rename-from-typescript", "options": { "newName": "externalState" } },
-              "equals": { "value.status": "available", "value.edits.length": 3 },
+              "equals": { "value.status": "available", "value.edits.length": 4 },
               "rows": [
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "typescript-reference", "oldText": "externalValue", "newText": "externalState" },
+                  "source": { "marker": "externalValue = ''", "token": "externalValue" },
+                  "oldTextMatchesSource": true,
+                  "count": 1
+                },
                 {
                   "rowPath": "value.edits",
                   "fields": { "oldText": "externalValue", "newText": "externalState" },
@@ -3473,8 +3495,15 @@
             {
               "name": "TypeScript-origin property rename",
               "query": { "kind": "template-rename-from-typescript", "options": { "newName": "baseValue" } },
-              "equals": { "value.status": "available", "value.edits.length": 3 },
+              "equals": { "value.status": "available", "value.edits.length": 4 },
               "rows": [
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "typescript-reference", "oldText": "baseStatic", "newText": "baseValue" },
+                  "source": { "marker": "baseStatic = ''", "token": "baseStatic" },
+                  "oldTextMatchesSource": true,
+                  "count": 1
+                },
                 {
                   "rowPath": "value.edits",
                   "fields": { "oldText": "baseStatic", "newText": "baseValue" },
@@ -3507,8 +3536,15 @@
             {
               "name": "TypeScript-origin property rename",
               "query": { "kind": "template-rename-from-typescript", "options": { "newName": "ownValue" } },
-              "equals": { "value.status": "available", "value.edits.length": 2 },
+              "equals": { "value.status": "available", "value.edits.length": 3 },
               "rows": [
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "typescript-reference", "oldText": "ownStatic", "newText": "ownValue" },
+                  "source": { "marker": "ownStatic = ''", "token": "ownStatic" },
+                  "oldTextMatchesSource": true,
+                  "count": 1
+                },
                 {
                   "rowPath": "value.edits",
                   "fields": { "oldText": "ownStatic", "newText": "ownValue" },
@@ -3539,8 +3575,15 @@
             {
               "name": "TypeScript-origin property rename",
               "query": { "kind": "template-rename-from-typescript", "options": { "newName": "state" } },
-              "equals": { "value.status": "available", "value.edits.length": 2 },
+              "equals": { "value.status": "available", "value.edits.length": 3 },
               "rows": [
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "typescript-reference", "oldText": "status", "newText": "state" },
+                  "source": { "marker": "status = ''", "token": "status" },
+                  "oldTextMatchesSource": true,
+                  "count": 1
+                },
                 {
                   "rowPath": "value.edits",
                   "fields": { "oldText": "status", "newText": "state" },
@@ -3571,8 +3614,22 @@
             {
               "name": "TypeScript-origin property rename",
               "query": { "kind": "template-rename-from-typescript", "options": { "newName": "currentValue" } },
-              "equals": { "value.status": "available", "value.edits.length": 2 },
+              "equals": { "value.status": "available", "value.edits.length": 4 },
               "rows": [
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "typescript-reference", "oldText": "value", "newText": "currentValue" },
+                  "source": { "marker": "}) value = ''", "token": "value" },
+                  "oldTextMatchesSource": true,
+                  "count": 1
+                },
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "typescript-reference", "oldText": "value", "newText": "currentValue" },
+                  "source": { "marker": "override value = ''", "token": "value" },
+                  "oldTextMatchesSource": true,
+                  "count": 1
+                },
                 {
                   "rowPath": "value.edits",
                   "fields": { "oldText": "value", "newText": "currentValue" },

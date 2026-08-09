@@ -16,6 +16,7 @@ import type {
   IdentityHandle,
   ProductHandle,
 } from '../kernel/handles.js';
+import { TypeScriptDeclarationIdentity } from '../kernel/identity.js';
 import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-project-pass.js';
 import {
   diagnosticRepairAffordanceForSuggestion,
@@ -151,6 +152,7 @@ import { isAureliaExpressionIdentifier } from '../expression/expression-scanner.
 import { bindableAttributeNameForProperty } from '../resources/bindable-attribute.js';
 import type { BindableDefinitionReference } from '../resources/bindable-definition.js';
 import {
+  NamedResourceDefinitionContributionKind,
   ResourceDefinitionKind,
   resourceKindsShareRegistrationIdentity,
 } from '../resources/resource-kind.js';
@@ -901,6 +903,11 @@ export class SemanticAppTemplateQueries {
         ?? selectedMember.handles?.sourceAddressHandle
         ?? null,
       renameSurface: TemplateRenameSurface.Member,
+      includeTypeScriptReferences: templateMemberHasTypeScriptDeclaration(
+        this.store,
+        selectedMember.handles?.declarationIdentityHandle ?? null,
+        targetSource,
+      ),
       observedTargetSources: this.templateMemberObservedTargetSources(
         selectedMember.handles?.detailHandle ?? null,
         targetSource,
@@ -1273,6 +1280,8 @@ export class SemanticAppTemplateQueries {
       definitionProductHandle: selectedDefinition.handles?.definitionProductHandle ?? null,
       sourceAddressHandle,
       declarations,
+      includeConventionTargetDeclaration: indexedDefinition != null
+        && resourceDefinitionHasConventionContribution(indexedDefinition),
       activeSources: [],
     }, handles);
   }
@@ -1345,6 +1354,27 @@ export class SemanticAppTemplateQueries {
       target,
       handles,
     );
+    const declarationRows = selection.declarations.length === 0
+      && selection.includeConventionTargetDeclaration
+      ? [templateReferenceDeclarationRow(
+          selection.targetSource,
+          selection.selectedName,
+          selection.targetSource,
+          selection.sourceAddressHandle,
+          handles,
+        )]
+      : selection.declarations.map((declaration) =>
+          templateReferenceDeclarationRow(
+            declaration.source,
+            declaration.name,
+            selection.targetSource,
+            declaration.sourceAddressHandle,
+            handles,
+            declaration.declarationKind,
+            null,
+            selection.sourceAddressHandle,
+          )
+        );
     return templateReferenceContextFromRows({
       selectedMemberName: selection.selectedName,
       targetSource: selection.targetSource,
@@ -1353,18 +1383,7 @@ export class SemanticAppTemplateQueries {
       hasDeclarationSource: selection.declarations.length > 0,
       hasEditableDeclarationSource: selection.declarations.length > 0
         && selection.declarations.every((declaration) => semanticEditSourceIsEditable(this.emission, declaration.source)),
-      declarationRows: selection.declarations.map((declaration) =>
-        templateReferenceDeclarationRow(
-          declaration.source,
-          declaration.name,
-          selection.targetSource,
-          declaration.sourceAddressHandle,
-          handles,
-          declaration.declarationKind,
-          null,
-          selection.sourceAddressHandle,
-        )
-      ),
+      declarationRows,
       templateUsageRows,
       candidateRows: [],
       activeSources: selection.activeSources,
@@ -1733,6 +1752,25 @@ interface TemplateReferenceContext {
   readonly activeSources: readonly SemanticSourceReference[];
 }
 
+function templateMemberHasTypeScriptDeclaration(
+  store: KernelStore,
+  declarationIdentityHandle: IdentityHandle | null,
+  targetSource: SemanticSourceReference,
+): boolean {
+  if (declarationIdentityHandle == null) {
+    return false;
+  }
+  const identity = store.readIdentity(declarationIdentityHandle);
+  if (!(identity instanceof TypeScriptDeclarationIdentity)) {
+    return false;
+  }
+  const declarationSource = semanticExactSourceReference(describeAddress(
+    store,
+    identity.declarationAddressHandle,
+  ));
+  return sourceReferencesMatchExactSpan(declarationSource, targetSource);
+}
+
 function semanticEditSourceIsEditable(
   emission: AureliaAppWorldProjectEmission,
   source: SemanticSourceReference | null,
@@ -1848,6 +1886,7 @@ function resourceReferenceSelectionsAtCursor(
       definitionProductHandle: definition.productHandle,
       sourceAddressHandle: declaration.sourceAddressHandle,
       declarations,
+      includeConventionTargetDeclaration: false,
       activeSources: [declaration.source],
     }));
 }
@@ -1874,8 +1913,17 @@ function resourceReferenceSelectionForTypeScriptTarget(
     definitionProductHandle: definition.productHandle,
     sourceAddressHandle: targetDeclaration?.sourceAddressHandle ?? definition.target.addressHandle,
     declarations,
+    includeConventionTargetDeclaration: resourceDefinitionHasConventionContribution(definition),
     activeSources: [activeSource],
   };
+}
+
+function resourceDefinitionHasConventionContribution(
+  definition: FullResourceDefinition,
+): boolean {
+  return definition.contributions.some((contribution) =>
+    String(contribution.contributionKind) === String(NamedResourceDefinitionContributionKind.Convention)
+  );
 }
 
 function authoredResourceReferenceDeclarations(
@@ -1982,6 +2030,7 @@ interface ResourceReferenceContextSelection {
   readonly definitionProductHandle: ProductHandle | null;
   readonly sourceAddressHandle: AddressHandle | null;
   readonly declarations: readonly ResourceReferenceDeclarationSelection[];
+  readonly includeConventionTargetDeclaration: boolean;
   readonly activeSources: readonly SemanticSourceReference[];
 }
 
