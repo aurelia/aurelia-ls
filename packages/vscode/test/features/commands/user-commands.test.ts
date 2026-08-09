@@ -1,4 +1,8 @@
 import { describe, expect, test, vi } from "vitest";
+import {
+  EXTENSION_HOST_OBSERVATION_EVENT,
+  type ExtensionHostObservation,
+} from "../../../out/extension-host-observation.js";
 import { UserCommandsFeature } from "../../../out/features/commands/user-commands.js";
 import { AureliaCommand } from "../../../out/product-contract.js";
 import type { VscodeApi } from "../../../out/vscode-api.js";
@@ -21,6 +25,8 @@ const answer = {
   summary: "complete",
   page: null,
 };
+
+const EXTENSION_HOST_OBSERVATION_ENV = "AURELIA_LS_EXTENSION_HOST_OBSERVATION";
 
 function available(uri: string, role = "public-name", line = 3) {
   return {
@@ -290,6 +296,92 @@ describe("UserCommandsFeature", () => {
     expect(harness.recorded.openedDocuments.at(-1)?.uri.toString()).toBe("file:///repo/src/product-card.ts");
   });
 
+  test("observes deferred availability requests before navigation with one invocation id", async () => {
+    const observations = captureExtensionHostObservations();
+    try {
+      const initial = deferred<ReturnType<typeof exactAvailability>>();
+      const fresh = deferred<ReturnType<typeof exactAvailability>>();
+      const availability = vi.fn()
+        .mockImplementationOnce(() => initial.promise)
+        .mockImplementationOnce(() => fresh.promise);
+      const harness = createHarness({ availability });
+
+      const command = harness.recorded.commandHandlers.get(AureliaCommand.GoToAvailableResource)?.();
+      await vi.waitFor(() => expect(commandObservations(observations.events).map((event) => event.phase)).toEqual([
+        "command-start",
+        "initial-request-start",
+      ]));
+
+      initial.resolve(exactAvailability());
+      await vi.waitFor(() => expect(harness.recorded.quickPicks[0]?.items).toHaveLength(1));
+      expect(commandObservations(observations.events).map((event) => event.phase)).toEqual([
+        "command-start",
+        "initial-request-start",
+        "initial-request-response",
+      ]);
+
+      harness.recorded.quickPicks[0]!.accept(0);
+      await vi.waitFor(() => expect(commandObservations(observations.events).at(-1)?.phase).toBe("fresh-request-start"));
+      expect(harness.recorded.openedDocuments).toHaveLength(0);
+      expect(commandObservations(observations.events).some((event) => event.phase === "navigation-start")).toBe(false);
+
+      fresh.resolve(exactAvailability());
+      await command;
+
+      const events = commandObservations(observations.events);
+      expect(events).toEqual([
+        expect.objectContaining({ phase: "command-start", documentName: "my-app.html", line: 8, character: 5 }),
+        expect.objectContaining({ phase: "initial-request-start" }),
+        expect.objectContaining({ phase: "initial-request-response", count: 1, status: "ready" }),
+        expect.objectContaining({ phase: "fresh-request-start" }),
+        expect.objectContaining({ phase: "fresh-request-response", count: 1, status: "available" }),
+        expect.objectContaining({ phase: "navigation-start" }),
+        expect.objectContaining({ phase: "navigation-complete", status: "opened" }),
+      ]);
+      expect(new Set(events.map((event) => event.observationId))).toEqual(new Set([events[0]!.observationId]));
+      expect(new Set(observations.events.map((event) => event.observationId))).toEqual(new Set([events[0]!.observationId]));
+      expect(events[0]!.observationId).toMatch(/^go-to-available-resource:\d+$/);
+      expect(events.every(Object.isFrozen)).toBe(true);
+    } finally {
+      observations.dispose();
+    }
+  });
+
+  test("settles and reports a rejected fresh availability request without navigating", async () => {
+    const observations = captureExtensionHostObservations();
+    try {
+      const fresh = deferred<ReturnType<typeof exactAvailability>>();
+      const availability = vi.fn()
+        .mockReturnValueOnce(exactAvailability())
+        .mockImplementationOnce(() => fresh.promise);
+      const harness = createHarness({ availability });
+
+      const command = harness.recorded.commandHandlers.get(AureliaCommand.GoToAvailableResource)?.();
+      await vi.waitFor(() => expect(harness.recorded.quickPicks[0]?.items).toHaveLength(1));
+      harness.recorded.quickPicks[0]!.accept(0);
+      await vi.waitFor(() => expect(commandObservations(observations.events).at(-1)?.phase).toBe("fresh-request-start"));
+
+      fresh.reject(new Error("fresh availability failed"));
+      await expect(command).resolves.toEqual({ ok: false });
+
+      expect(commandObservations(observations.events).map((event) => ({
+        phase: event.phase,
+        count: event.count,
+        status: event.status,
+      }))).toEqual([
+        { phase: "command-start", count: undefined, status: undefined },
+        { phase: "initial-request-start", count: undefined, status: undefined },
+        { phase: "initial-request-response", count: 1, status: "ready" },
+        { phase: "fresh-request-start", count: undefined, status: undefined },
+        { phase: "fresh-request-failed", count: undefined, status: "failed" },
+      ]);
+      expect(harness.recorded.openedDocuments).toHaveLength(0);
+      expect(harness.recorded.errorMessages).toContain("command.goToAvailableResource: fresh availability failed");
+    } finally {
+      observations.dispose();
+    }
+  });
+
   test("openRelatedFile asks the user to resolve genuine topology ambiguity", async () => {
     const harness = createHarness({
       related: [
@@ -313,4 +405,46 @@ function acceptQuickPickLabel(
   const index = picker.items.findIndex((item) => (item as { readonly label?: string }).label === label);
   if (index < 0) throw new Error(`Quick Pick item '${label}' was not published.`);
   picker.accept(index);
+}
+
+function deferred<T>(): {
+  readonly promise: Promise<T>;
+  readonly resolve: (value: T) => void;
+  readonly reject: (error: unknown) => void;
+} {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
+function captureExtensionHostObservations(): {
+  readonly events: ExtensionHostObservation[];
+  dispose(): void;
+} {
+  const previous = process.env[EXTENSION_HOST_OBSERVATION_ENV];
+  const events: ExtensionHostObservation[] = [];
+  const listener = (event: ExtensionHostObservation): void => { events.push(event); };
+  process.env[EXTENSION_HOST_OBSERVATION_ENV] = "1";
+  process.on(EXTENSION_HOST_OBSERVATION_EVENT, listener);
+  return {
+    events,
+    dispose: () => {
+      process.off(EXTENSION_HOST_OBSERVATION_EVENT, listener);
+      if (previous == null) {
+        delete process.env[EXTENSION_HOST_OBSERVATION_ENV];
+      } else {
+        process.env[EXTENSION_HOST_OBSERVATION_ENV] = previous;
+      }
+    },
+  };
+}
+
+function commandObservations(
+  events: readonly ExtensionHostObservation[],
+): ExtensionHostObservation[] {
+  return events.filter((event) => event.source === "go-to-available-resource");
 }

@@ -309,11 +309,16 @@ class QuickPick implements StubQuickPick {
   step: number | undefined;
   totalSteps: number | undefined;
   #accept = new EventEmitter<void>();
+  #active = new EventEmitter<readonly unknown[]>();
   #hide = new EventEmitter<void>();
   #button = new EventEmitter<unknown>();
 
   onDidAccept(listener: () => void): Disposable {
     return this.#accept.event(listener);
+  }
+
+  onDidChangeActive(listener: (items: readonly unknown[]) => void): Disposable {
+    return this.#active.event(listener);
   }
 
   onDidHide(listener: () => void): Disposable {
@@ -331,6 +336,7 @@ class QuickPick implements StubQuickPick {
   accept(index: number): void {
     const selected = this.items[index];
     this.selectedItems = selected == null ? [] : [selected];
+    this.#active.fire(this.selectedItems);
     this.#accept.fire();
   }
 
@@ -347,6 +353,7 @@ class QuickPick implements StubQuickPick {
   dispose(): void {
     this.visible = false;
     this.#accept.dispose();
+    this.#active.dispose();
     this.#hide.dispose();
     this.#button.dispose();
   }

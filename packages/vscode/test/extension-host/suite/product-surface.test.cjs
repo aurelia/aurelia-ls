@@ -9,6 +9,11 @@ const excludedAureliaWorkspace = process.env.AURELIA_LS_EXTENSION_HOST_EXCLUDED_
 const plainTypeScriptWorkspace = process.env.AURELIA_LS_EXTENSION_HOST_PLAIN_WORKSPACE;
 const expectedTransport = process.env.AURELIA_LS_EXTENSION_HOST_EXPECTED_TRANSPORT;
 const extensionId = "AureliaEffect.aurelia-2";
+const extensionHostObservationEvent = "aurelia-ls:extension-host-observation";
+const extensionHostObservations = [];
+const recordExtensionHostObservation = (event) => {
+  if (event != null && typeof event === "object") extensionHostObservations.push(event);
+};
 let selectedTransport;
 
 if (!aureliaWorkspace || !secondaryAureliaWorkspace || !excludedAureliaWorkspace || !plainTypeScriptWorkspace) {
@@ -20,6 +25,7 @@ if (expectedTransport !== "worker" && expectedTransport !== "ipc") {
 
 suite("extension-host product surface", () => {
   suiteSetup(async () => {
+    process.on(extensionHostObservationEvent, recordExtensionHostObservation);
     const extension = vscode.extensions.getExtension(extensionId);
     assert(extension, `Expected extension ${extensionId} in the Extension Development Host.`);
     const transportModuleUrl = pathToFileURL(path.join(extension.extensionPath, "out", "worker-transport.js"));
@@ -32,6 +38,10 @@ suite("extension-host product surface", () => {
       "the admitted Aurelia workspace should answer template hover",
       60_000,
     );
+  });
+
+  suiteTeardown(() => {
+    process.off(extensionHostObservationEvent, recordExtensionHostObservation);
   });
 
   test("selects the requested language-server transport", () => {
@@ -61,7 +71,17 @@ suite("extension-host product surface", () => {
     await executeAndAcceptQuickPick("aurelia.goToResource");
     assertAuthoredResourceDocument(vscode.window.activeTextEditor?.document, origin.uri);
 
-    await showAureliaDocument("src/my-app.html");
+    const availableOrigin = await showAureliaDocument("src/my-app.html");
+    await waitFor(
+      async () => (await hoverMarkdown(availableOrigin, "<product-card", "product-card"))
+        .includes("**Resource** `product-card`"),
+      "the active template should be re-admitted before cursor-scoped resource navigation",
+      60_000,
+    );
+    const availableCursor = positionIn(availableOrigin, "<product-card", "product-card");
+    const activeEditor = vscode.window.activeTextEditor;
+    assert(activeEditor && activeEditor.document.uri.toString() === availableOrigin.uri.toString());
+    activeEditor.selection = new vscode.Selection(availableCursor, availableCursor);
     await executeAndAcceptQuickPick("aurelia.goToAvailableResource");
     assertAuthoredResourceDocument(vscode.window.activeTextEditor?.document, origin.uri);
   });
@@ -313,20 +333,111 @@ function findWorkspaceFolder(workspaceRoot) {
 }
 
 async function executeAndAcceptQuickPick(command) {
-  let settled = false;
-  const execution = Promise.resolve(vscode.commands.executeCommand(command)).finally(() => {
-    settled = true;
-  });
-  const started = Date.now();
-  await new Promise((resolve) => setTimeout(resolve, 2_000));
-  while (!settled && Date.now() - started < 60_000) {
-    // VS Code may keep this internal command pending until the contributed command returns.
-    // Awaiting it here would deadlock the test driver against the Quick Pick it is accepting.
-    void vscode.commands.executeCommand("workbench.action.acceptSelectedQuickOpenItem").then(undefined, () => {});
-    await new Promise((resolve) => setTimeout(resolve, 250));
+  const observationStart = extensionHostObservations.length;
+  let executionSettled = false;
+  const execution = Promise.resolve(vscode.commands.executeCommand(command)).then(
+    (value) => {
+      executionSettled = true;
+      return { status: "fulfilled", value };
+    },
+    (error) => {
+      executionSettled = true;
+      return { status: "rejected", error };
+    },
+  );
+  let observationId;
+
+  try {
+    const ready = await waitForExtensionHostObservation(
+      observationStart,
+      (event) => event.source === "resource-quick-pick"
+        && event.phase === "model-ready",
+      `${command} should publish a Quick Pick model`,
+      () => executionSettled,
+    );
+    observationId = ready.observationId;
+    assert(ready.itemCount > 0, `${command} published an empty Quick Pick model.`);
+
+    // Programmatic Quick Picks do not expose their active row to the Extension Host test API. Accept an activation
+    // already observed while the model was published; otherwise move once and wait for the correlated receipt.
+    const isActiveReceipt = (event) => event.source === "resource-quick-pick"
+      && event.observationId === observationId
+      && event.phase === "active-changed"
+      && typeof event.activeLabel === "string"
+      && event.activeLabel.length > 0;
+    let active = extensionHostObservations.slice(observationStart).find(isActiveReceipt);
+    if (active == null) {
+      const activeStart = extensionHostObservations.length;
+      void vscode.commands.executeCommand("workbench.action.quickOpenSelectNext").then(undefined, () => {});
+      active = await waitForExtensionHostObservation(
+        activeStart,
+        isActiveReceipt,
+        `${command} should activate one Quick Pick item`,
+        () => executionSettled,
+      );
+    }
+    assert(active.activeLabel, `${command} activated an empty Quick Pick selection.`);
+    // The workbench command may remain pending until the contributed command completes. Its event is the receipt.
+    const accept = Promise.resolve(
+      vscode.commands.executeCommand("workbench.action.acceptSelectedQuickOpenItem"),
+    ).then(undefined, () => undefined);
+    const accepted = await waitForExtensionHostObservation(
+      observationStart,
+      (event) => event.source === "resource-quick-pick"
+        && event.observationId === observationId
+        && event.phase === "accept"
+        && typeof event.selectedLabel === "string"
+        && event.selectedLabel.length > 0,
+      `${command} should accept one selected Quick Pick item`,
+      () => executionSettled,
+    );
+    assert(accepted.selectedLabel, `${command} accepted an empty Quick Pick selection.`);
+
+    await waitFor(
+      () => executionSettled,
+      `${command} should settle after the selected Quick Pick item is accepted`,
+      60_000,
+    );
+    const result = await execution;
+    void accept;
+    if (result.status === "rejected") throw result.error;
+
+    if (command === "aurelia.goToAvailableResource") {
+      const trace = extensionHostObservations.slice(observationStart)
+        .filter((event) => event.observationId === observationId);
+      assert(trace.some((event) => event.source === "go-to-available-resource"
+        && event.phase === "fresh-request-response"
+        && event.status === "available"), "Expected fresh resource availability before navigation.");
+      assert(trace.some((event) => event.source === "go-to-available-resource"
+        && event.phase === "navigation-complete"
+        && event.status === "opened"), "Expected active-template resource navigation to complete.");
+    }
+  } catch (error) {
+    await Promise.resolve(vscode.commands.executeCommand("workbench.action.closeQuickOpen")).catch(() => undefined);
+    await Promise.race([execution, new Promise((resolve) => setTimeout(resolve, 2_000))]);
+    const trace = extensionHostObservations.slice(observationStart)
+      .filter((event) => observationId == null || event.observationId === observationId);
+    throw new Error(`${error instanceof Error ? error.message : String(error)}\n`
+      + `Extension Host Quick Pick trace: ${JSON.stringify(trace)}`
+      + (executionSettled ? "" : "\nThe contributed command remained in flight after closing the Quick Pick."));
   }
-  assert(settled, `${command} did not publish an accept-ready Quick Pick.`);
-  await execution;
+}
+
+async function waitForExtensionHostObservation(
+  start,
+  predicate,
+  message,
+  executionSettled,
+  timeoutMs = 60_000,
+) {
+  let matched;
+  await waitFor(() => {
+    matched = extensionHostObservations.slice(start).find(predicate);
+    if (matched != null) return true;
+    if (executionSettled()) throw new Error(`${message}; the command settled before that phase.`);
+    return false;
+  }, message, timeoutMs);
+  return matched;
 }
 
 function assertAuthoredResourceDocument(document, originUri) {

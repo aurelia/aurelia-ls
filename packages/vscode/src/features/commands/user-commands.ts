@@ -4,8 +4,12 @@ import type {
   TemplateResourceAvailabilityItem,
   TemplateResourceScopeCandidate,
 } from "@aurelia-ls/language-server/protocol";
-import type { CancellationToken, QuickPickItem, TextEditor } from "vscode";
+import type { QuickPickItem, TextEditor } from "vscode";
 import type { ClientFeature } from "../../core/feature.js";
+import {
+  emitExtensionHostObservation,
+  nextExtensionHostObservationId,
+} from "../../extension-host-observation.js";
 import { AureliaCommand } from "../../product-contract.js";
 import type {
   AureliaWorkspaceIdentity,
@@ -44,6 +48,42 @@ interface AvailabilityRequestSelection {
   readonly templateResourceScopeIdentityKey?: string;
 }
 
+type GoToAvailableResourceObservationPhase =
+  | "command-start"
+  | "initial-request-start"
+  | "initial-request-response"
+  | "initial-request-failed"
+  | "fresh-request-start"
+  | "fresh-request-response"
+  | "fresh-request-failed"
+  | "navigation-start"
+  | "navigation-complete"
+  | "navigation-failed";
+
+function observeGoToAvailableResource(
+  observationId: string | undefined,
+  phase: GoToAvailableResourceObservationPhase,
+  detail: {
+    readonly count?: number;
+    readonly character?: number;
+    readonly documentName?: string;
+    readonly languageId?: string;
+    readonly line?: number;
+    readonly projectSelection?: string;
+    readonly resourceCount?: number;
+    readonly status?: string;
+    readonly templateSelection?: string;
+  } = {},
+): void {
+  if (observationId == null) return;
+  emitExtensionHostObservation({
+    source: "go-to-available-resource",
+    observationId,
+    phase,
+    ...detail,
+  });
+}
+
 function activeEditor(vscode: VscodeApi): TextEditor | null {
   return vscode.window.activeTextEditor ?? null;
 }
@@ -74,13 +114,21 @@ export const UserCommandsFeature: ClientFeature = {
 
     own(vscode.commands.registerCommand(AureliaCommand.GoToAvailableResource, () =>
       run("goToAvailableResource", async () => {
+        const observationId = nextExtensionHostObservationId("go-to-available-resource");
         const editor = activeEditor(vscode);
         if (editor == null) {
           vscode.window.showInformationMessage("Open an analyzed Aurelia template to see its available resources.");
           return;
         }
         const uri = editor.document.uri.toString();
-        const position = editor.selection.active;
+        const activePosition = editor.selection.active;
+        const position = { line: activePosition.line, character: activePosition.character };
+        observeGoToAvailableResource(observationId, "command-start", {
+          character: position.character,
+          documentName: editor.document.uri.path.split("/").at(-1) ?? "",
+          languageId: editor.document.languageId,
+          line: position.line,
+        });
         const history: AvailabilityRequestSelection[] = [];
         let selection: AvailabilityRequestSelection = {};
 
@@ -89,16 +137,30 @@ export const UserCommandsFeature: ClientFeature = {
           const outcome = await showResourceQuickPick(
             vscode,
             "Go to Resource Available to Active Template",
-            async (token) => availabilityQuickPickModel(
-              await lsp.getTemplateResourceAvailability(
-                uri,
-                position,
-                currentSelection.projectKey,
-                currentSelection.templateResourceScopeIdentityKey,
-                token,
-              ),
-            ),
+            async (token) => {
+              observeGoToAvailableResource(observationId, "initial-request-start");
+              try {
+                const response = await lsp.getTemplateResourceAvailability(
+                  uri,
+                  position,
+                  currentSelection.projectKey,
+                  currentSelection.templateResourceScopeIdentityKey,
+                  token,
+                );
+                const model = availabilityQuickPickModel(response);
+                observeGoToAvailableResource(
+                  observationId,
+                  "initial-request-response",
+                  availabilityObservationDetails(response, model.items.length),
+                );
+                return model;
+              } catch (error) {
+                observeGoToAvailableResource(observationId, "initial-request-failed", { status: "failed" });
+                throw error;
+              }
+            },
             history.length > 0,
+            observationId,
           );
           if (outcome.status === "cancelled") return;
           if (outcome.status === "back") {
@@ -120,27 +182,48 @@ export const UserCommandsFeature: ClientFeature = {
           }
           const selectedResource = outcome.value;
 
-          const fresh = await lsp.getTemplateResourceAvailability(
-            uri,
-            position,
-            currentSelection.projectKey,
-            currentSelection.templateResourceScopeIdentityKey,
-          );
+          observeGoToAvailableResource(observationId, "fresh-request-start");
+          let fresh: TemplateResourceAvailabilitySnapshot | null;
+          try {
+            fresh = await lsp.getTemplateResourceAvailability(
+              uri,
+              position,
+              currentSelection.projectKey,
+              currentSelection.templateResourceScopeIdentityKey,
+            );
+          } catch (error) {
+            observeGoToAvailableResource(observationId, "fresh-request-failed", { status: "failed" });
+            throw error;
+          }
+          const freshRows = fresh == null ? [] : exactAvailabilityRows(fresh);
           const stillAvailable = fresh == null
             ? null
-            : exactAvailabilityRows(fresh).find((row) =>
+            : freshRows.find((row) =>
               row.resource.identityKey === selectedResource.row.resource.identityKey
             ) ?? null;
+          observeGoToAvailableResource(observationId, "fresh-request-response", {
+            count: freshRows.length,
+            status: stillAvailable == null ? "missing" : "available",
+          });
           if (stillAvailable == null) {
             vscode.window.showInformationMessage(
               "That resource is no longer available to the current template scope.",
             );
             return;
           }
-          await openResourceNavigation(vscode, lsp, ctx.logger, {
-            ...selectedResource.navigation,
-            fingerprint: fresh!.fingerprint,
-          });
+          observeGoToAvailableResource(observationId, "navigation-start");
+          try {
+            const opened = await openResourceNavigation(vscode, lsp, ctx.logger, {
+              ...selectedResource.navigation,
+              fingerprint: fresh!.fingerprint,
+            });
+            observeGoToAvailableResource(observationId, "navigation-complete", {
+              status: opened ? "opened" : "not-opened",
+            });
+          } catch (error) {
+            observeGoToAvailableResource(observationId, "navigation-failed", { status: "failed" });
+            throw error;
+          }
           return;
         }
       })));
@@ -318,23 +401,26 @@ function availabilityQuickPickModel(
 
   const items: AvailabilityResourceQuickPickItem[] = selection.resources
     .filter((row) => row.resource.navigation.state === "available")
-    .map((row): AvailabilityResourceQuickPickItem => ({
-      label: row.resource.name,
-      description: `${row.state === "open" ? "availability uncertain · " : ""}${resourceKindPresentation(row.resource.kind).singular} · ${resourceOriginLabel(row.resource)}`,
-      detail: [
-        sourceLabel(row.availabilitySource) == null ? null : `available through ${sourceLabel(row.availabilitySource)}`,
-        resourceQuickPickDetail(row.resource, selection.project, response.workspace, false),
-      ].filter((value): value is string => value != null && value.length > 0).join(" · "),
-      selectionKind: "resource",
-      row,
-      navigation: {
-        workspaceKey: response.workspace.key,
-        fingerprint: response.fingerprint,
-        projectKey: selection.project.projectKey,
-        resourceIdentityKey: row.resource.identityKey,
-        role: "resource",
-      },
-    }))
+    .map((row): AvailabilityResourceQuickPickItem => {
+      const availabilitySource = sourceLabel(row.availabilitySource);
+      return {
+        label: row.resource.name,
+        description: `${row.state === "open" ? "availability uncertain · " : ""}${resourceKindPresentation(row.resource.kind).singular} · ${resourceOriginLabel(row.resource)}`,
+        detail: [
+          availabilitySource == null ? null : `available through ${availabilitySource}`,
+          resourceQuickPickDetail(row.resource, selection.project, response.workspace, false),
+        ].filter((value): value is string => value != null && value.length > 0).join(" · "),
+        selectionKind: "resource",
+        row,
+        navigation: {
+          workspaceKey: response.workspace.key,
+          fingerprint: response.fingerprint,
+          projectKey: selection.project.projectKey,
+          resourceIdentityKey: row.resource.identityKey,
+          role: "resource",
+        },
+      };
+    })
     .sort((left, right) =>
       (left.row.state === right.row.state ? 0 : left.row.state === "available" ? -1 : 1)
       || left.label.localeCompare(right.label)
@@ -359,6 +445,53 @@ function exactAvailabilityRows(
     && selection.answer.selection === "exact"
     ? selection.resources
     : [];
+}
+
+function availabilityObservationDetails(
+  response: TemplateResourceAvailabilitySnapshot | null,
+  itemCount: number,
+): {
+  readonly count: number;
+  readonly projectSelection: string;
+  readonly resourceCount: number;
+  readonly status: string;
+  readonly templateSelection: string;
+} {
+  if (response == null) {
+    return {
+      count: itemCount,
+      projectSelection: "null",
+      resourceCount: 0,
+      status: "empty",
+      templateSelection: "unavailable",
+    };
+  }
+  const selection = response.projectSelection;
+  if (selection.status !== "exact") {
+    return {
+      count: itemCount,
+      projectSelection: selection.status,
+      resourceCount: 0,
+      status: itemCount === 0 ? "empty" : "ready",
+      templateSelection: "unavailable",
+    };
+  }
+  if (selection.answer.result !== "answered") {
+    return {
+      count: itemCount,
+      projectSelection: "exact",
+      resourceCount: 0,
+      status: "empty",
+      templateSelection: `answer:${selection.answer.result}`,
+    };
+  }
+  return {
+    count: itemCount,
+    projectSelection: "exact",
+    resourceCount: selection.resources.length,
+    status: itemCount === 0 ? "empty" : "ready",
+    templateSelection: selection.answer.selection,
+  };
 }
 
 type RelatedFileQuickPickItem = QuickPickItem & {
