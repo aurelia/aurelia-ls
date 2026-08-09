@@ -60,6 +60,8 @@ export async function initialize(
   options: {
     readonly configuration?: Readonly<Record<string, unknown>>;
     readonly onInlayHintRefresh?: () => void;
+    /** Client-authored workspace URI when the test is exercising a non-file URI namespace. */
+    readonly rootUri?: string;
   } = {},
 ) {
   if (options.configuration != null) {
@@ -74,7 +76,7 @@ export async function initialize(
       return null;
     });
   }
-  const rootUri = pathToFileURL(workspaceRoot).toString();
+  const rootUri = options.rootUri ?? pathToFileURL(workspaceRoot).toString();
   await new Promise<void>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(`initialize timeout; stderr=${getStderr()}`)), 5000);
     const onExit = (code: number | null, signal: string | null) => {

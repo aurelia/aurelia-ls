@@ -2,7 +2,11 @@ import path from "node:path";
 import type { TextDocument, Uri, WorkspaceFolder } from "vscode";
 import type { WorkspaceStatusResponse } from "@aurelia-ls/language-server/protocol";
 import type { VscodeApi } from "./vscode-api.js";
-import { documentUriIdentityKey, sameDocumentUri } from "./core/uri-identity.js";
+import {
+  canonicalWorkspaceHostPath,
+  documentUriIdentityKey,
+  sameDocumentUri,
+} from "./core/uri-identity.js";
 
 export const enum AureliaActivationMode {
   /** Admit cheap Aurelia candidates, then require semantic-runtime project-shape confirmation. */
@@ -202,8 +206,8 @@ export function workspaceFolderContainsUri(folder: WorkspaceFolder, uri: Uri): b
   if (folderAuthority !== uriAuthority) {
     return false;
   }
-  const folderPath = process.platform === "win32" ? folder.uri.fsPath.toLowerCase() : folder.uri.fsPath;
-  const uriPath = process.platform === "win32" ? uri.fsPath.toLowerCase() : uri.fsPath;
+  const folderPath = canonicalWorkspaceHostPath(folder.uri.fsPath);
+  const uriPath = canonicalWorkspaceHostPath(uri.fsPath);
   const relative = path.relative(folderPath, uriPath);
   return relative === ""
     || (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
@@ -253,10 +257,12 @@ function workspacePathLength(folder: WorkspaceFolder): number {
 
 function workspaceRelativeUriSegments(folder: WorkspaceFolder, uri: Uri): readonly string[] | null {
   if (!workspaceFolderContainsUri(folder, uri)) return null;
-  return path.relative(folder.uri.fsPath, uri.fsPath)
+  return path.relative(
+    canonicalWorkspaceHostPath(folder.uri.fsPath),
+    canonicalWorkspaceHostPath(uri.fsPath),
+  )
     .split(/[\\/]/u)
-    .filter((segment) => segment.length > 0)
-    .map((segment) => process.platform === "win32" ? segment.toLowerCase() : segment);
+    .filter((segment) => segment.length > 0);
 }
 
 async function workspaceHasAureliaManifest(vscode: VscodeApi, folder: WorkspaceFolder): Promise<boolean> {

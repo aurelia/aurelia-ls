@@ -1,5 +1,6 @@
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import ts from "typescript";
 import { describe, expect, test } from "vitest";
 import { WorkspaceDocumentUris } from "../../src/utils/document-uri.js";
 
@@ -16,6 +17,18 @@ describe("WorkspaceDocumentUris", () => {
       "file:///C:/Workspace/App/src/my-app.ts",
       "file:///c:/workspace/app/src/my-app.ts",
     )).toBe(true);
+  });
+
+  test("follows the detected host case policy for document identity", () => {
+    const documentUris = new WorkspaceDocumentUris();
+    const workspaceRoot = path.resolve("uri-case-policy-workspace");
+    documentUris.configure(pathToFileURL(workspaceRoot).toString());
+    const authored = pathToFileURL(path.join(workspaceRoot, "src", "Widget.ts")).toString();
+    const caseVariant = pathToFileURL(path.join(workspaceRoot, "src", "widget.ts")).toString();
+
+    expect(documentUris.sameDocument(authored, caseVariant)).toBe(
+      !ts.sys.useCaseSensitiveFileNames,
+    );
   });
 
   test("projects semantic paths into a remote workspace URI namespace", () => {
