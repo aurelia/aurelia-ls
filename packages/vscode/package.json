@@ -171,6 +171,7 @@
   },
   "dependencies": {
     "typescript": "^6.0.3",
+    "vscode-jsonrpc": "^9.0.1",
     "vscode-languageclient": "^10.1.0",
     "vscode-languageserver-protocol": "^3.18.2"
   },

@@ -51,9 +51,11 @@ export interface SemanticRuntimeProjectInputHost {
 export class NodeSemanticRuntimeProjectInputHost implements SemanticRuntimeProjectInputHost {
   constructor(
     private readonly sourceTextOverlay: SemanticRuntimeSourceTextOverlay | null = null,
+    private readonly beforeHostOperation: (() => void) | null = null,
   ) {}
 
   readFile(fileName: string): string | undefined {
+    this.beforeHostOperation?.();
     const overlayExists = this.sourceTextOverlay?.fileExists(fileName);
     if (overlayExists === false) {
       return undefined;
@@ -73,11 +75,13 @@ export class NodeSemanticRuntimeProjectInputHost implements SemanticRuntimeProje
   }
 
   fileExists(fileName: string): boolean {
+    this.beforeHostOperation?.();
     const overlayExists = this.sourceTextOverlay?.fileExists(fileName);
     return overlayExists ?? existsSync(fileName);
   }
 
   readDirectory(directoryName: string): readonly string[] {
+    this.beforeHostOperation?.();
     try {
       return readdirSync(directoryName).sort((left, right) => left.localeCompare(right));
     } catch {
@@ -86,6 +90,7 @@ export class NodeSemanticRuntimeProjectInputHost implements SemanticRuntimeProje
   }
 
   directoryExists(directoryName: string): boolean {
+    this.beforeHostOperation?.();
     try {
       return statSync(directoryName).isDirectory();
     } catch {
@@ -94,6 +99,7 @@ export class NodeSemanticRuntimeProjectInputHost implements SemanticRuntimeProje
   }
 
   realpath(fileName: string): string {
+    this.beforeHostOperation?.();
     try {
       return realpathSync.native(fileName);
     } catch {
@@ -108,6 +114,7 @@ export class NodeSemanticRuntimeProjectInputHost implements SemanticRuntimeProje
     includes: readonly string[] = [],
     depth?: number,
   ): readonly string[] {
+    this.beforeHostOperation?.();
     return ts.sys.readDirectory(rootDir, extensions, excludes, includes, depth);
   }
 }

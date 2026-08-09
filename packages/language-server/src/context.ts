@@ -4,6 +4,7 @@ import { NodeSemanticRuntimeProjectInputHost } from "@aurelia-ls/semantic-runtim
 import type { Logger } from "./services/types.js";
 import { OpenDocumentSourceTextOverlay } from "./runtime/open-document-source-text-overlay.js";
 import {
+  checkpointSemanticRuntimeLspOperation,
   SemanticRuntimeLspSession,
   type SemanticRuntimeLspOpenDocumentMetadata,
 } from "./runtime/semantic-runtime-session.js";
@@ -55,6 +56,8 @@ export interface ServerContextInit {
   connection: Connection;
   documents: TextDocuments<TextDocument>;
   logger: Logger;
+  /** Enable host-read cancellation polling for transports that can update tokens while JavaScript is busy. */
+  enableProjectInputCancellationCheckpoints?: boolean;
 }
 
 export function createServerContext(init: ServerContextInit): ServerContext {
@@ -66,6 +69,9 @@ export function createServerContext(init: ServerContextInit): ServerContext {
     documentUris,
     projectInputHost: new NodeSemanticRuntimeProjectInputHost(
       sourceTextOverlay,
+      init.enableProjectInputCancellationCheckpoints
+        ? checkpointSemanticRuntimeLspOperation
+        : null,
     ),
     projectInputCurrentnessPolicy: sourceTextOverlay,
     openDocumentMetadata: (uri) => openWorkspaceDocument(uri),

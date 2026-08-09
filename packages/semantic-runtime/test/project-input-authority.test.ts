@@ -81,6 +81,29 @@ class MutableProjectInputHost implements SemanticRuntimeProjectInputHost {
 }
 
 describe('SemanticRuntimeProjectInputAuthority', () => {
+  test('checks cancellation before every Node host operation', () => {
+    const checkpointFailure = new Error('cancelled at host boundary');
+    const beforeHostOperation = vi.fn(() => {
+      throw checkpointFailure;
+    });
+    const host = new NodeSemanticRuntimeProjectInputHost(null, beforeHostOperation);
+    const rootDir = path.resolve('project-input-checkpoint');
+    const fileName = path.join(rootDir, 'app.ts');
+    const operations = [
+      () => host.readFile(fileName),
+      () => host.fileExists(fileName),
+      () => host.readDirectory(rootDir),
+      () => host.directoryExists(rootDir),
+      () => host.realpath(fileName),
+      () => host.matchFiles(rootDir, ['.ts'], [], ['**/*.ts'], 1),
+    ];
+
+    for (const operation of operations) {
+      expect(operation).toThrow(checkpointFailure);
+    }
+    expect(beforeHostOperation).toHaveBeenCalledTimes(operations.length);
+  });
+
   test('replaces a generation when positive or negative host reads change', () => {
     const rootDir = normalize('C:/workspace/app');
     const sourceFile = normalize(`${rootDir}/src/app.ts`);

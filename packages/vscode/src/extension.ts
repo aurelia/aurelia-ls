@@ -9,6 +9,11 @@ import { ClientApp } from "./app.js";
 import { AureliaLanguageClient, type LanguageClientFactory } from "./client-core.js";
 import { DefaultFeatures } from "./features/index.js";
 import { ClientLogger } from "./log.js";
+import {
+  createExperimentalWorkerCancellationStrategy,
+  createExperimentalWorkerMessageTransports,
+  shouldUseExperimentalWorkerTransport,
+} from "./worker-transport.js";
 
 let app: ClientApp | undefined;
 
@@ -40,6 +45,21 @@ const createLanguageClient: LanguageClientFactory = (
   serverModule: string,
   clientOptions: LanguageClientOptions,
 ): LanguageClient => {
+  if (shouldUseExperimentalWorkerTransport()) {
+    return new LanguageClient(
+      id,
+      name,
+      () => Promise.resolve(createExperimentalWorkerMessageTransports(serverModule)),
+      {
+        ...clientOptions,
+        connectionOptions: {
+          ...clientOptions.connectionOptions,
+          cancellationStrategy: createExperimentalWorkerCancellationStrategy(),
+        },
+      },
+    );
+  }
+
   const serverOptions: ServerOptions = {
     run: { module: serverModule, transport: TransportKind.ipc },
     // Port zero asks Node to choose a free inspector port for each workspace

@@ -21,6 +21,8 @@ import {
   type SemanticRuntimeSummary,
 } from "@aurelia-ls/semantic-runtime";
 import {
+  checkpointSemanticRuntimeLspOperation,
+  SemanticRuntimeLspRequestAbortedError,
   SemanticRuntimeLspReentrantLifecycleError,
   SemanticRuntimeLspSession,
   drainSemanticRuntimePages,
@@ -310,6 +312,76 @@ describe("SemanticRuntimeLspSession", () => {
       session.runRequest(() => true, callback),
     ).rejects.toMatchObject({ reason: "cancelled" });
     expect(callback).not.toHaveBeenCalled();
+  });
+
+  test("checks cancellation during source-world admission before opening the callback", async () => {
+    const fixtureRoot = minimalFixtureRoot();
+    const callback = vi.fn();
+    let cancellationPolls = 0;
+    const session = createSession(
+      fixtureRoot,
+      new TestDocumentStore(),
+      () => undefined,
+      checkpointSemanticRuntimeLspOperation,
+    );
+
+    await expect(session.runRequest(
+      () => ++cancellationPolls > 1,
+      callback,
+    )).rejects.toMatchObject({ reason: "cancelled" });
+
+    expect(cancellationPolls).toBeGreaterThan(1);
+    expect(callback).not.toHaveBeenCalled();
+    await expect(session.dispose()).resolves.toBeUndefined();
+  });
+
+  test("cancels at a callback host read without publishing effects and closes its checkpoint lineage", async () => {
+    const fixtureRoot = minimalFixtureRoot();
+    const documents = new TestDocumentStore();
+    const publishEffect = vi.fn();
+    const documentUris = new WorkspaceDocumentUris();
+    documentUris.configure(pathToFileURL(fixtureRoot).toString());
+    const sourceTextOverlay = new OpenDocumentSourceTextOverlay(documents, documentUris);
+    const projectInputHost = new NodeSemanticRuntimeProjectInputHost(
+      sourceTextOverlay,
+      checkpointSemanticRuntimeLspOperation,
+    );
+    const session = new SemanticRuntimeLspSession({
+      documentUris,
+      projectInputHost,
+      projectInputCurrentnessPolicy: sourceTextOverlay,
+      openDocumentMetadata: () => null,
+      publishEffect,
+    });
+    const releaseDescendant = deferred<void>();
+    let descendantCheckpoint!: Promise<unknown>;
+    let cancelled = false;
+    let directHostReadFailure: unknown;
+    let resultEscaped = false;
+
+    expect(checkpointSemanticRuntimeLspOperation).not.toThrow();
+    await expect(session.runRequest(() => cancelled, (operation) => {
+      operation.deferEffect({ kind: "log", level: "info", message: "must not publish" });
+      descendantCheckpoint = releaseDescendant.promise.then(() =>
+        captureThrown(checkpointSemanticRuntimeLspOperation));
+      cancelled = true;
+      try {
+        projectInputHost.readFile(path.join(fixtureRoot, "package.json"));
+      } catch (error) {
+        directHostReadFailure = error;
+        throw error;
+      }
+      resultEscaped = true;
+      return "must not return";
+    })).rejects.toMatchObject({ reason: "cancelled" });
+
+    expect(directHostReadFailure).toBeInstanceOf(SemanticRuntimeLspRequestAbortedError);
+    expect(directHostReadFailure).toMatchObject({ reason: "cancelled" });
+    expect(resultEscaped).toBe(false);
+    expect(publishEffect).not.toHaveBeenCalled();
+    releaseDescendant.resolve(undefined);
+    await expect(descendantCheckpoint).resolves.toBeNull();
+    await expect(session.dispose()).resolves.toBeUndefined();
   });
 
   test("aborts a request captured before a source generation change", async () => {
@@ -1060,6 +1132,7 @@ function createSession(
   workspaceRoot: string,
   documents: OpenTextDocumentStore,
   publishEffect: (effect: unknown) => void | PromiseLike<void> = () => undefined,
+  beforeHostOperation: (() => void) | null = null,
 ): SemanticRuntimeLspSession {
   const documentUris = new WorkspaceDocumentUris();
   documentUris.configure(pathToFileURL(workspaceRoot).toString());
@@ -1068,6 +1141,7 @@ function createSession(
     documentUris,
     projectInputHost: new NodeSemanticRuntimeProjectInputHost(
       sourceTextOverlay,
+      beforeHostOperation,
     ),
     projectInputCurrentnessPolicy: sourceTextOverlay,
     openDocumentMetadata: (uri) => {

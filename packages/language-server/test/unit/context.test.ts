@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { createServerContext } from "../../src/context.js";
 
@@ -101,5 +101,38 @@ describe("createServerContext", () => {
 
     expect(() => ctx.configureWorkspace(rootUri, [], [outsideRootUri]))
       .toThrow(`Project root hint '${outsideRootUri}' is not inside workspace '${rootUri}'.`);
+  });
+
+  test("enables project-input cancellation checkpoints only when requested", async () => {
+    const fixtureRoot = path.resolve(
+      fileURLToPath(new URL("../..", import.meta.url)),
+      "../semantic-runtime/fixtures/pressure/app-pattern-minimal-app",
+    );
+
+    async function countCancellationPolls(enableCheckpoints: boolean): Promise<number> {
+      const ctx = createServerContext({
+        connection: {} as never,
+        documents: { get: vi.fn(), all: vi.fn(() => []) } as never,
+        logger: createLogger(),
+        enableProjectInputCancellationCheckpoints: enableCheckpoints,
+      });
+      ctx.configureWorkspace(pathToFileURL(fixtureRoot).toString());
+      let polls = 0;
+      await ctx.semanticRuntime.runRequest(
+        () => {
+          polls += 1;
+          return false;
+        },
+        (operation) => operation.workspaceSummary(),
+      );
+      await ctx.semanticRuntime.dispose();
+      return polls;
+    }
+
+    const defaultPolls = await countCancellationPolls(false);
+    const checkpointPolls = await countCancellationPolls(true);
+
+    expect(defaultPolls).toBeGreaterThan(0);
+    expect(checkpointPolls).toBeGreaterThan(defaultPolls);
   });
 });

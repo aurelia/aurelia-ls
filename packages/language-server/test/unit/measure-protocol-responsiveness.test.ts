@@ -3,6 +3,7 @@ import { describe, expect, test, vi } from "vitest";
 interface ParsedProtocolResponsivenessArgs {
   readonly fixture: string | null;
   readonly workspace: string | null;
+  readonly transport: "stdio" | "worker";
   readonly cancellationDelayMilliseconds: number;
   readonly cycles: number;
   readonly json: boolean;
@@ -74,6 +75,33 @@ interface CancellationCycleMeasurement {
 
 interface ProtocolResponsivenessMeasurementModule {
   readonly protocolResponsivenessSchemaVersion: string;
+  createProtocolServerTransport(options: {
+    readonly transport: "stdio" | "worker";
+    readonly workspaceRoot: string;
+    readonly adapters: {
+      startChild(entry: string, workspaceRoot: string): FakeChild;
+      startWorker(entry: string): FakeWorker;
+      createPortReader(port: FakeWorker): unknown;
+      createPortWriter(port: FakeWorker): unknown;
+      createStreamReader(stream: unknown): unknown;
+      createStreamWriter(stream: unknown): unknown;
+    };
+  }): {
+    readonly reader: unknown;
+    readonly writer: unknown;
+    readonly stderr: unknown;
+    terminate(): Promise<void>;
+  };
+  protocolClientConnectionOptions(
+    transport: "stdio" | "worker",
+    createSender?: () => unknown,
+  ): {
+    readonly cancellationStrategy: {
+      readonly receiver: { createCancellationTokenSource(id: unknown): unknown };
+      readonly sender: unknown;
+    };
+  } | undefined;
+  markdownReport(report: unknown): string;
   parseProtocolResponsivenessArgs(argv: readonly string[]): ParsedProtocolResponsivenessArgs;
   createProtocolCompletionVariant(
     originalText: string,
@@ -141,6 +169,38 @@ const scriptUrl = new URL(
   import.meta.url,
 ).href;
 
+interface FakeChild {
+  readonly stdout: unknown;
+  readonly stdin: unknown;
+  readonly stderr: unknown;
+  readonly exitCode: number | null;
+  readonly signalCode: string | null;
+  readonly kill: ReturnType<typeof vi.fn>;
+}
+
+interface FakeWorker {
+  readonly stderr: unknown;
+  readonly terminate: ReturnType<typeof vi.fn>;
+}
+
+function fakeChild(): FakeChild {
+  return {
+    stdout: { kind: "stdout" },
+    stdin: { kind: "stdin" },
+    stderr: { kind: "child-stderr" },
+    exitCode: null,
+    signalCode: null,
+    kill: vi.fn(),
+  };
+}
+
+function fakeWorker(): FakeWorker {
+  return {
+    stderr: { kind: "worker-stderr" },
+    terminate: vi.fn(() => Promise.resolve(0)),
+  };
+}
+
 async function loadMeasurementModule(): Promise<ProtocolResponsivenessMeasurementModule> {
   return await import(scriptUrl) as unknown as ProtocolResponsivenessMeasurementModule;
 }
@@ -152,10 +212,11 @@ describe("protocol responsiveness measurement", () => {
       protocolResponsivenessSchemaVersion,
     } = await loadMeasurementModule();
 
-    expect(protocolResponsivenessSchemaVersion).toBe("aurelia-ls/protocol-responsiveness/v3");
+    expect(protocolResponsivenessSchemaVersion).toBe("aurelia-ls/protocol-responsiveness/v4");
     expect(parseProtocolResponsivenessArgs([])).toEqual({
       fixture: null,
       workspace: null,
+      transport: "stdio",
       cancellationDelayMilliseconds: 25,
       cycles: 3,
       json: false,
@@ -164,10 +225,12 @@ describe("protocol responsiveness measurement", () => {
       "--fixture", "catalog",
       "--cancel-after=40",
       "--cycles", "7",
+      "--transport=worker",
       "--json",
     ])).toEqual({
       fixture: "catalog",
       workspace: null,
+      transport: "worker",
       cancellationDelayMilliseconds: 40,
       cycles: 7,
       json: true,
@@ -192,11 +255,95 @@ describe("protocol responsiveness measurement", () => {
     [["--cycles", "1.5"], "must be a positive integer"],
     [["--cycles", "1", "--cycles", "2"], "may only be supplied once"],
     [["--json", "sometimes"], "must be 'true' or 'false'"],
+    [["--transport", "ipc"], "must be 'stdio' or 'worker'"],
     [["--fixture", "catalog", "--workspace", "C:\\app"], "mutually exclusive"],
   ] as const)("rejects malformed argv %#", async (argv, message) => {
     const { parseProtocolResponsivenessArgs } = await loadMeasurementModule();
 
     expect(() => parseProtocolResponsivenessArgs(argv)).toThrow(message);
+  });
+
+  test("constructs explicit stdio and worker transports", async () => {
+    const {
+      createProtocolServerTransport,
+      protocolClientConnectionOptions,
+    } = await loadMeasurementModule();
+    const worker = fakeWorker();
+    const child = fakeChild();
+    const adapters = {
+      startChild: vi.fn((_entry: string, _workspaceRoot: string) => child),
+      startWorker: vi.fn((_entry: string) => worker),
+      createPortReader: vi.fn((_port: FakeWorker) => "port-reader"),
+      createPortWriter: vi.fn((_port: FakeWorker) => "port-writer"),
+      createStreamReader: vi.fn((_stream: unknown) => "stream-reader"),
+      createStreamWriter: vi.fn((_stream: unknown) => "stream-writer"),
+    };
+
+    const workerTransport = createProtocolServerTransport({
+      transport: "worker",
+      workspaceRoot: "C:\\workspace",
+      adapters,
+    });
+    expect(adapters.startWorker).toHaveBeenCalledOnce();
+    expect(adapters.startWorker.mock.calls[0]?.[0]).toMatch(/out[\\/]main\.js$/);
+    expect(workerTransport).toMatchObject({
+      reader: "port-reader",
+      writer: "port-writer",
+      stderr: worker.stderr,
+    });
+    await workerTransport.terminate();
+    expect(worker.terminate).toHaveBeenCalledOnce();
+
+    const stdioTransport = createProtocolServerTransport({
+      transport: "stdio",
+      workspaceRoot: "C:\\workspace",
+      adapters,
+    });
+    expect(adapters.startChild).toHaveBeenCalledWith(
+      expect.stringMatching(/out[\\/]main\.js$/),
+      "C:\\workspace",
+    );
+    expect(stdioTransport).toMatchObject({
+      reader: "stream-reader",
+      writer: "stream-writer",
+      stderr: child.stderr,
+    });
+    await stdioTransport.terminate();
+    expect(child.kill).toHaveBeenCalledWith("SIGKILL");
+
+    const sender = { kind: "shared-array-sender" };
+    expect(protocolClientConnectionOptions("stdio", () => sender)).toBeUndefined();
+    const workerOptions = protocolClientConnectionOptions("worker", () => sender);
+    expect(workerOptions?.cancellationStrategy.sender).toBe(sender);
+    expect(workerOptions?.cancellationStrategy.receiver.createCancellationTokenSource)
+      .toBeTypeOf("function");
+  });
+
+  test("reports the selected transport mode", async () => {
+    const { markdownReport, protocolResponsivenessSchemaVersion } =
+      await loadMeasurementModule();
+
+    const report = markdownReport({
+      schemaVersion: protocolResponsivenessSchemaVersion,
+      transport: "worker",
+      replacementDispatchedDuringContention: true,
+      independentSettlementTimestamps: true,
+      workspace: {
+        root: "C:\\workspace",
+        targetDocument: "src/app.html",
+      },
+      cancellationDelayMilliseconds: 25,
+      initializeMilliseconds: 1,
+      coldFullWithoutPreviousResultIdMilliseconds: 2,
+      warmFullWithoutPreviousResultIdMilliseconds: 3,
+      previousResultIdUnchangedMilliseconds: 4,
+      warmSameGenerationCompletion: null,
+      diagnosticRefreshRequests: 0,
+      cycles: [],
+    });
+
+    expect(report).toContain("Schema: `aurelia-ls/protocol-responsiveness/v4`");
+    expect(report).toContain("Transport: `worker`");
   });
 
   test("measures full-no-id diagnostics separately from proof-backed unchanged reuse", async () => {

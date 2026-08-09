@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Measurement-only stdio journey for request scheduling and cancellation. The language server runs unchanged in a
- * child process; timing and cancellation probes live entirely in this client process.
+ * Measurement-only protocol journey for request scheduling and cancellation. Timing and cancellation probes live
+ * entirely in this client process while the language server runs over either stdio or a worker message port.
  */
 import fs from "node:fs/promises";
 import { spawn } from "node:child_process";
@@ -9,25 +9,36 @@ import path from "node:path";
 import { performance } from "node:perf_hooks";
 import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { Worker } from "node:worker_threads";
 import {
+  CancellationReceiverStrategy,
   CancellationTokenSource,
+  PortMessageReader,
+  PortMessageWriter,
+  SharedArraySenderStrategy,
   StreamMessageReader,
   StreamMessageWriter,
   createMessageConnection,
-} from "vscode-languageserver/node";
+} from "vscode-jsonrpc/node";
 
 const packageRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const repoRoot = path.resolve(packageRoot, "../..");
 const serverEntry = path.join(packageRoot, "out/main.js");
 const pressureFixtureRoot = path.join(repoRoot, "packages/semantic-runtime/fixtures/pressure");
 const defaultFixtureName = "app-pattern-routed-catalog-storefront";
-const valueArgumentNames = new Set(["fixture", "workspace", "cancel-after", "cycles"]);
+const valueArgumentNames = new Set([
+  "fixture",
+  "workspace",
+  "cancel-after",
+  "cycles",
+  "transport",
+]);
 const booleanArgumentNames = new Set(["json"]);
 const oldCompletionBase = "state.items.";
 const replacementCompletionBase = "state.selection.";
 const replacementRequiredLabel = "itemCount";
 const replacementForbiddenLabel = "searchText";
-export const protocolResponsivenessSchemaVersion = "aurelia-ls/protocol-responsiveness/v3";
+export const protocolResponsivenessSchemaVersion = "aurelia-ls/protocol-responsiveness/v4";
 
 async function main() {
   const args = parseProtocolResponsivenessArgs(process.argv.slice(2));
@@ -41,15 +52,17 @@ async function main() {
   const targetUri = pathToFileURL(targetPath).toString();
   const originalText = await fs.readFile(targetPath, "utf8");
 
-  const child = spawn(process.execPath, [serverEntry, "--stdio"], {
-    cwd: workspaceRoot,
-    stdio: ["pipe", "pipe", "pipe"],
+  const serverTransport = createProtocolServerTransport({
+    transport: args.transport,
+    workspaceRoot,
   });
   const stderr = [];
-  child.stderr.on("data", (data) => stderr.push(data.toString()));
+  serverTransport.stderr?.on("data", (data) => stderr.push(data.toString()));
   const connection = createMessageConnection(
-    new StreamMessageReader(child.stdout),
-    new StreamMessageWriter(child.stdin),
+    serverTransport.reader,
+    serverTransport.writer,
+    undefined,
+    protocolClientConnectionOptions(args.transport),
   );
   const serverLogs = [];
   let diagnosticRefreshRequests = 0;
@@ -68,6 +81,7 @@ async function main() {
 
   const report = {
     schemaVersion: protocolResponsivenessSchemaVersion,
+    transport: args.transport,
     replacementDispatchedDuringContention: false,
     independentSettlementTimestamps: true,
     workspace: {
@@ -167,11 +181,74 @@ async function main() {
       connection.sendNotification("exit");
     } catch {}
     connection.dispose();
-    if (child.exitCode == null && child.signalCode == null) {
-      child.kill("SIGKILL");
-    }
+    await serverTransport.terminate();
   }
 }
+
+export function createProtocolServerTransport(options) {
+  const adapters = options.adapters ?? defaultProtocolTransportAdapters;
+  const transport = protocolTransport(options.transport);
+  if (transport === "worker") {
+    const worker = adapters.startWorker(serverEntry);
+    return Object.freeze({
+      reader: adapters.createPortReader(worker),
+      writer: adapters.createPortWriter(worker),
+      stderr: worker.stderr ?? null,
+      terminate: async () => {
+        await worker.terminate();
+      },
+    });
+  }
+
+  const child = adapters.startChild(serverEntry, options.workspaceRoot);
+  return Object.freeze({
+    reader: adapters.createStreamReader(child.stdout),
+    writer: adapters.createStreamWriter(child.stdin),
+    stderr: child.stderr,
+    terminate: async () => {
+      if (child.exitCode == null && child.signalCode == null) {
+        child.kill("SIGKILL");
+      }
+    },
+  });
+}
+
+export function protocolClientConnectionOptions(transport, createSender = () =>
+  new SharedArraySenderStrategy()) {
+  if (protocolTransport(transport) === "stdio") {
+    return undefined;
+  }
+  return Object.freeze({
+    cancellationStrategy: Object.freeze({
+      receiver: CancellationReceiverStrategy.Message,
+      sender: createSender(),
+    }),
+  });
+}
+
+const defaultProtocolTransportAdapters = Object.freeze({
+  startChild(entry, workspaceRoot) {
+    return spawn(process.execPath, [entry, "--stdio"], {
+      cwd: workspaceRoot,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+  },
+  startWorker(entry) {
+    return new Worker(entry);
+  },
+  createPortReader(port) {
+    return new PortMessageReader(port);
+  },
+  createPortWriter(port) {
+    return new PortMessageWriter(port);
+  },
+  createStreamReader(stream) {
+    return new StreamMessageReader(stream);
+  },
+  createStreamWriter(stream) {
+    return new StreamMessageWriter(stream);
+  },
+});
 
 /**
  * Run one cancellation/supersession cycle while all three post-cancel requests are genuinely in flight together.
@@ -587,6 +664,7 @@ export function parseProtocolResponsivenessArgs(argv) {
   return Object.freeze({
     fixture,
     workspace,
+    transport: protocolTransport(values.get("transport") ?? "stdio"),
     cancellationDelayMilliseconds: positiveInteger(
       values.get("cancel-after") ?? "25",
       "--cancel-after",
@@ -596,6 +674,13 @@ export function parseProtocolResponsivenessArgs(argv) {
   });
 }
 
+function protocolTransport(value) {
+  if (value !== "stdio" && value !== "worker") {
+    throw new Error("--transport must be 'stdio' or 'worker'.");
+  }
+  return value;
+}
+
 function strictBoolean(value, label) {
   if (value !== "true" && value !== "false") {
     throw new Error(`${label} must be 'true' or 'false'.`);
@@ -603,12 +688,13 @@ function strictBoolean(value, label) {
   return value === "true";
 }
 
-function markdownReport(report) {
+export function markdownReport(report) {
   const warmCompletion = report.warmSameGenerationCompletion;
   return [
     "# Protocol Responsiveness Measurement",
     "",
     `Schema: \`${report.schemaVersion}\``,
+    `Transport: \`${report.transport}\``,
     `Replacement dispatched during contention: ${report.replacementDispatchedDuringContention}`,
     `Independent settlement timestamps: ${report.independentSettlementTimestamps}`,
     `Workspace: \`${report.workspace.root}\``,
