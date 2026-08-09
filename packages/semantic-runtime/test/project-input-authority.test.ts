@@ -795,6 +795,42 @@ describe('SemanticRuntimeProjectInputAuthority', () => {
     expect(scope.tryRebaseCurrent(second)).toBe(false);
   });
 
+  test('rebased read callbacks do not consult their obsolete captured-generation host', () => {
+    const rootDir = normalize('C:/workspace/app');
+    const sourceFile = normalize(`${rootDir}/src/app.ts`);
+    const host = new MutableProjectInputHost();
+    host.write(sourceFile, 'export const value = 1;');
+    const authority = new SemanticRuntimeProjectInputAuthority(host);
+    const first = authority.capture({ projectKey: 'app', rootDir });
+    const scope = first.createReadScope('reusable-consumer');
+    expect(scope.host.readFile(sourceFile)).toContain('1');
+    const obsoleteHost = Reflect.get(scope.host, 'current') as unknown;
+    if (obsoleteHost == null || typeof obsoleteHost !== 'object') {
+      throw new Error('Expected the consumer host to retain its current captured-generation host.');
+    }
+
+    authority.advance();
+    const second = authority.capture({ projectKey: 'app', rootDir });
+    expect(scope.tryRebaseCurrent(second)).toBe(true);
+
+    // A rebased read keeps its original value reader. Poisoning the obsolete host's private authority carrier is a
+    // deterministic ownership canary: the reader may retain the long-lived authority, but must not close over this
+    // captured-generation host and thereby chain every superseded generation in memory.
+    const unrelatedHost = new MutableProjectInputHost();
+    unrelatedHost.write(sourceFile, 'export const value = 2;');
+    expect(Reflect.set(
+      obsoleteHost,
+      'authority',
+      new SemanticRuntimeProjectInputAuthority(unrelatedHost),
+    )).toBe(true);
+
+    authority.advance();
+    const third = authority.capture({ projectKey: 'app', rootDir });
+    expect(scope.tryRebaseCurrent(third)).toBe(true);
+    expect(scope.host.readFile(sourceFile)).toContain('1');
+    expect(scope.belongsTo(third)).toBe(true);
+  });
+
   test('shares target-generation input capture across consumer scopes in one proof', () => {
     const rootDir = normalize('C:/workspace/app');
     const sourceFile = normalize(`${rootDir}/src/app.ts`);

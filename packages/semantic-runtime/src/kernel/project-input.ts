@@ -682,7 +682,7 @@ class CapturedSemanticRuntimeProjectInputHost implements SemanticRuntimeProjectI
     if (read == null) {
       // Rebased reads retain this callback. Capture the long-lived authority and immutable descriptor, never this
       // generation-owned host or caller-owned match arrays.
-      const readCurrent = () => readProjectInputValue(this.authority.host, descriptor);
+      const readCurrent = projectInputValueReader(this.authority, descriptor);
       const currentnessAuthority = this.authority.currentnessForRead(descriptor);
       const value = freezeProjectInputReadValue(readCurrent());
       this.valuesByReadKey.set(readKey, value);
@@ -1247,6 +1247,13 @@ function readProjectInputValue(
         descriptor.depth ?? undefined,
       );
   }
+}
+
+function projectInputValueReader(
+  authority: SemanticRuntimeProjectInputAuthority,
+  descriptor: SemanticRuntimeProjectInputReadDescriptor,
+): () => ProjectInputReadValue {
+  return () => readProjectInputValue(authority.host, descriptor);
 }
 
 function sameProjectInputReadDescriptor(
