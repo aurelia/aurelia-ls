@@ -166,6 +166,7 @@
     "bundle:watch": "node esbuild.mjs --watch",
     "bundle:minify": "node esbuild.mjs --minify",
     "test:extension-host": "pnpm -w build && pnpm run bundle && node scripts/run-extension-host-tests.mjs",
+    "test:extension-host:worker": "pnpm -w build && pnpm run bundle && node scripts/run-extension-host-tests.mjs --worker",
     "typecheck": "tsc --noEmit",
     "typecheck:test": "tsc --noEmit -p tsconfig.test.json"
   },

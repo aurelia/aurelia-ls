@@ -1,20 +1,30 @@
 const assert = require("assert");
 const path = require("path");
+const { pathToFileURL } = require("url");
 const vscode = require("vscode");
 
 const aureliaWorkspace = process.env.AURELIA_LS_EXTENSION_HOST_WORKSPACE;
+const secondaryAureliaWorkspace = process.env.AURELIA_LS_EXTENSION_HOST_SECONDARY_WORKSPACE;
 const excludedAureliaWorkspace = process.env.AURELIA_LS_EXTENSION_HOST_EXCLUDED_WORKSPACE;
 const plainTypeScriptWorkspace = process.env.AURELIA_LS_EXTENSION_HOST_PLAIN_WORKSPACE;
+const expectedTransport = process.env.AURELIA_LS_EXTENSION_HOST_EXPECTED_TRANSPORT;
 const extensionId = "AureliaEffect.aurelia-2";
+let selectedTransport;
 
-if (!aureliaWorkspace || !excludedAureliaWorkspace || !plainTypeScriptWorkspace) {
+if (!aureliaWorkspace || !secondaryAureliaWorkspace || !excludedAureliaWorkspace || !plainTypeScriptWorkspace) {
   throw new Error("All extension-host workspace paths are required.");
+}
+if (expectedTransport !== "worker" && expectedTransport !== "ipc") {
+  throw new Error("Expected extension-host transport must be worker or ipc.");
 }
 
 suite("extension-host product surface", () => {
   suiteSetup(async () => {
     const extension = vscode.extensions.getExtension(extensionId);
     assert(extension, `Expected extension ${extensionId} in the Extension Development Host.`);
+    const transportModuleUrl = pathToFileURL(path.join(extension.extensionPath, "out", "worker-transport.js"));
+    const { shouldUseExperimentalWorkerTransport } = await import(transportModuleUrl.href);
+    selectedTransport = shouldUseExperimentalWorkerTransport() ? "worker" : "ipc";
     await extension.activate();
     const document = await showAureliaDocument("src/my-app.html");
     await waitFor(
@@ -22,6 +32,10 @@ suite("extension-host product surface", () => {
       "the admitted Aurelia workspace should answer template hover",
       60_000,
     );
+  });
+
+  test("selects the requested language-server transport", () => {
+    assert.strictEqual(selectedTransport, expectedTransport);
   });
 
   test("ships only the retained command and Explorer surface", async () => {
@@ -140,37 +154,108 @@ suite("extension-host product surface", () => {
     assert.deepStrictEqual(definitions ?? [], []);
   });
 
-  test("retires and re-admits the Aurelia root without leaking a session", async () => {
+  test("retires and re-admits the primary Aurelia root without disturbing the secondary root", async () => {
     const document = await showAureliaDocument("src/my-app.html");
-    const folder = vscode.workspace.workspaceFolders?.find((candidate) =>
-      normalize(candidate.uri.fsPath) === normalize(aureliaWorkspace)
-    );
-    assert(folder, "Expected the Aurelia workspace folder before retirement.");
-    assert.strictEqual(vscode.workspace.updateWorkspaceFolders(folder.index, 1), true);
-    await waitFor(
-      async () => !(await hoverMarkdown(document, "<product-card", "product-card"))
-        .includes("**Resource** `product-card`"),
-      "removing the Aurelia root should retire its editor providers",
-      60_000,
-    );
+    let secondaryDocument;
 
-    const insertAt = vscode.workspace.workspaceFolders?.length ?? 0;
-    assert.strictEqual(vscode.workspace.updateWorkspaceFolders(insertAt, 0, {
-      uri: vscode.Uri.file(aureliaWorkspace),
-      name: "hello-world",
-    }), true);
-    await waitFor(
-      async () => (await hoverMarkdown(document, "<product-card", "product-card"))
-        .includes("**Resource** `product-card`"),
-      "restoring the Aurelia root should re-admit its editor providers",
-      60_000,
-    );
-    await vscode.commands.executeCommand("aurelia.refreshResourceExplorer");
+    try {
+      assert(!findWorkspaceFolder(secondaryAureliaWorkspace), "Expected the secondary root to start outside the workspace.");
+      const secondaryInsertAt = vscode.workspace.workspaceFolders?.length ?? 0;
+      assert.strictEqual(vscode.workspace.updateWorkspaceFolders(secondaryInsertAt, 0, {
+        uri: vscode.Uri.file(secondaryAureliaWorkspace),
+        name: "hello-world-secondary",
+      }), true);
+      await waitFor(
+        () => findWorkspaceFolder(secondaryAureliaWorkspace) != null,
+        "adding the secondary Aurelia root should update the workspace",
+      );
+
+      secondaryDocument = await showAureliaDocument("src/my-app.html", secondaryAureliaWorkspace);
+      await waitForWorkspaceAnswer(
+        document,
+        aureliaWorkspace,
+        "the primary Aurelia root should keep answering after admitting the secondary root",
+      );
+      await waitForWorkspaceAnswer(
+        secondaryDocument,
+        secondaryAureliaWorkspace,
+        "the admitted secondary Aurelia root should answer independently",
+      );
+
+      const primaryFolder = findWorkspaceFolder(aureliaWorkspace);
+      assert(primaryFolder, "Expected the primary Aurelia workspace folder before retirement.");
+      assert.strictEqual(vscode.workspace.updateWorkspaceFolders(primaryFolder.index, 1), true);
+      await waitFor(
+        () => findWorkspaceFolder(aureliaWorkspace) == null,
+        "removing the primary Aurelia root should update the workspace",
+      );
+      await waitFor(
+        async () => !(await hoverMarkdown(document, "<product-card", "product-card"))
+          .includes("**Resource** `product-card`"),
+        "removing the primary Aurelia root should retire its editor providers",
+        60_000,
+      );
+      await waitForWorkspaceAnswer(
+        secondaryDocument,
+        secondaryAureliaWorkspace,
+        "retiring the primary root should not disturb the secondary root",
+      );
+
+      const primaryInsertAt = vscode.workspace.workspaceFolders?.length ?? 0;
+      assert.strictEqual(vscode.workspace.updateWorkspaceFolders(primaryInsertAt, 0, {
+        uri: vscode.Uri.file(aureliaWorkspace),
+        name: "hello-world",
+      }), true);
+      await waitFor(
+        () => findWorkspaceFolder(aureliaWorkspace) != null,
+        "restoring the primary Aurelia root should update the workspace",
+      );
+      await waitForWorkspaceAnswer(
+        document,
+        aureliaWorkspace,
+        "restoring the primary Aurelia root should re-admit its editor providers",
+      );
+      await waitForWorkspaceAnswer(
+        secondaryDocument,
+        secondaryAureliaWorkspace,
+        "re-admitting the primary root should not disturb the secondary root",
+      );
+      await vscode.commands.executeCommand("aurelia.refreshResourceExplorer");
+    } finally {
+      if (findWorkspaceFolder(aureliaWorkspace) == null) {
+        const primaryInsertAt = vscode.workspace.workspaceFolders?.length ?? 0;
+        assert.strictEqual(vscode.workspace.updateWorkspaceFolders(primaryInsertAt, 0, {
+          uri: vscode.Uri.file(aureliaWorkspace),
+          name: "hello-world",
+        }), true);
+        await waitFor(
+          () => findWorkspaceFolder(aureliaWorkspace) != null,
+          "cleanup should restore the primary Aurelia root",
+        );
+      }
+
+      const secondaryFolder = findWorkspaceFolder(secondaryAureliaWorkspace);
+      if (secondaryFolder != null) {
+        assert.strictEqual(vscode.workspace.updateWorkspaceFolders(secondaryFolder.index, 1), true);
+        await waitFor(
+          () => findWorkspaceFolder(secondaryAureliaWorkspace) == null,
+          "cleanup should remove the secondary Aurelia root",
+        );
+      }
+      if (secondaryDocument != null) {
+        await waitFor(
+          async () => !(await hoverMarkdown(secondaryDocument, "<product-card", "product-card"))
+            .includes("**Resource** `product-card`"),
+          "removing the secondary root should retire its editor providers",
+          60_000,
+        );
+      }
+    }
   });
 });
 
-async function showAureliaDocument(relativePath) {
-  const uri = vscode.Uri.file(path.join(aureliaWorkspace, ...relativePath.split("/")));
+async function showAureliaDocument(relativePath, workspaceRoot = aureliaWorkspace) {
+  const uri = vscode.Uri.file(path.join(workspaceRoot, ...relativePath.split("/")));
   const document = vscode.workspace.textDocuments.find((candidate) => candidate.uri.toString() === uri.toString())
     ?? await vscode.workspace.openTextDocument(uri);
   await vscode.window.showTextDocument(document, { preview: false });
@@ -203,6 +288,28 @@ async function definitionsAt(document, anchor, token = anchor) {
     const uri = definition?.targetUri ?? definition?.uri;
     return uri == null ? [] : [uri];
   });
+}
+
+async function assertWorkspaceAnswer(document, workspaceRoot) {
+  const resourceHover = await hoverMarkdown(document, "<product-card", "product-card");
+  assert(resourceHover.includes("**Resource** `product-card`"));
+  const definitions = await definitionsAt(document, "<product-card", "product-card");
+  assert(definitions.some((uri) =>
+    normalize(uri.fsPath) === normalize(path.join(workspaceRoot, "src", "components", "product-card.ts"))
+  ), `Expected product-card to resolve inside ${workspaceRoot}.`);
+}
+
+async function waitForWorkspaceAnswer(document, workspaceRoot, message) {
+  await waitFor(async () => {
+    await assertWorkspaceAnswer(document, workspaceRoot);
+    return true;
+  }, message, 60_000);
+}
+
+function findWorkspaceFolder(workspaceRoot) {
+  return vscode.workspace.workspaceFolders?.find((candidate) =>
+    normalize(candidate.uri.fsPath) === normalize(workspaceRoot)
+  );
 }
 
 async function executeAndAcceptQuickPick(command) {

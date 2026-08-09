@@ -10,9 +10,17 @@ const extensionTestsPath = join(extensionDevelopmentPath, "test", "extension-hos
 const sourceWorkspace = join(repoRoot, "fixtures", "hello-world");
 const tempRoot = join(repoRoot, ".temp", "vscode-extension-host");
 const aureliaWorkspace = join(tempRoot, "hello-world");
+const secondaryAureliaWorkspace = join(tempRoot, "hello-world-secondary");
 const excludedAureliaWorkspace = join(aureliaWorkspace, "excluded-project");
 const plainTypeScriptWorkspace = join(tempRoot, "plain-typescript");
 const testWorkspace = join(tempRoot, "extension-host.code-workspace");
+const workerMode = parseWorkerMode(process.argv.slice(2));
+
+function parseWorkerMode(args) {
+  if (args.length === 0) return false;
+  if (args.length === 1 && args[0] === "--worker") return true;
+  throw new Error(`Usage: node scripts/run-extension-host-tests.mjs [--worker]. Received: ${args.join(" ")}`);
+}
 
 function assertInside(parent, child) {
   const parentPath = resolve(parent);
@@ -24,6 +32,7 @@ function assertInside(parent, child) {
 
 assertInside(join(repoRoot, ".temp"), tempRoot);
 assertInside(tempRoot, aureliaWorkspace);
+assertInside(tempRoot, secondaryAureliaWorkspace);
 assertInside(aureliaWorkspace, excludedAureliaWorkspace);
 assertInside(tempRoot, plainTypeScriptWorkspace);
 assertInside(tempRoot, testWorkspace);
@@ -33,6 +42,7 @@ if (existsSync(tempRoot)) {
 }
 mkdirSync(join(plainTypeScriptWorkspace, "src"), { recursive: true });
 cpSync(sourceWorkspace, aureliaWorkspace, { recursive: true });
+cpSync(sourceWorkspace, secondaryAureliaWorkspace, { recursive: true });
 mkdirSync(join(excludedAureliaWorkspace, ".vscode"), { recursive: true });
 mkdirSync(join(excludedAureliaWorkspace, "src"), { recursive: true });
 writeFileSync(join(excludedAureliaWorkspace, ".vscode", "settings.json"), JSON.stringify({
@@ -100,8 +110,12 @@ await runTests({
   ],
   extensionTestsEnv: {
     AURELIA_LS_EXTENSION_HOST_WORKSPACE: aureliaWorkspace,
+    AURELIA_LS_EXTENSION_HOST_SECONDARY_WORKSPACE: secondaryAureliaWorkspace,
     AURELIA_LS_EXTENSION_HOST_EXCLUDED_WORKSPACE: excludedAureliaWorkspace,
     AURELIA_LS_EXTENSION_HOST_PLAIN_WORKSPACE: plainTypeScriptWorkspace,
+    AURELIA_LS_EXTENSION_HOST_EXPECTED_TRANSPORT: workerMode ? "worker" : "ipc",
+    AURELIA_LS_EXPERIMENTAL_WORKER_TRANSPORT: workerMode ? "1" : "0",
+    AURELIA_LS_FORCE_IPC_TRANSPORT: workerMode ? "0" : "1",
     ...(process.env.AURELIA_LS_EXTENSION_HOST_GREP
       ? { AURELIA_LS_EXTENSION_HOST_GREP: process.env.AURELIA_LS_EXTENSION_HOST_GREP }
       : {}),
