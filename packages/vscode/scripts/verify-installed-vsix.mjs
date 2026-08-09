@@ -33,11 +33,18 @@ import {
 
 export { sha256 };
 
-export const installedPlanSchemaVersion = "aurelia-ls/installed-vsix-plan/v1";
-export const installedEvidenceSchemaVersion = "aurelia-ls/installed-vsix-evidence/v1";
+export const installedPlanSchemaVersion = "aurelia-ls/installed-vsix-plan/v2";
+export const installedEvidenceSchemaVersion = "aurelia-ls/installed-vsix-evidence/v2";
 export const installedDriverReportSchemaVersion = "aurelia-ls/installed-vsix-driver-report/v1";
 export const requestedVSCodeVersion = "stable";
 export const expectedTestElectronVersion = "3.0.0";
+export const installedInventoryPolicy = Object.freeze({
+  payload: "every extension/ receipt entry except package.json installed byte-for-byte with no extra payload files or directories",
+  packageManifest: "archive package fields plus exact VS Code __metadata transform; timestamp bounded to the sole install, targetPlatform undefined, size equal to packaged extension bytes",
+  installerMetadataPath: ".vsixmanifest",
+  installerMetadataArchivePath: "extension.vsixmanifest",
+  installerMetadataAuthority: "exact byte equality with the generated VSIX control entry",
+});
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 export const extensionRoot = path.resolve(scriptDirectory, "..");
@@ -117,6 +124,7 @@ export function publicInstalledPlan({ repositoryHead, packageJson, root = eviden
     driverExtensionDevelopmentPath: repoRelative(driverRoot),
     productionClassification: "exact installed path plus sole inert-driver extension-development topology",
     artifactPolicy: "verify and consume the existing current-HEAD VSIX; never build, package, replace, or overwrite it",
+    installedInventoryPolicy,
   });
 }
 
@@ -268,11 +276,45 @@ export function discoverInstalledProduct(extensionsDirectory, identity) {
   });
 }
 
-export function verifyInstalledInventory(receipt, extensionPath) {
-  const expected = receipt.entries
+export function verifyInstalledInventory(receipt, extensionPath, installWindow) {
+  requireInstallWindow(installWindow);
+  const payload = receipt.entries
     .filter((entry) => entry.path.startsWith("extension/"))
-    .map((entry) => Object.freeze({ ...entry, relativePath: entry.path.slice("extension/".length) }))
+    .map((entry) => Object.freeze({
+      ...entry,
+      classification: entry.path === "extension/package.json"
+        ? "vscode-installer-transformed-manifest"
+        : "extension-payload",
+      relativePath: entry.path.slice("extension/".length),
+    }));
+  const packageManifestEntries = payload.filter((entry) => entry.path === "extension/package.json");
+  if (packageManifestEntries.length !== 1) {
+    throw new Error(`VSIX receipt must contain exactly one extension/package.json entry; received ${packageManifestEntries.length}.`);
+  }
+  const installerMetadataEntries = receipt.entries.filter(
+    (entry) => entry.path === installedInventoryPolicy.installerMetadataArchivePath,
+  );
+  if (installerMetadataEntries.length !== 1) {
+    throw new Error(
+      `VSIX receipt must contain exactly one ${installedInventoryPolicy.installerMetadataArchivePath} control entry; received ${installerMetadataEntries.length}.`,
+    );
+  }
+  const [installerMetadataEntry] = installerMetadataEntries;
+  if (installerMetadataEntry.source?.kind !== "generated-control") {
+    throw new Error("VSIX installer metadata authority must be a generated control entry.");
+  }
+  const expected = [
+    ...payload,
+    Object.freeze({
+      ...installerMetadataEntry,
+      classification: "vscode-installer-metadata",
+      relativePath: installedInventoryPolicy.installerMetadataPath,
+    }),
+  ]
     .sort((left, right) => codePointCompare(left.relativePath, right.relativePath));
+  if (new Set(expected.map((entry) => entry.relativePath)).size !== expected.length) {
+    throw new Error("VSIX receipt maps more than one entry to the same installed path.");
+  }
   const tree = regularTree(extensionPath);
   const actualPaths = tree.files
     .map((filePath) => path.relative(extensionPath, filePath).split(path.sep).join("/"))
@@ -295,23 +337,136 @@ export function verifyInstalledInventory(receipt, extensionPath) {
     const extra = actualDirectories.filter((entry) => !expectedDirectories.includes(entry));
     throw new Error(`Installed payload directory inventory mismatch; missing=${JSON.stringify(missing)}, extra=${JSON.stringify(extra)}.`);
   }
-  return Object.freeze(expected.map((entry) => {
+  const evidence = expected.map((entry) => {
     const filePath = path.join(extensionPath, ...entry.relativePath.split("/"));
     assertStrictChild(extensionPath, filePath, "Installed payload file");
     assertRegularRealFile(filePath, "Installed payload file");
     const bytes = readFileSync(filePath);
+    if (entry.classification === "vscode-installer-transformed-manifest") {
+      return verifyInstalledPackageManifest(receipt, entry, bytes, installWindow);
+    }
     const digest = sha256(bytes);
     if (bytes.length !== entry.bytes || digest !== entry.sha256) {
       throw new Error(`Installed payload bytes drifted for ${entry.relativePath}.`);
     }
     return Object.freeze({
       path: entry.relativePath,
+      archivePath: entry.path,
+      classification: entry.classification,
       bytes: bytes.length,
       sha256: digest,
       receiptSha256: entry.sha256,
       equal: true,
     });
-  }));
+  });
+  return Object.freeze({
+    payload: Object.freeze(evidence.filter((entry) => entry.classification === "extension-payload")),
+    packageManifest: evidence.find((entry) => entry.classification === "vscode-installer-transformed-manifest"),
+    installerMetadata: evidence.find((entry) => entry.classification === "vscode-installer-metadata"),
+  });
+}
+
+function requireInstallWindow(installWindow) {
+  if (
+    !Number.isSafeInteger(installWindow?.startedEpochMilliseconds)
+    || !Number.isSafeInteger(installWindow?.completedEpochMilliseconds)
+    || installWindow.startedEpochMilliseconds <= 0
+    || installWindow.completedEpochMilliseconds < installWindow.startedEpochMilliseconds
+  ) {
+    throw new Error("Installed inventory requires the exact sole-install timestamp window.");
+  }
+}
+
+function verifyInstalledPackageManifest(receipt, entry, installedBytes, installWindow) {
+  const source = entry.source;
+  if (
+    source?.kind !== "local"
+    || source.equal !== true
+    || typeof source.path !== "string"
+    || !Number.isSafeInteger(source.bytes)
+    || typeof source.sha256 !== "string"
+  ) {
+    throw new Error("Installed package.json requires an exact local archive authority.");
+  }
+  const sourcePath = path.resolve(repoRoot, source.path);
+  assertStrictChild(repoRoot, sourcePath, "Installed package.json archive authority");
+  assertRegularRealFile(sourcePath, "Installed package.json archive authority");
+  const sourceBytes = readFileSync(sourcePath);
+  const sourceDigest = sha256(sourceBytes);
+  if (
+    sourceBytes.length !== source.bytes
+    || sourceDigest !== source.sha256
+    || sourceBytes.length !== entry.bytes
+    || sourceDigest !== entry.sha256
+  ) {
+    throw new Error("Installed package.json archive authority bytes drifted.");
+  }
+
+  let sourceManifest;
+  let installedManifest;
+  try {
+    sourceManifest = JSON.parse(sourceBytes.toString("utf8"));
+    installedManifest = JSON.parse(installedBytes.toString("utf8"));
+  } catch (error) {
+    throw new Error(`Installed package.json transformation was not valid JSON: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  if (
+    sourceManifest == null
+    || typeof sourceManifest !== "object"
+    || Array.isArray(sourceManifest)
+    || Object.hasOwn(sourceManifest, "__metadata")
+  ) {
+    throw new Error("Archive package.json cannot carry VS Code installer metadata.");
+  }
+  const metadata = installedManifest?.__metadata;
+  const metadataKeys = metadata == null || typeof metadata !== "object" || Array.isArray(metadata)
+    ? []
+    : Object.keys(metadata);
+  const packagedBytes = receipt.entries
+    .filter((candidate) => candidate.path.startsWith("extension/") || candidate.path === installedInventoryPolicy.installerMetadataArchivePath)
+    .reduce((total, candidate) => total + candidate.bytes, 0);
+  if (!Number.isSafeInteger(packagedBytes) || packagedBytes <= 0) {
+    throw new Error("VSIX receipt packaged-byte total was invalid.");
+  }
+  if (
+    JSON.stringify(metadataKeys) !== JSON.stringify(["installedTimestamp", "targetPlatform", "size"])
+    || !Number.isSafeInteger(metadata?.installedTimestamp)
+    || metadata.installedTimestamp < installWindow.startedEpochMilliseconds
+    || metadata.installedTimestamp > installWindow.completedEpochMilliseconds
+    || metadata.targetPlatform !== "undefined"
+    || metadata.size !== packagedBytes
+  ) {
+    throw new Error("Installed package.json metadata did not match the exact VS Code installer transform.");
+  }
+  const transformedBytes = Buffer.from(JSON.stringify({
+    ...sourceManifest,
+    __metadata: {
+      installedTimestamp: metadata.installedTimestamp,
+      targetPlatform: "undefined",
+      size: packagedBytes,
+    },
+  }, null, "\t"));
+  if (!installedBytes.equals(transformedBytes)) {
+    throw new Error("Installed package.json bytes did not equal the exact VS Code installer transform.");
+  }
+  return Object.freeze({
+    path: entry.relativePath,
+    archivePath: entry.path,
+    classification: entry.classification,
+    bytes: installedBytes.length,
+    sha256: sha256(installedBytes),
+    receiptBytes: entry.bytes,
+    receiptSha256: entry.sha256,
+    source: Object.freeze({
+      path: source.path,
+      bytes: sourceBytes.length,
+      sha256: sourceDigest,
+      equal: true,
+    }),
+    metadata: Object.freeze({ ...metadata }),
+    packagedBytes,
+    exactTransform: true,
+  });
 }
 
 export function snapshotRegularTree(root, options = {}) {
@@ -493,14 +648,16 @@ export async function verifyInstalledVsix(dependencies = {}) {
     });
     state.install.invocation = serializableInvocation(installInvocation);
     state.method.installCount += 1;
+    state.install.startedEpochMilliseconds = Date.now();
     const installResult = await (dependencies.installVsix ?? runChildProcess)(installInvocation);
+    state.install.completedEpochMilliseconds = Date.now();
     state.install.result = processResultEvidence(installResult);
     writeBytesExclusive(layout.installStdoutPath, retainedBytes(installResult.stdout));
     writeBytesExclusive(layout.installStderrPath, retainedBytes(installResult.stderr));
     requireSuccessfulProcess(installResult, "VSIX installation");
 
     const product = discoverInstalledProduct(layout.extensionsDirectory, receipt.identity);
-    const installedBeforeHost = verifyInstalledInventory(receipt, product.extensionPath);
+    const installedBeforeHost = verifyInstalledInventory(receipt, product.extensionPath, state.install);
     state.product = {
       extensionPath: product.extensionPath,
       productionClassification: "inferred-installed-production",
@@ -587,7 +744,7 @@ export async function verifyInstalledVsix(dependencies = {}) {
     if (!samePath(productAfterHost.extensionPath, product.extensionPath)) {
       throw new Error("Installed product path changed during host acceptance.");
     }
-    state.product.inventoryAfterHost = verifyInstalledInventory(receipt, productAfterHost.extensionPath);
+    state.product.inventoryAfterHost = verifyInstalledInventory(receipt, productAfterHost.extensionPath, state.install);
     state.method.verifyCount += 1;
     const finalReceipt = await verifyArtifact(dependencies.archiveDependencies ?? {});
     requireArtifactReceipt(finalReceipt, before);
@@ -674,6 +831,7 @@ function createEvidenceState({ before, receipt, paths, artifactPath, layout, ele
       productModeEvidence: "topology-inferred from exact installed path plus sole inert-driver development path",
       driverModeEvidence: "direct ExtensionContext.extensionMode Test evidence",
       rawStderrPolicy: "descriptive-retained-and-hashed",
+      installedInventoryPolicy,
     },
     layout: Object.fromEntries(Object.entries(layout).map(([key, value]) => [key, repoRelative(value)])),
     driverInputs: [
@@ -686,7 +844,12 @@ function createEvidenceState({ before, receipt, paths, artifactPath, layout, ele
     workspaceAfterHost: null,
     workspaceDependencyAfterHost: null,
     vscode: null,
-    install: { invocation: null, result: null },
+    install: {
+      invocation: null,
+      startedEpochMilliseconds: null,
+      completedEpochMilliseconds: null,
+      result: null,
+    },
     product: null,
     host: { invocation: null, result: null },
     driverReport: null,
@@ -1122,7 +1285,7 @@ function auditRetainedEvidence(state, layout, receipt, dependencies) {
     if (!samePath(product.extensionPath, state.product.extensionPath)) {
       throw new Error("Installed product path changed after its post-host validation.");
     }
-    const currentInventory = verifyInstalledInventory(receipt, product.extensionPath);
+    const currentInventory = verifyInstalledInventory(receipt, product.extensionPath, state.install);
     const expectedInventory = state.product.inventoryAfterHost ?? state.product.inventoryBeforeHost;
     if (JSON.stringify(currentInventory) !== JSON.stringify(expectedInventory)) {
       throw new Error("Installed product inventory changed after its post-host validation.");

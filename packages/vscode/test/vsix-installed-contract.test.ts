@@ -50,7 +50,7 @@ describe("installed VSIX release gate", () => {
     });
 
     expect(plan).toMatchObject({
-      schemaVersion: "aurelia-ls/installed-vsix-plan/v1",
+      schemaVersion: "aurelia-ls/installed-vsix-plan/v2",
       repositoryHead: head,
       requestedVSCodeVersion: "stable",
       packageCount: 0,
@@ -60,6 +60,13 @@ describe("installed VSIX release gate", () => {
       retryCount: 0,
       replacementCount: 0,
       productExtensionDevelopmentPathCount: 0,
+      installedInventoryPolicy: {
+        payload: expect.stringContaining("except package.json installed byte-for-byte"),
+        packageManifest: expect.stringContaining("exact VS Code __metadata transform"),
+        installerMetadataPath: ".vsixmanifest",
+        installerMetadataArchivePath: "extension.vsixmanifest",
+        installerMetadataAuthority: "exact byte equality with the generated VSIX control entry",
+      },
     });
     expect(plan.artifact).toBe("packages/vscode/.release/aurelia-2-0.5.0-0123456789ab.vsix");
     expect(plan.driverExtensionDevelopmentPath).toBe("packages/vscode/test/installed-driver");
@@ -179,6 +186,26 @@ describe("installed VSIX release gate", () => {
     });
     expect(harness.calls()).toEqual({ verify: 2, resolve: 1, install: 1, host: 1, dependency: 1 });
     expect(evidence.product.inventoryBeforeHost).toEqual(evidence.product.inventoryAfterHost);
+    expect(evidence.schemaVersion).toBe("aurelia-ls/installed-vsix-evidence/v2");
+    expect(evidence.product.inventoryBeforeHost.installerMetadata).toMatchObject({
+      path: ".vsixmanifest",
+      archivePath: "extension.vsixmanifest",
+      classification: "vscode-installer-metadata",
+      equal: true,
+    });
+    expect(evidence.product.inventoryBeforeHost.installerMetadata.bytes).toBeGreaterThan(0);
+    expect(evidence.product.inventoryBeforeHost.installerMetadata.sha256)
+      .toBe(evidence.product.inventoryBeforeHost.installerMetadata.receiptSha256);
+    expect(evidence.product.inventoryBeforeHost.packageManifest).toMatchObject({
+      path: "package.json",
+      archivePath: "extension/package.json",
+      classification: "vscode-installer-transformed-manifest",
+      exactTransform: true,
+    });
+    expect(evidence.product.inventoryBeforeHost.packageManifest.metadata.installedTimestamp)
+      .toBeGreaterThanOrEqual(evidence.install.startedEpochMilliseconds);
+    expect(evidence.product.inventoryBeforeHost.packageManifest.metadata.installedTimestamp)
+      .toBeLessThanOrEqual(evidence.install.completedEpochMilliseconds);
     expect(evidence.driverReport.value.status).toBe("passed");
     expect(evidence.logs.client.evidence.workerFaults).toEqual([]);
     expect(evidence.logs.client.evidence.workerOnlineCount).toBe(1);
@@ -249,11 +276,23 @@ describe("installed VSIX release gate", () => {
 
   test("revalidates installed payload, topology, and workspace after the final evidence hook", async () => {
     const gate = await loadGate();
-    for (const mutation of ["payload", "extra-extension", "empty-directory", "workspace", "tool-input"] as const) {
+    for (const mutation of [
+      "payload",
+      "package-manifest",
+      "installer-metadata",
+      "extra-extension",
+      "empty-directory",
+      "workspace",
+      "tool-input",
+    ] as const) {
       const harness = installedHarness(gate, `final-${mutation}-`);
       harness.dependencies.beforeEvidence = ({ state, layout }: any) => {
         if (mutation === "payload") {
           writeFileSync(path.join(state.product.extensionPath, "dist", "extension.cjs"), "late payload drift\n");
+        } else if (mutation === "package-manifest") {
+          writeFileSync(path.join(state.product.extensionPath, "package.json"), "{\"late\":true}\n");
+        } else if (mutation === "installer-metadata") {
+          writeFileSync(path.join(state.product.extensionPath, ".vsixmanifest"), "late installer metadata drift\n");
         } else if (mutation === "extra-extension") {
           const extra = path.join(layout.extensionsDirectory, "other.publisher-1.0.0");
           mkdirSync(extra);
@@ -267,7 +306,7 @@ describe("installed VSIX release gate", () => {
         }
       };
 
-      await expect(gate.verifyInstalledVsix(harness.dependencies)).rejects.toThrow(/changed|drifted|inventory|exactly one/iu);
+      await expect(gate.verifyInstalledVsix(harness.dependencies)).rejects.toThrow(/changed|drifted|inventory|exactly one|package\.json/iu);
       const retained = JSON.parse(readFileSync(harness.layout.evidencePath, "utf8"));
       expect(retained.status).toBe("failed");
       expect(retained.finalizationErrors).toEqual([
@@ -340,20 +379,42 @@ describe("installed VSIX release gate", () => {
     expect(harness.calls().host).toBe(1);
   });
 
-  test("rejects installed payload byte drift before launching the host", async () => {
+  test("rejects installed payload and installer-metadata drift before launching the host", async () => {
     const gate = await loadGate();
-    const harness = installedHarness(gate, "prehost-payload-");
-    const install = harness.dependencies.installVsix;
-    harness.dependencies.installVsix = async (invocation: any) => {
-      const result = await install(invocation);
-      const productPath = path.join(harness.layout.extensionsDirectory, "aureliaeffect.aurelia-2-0.5.0");
-      writeFileSync(path.join(productPath, "dist", "extension.cjs"), "wrong installed bytes\n");
-      return result;
-    };
+    for (const mutation of [
+      "payload",
+      "installer-metadata",
+      "missing-installer-metadata",
+      "linked-installer-metadata",
+      "extra-installed-file",
+    ] as const) {
+      const harness = installedHarness(gate, `prehost-${mutation}-`);
+      const install = harness.dependencies.installVsix;
+      harness.dependencies.installVsix = async (invocation: any) => {
+        const result = await install(invocation);
+        const productPath = path.join(harness.layout.extensionsDirectory, "aureliaeffect.aurelia-2-0.5.0");
+        const target = mutation === "payload"
+          ? path.join(productPath, "dist", "extension.cjs")
+          : path.join(productPath, ".vsixmanifest");
+        if (mutation === "missing-installer-metadata") {
+          unlinkSync(target);
+        } else if (mutation === "linked-installer-metadata") {
+          unlinkSync(target);
+          const linkTarget = path.join(harness.layout.evidenceRoot, "installer-metadata-target");
+          mkdirSync(linkTarget);
+          symlinkSync(linkTarget, target, process.platform === "win32" ? "junction" : "dir");
+        } else if (mutation === "extra-installed-file") {
+          writeFileSync(path.join(productPath, "installer-extra.txt"), "unexpected\n");
+        } else {
+          writeFileSync(target, `wrong ${mutation} bytes\n`);
+        }
+        return result;
+      };
 
-    await expect(gate.verifyInstalledVsix(harness.dependencies)).rejects.toThrow(/payload bytes drifted/u);
-    expect(harness.calls()).toEqual({ verify: 1, resolve: 1, install: 1, host: 0, dependency: 1 });
-    expect(JSON.parse(readFileSync(harness.layout.evidencePath, "utf8")).status).toBe("failed");
+      await expect(gate.verifyInstalledVsix(harness.dependencies)).rejects.toThrow(/payload bytes drifted|inventory mismatch|symbolic link/iu);
+      expect(harness.calls()).toEqual({ verify: 1, resolve: 1, install: 1, host: 0, dependency: 1 });
+      expect(JSON.parse(readFileSync(harness.layout.evidencePath, "utf8")).status).toBe("failed");
+    }
   });
 
   test("rejects copied-fixture drift before dependency preparation or host work", async () => {
@@ -376,7 +437,7 @@ describe("installed VSIX release gate", () => {
 
   test("rejects workspace, installed-extension, and payload mutation after the host", async () => {
     const gate = await loadGate();
-    for (const mutation of ["workspace", "extra-extension", "payload"] as const) {
+    for (const mutation of ["workspace", "extra-extension", "payload", "package-manifest", "installer-metadata"] as const) {
       const harness = installedHarness(gate, `host-${mutation}-`);
       const runHost = harness.dependencies.runHost;
       harness.dependencies.runHost = async (invocation: any) => {
@@ -387,16 +448,26 @@ describe("installed VSIX release gate", () => {
           const extra = path.join(harness.layout.extensionsDirectory, "other.publisher-1.0.0");
           mkdirSync(extra);
           writeFileSync(path.join(extra, "package.json"), "{\"publisher\":\"other\",\"name\":\"publisher\"}\n");
-        } else {
+        } else if (mutation === "payload") {
           writeFileSync(
             path.join(invocation.extensionTestsEnv.AURELIA_LS_INSTALLED_PRODUCT_PATH, "dist", "extension.cjs"),
             "mutated bundle\n",
+          );
+        } else if (mutation === "package-manifest") {
+          writeFileSync(
+            path.join(invocation.extensionTestsEnv.AURELIA_LS_INSTALLED_PRODUCT_PATH, "package.json"),
+            "{\"mutated\":true}\n",
+          );
+        } else {
+          writeFileSync(
+            path.join(invocation.extensionTestsEnv.AURELIA_LS_INSTALLED_PRODUCT_PATH, ".vsixmanifest"),
+            "mutated installer metadata\n",
           );
         }
         return result;
       };
 
-      await expect(gate.verifyInstalledVsix(harness.dependencies)).rejects.toThrow(/changed|drifted|inventory|exactly one/iu);
+      await expect(gate.verifyInstalledVsix(harness.dependencies)).rejects.toThrow(/changed|drifted|inventory|exactly one|package\.json/iu);
       const retained = JSON.parse(readFileSync(harness.layout.evidencePath, "utf8"));
       expect(retained.status).toBe("failed");
       expect(harness.calls().host).toBe(1);
@@ -628,13 +699,121 @@ describe("installed VSIX release gate", () => {
 
     const payloadRoot = path.join(root, "payload");
     mkdirSync(payloadRoot);
-    writeFileSync(path.join(payloadRoot, "package.json"), "{}\n");
+    const sourcePackageBytes = Buffer.from("{}\n");
+    const packageAuthorityPath = path.join(root, "package-authority.json");
+    writeFileSync(packageAuthorityPath, sourcePackageBytes);
+    const manifestBytes = Buffer.from("<PackageManifest />\n");
+    writeFileSync(path.join(payloadRoot, ".vsixmanifest"), manifestBytes);
+    const installedTimestamp = Date.now();
     const receipt = {
-      entries: [{ path: "extension/package.json", bytes: 3, sha256: gate.sha256(Buffer.from("{}\n")) }],
+      entries: [
+        { path: "extension.vsixmanifest", bytes: manifestBytes.length, sha256: gate.sha256(manifestBytes), source: { kind: "generated-control" } },
+        {
+          path: "extension/package.json",
+          bytes: sourcePackageBytes.length,
+          sha256: gate.sha256(sourcePackageBytes),
+          source: {
+            kind: "local",
+            path: path.relative(gate.repoRoot, packageAuthorityPath).split(path.sep).join("/"),
+            bytes: sourcePackageBytes.length,
+            sha256: gate.sha256(sourcePackageBytes),
+            equal: true,
+          },
+        },
+      ],
     };
-    expect(() => gate.verifyInstalledInventory(receipt, payloadRoot)).not.toThrow();
+    const packagedBytes = receipt.entries.reduce((total, entry) => total + entry.bytes, 0);
+    const installWindow = {
+      startedEpochMilliseconds: installedTimestamp - 1,
+      completedEpochMilliseconds: installedTimestamp + 1,
+    };
+    const installedPackage = {
+      __metadata: { installedTimestamp, targetPlatform: "undefined", size: packagedBytes },
+    };
+    writeFileSync(path.join(payloadRoot, "package.json"), JSON.stringify(installedPackage, null, "\t"));
+    expect(gate.verifyInstalledInventory(receipt, payloadRoot, installWindow)).toMatchObject({
+      payload: [],
+      packageManifest: {
+        path: "package.json",
+        classification: "vscode-installer-transformed-manifest",
+        exactTransform: true,
+      },
+      installerMetadata: {
+        path: ".vsixmanifest",
+        archivePath: "extension.vsixmanifest",
+        classification: "vscode-installer-metadata",
+        equal: true,
+      },
+    });
     writeFileSync(path.join(payloadRoot, "stale.js"), "stale\n");
-    expect(() => gate.verifyInstalledInventory(receipt, payloadRoot)).toThrow(/inventory mismatch/u);
+    expect(() => gate.verifyInstalledInventory(receipt, payloadRoot, installWindow)).toThrow(/inventory mismatch/u);
+    unlinkSync(path.join(payloadRoot, "stale.js"));
+    writeFileSync(path.join(payloadRoot, ".vsixmanifest"), "wrong control\n");
+    expect(() => gate.verifyInstalledInventory(receipt, payloadRoot, installWindow)).toThrow(/payload bytes drifted/u);
+    writeFileSync(path.join(payloadRoot, ".vsixmanifest"), manifestBytes);
+    expect(() => gate.verifyInstalledInventory({ entries: receipt.entries.slice(1) }, payloadRoot, installWindow)).toThrow(/exactly one extension\.vsixmanifest/u);
+    expect(() => gate.verifyInstalledInventory(
+      { entries: [receipt.entries[0], ...receipt.entries] },
+      payloadRoot,
+      installWindow,
+    )).toThrow(/received 2/u);
+    expect(() => gate.verifyInstalledInventory({
+      entries: receipt.entries.map((entry) => entry.path === "extension.vsixmanifest"
+        ? { ...entry, source: { kind: "local" } }
+        : entry),
+    }, payloadRoot, installWindow)).toThrow(/generated control/u);
+    expect(() => gate.verifyInstalledInventory({
+      entries: [
+        ...receipt.entries,
+        { path: "extension/.vsixmanifest", bytes: 1, sha256: gate.sha256("x") },
+      ],
+    }, payloadRoot, installWindow)).toThrow(/same installed path/u);
+    expect(() => gate.verifyInstalledInventory(receipt, payloadRoot)).toThrow(/sole-install timestamp window/u);
+    expect(() => gate.verifyInstalledInventory(receipt, payloadRoot, {
+      startedEpochMilliseconds: installedTimestamp + 1,
+      completedEpochMilliseconds: installedTimestamp,
+    })).toThrow(/sole-install timestamp window/u);
+    expect(() => gate.verifyInstalledInventory({
+      entries: receipt.entries.filter((entry) => entry.path !== "extension/package.json"),
+    }, payloadRoot, installWindow)).toThrow(/exactly one extension\/package\.json/u);
+    expect(() => gate.verifyInstalledInventory({
+      entries: receipt.entries.map((entry) => entry.path === "extension/package.json"
+        ? { ...entry, source: { ...entry.source, sha256: "0".repeat(64) } }
+        : entry),
+    }, payloadRoot, installWindow)).toThrow(/archive authority bytes drifted/u);
+    writeFileSync(packageAuthorityPath, "source authority drift\n");
+    expect(() => gate.verifyInstalledInventory(receipt, payloadRoot, installWindow)).toThrow(/archive authority bytes drifted/u);
+    writeFileSync(packageAuthorityPath, sourcePackageBytes);
+
+    for (const mutation of [
+      "timestamp",
+      "upper-timestamp",
+      "target",
+      "size",
+      "missing-key",
+      "extra-key",
+      "key-order",
+      "authored",
+      "serialization",
+      "newline",
+    ] as const) {
+      const drifted = structuredClone(installedPackage);
+      if (mutation === "timestamp") drifted.__metadata.installedTimestamp = installWindow.startedEpochMilliseconds - 1;
+      else if (mutation === "upper-timestamp") drifted.__metadata.installedTimestamp = installWindow.completedEpochMilliseconds + 1;
+      else if (mutation === "target") drifted.__metadata.targetPlatform = "win32-x64";
+      else if (mutation === "size") drifted.__metadata.size += 1;
+      else if (mutation === "missing-key") delete (drifted.__metadata as any).size;
+      else if (mutation === "extra-key") (drifted.__metadata as any).extra = true;
+      else if (mutation === "key-order") drifted.__metadata = {
+        targetPlatform: drifted.__metadata.targetPlatform,
+        installedTimestamp: drifted.__metadata.installedTimestamp,
+        size: drifted.__metadata.size,
+      } as any;
+      else if (mutation === "authored") (drifted as any).name = "forged";
+      const serialized = `${JSON.stringify(drifted, null, mutation === "serialization" ? 2 : "\t")}${mutation === "newline" ? "\n" : ""}`;
+      writeFileSync(path.join(payloadRoot, "package.json"), serialized);
+      expect(() => gate.verifyInstalledInventory(receipt, payloadRoot, installWindow)).toThrow(/package\.json/iu);
+    }
   });
 
   test("revalidates the copied workspace dependency link against the exact semantic-runtime root", async () => {
@@ -754,6 +933,7 @@ function installedHarness(gate: any, prefix: string) {
   }, null, 2)}\n`;
   const bundleBytes = "module.exports = {};\n";
   const serverBytes = "module.exports = { server: true };\n";
+  const installerManifestBytes = "<PackageManifest Version=\"2.0.0\" />\n";
   const archiveBytes = Buffer.from("synthetic-vsix");
   const artifactPath = path.join(archiveRoot, "aurelia-2-0.5.0-0123456789ab.vsix");
   const receiptPath = path.join(archiveRoot, "aurelia-2-0.5.0-0123456789ab.manifest.json");
@@ -761,6 +941,8 @@ function installedHarness(gate: any, prefix: string) {
   writeFileSync(artifactPath, archiveBytes);
   writeFileSync(receiptPath, "synthetic receipt\n");
   writeFileSync(checksumPath, "synthetic checksum\n");
+  const packageAuthorityPath = path.join(archiveRoot, "package.authority.json");
+  writeFileSync(packageAuthorityPath, packageBytes);
   const receipt = {
     schemaVersion: "aurelia-ls/vscode-vsix-artifact/v1",
     artifact: {
@@ -774,7 +956,24 @@ function installedHarness(gate: any, prefix: string) {
     },
     identity: identity("0.5.0"),
     entries: [
-      { path: "extension/package.json", bytes: Buffer.byteLength(packageBytes), sha256: gate.sha256(packageBytes) },
+      {
+        path: "extension.vsixmanifest",
+        bytes: Buffer.byteLength(installerManifestBytes),
+        sha256: gate.sha256(installerManifestBytes),
+        source: { kind: "generated-control" },
+      },
+      {
+        path: "extension/package.json",
+        bytes: Buffer.byteLength(packageBytes),
+        sha256: gate.sha256(packageBytes),
+        source: {
+          kind: "local",
+          path: path.relative(gate.repoRoot, packageAuthorityPath).split(path.sep).join("/"),
+          bytes: Buffer.byteLength(packageBytes),
+          sha256: gate.sha256(packageBytes),
+          equal: true,
+        },
+      },
       { path: "extension/dist/extension.cjs", bytes: Buffer.byteLength(bundleBytes), sha256: gate.sha256(bundleBytes) },
       { path: "extension/dist/server/main.cjs", bytes: Buffer.byteLength(serverBytes), sha256: gate.sha256(serverBytes) },
     ],
@@ -823,7 +1022,13 @@ function installedHarness(gate: any, prefix: string) {
       expect(invocation.args).toContain(artifactPath);
       const productPath = path.join(layout.extensionsDirectory, "aureliaeffect.aurelia-2-0.5.0");
       mkdirSync(path.join(productPath, "dist", "server"), { recursive: true });
-      writeFileSync(path.join(productPath, "package.json"), packageBytes);
+      const installedTimestamp = Date.now();
+      const packagedBytes = receipt.entries.reduce((total, entry) => total + entry.bytes, 0);
+      writeFileSync(path.join(productPath, "package.json"), JSON.stringify({
+        ...JSON.parse(packageBytes),
+        __metadata: { installedTimestamp, targetPlatform: "undefined", size: packagedBytes },
+      }, null, "\t"));
+      writeFileSync(path.join(productPath, ".vsixmanifest"), installerManifestBytes);
       writeFileSync(path.join(productPath, "dist", "extension.cjs"), bundleBytes);
       writeFileSync(path.join(productPath, "dist", "server", "main.cjs"), serverBytes);
       return { exitCode: 0, signal: null, stdout: "installed\n", stderr: "" };

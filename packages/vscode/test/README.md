@@ -134,9 +134,16 @@ Guidelines:
   installed product, remain outside the source and driver roots, activate from
   its shipping `workspaceContains` event, and return the exact native
   `searchText` Property/type-member completion. The retained evidence binds the
-  installed payload byte-for-byte to the archive receipt, authenticates the
-  driver Test context and product Production launch topology, and preserves the
-  raw driver report, install/host streams, Client log, and Extension Host log.
+  installed payload byte-for-byte to the archive receipt, except for VS Code's
+  deterministic `package.json` rewrite: all archived fields remain exact, while
+  the canonical tab-serialized `__metadata` must carry a timestamp inside the
+  sole install window, target platform `undefined`, and the exact packaged-byte
+  total. Its filesystem contract additionally requires the one installer-owned
+  root `.vsixmanifest` to equal the generated `extension.vsixmanifest` archive
+  control byte-for-byte; every other added file or directory remains forbidden.
+  The gate authenticates the driver Test context and product Production launch
+  topology, and preserves the raw driver report, install/host streams, Client
+  log, and Extension Host log.
   Existing evidence is never overwritten and no failed run is retried or
   replaced. `pnpm --filter aurelia-2 release:verify-installed -- --plan` is
   non-launching; the focused installed contract uses injected download,
