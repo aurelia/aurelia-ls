@@ -9,10 +9,16 @@
  * This catches bundle configuration issues, missing dependencies, etc.
  */
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import { once } from "node:events";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { createMessageConnection } from "vscode-jsonrpc/node";
 import { test, expect, afterEach } from "vitest";
+import {
+  createExperimentalWorkerCancellationStrategy,
+  createExperimentalWorkerMessageTransports,
+} from "../../out/worker-transport.js";
 
 const VSCODE_PACKAGE_ROOT = path.resolve(import.meta.dirname, "../..");
 const SERVER_PATH = path.resolve(VSCODE_PACKAGE_ROOT, "dist/server/main.cjs");
@@ -56,7 +62,7 @@ function parseMessages(data: string): Array<{ id?: number; result?: unknown; err
   for (const part of parts) {
     if (part.trim()) {
       try {
-        messages.push(JSON.parse(part));
+        messages.push(JSON.parse(part) as { id?: number; result?: unknown; error?: unknown });
       } catch {
         // partial message, ignore
       }
@@ -159,6 +165,54 @@ test("bundled server initializes and confirms semantic workspace shape", async (
   });
 
   expect(exitCode, "server should exit cleanly").toBe(0);
+}, 20000);
+
+test("bundled server initializes over Worker transport and exits cleanly", async () => {
+  ensureBundledServer();
+
+  const transports = createExperimentalWorkerMessageTransports(SERVER_PATH);
+  const connection = createMessageConnection(
+    transports.reader,
+    transports.writer,
+    undefined,
+    { cancellationStrategy: createExperimentalWorkerCancellationStrategy() },
+  );
+  connection.listen();
+
+  try {
+    const workspaceRoot = path.resolve(VSCODE_PACKAGE_ROOT, "../../fixtures/hello-world");
+    const initializeResult = await connection.sendRequest<{
+      capabilities?: unknown;
+    }>("initialize", {
+      processId: process.pid,
+      capabilities: {},
+      rootUri: pathToFileURL(workspaceRoot).toString(),
+    });
+
+    expect(initializeResult.capabilities, "server should return capabilities").toBeDefined();
+
+    await connection.sendNotification("initialized", {});
+
+    const status = await connection.sendRequest<{
+      projectAnalysisCounts?: Array<{ analysisKind: string; count: number }>;
+    }>("aurelia/workspaceStatus", null);
+    expect(status.projectAnalysisCounts).toContainEqual(
+      expect.objectContaining({ analysisKind: "app-world", count: 1 }),
+    );
+
+    await connection.sendRequest("shutdown", null);
+    const exited = once(transports.worker, "exit");
+    await connection.sendNotification("exit");
+    const [exitCode] = await exited as [number];
+
+    expect(exitCode, "Worker server should exit cleanly").toBe(0);
+  } finally {
+    connection.end();
+    connection.dispose();
+    if (transports.worker.threadId !== -1) {
+      await transports.worker.terminate();
+    }
+  }
 }, 20000);
 
 function waitForResponse<T>(
