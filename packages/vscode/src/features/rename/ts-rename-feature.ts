@@ -9,10 +9,16 @@
  * built-in provider and the command re-enters this provider through RPC.
  */
 import type { ClientFeature } from "../../core/feature.js";
-import type { ProtocolWorkspaceEdit, RenameFromTsResponse } from "../../types.js";
+import type {
+  CancellationToken,
+  DocumentSelector,
+  RenameProvider,
+  TextDocument,
+} from "vscode";
+import type { RenameFromTsResponse } from "../../types.js";
 import { assertWorkspaceEditVersionsCurrent } from "../../workspace-edit-versions.js";
 
-const SCRIPT_RENAME_SELECTOR: import("vscode").DocumentSelector = [
+const SCRIPT_RENAME_SELECTOR: DocumentSelector = [
   { language: "typescript" },
   { language: "typescriptreact" },
   { language: "javascript" },
@@ -25,7 +31,7 @@ export const TsRenameFeature: ClientFeature = {
     const vscode = ctx.vscode;
     const log = ctx.logger;
 
-    const provider: import("vscode").RenameProvider = {
+    const provider: RenameProvider = {
       provideRenameEdits: async (document, position, newName, token) => {
         if (
           isCancelled(token)
@@ -63,7 +69,7 @@ export const TsRenameFeature: ClientFeature = {
 
         const edit = await ctx.lsp.convertWorkspaceEdit(
           document.uri.toString(),
-          aureliaRename.workspaceEdit as ProtocolWorkspaceEdit,
+          aureliaRename.workspaceEdit,
           token,
         );
         if (isCancelled(token)) return undefined;
@@ -118,14 +124,14 @@ export const TsRenameFeature: ClientFeature = {
   },
 };
 
-function isScriptDocument(document: import("vscode").TextDocument): boolean {
+function isScriptDocument(document: TextDocument): boolean {
   return document.languageId === "typescript"
     || document.languageId === "typescriptreact"
     || document.languageId === "javascript"
     || document.languageId === "javascriptreact";
 }
 
-function isCancelled(token: import("vscode").CancellationToken | undefined): boolean {
+function isCancelled(token: CancellationToken | undefined): boolean {
   return token?.isCancellationRequested === true;
 }
 

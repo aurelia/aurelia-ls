@@ -1,6 +1,5 @@
 import type {
   ResourceInventoryProjectResult,
-  ResourceProject,
 } from "@aurelia-ls/language-server/protocol";
 import type {
   Disposable,
