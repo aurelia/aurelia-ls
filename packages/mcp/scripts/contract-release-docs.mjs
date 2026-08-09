@@ -37,7 +37,7 @@ expectIncludes(docs.ciWorkflow, 'Pack MCP release tarball', 'CI workflow should 
 expectIncludes(docs.ciWorkflow, 'aurelia-ls-mcp-release', 'CI artifact name should use release wording.');
 expectIncludes(docs.ciWorkflow, 'pnpm --filter @aurelia-ls/mcp contract:release', 'CI workflow should run the aggregate MCP release contract.');
 expectIncludes(docs.ciWorkflow, 'pnpm --filter @aurelia-ls/mcp release:pack', 'CI workflow should pack the MCP release tarball.');
-expectOccurrenceCount(docs.ciWorkflow, 'run: pnpm bootstrap:aurelia', 2, 'Both CI jobs should bootstrap linked Aurelia dependencies before semantic contracts.');
+expectOccurrenceCount(docs.ciWorkflow, 'run: pnpm bootstrap:aurelia', 4, 'All four CI job definitions should bootstrap linked Aurelia dependencies before their contracts.');
 
 expectIncludes(docs.readme, 'aurelia_pattern_menu', 'README should name the pattern menu tool.');
 expectIncludes(docs.readme, 'aurelia_pattern_example', 'README should name the pattern example tool.');

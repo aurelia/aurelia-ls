@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # CI is currently scoped to semantic-runtime and MCP release confidence.
+  # CI is currently scoped to semantic-runtime, IDE support, and MCP release confidence.
   # Legacy compiler/SSR/SSG/Vite/playground lanes are parked until they target semantic-runtime.
   semantic-runtime:
     name: Semantic Runtime Contracts
@@ -116,3 +116,93 @@ jobs:
           path: packages/mcp/.release/*.tgz
           if-no-files-found: error
           include-hidden-files: true
+
+  ide-support:
+    name: IDE Support Contracts (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: Linux
+            os: ubuntu-latest
+          - platform: Windows
+            os: windows-latest
+          - platform: macOS
+            os: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Verify submodules
+        shell: bash
+        run: |
+          git submodule status --recursive
+          test -f aurelia/package.json
+          test -f aurelia2-plugins/packages/aurelia2-table/package.json
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.5.2
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          PNPM_APPROVE_BUILDS: esbuild
+
+      - name: Bootstrap linked Aurelia dependencies
+        run: pnpm bootstrap:aurelia
+
+      - name: Check bounded IDE support contracts
+        run: pnpm test:ide:support
+
+  vscode-extension-host:
+    name: VS Code Extension Host Support (Windows)
+    runs-on: windows-latest
+    needs: ide-support
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Verify submodules
+        shell: bash
+        run: |
+          git submodule status --recursive
+          test -f aurelia/package.json
+          test -f aurelia2-plugins/packages/aurelia2-table/package.json
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.5.2
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          PNPM_APPROVE_BUILDS: esbuild
+
+      - name: Bootstrap linked Aurelia dependencies
+        run: pnpm bootstrap:aurelia
+
+      - name: Test current stable VS Code with Worker transport
+        run: pnpm test:vscode:extension-host:current-stable
+
+      - name: Test exact minimum VS Code with Worker transport
+        run: pnpm test:vscode:extension-host:minimum
