@@ -71,6 +71,83 @@
       ],
       "createdAt": "2026-05-12",
       "updatedAt": "2026-05-13"
+    },
+    {
+      "id": "decision:vscode-exact-vsix-release",
+      "kind": "decision",
+      "domains": [
+        "vscode",
+        "release",
+        "packaging",
+        "ci",
+        "extension-host"
+      ],
+      "summary": "VS Code releases package once, accepts the exact commit-addressed VSIX in a clean installed host, attests those unchanged bytes, then optionally publishes them.",
+      "rationale": "Release confidence comes from preserving one artifact identity across archive verification, installed-product acceptance, Marketplace publication, evidence upload, and provenance attestation. Repackaging, version mutation, mutable same-commit evidence, or testing a development extension would break the causal link between the accepted product and the published bytes.",
+      "guidance": [
+        "Build from a clean full Git HEAD and the committed extension version, then run `pnpm package:ide:vsix` exactly once through the pinned package-local VSCE. The commit-addressed VSIX, immutable manifest, and SHA-256 sidecar are one release packet.",
+        "Use `pnpm verify:ide:vsix` to consume and revalidate the current-HEAD packet; verification must never rebuild or repackage it.",
+        "Use `pnpm verify:ide:vsix:installed` to install that exact VSIX once in an isolated clean host and retain immutable acceptance evidence. Never retry or overwrite a failed same-HEAD run; diagnose it, commit the repair, and produce a new artifact identity.",
+        "Marketplace publication is opt-in and allowed only from the exact `vscode-v<version>` tag. Invoke the pinned local VSCE with `publish --packagePath`; the workflow must not bump versions, repackage, or mutate Git state.",
+        "Upload the exact VSIX, manifest, checksum, and installed evidence. Attest the exact VSIX before optional Marketplace publication, then reverify the packet after the publish-or-ready boundary."
+      ],
+      "anchors": [
+        {
+          "kind": "doc",
+          "path": "packages/vscode/test/README.md",
+          "summary": "Package-once, exact-byte archive verification and installed-product acceptance contract."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/vscode/scripts/vsix-artifact.mjs",
+          "summary": "Commit-addressed artifact construction, receipt, checksum, inventory, and verification authority."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/vscode/scripts/verify-installed-vsix.mjs",
+          "summary": "One-shot isolated installation and immutable installed-product evidence authority."
+        },
+        {
+          "kind": "source",
+          "filePath": ".github/workflows/publish-vscode.yml",
+          "summary": "Pinned clean-checkout release workflow that verifies, accepts, attests, optionally publishes, and uploads one exact VSIX."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm package:ide:vsix",
+          "summary": "Root package-once command for the commit-addressed VSIX release packet."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm verify:ide:vsix",
+          "summary": "Non-packaging exact-byte archive verification command."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm verify:ide:vsix:installed",
+          "summary": "Exact-artifact installed-product acceptance and evidence command."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/vscode/scripts/vsix-artifact.mjs"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/vscode/scripts/verify-installed-vsix.mjs"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": ".github/workflows/publish-vscode.yml"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/vscode/test/README.md"
+        }
+      ],
+      "createdAt": "2026-08-09",
+      "updatedAt": "2026-08-09"
     }
   ]
 }

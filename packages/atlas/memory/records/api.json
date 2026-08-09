@@ -548,6 +548,8 @@
         "Pressure scripts may select aurelia-resource-library frames for authoring/LSP pressure, but missing app roots in those frames are not app-startup failures.",
         "VS Code manifest/import/native-config preflight is candidate admission only. In auto mode, retain a workspace session after aurelia/workspaceStatus reports a non-outside-aurelia SemanticProjectAnalysisKind or confirms the exact native project configuration that nominated a config-only session; explicit on/off remain user-owned overrides.",
         "One language-server process owns one disjoint VS Code workspace root. Let semantic-runtime discover the package.json/tsconfig.json/jsconfig.json/aurelia.project.json marker union inside that root. Enabled nested workspace folders are additive projectRootHints, not extension-owned project definitions.",
+        "Treat `activationMode: off` as a hard authored-subtree exclusion: an excluded parent dominates a nested `on`, and projectRootHints cannot reopen the excluded subtree.",
+        "Treat authored membership as root minus exclusions. Dependency reads and outgoing exact locations may cross that boundary; do not reuse the incoming authored-document admission predicate for outward semantic projection.",
         "IDE, MCP, and future AOT consumers share semantic-runtime's normalized `semantic-workspace/1` source-world descriptor. Consumer adapters may supply host root hints and exclusions or choose presentation policy, but must not redefine project markers, ownership, configuration, keys, or source admission.",
         "Use `aurelia.project.json` for durable authored-source exclusions that every consumer can read. A live IDE-only workspace-folder hint/off boundary reaches parity with MCP only when the same host inputs are handed to both descriptors; do not claim automatic cross-process parity until a shared configuration or handoff channel exists."
       ],
@@ -592,6 +594,12 @@
           "summary": "Boot-owned native source-world configuration and exact diagnostic authority."
         },
         {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/boot/source-boundary.ts",
+          "symbolName": "AuthoredSourceBoundary",
+          "summary": "Root-minus-exclusions authored membership boundary, distinct from dependency reads and outgoing locations."
+        },
+        {
           "kind": "doc",
           "path": "packages/semantic-runtime/src/boot/README.md",
           "summary": "Boot boundary and project-shape triage notes."
@@ -629,10 +637,15 @@
         {
           "kind": "source-file-exists",
           "filePath": "packages/vscode/src/client-core.ts"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/boot/source-boundary.ts",
+          "symbolName": "AuthoredSourceBoundary"
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-08-04"
+      "updatedAt": "2026-08-09"
     },
     {
       "id": "frontier:mcp-app-world-heap-budget",

@@ -103,7 +103,7 @@ Transient verdict state lives in `known-gaps.json`:
 
 This keeps the north-star requirements durable while making today's implementation gaps explicit.
 
-Current matrix scale, as of 2026-07-24:
+Matrix shape:
 
 - public app-query catalog boundary assertions;
 - source precision and cross-query agreement canaries;
@@ -129,11 +129,11 @@ Current matrix scale, as of 2026-07-24:
 - code-action edit-plan provenance, including safe no-action cases;
 - framework capability demand rows before diagnostic/code-action projection.
 
-Current default output: 594 active assertions pass with 14 known gaps. Domain totals are: template expression typing
-102/102 active, runtime API boundary 24/24, plugin capability admission 18/18, resource registration 92/92, runtime
-composition 6/6, router composition 110/110, observation/data flow 10/10, bindable contracts 86/86,
-template-controller scope 73/79, and template binding syntax 73/81. Known gaps remain requirement witnesses rather than weakened
-expectations; their current causal buckets live only in `known-gaps.json`.
+Counts and pass/gap status are runner output, not documentation state. Run
+`pnpm --filter @aurelia-ls/semantic-runtime contract:semantic-conformance`; it expands the assertion sets, validates
+the matrix and known-gap ledger, and prints the current active/known-gap totals plus grouped domain counts.
+`known-gaps.json` is the sole transient gap ledger: known gaps remain requirement witnesses rather than weakened
+expectations.
 
 The matrix is intentionally structural rather than exhaustive. New assertion families should be added when they expose
 a new semantic axis, a new answer contract, or a known data-loss risk. Do not add duplicate rows merely to raise the
