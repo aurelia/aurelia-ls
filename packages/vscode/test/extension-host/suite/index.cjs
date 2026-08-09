@@ -13,6 +13,9 @@ function run() {
     mocha.grep(process.env.AURELIA_LS_EXTENSION_HOST_GREP);
   }
 
+  if (process.env.AURELIA_LS_EXTENSION_HOST_EXPECTED_TRANSPORT === "worker") {
+    mocha.addFile(path.join(__dirname, "worker-languageclient-restart.test.cjs"));
+  }
   mocha.addFile(path.join(__dirname, "rename-undo-redo.test.cjs"));
   mocha.addFile(path.join(__dirname, "product-surface.test.cjs"));
 
