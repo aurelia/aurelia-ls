@@ -126,3 +126,22 @@ Guidelines:
   their clean Git HEAD and inputs; it never packages again. Archive contract
   tests use synthetic in-memory ZIPs and dependency-injected lifecycle seams,
   so they perform no packaging, download, network request, or Electron launch.
+- `pnpm verify:ide:vsix:installed` consumes that already-verified, current-HEAD
+  artifact without building or repackaging it. It resolves current stable VS
+  Code once, installs the exact VSIX once into an isolated extensions/profile
+  pair, and launches one fresh host with only the inert installed-test driver
+  under `--extensionDevelopmentPath`. The Aurelia extension must be the sole
+  installed product, remain outside the source and driver roots, activate from
+  its shipping `workspaceContains` event, and return the exact native
+  `searchText` Property/type-member completion. The retained evidence binds the
+  installed payload byte-for-byte to the archive receipt, authenticates the
+  driver Test context and product Production launch topology, and preserves the
+  raw driver report, install/host streams, Client log, and Extension Host log.
+  Existing evidence is never overwritten and no failed run is retried or
+  replaced. `pnpm --filter aurelia-2 release:verify-installed -- --plan` is
+  non-launching; the focused installed contract uses injected download,
+  installer, and host seams and never starts Electron or the network.
+  The inert driver is necessary because both the VS Code 1.91 and current test
+  runners require an extension-development path before they execute an
+  `--extensionTestsPath`; using only the inert driver keeps the installed
+  Aurelia product off the development-extension path.

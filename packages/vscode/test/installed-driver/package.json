@@ -1,0 +1,14 @@
+{
+  "name": "installed-vsix-driver",
+  "displayName": "Installed VSIX Test Driver",
+  "publisher": "aurelia-ls-tests",
+  "version": "0.0.0",
+  "private": true,
+  "engines": {
+    "vscode": "^1.91.0"
+  },
+  "activationEvents": [
+    "*"
+  ],
+  "main": "./extension.cjs"
+}
