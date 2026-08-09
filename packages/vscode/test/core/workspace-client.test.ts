@@ -817,6 +817,44 @@ describe("LspFacade workspace routing", () => {
       undefined,
     );
 
+    const prototypePosition = Object.assign(Object.create({
+      get line(): number { return this._line; },
+      get character(): number { return this._character; },
+    }), { _line: 28, _character: 15 }) as { readonly line: number; readonly character: number };
+    expect(structuredClone(prototypePosition)).not.toHaveProperty("line");
+
+    await facade.getTemplateResourceAvailability(
+      "file:///work/b/src/my-app.html",
+      prototypePosition,
+      "file:///work/b:app",
+      "template:my-app",
+    );
+    expect(harness.clients[1]?.sendRequest).toHaveBeenCalledWith(
+      "aurelia/templateResourceAvailability",
+      {
+        uri: "file:///work/b/src/my-app.html",
+        position: { line: 28, character: 15 },
+        projectKey: "file:///work/b:app",
+        templateResourceScopeIdentityKey: "template:my-app",
+      },
+      undefined,
+    );
+
+    await facade.renameFromTs(
+      "file:///work/b/src/card.ts",
+      prototypePosition,
+      "renamedCard",
+    );
+    expect(harness.clients[1]?.sendRequest).toHaveBeenCalledWith(
+      "aurelia/renameFromTs",
+      {
+        uri: "file:///work/b/src/card.ts",
+        position: { line: 28, character: 15 },
+        newName: "renamedCard",
+      },
+      undefined,
+    );
+
     const inventory = await facade.getResourceInventory();
     expect(inventory?.workspaces.map((workspace) => workspace.name)).toEqual(["a", "b"]);
     expect(inventory?.workspaces.map((workspace) =>
@@ -1021,6 +1059,13 @@ function createClientHarness(
           return harnessOptions.resourceResponse?.(workspaceUri) ?? resourceResponse(workspaceUri);
         case "aurelia/sourceOwnership":
           return sourceOwnershipResponse(workspaceUri, (params as { uri: string }).uri);
+        case "aurelia/templateResourceAvailability":
+          return {
+            fingerprint: `${workspaceUri}:availability`,
+            projectSelection: { status: "absent", candidates: [] },
+          };
+        case "aurelia/renameFromTs":
+          return { status: "not-applicable", reason: "not-an-aurelia-symbol" };
         case "aurelia/getRelatedFiles":
           return [{
             uri: `${workspaceUri}/related.html`,

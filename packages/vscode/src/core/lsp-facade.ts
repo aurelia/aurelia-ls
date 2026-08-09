@@ -118,7 +118,7 @@ export class LspFacade implements Disposable {
       AureliaProtocolRequest.TemplateResourceAvailability,
       {
         uri,
-        position,
+        position: protocolPosition(position),
         ...(projectKey == null ? {} : { projectKey }),
         ...(templateResourceScopeIdentityKey == null ? {} : { templateResourceScopeIdentityKey }),
       },
@@ -166,7 +166,7 @@ export class LspFacade implements Disposable {
       const response = await this.#sendRequest<RenameFromTsResponse | null>(
         session,
         AureliaProtocolRequest.RenameFromTypeScript,
-        { uri, position, ...(newName == null ? {} : { newName }) },
+        { uri, position: protocolPosition(position), ...(newName == null ? {} : { newName }) },
         token,
       );
       return response ?? {
@@ -291,6 +291,13 @@ export class LspFacade implements Disposable {
       }
     }
   }
+}
+
+function protocolPosition(position: { readonly line: number; readonly character: number }): {
+  readonly line: number;
+  readonly character: number;
+} {
+  return { line: position.line, character: position.character };
 }
 
 function isAnalysisChangedPayload(value: unknown): value is AnalysisChangedPayload {
