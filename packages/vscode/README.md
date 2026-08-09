@@ -140,6 +140,10 @@ If features aren't working:
 3. Verify `aurelia` is in your `package.json` dependencies
 4. Try reloading the VS Code window
 
+The extension normally runs one language-server Worker per admitted workspace root. To diagnose a Worker-specific
+startup or lifecycle problem, launch VS Code with `AURELIA_LS_FORCE_IPC_TRANSPORT=1`; Extension Development Host
+debugging selects IPC automatically.
+
 ## Feedback
 
 - Report issues: [aurelia/aurelia-ls](https://github.com/aurelia/aurelia-ls/issues)

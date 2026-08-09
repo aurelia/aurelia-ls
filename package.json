@@ -63,6 +63,7 @@
     "test:vscode": "pnpm -w build && node scripts/run-vitest.mjs packages/vscode",
     "test:vscode:extension-host": "pnpm --filter aurelia-2 test:extension-host",
     "test:vscode:extension-host:worker": "pnpm --filter aurelia-2 test:extension-host:worker",
+    "test:vscode:extension-host:ipc": "pnpm --filter aurelia-2 test:extension-host:ipc",
     "test:vscode:cov": "pnpm -w build && node scripts/run-vitest.mjs --coverage packages/vscode",
     "test:vite-plugin": "pnpm -w build && node scripts/run-vitest.mjs packages/vite-plugin",
     "test:vite-plugin:cov": "pnpm -w build && node scripts/run-vitest.mjs --coverage packages/vite-plugin",

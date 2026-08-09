@@ -18,8 +18,8 @@ const transportModuleUrl = pathToFileURL(path.resolve(
 suite("Worker LanguageClient restart", () => {
   test("automatically replaces an abnormally exited Worker", async () => {
     const {
-      createExperimentalWorkerCancellationStrategy,
-      createExperimentalWorkerMessageTransports,
+      createWorkerCancellationStrategy,
+      createWorkerMessageTransports,
     } = await import(transportModuleUrl.href);
     const transportEvents = [];
     const stateChanges = [];
@@ -30,7 +30,7 @@ suite("Worker LanguageClient restart", () => {
       "Aurelia Worker Restart Witness",
       () => {
         const launch = ++launches;
-        return Promise.resolve(createExperimentalWorkerMessageTransports(workerFixture, {
+        return Promise.resolve(createWorkerMessageTransports(workerFixture, {
           createWorker: () => new Worker(workerFixture, {
             stdout: true,
             stderr: true,
@@ -42,7 +42,7 @@ suite("Worker LanguageClient restart", () => {
       {
         documentSelector: [],
         connectionOptions: {
-          cancellationStrategy: createExperimentalWorkerCancellationStrategy(),
+          cancellationStrategy: createWorkerCancellationStrategy(),
           maxRestartCount: 1,
         },
       },

@@ -29,8 +29,8 @@ suite("extension-host product surface", () => {
     const extension = vscode.extensions.getExtension(extensionId);
     assert(extension, `Expected extension ${extensionId} in the Extension Development Host.`);
     const transportModuleUrl = pathToFileURL(path.join(extension.extensionPath, "out", "worker-transport.js"));
-    const { shouldUseExperimentalWorkerTransport } = await import(transportModuleUrl.href);
-    selectedTransport = shouldUseExperimentalWorkerTransport() ? "worker" : "ipc";
+    const { shouldUseWorkerTransport } = await import(transportModuleUrl.href);
+    selectedTransport = shouldUseWorkerTransport() ? "worker" : "ipc";
     await extension.activate();
     const document = await showAureliaDocument("src/my-app.html");
     await waitFor(

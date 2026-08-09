@@ -7,12 +7,11 @@ import {
 } from "vscode-jsonrpc/node";
 import { describe, expect, test } from "vitest";
 import {
-  createExperimentalWorkerCancellationStrategy,
-  createExperimentalWorkerMessageTransports,
-  EXPERIMENTAL_WORKER_TRANSPORT_ENV,
+  createWorkerCancellationStrategy,
+  createWorkerMessageTransports,
   FORCE_IPC_TRANSPORT_ENV,
-  shouldUseExperimentalWorkerTransport,
-  type ExperimentalWorkerTransportEvent,
+  shouldUseWorkerTransport,
+  type WorkerTransportEvent,
 } from "../out/worker-transport.js";
 
 const WORKER_FIXTURE = path.resolve(
@@ -20,31 +19,23 @@ const WORKER_FIXTURE = path.resolve(
   "../../language-server/test/fixtures/shared-array-cancellation-worker.mjs",
 );
 
-describe("experimental Worker transport", () => {
-  test("stays opt-in and keeps Node inspector sessions on IPC", () => {
-    expect(shouldUseExperimentalWorkerTransport({}, [])).toBe(false);
-    expect(shouldUseExperimentalWorkerTransport({
-      [EXPERIMENTAL_WORKER_TRANSPORT_ENV]: "1",
-    }, [])).toBe(true);
-    expect(shouldUseExperimentalWorkerTransport({
-      [EXPERIMENTAL_WORKER_TRANSPORT_ENV]: "1",
-    }, ["--inspect=0"])).toBe(false);
-    expect(shouldUseExperimentalWorkerTransport({
-      [EXPERIMENTAL_WORKER_TRANSPORT_ENV]: "1",
-    }, ["--inspect-brk"])).toBe(false);
-    expect(shouldUseExperimentalWorkerTransport({
-      [EXPERIMENTAL_WORKER_TRANSPORT_ENV]: "1",
+describe("Worker transport", () => {
+  test("is the default and keeps forced IPC and Node inspector sessions on IPC", () => {
+    expect(shouldUseWorkerTransport({}, [])).toBe(true);
+    expect(shouldUseWorkerTransport({}, ["--inspect=0"])).toBe(false);
+    expect(shouldUseWorkerTransport({}, ["--inspect-brk"])).toBe(false);
+    expect(shouldUseWorkerTransport({
       [FORCE_IPC_TRANSPORT_ENV]: "1",
     }, [])).toBe(false);
   });
 
   test("flips a shared token during a synchronous worker loop and exits gracefully", async () => {
-    const transports = createExperimentalWorkerMessageTransports(WORKER_FIXTURE);
+    const transports = createWorkerMessageTransports(WORKER_FIXTURE);
     const connection = createMessageConnection(
       transports.reader,
       transports.writer,
       undefined,
-      { cancellationStrategy: createExperimentalWorkerCancellationStrategy() },
+      { cancellationStrategy: createWorkerCancellationStrategy() },
     );
     connection.listen();
 
@@ -91,8 +82,8 @@ describe("experimental Worker transport", () => {
   });
 
   test("reports an abnormal crash once, closes once, and permits a fresh transport", async () => {
-    const events: ExperimentalWorkerTransportEvent[] = [];
-    const transports = createExperimentalWorkerMessageTransports("unused", {
+    const events: WorkerTransportEvent[] = [];
+    const transports = createWorkerMessageTransports("unused", {
       createWorker: () => new Worker(
         [
           "console.log('intentional Worker stdout');",
@@ -127,12 +118,12 @@ describe("experimental Worker transport", () => {
     expect(events.filter((event) => event.type === "exit")).toHaveLength(1);
     connection.dispose();
 
-    const replacement = createExperimentalWorkerMessageTransports(WORKER_FIXTURE);
+    const replacement = createWorkerMessageTransports(WORKER_FIXTURE);
     const replacementConnection = createMessageConnection(
       replacement.reader,
       replacement.writer,
       undefined,
-      { cancellationStrategy: createExperimentalWorkerCancellationStrategy() },
+      { cancellationStrategy: createWorkerCancellationStrategy() },
     );
     replacementConnection.listen();
     try {
@@ -152,10 +143,10 @@ describe("experimental Worker transport", () => {
   });
 
   test("force-terminates a noncooperative Worker after the configured grace", async () => {
-    const events: ExperimentalWorkerTransportEvent[] = [];
+    const events: WorkerTransportEvent[] = [];
     let online!: () => void;
     const onlinePromise = new Promise<void>((resolve) => { online = resolve; });
-    const transports = createExperimentalWorkerMessageTransports("unused", {
+    const transports = createWorkerMessageTransports("unused", {
       shutdownGraceMilliseconds: 25,
       createWorker: () => new Worker("setInterval(() => undefined, 1_000);", { eval: true }),
       onEvent: (event) => {
@@ -179,6 +170,38 @@ describe("experimental Worker transport", () => {
     expect(elapsedMilliseconds).toBeLessThan(500);
     expect(events.filter((event) => event.type === "force-terminate")).toEqual([
       { type: "force-terminate", graceMilliseconds: 25 },
+    ]);
+    expect(events.filter((event) => event.type === "exit")).toHaveLength(1);
+  });
+
+  test("force-terminates a noncooperative Worker after the default two-second grace", async () => {
+    const events: WorkerTransportEvent[] = [];
+    let online!: () => void;
+    const onlinePromise = new Promise<void>((resolve) => { online = resolve; });
+    const transports = createWorkerMessageTransports("unused", {
+      createWorker: () => new Worker("setInterval(() => undefined, 1_000);", { eval: true }),
+      onEvent: (event) => {
+        events.push(event);
+        if (event.type === "online") online();
+      },
+    });
+
+    await onlinePromise;
+    const startedAt = performance.now();
+    const shutdownRequest: RequestMessage = {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "shutdown",
+    };
+    await transports.writer.write(shutdownRequest);
+    const exitCode = await transports.exited;
+    const elapsedMilliseconds = performance.now() - startedAt;
+
+    expect(exitCode).not.toBe(0);
+    expect(elapsedMilliseconds).toBeGreaterThanOrEqual(1_500);
+    expect(elapsedMilliseconds).toBeLessThan(10_000);
+    expect(events.filter((event) => event.type === "force-terminate")).toEqual([
+      { type: "force-terminate", graceMilliseconds: 2_000 },
     ]);
     expect(events.filter((event) => event.type === "exit")).toHaveLength(1);
   });

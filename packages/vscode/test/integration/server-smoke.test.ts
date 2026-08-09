@@ -15,8 +15,8 @@ import { pathToFileURL } from "node:url";
 import { createMessageConnection } from "vscode-jsonrpc/node";
 import { test, expect, afterEach } from "vitest";
 import {
-  createExperimentalWorkerCancellationStrategy,
-  createExperimentalWorkerMessageTransports,
+  createWorkerCancellationStrategy,
+  createWorkerMessageTransports,
 } from "../../out/worker-transport.js";
 
 const VSCODE_PACKAGE_ROOT = path.resolve(import.meta.dirname, "../..");
@@ -169,12 +169,12 @@ test("bundled server initializes and confirms semantic workspace shape", async (
 test("bundled server initializes over Worker transport and exits cleanly", async () => {
   ensureBundledServer();
 
-  const transports = createExperimentalWorkerMessageTransports(SERVER_PATH);
+  const transports = createWorkerMessageTransports(SERVER_PATH);
   const connection = createMessageConnection(
     transports.reader,
     transports.writer,
     undefined,
-    { cancellationStrategy: createExperimentalWorkerCancellationStrategy() },
+    { cancellationStrategy: createWorkerCancellationStrategy() },
   );
   connection.listen();
 

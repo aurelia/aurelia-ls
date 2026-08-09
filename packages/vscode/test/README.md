@@ -24,7 +24,9 @@ Guidelines:
 - Activation test runs under `@vscode/test-electron` (set `VSCODE_RUNNER=1`).
 - Extension-host reliability tests launch real VS Code against a disposable
   multi-root workspace containing `fixtures/hello-world` and an unowned plain
-  TypeScript project: run `pnpm test:vscode:extension-host`.
+  TypeScript project. Run `pnpm test:vscode:extension-host` (or its explicit
+  `:worker` alias) for the shipping-default Worker lane and
+  `pnpm test:vscode:extension-host:ipc` for the forced-IPC control lane.
   Keep this suite focused on client-boundary behavior that Vitest stubs cannot
   observe, such as multi-file edit application,
   lazy code-action resolution, undo/redo grouping, dirty state, diagnostics

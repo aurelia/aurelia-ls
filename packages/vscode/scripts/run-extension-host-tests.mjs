@@ -17,9 +17,10 @@ const testWorkspace = join(tempRoot, "extension-host.code-workspace");
 const workerMode = parseWorkerMode(process.argv.slice(2));
 
 function parseWorkerMode(args) {
-  if (args.length === 0) return false;
+  if (args.length === 0) return true;
   if (args.length === 1 && args[0] === "--worker") return true;
-  throw new Error(`Usage: node scripts/run-extension-host-tests.mjs [--worker]. Received: ${args.join(" ")}`);
+  if (args.length === 1 && args[0] === "--ipc") return false;
+  throw new Error(`Usage: node scripts/run-extension-host-tests.mjs [--worker|--ipc]. Received: ${args.join(" ")}`);
 }
 
 function assertInside(parent, child) {
@@ -115,7 +116,6 @@ await runTests({
     AURELIA_LS_EXTENSION_HOST_PLAIN_WORKSPACE: plainTypeScriptWorkspace,
     AURELIA_LS_EXTENSION_HOST_EXPECTED_TRANSPORT: workerMode ? "worker" : "ipc",
     AURELIA_LS_EXTENSION_HOST_OBSERVATION: "1",
-    AURELIA_LS_EXPERIMENTAL_WORKER_TRANSPORT: workerMode ? "1" : "0",
     AURELIA_LS_FORCE_IPC_TRANSPORT: workerMode ? "0" : "1",
     ...(process.env.AURELIA_LS_EXTENSION_HOST_GREP
       ? { AURELIA_LS_EXTENSION_HOST_GREP: process.env.AURELIA_LS_EXTENSION_HOST_GREP }

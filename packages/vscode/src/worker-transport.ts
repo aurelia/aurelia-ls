@@ -11,13 +11,12 @@ import {
 } from "vscode-jsonrpc/node";
 import type { MessageTransports } from "vscode-languageclient/node";
 
-export const EXPERIMENTAL_WORKER_TRANSPORT_ENV = "AURELIA_LS_EXPERIMENTAL_WORKER_TRANSPORT";
 export const FORCE_IPC_TRANSPORT_ENV = "AURELIA_LS_FORCE_IPC_TRANSPORT";
 
 const DEFAULT_WORKER_SHUTDOWN_GRACE_MS = 2_000;
 const DEBUG_FLAGS = new Set(["--debug", "--debug-brk", "--inspect", "--inspect-brk"]);
 
-export type ExperimentalWorkerTransportEvent =
+export type WorkerTransportEvent =
   | { readonly type: "online" }
   | { readonly type: "stdout"; readonly text: string }
   | { readonly type: "stderr"; readonly text: string }
@@ -25,31 +24,30 @@ export type ExperimentalWorkerTransportEvent =
   | { readonly type: "exit"; readonly code: number }
   | { readonly type: "force-terminate"; readonly graceMilliseconds: number };
 
-export interface ExperimentalWorkerTransportOptions {
+export interface WorkerTransportOptions {
   readonly shutdownGraceMilliseconds?: number;
   readonly createWorker?: (serverModule: string) => Worker;
-  readonly onEvent?: (event: ExperimentalWorkerTransportEvent) => void;
+  readonly onEvent?: (event: WorkerTransportEvent) => void;
 }
 
-export interface ExperimentalWorkerMessageTransports extends MessageTransports {
+export interface WorkerMessageTransports extends MessageTransports {
   /** Resolves once for either a graceful or abnormal Worker exit. */
   readonly exited: Promise<number>;
   /** Immediate, idempotent cleanup without exposing the underlying Worker. */
   terminate(): Promise<number>;
 }
 
-/** The worker experiment is deliberately excluded from debugging and emergency IPC sessions. */
-export function shouldUseExperimentalWorkerTransport(
+/** Worker transport is the default; debugging and the explicit emergency escape hatch retain IPC. */
+export function shouldUseWorkerTransport(
   env: Readonly<Record<string, string | undefined>> = process.env,
   execArgv: readonly string[] = process.execArgv,
 ): boolean {
   return env[FORCE_IPC_TRANSPORT_ENV] !== "1"
-    && env[EXPERIMENTAL_WORKER_TRANSPORT_ENV] === "1"
     && !execArgv.some(isNodeDebugFlag);
 }
 
 /** Client half of the asymmetric shared-array cancellation contract. */
-export function createExperimentalWorkerCancellationStrategy(): CancellationStrategy {
+export function createWorkerCancellationStrategy(): CancellationStrategy {
   return {
     receiver: CancellationReceiverStrategy.Message,
     sender: new SharedArraySenderStrategy(),
@@ -62,10 +60,10 @@ export function createExperimentalWorkerCancellationStrategy(): CancellationStra
  * The LSP shutdown/exit sequence remains authoritative. A delayed termination
  * is only a backstop when a worker does not retire after its connection ends.
  */
-export function createExperimentalWorkerMessageTransports(
+export function createWorkerMessageTransports(
   serverModule: string,
-  options: ExperimentalWorkerTransportOptions = {},
-): ExperimentalWorkerMessageTransports {
+  options: WorkerTransportOptions = {},
+): WorkerMessageTransports {
   const shutdownGraceMilliseconds = options.shutdownGraceMilliseconds
     ?? DEFAULT_WORKER_SHUTDOWN_GRACE_MS;
   if (!Number.isFinite(shutdownGraceMilliseconds) || shutdownGraceMilliseconds < 0) {
@@ -105,7 +103,7 @@ function isNodeDebugFlag(argument: string): boolean {
 class WorkerLifetime {
   readonly #worker: Worker;
   readonly #shutdownGraceMilliseconds: number;
-  readonly #onEvent: ((event: ExperimentalWorkerTransportEvent) => void) | undefined;
+  readonly #onEvent: ((event: WorkerTransportEvent) => void) | undefined;
   readonly exited: Promise<number>;
   #resolveExited!: (code: number) => void;
   #reader: OwnedWorkerMessageReader | undefined;
@@ -117,7 +115,7 @@ class WorkerLifetime {
   constructor(
     worker: Worker,
     shutdownGraceMilliseconds: number,
-    onEvent: ((event: ExperimentalWorkerTransportEvent) => void) | undefined,
+    onEvent: ((event: WorkerTransportEvent) => void) | undefined,
   ) {
     this.#worker = worker;
     this.#shutdownGraceMilliseconds = shutdownGraceMilliseconds;
@@ -191,7 +189,7 @@ class WorkerLifetime {
     this.#resolveExited(code);
   }
 
-  #report(event: ExperimentalWorkerTransportEvent): void {
+  #report(event: WorkerTransportEvent): void {
     try {
       this.#onEvent?.(event);
     } catch {

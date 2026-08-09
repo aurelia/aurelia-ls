@@ -10,9 +10,9 @@ import { AureliaLanguageClient, type LanguageClientFactory } from "./client-core
 import { DefaultFeatures } from "./features/index.js";
 import { ClientLogger } from "./log.js";
 import {
-  createExperimentalWorkerCancellationStrategy,
-  createExperimentalWorkerMessageTransports,
-  shouldUseExperimentalWorkerTransport,
+  createWorkerCancellationStrategy,
+  createWorkerMessageTransports,
+  shouldUseWorkerTransport,
 } from "./worker-transport.js";
 
 let app: ClientApp | undefined;
@@ -46,34 +46,34 @@ const createLanguageClient = (logger: ClientLogger): LanguageClientFactory => (
   clientOptions: LanguageClientOptions,
 ): LanguageClient => {
   const transportLogger = logger.child("client", { id, name });
-  if (shouldUseExperimentalWorkerTransport()) {
+  if (shouldUseWorkerTransport()) {
     return new LanguageClient(
       id,
       name,
-      () => Promise.resolve(createExperimentalWorkerMessageTransports(serverModule, {
+      () => Promise.resolve(createWorkerMessageTransports(serverModule, {
         onEvent: (event) => {
           switch (event.type) {
             case "online":
-              transportLogger.debug("Experimental Worker transport is online");
+              transportLogger.debug("Worker transport is online");
               break;
             case "stdout":
-              transportLogger.debug("Experimental Worker stdout", { text: event.text.trimEnd() });
+              transportLogger.debug("Worker stdout", { text: event.text.trimEnd() });
               break;
             case "stderr":
-              transportLogger.warn("Experimental Worker stderr", { text: event.text.trimEnd() });
+              transportLogger.warn("Worker stderr", { text: event.text.trimEnd() });
               break;
             case "error":
-              transportLogger.error("Experimental Worker transport failed", undefined, event.error);
+              transportLogger.error("Worker transport failed", undefined, event.error);
               break;
             case "exit":
               if (event.code === 0) {
-                transportLogger.debug("Experimental Worker transport exited", { code: event.code });
+                transportLogger.debug("Worker transport exited", { code: event.code });
               } else {
-                transportLogger.warn("Experimental Worker transport exited abnormally", { code: event.code });
+                transportLogger.warn("Worker transport exited abnormally", { code: event.code });
               }
               break;
             case "force-terminate":
-              transportLogger.warn("Experimental Worker transport exceeded its shutdown grace", {
+              transportLogger.warn("Worker transport exceeded its shutdown grace", {
                 graceMilliseconds: event.graceMilliseconds,
               });
               break;
@@ -84,7 +84,7 @@ const createLanguageClient = (logger: ClientLogger): LanguageClientFactory => (
         ...clientOptions,
         connectionOptions: {
           ...clientOptions.connectionOptions,
-          cancellationStrategy: createExperimentalWorkerCancellationStrategy(),
+          cancellationStrategy: createWorkerCancellationStrategy(),
         },
       },
     );
