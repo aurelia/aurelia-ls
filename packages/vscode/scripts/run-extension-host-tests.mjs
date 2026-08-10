@@ -1,4 +1,13 @@
-import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -14,6 +23,15 @@ const repoRoot = resolve(__dirname, "../../..");
 const extensionDevelopmentPath = resolve(__dirname, "..");
 const extensionTestsPath = join(extensionDevelopmentPath, "test", "extension-host", "suite", "index.cjs");
 const sourceWorkspace = join(repoRoot, "fixtures", "hello-world");
+const routedSourceWorkspace = join(
+  repoRoot,
+  "packages",
+  "semantic-runtime",
+  "fixtures",
+  "pressure",
+  "app-pattern-routed-catalog-storefront",
+);
+const semanticRuntimeDependencies = join(repoRoot, "packages", "semantic-runtime", "node_modules");
 const tempRoot = join(repoRoot, ".temp", "vscode-extension-host");
 const usage = [
   "Usage: node scripts/run-extension-host-tests.mjs",
@@ -138,6 +156,9 @@ export async function runExtensionHostTests(plan, dependencies = {}) {
         AURELIA_LS_EXTENSION_HOST_SECONDARY_WORKSPACE: workspace.secondaryAureliaWorkspace,
         AURELIA_LS_EXTENSION_HOST_EXCLUDED_WORKSPACE: workspace.excludedAureliaWorkspace,
         AURELIA_LS_EXTENSION_HOST_PLAIN_WORKSPACE: workspace.plainTypeScriptWorkspace,
+        ...(shard === "product-support"
+          ? { AURELIA_LS_EXTENSION_HOST_ROUTED_WORKSPACE: workspace.routedAureliaWorkspace }
+          : {}),
         AURELIA_LS_EXTENSION_HOST_SHARD: shard,
         AURELIA_LS_EXTENSION_HOST_EXPECTED_ACTUAL_VERSION: resolvedVersion,
         AURELIA_LS_EXTENSION_HOST_EXPECTED_VERSION: plan.version,
@@ -170,6 +191,9 @@ function prepareTestWorkspace(shard) {
   const secondaryAureliaWorkspace = join(shardRoot, "hello-world-secondary");
   const excludedAureliaWorkspace = join(aureliaWorkspace, "excluded-project");
   const plainTypeScriptWorkspace = join(shardRoot, "plain-typescript");
+  const routedAureliaWorkspace = shard === "product-support"
+    ? join(shardRoot, "routed-catalog-storefront")
+    : null;
   const testWorkspace = join(shardRoot, "extension-host.code-workspace");
   const userDataDirectory = join(shardRoot, "profile", "user-data");
   const extensionsDirectory = join(shardRoot, "profile", "extensions");
@@ -180,6 +204,7 @@ function prepareTestWorkspace(shard) {
   assertInside(shardRoot, secondaryAureliaWorkspace);
   assertInside(aureliaWorkspace, excludedAureliaWorkspace);
   assertInside(shardRoot, plainTypeScriptWorkspace);
+  if (routedAureliaWorkspace != null) assertInside(shardRoot, routedAureliaWorkspace);
   assertInside(shardRoot, testWorkspace);
   assertInside(shardRoot, userDataDirectory);
   assertInside(shardRoot, extensionsDirectory);
@@ -192,6 +217,13 @@ function prepareTestWorkspace(shard) {
   mkdirSync(extensionsDirectory, { recursive: true });
   cpSync(sourceWorkspace, aureliaWorkspace, { recursive: true });
   cpSync(sourceWorkspace, secondaryAureliaWorkspace, { recursive: true });
+  if (routedAureliaWorkspace != null) {
+    cpSync(routedSourceWorkspace, routedAureliaWorkspace, { recursive: true });
+    linkDirectoryExactly(
+      semanticRuntimeDependencies,
+      join(routedAureliaWorkspace, "node_modules"),
+    );
+  }
   writeFileSync(
     join(aureliaWorkspace, "aurelia.project.json"),
     "{\n  // JSONC syntax is intentional.\n  \"version\": 1,\n}\n",
@@ -243,6 +275,9 @@ function prepareTestWorkspace(shard) {
   writeFileSync(testWorkspace, JSON.stringify({
     folders: [
       { name: "hello-world", path: "hello-world" },
+      ...(routedAureliaWorkspace == null
+        ? []
+        : [{ name: "routed-catalog-storefront", path: "routed-catalog-storefront" }]),
       { name: "excluded-project", path: "hello-world/excluded-project" },
       { name: "plain-typescript", path: "plain-typescript" },
     ],
@@ -253,10 +288,23 @@ function prepareTestWorkspace(shard) {
     secondaryAureliaWorkspace,
     excludedAureliaWorkspace,
     plainTypeScriptWorkspace,
+    routedAureliaWorkspace,
     testWorkspace,
     userDataDirectory,
     extensionsDirectory,
   };
+}
+
+function linkDirectoryExactly(target, linkPath) {
+  assertInside(repoRoot, target);
+  assertInside(tempRoot, linkPath);
+  if (!existsSync(target) || !lstatSync(target).isDirectory()) {
+    throw new Error(`Extension Host dependency directory does not exist: ${target}`);
+  }
+  symlinkSync(target, linkPath, process.platform === "win32" ? "junction" : "dir");
+  if (!lstatSync(linkPath).isSymbolicLink() || realpathSync(linkPath) !== realpathSync(target)) {
+    throw new Error(`Extension Host dependency link does not resolve exactly to ${target}: ${linkPath}`);
+  }
 }
 
 function assertInside(parent, child) {

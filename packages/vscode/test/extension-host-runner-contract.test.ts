@@ -23,6 +23,7 @@ interface ExecutionProbe {
     readonly shard: string;
     readonly expectedActualVersion: string;
     readonly expectedTransport: string;
+    readonly routedWorkspace: string | null;
     readonly tailObservation: string | null;
     readonly testWorkspace: string;
     readonly userDataArgument: string;
@@ -103,6 +104,11 @@ describe("Extension Host support runner", () => {
       ["rename-reliability", null],
       ["product-support", "1"],
     ]);
+    expect(probe.launches.map((launch) => [launch.shard, launch.routedWorkspace])).toEqual([
+      ["worker-lifecycle", null],
+      ["rename-reliability", null],
+      ["product-support", "/mock/product-support/routed"],
+    ]);
   });
 
   test("exposes default, Worker, IPC, current-stable, and exact-minimum package entry points", () => {
@@ -181,6 +187,8 @@ function readExecutionProbe(): ExecutionProbe {
               options.extensionTestsEnv.AURELIA_LS_EXTENSION_HOST_EXPECTED_ACTUAL_VERSION,
             expectedTransport:
               options.extensionTestsEnv.AURELIA_LS_EXTENSION_HOST_EXPECTED_TRANSPORT,
+            routedWorkspace:
+              options.extensionTestsEnv.AURELIA_LS_EXTENSION_HOST_ROUTED_WORKSPACE ?? null,
             tailObservation:
               options.extensionTestsEnv.AURELIA_LS_EXTENSION_HOST_TAIL_OBSERVATION ?? null,
             testWorkspace: options.launchArgs[0],
@@ -199,6 +207,7 @@ function readExecutionProbe(): ExecutionProbe {
           secondaryAureliaWorkspace: root + "/secondary",
           excludedAureliaWorkspace: root + "/excluded",
           plainTypeScriptWorkspace: root + "/plain",
+          routedAureliaWorkspace: root + "/routed",
           testWorkspace: root + "/workspace.code-workspace",
           userDataDirectory: root + "/profile/user-data",
           extensionsDirectory: root + "/profile/extensions",

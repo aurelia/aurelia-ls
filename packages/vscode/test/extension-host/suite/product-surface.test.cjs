@@ -7,16 +7,103 @@ const aureliaWorkspace = process.env.AURELIA_LS_EXTENSION_HOST_WORKSPACE;
 const secondaryAureliaWorkspace = process.env.AURELIA_LS_EXTENSION_HOST_SECONDARY_WORKSPACE;
 const excludedAureliaWorkspace = process.env.AURELIA_LS_EXTENSION_HOST_EXCLUDED_WORKSPACE;
 const plainTypeScriptWorkspace = process.env.AURELIA_LS_EXTENSION_HOST_PLAIN_WORKSPACE;
+const routedAureliaWorkspace = process.env.AURELIA_LS_EXTENSION_HOST_ROUTED_WORKSPACE;
 const expectedTransport = process.env.AURELIA_LS_EXTENSION_HOST_EXPECTED_TRANSPORT;
 const extensionId = "AureliaEffect.aurelia-2";
 const extensionHostObservationEvent = "aurelia-ls:extension-host-observation";
 const extensionHostObservations = [];
+const memberHoverMarkdown = [
+  "```ts",
+  "searchText: string",
+  "```",
+].join("\n");
+const letLocalHoverMarkdown = [
+  "```ts",
+  "preview: CatalogItem",
+  "```",
+  "",
+  "Let local.",
+].join("\n");
+const repeatLocalHoverMarkdown = [
+  "```ts",
+  "item: CatalogItem",
+  "```",
+  "",
+  "Repeat local.",
+].join("\n");
+const productCardHoverMarkdown = [
+  "```html",
+  "<product-card>",
+  "```",
+  "",
+  "Aurelia custom element. Implementation: `ProductCard`.",
+].join("\n");
+const productItemBindableHoverMarkdown = [
+  "```ts",
+  "(bindable) item: CatalogItem | null",
+  "```",
+  "",
+  "Default mode: to view.",
+].join("\n");
+const catalogCardAliasHoverMarkdown = [
+  "```html",
+  "<catalog-card>",
+  "```",
+  "",
+  "Aurelia custom element. Alias for: `product-card`. Implementation: `ProductCard`.",
+].join("\n");
+const missingMemberDiagnosticHoverMarkdown = [
+  "Warning `missing-expression-member`: Member \"label\" is not projected on the owner type, so semantic tooling cannot validate or navigate it.",
+].join("\n");
+const weakOwnerIdentityHoverMarkdown = [
+  "```ts",
+  "source: unknown",
+  "```",
+].join("\n");
+const staticRoutePathHoverMarkdown = [
+  "```text",
+  '(route path) "items"',
+  "```",
+].join("\n");
+const parameterizedRoutePathHoverMarkdown = [
+  "```text",
+  '(route path) "items/item-1"',
+  "```",
+  "",
+  "Configured route id: `item-detail`.",
+].join("\n");
+const quotedRouteIdHoverMarkdown = [
+  "```text",
+  "(route id) 'item-detail'",
+  "```",
+].join("\n");
+const dynamicRouteHoverMarkdown = "Dynamic route target.";
+const nativeTitleAliasHoverMarkdown = [
+  "```text",
+  "(custom attribute) title",
+  "```",
+  "",
+  "Aurelia custom attribute. Alias for: `display-hint`. Implementation: `DisplayHint`.",
+].join("\n");
+const currentContextHoverMarkdown = [
+  "```ts",
+  "$this: MyApp",
+  "```",
+  "",
+  "Current Aurelia binding context.",
+].join("\n");
 const recordExtensionHostObservation = (event) => {
   if (event != null && typeof event === "object") extensionHostObservations.push(event);
 };
 let selectedTransport;
 
-if (!aureliaWorkspace || !secondaryAureliaWorkspace || !excludedAureliaWorkspace || !plainTypeScriptWorkspace) {
+if (
+  !aureliaWorkspace
+  || !secondaryAureliaWorkspace
+  || !excludedAureliaWorkspace
+  || !plainTypeScriptWorkspace
+  || !routedAureliaWorkspace
+) {
   throw new Error("All extension-host workspace paths are required.");
 }
 if (expectedTransport !== "worker" && expectedTransport !== "ipc") {
@@ -77,7 +164,7 @@ suite("extension-host product surface", () => {
     const availableOrigin = await showAureliaDocument("src/my-app.html");
     await waitFor(
       async () => (await hoverMarkdown(availableOrigin, "<product-card", "product-card"))
-        .includes("**Resource** `product-card`"),
+        .includes("<product-card>"),
       "the active template should be re-admitted before cursor-scoped resource navigation",
       60_000,
     );
@@ -89,15 +176,59 @@ suite("extension-host product surface", () => {
     assertAuthoredResourceDocument(vscode.window.activeTextEditor?.document, origin.uri);
   });
 
-  test("projects resource and bindable facts through live editor providers", async () => {
+  test("projects bounded hover cards and related facts through live editor providers", async () => {
     const document = await showAureliaDocument("src/my-app.html");
-    const resourceHover = await hoverMarkdown(document, "<product-card", "product-card");
-    assert(resourceHover.includes("**Resource** `product-card`"));
-    assert(resourceHover.includes("kind: `custom-element`"));
+    const resourceHoverResult = await exactHoverAt(
+      document,
+      "<product-card",
+      "product-card",
+      productCardHoverMarkdown,
+    );
+    const bindableHoverResult = await exactHoverAt(
+      document,
+      "<product-card",
+      "item",
+      productItemBindableHoverMarkdown,
+    );
+    const resourceHover = hoverMarkdownText(resourceHoverResult);
+    const bindableHover = hoverMarkdownText(bindableHoverResult);
 
-    const bindableHover = await hoverMarkdown(document, "<product-card", "item.bind");
-    assert(bindableHover.includes("**Bindable** `item`"));
-    assert(bindableHover.includes("**Resource** `product-card`"));
+    const memberHover = await exactHoverAt(
+      document,
+      "state.searchText",
+      "searchText",
+      memberHoverMarkdown,
+    );
+    const letLocalHover = await exactHoverAt(
+      document,
+      '<let preview.bind="selectedItem">',
+      "preview",
+      letLocalHoverMarkdown,
+    );
+    const repeatLocalUseHover = await exactHoverAt(
+      document,
+      'display-label.bind="item.name"',
+      "item",
+      repeatLocalHoverMarkdown,
+    );
+    const repeatLocalDeclarationHover = await exactHoverAt(
+      document,
+      '<li repeat.for="item of visibleItems">',
+      "item",
+      repeatLocalHoverMarkdown,
+    );
+    assertBoundedHoverCard(resourceHover, "custom-element resource");
+    assertBoundedHoverCard(bindableHover, "typed bindable");
+    assertBoundedHoverCard(hoverMarkdownText(memberHover), "member");
+    assertBoundedHoverCard(hoverMarkdownText(letLocalHover), "let local");
+    assertBoundedHoverCard(hoverMarkdownText(repeatLocalUseHover), "repeat-local use");
+    assertBoundedHoverCard(hoverMarkdownText(repeatLocalDeclarationHover), "repeat-local declaration");
+    assert(!hoverMarkdownText(letLocalHover).includes("Aurelia custom attribute"));
+    assert(!hoverMarkdownText(letLocalHover).includes("(bindable)"));
+    assert(!hoverMarkdownText(repeatLocalUseHover).includes("Aurelia template controller"));
+    assert(!hoverMarkdownText(repeatLocalUseHover).includes("(bindable)"));
+    assert(!hoverMarkdownText(repeatLocalDeclarationHover).includes("Aurelia template controller"));
+    assert(!hoverMarkdownText(repeatLocalDeclarationHover).includes("(bindable)"));
 
     const definitions = await definitionsAt(document, "<product-card", "product-card");
     assert(definitions.some((uri) =>
@@ -129,12 +260,318 @@ suite("extension-host product surface", () => {
         `Expected native references to include ${expectedPath}.`,
       );
     }
+
+    const productDocument = await showAureliaDocument("src/components/product-card.ts");
+    const templateBaseline = document.getText();
+    const productBaseline = productDocument.getText();
+    const aliasedProduct = productBaseline.replace(
+      "  name: 'product-card',",
+      "  name: 'product-card',\n  aliases: ['catalog-card'],",
+    );
+    const aliasMarkup = '    <catalog-card item.bind="preview"></catalog-card>\n';
+    const aliasedTemplate = templateBaseline.replace("  </main>", `${aliasMarkup}  </main>`);
+    assert.notStrictEqual(aliasedProduct, productBaseline, "Expected the alias decorator edit to apply.");
+    assert.notStrictEqual(aliasedTemplate, templateBaseline, "Expected the alias usage edit to apply.");
+
+    try {
+      await replaceDocumentTexts([
+        [productDocument, aliasedProduct],
+        [document, aliasedTemplate],
+      ]);
+      await waitFor(
+        async () => (await hoverMarkdown(document, "<catalog-card", "catalog-card"))
+          .includes("Alias for: `product-card`."),
+        "the in-memory resource alias should reach the native hover provider",
+        60_000,
+      );
+      const aliasHover = await exactHoverAt(
+        document,
+        "<catalog-card",
+        "catalog-card",
+        catalogCardAliasHoverMarkdown,
+      );
+      assertBoundedHoverCard(hoverMarkdownText(aliasHover), "source-backed resource alias");
+    } finally {
+      if (productDocument.getText() !== productBaseline || document.getText() !== templateBaseline) {
+        await replaceDocumentTexts([
+          [productDocument, productBaseline],
+          [document, templateBaseline],
+        ]);
+      }
+      await waitFor(
+        async () => (await hoverMarkdown(document, "<product-card", "product-card"))
+          === productCardHoverMarkdown,
+        "resource-alias cleanup should restore the canonical resource hover",
+        60_000,
+      );
+    }
+  });
+
+  test("clips a long member signature and projects the bare current context", async () => {
+    const templateDocument = await showAureliaDocument("src/my-app.html");
+    const componentDocument = await showAureliaDocument("src/my-app.ts");
+    const templateBaseline = templateDocument.getText();
+    const componentBaseline = componentDocument.getText();
+    const longTypeDeclaration = [
+      "  readonly hoverBudgetValue:",
+      "    | 'catalogalphaselectionwithaverylongdescriptivename'",
+      "    | 'catalogbetaselectionwithaverylongdescriptivename'",
+      "    | 'cataloggammaselectionwithaverylongdescriptivename'",
+      "    | 'catalogdeltaselectionwithaverylongdescriptivename'",
+      "    | 'catalogepsilonselectionwithaverylongdescriptivename'",
+      "    = 'catalogalphaselectionwithaverylongdescriptivename';",
+      "",
+    ].join("\n");
+    const hoverMarkup = [
+      "    <p>${hoverBudgetValue}</p>",
+      "    <p>${$this}</p>",
+      "",
+    ].join("\n");
+    const editedComponent = componentBaseline.replace(
+      "  readonly heading = 'Aurelia IDE playground';",
+      `  readonly heading = 'Aurelia IDE playground';\n${longTypeDeclaration}`,
+    );
+    const editedTemplate = templateBaseline.replace("  </main>", `${hoverMarkup}  </main>`);
+    assert.notStrictEqual(editedComponent, componentBaseline, "Expected the long union member to be inserted.");
+    assert.notStrictEqual(editedTemplate, templateBaseline, "Expected the hover budget witnesses to be inserted.");
+
+    try {
+      await replaceDocumentTexts([
+        [componentDocument, editedComponent],
+        [templateDocument, editedTemplate],
+      ]);
+      await waitFor(
+        async () => (await hoverMarkdown(
+          templateDocument,
+          "${hoverBudgetValue}",
+          "hoverBudgetValue",
+        )).includes("hoverBudgetValue:"),
+        "the in-memory long union member should reach the hover provider",
+        60_000,
+      );
+      const longHovers = await hoversAt(
+        templateDocument,
+        "${hoverBudgetValue}",
+        "hoverBudgetValue",
+      );
+      assert.strictEqual(
+        longHovers.length,
+        1,
+        `Expected one long member hover; observed ${JSON.stringify(longHovers.map(hoverMarkdownText))}.`,
+      );
+      const longHover = longHovers[0];
+      assert(longHover.range instanceof vscode.Range, "Expected the long member hover to retain its range.");
+      assert.strictEqual(templateDocument.getText(longHover.range), "hoverBudgetValue");
+      const longMarkdown = hoverMarkdownText(longHover);
+      const longIdentity = hoverIdentityLine(longMarkdown);
+      assert(
+        longIdentity.startsWith("readonly hoverBudgetValue: "),
+        `Expected the proved readonly signature, received ${longIdentity}.`,
+      );
+      assert(longIdentity.endsWith("…"), `Expected clipped long union identity, received ${longIdentity}.`);
+      assert(Array.from("hoverBudgetValue").length <= 80);
+      assert(Array.from(longIdentity).length <= 160);
+      assert(!longIdentity.includes("catalogepsilonselectionwithaverylongdescriptivename"));
+      assertBoundedHoverCard(longMarkdown, "long union member");
+
+      await exactHoverAt(
+        templateDocument,
+        "${$this}",
+        "$this",
+        currentContextHoverMarkdown,
+      );
+    } finally {
+      if (
+        componentDocument.getText() !== componentBaseline
+        || templateDocument.getText() !== templateBaseline
+      ) {
+        await replaceDocumentTexts([
+          [componentDocument, componentBaseline],
+          [templateDocument, templateBaseline],
+        ]);
+      }
+      await waitFor(
+        async () => (await hoverMarkdown(templateDocument, "state.searchText", "searchText"))
+          === memberHoverMarkdown,
+        "hover budget witness cleanup should restore the checked-in component and template",
+        60_000,
+      );
+    }
+  });
+
+  test("projects exact, open, and refused route hovers through the admitted router root", async () => {
+    const document = await showAureliaDocument("src/app.html", routedAureliaWorkspace);
+    await waitFor(
+      async () => (await hoverMarkdown(document, 'load="items"', "items"))
+        === staticRoutePathHoverMarkdown,
+      "the routed workspace should answer its exact static path hover",
+      60_000,
+    );
+    await exactHoverAt(
+      document,
+      'load="items"',
+      "items",
+      staticRoutePathHoverMarkdown,
+    );
+    await exactHoverAt(
+      document,
+      'load="items/item-1?ref=featured#details"',
+      "item-1",
+      parameterizedRoutePathHoverMarkdown,
+      "items/item-1",
+    );
+    await noHoverAt(document, 'load="items/item-1?ref=featured#details"', "ref");
+    await noHoverAt(document, 'load="items/item-1?ref=featured#details"', "details");
+
+    const appDocument = await showAureliaDocument("src/app.ts", routedAureliaWorkspace);
+    const templateBaseline = document.getText();
+    const appBaseline = appDocument.getText();
+    const routeMarkup = [
+      '      <a load="route.bind: \'item-detail\'; params.bind: { itemId: \'item-1\' }">Detail by id</a>',
+      '      <a load="route: item-detail; context.bind: alternateContext; params.bind: { itemId: \'item-1\' }">Open detail</a>',
+      "",
+    ].join("\n");
+    const editedTemplate = templateBaseline.replace("    </nav>", `${routeMarkup}    </nav>`);
+    const editedApp = appBaseline.replace(
+      "  readonly catalogStatus = Promise.resolve('Featured items refreshes daily.');",
+      "  readonly catalogStatus = Promise.resolve('Featured items refreshes daily.');\n  alternateContext!: unknown;",
+    );
+    assert.notStrictEqual(editedTemplate, templateBaseline, "Expected route witnesses to be inserted.");
+    assert.notStrictEqual(editedApp, appBaseline, "Expected the open route context to be inserted.");
+
+    try {
+      await replaceDocumentTexts([
+        [appDocument, editedApp],
+        [document, editedTemplate],
+      ]);
+      await waitFor(
+        async () => (await hoverMarkdown(
+          document,
+          "route.bind: 'item-detail'; params.bind:",
+          "item-detail",
+        )) === quotedRouteIdHoverMarkdown,
+        "the in-memory literal route id should reach the native hover provider",
+        60_000,
+      );
+      await exactHoverAt(
+        document,
+        "route.bind: 'item-detail'; params.bind:",
+        "item-detail",
+        quotedRouteIdHoverMarkdown,
+        "'item-detail'",
+      );
+      await exactHoverAt(
+        document,
+        "route: item-detail; context.bind: alternateContext",
+        "item-detail",
+        dynamicRouteHoverMarkdown,
+      );
+    } finally {
+      if (appDocument.getText() !== appBaseline || document.getText() !== templateBaseline) {
+        await replaceDocumentTexts([
+          [appDocument, appBaseline],
+          [document, templateBaseline],
+        ]);
+      }
+      await waitFor(
+        async () => (await hoverMarkdown(document, 'load="items"', "items"))
+          === staticRoutePathHoverMarkdown,
+        "route witness cleanup should restore the checked-in routed template",
+        60_000,
+      );
+    }
+  });
+
+  test("coexists with native HTML hover and leaves TypeScript hover to the native provider", async () => {
+    const templateDocument = await showAureliaDocument("src/my-app.html");
+    const attributeDocument = await showAureliaDocument("src/attributes/display-hint.ts");
+    const templateBaseline = templateDocument.getText();
+    const attributeBaseline = attributeDocument.getText();
+    const editedAttribute = attributeBaseline.replace(
+      "  name: 'display-hint',",
+      "  name: 'display-hint',\n  aliases: ['title'],",
+    );
+    const nativeAliasMarkup = '    <div title="Native and Aurelia">Provider coexistence</div>\n';
+    const editedTemplate = templateBaseline.replace("  </main>", `${nativeAliasMarkup}  </main>`);
+    assert.notStrictEqual(editedAttribute, attributeBaseline, "Expected the native-title alias to be inserted.");
+    assert.notStrictEqual(editedTemplate, templateBaseline, "Expected the native-title usage to be inserted.");
+
+    try {
+      await replaceDocumentTexts([
+        [attributeDocument, editedAttribute],
+        [templateDocument, editedTemplate],
+      ]);
+      await waitFor(
+        async () => (await hoversAt(
+          templateDocument,
+          '<div title="Native and Aurelia">',
+          "title",
+        )).some((hover) => hoverMarkdownText(hover) === nativeTitleAliasHoverMarkdown),
+        "the source-backed title alias should join the native HTML hover result",
+        60_000,
+      );
+      const mergedHovers = await hoversAt(
+        templateDocument,
+        '<div title="Native and Aurelia">',
+        "title",
+      );
+      const aureliaHovers = mergedHovers.filter(
+        (hover) => hoverMarkdownText(hover) === nativeTitleAliasHoverMarkdown,
+      );
+      const nativeHovers = mergedHovers.filter(
+        (hover) => hoverMarkdownText(hover) !== nativeTitleAliasHoverMarkdown
+          && hoverMarkdownText(hover).length > 0,
+      );
+      assert.strictEqual(aureliaHovers.length, 1, "Expected one Aurelia contribution at the native title locus.");
+      assert(nativeHovers.length > 0, "Expected the native HTML provider to contribute at the same title locus.");
+      const aureliaHover = aureliaHovers[0];
+      assert(aureliaHover.range instanceof vscode.Range, "Expected the Aurelia title alias to retain its range.");
+      assert.strictEqual(templateDocument.getText(aureliaHover.range), "title");
+      assertBoundedHoverCard(nativeTitleAliasHoverMarkdown, "native-title resource alias");
+    } finally {
+      if (
+        attributeDocument.getText() !== attributeBaseline
+        || templateDocument.getText() !== templateBaseline
+      ) {
+        await replaceDocumentTexts([
+          [attributeDocument, attributeBaseline],
+          [templateDocument, templateBaseline],
+        ]);
+      }
+      await waitFor(
+        async () => (await hoverMarkdown(
+          templateDocument,
+          'display-hint="display-label.bind: preview.name',
+          "display-hint",
+        )).includes("(custom attribute) display-hint"),
+        "native-title alias cleanup should restore the canonical custom attribute",
+        60_000,
+      );
+    }
+
+    const typeScriptDocument = await showAureliaDocument("src/my-app.ts");
+    let nativeTypeScriptHovers = [];
+    await waitFor(async () => {
+      nativeTypeScriptHovers = await hoversAt(typeScriptDocument, "readonly heading", "heading");
+      return nativeTypeScriptHovers.length > 0;
+    }, "the native TypeScript provider should answer outside Aurelia template hover", 60_000);
+    assert.strictEqual(
+      nativeTypeScriptHovers.length,
+      1,
+      `Expected only the native TypeScript hover; observed ${JSON.stringify(nativeTypeScriptHovers.map(hoverMarkdownText))}.`,
+    );
+    const nativeTypeScriptMarkdown = hoverMarkdownText(nativeTypeScriptHovers[0]);
+    assert.match(nativeTypeScriptMarkdown, /MyApp\.heading/u);
+    assert(!nativeTypeScriptMarkdown.includes("Aurelia custom"));
+    assert(!nativeTypeScriptMarkdown.includes("Repeat local."));
+    assert(!nativeTypeScriptMarkdown.includes("Let local."));
+    assert.notStrictEqual(nativeTypeScriptMarkdown, "```ts\nheading: string\n```");
   });
 
   test("preserves hover ranges and resource symbols through native editor commands", async () => {
     const templateDocument = await showAureliaDocument("src/my-app.html");
     const memberHovers = await hoversAt(templateDocument, "state.searchText", "searchText");
-    const memberHover = memberHovers.find((hover) => hoverMarkdownText(hover).includes("searchText"));
+    const memberHover = memberHovers.find((hover) => hoverMarkdownText(hover) === memberHoverMarkdown);
     assert(memberHover, "Expected an Aurelia member hover through the native hover provider.");
     assert(memberHover.range instanceof vscode.Range, "Expected the native hover to retain its authored range.");
     assert.strictEqual(templateDocument.getText(memberHover.range), "searchText");
@@ -340,6 +777,23 @@ suite("extension-host product surface", () => {
         "The withheld weak-owner fact must not leak as Information.",
       );
 
+      const primaryStatusHover = await exactHoverAt(
+        templateDocument,
+        "shellTone.label",
+        "label",
+        missingMemberDiagnosticHoverMarkdown,
+      );
+      assert(!hoverMarkdownText(primaryStatusHover).includes("shellTone"));
+      assert(!hoverMarkdownText(primaryStatusHover).includes("Type information is incomplete"));
+      const withheldWeakOwnerHover = await exactHoverAt(
+        templateDocument,
+        "weakMetadata.source",
+        "source",
+        weakOwnerIdentityHoverMarkdown,
+      );
+      assert(!hoverMarkdownText(withheldWeakOwnerHover).includes("Warning"));
+      assert(!hoverMarkdownText(withheldWeakOwnerHover).includes("Information"));
+
       const missingRootRange = missingRoot.range;
       let unresolvedActions = [];
       await waitFor(async () => {
@@ -540,7 +994,7 @@ suite("extension-host product surface", () => {
       );
       await waitFor(
         async () => !(await hoverMarkdown(document, "<product-card", "product-card"))
-          .includes("**Resource** `product-card`"),
+          .includes("<product-card>"),
         "removing the primary Aurelia root should retire its editor providers",
         60_000,
       );
@@ -594,7 +1048,7 @@ suite("extension-host product surface", () => {
       if (secondaryDocument != null) {
         await waitFor(
           async () => !(await hoverMarkdown(secondaryDocument, "<product-card", "product-card"))
-            .includes("**Resource** `product-card`"),
+            .includes("<product-card>"),
           "removing the secondary root should retire its editor providers",
           60_000,
         );
@@ -651,6 +1105,104 @@ async function hoversAt(document, anchor, token = anchor) {
   const position = positionIn(document, anchor, token);
   const hovers = await vscode.commands.executeCommand("vscode.executeHoverProvider", document.uri, position);
   return Array.isArray(hovers) ? hovers : [];
+}
+
+async function exactHoverAt(document, anchor, token, expectedMarkdown, expectedRangeText = token) {
+  const hovers = await hoversAt(document, anchor, token);
+  const matches = hovers.filter((hover) => hoverMarkdownText(hover) === expectedMarkdown);
+  assert.strictEqual(
+    matches.length,
+    1,
+    `Expected one exact hover for ${token}; observed ${JSON.stringify(hovers.map(hoverMarkdownText))}.`,
+  );
+  const hover = matches[0];
+  assert(hover.range instanceof vscode.Range, `Expected ${token} hover to retain an authored range.`);
+  assert.strictEqual(document.getText(hover.range), expectedRangeText);
+  assertBoundedHoverCard(expectedMarkdown, token);
+  return hover;
+}
+
+async function noHoverAt(document, anchor, token) {
+  const hovers = await hoversAt(document, anchor, token);
+  assert.deepStrictEqual(
+    hovers.map(hoverMarkdownText),
+    [],
+    `Expected no hover for ${token}.`,
+  );
+}
+
+function assertBoundedHoverCard(markdown, label) {
+  const codePoints = Array.from(markdown).length;
+  assert(codePoints > 0, `Expected a nonempty ${label} hover card.`);
+  assert(codePoints <= 640, `${label} hover emitted ${codePoints} Markdown code points.`);
+  const sections = markdown.split("\n\n");
+  assert(sections.length <= 3, `${label} hover emitted ${sections.length} sections.`);
+  const logicalLines = sections.reduce(
+    (count, section) => count + (section.startsWith("```") ? 1 : section.split("\n").length),
+    0,
+  );
+  assert(logicalLines <= 6, `${label} hover emitted ${logicalLines} logical lines.`);
+  assertHoverLeafBudgets(markdown, label);
+  assertNoImplementationVocabulary(markdown, label);
+}
+
+function assertHoverLeafBudgets(markdown, label) {
+  const sections = markdown.split("\n\n");
+  const firstSection = sections[0] ?? "";
+  const identity = firstSection.startsWith("`") ? hoverIdentityLine(markdown) : null;
+  if (identity != null) {
+    const identityCodePoints = Array.from(identity).length;
+    assert(identityCodePoints <= 300, `${label} identity exceeded the 300-code-point hard limit.`);
+    assert(identityCodePoints <= 160, `${label} ordinary identity exceeded the 160-code-point soft limit.`);
+  }
+  const proseSections = identity == null ? sections : sections.slice(1);
+  for (const line of proseSections.flatMap((section) => section.split("\n"))) {
+    const lineCodePoints = Array.from(line).length;
+    if (/^(Error|Information|Warning)\s+`/u.test(line)) {
+      assert(lineCodePoints <= 240, `${label} diagnostic status exceeded 240 code points.`);
+    } else {
+      assert(lineCodePoints <= 160, `${label} context or uncertainty line exceeded 160 code points.`);
+    }
+  }
+}
+
+function hoverIdentityLine(markdown) {
+  const section = markdown.split("\n\n", 1)[0] ?? "";
+  const lines = section.split("\n");
+  assert(lines.length === 3, `Expected one well-formed fenced identity line, received ${section}.`);
+  const opening = lines[0].match(/^(`{3,})(?:html|text|ts)$/u);
+  assert(opening, `Expected a supported fenced identity opening, received ${lines[0]}.`);
+  assert.strictEqual(lines[2], opening[1], "Expected the identity fence to close with the same delimiter.");
+  return lines[1];
+}
+
+function assertNoImplementationVocabulary(markdown, label) {
+  const normalized = markdown.toLowerCase();
+  for (const forbidden of [
+    "binding-observation",
+    "binding-source-context:",
+    "checker origin",
+    "expression-member-owner-type:",
+    "generated path",
+    "missing-input",
+    "missinginputs",
+    "openkind",
+    "openreason",
+    "owner origin:",
+    "producthandle",
+    "router-navigation-target-",
+    "scope-slot:",
+    "selected-expression-type:",
+    "semantic-authoring-policy",
+    "shapekind",
+    "sourceaddresshandle",
+    "type origin:",
+    "type shape:",
+    "type-projection",
+    "value-site",
+  ]) {
+    assert(!normalized.includes(forbidden), `${label} hover leaked implementation vocabulary ${forbidden}.`);
+  }
 }
 
 function hoverMarkdownText(hover) {
@@ -719,7 +1271,8 @@ async function workspaceSymbols(query) {
 
 async function assertWorkspaceAnswer(document, workspaceRoot) {
   const resourceHover = await hoverMarkdown(document, "<product-card", "product-card");
-  assert(resourceHover.includes("**Resource** `product-card`"));
+  assert.strictEqual(resourceHover, productCardHoverMarkdown);
+  assertBoundedHoverCard(resourceHover, "workspace resource");
   const definitions = await definitionsAt(document, "<product-card", "product-card");
   assert(definitions.some((uri) =>
     normalize(uri.fsPath) === normalize(path.join(workspaceRoot, "src", "components", "product-card.ts"))
