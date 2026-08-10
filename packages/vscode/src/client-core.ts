@@ -723,6 +723,7 @@ export class AureliaLanguageClient {
         excludedWorkspaceRootUris: excludedFolders.map((folder) => folder.uri.toString()),
         projectRootHintUris: projectRootHintFolders.map((folder) => folder.uri.toString()),
         projectConfigurationParserDiagnostics: "client",
+        typeScriptProgramDiagnostics: "client",
       } satisfies AureliaInitializeOptions,
       synchronize: { fileEvents },
       // The server requests one standard pull refresh after its semantic source

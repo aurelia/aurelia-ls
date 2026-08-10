@@ -7,6 +7,7 @@ import {
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { describe, expect, test, vi } from "vitest";
+import { appDiagnosticPresentation } from "@aurelia-ls/semantic-runtime";
 import { registerDiagnosticHandlers } from "../../src/handlers/diagnostics.js";
 import { WorkspaceDocumentUris } from "../../src/utils/document-uri.js";
 
@@ -102,6 +103,7 @@ function createDiagnosticHarness(programDocument: TextDocument | null = document
     },
     logger,
     projectConfigurationParserDiagnostics: "semantic-runtime",
+    typeScriptProgramDiagnostics: "semantic-runtime",
   };
 
   registerDiagnosticHandlers(ctx as never);
@@ -151,6 +153,60 @@ describe("document diagnostics handler", () => {
       }),
       expect.any(Function),
     );
+  });
+
+  test("delegates only ordinary TypeScript Program diagnostics when the client owns them", async () => {
+    const typeScriptUri = "file:///C:/projects/app/src/component.ts";
+    const text = "const count: string = 1;";
+    const typeScriptDocument = TextDocument.create(typeScriptUri, "typescript", 8, text);
+    const start = text.lastIndexOf("1");
+    const rows = [{
+      projectKey: "app",
+      diagnosticDomain: "typescript",
+      phase: "semantic",
+      diagnosticKind: "TS2322",
+      diagnosticAuthority: "typescript",
+      typeScriptDiagnosticCode: 2322,
+      frameworkErrorCode: null,
+      frameworkRawErrorAuthority: null,
+      severity: "error",
+      summary: "Type 'number' is not assignable to type 'string'.",
+      missingInput: "typescript:TS2322",
+      missingInputs: ["typescript:TS2322"],
+      source: {
+        kind: "typescript-diagnostic",
+        label: `src/component.ts@${start}..${start + 1}`,
+        path: "src/component.ts",
+        start,
+        end: start + 1,
+        role: "line:0:character:22",
+      },
+      subject: null,
+      diagnosticIdentityHandle: null,
+      relatedInformation: [],
+      suggestion: null,
+      sourceRole: "app-source",
+      relatedQueryKind: "typescript-diagnostics",
+    }];
+    const answer = {
+      analysisBasis: { revision: "semantic-runtime-analysis:test" },
+      value: {
+        rows,
+        presentation: appDiagnosticPresentation(rows as never, true),
+      },
+    };
+    const semanticRuntimeOwner = createDiagnosticHarness(typeScriptDocument);
+    semanticRuntimeOwner.appDiagnostics.mockResolvedValue(answer as never);
+
+    await expect(semanticRuntimeOwner.request()).resolves.toEqual(expect.objectContaining({
+      items: [expect.objectContaining({ source: "typescript", code: "TS2322" })],
+    }));
+
+    const clientOwner = createDiagnosticHarness(typeScriptDocument);
+    clientOwner.ctx.typeScriptProgramDiagnostics = "client";
+    clientOwner.appDiagnostics.mockResolvedValue(answer as never);
+
+    await expect(clientOwner.request()).resolves.toEqual(expect.objectContaining({ items: [] }));
   });
 
   test("fails instead of publishing a partial Problems projection", async () => {

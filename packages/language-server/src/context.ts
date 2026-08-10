@@ -12,7 +12,10 @@ import {
   WorkspaceDocumentUris,
   type DocumentUri,
 } from "./utils/document-uri.js";
-import type { ProjectConfigurationParserDiagnosticsOwner } from "./protocol.js";
+import type {
+  ProjectConfigurationParserDiagnosticsOwner,
+  TypeScriptProgramDiagnosticsOwner,
+} from "./protocol.js";
 
 /**
  * Shared server context passed to all handlers.
@@ -31,6 +34,8 @@ export interface ServerContext {
   clientSupportsCodeActionResolveEdit: boolean;
   /** Owner of native configuration parser diagnostics for this transport. */
   projectConfigurationParserDiagnostics: ProjectConfigurationParserDiagnosticsOwner;
+  /** Owner of ordinary TypeScript Program diagnostics for this transport. */
+  typeScriptProgramDiagnostics: TypeScriptProgramDiagnosticsOwner;
 
   configureWorkspace(
     rootUri: DocumentUri,
@@ -142,6 +147,7 @@ export function createServerContext(init: ServerContextInit): ServerContext {
     },
     clientSupportsCodeActionResolveEdit: false,
     projectConfigurationParserDiagnostics: "semantic-runtime",
+    typeScriptProgramDiagnostics: "semantic-runtime",
 
     ownsDocument: (uri) => documentUris.ownsDocument(uri),
     openWorkspaceDocument,

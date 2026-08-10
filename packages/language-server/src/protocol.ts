@@ -32,6 +32,7 @@ export const AureliaProtocolNotification = {
 export const AURELIA_TEMPLATE_CODE_ACTION_RESOLVE_SCHEMA = "aurelia.template-code-action-resolve/1" as const;
 
 export type ProjectConfigurationParserDiagnosticsOwner = "semantic-runtime" | "client";
+export type TypeScriptProgramDiagnosticsOwner = "semantic-runtime" | "client";
 
 /** Client-owned workspace topology supplied before the server admits documents or projects. */
 export interface AureliaInitializeOptions {
@@ -40,6 +41,8 @@ export interface AureliaInitializeOptions {
   readonly projectRootHintUris: readonly string[];
   /** Parser-diagnostic owner; omitted clients retain semantic-runtime's complete configuration rows. */
   readonly projectConfigurationParserDiagnostics?: ProjectConfigurationParserDiagnosticsOwner;
+  /** Ordinary Program diagnostic owner; omitted clients retain semantic-runtime's TypeScript rows. */
+  readonly typeScriptProgramDiagnostics?: TypeScriptProgramDiagnosticsOwner;
 }
 
 export interface WorkspaceNativeProjectConfiguration {

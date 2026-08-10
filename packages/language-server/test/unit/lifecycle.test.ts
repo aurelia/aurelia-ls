@@ -122,6 +122,7 @@ function createLifecycleHarness() {
     logger,
     clientSupportsCodeActionResolveEdit: false,
     projectConfigurationParserDiagnostics: "semantic-runtime",
+    typeScriptProgramDiagnostics: "semantic-runtime",
     get workspaceRoot() { return documentUris.workspaceRoot; },
     configureWorkspace: vi.fn((
       rootUri: string,
@@ -199,6 +200,7 @@ describe("initialization", () => {
 
     expect(harness.ctx.configureWorkspace).toHaveBeenCalledWith(fallbackRootUri, [], []);
     expect(harness.ctx.projectConfigurationParserDiagnostics).toBe("semantic-runtime");
+    expect(harness.ctx.typeScriptProgramDiagnostics).toBe("semantic-runtime");
     expect(harness.clientSupport).toEqual({
       configurationPull: true,
       configurationChangeRegistration: true,
@@ -239,6 +241,7 @@ describe("initialization", () => {
         excludedWorkspaceRootUris: [excludedUri],
         projectRootHintUris: [projectRootHintUri],
         projectConfigurationParserDiagnostics: "client",
+        typeScriptProgramDiagnostics: "client",
       },
       capabilities: {},
     } as never);
@@ -248,6 +251,7 @@ describe("initialization", () => {
       [projectRootHintUri],
     );
     expect(harness.ctx.projectConfigurationParserDiagnostics).toBe("client");
+    expect(harness.ctx.typeScriptProgramDiagnostics).toBe("client");
 
     expect(() => handleInitialize(harness.ctx as never, {
       rootUri: workspaceUri,
@@ -264,6 +268,12 @@ describe("initialization", () => {
     expect(() => handleInitialize(harness.ctx as never, {
       rootUri: workspaceUri,
       initializationOptions: { projectConfigurationParserDiagnostics: "both" },
+      capabilities: {},
+    } as never)).toThrowError(expect.objectContaining({ code: ErrorCodes.InvalidParams }));
+
+    expect(() => handleInitialize(harness.ctx as never, {
+      rootUri: workspaceUri,
+      initializationOptions: { typeScriptProgramDiagnostics: "both" },
       capabilities: {},
     } as never)).toThrowError(expect.objectContaining({ code: ErrorCodes.InvalidParams }));
   });

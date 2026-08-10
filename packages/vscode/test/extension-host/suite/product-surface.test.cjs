@@ -22,6 +22,9 @@ if (!aureliaWorkspace || !secondaryAureliaWorkspace || !excludedAureliaWorkspace
 if (expectedTransport !== "worker" && expectedTransport !== "ipc") {
   throw new Error("Expected extension-host transport must be worker or ipc.");
 }
+if (process.env.AURELIA_LS_EXTENSION_HOST_TAIL_OBSERVATION !== "1") {
+  throw new Error("Product-support requires provider-tail observation before extension activation.");
+}
 
 suite("extension-host product surface", () => {
   suiteSetup(async () => {
@@ -213,12 +216,20 @@ suite("extension-host product surface", () => {
 
     try {
       await replaceDocumentText(document, '{"version":1,"unknown":true,}\n');
+      let unknownPropertyDiagnostic;
       await waitFor(() => {
         const diagnostics = vscode.languages.getDiagnostics(uri);
-        return diagnostics.length === 1
-          && diagnostics[0].source === "aurelia"
-          && diagnostics[0].code === "aurelia-project-config-unknown-property";
+        unknownPropertyDiagnostic = diagnostics.length === 1 ? diagnostics[0] : undefined;
+        return unknownPropertyDiagnostic?.source === "aurelia"
+          && diagnosticCode(unknownPropertyDiagnostic) === "aurelia-project-config-unknown-property";
       }, "valid JSONC with an unknown config property should have one Aurelia semantic diagnostic", 60_000);
+      assert.strictEqual(unknownPropertyDiagnostic.severity, vscode.DiagnosticSeverity.Error);
+      assert.strictEqual(
+        unknownPropertyDiagnostic.message,
+        "Unknown Aurelia project configuration property 'unknown'.",
+      );
+      assert.strictEqual(document.getText(unknownPropertyDiagnostic.range), '"unknown"');
+      assert.deepStrictEqual(unknownPropertyDiagnostic.relatedInformation ?? [], []);
 
       let observedProjectConfigurationDiagnostics = [];
       await replaceDocumentText(document, '{"version":1,"version":1}\n');
@@ -249,6 +260,207 @@ suite("extension-host product surface", () => {
         () => vscode.languages.getDiagnostics(uri).length === 0,
         "project-config cleanup should restore the accepted JSONC baseline",
         60_000,
+      );
+    }
+  });
+
+  test("publishes the default Problems policy through native diagnostics and code actions", async () => {
+    const typeScriptDocument = await showAureliaDocument("src/my-app.ts");
+    const templateDocument = await showAureliaDocument("src/my-app.html");
+    const typeScriptBaseline = typeScriptDocument.getText();
+    const templateBaseline = templateDocument.getText();
+    const headingDeclaration = "  readonly heading = 'Aurelia IDE playground';";
+    const headingMarkup = "      <h1>${heading}</h1>";
+    assert(typeScriptBaseline.includes(headingDeclaration));
+    assert(templateBaseline.includes(headingMarkup));
+    const changedTypeScript = typeScriptBaseline.replace(
+      headingDeclaration,
+      `${headingDeclaration}\n  readonly shellTone = 'ticket-shell';\n  readonly weakMetadata: Record<string, unknown> = {};`,
+    );
+    const changedTemplate = templateBaseline.replace(
+      headingMarkup,
+      "      <h1>${titel}</h1>\n      <p>${shellTone.label}</p>\n      <p>${weakMetadata.source}</p>",
+    );
+
+    try {
+      const observationStart = extensionHostObservations.length;
+      await replaceDocumentTexts([
+        [typeScriptDocument, changedTypeScript],
+        [templateDocument, changedTemplate],
+      ]);
+      const receipt = await waitForCurrentDiagnosticProviderSettlement(
+        observationStart,
+        templateDocument,
+        "the edited template should finish one current full Aurelia diagnostic pull",
+      );
+      assert.strictEqual(receipt.itemCount, 2, `Expected two Aurelia primaries; receipt ${JSON.stringify(receipt)}`);
+
+      let diagnostics = [];
+      await waitFor(() => {
+        diagnostics = vscode.languages.getDiagnostics(templateDocument.uri)
+          .filter((diagnostic) => diagnostic.source === "aurelia");
+        return diagnostics.length === 2;
+      }, () => `the Problems policy journey should publish two Aurelia primaries; observed ${diagnosticSummary(vscode.languages.getDiagnostics(templateDocument.uri))}`, 120_000);
+
+      const missingRoot = diagnosticForAuthoredText(templateDocument, diagnostics, "titel");
+      assert(missingRoot, `Expected the missing root diagnostic; observed ${diagnosticSummary(diagnostics)}`);
+      assert.strictEqual(diagnosticCode(missingRoot), "missing-expression-member");
+      assert.strictEqual(missingRoot.severity, vscode.DiagnosticSeverity.Error);
+      assert.strictEqual(
+        missingRoot.message,
+        'Template expression root "titel" is not available on the current binding scope.',
+      );
+      assert.deepStrictEqual(missingRoot.relatedInformation ?? [], []);
+
+      const primitiveMember = diagnosticForAuthoredText(templateDocument, diagnostics, "label");
+      assert(primitiveMember, `Expected the primitive-owner diagnostic; observed ${diagnosticSummary(diagnostics)}`);
+      assert.strictEqual(diagnosticCode(primitiveMember), "missing-expression-member");
+      assert.strictEqual(primitiveMember.severity, vscode.DiagnosticSeverity.Warning);
+      assert.strictEqual(
+        primitiveMember.message,
+        'Member "label" is not projected on the owner type, so semantic tooling cannot validate or navigate it.',
+      );
+      assert.strictEqual(primitiveMember.relatedInformation?.length, 1);
+      const checkerEvidence = primitiveMember.relatedInformation[0];
+      assert.strictEqual(
+        checkerEvidence.message,
+        "TS2339: Property 'label' does not exist on type 'string'.",
+      );
+      assert.strictEqual(checkerEvidence.location.uri.toString(), templateDocument.uri.toString());
+      assert.strictEqual(templateDocument.getText(checkerEvidence.location.range), "label");
+
+      assert.strictEqual(
+        diagnostics.some((diagnostic) => templateDocument.getText(diagnostic.range) === "source"),
+        false,
+        "The weak index-signature owner must remain withheld as a standalone Problem.",
+      );
+      assert.strictEqual(
+        diagnostics.some((diagnostic) => diagnostic.severity === vscode.DiagnosticSeverity.Information),
+        false,
+        "The withheld weak-owner fact must not leak as Information.",
+      );
+
+      const missingRootRange = missingRoot.range;
+      let unresolvedActions = [];
+      await waitFor(async () => {
+        unresolvedActions = await executeCodeActionProvider(templateDocument.uri, missingRootRange, 0);
+        return unresolvedActions.some((action) => action.title === "Declare member 'titel' on MyApp");
+      }, "the definite missing root should offer its conservative quick fix", 120_000);
+      const unresolved = unresolvedActions.find((action) => action.title === "Declare member 'titel' on MyApp");
+      assert(unresolved);
+      assert.strictEqual(unresolved.kind?.value ?? unresolved.kind, vscode.CodeActionKind.QuickFix.value);
+      assert.strictEqual(unresolved.isPreferred, true);
+      assert.strictEqual(unresolved.edit, undefined, "The action should remain lazy until VS Code resolves it.");
+
+      const resolvedActions = await executeCodeActionProvider(templateDocument.uri, missingRootRange, 1);
+      const resolved = resolvedActions.find((action) => action.title === "Declare member 'titel' on MyApp");
+      assert(resolved?.edit instanceof vscode.WorkspaceEdit, "The selected missing-root action should resolve to an edit.");
+      const resolvedEntries = resolved.edit.entries();
+      assert.strictEqual(resolvedEntries.length, 1);
+      assert.strictEqual(resolvedEntries[0][0].toString(), typeScriptDocument.uri.toString());
+      assert.deepStrictEqual(
+        resolvedEntries[0][1].map((edit) => ({ oldText: typeScriptDocument.getText(edit.range), newText: edit.newText })),
+        [{ oldText: "", newText: "\n  titel!: unknown;" }],
+      );
+
+      for (const [anchor, token] of [["shellTone.label", "label"], ["weakMetadata.source", "source"]]) {
+        const position = positionIn(templateDocument, anchor, token);
+        const actions = await executeCodeActionProvider(
+          templateDocument.uri,
+          new vscode.Range(position, position),
+          1,
+        );
+        assert.strictEqual(
+          actions.some((action) => action.edit instanceof vscode.WorkspaceEdit),
+          false,
+          `${token} should not offer an unproved edit-backed repair; observed ${actionSummary(actions)}.`,
+        );
+        assert.strictEqual(
+          actions.some((action) => action.title === `Declare member '${token}' on MyApp`),
+          false,
+          `${token} should not offer a view-model member declaration; observed ${actionSummary(actions)}.`,
+        );
+      }
+    } finally {
+      const observationStart = extensionHostObservations.length;
+      if (
+        typeScriptDocument.getText() !== typeScriptBaseline
+        || templateDocument.getText() !== templateBaseline
+      ) {
+        await replaceDocumentTexts([
+          [typeScriptDocument, typeScriptBaseline],
+          [templateDocument, templateBaseline],
+        ]);
+        const receipt = await waitForCurrentDiagnosticProviderSettlement(
+          observationStart,
+          templateDocument,
+          "Problems policy cleanup should finish one current full Aurelia diagnostic pull",
+        );
+        assert.strictEqual(receipt.itemCount, 0, `Expected clean Aurelia receipt; observed ${JSON.stringify(receipt)}`);
+      }
+      await waitFor(
+        () => !vscode.languages.getDiagnostics(templateDocument.uri)
+          .some((diagnostic) => diagnostic.source === "aurelia"),
+        "Problems policy cleanup should clear all Aurelia template diagnostics",
+        120_000,
+      );
+    }
+  });
+
+  test("does not duplicate TypeScript-owned Problems through the Aurelia diagnostic provider", async () => {
+    const document = await showAureliaDocument("src/my-app.ts");
+    const baseline = document.getText();
+    const marker = "a3RelatedInfoContract";
+    const changed = `${baseline}\ninterface A3RequiredContract {\n  requiredName: string;\n}\n\nconst ${marker}: A3RequiredContract = {};\n`;
+
+    try {
+      const observationStart = extensionHostObservations.length;
+      await replaceDocumentText(document, changed);
+      const receipt = await waitForCurrentDiagnosticProviderSettlement(
+        observationStart,
+        document,
+        "the TypeScript ownership canary should finish one current full Aurelia diagnostic pull",
+      );
+      assert.strictEqual(receipt.itemCount, 0, `Aurelia must delegate this Program diagnostic; receipt ${JSON.stringify(receipt)}`);
+      let matchingDiagnostics = [];
+      await waitFor(() => {
+        matchingDiagnostics = vscode.languages.getDiagnostics(document.uri).filter((diagnostic) =>
+          (diagnosticCode(diagnostic) === 2741 || diagnosticCode(diagnostic) === "TS2741")
+          && document.getText(diagnostic.range) === marker
+        );
+        return matchingDiagnostics.length === 1;
+      }, () => `the TS2741 ownership canary should settle through VS Code's native provider; observed ${diagnosticSummary(vscode.languages.getDiagnostics(document.uri))}`, 120_000);
+
+      const diagnostic = matchingDiagnostics[0];
+      assert.strictEqual(diagnostic.source, "ts");
+      assert.strictEqual(diagnostic.severity, vscode.DiagnosticSeverity.Error);
+      assert.strictEqual(
+        diagnostic.message,
+        "Property 'requiredName' is missing in type '{}' but required in type 'A3RequiredContract'.",
+      );
+      const relatedDeclaration = diagnostic.relatedInformation?.find((information) =>
+        information.location.uri.toString() === document.uri.toString()
+        && document.getText(information.location.range) === "requiredName"
+      );
+      assert(relatedDeclaration, "Native TS2741 should retain the related required property declaration location.");
+      assert.strictEqual(relatedDeclaration.message, "'requiredName' is declared here.");
+    } finally {
+      const observationStart = extensionHostObservations.length;
+      if (document.getText() !== baseline) {
+        await replaceDocumentText(document, baseline);
+        const receipt = await waitForCurrentDiagnosticProviderSettlement(
+          observationStart,
+          document,
+          "TypeScript ownership canary cleanup should finish one current full Aurelia diagnostic pull",
+        );
+        assert.strictEqual(receipt.itemCount, 0, `Expected clean Aurelia receipt; observed ${JSON.stringify(receipt)}`);
+      }
+      await waitFor(
+        () => !vscode.languages.getDiagnostics(document.uri).some((diagnostic) =>
+          diagnosticCode(diagnostic) === 2741 || diagnosticCode(diagnostic) === "TS2741"
+        ),
+        "TypeScript ownership canary cleanup should clear TS2741",
+        120_000,
       );
     }
   });
@@ -405,13 +617,30 @@ async function inlayHints(uri, range) {
 }
 
 async function replaceDocumentText(document, text) {
+  await replaceDocumentTexts([[document, text]]);
+}
+
+async function replaceDocumentTexts(changes) {
   const edit = new vscode.WorkspaceEdit();
-  edit.replace(
-    document.uri,
-    new vscode.Range(document.positionAt(0), document.positionAt(document.getText().length)),
-    text,
+  for (const [document, text] of changes) {
+    edit.replace(
+      document.uri,
+      new vscode.Range(document.positionAt(0), document.positionAt(document.getText().length)),
+      text,
+    );
+  }
+  assert.strictEqual(await vscode.workspace.applyEdit(edit), true, "Expected workspace edit to apply.");
+}
+
+async function executeCodeActionProvider(uri, range, itemResolveCount) {
+  const actions = await vscode.commands.executeCommand(
+    "vscode.executeCodeActionProvider",
+    uri,
+    range,
+    "quickfix",
+    itemResolveCount,
   );
-  assert.strictEqual(await vscode.workspace.applyEdit(edit), true, "Expected project-config edit to apply.");
+  return Array.isArray(actions) ? actions : [];
 }
 
 async function hoverMarkdown(document, anchor, token = anchor) {
@@ -658,7 +887,7 @@ async function waitFor(predicate, message, timeoutMs = 20_000) {
 function diagnosticSummary(diagnostics) {
   return JSON.stringify(diagnostics.map((diagnostic) => ({
     source: diagnostic.source ?? null,
-    code: diagnostic.code ?? null,
+    code: diagnosticCode(diagnostic),
     severity: diagnostic.severity,
     message: diagnostic.message,
     range: [
@@ -668,4 +897,155 @@ function diagnosticSummary(diagnostics) {
       diagnostic.range.end.character,
     ],
   })));
+}
+
+function diagnosticCode(diagnostic) {
+  return typeof diagnostic.code === "object" ? diagnostic.code?.value ?? null : diagnostic.code ?? null;
+}
+
+function actionSummary(actions) {
+  return JSON.stringify(actions.map((action) => ({
+    title: action.title,
+    kind: action.kind?.value ?? action.kind ?? null,
+    hasEdit: action.edit instanceof vscode.WorkspaceEdit,
+    command: action.command?.command ?? null,
+  })));
+}
+
+function diagnosticForAuthoredText(document, diagnostics, text) {
+  return diagnostics.find((diagnostic) => document.getText(diagnostic.range) === text);
+}
+
+async function waitForCurrentDiagnosticProviderSettlement(observationStart, document, message) {
+  const uri = document.uri.toString();
+  const documentVersion = document.version;
+  let settlement;
+  await waitFor(() => {
+    const parsed = parseDiagnosticProviderSettlement(
+      extensionHostObservations,
+      uri,
+      documentVersion,
+      observationStart,
+    );
+    if (parsed.error != null) {
+      throw new Error(`${parsed.error}\nDiagnostic provider trace: ${JSON.stringify(parsed.trace)}`);
+    }
+    settlement = parsed.settlement;
+    return settlement != null;
+  }, () => `${message}; diagnostic provider trace ${JSON.stringify(
+    extensionHostObservations.slice(observationStart).filter((event) =>
+      event.source === "language-client-provider"
+      && event.operation === "diagnostics"
+      && event.uri === uri
+    ),
+  )}`, 120_000);
+  return settlement;
+}
+
+function parseDiagnosticProviderSettlement(events, uri, documentVersion, observationStart) {
+  const trace = events.map((event, index) => ({ event, index })).filter(({ event }) =>
+    event.source === "language-client-provider"
+    && event.operation === "diagnostics"
+    && event.uri === uri
+  );
+  const attempts = [];
+  const byId = new Map();
+  let active;
+
+  for (const entry of trace) {
+    const event = entry.event;
+    if (event.phase === "request") {
+      if (active != null) {
+        return {
+          error: `Diagnostic provider attempt ${event.observationId} overlapped ${active.request.observationId}.`,
+          settlement: null,
+          trace: trace.map((candidate) => candidate.event),
+        };
+      }
+      if (byId.has(event.observationId)) {
+        return {
+          error: `Diagnostic provider attempt ${event.observationId} reused an observation id.`,
+          settlement: null,
+          trace: trace.map((candidate) => candidate.event),
+        };
+      }
+      const attempt = { request: event, requestIndex: entry.index, terminal: null };
+      attempts.push(attempt);
+      byId.set(event.observationId, attempt);
+      active = attempt;
+      continue;
+    }
+    if (event.phase !== "response" && event.phase !== "failed") continue;
+    const attempt = byId.get(event.observationId);
+    if (attempt == null) {
+      return {
+        error: `Diagnostic provider attempt ${event.observationId} published a terminal without an observed request.`,
+        settlement: null,
+        trace: trace.map((candidate) => candidate.event),
+      };
+    }
+    if (attempt.terminal != null) {
+      return {
+        error: `Diagnostic provider attempt ${event.observationId} published more than one terminal.`,
+        settlement: null,
+        trace: trace.map((candidate) => candidate.event),
+      };
+    }
+    if (active !== attempt) {
+      return {
+        error: `Diagnostic provider attempt ${event.observationId} terminated out of request order.`,
+        settlement: null,
+        trace: trace.map((candidate) => candidate.event),
+      };
+    }
+    attempt.terminal = event;
+    active = undefined;
+    if (
+      event.phase === "failed"
+      && (
+        event.errorName !== "Canceled"
+        || (event.cancellationRequested !== true && event.serverRetriggerRequested !== true)
+      )
+    ) {
+      return {
+        error: `Diagnostic provider attempt ${event.observationId} failed without authenticated cancellation.`,
+        settlement: null,
+        trace: trace.map((candidate) => candidate.event),
+      };
+    }
+    if (event.phase === "response" && event.cancellationRequested === true) {
+      return {
+        error: `Diagnostic provider attempt ${event.observationId} responded after client cancellation.`,
+        settlement: null,
+        trace: trace.map((candidate) => candidate.event),
+      };
+    }
+  }
+
+  if (attempts.length === 0 || active != null) {
+    return { error: null, settlement: null, trace: trace.map((candidate) => candidate.event) };
+  }
+  const last = attempts[attempts.length - 1];
+  if (last.requestIndex < observationStart || last.request.documentVersion !== documentVersion) {
+    return { error: null, settlement: null, trace: trace.map((candidate) => candidate.event) };
+  }
+  if (last.terminal?.phase !== "response") {
+    return { error: null, settlement: null, trace: trace.map((candidate) => candidate.event) };
+  }
+  if (last.terminal.reportKind !== "full" || last.terminal.resultIdPresent !== true) {
+    return {
+      error: `Current diagnostic provider attempt ${last.request.observationId} did not return a full resultId-bearing report.`,
+      settlement: null,
+      trace: trace.map((candidate) => candidate.event),
+    };
+  }
+  return {
+    error: null,
+    settlement: {
+      ...last.terminal,
+      observedAttemptCount: attempts.length,
+      observedCanceledAttemptCount: attempts.filter((attempt) => attempt.terminal?.phase === "failed").length,
+    },
+    trace: trace.map((candidate) => candidate.event),
+  };
 }

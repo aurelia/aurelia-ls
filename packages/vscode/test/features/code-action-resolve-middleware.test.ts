@@ -199,9 +199,30 @@ describe("code-action resolve middleware", () => {
     expect(harness.showWarningMessage).toHaveBeenCalledOnce();
   });
 
-  test.each(Object.entries(TEMPLATE_CODE_ACTION_RESOLVE_REFUSAL_REASONS))(
-    "surfaces the exact authenticated %s refusal",
-    async (kind, reason) => {
+  test.each([
+    [
+      "sourceDocumentUnavailable",
+      TEMPLATE_CODE_ACTION_RESOLVE_REFUSAL_REASONS.sourceDocumentUnavailable,
+      "Restore or reopen the source document before requesting another code action.",
+    ],
+    [
+      "semanticPlanNoLongerMatches",
+      TEMPLATE_CODE_ACTION_RESOLVE_REFUSAL_REASONS.semanticPlanNoLongerMatches,
+      "Review the current source, then request a fresh code action.",
+    ],
+    [
+      "semanticPlanAmbiguous",
+      TEMPLATE_CODE_ACTION_RESOLVE_REFUSAL_REASONS.semanticPlanAmbiguous,
+      "Disambiguate the current source before requesting another code action.",
+    ],
+    [
+      "editMappingFailed",
+      TEMPLATE_CODE_ACTION_RESOLVE_REFUSAL_REASONS.editMappingFailed,
+      "Review the current source and make the change manually.",
+    ],
+  ] as const)(
+    "surfaces the exact authenticated %s refusal with actionable recovery",
+    async (kind, reason, recovery) => {
       const harness = createHarness({
         resolvedEdit: null,
         resolvedRefusal: { kind, reason },
@@ -215,7 +236,9 @@ describe("code-action resolve middleware", () => {
 
       expect(result).toBe(harness.action);
       expect(harness.logger.warn).toHaveBeenCalledWith(expect.stringContaining(reason));
-      expect(harness.showWarningMessage).toHaveBeenCalledWith(expect.stringContaining(reason));
+      expect(harness.showWarningMessage).toHaveBeenCalledWith(
+        `Aurelia code action was not applied because ${reason}. ${recovery}`,
+      );
     },
   );
 

@@ -201,6 +201,7 @@ export function handleInitialize(ctx: ServerContext, params: InitializeParams): 
   ctx.clientSupportsCodeActionResolveEdit = params.capabilities.textDocument?.codeAction?.dataSupport === true
     && params.capabilities.textDocument.codeAction.resolveSupport?.properties.includes("edit") === true;
   ctx.projectConfigurationParserDiagnostics = options.projectConfigurationParserDiagnostics ?? "semantic-runtime";
+  ctx.typeScriptProgramDiagnostics = options.typeScriptProgramDiagnostics ?? "semantic-runtime";
   ctx.clientSupport.configurationPull = params.capabilities.workspace?.configuration === true;
   ctx.clientSupport.configurationChangeRegistration =
     params.capabilities.workspace?.didChangeConfiguration?.dynamicRegistration === true;
@@ -247,6 +248,7 @@ function initializeOptions(value: unknown): AureliaInitializeOptions {
       excludedWorkspaceRootUris: [],
       projectRootHintUris: [],
       projectConfigurationParserDiagnostics: "semantic-runtime",
+      typeScriptProgramDiagnostics: "semantic-runtime",
     };
   }
   if (typeof value !== "object" || Array.isArray(value)) {
@@ -257,7 +259,20 @@ function initializeOptions(value: unknown): AureliaInitializeOptions {
     excludedWorkspaceRootUris: initializeUriArrayOption(options, "excludedWorkspaceRootUris"),
     projectRootHintUris: initializeUriArrayOption(options, "projectRootHintUris"),
     projectConfigurationParserDiagnostics: initializeProjectConfigurationParserDiagnosticsOption(options),
+    typeScriptProgramDiagnostics: initializeTypeScriptProgramDiagnosticsOption(options),
   };
+}
+
+function initializeTypeScriptProgramDiagnosticsOption(
+  options: Readonly<Record<string, unknown>>,
+): NonNullable<AureliaInitializeOptions["typeScriptProgramDiagnostics"]> {
+  const value = options["typeScriptProgramDiagnostics"];
+  if (value == null) return "semantic-runtime";
+  if (value === "semantic-runtime" || value === "client") return value;
+  throw new ResponseError(
+    ErrorCodes.InvalidParams,
+    "Aurelia typeScriptProgramDiagnostics must be 'semantic-runtime' or 'client'.",
+  );
 }
 
 function initializeProjectConfigurationParserDiagnosticsOption(

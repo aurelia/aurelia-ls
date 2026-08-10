@@ -281,6 +281,7 @@ describe("AureliaLanguageClient workspace ownership", () => {
       excludedWorkspaceRootUris: ["file:///work/repo/packages/disabled"],
       projectRootHintUris: ["file:///work/repo"],
       projectConfigurationParserDiagnostics: "client",
+      typeScriptProgramDiagnostics: "client",
     });
     expect(manager.clientForUri("file:///work/repo/src/main.ts")).toBe(harness.clients[0]?.raw);
     expect(manager.clientForUri("file:///work/repo/packages/disabled/src/main.ts")).toBeUndefined();
@@ -304,6 +305,7 @@ describe("AureliaLanguageClient workspace ownership", () => {
         "file:///work/repo/packages/disabled/examples/reentry",
       ],
       projectConfigurationParserDiagnostics: "client",
+      typeScriptProgramDiagnostics: "client",
     });
     expect(manager.clientForUri("file:///work/repo/packages/disabled/src/main.ts")).toBe(harness.clients[1]?.raw);
     await manager.stop();
@@ -334,6 +336,7 @@ describe("AureliaLanguageClient workspace ownership", () => {
       excludedWorkspaceRootUris: [],
       projectRootHintUris: ["file:///work/repo"],
       projectConfigurationParserDiagnostics: "client",
+      typeScriptProgramDiagnostics: "client",
     });
     await manager.stop();
   });

@@ -14,7 +14,7 @@ source and disclose partial, refused, or failed results instead of filling seman
 - Made template rename cover source-backed members, bindables and aliases, custom elements, custom attributes, template controllers, value converters, and binding behaviors when their declarations and references are editable and verified.
 - Extended TypeScript, TSX, JavaScript, and JSX member renames atomically into admitted templates, while leaving unverified same-name candidates unchanged and reporting them.
 - Made Quick Fixes re-plan against the current document and reject stale, overlapping, or otherwise unsafe workspace edits.
-- Preserved framework and structured TypeScript diagnostic codes through VS Code Problems, and hardened native symbols, highlights, selection ranges, paired-tag linked editing, folding ranges, inlay hints, and semantic-token source ranges.
+- Preserved framework and template-checker TypeScript codes through VS Code Problems while leaving ordinary Program diagnostics to VS Code's native TypeScript/JavaScript provider, and hardened native symbols, highlights, selection ranges, paired-tag linked editing, folding ranges, inlay hints, and semantic-token source ranges.
 - Semantic-token responses now require complete, source-backed, non-overlapping single-line classifications, and the extension declares native fallback types for its Aurelia token vocabulary.
 
 ### Workspace and resource discovery

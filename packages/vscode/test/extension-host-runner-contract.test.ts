@@ -23,6 +23,7 @@ interface ExecutionProbe {
     readonly shard: string;
     readonly expectedActualVersion: string;
     readonly expectedTransport: string;
+    readonly tailObservation: string | null;
     readonly testWorkspace: string;
     readonly userDataArgument: string;
   }[];
@@ -97,6 +98,11 @@ describe("Extension Host support runner", () => {
       launch.expectedActualVersion === "1.123.4"
         && launch.expectedTransport === "worker"
     ))).toBe(true);
+    expect(probe.launches.map((launch) => [launch.shard, launch.tailObservation])).toEqual([
+      ["worker-lifecycle", null],
+      ["rename-reliability", null],
+      ["product-support", "1"],
+    ]);
   });
 
   test("exposes default, Worker, IPC, current-stable, and exact-minimum package entry points", () => {
@@ -175,6 +181,8 @@ function readExecutionProbe(): ExecutionProbe {
               options.extensionTestsEnv.AURELIA_LS_EXTENSION_HOST_EXPECTED_ACTUAL_VERSION,
             expectedTransport:
               options.extensionTestsEnv.AURELIA_LS_EXTENSION_HOST_EXPECTED_TRANSPORT,
+            tailObservation:
+              options.extensionTestsEnv.AURELIA_LS_EXTENSION_HOST_TAIL_OBSERVATION ?? null,
             testWorkspace: options.launchArgs[0],
             userDataArgument: options.launchArgs.find((argument) =>
               argument.startsWith("--user-data-dir=")),

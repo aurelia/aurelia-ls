@@ -143,6 +143,9 @@ export async function runExtensionHostTests(plan, dependencies = {}) {
         AURELIA_LS_EXTENSION_HOST_EXPECTED_VERSION: plan.version,
         AURELIA_LS_EXTENSION_HOST_EXPECTED_TRANSPORT: plan.transport,
         AURELIA_LS_EXTENSION_HOST_OBSERVATION: "1",
+        ...(shard === "product-support"
+          ? { AURELIA_LS_EXTENSION_HOST_TAIL_OBSERVATION: "1" }
+          : {}),
         AURELIA_LS_FORCE_IPC_TRANSPORT: plan.transport === "worker" ? "0" : "1",
         ...(process.env.AURELIA_LS_EXTENSION_HOST_GREP
           ? { AURELIA_LS_EXTENSION_HOST_GREP: process.env.AURELIA_LS_EXTENSION_HOST_GREP }

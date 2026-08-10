@@ -42,6 +42,14 @@ Guidelines:
   iterating on one host journey, or pass
   `--shard=worker-lifecycle|rename-reliability|product-support` directly to the
   package runner after building and bundling.
+- The product/support shard alone enables diagnostic-provider observation before
+  extension activation. For each audited journey target URI it requires IDs that
+  are unique within that URI trace, serialized request/terminal pairs with no
+  overlap or terminal reuse, and one final request begun after the journey cursor
+  whose exact current document version returns a full report with a result ID.
+  Cancellation counts are descriptive: a valid journey does not invent or
+  require a scheduler-dependent cancellation, and host-observed server
+  retrigger remains distinct from the deterministic request-guard contract.
 - Host-inclusive tail measurement is a separate opt-in product/support lane,
   never another acceptance shard or required CI job. Run
   `pnpm -w build` and `pnpm --filter aurelia-2 bundle` once, then run

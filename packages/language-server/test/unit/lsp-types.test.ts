@@ -406,6 +406,8 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
         completeDiagnosticAnswer({ value: { rows } } as never),
         doc,
         appDocumentUris,
+        null,
+        { clientOwnsTypeScriptProgramDiagnostics: true },
       );
 
       expect(mapped.failures).toEqual([]);
@@ -556,6 +558,8 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
       } as never),
       doc,
       appDocumentUris,
+      null,
+      { clientOwnsTypeScriptProgramDiagnostics: true },
     );
 
     expect(mapped.failures).toEqual([]);
@@ -583,41 +587,42 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
       text,
     );
     const start = text.lastIndexOf("1");
-    const mapped = mapSemanticRuntimeAppDiagnostics(
-      completeDiagnosticAnswer({
-        value: {
-          rows: [
-            {
-              projectKey: "app",
-              diagnosticDomain: "typescript",
-              phase: "semantic",
-              diagnosticKind: "TS2322",
-              diagnosticAuthority: "typescript",
-              typeScriptDiagnosticCode: 2322,
-              frameworkErrorCode: null,
-              frameworkRawErrorAuthority: null,
-              severity: "error",
-              summary: "Type 'number' is not assignable to type 'string'.",
-              missingInput: "typescript:TS9999",
-              missingInputs: [],
-              source: {
-                kind: "typescript-diagnostic",
-                label: `src/component.ts@${start}..${start + 1}`,
-                path: "src/component.ts",
-                start,
-                end: start + 1,
-                role: "line:0:character:22",
-              },
-              subject: null,
-              diagnosticIdentityHandle: null,
-              relatedInformation: [],
-              suggestion: null,
-              sourceRole: "app-source",
-              relatedQueryKind: "typescript-diagnostics",
+    const answer = completeDiagnosticAnswer({
+      value: {
+        rows: [
+          {
+            projectKey: "app",
+            diagnosticDomain: "typescript",
+            phase: "semantic",
+            diagnosticKind: "TS2322",
+            diagnosticAuthority: "typescript",
+            typeScriptDiagnosticCode: 2322,
+            frameworkErrorCode: null,
+            frameworkRawErrorAuthority: null,
+            severity: "error",
+            summary: "Type 'number' is not assignable to type 'string'.",
+            missingInput: "typescript:TS9999",
+            missingInputs: [],
+            source: {
+              kind: "typescript-diagnostic",
+              label: `src/component.ts@${start}..${start + 1}`,
+              path: "src/component.ts",
+              start,
+              end: start + 1,
+              role: "line:0:character:22",
             },
-          ],
-        },
-      } as never),
+            subject: null,
+            diagnosticIdentityHandle: null,
+            relatedInformation: [],
+            suggestion: null,
+            sourceRole: "app-source",
+            relatedQueryKind: "typescript-diagnostics",
+          },
+        ],
+      },
+    } as never);
+    const mapped = mapSemanticRuntimeAppDiagnostics(
+      answer,
       doc,
       appDocumentUris,
     );
@@ -636,6 +641,14 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
         missingInputs: [],
       },
     });
+
+    expect(mapSemanticRuntimeAppDiagnostics(
+      answer,
+      doc,
+      appDocumentUris,
+      null,
+      { clientOwnsTypeScriptProgramDiagnostics: true },
+    )).toEqual({ value: [], failures: [] });
   });
 
   test("prefers framework and structured TypeScript codes before the diagnostic-kind fallback", () => {

@@ -4,6 +4,7 @@ import type * as LanguageClientProtocol from "vscode-languageclient/node";
 import {
   AURELIA_TEMPLATE_CODE_ACTION_RESOLVE_SCHEMA,
   templateCodeActionResolveRefusalFromData,
+  type TemplateCodeActionResolveRefusalKind,
 } from "@aurelia-ls/language-server/protocol";
 import {
   emitExtensionHostObservation,
@@ -72,7 +73,13 @@ export function createMiddleware(
       }
       const refusal = templateCodeActionResolveRefusalFromData(resolved.data);
       if (refusal != null) {
-        refuseCodeAction(vscode, logger, action.title, refusal.reason);
+        refuseCodeAction(
+          vscode,
+          logger,
+          action.title,
+          refusal.reason,
+          templateCodeActionRefusalRecovery(refusal.kind),
+        );
         return action;
       }
       if (resolved.edit == null || converted?.edit == null) {
@@ -234,9 +241,23 @@ function refuseCodeAction(
   logger: ClientLogger,
   title: string,
   reason: string,
+  recovery = "Request the code action again.",
 ): void {
   logger.warn(`[codeAction] '${title}' was not applied because ${reason}`);
   void vscode.window.showWarningMessage(
-    `Aurelia code action was not applied because ${reason}. Request the code action again.`,
+    `Aurelia code action was not applied because ${reason}. ${recovery}`,
   );
+}
+
+function templateCodeActionRefusalRecovery(kind: TemplateCodeActionResolveRefusalKind): string {
+  switch (kind) {
+    case "sourceDocumentUnavailable":
+      return "Restore or reopen the source document before requesting another code action.";
+    case "semanticPlanNoLongerMatches":
+      return "Review the current source, then request a fresh code action.";
+    case "semanticPlanAmbiguous":
+      return "Disambiguate the current source before requesting another code action.";
+    case "editMappingFailed":
+      return "Review the current source and make the change manually.";
+  }
 }

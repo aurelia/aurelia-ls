@@ -65,6 +65,11 @@ export type LookupDocumentSnapshotFn = (
   uri: DocumentUri,
 ) => SemanticRuntimeLspDocumentSnapshot | null;
 
+export interface SemanticRuntimeAppDiagnosticMappingOptions {
+  /** The client publishes ordinary TypeScript Program diagnostics through its native provider. */
+  readonly clientOwnsTypeScriptProgramDiagnostics?: boolean;
+}
+
 /** Whether an LSP `CodeActionContext.only` filter contains the candidate kind. */
 export function codeActionKindMatchesOnly(
   kind: CodeActionKind,
@@ -169,6 +174,7 @@ export function mapSemanticRuntimeAppDiagnostics(
   document: TextDocument,
   documentUris: WorkspaceDocumentUris,
   lookupText: LookupTextFn | null = null,
+  options: SemanticRuntimeAppDiagnosticMappingOptions = {},
 ): SemanticRuntimeReadMapping<Diagnostic[]> {
   const mapped: Diagnostic[] = [];
   const failures: string[] = [];
@@ -190,6 +196,13 @@ export function mapSemanticRuntimeAppDiagnostics(
     );
   }
   for (const group of presentation.groups) {
+    const primaryRow = rows[group.primary.rowIndex]!;
+    if (
+      options.clientOwnsTypeScriptProgramDiagnostics === true
+      && isTypeScriptProgramDiagnostic(primaryRow)
+    ) {
+      continue;
+    }
     const relatedInformation: DiagnosticRelatedInformation[] = [];
     const contextual: DetachedSemanticDiagnosticPresentationContext[] = [];
     for (const related of group.related) {
@@ -202,7 +215,6 @@ export function mapSemanticRuntimeAppDiagnostics(
         diagnostic: semanticRuntimeDetachedDiagnosticData(row),
       });
     }
-    const primaryRow = rows[group.primary.rowIndex]!;
     const diagnosticMapping = semanticRuntimeDiagnostic(
       primaryRow,
       document,
@@ -227,6 +239,12 @@ export function mapSemanticRuntimeAppDiagnostics(
     }
   }
   return { value: mapped, failures };
+}
+
+function isTypeScriptProgramDiagnostic(row: SemanticAppDiagnosticRow): boolean {
+  return row.diagnosticDomain === "typescript"
+    && row.diagnosticAuthority === "typescript"
+    && row.relatedQueryKind === "typescript-diagnostics";
 }
 
 interface DetachedSemanticDiagnosticPresentationContext {

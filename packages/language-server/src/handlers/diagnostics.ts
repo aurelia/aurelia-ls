@@ -82,6 +82,9 @@ async function documentDiagnostics(
       document,
       ctx.documentUris,
       (uri) => operation.documents.lookupText(uri),
+      {
+        clientOwnsTypeScriptProgramDiagnostics: ctx.typeScriptProgramDiagnostics === "client",
+      },
     );
     if (mapped.failures.length > 0) {
       operation.deferEffect({

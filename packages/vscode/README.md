@@ -24,10 +24,11 @@ mismatches. Errors are definite correctness or configuration failures; warnings 
 may still tolerate at runtime; Information is reserved for exact, actionable incomplete-analysis loci. Broad weak-owner
 or admission uncertainty and operational failures do not become standalone Problems.
 
-When Aurelia's semantic diagnosis and generated TypeScript checker evidence describe the same authored problem, the
-semantic diagnosis owns the squiggle and the checker fact appears as related information. The extension does not expose
-severity overrides, inline suppression, or a blanket strict mode in the 0.5 release line; those controls would need a
-separate, evidence-backed policy.
+VS Code's native TypeScript/JavaScript provider owns ordinary Program diagnostics; Aurelia does not republish those
+rows. When Aurelia's semantic diagnosis and generated template checker evidence describe the same authored problem,
+the semantic diagnosis owns the squiggle and the checker fact appears as related information. The extension does not
+expose severity overrides, inline suppression, or a blanket strict mode in the 0.5 release line; those controls would
+need a separate, evidence-backed policy.
 
 ### Quick fixes — apply only current plans
 
