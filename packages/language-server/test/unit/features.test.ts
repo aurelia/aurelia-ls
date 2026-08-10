@@ -323,7 +323,7 @@ function createMockHoverContext() {
         Promise.resolve({
           schemaVersion: "0.2",
           result: "answered",
-          selection: "not-applicable",
+          selection: "exact",
           coverage: "complete",
           summary: "mock semantic-runtime cursor answer",
           value: {
@@ -345,11 +345,14 @@ function createMockHoverContext() {
               attributeName: null,
               attributeValue: null,
               source: null,
+              tagNameSource: null,
+              closingTagNameSource: null,
               attributeSource: null,
             },
             valueSite: null,
             selectedDefinition: null,
             selectedBindable: null,
+            selectedRouteTarget: null,
             selectedMemberName: "message",
             selectedMember: {
               name: "message",
@@ -357,8 +360,12 @@ function createMockHoverContext() {
               typeDisplay: "string",
               isOptional: false,
               isReadonly: false,
+              scopeRole: null,
               source: null,
+              declarationSource: null,
             },
+            selectedExpression: null,
+            uncertainty: null,
             memberOwnerType: {
               display: "MyApp",
               shapeKind: "object",
@@ -367,6 +374,7 @@ function createMockHoverContext() {
               declarationSource: null,
             },
             diagnostics: [],
+            diagnosticPresentation: null,
           },
         }),
       ),
@@ -1672,8 +1680,8 @@ describe("handleHover", () => {
       params.position,
     );
     const contents = result?.contents as { value?: string };
-    expect(contents.value).toContain("message: string");
-    expect(contents.value).toContain("owner: `MyApp`");
+    expect(contents.value).toBe("```ts\nmessage: string\n```");
+    expect(contents.value).not.toContain("MyApp");
     expect(result?.range).toEqual({
       start: { line: 0, character: 12 },
       end: { line: 0, character: 19 },
