@@ -45,8 +45,11 @@ Guidelines:
 - The product/support shard alone enables diagnostic-provider observation before
   extension activation. For each audited journey target URI it requires IDs that
   are unique within that URI trace, serialized request/terminal pairs with no
-  overlap or terminal reuse, and one final request begun after the journey cursor
-  whose exact current document version returns a full report with a result ID.
+  overlap or terminal reuse, and a request begun after the journey cursor whose
+  exact current document version returns a full report with a result ID and item
+  count. Later attempts must stay at that version: a later full report supersedes
+  the receipt, an unchanged report must authenticate result-ID reuse, and an
+  explicit server retrigger remains unsettled until a later valid response.
   Cancellation counts are descriptive: a valid journey does not invent or
   require a scheduler-dependent cancellation, and host-observed server
   retrigger remains distinct from the deterministic request-guard contract.

@@ -2,6 +2,10 @@ const assert = require("assert");
 const path = require("path");
 const { pathToFileURL } = require("url");
 const vscode = require("vscode");
+const {
+  parseDiagnosticProviderSettlement,
+} = require("../diagnostic-provider-settlement.cjs");
+const { admittedAuthoredRoot } = require("../authored-resource-path.cjs");
 
 const aureliaWorkspace = process.env.AURELIA_LS_EXTENSION_HOST_WORKSPACE;
 const secondaryAureliaWorkspace = process.env.AURELIA_LS_EXTENSION_HOST_SECONDARY_WORKSPACE;
@@ -159,7 +163,11 @@ suite("extension-host product surface", () => {
   test("navigates through both native resource discovery journeys", async () => {
     const origin = await showAureliaDocument("src/my-app.html");
     await executeAndAcceptQuickPick("aurelia.goToResource");
-    assertAuthoredResourceDocument(vscode.window.activeTextEditor?.document, origin.uri);
+    assertAuthoredResourceDocument(
+      vscode.window.activeTextEditor?.document,
+      origin.uri,
+      [aureliaWorkspace, routedAureliaWorkspace],
+    );
 
     const availableOrigin = await showAureliaDocument("src/my-app.html");
     await waitFor(
@@ -173,7 +181,11 @@ suite("extension-host product surface", () => {
     assert(activeEditor && activeEditor.document.uri.toString() === availableOrigin.uri.toString());
     activeEditor.selection = new vscode.Selection(availableCursor, availableCursor);
     await executeAndAcceptQuickPick("aurelia.goToAvailableResource");
-    assertAuthoredResourceDocument(vscode.window.activeTextEditor?.document, origin.uri);
+    assertAuthoredResourceDocument(
+      vscode.window.activeTextEditor?.document,
+      origin.uri,
+      [aureliaWorkspace],
+    );
   });
 
   test("projects bounded hover cards and related facts through live editor providers", async () => {
@@ -1400,12 +1412,13 @@ async function waitForExtensionHostObservation(
   return matched;
 }
 
-function assertAuthoredResourceDocument(document, originUri) {
+function assertAuthoredResourceDocument(document, originUri, admittedRoots) {
   assert(document, "Expected resource navigation to leave an active editor.");
   assert.notStrictEqual(document.uri.toString(), originUri.toString(), "Expected navigation away from the template.");
+  const authoredRoot = admittedAuthoredRoot(document.uri.fsPath, admittedRoots);
   assert(
-    normalize(document.uri.fsPath).startsWith(normalize(path.join(aureliaWorkspace, "src"))),
-    `Expected an authored workspace resource, received ${document.uri.toString()}.`,
+    authoredRoot != null,
+    `Expected a resource authored in ${admittedRoots.join(", ")}, received ${document.uri.toString()}.`,
   );
 }
 
@@ -1493,112 +1506,4 @@ async function waitForCurrentDiagnosticProviderSettlement(observationStart, docu
     ),
   )}`, 120_000);
   return settlement;
-}
-
-function parseDiagnosticProviderSettlement(events, uri, documentVersion, observationStart) {
-  const trace = events.map((event, index) => ({ event, index })).filter(({ event }) =>
-    event.source === "language-client-provider"
-    && event.operation === "diagnostics"
-    && event.uri === uri
-  );
-  const attempts = [];
-  const byId = new Map();
-  let active;
-
-  for (const entry of trace) {
-    const event = entry.event;
-    if (event.phase === "request") {
-      if (active != null) {
-        return {
-          error: `Diagnostic provider attempt ${event.observationId} overlapped ${active.request.observationId}.`,
-          settlement: null,
-          trace: trace.map((candidate) => candidate.event),
-        };
-      }
-      if (byId.has(event.observationId)) {
-        return {
-          error: `Diagnostic provider attempt ${event.observationId} reused an observation id.`,
-          settlement: null,
-          trace: trace.map((candidate) => candidate.event),
-        };
-      }
-      const attempt = { request: event, requestIndex: entry.index, terminal: null };
-      attempts.push(attempt);
-      byId.set(event.observationId, attempt);
-      active = attempt;
-      continue;
-    }
-    if (event.phase !== "response" && event.phase !== "failed") continue;
-    const attempt = byId.get(event.observationId);
-    if (attempt == null) {
-      return {
-        error: `Diagnostic provider attempt ${event.observationId} published a terminal without an observed request.`,
-        settlement: null,
-        trace: trace.map((candidate) => candidate.event),
-      };
-    }
-    if (attempt.terminal != null) {
-      return {
-        error: `Diagnostic provider attempt ${event.observationId} published more than one terminal.`,
-        settlement: null,
-        trace: trace.map((candidate) => candidate.event),
-      };
-    }
-    if (active !== attempt) {
-      return {
-        error: `Diagnostic provider attempt ${event.observationId} terminated out of request order.`,
-        settlement: null,
-        trace: trace.map((candidate) => candidate.event),
-      };
-    }
-    attempt.terminal = event;
-    active = undefined;
-    if (
-      event.phase === "failed"
-      && (
-        event.errorName !== "Canceled"
-        || (event.cancellationRequested !== true && event.serverRetriggerRequested !== true)
-      )
-    ) {
-      return {
-        error: `Diagnostic provider attempt ${event.observationId} failed without authenticated cancellation.`,
-        settlement: null,
-        trace: trace.map((candidate) => candidate.event),
-      };
-    }
-    if (event.phase === "response" && event.cancellationRequested === true) {
-      return {
-        error: `Diagnostic provider attempt ${event.observationId} responded after client cancellation.`,
-        settlement: null,
-        trace: trace.map((candidate) => candidate.event),
-      };
-    }
-  }
-
-  if (attempts.length === 0 || active != null) {
-    return { error: null, settlement: null, trace: trace.map((candidate) => candidate.event) };
-  }
-  const last = attempts[attempts.length - 1];
-  if (last.requestIndex < observationStart || last.request.documentVersion !== documentVersion) {
-    return { error: null, settlement: null, trace: trace.map((candidate) => candidate.event) };
-  }
-  if (last.terminal?.phase !== "response") {
-    return { error: null, settlement: null, trace: trace.map((candidate) => candidate.event) };
-  }
-  if (last.terminal.reportKind !== "full" || last.terminal.resultIdPresent !== true) {
-    return {
-      error: `Current diagnostic provider attempt ${last.request.observationId} did not return a full resultId-bearing report.`,
-      settlement: null,
-      trace: trace.map((candidate) => candidate.event),
-    };
-  }
-  return {
-    error: null,
-    settlement: {
-      ...last.terminal,
-      observedAttemptCount: attempts.length,
-      observedCanceledAttemptCount: attempts.filter((attempt) => attempt.terminal?.phase === "failed").length,
-    },
-    trace: trace.map((candidate) => candidate.event),
-  };
 }
