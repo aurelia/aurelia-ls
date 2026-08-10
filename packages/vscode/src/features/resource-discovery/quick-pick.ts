@@ -14,9 +14,17 @@ export interface ResourceQuickPickModel<T extends QuickPickItem> {
   readonly title: string;
   readonly placeholder: string;
   readonly items: readonly T[];
+  readonly titleActions?: readonly ResourceQuickPickTitleAction[];
   readonly step?: number;
   readonly totalSteps?: number;
 }
+
+export const ResourceQuickPickTitleActionKind = {
+  OpenOutput: "open-output",
+} as const;
+
+export type ResourceQuickPickTitleAction =
+  typeof ResourceQuickPickTitleActionKind[keyof typeof ResourceQuickPickTitleActionKind];
 
 export type ResourceQuickPickOutcome<T> =
   | { readonly status: "selected"; readonly value: T }
@@ -30,6 +38,7 @@ export async function showResourceQuickPick<T extends QuickPickItem>(
   load: (token: CancellationToken) => Promise<ResourceQuickPickModel<T>>,
   allowBack = false,
   observationId?: string,
+  onDidTriggerTitleAction?: (action: ResourceQuickPickTitleAction) => void,
 ): Promise<ResourceQuickPickOutcome<T>> {
   const effectiveObservationId = observationId ?? nextExtensionHostObservationId("quick-pick");
   const observe = (
@@ -46,10 +55,21 @@ export async function showResourceQuickPick<T extends QuickPickItem>(
   };
   const cancellation = new vscode.CancellationTokenSource();
   const picker = vscode.window.createQuickPick<T>();
+  const titleActionByButton = new Map<QuickInputButton, ResourceQuickPickTitleAction>();
+  const setButtons = (actions: readonly ResourceQuickPickTitleAction[] = []): void => {
+    titleActionByButton.clear();
+    const buttons: QuickInputButton[] = allowBack ? [vscode.QuickInputButtons.Back] : [];
+    for (const action of new Set(actions)) {
+      const button = resourceQuickPickTitleButton(vscode, action);
+      titleActionByButton.set(button, action);
+      buttons.push(button);
+    }
+    picker.buttons = buttons;
+  };
   picker.title = initialTitle;
   picker.placeholder = "Discovering Aurelia resources...";
   picker.busy = true;
-  if (allowBack) picker.buttons = [vscode.QuickInputButtons.Back];
+  setButtons();
 
   let settled = false;
   let finishedStatus: ResourceQuickPickOutcome<T>["status"] | "failed" | undefined;
@@ -77,7 +97,14 @@ export async function showResourceQuickPick<T extends QuickPickItem>(
       finish({ status: "cancelled" });
     }),
     picker.onDidTriggerButton((button: QuickInputButton) => {
-      if (allowBack && button === vscode.QuickInputButtons.Back) finish({ status: "back" });
+      if (allowBack && button === vscode.QuickInputButtons.Back) {
+        finish({ status: "back" });
+        return;
+      }
+      const action = titleActionByButton.get(button);
+      if (action == null) return;
+      observe("title-action", { action });
+      onDidTriggerTitleAction?.(action);
     }),
   ];
   picker.show();
@@ -121,6 +148,7 @@ export async function showResourceQuickPick<T extends QuickPickItem>(
     picker.matchOnDetail = true;
     picker.step = model.step;
     picker.totalSteps = model.totalSteps;
+    setButtons(model.titleActions);
     observe("model-ready", { itemCount: model.items.length, title: model.title });
     return await outcome;
   } finally {
@@ -129,5 +157,18 @@ export async function showResourceQuickPick<T extends QuickPickItem>(
     cancellation.dispose();
     picker.dispose();
     observe("disposed");
+  }
+}
+
+function resourceQuickPickTitleButton(
+  vscode: VscodeApi,
+  action: ResourceQuickPickTitleAction,
+): QuickInputButton {
+  switch (action) {
+    case ResourceQuickPickTitleActionKind.OpenOutput:
+      return {
+        iconPath: new vscode.ThemeIcon("output"),
+        tooltip: "Open Aurelia Output",
+      };
   }
 }

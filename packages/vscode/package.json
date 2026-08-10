@@ -142,6 +142,37 @@
       {
         "command": "aurelia.goToAvailableResource",
         "title": "Go to Resource Available to Active Template...",
+        "icon": "$(target)",
+        "category": "Aurelia"
+      },
+      {
+        "command": "aurelia.openResourceDeclaration",
+        "title": "Open Declaration",
+        "icon": "$(go-to-file)",
+        "category": "Aurelia"
+      },
+      {
+        "command": "aurelia.openResourceImplementation",
+        "title": "Open Implementation",
+        "icon": "$(symbol-class)",
+        "category": "Aurelia"
+      },
+      {
+        "command": "aurelia.openResourceToSide",
+        "title": "Open to Side",
+        "icon": "$(split-horizontal)",
+        "category": "Aurelia"
+      },
+      {
+        "command": "aurelia.retryResourceProject",
+        "title": "Retry Resource Discovery",
+        "icon": "$(refresh)",
+        "category": "Aurelia"
+      },
+      {
+        "command": "aurelia.openAureliaOutput",
+        "title": "Open Aurelia Output",
+        "icon": "$(output)",
         "category": "Aurelia"
       },
       {
@@ -155,12 +186,49 @@
         {
           "command": "aurelia.goToResource",
           "when": "view == aureliaResourceExplorer",
-          "group": "navigation"
+          "group": "navigation@1"
+        },
+        {
+          "command": "aurelia.goToAvailableResource",
+          "when": "view == aureliaResourceExplorer && aurelia.documentOwned && editorLangId == html",
+          "group": "navigation@2"
         },
         {
           "command": "aurelia.refreshResourceExplorer",
           "when": "view == aureliaResourceExplorer",
-          "group": "navigation"
+          "group": "navigation@3"
+        },
+        {
+          "command": "aurelia.openAureliaOutput",
+          "when": "view == aureliaResourceExplorer && aurelia.resourceExplorerHasIssues",
+          "group": "status@1"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "aurelia.openResourceDeclaration",
+          "when": "view == aureliaResourceExplorer && (viewItem == resource || viewItem == resourceWithImplementation || viewItem == resourceAlias || viewItem == resourceBindable)",
+          "group": "navigation@1"
+        },
+        {
+          "command": "aurelia.openResourceImplementation",
+          "when": "view == aureliaResourceExplorer && viewItem == resourceWithImplementation",
+          "group": "navigation@2"
+        },
+        {
+          "command": "aurelia.openResourceToSide",
+          "when": "view == aureliaResourceExplorer && (viewItem == resource || viewItem == resourceWithImplementation || viewItem == resourceAlias || viewItem == resourceBindable)",
+          "group": "navigation@3"
+        },
+        {
+          "command": "aurelia.retryResourceProject",
+          "when": "view == aureliaResourceExplorer && viewItem == resourceProjectIssue",
+          "group": "resourceRecovery@1"
+        },
+        {
+          "command": "aurelia.openAureliaOutput",
+          "when": "view == aureliaResourceExplorer && (viewItem == resourceProjectIssue || viewItem == resourceProjectUnsupported)",
+          "group": "resourceRecovery@2"
         }
       ],
       "editor/context": [
@@ -191,6 +259,26 @@
         {
           "command": "aurelia.openRelatedFile",
           "when": "aurelia.active && aurelia.documentOwned"
+        },
+        {
+          "command": "aurelia.openResourceDeclaration",
+          "when": "false"
+        },
+        {
+          "command": "aurelia.openResourceImplementation",
+          "when": "false"
+        },
+        {
+          "command": "aurelia.openResourceToSide",
+          "when": "false"
+        },
+        {
+          "command": "aurelia.retryResourceProject",
+          "when": "false"
+        },
+        {
+          "command": "aurelia.openAureliaOutput",
+          "when": "false"
         }
       ]
     },

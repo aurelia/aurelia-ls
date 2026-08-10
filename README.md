@@ -52,7 +52,7 @@ The extension analyzes your Aurelia project and provides:
 - **Find References** — locate all usages of a component or bindable across templates
 - **Rename** — cross-file rename with safety checks (won't apply partial changes)
 - **Semantic Tokens** — coloring that distinguishes custom elements from HTML, bindables from plain attributes
-- **Resource Explorer** — browse all resources in your project from the sidebar
+- **Aurelia Resources** — browse exact runtime resources in your project from VS Code's Explorer
 
 See the [extension README](packages/vscode/README.md) for the full feature list and screenshots.
 

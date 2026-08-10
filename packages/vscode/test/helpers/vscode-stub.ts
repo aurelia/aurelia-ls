@@ -36,6 +36,8 @@ interface CreateVscodeApiOptions {
   configuration?: Record<string, unknown>;
   workspaceConfiguration?: Record<string, Record<string, unknown>>;
   openDocuments?: Array<{ uri: string; languageId: string; text: string }>;
+  informationMessageResponses?: Array<string | undefined>;
+  errorMessageResponses?: Array<string | undefined>;
 }
 
 interface StubStatusBarItem {
@@ -95,6 +97,7 @@ export interface StubQuickPick {
   totalSteps: number | undefined;
   accept(index: number): void;
   back(): void;
+  triggerButton(index: number): void;
   hide(): void;
   dispose(): void;
 }
@@ -106,10 +109,13 @@ interface RecordedActions {
   openedDocuments: StubDocument[];
   shownDocuments: Array<{ doc: StubDocument; opts?: unknown }>;
   infoMessages: string[];
+  infoMessageRequests: Array<{ message: string; items: readonly string[] }>;
   errorMessages: string[];
+  errorMessageRequests: Array<{ message: string; items: readonly string[] }>;
   statusItems: StubStatusBarItem[];
   fileWatchers: StubFileWatcher[];
   outputLogs: string[];
+  shownOutputChannels: Array<{ name: string; preserveFocus: boolean | undefined }>;
   quickPicks: StubQuickPick[];
   contextValues: Map<string, unknown>;
   fireWorkspaceFoldersChanged(): void;
@@ -149,8 +155,8 @@ export interface StubVscodeApi {
   };
   window: {
     activeTextEditor: unknown;
-    showInformationMessage: (message: string) => string;
-    showErrorMessage: (message: string) => string;
+    showInformationMessage: (message: string, ...items: string[]) => Promise<string | undefined>;
+    showErrorMessage: (message: string, ...items: string[]) => Promise<string | undefined>;
     showTextDocument: (doc: StubDocument, opts?: unknown) => Promise<{ document: StubDocument }>;
     openTextDocument: (target: unknown) => Promise<StubDocument>;
     createOutputChannel: (name: string, options?: { log: true }) => StubOutputChannel;
@@ -171,6 +177,7 @@ export interface StubVscodeApi {
   Range: typeof Range;
   ThemeIcon: typeof ThemeIcon;
   QuickInputButtons: { Back: object };
+  QuickPickItemKind: { Separator: number; Default: number };
   TreeItemCollapsibleState: { None: number; Collapsed: number; Expanded: number };
   StatusBarAlignment: { Left: number; Right: number };
   ViewColumn: { Beside: number; One: number };
@@ -344,6 +351,11 @@ class QuickPick implements StubQuickPick {
     this.#button.fire(QuickInputButtons.Back);
   }
 
+  triggerButton(index: number): void {
+    const button = this.buttons[index];
+    if (button != null) this.#button.fire(button);
+  }
+
   hide(): void {
     if (!this.visible) return;
     this.visible = false;
@@ -468,10 +480,13 @@ export function createVscodeApi(options: CreateVscodeApiOptions = {}): { vscode:
   const openedDocuments: StubDocument[] = [];
   const shownDocuments: Array<{ doc: StubDocument; opts?: unknown }> = [];
   const infoMessages: string[] = [];
+  const infoMessageRequests: Array<{ message: string; items: readonly string[] }> = [];
   const errorMessages: string[] = [];
+  const errorMessageRequests: Array<{ message: string; items: readonly string[] }> = [];
   const statusItems: StubStatusBarItem[] = [];
   const fileWatchers: StubFileWatcher[] = [];
   const outputLogs: string[] = [];
+  const shownOutputChannels: Array<{ name: string; preserveFocus: boolean | undefined }> = [];
   const quickPicks: StubQuickPick[] = [];
   const contextValues = new Map<string, unknown>();
   const workspaceFoldersChanged = new EventEmitter<void>();
@@ -533,7 +548,9 @@ export function createVscodeApi(options: CreateVscodeApiOptions = {}): { vscode:
       info: (message: string, ...args: unknown[]) => write("info", message, args),
       warn: (message: string, ...args: unknown[]) => write("warn", message, args),
       error: (message: string | Error, ...args: unknown[]) => write("error", String(message), args),
-      show: () => {},
+      show: (preserveFocus?: boolean) => {
+        shownOutputChannels.push({ name, preserveFocus });
+      },
       dispose: () => {
         lines.splice(0, lines.length);
         entries.splice(0, entries.length);
@@ -630,13 +647,15 @@ export function createVscodeApi(options: CreateVscodeApiOptions = {}): { vscode:
     set activeTextEditor(editor: unknown) {
       options.activeTextEditor = editor;
     },
-    showInformationMessage: (message: string) => {
+    showInformationMessage: (message: string, ...items: string[]) => {
       infoMessages.push(message);
-      return message;
+      infoMessageRequests.push({ message, items });
+      return Promise.resolve(options.informationMessageResponses?.shift());
     },
-    showErrorMessage: (message: string) => {
+    showErrorMessage: (message: string, ...items: string[]) => {
       errorMessages.push(message);
-      return message;
+      errorMessageRequests.push({ message, items });
+      return Promise.resolve(options.errorMessageResponses?.shift());
     },
     showTextDocument: async (doc: StubDocument, opts?: unknown) => {
       shownDocuments.push({ doc, opts });
@@ -686,6 +705,7 @@ export function createVscodeApi(options: CreateVscodeApiOptions = {}): { vscode:
     Range,
     ThemeIcon,
     QuickInputButtons,
+    QuickPickItemKind: { Separator: -1, Default: 0 },
     TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
     StatusBarAlignment: { Left: 1, Right: 2 },
     ViewColumn: { Beside: 2, One: 1 },
@@ -701,10 +721,13 @@ export function createVscodeApi(options: CreateVscodeApiOptions = {}): { vscode:
       openedDocuments,
       shownDocuments,
       infoMessages,
+      infoMessageRequests,
       errorMessages,
+      errorMessageRequests,
       statusItems,
       fileWatchers,
       outputLogs,
+      shownOutputChannels,
       quickPicks,
       contextValues,
       fireWorkspaceFoldersChanged: () => workspaceFoldersChanged.fire(),

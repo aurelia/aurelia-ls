@@ -101,6 +101,7 @@ export class LspFacade implements Disposable {
         return { ...session.workspace, status: "error" as const, error: errorMessage(err) };
       }
     }));
+    this.#logResourceInventoryIssues(rows);
     return { workspaces: rows };
   }
 
@@ -124,6 +125,7 @@ export class LspFacade implements Disposable {
       },
       token,
     );
+    this.#logTemplateAvailabilityIssues(response, session.workspace.key);
     return { ...response, workspace: session.workspace };
   }
 
@@ -205,6 +207,65 @@ export class LspFacade implements Disposable {
 
   #sessionForUri(uri: string): AureliaLanguageClientSession | undefined {
     return this.#clients.sessionForUri(uri);
+  }
+
+  #logResourceInventoryIssues(workspaces: ResourceInventorySnapshot["workspaces"]): void {
+    for (const workspace of workspaces) {
+      if (workspace.status === "error") {
+        // #sendRequest already recorded the transport exception with workspace
+        // context before it was conserved as an error row.
+        continue;
+      }
+      for (const project of workspace.response.projects) {
+        if (project.status === "error") {
+          this.#logger.warn("resource-inventory.project.issue", {
+            workspace: workspace.key,
+            project: project.project.projectKey,
+            status: project.status,
+            message: project.message,
+          });
+          continue;
+        }
+        if (
+          project.answer.result === "answered"
+          && project.answer.coverage === "complete"
+          && !resourceCompletenessHasIssue(project.completeness)
+        ) {
+          continue;
+        }
+        this.#logger.warn("resource-inventory.project.issue", {
+          workspace: workspace.key,
+          project: project.project.projectKey,
+          result: project.answer.result,
+          coverage: project.answer.coverage,
+          summary: project.answer.summary,
+          completeness: project.completeness,
+        });
+      }
+    }
+  }
+
+  #logTemplateAvailabilityIssues(
+    response: TemplateResourceAvailabilityResponse,
+    workspaceKey: string,
+  ): void {
+    const selection = response.projectSelection;
+    if (selection.status !== "exact") return;
+    if (
+      selection.answer.result === "answered"
+      && selection.answer.coverage === "complete"
+      && !resourceCompletenessHasIssue(selection.completeness)
+    ) {
+      return;
+    }
+    this.#logger.warn("template-resource-availability.issue", {
+      workspace: workspaceKey,
+      project: selection.project.projectKey,
+      result: selection.answer.result,
+      coverage: selection.answer.coverage,
+      summary: selection.answer.summary,
+      completeness: selection.completeness,
+    });
   }
 
   async #sendRequest<T>(
@@ -298,6 +359,16 @@ function protocolPosition(position: { readonly line: number; readonly character:
   readonly character: number;
 } {
   return { line: position.line, character: position.character };
+}
+
+function resourceCompletenessHasIssue(completeness: {
+  readonly unnamedDefinitions: number;
+  readonly unresolvedModules: number;
+  readonly openVisibility: number;
+}): boolean {
+  return completeness.unnamedDefinitions > 0
+    || completeness.unresolvedModules > 0
+    || completeness.openVisibility > 0;
 }
 
 function isAnalysisChangedPayload(value: unknown): value is AnalysisChangedPayload {

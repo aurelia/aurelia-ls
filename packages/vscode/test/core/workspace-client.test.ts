@@ -48,6 +48,7 @@ interface ClientHarnessOptions {
     notificationIndex: number,
   ) => void | Promise<void>;
   readonly resourceResponse?: (workspaceUri: string) => unknown | Promise<unknown>;
+  readonly templateAvailabilityResponse?: (workspaceUri: string) => unknown | Promise<unknown>;
 }
 
 describe("workspace activation admission", () => {
@@ -963,6 +964,115 @@ describe("LspFacade workspace routing", () => {
     await manager.stop();
   });
 
+  test("records only nonhealthy resource snapshots with causal structured Output detail", async () => {
+    const workspaceUri = "file:///work/app";
+    const { vscode, recorded } = createVscodeApi({
+      workspaceFolders: [{ name: "app", uri: workspaceUri }],
+      files: {
+        [`${workspaceUri}/package.json`]: JSON.stringify({ dependencies: { aurelia: "latest" } }),
+      },
+    });
+    let currentInventory: unknown = resourceResponse(workspaceUri);
+    let currentAvailability: unknown = templateAvailabilityResponse(workspaceUri);
+    const harness = createClientHarness(new Map([
+      [workspaceUri, workspaceStatus("app-world")],
+    ]), {
+      resourceResponse: () => currentInventory,
+      templateAvailabilityResponse: () => currentAvailability,
+    });
+    const manager = createManager(vscode, harness);
+    await manager.start(stubExtensionContext(vscode));
+    const { logger } = createTestServices(vscode as unknown as VscodeApi);
+    const facade = new LspFacade(manager, logger);
+    const inventoryVariant = (
+      answer: Record<string, unknown> = {},
+      completeness: Record<string, unknown> = {},
+    ) => {
+      const base = resourceResponse(workspaceUri);
+      const project = base.projects[0]!;
+      return {
+        ...base,
+        projects: [{
+          ...project,
+          answer: { ...project.answer, ...answer },
+          completeness: { ...project.completeness, ...completeness },
+        }],
+      };
+    };
+    const availabilityVariant = (
+      answer: Record<string, unknown> = {},
+      completeness: Record<string, unknown> = {},
+    ) => {
+      const base = templateAvailabilityResponse(workspaceUri);
+      const selection = base.projectSelection;
+      return {
+        ...base,
+        projectSelection: {
+          ...selection,
+          answer: { ...selection.answer, ...answer },
+          completeness: { ...selection.completeness, ...completeness },
+        },
+      };
+    };
+    const issueLogs = () => recorded.outputLogs.filter((line) => line.includes(".issue"));
+
+    // Intentional compiler exclusion and row-level metadata counts are healthy
+    // when the semantic answer still reports complete coverage.
+    currentInventory = inventoryVariant({}, {
+      excludedCompilerSyntax: 19,
+      headerOnly: 2,
+      visibilityOnly: 1,
+    });
+    await facade.getResourceInventory();
+    await facade.getTemplateResourceAvailability(`${workspaceUri}/src/app.html`, { line: 0, character: 0 });
+    expect(issueLogs()).toEqual([]);
+
+    const projectError = resourceResponse(workspaceUri);
+    currentInventory = {
+      ...projectError,
+      projects: [{
+        status: "error",
+        project: projectError.projects[0]!.project,
+        message: "private project admission detail",
+      }],
+    };
+    await facade.getResourceInventory();
+    for (const result of ["failed", "invalid", "unsupported"] as const) {
+      currentInventory = inventoryVariant({ result, summary: `private inventory ${result}` });
+      await facade.getResourceInventory();
+    }
+    currentInventory = inventoryVariant({ coverage: "open", summary: "private inventory open" });
+    await facade.getResourceInventory();
+    currentInventory = inventoryVariant({}, { unnamedDefinitions: 1, unresolvedModules: 2, openVisibility: 3 });
+    await facade.getResourceInventory();
+
+    for (const result of ["failed", "invalid", "unsupported"] as const) {
+      currentAvailability = availabilityVariant({ result, summary: `private availability ${result}` });
+      await facade.getTemplateResourceAvailability(`${workspaceUri}/src/app.html`, { line: 0, character: 0 });
+    }
+    currentAvailability = availabilityVariant({ coverage: "open", summary: "private availability open" });
+    await facade.getTemplateResourceAvailability(`${workspaceUri}/src/app.html`, { line: 0, character: 0 });
+    currentAvailability = availabilityVariant({}, { unnamedDefinitions: 1, unresolvedModules: 2, openVisibility: 3 });
+    await facade.getTemplateResourceAvailability(`${workspaceUri}/src/app.html`, { line: 0, character: 0 });
+
+    const output = issueLogs().join("\n");
+    expect(output).toContain("resource-inventory.project.issue");
+    expect(output).toContain("status=error");
+    expect(output).toContain("message=\"private project admission detail\"");
+    expect(output).toContain("result=failed");
+    expect(output).toContain("result=invalid");
+    expect(output).toContain("result=unsupported");
+    expect(output).toContain("coverage=open");
+    expect(output).toContain("unnamedDefinitions\":1");
+    expect(output).toContain("template-resource-availability.issue");
+    expect(output).toContain("summary=\"private availability open\"");
+    expect(output).toContain(`workspace=${workspaceUri}`);
+    expect(output).toContain(`project=${workspaceUri}:app`);
+
+    facade.dispose();
+    await manager.stop();
+  });
+
   test("multicasts one raw notification and rebinds when workspace ownership changes", async () => {
     const { vscode, recorded } = twoWorkspaceApi();
     const harness = createClientHarness(new Map([
@@ -1096,7 +1206,7 @@ function createClientHarness(
         case "aurelia/sourceOwnership":
           return sourceOwnershipResponse(workspaceUri, (params as { uri: string }).uri);
         case "aurelia/templateResourceAvailability":
-          return {
+          return harnessOptions.templateAvailabilityResponse?.(workspaceUri) ?? {
             fingerprint: `${workspaceUri}:availability`,
             projectSelection: { status: "absent", candidates: [] },
           };
@@ -1210,6 +1320,45 @@ function resourceResponse(workspaceUri: string) {
         openVisibility: 0,
       },
     }],
+  };
+}
+
+function templateAvailabilityResponse(workspaceUri: string) {
+  const inventory = resourceResponse(workspaceUri);
+  const project = inventory.projects[0]!.project;
+  return {
+    fingerprint: `${workspaceUri}:availability`,
+    projectSelection: {
+      status: "exact",
+      project,
+      answer: {
+        schemaVersion: "0.2",
+        result: "answered",
+        selection: "exact",
+        coverage: "complete",
+        summary: "complete",
+        page: null,
+      },
+      selectedTemplate: {
+        templateIdentityKey: "template:app",
+        scopeIdentityKey: "scope:app",
+        definitionName: "app",
+        compilationLane: "app-runtime",
+        source: { state: "absent" },
+      },
+      templateCandidates: [],
+      resources: [],
+      completeness: {
+        fullDefinitions: 1,
+        headerOnly: 0,
+        visibilityOnly: 0,
+        localTemplates: 0,
+        excludedCompilerSyntax: 19,
+        unnamedDefinitions: 0,
+        unresolvedModules: 0,
+        openVisibility: 0,
+      },
+    },
   };
 }
 

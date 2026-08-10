@@ -59,7 +59,10 @@ export type SourceOwnershipSnapshot = SourceOwnershipResponse & {
   readonly workspace: AureliaWorkspaceIdentity;
 };
 
-export type ResourceNavigationRole = "resource" | "alias" | "bindable";
+export type ResourceNavigationRole = "resource" | "implementation" | "alias" | "bindable";
+
+export type ResourceNavigationPlacement = "preview" | "beside";
+export type ResourceNavigationCurrentness = "identity-current" | "strict-snapshot";
 
 /** Stable identity used to re-resolve a current location before every navigation. */
 export interface ResourceNavigationRequest {
@@ -69,4 +72,7 @@ export interface ResourceNavigationRequest {
   readonly resourceIdentityKey: string;
   readonly role: ResourceNavigationRole;
   readonly childIdentityKey?: string;
+  readonly placement?: ResourceNavigationPlacement;
+  /** Active-template availability requires the exact snapshot it just proved. */
+  readonly currentness?: ResourceNavigationCurrentness;
 }

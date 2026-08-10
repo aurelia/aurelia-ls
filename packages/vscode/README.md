@@ -83,13 +83,18 @@ Browse exact runtime resources in the **Aurelia Resources** view in VS Code's bu
 covers custom elements, custom attributes, template controllers, value converters, and binding behaviors; compiler-syntax
 features such as binding commands and attribute patterns remain outside the runtime-resource inventory. Aliases, bindables,
 declaration forms, origin, and exact source navigation stay attached to their owning definition. Multi-root workspaces show
-workspace and project ownership only when it is needed to disambiguate identical names, and failed or partial analysis remains
-visible without replacing the last coherent tree.
+workspace and project ownership where it helps search or disambiguate identical names. Incomplete declaration metadata,
+uncertain template availability, updating state, and project-specific failure states remain explicit. A rejected refresh
+retains the last coherent tree as out of date. Resource rows provide exact declaration, implementation, and side-by-side
+navigation when those targets are proved. Failed or out-of-date project rows offer **Retry Resource Discovery** and
+**Open Aurelia Output**; unsupported project rows offer Output without implying that retry can change support.
 
-Use **Aurelia: Go to Resource...** to search the complete inventory across active Aurelia workspaces. Use
+Use **Aurelia: Go to Resource...** to search navigable resources from the exact inventory across active Aurelia workspaces. Use
 **Aurelia: Go to Resource Available to Active Template...** for the exact compiler scope at the current template cursor. The
 contextual command asks you to choose when project or template ownership is genuinely ambiguous; it never derives scope from
-which Explorer item happens to have focus.
+which Explorer item happens to have focus. Quick Picks keep aliases, bindables, kinds, workspace and project ownership, source
+location, and incomplete metadata searchable. A navigation retry repeats the current template-availability proof before opening
+anything, so a stale selection cannot be paired with a newer project snapshot.
 
 ### Binding Mode Hints
 

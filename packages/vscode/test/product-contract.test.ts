@@ -6,7 +6,7 @@ interface ExtensionManifest {
   readonly api?: string;
   readonly activationEvents?: readonly string[];
   readonly contributes?: {
-    readonly commands?: readonly { readonly command: string }[];
+    readonly commands?: readonly { readonly command: string; readonly title?: string; readonly icon?: string }[];
     readonly keybindings?: readonly unknown[];
     readonly snippets?: readonly unknown[];
     readonly semanticTokenTypes?: readonly {
@@ -26,6 +26,7 @@ interface ExtensionManifest {
     readonly menus?: Readonly<Record<string, readonly {
       readonly command: string;
       readonly when?: string;
+      readonly group?: string;
     }[]>>;
     readonly views?: Readonly<Record<string, readonly { readonly id: string }[]>>;
     readonly configuration?: {
@@ -143,6 +144,60 @@ describe("VS Code product contract", () => {
         ?.find((entry) => entry.command === AureliaCommand.GoToAvailableResource);
       expect(menu?.when).toBe("aurelia.active && aurelia.documentOwned && editorLangId == html");
     }
+  });
+
+  test("keeps exactly three primary view actions and issue-scoped Output in overflow", () => {
+    const title = manifest.contributes?.menus?.["view/title"] ?? [];
+    const primary = title.filter((entry) => entry.group?.startsWith("navigation"));
+
+    expect(primary).toEqual([
+      expect.objectContaining({ command: AureliaCommand.GoToResource, group: "navigation@1" }),
+      expect.objectContaining({
+        command: AureliaCommand.GoToAvailableResource,
+        group: "navigation@2",
+        when: "view == aureliaResourceExplorer && aurelia.documentOwned && editorLangId == html",
+      }),
+      expect.objectContaining({ command: AureliaCommand.RefreshResourceExplorer, group: "navigation@3" }),
+    ]);
+    expect(title).toContainEqual(expect.objectContaining({
+      command: AureliaCommand.OpenAureliaOutput,
+      group: "status@1",
+      when: "view == aureliaResourceExplorer && aurelia.resourceExplorerHasIssues",
+    }));
+  });
+
+  test("bounds tree context actions and hides contextual commands from the Command Palette", () => {
+    const context = manifest.contributes?.menus?.["view/item/context"] ?? [];
+    const navigable = "view == aureliaResourceExplorer && (viewItem == resource || viewItem == resourceWithImplementation || viewItem == resourceAlias || viewItem == resourceBindable)";
+    expect(context).toEqual([
+      { command: AureliaCommand.OpenResourceDeclaration, when: navigable, group: "navigation@1" },
+      {
+        command: AureliaCommand.OpenResourceImplementation,
+        when: "view == aureliaResourceExplorer && viewItem == resourceWithImplementation",
+        group: "navigation@2",
+      },
+      { command: AureliaCommand.OpenResourceToSide, when: navigable, group: "navigation@3" },
+      {
+        command: AureliaCommand.RetryResourceProject,
+        when: "view == aureliaResourceExplorer && viewItem == resourceProjectIssue",
+        group: "resourceRecovery@1",
+      },
+      {
+        command: AureliaCommand.OpenAureliaOutput,
+        when: "view == aureliaResourceExplorer && (viewItem == resourceProjectIssue || viewItem == resourceProjectUnsupported)",
+        group: "resourceRecovery@2",
+      },
+    ]);
+    for (const command of [
+      AureliaCommand.OpenResourceDeclaration,
+      AureliaCommand.OpenResourceImplementation,
+      AureliaCommand.OpenResourceToSide,
+      AureliaCommand.RetryResourceProject,
+      AureliaCommand.OpenAureliaOutput,
+    ]) {
+      expect(manifest.contributes?.menus?.commandPalette).toContainEqual({ command, when: "false" });
+    }
+    expect(manifest.contributes?.keybindings).toBeUndefined();
   });
 
   test("offers related-file navigation for every supported script language", () => {

@@ -1,11 +1,23 @@
 import type { ClientFeature } from "../../core/feature.js";
 import { AureliaCommand, AureliaView } from "../../product-contract.js";
-import { ResourceExplorerProvider } from "./resource-explorer.js";
+import { openResourceNavigation } from "../resource-discovery/navigation.js";
+import {
+  ResourceExplorerProvider,
+  type ResourceExplorerNavigationAction,
+} from "./resource-explorer.js";
 
 export const ViewsFeature: ClientFeature = {
   id: "views.workspace",
   activate: (ctx, own) => {
-    const explorer = own(new ResourceExplorerProvider(ctx.vscode, ctx.lsp, ctx.logger));
+    const explorer = own(new ResourceExplorerProvider(
+      ctx.vscode,
+      ctx.lsp,
+      ctx.logger,
+      (task) => ctx.vscode.window.withProgress(
+        { location: { viewId: AureliaView.ResourceExplorer } },
+        () => task(),
+      ),
+    ));
     const view = own(ctx.vscode.window.createTreeView(AureliaView.ResourceExplorer, {
       treeDataProvider: explorer,
       showCollapseAll: true,
@@ -22,6 +34,8 @@ export const ViewsFeature: ClientFeature = {
     const dirtyWorkspaceKeys = new Set<string>();
     let forceWhileHidden = false;
     let refreshDrain: Promise<void> | null = null;
+    const noActiveRefresh = Symbol("no-active-resource-refresh");
+    let activeRefreshScope: string | null | typeof noActiveRefresh = noActiveRefresh;
     const hasDirtyRefresh = (): boolean => dirtyAll || dirtyWorkspaceKeys.size > 0;
     const drainRefresh = (): Promise<void> => {
       if (!acceptingRefreshes) return Promise.resolve();
@@ -34,13 +48,23 @@ export const ViewsFeature: ClientFeature = {
           if (dirtyAll) {
             dirtyAll = false;
             dirtyWorkspaceKeys.clear();
-            await explorer.refresh();
+            activeRefreshScope = null;
+            try {
+              await explorer.refresh();
+            } finally {
+              activeRefreshScope = noActiveRefresh;
+            }
             continue;
           }
           const workspaceKey = dirtyWorkspaceKeys.values().next().value;
           if (workspaceKey == null) continue;
           dirtyWorkspaceKeys.delete(workspaceKey);
-          await explorer.refreshWorkspace(workspaceKey);
+          activeRefreshScope = workspaceKey;
+          try {
+            await explorer.refreshWorkspace(workspaceKey);
+          } finally {
+            activeRefreshScope = noActiveRefresh;
+          }
         }
       })();
       refreshDrain = operation.finally(() => {
@@ -52,13 +76,24 @@ export const ViewsFeature: ClientFeature = {
       return refreshDrain;
     };
     const invalidateAll = (force = false): Promise<void> => {
+      explorer.markUpdating(null);
+      if (activeRefreshScope !== noActiveRefresh) explorer.supersedeRefresh(null);
       dirtyAll = true;
       dirtyWorkspaceKeys.clear();
       if (force) forceWhileHidden = true;
       return drainRefresh();
     };
     const invalidateWorkspace = (workspaceKey: string): Promise<void> => {
-      if (!dirtyAll) dirtyWorkspaceKeys.add(workspaceKey);
+      if (activeRefreshScope === null || dirtyAll) {
+        explorer.markUpdating(null);
+        if (activeRefreshScope === null) explorer.supersedeRefresh(null);
+        dirtyAll = true;
+        dirtyWorkspaceKeys.clear();
+      } else {
+        explorer.markUpdating(workspaceKey);
+        if (activeRefreshScope === workspaceKey) explorer.supersedeRefresh(workspaceKey);
+        if (!dirtyAll) dirtyWorkspaceKeys.add(workspaceKey);
+      }
       return drainRefresh();
     };
 
@@ -83,6 +118,54 @@ export const ViewsFeature: ClientFeature = {
     own(ctx.vscode.commands.registerCommand(
       AureliaCommand.RefreshResourceExplorer,
       () => invalidateAll(true),
+    ));
+    const openTreeResource = async (target: unknown, action: ResourceExplorerNavigationAction): Promise<boolean> => {
+      while (true) {
+        const request = explorer.navigationFor(target, action);
+        if (request == null) return false;
+        try {
+          return await openResourceNavigation(ctx.vscode, ctx.lsp, ctx.logger, request);
+        } catch (error) {
+          ctx.logger.warn("resourceExplorer.navigation.failed", {
+            action,
+            message: error instanceof Error ? error.message : String(error),
+          });
+          const recovery = await ctx.vscode.window.showInformationMessage(
+            "The Aurelia resource could not be opened. Try again or open Aurelia Output for details.",
+            "Retry",
+            "Open Aurelia Output",
+          );
+          if (recovery === "Retry") {
+            await invalidateWorkspace(request.workspaceKey);
+            continue;
+          }
+          if (recovery === "Open Aurelia Output") ctx.logger.show(true);
+          return false;
+        }
+      }
+    };
+    own(ctx.vscode.commands.registerCommand(
+      AureliaCommand.OpenResourceDeclaration,
+      (target: unknown) => openTreeResource(target, "declaration"),
+    ));
+    own(ctx.vscode.commands.registerCommand(
+      AureliaCommand.OpenResourceImplementation,
+      (target: unknown) => openTreeResource(target, "implementation"),
+    ));
+    own(ctx.vscode.commands.registerCommand(
+      AureliaCommand.OpenResourceToSide,
+      (target: unknown) => openTreeResource(target, "beside"),
+    ));
+    own(ctx.vscode.commands.registerCommand(
+      AureliaCommand.RetryResourceProject,
+      (target: unknown) => {
+        const workspaceKey = explorer.retryWorkspaceFor(target);
+        return workspaceKey == null ? Promise.resolve() : invalidateWorkspace(workspaceKey);
+      },
+    ));
+    own(ctx.vscode.commands.registerCommand(
+      AureliaCommand.OpenAureliaOutput,
+      () => ctx.logger.show(true),
     ));
     // Registered last so deactivation closes the drain before disposing the
     // view and provider that an already-running refresh still references.

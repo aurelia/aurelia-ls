@@ -24,7 +24,8 @@ source and disclose partial, refused, or failed results instead of filling seman
   configuration diagnostics owned by semantic-runtime; the canonical full schema remains packaged but unassociated.
 - Rebuilt **Aurelia Resources** in VS Code's built-in Explorer over exact project inventory, aliases, bindables, origin, ambiguity, and partial or failed analysis state.
 - Replaced **Find Resource** and **Show Available Resources** with **Go to Resource...** and **Go to Resource Available to Active Template...**, using exact workspace inventory and active-template compiler scope.
-- Scoped settled Resource Explorer refreshes to the workspace whose analysis changed while retaining full refreshes for topology, session, and explicit user-refresh events.
+- Added bounded declaration, implementation, and side-by-side resource actions; explicit updating, stale, incomplete, unsupported, and failed states; Retry plus Output recovery on failed or out-of-date project rows; Output-only context for unsupported projects; and searchable owner and metadata-state context in resource Quick Picks.
+- Scoped settled **Aurelia Resources** refreshes to the workspace whose analysis changed while retaining full refreshes for topology, session, and explicit user-refresh events.
 - Made an isolated Worker-backed language server the default transport for active roots, with IPC retained for debugging and explicit fallback.
 
 ### Compatibility and product changes

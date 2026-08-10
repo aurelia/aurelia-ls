@@ -41,15 +41,108 @@ function inventorySnapshot(...workspaceKeys: readonly string[]) {
   };
 }
 
+function failedInventorySnapshot(...workspaceKeys: readonly string[]) {
+  return {
+    workspaces: workspaceKeys.map((key) => ({
+      key,
+      name: key.split("/").at(-1) ?? key,
+      uri: key,
+      status: "error" as const,
+      error: "internal detail",
+    })),
+  };
+}
+
+function navigableInventorySnapshot(includeResource = true) {
+  const location = (role: string, line: number) => ({
+    state: "available" as const,
+    location: {
+      uri: "file:///work/a/src/product-card.ts",
+      range: { start: { line, character: 1 }, end: { line, character: 13 } },
+      role,
+      label: `src/product-card.ts:${line + 1}`,
+    },
+  });
+  const absent = { state: "absent" as const };
+  const resource = {
+    identityKey: "resource:product-card",
+    projectKey: "app",
+    kind: "custom-element",
+    name: "product-card",
+    registrationKey: "au:resource:custom-element:product-card",
+    aliases: [],
+    bindables: [],
+    declarationModes: ["decorator"],
+    metadataState: "full-definition",
+    origin: {
+      kind: "project",
+      projectKey: "app",
+      packageName: null,
+      moduleKey: "src/product-card.ts",
+      catalogGroup: null,
+    },
+    locality: { kind: "project", ownerIdentityKey: null, ownerName: null, ownerSource: absent },
+    sources: {
+      publicName: location("public-name", 1),
+      declaration: location("declaration", 0),
+      implementation: location("implementation", 5),
+    },
+    navigation: location("public-name", 1),
+  };
+  return {
+    workspaces: [{
+      key: "file:///work/a",
+      name: "a",
+      uri: "file:///work/a",
+      status: "ready" as const,
+      response: {
+        fingerprint: "current",
+        projects: [{
+          status: "ready" as const,
+          project: {
+            projectKey: "app",
+            rootUri: "file:///work/a",
+            sourceFiles: 2,
+            shapeKind: "aurelia-app",
+            analysisKind: "full",
+          },
+          answer: {
+            schemaVersion: "0.2",
+            result: "answered",
+            selection: "not-applicable",
+            coverage: "complete",
+            summary: "complete",
+            page: null,
+          },
+          typeSurfacesIncluded: true,
+          resources: includeResource ? [resource] : [],
+          completeness: {
+            fullDefinitions: includeResource ? 1 : 0,
+            headerOnly: 0,
+            visibilityOnly: 0,
+            localTemplates: 0,
+            excludedCompilerSyntax: 0,
+            unnamedDefinitions: 0,
+            unresolvedModules: 0,
+            openVisibility: 0,
+          },
+        }],
+      },
+    }],
+  };
+}
+
 function createHarness(options: {
   readonly visible?: boolean;
   readonly getResourceInventory?: (options?: unknown) => Promise<unknown>;
+  readonly informationAction?: "Retry" | "Open Aurelia Output";
 } = {}) {
   const { vscode: stubVscode, recorded } = createVscodeApi();
   const visibility = createEmitter<{ readonly visible: boolean }>();
   const analysisChanged = createEmitter<unknown>();
   const sessionsChanged = createEmitter<unknown>();
   let visible = options.visible === true;
+  let treeDataProvider: { getChildren(element?: unknown): unknown } | null = null;
   const view = {
     get visible() { return visible; },
     onDidChangeVisibility: visibility.event,
@@ -57,11 +150,25 @@ function createHarness(options: {
     description: undefined as string | undefined,
     dispose: vi.fn(),
   };
+  const withProgress = vi.fn(async (
+    _options: unknown,
+    task: () => Promise<unknown>,
+  ) => await task());
+  const showInformationMessage = vi.fn(async (message: string, ..._actions: readonly string[]) => {
+    recorded.infoMessages.push(message);
+    return options.informationAction;
+  });
   Object.assign(stubVscode.window, {
-    createTreeView: vi.fn(() => view),
+    createTreeView: vi.fn((_id: string, options: { treeDataProvider: typeof treeDataProvider }) => {
+      treeDataProvider = options.treeDataProvider;
+      return view;
+    }),
+    withProgress,
+    showInformationMessage,
   });
 
   const getResourceInventory = vi.fn(options.getResourceInventory ?? (async () => null));
+  const logger = { debug: vi.fn(), warn: vi.fn(), show: vi.fn() };
   const contributions: Disposable[] = [];
   ViewsFeature.activate({
     vscode: stubVscode as unknown as VscodeApi,
@@ -72,7 +179,7 @@ function createHarness(options: {
     languageClient: {
       onDidChangeSessions: sessionsChanged.event,
     },
-    logger: { debug: vi.fn(), warn: vi.fn() },
+    logger,
   } as never, (contribution) => {
     contributions.push(contribution);
     return contribution;
@@ -80,6 +187,13 @@ function createHarness(options: {
 
   return {
     getResourceInventory,
+    logger,
+    recorded,
+    get treeDataProvider() { return treeDataProvider; },
+    view,
+    vscode: stubVscode,
+    withProgress,
+    showInformationMessage,
     fireAnalysisChanged: (
       workspaceKey = "file:///work/a",
       changeKind: "source-text" | "topology" = "source-text",
@@ -100,7 +214,223 @@ function createHarness(options: {
   };
 }
 
+async function waitForRootCount(
+  provider: { getChildren(element?: unknown): unknown } | null,
+  count: number,
+): Promise<void> {
+  if (provider == null) throw new Error("Resource tree provider was not registered.");
+  await vi.waitFor(async () => expect(await Promise.resolve(provider.getChildren())).toHaveLength(count));
+}
+
+async function resourceRoots(
+  provider: { getChildren(element?: unknown): unknown } | null,
+): Promise<ReadonlyArray<{ readonly label: string; readonly description?: string; readonly accessibilityLabel: string }>> {
+  if (provider == null) throw new Error("Resource tree provider was not registered.");
+  return await Promise.resolve(provider.getChildren()) as ReadonlyArray<{
+    readonly label: string;
+    readonly description?: string;
+    readonly accessibilityLabel: string;
+  }>;
+}
+
 describe("ViewsFeature resource inventory lifecycle", () => {
+  test("uses native view-scoped progress and registers the bounded tree action set", async () => {
+    const harness = createHarness({ visible: true });
+    await vi.waitFor(() => expect(harness.getResourceInventory).toHaveBeenCalledOnce());
+
+    expect(harness.withProgress).toHaveBeenCalledWith(
+      { location: { viewId: "aureliaResourceExplorer" } },
+      expect.any(Function),
+    );
+    for (const command of [
+      AureliaCommand.OpenResourceDeclaration,
+      AureliaCommand.OpenResourceImplementation,
+      AureliaCommand.OpenResourceToSide,
+      AureliaCommand.RetryResourceProject,
+      AureliaCommand.OpenAureliaOutput,
+    ]) {
+      expect(harness.recorded.commandHandlers.has(command)).toBe(true);
+    }
+    harness.recorded.commandHandlers.get(AureliaCommand.OpenAureliaOutput)?.();
+    expect(harness.logger.show).toHaveBeenCalledWith(true);
+    harness.dispose();
+  });
+
+  test("executes declaration, implementation, and beside against current re-resolved sources", async () => {
+    const current = navigableInventorySnapshot();
+    const harness = createHarness({ visible: true, getResourceInventory: async () => current });
+    await vi.waitFor(() => expect(harness.getResourceInventory).toHaveBeenCalledOnce());
+    await vi.waitFor(async () => expect(
+      await Promise.resolve(harness.treeDataProvider?.getChildren()),
+    ).toHaveLength(1));
+    const groups = await Promise.resolve(harness.treeDataProvider?.getChildren()) as readonly unknown[];
+    const resources = await Promise.resolve(harness.treeDataProvider?.getChildren(groups[0])) as readonly unknown[];
+    const node = resources[0];
+
+    await harness.recorded.commandHandlers.get(AureliaCommand.OpenResourceDeclaration)?.(node);
+    await harness.recorded.commandHandlers.get(AureliaCommand.OpenResourceImplementation)?.(node);
+    await harness.recorded.commandHandlers.get(AureliaCommand.OpenResourceToSide)?.(node);
+
+    const options = harness.recorded.shownDocuments.map((entry) => entry.opts as {
+      readonly selection?: { readonly start?: { readonly line?: number } };
+      readonly viewColumn?: number;
+    });
+    expect(options.map((entry) => entry.selection?.start?.line)).toEqual([1, 5, 1]);
+    expect(options[2]?.viewColumn).toBe(harness.vscode.ViewColumn.Beside);
+    harness.dispose();
+  });
+
+  test("refuses a retired tree object before issuing another inventory request", async () => {
+    let current = navigableInventorySnapshot();
+    const harness = createHarness({ visible: true, getResourceInventory: async () => current });
+    await vi.waitFor(async () => expect(
+      await Promise.resolve(harness.treeDataProvider?.getChildren()),
+    ).toHaveLength(1));
+    const groups = await Promise.resolve(harness.treeDataProvider?.getChildren()) as readonly unknown[];
+    const resources = await Promise.resolve(harness.treeDataProvider?.getChildren(groups[0])) as readonly unknown[];
+    const retired = resources[0];
+    current = navigableInventorySnapshot(false);
+    await harness.refreshCommand();
+    const callsBefore = harness.getResourceInventory.mock.calls.length;
+
+    await expect(harness.recorded.commandHandlers.get(AureliaCommand.OpenResourceDeclaration)?.(retired))
+      .resolves.toBe(false);
+    expect(harness.getResourceInventory).toHaveBeenCalledTimes(callsBefore);
+    expect(harness.recorded.shownDocuments).toHaveLength(0);
+    harness.dispose();
+  });
+
+  test("offers actionable recovery without exposing an operational navigation exception", async () => {
+    let calls = 0;
+    const harness = createHarness({
+      visible: true,
+      informationAction: "Open Aurelia Output",
+      getResourceInventory: async () => {
+        if (calls++ === 0) return navigableInventorySnapshot();
+        throw new Error("C:\\private\\workspace\\raw failure");
+      },
+    });
+    await vi.waitFor(async () => expect(
+      await Promise.resolve(harness.treeDataProvider?.getChildren()),
+    ).toHaveLength(1));
+    const groups = await Promise.resolve(harness.treeDataProvider?.getChildren()) as readonly unknown[];
+    const resources = await Promise.resolve(harness.treeDataProvider?.getChildren(groups[0])) as readonly unknown[];
+
+    await harness.recorded.commandHandlers.get(AureliaCommand.OpenResourceDeclaration)?.(resources[0]);
+
+    expect(harness.showInformationMessage).toHaveBeenCalledWith(
+      "The Aurelia resource could not be opened. Try again or open Aurelia Output for details.",
+      "Retry",
+      "Open Aurelia Output",
+    );
+    expect(harness.recorded.infoMessages.join(" ")).not.toContain("private");
+    expect(harness.logger.show).toHaveBeenCalledWith(true);
+    harness.dispose();
+  });
+
+  test("Retry refreshes, re-resolves, and executes the original tree navigation action", async () => {
+    let calls = 0;
+    const harness = createHarness({
+      visible: true,
+      informationAction: "Retry",
+      getResourceInventory: async () => {
+        calls += 1;
+        if (calls === 2) throw new Error("private transient navigation failure");
+        return navigableInventorySnapshot();
+      },
+    });
+    await vi.waitFor(async () => expect(
+      await Promise.resolve(harness.treeDataProvider?.getChildren()),
+    ).toHaveLength(1));
+    const groups = await Promise.resolve(harness.treeDataProvider?.getChildren()) as readonly unknown[];
+    const resources = await Promise.resolve(harness.treeDataProvider?.getChildren(groups[0])) as readonly unknown[];
+
+    await expect(harness.recorded.commandHandlers.get(AureliaCommand.OpenResourceDeclaration)?.(resources[0]))
+      .resolves.toBe(true);
+
+    expect(harness.getResourceInventory).toHaveBeenCalledTimes(4);
+    expect(harness.recorded.shownDocuments).toHaveLength(1);
+    expect(harness.recorded.shownDocuments[0]?.opts).toMatchObject({
+      selection: { start: { line: 1, character: 1 }, end: { line: 1, character: 13 } },
+    });
+    expect(harness.recorded.infoMessages.join(" ")).not.toContain("private");
+    harness.dispose();
+  });
+
+  test("Retry refuses a stable tree identity retired by the recovery refresh", async () => {
+    let calls = 0;
+    const harness = createHarness({
+      visible: true,
+      informationAction: "Retry",
+      getResourceInventory: async () => {
+        calls += 1;
+        if (calls === 2) throw new Error("private transient navigation failure");
+        return calls === 3 ? navigableInventorySnapshot(false) : navigableInventorySnapshot();
+      },
+    });
+    await vi.waitFor(async () => expect(
+      await Promise.resolve(harness.treeDataProvider?.getChildren()),
+    ).toHaveLength(1));
+    const groups = await Promise.resolve(harness.treeDataProvider?.getChildren()) as readonly unknown[];
+    const resources = await Promise.resolve(harness.treeDataProvider?.getChildren(groups[0])) as readonly unknown[];
+
+    await expect(harness.recorded.commandHandlers.get(AureliaCommand.OpenResourceDeclaration)?.(resources[0]))
+      .resolves.toBe(false);
+
+    expect(harness.getResourceInventory).toHaveBeenCalledTimes(3);
+    expect(harness.recorded.shownDocuments).toEqual([]);
+    harness.dispose();
+  });
+
+  test("routes a shifted failed project answer through safe tree recovery without opening", async () => {
+    const initial = navigableInventorySnapshot();
+    const failed = navigableInventorySnapshot();
+    failed.workspaces[0]!.response.projects[0]!.answer.result = "failed";
+    failed.workspaces[0]!.response.projects[0]!.answer.summary = "private C:\\workspace\\semantic failure";
+    const getResourceInventory = vi.fn()
+      .mockResolvedValueOnce(initial)
+      .mockResolvedValueOnce(failed);
+    const harness = createHarness({ visible: true, getResourceInventory });
+    await vi.waitFor(async () => expect(
+      await Promise.resolve(harness.treeDataProvider?.getChildren()),
+    ).toHaveLength(1));
+    const groups = await Promise.resolve(harness.treeDataProvider?.getChildren()) as readonly unknown[];
+    const resources = await Promise.resolve(harness.treeDataProvider?.getChildren(groups[0])) as readonly unknown[];
+
+    await harness.recorded.commandHandlers.get(AureliaCommand.OpenResourceDeclaration)?.(resources[0]);
+
+    expect(harness.showInformationMessage).toHaveBeenCalledWith(
+      "The Aurelia resource could not be opened. Try again or open Aurelia Output for details.",
+      "Retry",
+      "Open Aurelia Output",
+    );
+    expect(harness.recorded.infoMessages.join(" ")).not.toContain("private");
+    expect(harness.recorded.openedDocuments).toEqual([]);
+    harness.dispose();
+  });
+
+  test("retries only the affected project workspace selected by its current issue root", async () => {
+    const first = failedInventorySnapshot("file:///work/a", "file:///work/b");
+    const getResourceInventory = vi.fn(async (options?: { readonly workspaceKey?: string }) =>
+      options?.workspaceKey == null ? first : failedInventorySnapshot(options.workspaceKey));
+    const harness = createHarness({ visible: true, getResourceInventory });
+    await vi.waitFor(() => expect(harness.getResourceInventory).toHaveBeenCalledOnce());
+    await vi.waitFor(async () => expect(
+      await Promise.resolve(harness.treeDataProvider?.getChildren()),
+    ).toHaveLength(2));
+    const roots = await Promise.resolve(harness.treeDataProvider?.getChildren()) as Array<{
+      readonly label: string;
+    }>;
+
+    await harness.recorded.commandHandlers.get(AureliaCommand.RetryResourceProject)?.(roots[1]);
+
+    expect(harness.getResourceInventory).toHaveBeenLastCalledWith({
+      workspaceKey: "file:///work/b",
+      includeTypeSurfaces: true,
+    });
+    harness.dispose();
+  });
+
   test("scopes settled source invalidation to its workspace and keeps topology refresh aggregate", async () => {
     const first = inventorySnapshot("file:///work/a", "file:///work/b");
     const getResourceInventory = vi.fn(async (options?: { readonly workspaceKey?: string }) =>
@@ -108,6 +438,7 @@ describe("ViewsFeature resource inventory lifecycle", () => {
     const harness = createHarness({ visible: true, getResourceInventory });
 
     await vi.waitFor(() => expect(harness.getResourceInventory).toHaveBeenCalledOnce());
+    await waitForRootCount(harness.treeDataProvider, 2);
     expect(harness.getResourceInventory).toHaveBeenLastCalledWith({ includeTypeSurfaces: true });
 
     harness.fireAnalysisChanged("file:///work/a");
@@ -127,6 +458,7 @@ describe("ViewsFeature resource inventory lifecycle", () => {
     const getResourceInventory = vi.fn(async () => inventorySnapshot("file:///work/a", "file:///work/b"));
     const harness = createHarness({ visible: true, getResourceInventory });
     await vi.waitFor(() => expect(harness.getResourceInventory).toHaveBeenCalledOnce());
+    await waitForRootCount(harness.treeDataProvider, 2);
 
     harness.setVisible(false);
     harness.fireAnalysisChanged("file:///work/a");
@@ -152,6 +484,7 @@ describe("ViewsFeature resource inventory lifecycle", () => {
     });
     const harness = createHarness({ visible: true, getResourceInventory });
     await vi.waitFor(() => expect(harness.getResourceInventory).toHaveBeenCalledOnce());
+    await waitForRootCount(harness.treeDataProvider, 2);
 
     harness.fireAnalysisChanged("file:///work/a");
     await vi.waitFor(() => expect(harness.getResourceInventory).toHaveBeenCalledTimes(2));
@@ -171,7 +504,209 @@ describe("ViewsFeature resource inventory lifecycle", () => {
     harness.dispose();
   });
 
-  test("lets an in-flight workspace refresh finish before one full invalidation clears its scoped tail", async () => {
+  test("supersedes a held workspace predecessor and publishes only its trailing current result", async () => {
+    const predecessor = deferred<unknown>();
+    const trailing = deferred<unknown>();
+    const getResourceInventory = vi.fn()
+      .mockResolvedValueOnce(inventorySnapshot("file:///work/a", "file:///work/b"))
+      .mockImplementationOnce(() => predecessor.promise)
+      .mockImplementationOnce(() => trailing.promise);
+    const harness = createHarness({ visible: true, getResourceInventory });
+    await vi.waitFor(() => expect(getResourceInventory).toHaveBeenCalledOnce());
+    await waitForRootCount(harness.treeDataProvider, 2);
+
+    harness.fireAnalysisChanged("file:///work/a");
+    await vi.waitFor(() => expect(getResourceInventory).toHaveBeenCalledTimes(2));
+    harness.fireAnalysisChanged("file:///work/a");
+    predecessor.resolve(failedInventorySnapshot("file:///work/a"));
+    await vi.waitFor(() => expect(getResourceInventory).toHaveBeenCalledTimes(3));
+
+    expect(JSON.stringify(await Promise.resolve(harness.treeDataProvider?.getChildren())))
+      .not.toContain("Couldn't load Aurelia resources");
+    expect(getResourceInventory.mock.calls.map(([options]) => options)).toEqual([
+      { includeTypeSurfaces: true },
+      { workspaceKey: "file:///work/a", includeTypeSurfaces: true },
+      { workspaceKey: "file:///work/a", includeTypeSurfaces: true },
+    ]);
+    trailing.resolve(inventorySnapshot("file:///work/a"));
+    await vi.waitFor(() => expect(harness.view.message).toBeUndefined());
+    harness.dispose();
+  });
+
+  test("supersedes a held full request with a full retry after a scoped invalidation", async () => {
+    const predecessor = deferred<unknown>();
+    const trailing = deferred<unknown>();
+    const getResourceInventory = vi.fn()
+      .mockResolvedValueOnce(inventorySnapshot("file:///work/a", "file:///work/b"))
+      .mockImplementationOnce(() => predecessor.promise)
+      .mockImplementationOnce(() => trailing.promise);
+    const harness = createHarness({ visible: true, getResourceInventory });
+    await vi.waitFor(() => expect(getResourceInventory).toHaveBeenCalledOnce());
+    await waitForRootCount(harness.treeDataProvider, 2);
+
+    harness.fireAnalysisChanged("file:///work/a", "topology");
+    await vi.waitFor(() => expect(getResourceInventory).toHaveBeenCalledTimes(2));
+    harness.fireAnalysisChanged("file:///work/a");
+    predecessor.resolve(failedInventorySnapshot("file:///work/a", "file:///work/b"));
+    await vi.waitFor(() => expect(getResourceInventory).toHaveBeenCalledTimes(3));
+
+    expect(getResourceInventory.mock.calls.map(([options]) => options)).toEqual([
+      { includeTypeSurfaces: true },
+      { includeTypeSurfaces: true },
+      { includeTypeSurfaces: true },
+    ]);
+    expect(JSON.stringify(await Promise.resolve(harness.treeDataProvider?.getChildren())))
+      .not.toContain("Couldn't load Aurelia resources");
+    trailing.resolve(inventorySnapshot("file:///work/a", "file:///work/b"));
+    await vi.waitFor(() => expect(harness.view.message).toBeUndefined());
+    harness.dispose();
+  });
+
+  test("allows held workspace A to publish when only unrelated workspace B is invalidated", async () => {
+    const workspaceA = deferred<unknown>();
+    const workspaceB = deferred<unknown>();
+    const getResourceInventory = vi.fn()
+      .mockResolvedValueOnce(inventorySnapshot("file:///work/a", "file:///work/b"))
+      .mockImplementationOnce(() => workspaceA.promise)
+      .mockImplementationOnce(() => workspaceB.promise);
+    const harness = createHarness({ visible: true, getResourceInventory });
+    await vi.waitFor(() => expect(getResourceInventory).toHaveBeenCalledOnce());
+    await waitForRootCount(harness.treeDataProvider, 2);
+
+    harness.fireAnalysisChanged("file:///work/a");
+    await vi.waitFor(() => expect(getResourceInventory).toHaveBeenCalledTimes(2));
+    harness.fireAnalysisChanged("file:///work/b");
+    workspaceA.resolve(navigableInventorySnapshot());
+    await vi.waitFor(() => expect(getResourceInventory).toHaveBeenCalledTimes(3));
+
+    expect(JSON.stringify(await Promise.resolve(harness.treeDataProvider?.getChildren())))
+      .toContain("product-card");
+    expect(getResourceInventory.mock.calls[2]?.[0]).toEqual({
+      workspaceKey: "file:///work/b",
+      includeTypeSurfaces: true,
+    });
+    workspaceB.resolve(inventorySnapshot("file:///work/b"));
+    await Promise.resolve();
+    harness.dispose();
+  });
+
+  test("keeps every dirty workspace visibly updating until its own latest request settles", async () => {
+    const workspaceA = deferred<unknown>();
+    const workspaceB = deferred<unknown>();
+    const getResourceInventory = vi.fn()
+      .mockResolvedValueOnce(inventorySnapshot("file:///work/a", "file:///work/b"))
+      .mockImplementationOnce(() => workspaceA.promise)
+      .mockImplementationOnce(() => workspaceB.promise);
+    const harness = createHarness({ visible: true, getResourceInventory });
+    await waitForRootCount(harness.treeDataProvider, 2);
+
+    harness.fireAnalysisChanged("file:///work/a");
+    await vi.waitFor(() => expect(getResourceInventory).toHaveBeenCalledTimes(2));
+    harness.fireAnalysisChanged("file:///work/b");
+
+    let roots = await resourceRoots(harness.treeDataProvider);
+    expect(roots).toHaveLength(2);
+    expect(roots.every((root) => root.description?.includes("updating") === true)).toBe(true);
+    expect(roots.every((root) => root.accessibilityLabel.includes("updating"))).toBe(true);
+
+    workspaceA.resolve(inventorySnapshot("file:///work/a"));
+    await vi.waitFor(() => expect(getResourceInventory).toHaveBeenCalledTimes(3));
+    roots = await resourceRoots(harness.treeDataProvider);
+    const rootA = roots.find((root) => root.label === "a");
+    const rootB = roots.find((root) => root.label === "b");
+    expect(rootA?.description).not.toContain("updating");
+    expect(rootA?.accessibilityLabel).not.toContain("updating");
+    expect(rootB?.description).toContain("updating");
+    expect(rootB?.accessibilityLabel).toContain("updating");
+
+    workspaceB.resolve(inventorySnapshot("file:///work/b"));
+    await vi.waitFor(async () => expect(
+      (await resourceRoots(harness.treeDataProvider)).every((root) => !root.accessibilityLabel.includes("updating")),
+    ).toBe(true));
+    harness.dispose();
+  });
+
+  test("preserves queued updating scopes when the active predecessor is superseded", async () => {
+    const predecessorA = deferred<unknown>();
+    const workspaceB = deferred<unknown>();
+    const trailingA = deferred<unknown>();
+    const getResourceInventory = vi.fn()
+      .mockResolvedValueOnce(inventorySnapshot("file:///work/a", "file:///work/b"))
+      .mockImplementationOnce(() => predecessorA.promise)
+      .mockImplementationOnce(() => workspaceB.promise)
+      .mockImplementationOnce(() => trailingA.promise);
+    const harness = createHarness({ visible: true, getResourceInventory });
+    await waitForRootCount(harness.treeDataProvider, 2);
+
+    harness.fireAnalysisChanged("file:///work/a");
+    await vi.waitFor(() => expect(getResourceInventory).toHaveBeenCalledTimes(2));
+    harness.fireAnalysisChanged("file:///work/b");
+    harness.fireAnalysisChanged("file:///work/a");
+    predecessorA.resolve(failedInventorySnapshot("file:///work/a"));
+    await vi.waitFor(() => expect(getResourceInventory).toHaveBeenCalledTimes(3));
+
+    const roots = await resourceRoots(harness.treeDataProvider);
+    expect(roots.every((root) => root.accessibilityLabel.includes("updating"))).toBe(true);
+    expect(JSON.stringify(roots)).not.toContain("out of date");
+
+    workspaceB.resolve(inventorySnapshot("file:///work/b"));
+    await vi.waitFor(() => expect(getResourceInventory).toHaveBeenCalledTimes(4));
+    trailingA.resolve(inventorySnapshot("file:///work/a"));
+    await vi.waitFor(() => expect(harness.view.message).toBeUndefined());
+    harness.dispose();
+  });
+
+  test("marks hidden invalidations immediately without querying until reveal", async () => {
+    const getResourceInventory = vi.fn(async (options?: { readonly workspaceKey?: string }) =>
+      options?.workspaceKey == null
+        ? inventorySnapshot("file:///work/a", "file:///work/b")
+        : inventorySnapshot(options.workspaceKey));
+    const harness = createHarness({ visible: true, getResourceInventory });
+    await waitForRootCount(harness.treeDataProvider, 2);
+    harness.setVisible(false);
+
+    harness.fireAnalysisChanged("file:///work/b");
+
+    expect(getResourceInventory).toHaveBeenCalledOnce();
+    const roots = await resourceRoots(harness.treeDataProvider);
+    expect(roots.find((root) => root.label === "a")?.accessibilityLabel).not.toContain("updating");
+    expect(roots.find((root) => root.label === "b")?.accessibilityLabel).toContain("updating");
+
+    harness.setVisible(true);
+    await vi.waitFor(() => expect(getResourceInventory).toHaveBeenCalledTimes(2));
+    harness.dispose();
+  });
+
+  test("turns only a failed active scope stale while another dirty scope keeps updating", async () => {
+    const workspaceA = deferred<unknown>();
+    const workspaceB = deferred<unknown>();
+    const getResourceInventory = vi.fn()
+      .mockResolvedValueOnce(inventorySnapshot("file:///work/a", "file:///work/b"))
+      .mockImplementationOnce(() => workspaceA.promise)
+      .mockImplementationOnce(() => workspaceB.promise);
+    const harness = createHarness({ visible: true, getResourceInventory });
+    await waitForRootCount(harness.treeDataProvider, 2);
+
+    harness.fireAnalysisChanged("file:///work/a");
+    await vi.waitFor(() => expect(getResourceInventory).toHaveBeenCalledTimes(2));
+    harness.fireAnalysisChanged("file:///work/b");
+    workspaceA.resolve(failedInventorySnapshot("file:///work/a"));
+    await vi.waitFor(() => expect(getResourceInventory).toHaveBeenCalledTimes(3));
+
+    const roots = await resourceRoots(harness.treeDataProvider);
+    const rootA = roots.find((root) => root.label === "a");
+    const rootB = roots.find((root) => root.label === "b");
+    expect(rootA?.accessibilityLabel).toContain("out of date");
+    expect(rootA?.accessibilityLabel).not.toContain("updating");
+    expect(rootB?.accessibilityLabel).toContain("updating");
+    expect(rootB?.accessibilityLabel).not.toContain("out of date");
+
+    workspaceB.resolve(inventorySnapshot("file:///work/b"));
+    await Promise.resolve();
+    harness.dispose();
+  });
+
+  test("retries full after a topology invalidation supersedes an in-flight workspace refresh", async () => {
     const workspaceARefresh = deferred<unknown>();
     let workspaceACalls = 0;
     const getResourceInventory = vi.fn((options?: { readonly workspaceKey?: string }) => {
@@ -182,6 +717,7 @@ describe("ViewsFeature resource inventory lifecycle", () => {
     });
     const harness = createHarness({ visible: true, getResourceInventory });
     await vi.waitFor(() => expect(harness.getResourceInventory).toHaveBeenCalledOnce());
+    await waitForRootCount(harness.treeDataProvider, 2);
 
     harness.fireAnalysisChanged("file:///work/a");
     await vi.waitFor(() => expect(harness.getResourceInventory).toHaveBeenCalledTimes(2));

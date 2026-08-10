@@ -4,7 +4,10 @@ import {
   EXTENSION_HOST_OBSERVATION_EVENT,
   type ExtensionHostObservation,
 } from "../../../out/extension-host-observation.js";
-import { showResourceQuickPick } from "../../../out/features/resource-discovery/quick-pick.js";
+import {
+  ResourceQuickPickTitleActionKind,
+  showResourceQuickPick,
+} from "../../../out/features/resource-discovery/quick-pick.js";
 import type { VscodeApi } from "../../../out/vscode-api.js";
 import { createVscodeApi } from "../../helpers/vscode-stub.js";
 
@@ -165,6 +168,90 @@ describe("resource discovery Quick Pick", () => {
     await vi.waitFor(() => expect(recorded.quickPicks[0]?.items).toHaveLength(1));
     recorded.quickPicks[0]!.back();
 
+    await expect(outcome).resolves.toEqual({ status: "back" });
+  });
+
+  test("runs a typed title action without settling or hiding the picker", async () => {
+    const observation = recordObservations();
+    const { vscode: stubVscode, recorded } = createVscodeApi();
+    const vscode = stubVscode as unknown as VscodeApi;
+    const onTitleAction = vi.fn();
+    let settled = false;
+
+    try {
+      const outcome = showResourceQuickPick(
+        vscode,
+        "Resources",
+        async () => ({
+          title: "Resources — incomplete",
+          placeholder: "Choose one",
+          items: [{ label: "app" }],
+          titleActions: [ResourceQuickPickTitleActionKind.OpenOutput],
+        }),
+        false,
+        undefined,
+        onTitleAction,
+      );
+      void outcome.then(() => { settled = true; });
+      await vi.waitFor(() => expect(recorded.quickPicks[0]?.busy).toBe(false));
+
+      expect(recorded.quickPicks[0]?.buttons).toEqual([{
+        iconPath: expect.objectContaining({ id: "output" }),
+        tooltip: "Open Aurelia Output",
+      }]);
+      recorded.quickPicks[0]!.triggerButton(0);
+
+      expect(onTitleAction).toHaveBeenCalledWith(ResourceQuickPickTitleActionKind.OpenOutput);
+      expect(recorded.quickPicks[0]?.visible).toBe(true);
+      expect(settled).toBe(false);
+
+      recorded.quickPicks[0]!.hide();
+      await expect(outcome).resolves.toEqual({ status: "cancelled" });
+      expectObservationSequence(observation.events, [
+        { phase: "shown" },
+        { phase: "model-ready", itemCount: 1, title: "Resources — incomplete" },
+        { phase: "title-action", action: "open-output" },
+        { phase: "hidden" },
+        { phase: "finished", status: "cancelled" },
+        { phase: "disposed" },
+      ]);
+    } finally {
+      observation.dispose();
+    }
+  });
+
+  test("keeps Open Output non-closing when it shares the title bar with Back", async () => {
+    const { vscode: stubVscode, recorded } = createVscodeApi();
+    const vscode = stubVscode as unknown as VscodeApi;
+    const onTitleAction = vi.fn();
+
+    const outcome = showResourceQuickPick(
+      vscode,
+      "Resources",
+      async () => ({
+        title: "Resources — incomplete",
+        placeholder: "Choose one",
+        items: [{ label: "app" }],
+        titleActions: [ResourceQuickPickTitleActionKind.OpenOutput],
+        step: 2,
+        totalSteps: 3,
+      }),
+      true,
+      undefined,
+      onTitleAction,
+    );
+    await vi.waitFor(() => expect(recorded.quickPicks[0]?.busy).toBe(false));
+
+    expect(recorded.quickPicks[0]?.buttons).toEqual([
+      stubVscode.QuickInputButtons.Back,
+      { iconPath: expect.objectContaining({ id: "output" }), tooltip: "Open Aurelia Output" },
+    ]);
+    recorded.quickPicks[0]!.triggerButton(1);
+
+    expect(onTitleAction).toHaveBeenCalledWith(ResourceQuickPickTitleActionKind.OpenOutput);
+    expect(recorded.quickPicks[0]?.visible).toBe(true);
+
+    recorded.quickPicks[0]!.back();
     await expect(outcome).resolves.toEqual({ status: "back" });
   });
 });

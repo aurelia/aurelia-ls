@@ -10,18 +10,20 @@ ext install AureliaEffect.aurelia-2
 
 Open any Aurelia 2 project (one with `aurelia` or `@aurelia/*` in its
 dependencies and a `tsconfig.json`) and the language server starts
-automatically. You should see the Aurelia status bar item appear with
-resource and template counts once analysis completes.
+automatically. Once analysis completes, the **Aurelia Resources** view in
+VS Code's Explorer shows the resources admitted for the active workspace.
 
 Try these to verify it's working:
 
 - **Hover** a custom element tag to see its exact resource identity and Aurelia kind
 - **Ctrl+click** a tag name to jump to the component class
 - **Type `<`** inside a template to see element completions
-- Open the **Resource Explorer** in the sidebar to browse your project's resources
-- Press **Ctrl+Alt+A** to search resources by name
+- Open **Aurelia Resources** in VS Code's Explorer to browse your project's resources
+- Run **Aurelia: Go to Resource...** from the Command Palette to search resources by name
 
-Check the "Aurelia Language Server" output channel if anything isn't working.
+If discovery fails, use **Open Aurelia Output** from the view or the affected
+project row. The client channel is named **Aurelia LS (Client)**, and each
+active workspace folder has its own **Aurelia Language Server (...)** channel.
 
 ## Using the MCP Preview
 
