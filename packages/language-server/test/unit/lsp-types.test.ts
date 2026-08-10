@@ -1568,8 +1568,8 @@ describe("mapSemanticRuntimeTemplateHover", () => {
 
     const value = (mapped.value?.contents as { value?: string }).value ?? "";
     expect(value).toContain("message: string");
-    expect(value).toContain("owner: `Component`");
-    expect(value).toContain("owner origin: `typescript`");
+    expect(value).not.toContain("owner:");
+    expect(value).not.toContain("owner origin:");
     expect(value).not.toContain("must not be copied");
     expect(mapped.value?.range).toEqual({
       start: hoverDocument.positionAt(messageStart),
@@ -1578,7 +1578,7 @@ describe("mapSemanticRuntimeTemplateHover", () => {
     expect(mapped.failures).toEqual([]);
   });
 
-  test("qualifies an exact hover only when concrete semantic inputs are missing", () => {
+  test("uses typed uncertainty without exposing raw missing inputs", () => {
     const mapped = mapSemanticRuntimeTemplateHover({
       schemaVersion: "0.2",
       result: "answered",
@@ -1611,10 +1611,15 @@ describe("mapSemanticRuntimeTemplateHover", () => {
         selectedMember: {
           name: "message",
           memberKind: "property",
-          typeDisplay: "string",
+          typeDisplay: null,
           isOptional: false,
           isReadonly: false,
           source: null,
+        },
+        uncertainty: {
+          category: "type-information-incomplete",
+          affectedDomain: "member",
+          affectedLocus: "selected-member",
         },
         memberOwnerType: null,
         diagnostics: [],
@@ -1622,10 +1627,12 @@ describe("mapSemanticRuntimeTemplateHover", () => {
     } as never, hoverOptions);
 
     const value = (mapped.value?.contents as { value?: string }).value ?? "";
-    expect(value).toContain("message: string");
-    expect(value).toContain("Analysis is incomplete because");
-    expect(value).toContain("`expression-member-owner-type:dynamic`");
-    expect(value).toContain("and 1 more input");
+    expect(value).toContain("message");
+    expect(value).not.toContain("message: string");
+    expect(value).toContain("Type unavailable for this expression.");
+    expect(value).not.toContain("expression-member-owner-type:dynamic");
+    expect(value).not.toContain("binding-source-context:ambiguous");
+    expect(value).not.toContain("third-gap");
   });
 
   test("maps closed and open bare current-context expressions with exact range and pressure", () => {
@@ -1638,11 +1645,10 @@ describe("mapSemanticRuntimeTemplateHover", () => {
       start: expressionDocument.positionAt(expressionStart),
       end: expressionDocument.positionAt(expressionStart + "$this".length),
     });
-    expect(closedMarkdown).toContain("**Expression** `$this`");
     expect(closedMarkdown).toContain("$this: ExpressionApp");
-    expect(closedMarkdown).toContain("type shape: `class`");
-    expect(closedMarkdown).toContain("type origin: `type-checker`");
-    expect(closedMarkdown).not.toContain("Analysis is incomplete");
+    expect(closedMarkdown).toContain("Current Aurelia binding context.");
+    expect(closedMarkdown).not.toContain("type shape");
+    expect(closedMarkdown).not.toContain("type origin");
     expect(closed.failures).toEqual([]);
 
     const open = mapSemanticRuntimeTemplateHover(
@@ -1654,6 +1660,11 @@ describe("mapSemanticRuntimeTemplateHover", () => {
         openReason: "The repeated binding context has no closed aggregate context type.",
       }, {
         missingInputs: ["selected-expression-type:missing-context-type"],
+        uncertainty: {
+          category: "type-information-incomplete",
+          affectedDomain: "binding-context",
+          affectedLocus: "selected-expression",
+        },
       }, {
         coverage: "open",
       }),
@@ -1662,10 +1673,10 @@ describe("mapSemanticRuntimeTemplateHover", () => {
     const openMarkdown = (open.value?.contents as { value?: string }).value ?? "";
     expect(open.value?.range).toEqual(closed.value?.range);
     expect(openMarkdown).toContain("$this: { item: AccessUseItem; }");
-    expect(openMarkdown).toContain("analysis: `missing-context-type`");
-    expect(openMarkdown).toContain("The repeated binding context has no closed aggregate context type.");
-    expect(openMarkdown).toContain("Analysis is incomplete because");
-    expect(openMarkdown).toContain("`selected-expression-type:missing-context-type`");
+    expect(openMarkdown).toContain("Current binding-context type is unavailable.");
+    expect(openMarkdown).not.toContain("missing-context-type");
+    expect(openMarkdown).not.toContain("The repeated binding context");
+    expect(openMarkdown).not.toContain("selected-expression-type:");
     expect(open.failures).toEqual([]);
   });
 
@@ -1742,10 +1753,10 @@ describe("mapSemanticRuntimeTemplateHover", () => {
     expect(mapSemanticRuntimeTemplateHover(
       expressionHoverAnswer({ source: outOfBounds }, { activeSource: outOfBounds }),
       expressionOptions,
-    ).failures).toEqual(["Hover selected expression source is outside the current document text."]);
+    ).failures).toEqual(["Hover active source is outside the current document text."]);
   });
 
-  test("fails closed for invalid expression text, kind, type closure, and open pressure", () => {
+  test("fails closed for invalid expression text, kind, and unqualified missing type", () => {
     const wrongText = "<template>${$that}</template>";
     const wrongTextDocument = TextDocument.create(expressionUri, "html", 4, wrongText);
     const wrongTextStart = wrongText.indexOf("$that");
@@ -1772,9 +1783,11 @@ describe("mapSemanticRuntimeTemplateHover", () => {
     expect(mapSemanticRuntimeTemplateHover(
       expressionHoverAnswer({ typeDisplay: null }),
       expressionOptions,
-    ).failures).toEqual(["Hover selected expression is closed but has no type display."]);
+    ).failures).toEqual([
+      "Hover selected expression has neither a type nor typed binding-context uncertainty.",
+    ]);
 
-    expect(mapSemanticRuntimeTemplateHover(
+    const openWithRawPressureOnly = mapSemanticRuntimeTemplateHover(
       expressionHoverAnswer({
         openKind: "missing-context-type",
         openReason: "Missing aggregate context type.",
@@ -1784,10 +1797,14 @@ describe("mapSemanticRuntimeTemplateHover", () => {
         coverage: "open",
       }),
       expressionOptions,
-    ).failures).toEqual(["Hover selected expression is open without matching analysis pressure."]);
+    );
+    expect(openWithRawPressureOnly.failures).toEqual([]);
+    const openMarkdown = (openWithRawPressureOnly.value?.contents as { value?: string }).value ?? "";
+    expect(openMarkdown).not.toContain("missing-context-type");
+    expect(openMarkdown).not.toContain("Missing aggregate context type");
   });
 
-  test("preserves the exact active range plus bindable type and every cursor diagnostic", () => {
+  test("preserves the exact bindable range and renders only the presenter-selected diagnostic", () => {
     const start = hoverText.indexOf("item.bind");
     const mapped = mapSemanticRuntimeTemplateHover({
       schemaVersion: "0.2",
@@ -1800,10 +1817,10 @@ describe("mapSemanticRuntimeTemplateHover", () => {
         siteKind: "attribute-name",
         activeSource: {
           kind: "source-span-address",
-          label: `src/component.html@${start}..${start + "item.bind".length}`,
+          label: `src/component.html@${start}..${start + "item".length}`,
           path: "src/component.html",
           start,
-          end: start + "item.bind".length,
+          end: start + "item".length,
         },
         expressionFrontier: null,
         missingInputs: [],
@@ -1814,9 +1831,15 @@ describe("mapSemanticRuntimeTemplateHover", () => {
           attributeName: "item.bind",
           attributeValue: "message",
           source: null,
-          attributeSource: null,
+          attributeSource: {
+            kind: "source-span-address",
+            label: `src/component.html@${start}..${start + "item.bind".length}`,
+            path: "src/component.html",
+            start,
+            end: start + "item.bind".length,
+          },
         },
-        valueSite: null,
+        valueSite: { bindingCommandName: "bind" },
         selectedDefinition: {
           resourceKind: "custom-element",
           name: "product-card",
@@ -1840,12 +1863,20 @@ describe("mapSemanticRuntimeTemplateHover", () => {
         selectedMemberName: null,
         selectedMember: null,
         memberOwnerType: null,
+        uncertainty: null,
         diagnostics: [{
           diagnosticKind: "missing-expression-member",
           diagnosticAuthority: "semantic-authoring-policy",
           frameworkErrorCode: null,
           severity: "error",
           summary: "First diagnostic.",
+          source: {
+            kind: "source-span-address",
+            label: `src/component.html@${start}..${start + "item.bind".length}`,
+            path: "src/component.html",
+            start,
+            end: start + "item.bind".length,
+          },
         }, {
           diagnosticKind: "template-compiler-error",
           diagnosticAuthority: "framework-error-code",
@@ -1862,24 +1893,42 @@ describe("mapSemanticRuntimeTemplateHover", () => {
           missingInput: "typescript:TS9999",
           missingInputs: [],
         }],
+        diagnosticPresentation: {
+          kind: "presented",
+          rawRowCount: 3,
+          group: {
+            groupKey: "missing:item",
+            subject: null,
+            primary: {
+              rowId: "missing:item",
+              rowIndex: 0,
+              role: "primary",
+              relation: null,
+            },
+            related: [],
+            rawRowCount: 1,
+            primarySeverity: "error",
+            maxRawSeverity: "error",
+          },
+        },
       },
     } as never, hoverOptions);
 
     const markdown = (mapped.value?.contents as { value?: string }).value ?? "";
     expect(mapped.value?.range).toEqual({
       start: hoverDocument.positionAt(start),
-      end: hoverDocument.positionAt(start + "item.bind".length),
+      end: hoverDocument.positionAt(start + "item".length),
     });
-    expect(markdown).toContain("type: `CatalogItem | null`");
-    expect(markdown).toContain("nullable: `false`");
+    expect(markdown).toContain("(bindable) item: CatalogItem | null");
+    expect(markdown).toContain("Default mode: to view.");
+    expect(markdown).not.toContain("nullable");
     expect(markdown).toContain("First diagnostic.");
-    expect(markdown).toContain("error: missing-expression-member");
-    expect(markdown).toContain("Second diagnostic.");
-    expect(markdown).toContain("warning: AUR0701");
-    expect(markdown).toContain("Third diagnostic.");
-    expect(markdown).toContain("error: TS2345");
-    expect(markdown).not.toContain("error: TS9999");
-    expect(markdown).not.toContain("error: template-expression-typescript-diagnostic");
+    expect(markdown).toContain("Error `missing-expression-member`");
+    expect(markdown).not.toContain("Second diagnostic.");
+    expect(markdown).not.toContain("AUR0701");
+    expect(markdown).not.toContain("Third diagnostic.");
+    expect(markdown).not.toContain("TS2345");
+    expect(markdown).not.toContain("TS9999");
     expect(mapped.failures).toEqual([]);
   });
 

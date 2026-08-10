@@ -89,7 +89,7 @@
         "anchor": "<mode-panel\n    one-time-value.bind",
         "at": "mode-panel",
         "verdict": "correct",
-        "reason": "Hover should identify mode-panel as a compiler-local custom element and must not invent a TypeScript class identity."
+        "reason": "Hover should identify the exact `<mode-panel>` custom-element resource and must not invent TypeScript implementation or compiler-world provenance."
       },
       {
         "id": "local-bindable-property-declaration",
@@ -97,7 +97,7 @@
         "anchor": "<bindable name=\"oneTimeValue\"",
         "at": "oneTimeValue",
         "verdict": "correct",
-        "reason": "Hover should describe the generated writable property as string using parent binding evidence while retaining the local declaration as authority."
+        "reason": "Hover should present the exact bindable-name declaration as the public bindable contract with its proved string type, public attribute, and default mode."
       },
       {
         "id": "local-bindable-property-use",
@@ -105,7 +105,7 @@
         "anchor": "<h2>${oneTimeValue}</h2>",
         "at": "oneTimeValue",
         "verdict": "correct",
-        "reason": "A local-body use should hover as the generated string property rather than falling back to the owner view-model."
+        "reason": "A local-body use should hover as the ordinary `oneTimeValue: string` member without a bindable section or fabricated owner provenance."
       },
       {
         "id": "local-bindable-union-use",
@@ -113,7 +113,7 @@
         "anchor": "<p>${mixedValue}</p>",
         "at": "mixedValue",
         "verdict": "correct",
-        "reason": "The generated property receives string and number at distinct use sites, so hover should preserve the honest string | number union."
+        "reason": "The local member receives string and number at distinct use sites, so hover should preserve the honest `string | number` union without exposing compiler internals."
       },
       {
         "id": "local-bindable-alias",
@@ -121,7 +121,7 @@
         "anchor": "attribute=\"one-time-value\"",
         "at": "one-time-value",
         "verdict": "correct",
-        "reason": "Hover should describe the explicit public alias and its owner bindable rather than treating it as ordinary HTML text."
+        "reason": "Hover should present the exact public attribute declaration as a typed bindable, map it to `oneTimeValue`, and label `oneTime` as the default mode."
       },
       {
         "id": "local-bindable-mode",
@@ -129,7 +129,7 @@
         "anchor": "mode=\"oneTime\"",
         "at": "oneTime",
         "verdict": "correct",
-        "reason": "Hover should recognize oneTime as the selected bindable's effective framework mode, not as a renameable symbol."
+        "reason": "Hover should present `(binding mode) oneTime` as the declaration default for `one-time-value`, never as an effective runtime mode or renameable symbol."
       },
       {
         "id": "nested-local-resource",
@@ -137,7 +137,7 @@
         "anchor": "<nested-note note.bind",
         "at": "nested-note",
         "verdict": "correct",
-        "reason": "Hover should resolve the nested local resource in the mode-panel compiler world."
+        "reason": "Hover should resolve the exact `<nested-note>` custom-element resource without exposing compiler-world provenance."
       }
     ],
     "definition": [

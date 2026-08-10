@@ -45,7 +45,7 @@ ext install AureliaEffect.aurelia-2
 
 The extension analyzes your Aurelia project and provides:
 
-- **Hover** — component interfaces, binding modes, types, contextual variables, provenance
+- **Hover** — exact member and local types, resource and alias identity, bindable types and declaration-default modes, selected static route ids or paths, and one concise cursor diagnostic or typed uncertainty
 - **Diagnostics** — unknown elements, missing bindables, binding mismatches — with confidence-based severity so you don't get false positives on valid code
 - **Completions** — elements, attributes, binding commands, expressions, value converters, binding behaviors — scoped to what's actually registered
 - **Go to Definition** — jump from template to source for any Aurelia construct
@@ -62,7 +62,7 @@ The project is built around a **semantic workspace** that analyzes your Aurelia 
 
 The language server and the AOT compiler both consume this model. IDE features get their answers from the same analysis that drives compilation, which means hover, diagnostics, and completions all agree with each other and with the build output.
 
-When the analysis hits a limit — a dynamic registration pattern, a third-party package the analyzer can't fully trace — it records what it couldn't determine and why. Diagnostics demote to warnings, hover cards show confidence indicators, completions flag gaps. The goal is that you can trust what the tooling tells you.
+When analysis reaches a dynamic or otherwise unresolved boundary, the semantic model records the missing evidence instead of filling the gap. Problems shows only source-linked, actionable findings. Hover keeps any proved identity or type and adds one author-facing uncertainty status only when a typed carrier proves that the gap materially affects that exact selected answer; broad or unmapped pressure stays out of the default UI.
 
 ## Packages
 

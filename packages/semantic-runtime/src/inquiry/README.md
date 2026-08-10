@@ -377,9 +377,10 @@ are compiled only when an authoring/LSP inquiry asks for those files. This keeps
 monorepo sampling from turning "all possible component templates" into an accidental app-world hydration claim.
 Cursor pressure deliberately separates missing semantic-runtime substrate from weak application typings. Completion
 answers still carry `expression-member-owner-type:any`, `index-signature-only`, and `no-members` as missing inputs so
-hover/completion callers can explain why member candidates are absent, but the pressure script classifies those rows as
-`weak-type:*` when the expression-member site has no candidates. Treat that as typing or value-shape pressure in the app
-or plugin surface unless a lower-level projection lost a concrete TypeChecker member.
+completion-pressure and explicit explanation consumers can inspect why member candidates are absent, but the pressure
+script classifies those rows as `weak-type:*` when the expression-member site has no candidates. Default hover does not
+translate these raw keys. Treat that as typing or value-shape pressure in the app or plugin surface unless a lower-level
+projection lost a concrete TypeChecker member.
 The public cursor-info API now turns those weak owner surfaces into diagnostic rows with coarse suggestion kinds. This
 keeps completion honest while giving future diagnostics/code actions enough structure to recommend stronger owner types
 or explicit properties. The diagnostic row carries the owner type projection origin and an action-target envelope, so

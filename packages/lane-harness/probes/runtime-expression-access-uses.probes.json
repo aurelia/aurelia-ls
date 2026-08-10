@@ -65,6 +65,16 @@
         "at": "name",
         "verdict": "correct",
         "reason": "Hover should resolve the nested member as string while preserving its exact TypeScript declaration authority."
+      },
+      {
+        "id": "bare-current-context",
+        "file": "src/runtime-expression-access-uses-app.html",
+        "anchor": "${$this} / ${items.map(item => $this).length}",
+        "at": "$this",
+        "atOccurrence": 1,
+        "verdict": "correct",
+        "reason": "Hover should present the exact bare `$this` token as the current Aurelia binding context with its proved component type.",
+        "note": "B2 current-context witness: the card is owned by the bare AccessThis expression rather than a selected member or a generic expression fallback."
       }
     ],
     "definition": [

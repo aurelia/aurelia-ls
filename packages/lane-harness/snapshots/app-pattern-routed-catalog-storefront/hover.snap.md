@@ -32,8 +32,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 116,
-    "range": null
+    "markdownCodePoints": 28,
+    "range": {
+      "end": {
+        "character": 63,
+        "line": 7
+      },
+      "start": {
+        "character": 53,
+        "line": 7
+      }
+    },
+    "rangeText": "searchText"
   }
 }
 ```
@@ -41,15 +51,9 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 ### Hover markdown
 
 ````markdown
-**searchText**
-
 ```ts
 searchText: string
 ```
-
-kind: `property`
-owner: `ItemCollectionState`
-owner shape: `class`
 ````
 
 ## template-member-onlyInStock
@@ -78,8 +82,18 @@ owner shape: `class`
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 119,
-    "range": null
+    "markdownCodePoints": 30,
+    "range": {
+      "end": {
+        "character": 68,
+        "line": 10
+      },
+      "start": {
+        "character": 57,
+        "line": 10
+      }
+    },
+    "rangeText": "onlyInStock"
   }
 }
 ```
@@ -87,15 +101,9 @@ owner shape: `class`
 ### Hover markdown
 
 ````markdown
-**onlyInStock**
-
 ```ts
 onlyInStock: boolean
 ```
-
-kind: `property`
-owner: `ItemCollectionState`
-owner shape: `class`
 ````
 
 ## template-getter-visibleItems
@@ -124,8 +132,18 @@ owner shape: `class`
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 245,
-    "range": null
+    "markdownCodePoints": 39,
+    "range": {
+      "end": {
+        "character": 56,
+        "line": 24
+      },
+      "start": {
+        "character": 44,
+        "line": 24
+      }
+    },
+    "rangeText": "visibleItems"
   }
 }
 ```
@@ -133,28 +151,9 @@ owner shape: `class`
 ### Hover markdown
 
 ````markdown
-**visibleItems**
-
 ```ts
 visibleItems: readonly Item[]
 ```
-
-kind: `accessor`
-owner: `ItemCollectionState`
-owner shape: `class`
-
----
-
-**Bindable** `items`
-
-name: `items`
-mode: `toView`
-
----
-
-**Resource** `repeat`
-
-kind: `template-controller`
 ````
 
 ## repeat-local-item
@@ -183,8 +182,18 @@ kind: `template-controller`
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 164,
-    "range": null
+    "markdownCodePoints": 35,
+    "range": {
+      "end": {
+        "character": 28,
+        "line": 24
+      },
+      "start": {
+        "character": 24,
+        "line": 24
+      }
+    },
+    "rangeText": "item"
   }
 }
 ```
@@ -192,26 +201,11 @@ kind: `template-controller`
 ### Hover markdown
 
 ````markdown
-**item**
-
 ```ts
 item: Item
 ```
 
-kind: `property`
-
----
-
-**Bindable** `items`
-
-name: `items`
-mode: `toView`
-
----
-
-**Resource** `repeat`
-
-kind: `template-controller`
+Repeat local.
 ````
 
 ## let-local-item-target
@@ -240,8 +234,18 @@ kind: `template-controller`
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 55,
-    "range": null
+    "markdownCodePoints": 39,
+    "range": {
+      "end": {
+        "character": 11,
+        "line": 3
+      },
+      "start": {
+        "character": 7,
+        "line": 3
+      }
+    },
+    "rangeText": "item"
   }
 }
 ```
@@ -249,13 +253,11 @@ kind: `template-controller`
 ### Hover markdown
 
 ````markdown
-**item**
-
 ```ts
 item: Item | null
 ```
 
-kind: `property`
+Let local.
 ````
 
 ## let-local-item-usage
@@ -284,8 +286,18 @@ kind: `property`
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 48,
-    "range": null
+    "markdownCodePoints": 32,
+    "range": {
+      "end": {
+        "character": 14,
+        "line": 5
+      },
+      "start": {
+        "character": 10,
+        "line": 5
+      }
+    },
+    "rangeText": "item"
   }
 }
 ```
@@ -293,13 +305,11 @@ kind: `property`
 ### Hover markdown
 
 ````markdown
-**item**
-
 ```ts
 item: Item
 ```
 
-kind: `property`
+Let local.
 ````
 
 ## bindable-attr-item
@@ -328,26 +338,31 @@ kind: `property`
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 105,
-    "range": null
+    "markdownCodePoints": 62,
+    "range": {
+      "end": {
+        "character": 25,
+        "line": 25
+      },
+      "start": {
+        "character": 21,
+        "line": 25
+      }
+    },
+    "rangeText": "item"
   }
 }
 ```
 
 ### Hover markdown
 
-```markdown
-**Bindable** `item`
-
-name: `item`
-mode: `toView`
-
----
-
-**Resource** `item-card`
-
-kind: `custom-element`
+````markdown
+```ts
+(bindable) item: Item | null
 ```
+
+Default mode: to view.
+````
 
 ## repeat-local-badge-three-sites
 
@@ -375,8 +390,18 @@ kind: `custom-element`
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 179,
-    "range": null
+    "markdownCodePoints": 49,
+    "range": {
+      "end": {
+        "character": 35,
+        "line": 16
+      },
+      "start": {
+        "character": 30,
+        "line": 16
+      }
+    },
+    "rangeText": "badge"
   }
 }
 ```
@@ -384,27 +409,96 @@ kind: `custom-element`
 ### Hover markdown
 
 ````markdown
-**badge**
-
 ```ts
 badge: ItemBadge | "all"
 ```
 
-kind: `property`
-
----
-
-**Bindable** `items`
-
-name: `items`
-mode: `toView`
-
----
-
-**Resource** `repeat`
-
-kind: `template-controller`
+Repeat local.
 ````
+
+## router-path-item-detail
+
+### Probe
+
+```json
+{
+  "anchor": "load=\"items/item-1?ref=featured#details\"",
+  "at": "item-1",
+  "atOccurrence": 1,
+  "displayPosition": "src/app.html:15:22",
+  "file": "src/app.html",
+  "lspPosition": {
+    "character": 21,
+    "line": 14
+  },
+  "occurrence": 1
+}
+```
+
+### hover
+
+```json
+{
+  "outcome": "result",
+  "result": {
+    "contentsKind": "markdown",
+    "markdownCodePoints": 76,
+    "range": {
+      "end": {
+        "character": 27,
+        "line": 14
+      },
+      "start": {
+        "character": 15,
+        "line": 14
+      }
+    },
+    "rangeText": "items/item-1"
+  }
+}
+```
+
+### Hover markdown
+
+````markdown
+```text
+(route path) "items/item-1"
+```
+
+Configured route id: `item-detail`.
+````
+
+## router-query-no-hover
+
+### Probe
+
+```json
+{
+  "anchor": "load=\"items/item-1?ref=featured#details\"",
+  "at": "ref",
+  "atOccurrence": 1,
+  "displayPosition": "src/app.html:15:29",
+  "file": "src/app.html",
+  "lspPosition": {
+    "character": 28,
+    "line": 14
+  },
+  "occurrence": 1
+}
+```
+
+### hover
+
+```json
+{
+  "outcome": "result",
+  "result": null
+}
+```
+
+### Hover markdown
+
+_No hover markdown._
 
 ## ts-property-state
 

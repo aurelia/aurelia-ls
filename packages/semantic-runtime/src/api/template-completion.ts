@@ -2,6 +2,7 @@ import ts from 'typescript';
 
 import {
   answerTemplateCompletion,
+  templateRouteExpressionPathSpanForCursor,
   TemplateCompletionSiteKind,
   templateCompletionQueryForCursor,
   type TemplateCompletionCandidate,
@@ -58,12 +59,13 @@ import type { RuntimeValueConverterIssue } from '../template/runtime-value-conve
 import type { RuntimeControllerIssue } from '../template/runtime-controller-issue.js';
 import type { RuntimeRendererIssue } from '../template/runtime-renderer-issue.js';
 import { RefBindingInstruction } from '../template/instruction-ir.js';
-import type { RouterIssueModel } from '../router/model.js';
+import { RouterNavigationTargetKind, type RouterIssueModel } from '../router/model.js';
 import {
   FrameworkCapabilityAdmissionState,
   FrameworkCapabilityDemandSiteKind,
   type FrameworkCapabilityDemand,
 } from '../framework/capability-demand.js';
+import { FrameworkRegistrationCapability } from '../registration/framework-registration-manifest.js';
 import type { TemplateExpressionParse } from '../template/value-site.js';
 import { TemplateValueSiteKind } from '../template/value-site.js';
 import { TemplateProductDetails } from '../template/product-details.js';
@@ -83,7 +85,7 @@ import {
   readTypeSystemOverlayDiagnostics,
   type TypeSystemOverlayDiagnostic,
 } from '../type-system/diagnostics.js';
-import { readRouterIssues } from './route-projections.js';
+import { readRouterIssueRows, readRouterIssues } from './route-projections.js';
 import { semanticTypeScriptDiagnosticSeverity } from './typescript-diagnostics.js';
 import { TypeSystemProjectBuilder, type TypeSystemProject } from '../type-system/project.js';
 import type { CheckerTypeProjector } from '../type-system/checker-projector.js';
@@ -93,12 +95,14 @@ import {
 } from '../type-system/checker-node-helpers.js';
 import {
   CheckerTypeMemberKind,
+  CheckerTypeProjectionOrigin,
+  type CheckerTypeReference,
   checkerIndexedAccessSupportsString,
   checkerTypeMemberReachableIdentityHandle,
 } from '../type-system/type-shape.js';
 import { checkerTypeMemberSourceAddressHandle } from '../type-system/checker-type-member-source.js';
 import { readOrProjectCheckerTypeMembersInProjection } from '../type-system/checker-type-member-surface.js';
-import type { RuntimeBindingDataFlow } from '../observation/runtime-binding-observation.js';
+import { readCheckerReferenceSurface } from '../type-system/type-surface.js';
 import type { TemplateBindableReference } from '../template/compiler-world-reference.js';
 import { resolveSemanticSourceCursor } from './source-cursor.js';
 import {
@@ -111,11 +115,16 @@ import type {
   SemanticRuntimePageResult,
   SemanticRuntimeSourceFileInput,
   SemanticRuntimeSourceCursorInput,
+  SemanticAppDiagnosticRow,
+  SemanticDiagnosticPresentationGroup,
+  SemanticDiagnosticPresentationRow,
+  SemanticDiagnosticPresentationWithheldRow,
   SemanticDiagnosticRelation,
   SemanticDiagnosticSubject,
   SemanticTemplateCompilationRow,
   SemanticTemplateCursorBindableRow,
   SemanticTemplateCursorDiagnosticRow,
+  SemanticTemplateCursorDiagnosticPresentation,
   SemanticTemplateCompletionCandidateRow,
   SemanticTemplateDiagnosticRow,
   SemanticTemplateDiagnosticPhase,
@@ -129,6 +138,7 @@ import type {
   SemanticTemplateCursorValueSiteRow,
   SemanticTemplateCompletionResult,
   SemanticTemplateCursorSuggestionValueTypeSource,
+  SemanticTemplateCursorUncertainty,
 } from './contracts.js';
 import {
   SemanticDiagnosticProjectionPolicy,
@@ -188,6 +198,14 @@ import {
   TemplateDiagnosticRelations,
   type TemplateDiagnosticRelationOrigin,
 } from './template-diagnostic-relations.js';
+import {
+  routerAppDiagnosticRow,
+  templateAppDiagnosticRow,
+  templateDiagnosticContributesToAppDiagnostics,
+} from './app-diagnostics.js';
+import { appDiagnosticPresentation } from './diagnostic-presentation.js';
+import type { SemanticSourceReference } from './source-reference.js';
+import { normalizeTypeSystemPath } from '../type-system/source-file-path.js';
 
 type TemplateCompilationLane = SemanticTemplateCompilationRow['compilationLane'];
 
@@ -372,12 +390,17 @@ function readTemplateCursorInfoValue(
         { filePath: readContext.locus.cursor.filePath },
         includeHandles,
         diagnosticProjection,
-      ).filter((diagnostic) =>
-        semanticSourceReferenceContainsOffset(diagnostic.source, cursorOffset)
       );
   return {
     missingInputs,
-    value: withCursorDiagnostics(baseValue, diagnostics),
+    value: withCursorDiagnosticPresentation(
+      baseValue,
+      diagnostics,
+      emission.project.projectKey,
+      cursorOffset,
+      // Identity handles stay internal here and prove which router-owned AppDiagnostic replaces each template proxy.
+      readRouterIssueRows(emission, store, true).map(routerAppDiagnosticRow),
+    ),
   };
 }
 
@@ -419,20 +442,213 @@ function valueSiteSupportsBindingTargetExpectedType(
   }
 }
 
-function withCursorDiagnostics(
+interface CursorDiagnosticPresentationInput {
+  readonly cursorDiagnostic: SemanticTemplateDiagnosticRow;
+  readonly appDiagnostic: SemanticAppDiagnosticRow;
+}
+
+function cursorDiagnosticPresentationInputs(
+  diagnostics: readonly SemanticTemplateDiagnosticRow[],
+  projectKey: string,
+  appDiagnosticReplacements: readonly SemanticAppDiagnosticRow[],
+): readonly CursorDiagnosticPresentationInput[] {
+  const claimedReplacementIndices = new Set<number>();
+  return diagnostics.flatMap((cursorDiagnostic): readonly CursorDiagnosticPresentationInput[] => {
+    if (templateDiagnosticContributesToAppDiagnostics(cursorDiagnostic)) {
+      return [{
+        cursorDiagnostic,
+        appDiagnostic: templateAppDiagnosticRow(projectKey, cursorDiagnostic),
+      }];
+    }
+    const replacementIndex = appDiagnosticReplacements.findIndex((candidate, candidateIndex) =>
+      !claimedReplacementIndices.has(candidateIndex)
+      && appDiagnosticReplacementMatchesCursorCarrier(cursorDiagnostic, candidate)
+    );
+    if (replacementIndex < 0) {
+      return [];
+    }
+    claimedReplacementIndices.add(replacementIndex);
+    return [{
+      cursorDiagnostic,
+      appDiagnostic: appDiagnosticReplacements[replacementIndex]!,
+    }];
+  });
+}
+
+/**
+ * Router template diagnostics are cursor carriers for router-owned AppDiagnostics rows, not an independently admitted
+ * app diagnostic family. Pair only the exact owning row so presentation keeps AppDiagnostics authority without
+ * leaking unrelated app diagnostics or presenting the template proxy twice.
+ */
+function appDiagnosticReplacementMatchesCursorCarrier(
+  cursorDiagnostic: SemanticTemplateDiagnosticRow,
+  appDiagnostic: SemanticAppDiagnosticRow,
+): boolean {
+  return cursorDiagnostic.diagnosticKind === 'router-framework-error'
+    && appDiagnostic.diagnosticDomain === 'router'
+    && appDiagnostic.relatedQueryKind === 'router-issues'
+    && cursorDiagnostic.diagnosticIdentityHandle != null
+    && appDiagnostic.handles?.identityHandle === cursorDiagnostic.diagnosticIdentityHandle
+    && appDiagnostic.diagnosticAuthority === cursorDiagnostic.diagnosticAuthority
+    && appDiagnostic.frameworkErrorCode === cursorDiagnostic.frameworkErrorCode
+    && appDiagnostic.severity === cursorDiagnostic.severity
+    && appDiagnostic.summary === cursorDiagnostic.summary
+    && appDiagnostic.missingInput === cursorDiagnostic.missingInput
+    && appDiagnostic.missingInputs.length === cursorDiagnostic.missingInputs.length
+    && appDiagnostic.missingInputs.every((missingInput, index) =>
+      missingInput === cursorDiagnostic.missingInputs[index]
+    )
+    && diagnosticSuggestionsMatchExactly(appDiagnostic.suggestion, cursorDiagnostic.suggestion)
+    && semanticTemplateCursorSourcesMatchExactly(appDiagnostic.source, cursorDiagnostic.source);
+}
+
+function diagnosticSuggestionsMatchExactly(
+  left: SemanticAppDiagnosticRow['suggestion'],
+  right: SemanticTemplateDiagnosticRow['suggestion'],
+): boolean {
+  if (left == null || right == null) {
+    return left === right;
+  }
+  return left.suggestionKind === right.suggestionKind
+    && left.actionKind === right.actionKind
+    && left.summary === right.summary
+    && left.targetMemberName === right.targetMemberName
+    && left.ownerTypeDisplay === right.ownerTypeDisplay
+    && left.valueTypeDisplay === right.valueTypeDisplay
+    && left.valueTypeSource === right.valueTypeSource
+    && diagnosticActionTargetsMatchExactly(left.actionTarget, right.actionTarget);
+}
+
+function diagnosticActionTargetsMatchExactly(
+  left: NonNullable<SemanticAppDiagnosticRow['suggestion']>['actionTarget'],
+  right: NonNullable<SemanticTemplateDiagnosticRow['suggestion']>['actionTarget'],
+): boolean {
+  if (left == null || right == null) {
+    return left === right;
+  }
+  return left.targetKind === right.targetKind
+    && left.memberName === right.memberName
+    && left.typeDisplay === right.typeDisplay
+    && nullableExactDiagnosticSourcesMatch(left.source, right.source);
+}
+
+function nullableExactDiagnosticSourcesMatch(
+  left: SemanticSourceReference | null,
+  right: SemanticSourceReference | null,
+): boolean {
+  return left == null || right == null
+    ? left === right
+    : semanticTemplateCursorSourcesMatchExactly(left, right);
+}
+
+function withCursorDiagnosticPresentation(
+  value: SemanticTemplateCursorInfoResult,
+  diagnostics: readonly SemanticTemplateDiagnosticRow[],
+  projectKey: string,
+  cursorOffset: number | null,
+  appDiagnosticReplacements: readonly SemanticAppDiagnosticRow[],
+): SemanticTemplateCursorInfoResult {
+  const compact = semanticTemplateCursorDiagnosticPresentation(
+    diagnostics,
+    projectKey,
+    value.activeSource,
+    cursorOffset,
+    appDiagnosticReplacements,
+  );
+  return cursorInfoWithDiagnosticPresentation(
+    value,
+    compact.diagnostics,
+    compact.diagnosticPresentation,
+  );
+}
+
+/**
+ * Apply app-level template admission and presentation before selecting one cursor outcome while conserving every
+ * co-located admitted outcome and each contextual row needed to explain it.
+ */
+export function semanticTemplateCursorDiagnosticPresentation(
+  diagnostics: readonly SemanticTemplateDiagnosticRow[],
+  projectKey: string,
+  activeSource: SemanticSourceReference | null,
+  cursorOffset: number | null,
+  appDiagnosticReplacements: readonly SemanticAppDiagnosticRow[] = [],
+): {
+  readonly diagnostics: readonly SemanticTemplateDiagnosticRow[];
+  readonly diagnosticPresentation: SemanticTemplateCursorDiagnosticPresentation | null;
+} {
+  const admittedInputs = cursorDiagnosticPresentationInputs(
+    diagnostics,
+    projectKey,
+    appDiagnosticReplacements,
+  );
+  const admittedTemplateRows = admittedInputs.map((input) => input.cursorDiagnostic);
+  const admittedAppRows = admittedInputs.map((input) => input.appDiagnostic);
+  const presentation = appDiagnosticPresentation(admittedAppRows, true);
+  const presented = cursorPresentedDiagnosticCandidates(
+    presentation.groups,
+    admittedAppRows,
+    activeSource,
+    cursorOffset,
+  );
+  const withheld = cursorWithheldDiagnosticCandidates(
+    presentation.withheld,
+    admittedAppRows,
+    activeSource,
+    cursorOffset,
+  );
+  const compact = compactCursorDiagnostics(presented, withheld, admittedTemplateRows);
+  const winningPresented = [...presented].sort((left, right) => cursorDiagnosticCandidateOrder(
+    admittedAppRows[left.group.primary.rowIndex] ?? null,
+    left.presenterOrder,
+    admittedAppRows[right.group.primary.rowIndex] ?? null,
+    right.presenterOrder,
+    activeSource,
+  ))[0] ?? null;
+  if (winningPresented != null) {
+    return {
+      diagnostics: compact.diagnostics,
+      diagnosticPresentation: {
+        kind: 'presented',
+        rawRowCount: compact.diagnostics.length,
+        group: reindexCursorDiagnosticGroup(winningPresented.group, compact.indexBySourceIndex),
+      },
+    };
+  }
+  const winningWithheld = [...withheld].sort((left, right) => cursorDiagnosticCandidateOrder(
+    admittedAppRows[left.withheld.rowIndex] ?? null,
+    left.presenterOrder,
+    admittedAppRows[right.withheld.rowIndex] ?? null,
+    right.presenterOrder,
+    activeSource,
+  ))[0] ?? null;
+  if (winningWithheld != null) {
+    return {
+      diagnostics: compact.diagnostics,
+      diagnosticPresentation: {
+        kind: 'withheld',
+        rawRowCount: compact.diagnostics.length,
+        withheld: {
+          ...winningWithheld.withheld,
+          rowIndex: requireCompactCursorDiagnosticIndex(
+            compact.indexBySourceIndex,
+            winningWithheld.withheld.rowIndex,
+          ),
+        },
+      },
+    };
+  }
+  return { diagnostics: [], diagnosticPresentation: null };
+}
+
+function cursorInfoWithDiagnosticPresentation(
   value: SemanticTemplateCursorInfoResult,
   diagnostics: readonly SemanticTemplateCursorDiagnosticRow[],
+  diagnosticPresentation: SemanticTemplateCursorDiagnosticPresentation | null,
 ): SemanticTemplateCursorInfoResult {
-  if (diagnostics.length === 0) {
-    return value;
-  }
-  const byKey = new Map<string, SemanticTemplateCursorDiagnosticRow>();
-  for (const diagnostic of [...value.diagnostics, ...diagnostics]) {
-    byKey.set(cursorDiagnosticKey(diagnostic), diagnostic);
-  }
   const nextValue = {
     ...value,
-    diagnostics: [...byKey.values()],
+    diagnostics,
+    diagnosticPresentation,
   };
   return {
     ...nextValue,
@@ -440,19 +656,173 @@ function withCursorDiagnostics(
   };
 }
 
-function cursorDiagnosticKey(
-  diagnostic: SemanticTemplateCursorDiagnosticRow,
-): string {
-  return [
-    diagnostic.source?.path ?? 'no-source',
-    diagnostic.source?.start ?? 'no-start',
-    diagnostic.source?.end ?? 'no-end',
-    diagnostic.diagnosticAuthority,
-    diagnostic.frameworkErrorCode ?? 'no-framework-code',
-    diagnostic.diagnosticKind,
-    diagnosticRowMissingInputKey(diagnostic),
-    diagnostic.selectedMemberName ?? 'none',
-  ].join(':');
+interface CursorPresentedDiagnosticCandidate {
+  readonly presenterOrder: number;
+  readonly group: SemanticDiagnosticPresentationGroup;
+}
+
+interface CursorWithheldDiagnosticCandidate {
+  readonly presenterOrder: number;
+  readonly withheld: SemanticDiagnosticPresentationWithheldRow;
+}
+
+function cursorPresentedDiagnosticCandidates(
+  groups: readonly SemanticDiagnosticPresentationGroup[],
+  rows: readonly SemanticAppDiagnosticRow[],
+  activeSource: SemanticSourceReference | null,
+  cursorOffset: number | null,
+): readonly CursorPresentedDiagnosticCandidate[] {
+  return groups.flatMap((group, presenterOrder) => {
+    const row = rows[group.primary.rowIndex] ?? null;
+    return semanticTemplateCursorSourcePathsMatchExactly(row?.source ?? null, activeSource)
+      && semanticSourceReferenceContainsOffset(row?.source ?? null, cursorOffset)
+      ? [{ presenterOrder, group }]
+      : [];
+  });
+}
+
+function cursorWithheldDiagnosticCandidates(
+  withheld: readonly SemanticDiagnosticPresentationWithheldRow[],
+  rows: readonly SemanticAppDiagnosticRow[],
+  activeSource: SemanticSourceReference | null,
+  cursorOffset: number | null,
+): readonly CursorWithheldDiagnosticCandidate[] {
+  return withheld.flatMap((row, presenterOrder) => {
+    const diagnostic = rows[row.rowIndex] ?? null;
+    return semanticTemplateCursorSourcePathsMatchExactly(diagnostic?.source ?? null, activeSource)
+      && semanticSourceReferenceContainsOffset(diagnostic?.source ?? null, cursorOffset)
+      ? [{ presenterOrder, withheld: row }]
+      : [];
+  });
+}
+
+function cursorDiagnosticCandidateOrder(
+  left: SemanticAppDiagnosticRow | null,
+  leftPresenterOrder: number,
+  right: SemanticAppDiagnosticRow | null,
+  rightPresenterOrder: number,
+  activeSource: SemanticSourceReference | null,
+): number {
+  return Number(semanticTemplateCursorSourcesMatchExactly(right?.source ?? null, activeSource))
+    - Number(semanticTemplateCursorSourcesMatchExactly(left?.source ?? null, activeSource))
+    || sourceReferenceSpanLength(left?.source ?? null) - sourceReferenceSpanLength(right?.source ?? null)
+    || cursorDiagnosticSeverityRank(right?.severity ?? 'information')
+      - cursorDiagnosticSeverityRank(left?.severity ?? 'information')
+    || leftPresenterOrder - rightPresenterOrder;
+}
+
+export function semanticTemplateCursorSourcesMatchExactly(
+  left: SemanticSourceReference | null,
+  right: SemanticSourceReference | null,
+): boolean {
+  const exactLeft = semanticExactSourceReference(left);
+  const exactRight = semanticExactSourceReference(right);
+  return exactLeft?.path != null
+    && exactRight?.path != null
+    && canonicalCursorSourcePath(exactLeft.path) === canonicalCursorSourcePath(exactRight.path)
+    && exactLeft.start === exactRight.start
+    && exactLeft.end === exactRight.end;
+}
+
+function semanticTemplateCursorSourcePathsMatchExactly(
+  left: SemanticSourceReference | null,
+  right: SemanticSourceReference | null,
+): boolean {
+  const exactLeft = semanticExactSourceReference(left);
+  const exactRight = semanticExactSourceReference(right);
+  return exactLeft?.path != null
+    && exactRight?.path != null
+    && canonicalCursorSourcePath(exactLeft.path) === canonicalCursorSourcePath(exactRight.path);
+}
+
+function canonicalCursorSourcePath(value: string): string {
+  const normalized = normalizeTypeSystemPath(value);
+  return ts.sys.useCaseSensitiveFileNames ? normalized : normalized.toLowerCase();
+}
+
+function sourceReferenceSpanLength(source: SemanticSourceReference | null): number {
+  const exact = semanticExactSourceReference(source);
+  return exact?.start == null || exact.end == null
+    ? Number.POSITIVE_INFINITY
+    : exact.end - exact.start;
+}
+
+function cursorDiagnosticSeverityRank(
+  severity: SemanticTemplateCursorDiagnosticRow['severity'],
+): number {
+  switch (severity) {
+    case 'error': return 3;
+    case 'warning': return 2;
+    case 'information': return 1;
+  }
+}
+
+function compactCursorDiagnostics(
+  presented: readonly CursorPresentedDiagnosticCandidate[],
+  withheld: readonly CursorWithheldDiagnosticCandidate[],
+  rows: readonly SemanticTemplateDiagnosticRow[],
+): {
+  readonly diagnostics: readonly SemanticTemplateDiagnosticRow[];
+  readonly indexBySourceIndex: ReadonlyMap<number, number>;
+} {
+  const sourceIndices = [
+    ...presented.flatMap((candidate) => [
+      candidate.group.primary.rowIndex,
+      ...candidate.group.related.map((related) => related.rowIndex),
+    ]),
+    ...withheld.map((candidate) => candidate.withheld.rowIndex),
+  ];
+  assertCursorDiagnosticCompactionClaims(sourceIndices, rows.length);
+  const uniqueSourceIndices = [...new Set(sourceIndices)].sort((left, right) => left - right);
+  const compactIndexBySourceIndex = new Map(
+    uniqueSourceIndices.map((sourceIndex, compactIndex) => [sourceIndex, compactIndex]),
+  );
+  return {
+    diagnostics: uniqueSourceIndices.map((sourceIndex) => rows[sourceIndex]!),
+    indexBySourceIndex: compactIndexBySourceIndex,
+  };
+}
+
+function reindexCursorDiagnosticGroup(
+  group: SemanticDiagnosticPresentationGroup,
+  indexBySourceIndex: ReadonlyMap<number, number>,
+): SemanticDiagnosticPresentationGroup {
+  const reindex = (row: SemanticDiagnosticPresentationRow): SemanticDiagnosticPresentationRow => ({
+    ...row,
+    rowIndex: requireCompactCursorDiagnosticIndex(indexBySourceIndex, row.rowIndex),
+  });
+  return {
+    ...group,
+    primary: reindex(group.primary),
+    related: group.related.map(reindex),
+  };
+}
+
+function requireCompactCursorDiagnosticIndex(
+  indexBySourceIndex: ReadonlyMap<number, number>,
+  sourceIndex: number,
+): number {
+  const compactIndex = indexBySourceIndex.get(sourceIndex);
+  if (compactIndex == null) {
+    throw new Error(`Cursor diagnostic presentation lost admitted source row ${sourceIndex}.`);
+  }
+  return compactIndex;
+}
+
+function assertCursorDiagnosticCompactionClaims(
+  claimedSourceIndices: readonly number[],
+  sourceRowCount: number,
+): void {
+  const claimed = new Set<number>();
+  for (const sourceIndex of claimedSourceIndices) {
+    if (!Number.isInteger(sourceIndex) || sourceIndex < 0 || sourceIndex >= sourceRowCount) {
+      throw new Error(`Cursor diagnostic presentation claimed invalid source row ${sourceIndex}.`);
+    }
+    if (claimed.has(sourceIndex)) {
+      throw new Error(`Cursor diagnostic presentation claimed source row ${sourceIndex} more than once.`);
+    }
+    claimed.add(sourceIndex);
+  }
 }
 
 export function readSemanticTemplateDiagnostics(
@@ -2391,8 +2761,10 @@ function missingTemplateCursorInfo(
     selectedMemberName: null,
     selectedMember: null,
     selectedExpression: null,
+    uncertainty: null,
     memberOwnerType: null,
     diagnostics: [],
+    diagnosticPresentation: null,
   };
   return publicAnswer(read.result, read.summary, {
       displayText: semanticTemplateCursorInfoDisplayText(value),
@@ -2426,7 +2798,7 @@ function templateCursorInfoResult(
     query.locus.kind === InquiryLocusKind.SourceCursor ? query.locus.cursor.offset : null,
     valueSite?.siteKind ?? null,
   );
-  const activeSource = cursorContext.activeExpressionSpan == null
+  const baseActiveSource = cursorContext.activeExpressionSpan == null
     ? describeAddress(store, cursorContext.activeSourceAddressHandle)
     : query.locus.kind === InquiryLocusKind.SourceCursor
       ? sourceReferenceForParserSpan(
@@ -2435,12 +2807,37 @@ function templateCursorInfoResult(
           'active-template-token',
         )
       : null;
+  const routeActiveSource = cursorRouteActiveSource(
+    store,
+    cursorContext,
+    valueSite,
+    baseActiveSource,
+  );
+  const activeSource = cursorSelectedMemberActiveSource(
+    routeActiveSource,
+    selectedMember,
+    query.locus.kind === InquiryLocusKind.SourceCursor ? query.locus.cursor : null,
+  );
   const selectedExpression = cursorSelectedExpressionRow(
     store,
     cursorContext,
     activeSource,
     includeHandles,
   );
+  const selectedDefinition = cursorDefinitionRow(
+    store,
+    query.selectedDefinitionProductHandle,
+    cursorContext.selectedDefinitionMatchedName,
+    includeHandles,
+  );
+  const selectedBindable = cursorBindableRow(
+    store,
+    selection.resource.runtimeAnalysis.expressionWorld.projector,
+    cursorContext.selectedBindable,
+    cursorContext.selectedBindableValueType,
+    includeHandles,
+  );
+  const selectedRouteTarget = cursorRouteTargetRow(store, cursorContext, includeHandles);
   const value: Omit<SemanticTemplateCursorInfoResult, 'displayText'> = {
     siteKind: query.siteKind,
     activeSource,
@@ -2457,22 +2854,21 @@ function templateCursorInfoResult(
     },
     html,
     valueSite,
-    selectedDefinition: cursorDefinitionRow(
-      store,
-      query.selectedDefinitionProductHandle,
-      cursorContext.selectedDefinitionMatchedName,
-      includeHandles,
-    ),
-    selectedBindable: cursorBindableRow(
-      store,
-      selection.resource.runtimeAnalysis.expressionWorld.projector,
-      cursorContext.selectedBindable,
-      includeHandles,
-    ),
-    selectedRouteTarget: cursorRouteTargetRow(store, cursorContext, includeHandles),
+    selectedDefinition,
+    selectedBindable,
+    selectedRouteTarget,
     selectedMemberName: cursorContext.selectedMemberName,
     selectedMember,
     selectedExpression,
+    uncertainty: cursorUncertainty(
+      store,
+      selection.resource,
+      cursorContext,
+      missingInputs,
+      selectedDefinition,
+      selectedBindable,
+      selectedMember,
+    ),
     memberOwnerType,
     diagnostics: cursorDiagnosticRows(
       store,
@@ -2488,9 +2884,16 @@ function templateCursorInfoResult(
       expectedValueType?.display ?? null,
       expectedValueType?.source ?? null,
     ),
+    diagnosticPresentation: null,
     ...(includeHandles ? {
       handles: {
-        activeSourceAddressHandle: cursorContext.activeSourceAddressHandle,
+        activeSourceAddressHandle: cursorActiveSourceAddressHandle(
+          store,
+          activeSource,
+          cursorContext,
+          valueSite,
+          selectedMember,
+        ),
       },
     } : {}),
   };
@@ -2498,6 +2901,347 @@ function templateCursorInfoResult(
     displayText: semanticTemplateCursorInfoDisplayText(value),
     ...value,
   };
+}
+
+/** Publish a store handle only when its current authored span is exactly the winning public active source. */
+function cursorActiveSourceAddressHandle(
+  store: KernelStore,
+  activeSource: SemanticSourceReference | null,
+  cursorContext: TemplateCompletionCursorContext,
+  valueSite: SemanticTemplateCursorValueSiteRow | null,
+  selectedMember: SemanticTemplateCursorMemberRow | null,
+): AddressHandle | null {
+  const candidates = [
+    cursorContext.activeSourceAddressHandle,
+    valueSite?.handles?.sourceAddressHandle ?? null,
+    selectedMember?.handles?.sourceAddressHandle ?? null,
+    selectedMember?.handles?.declarationSourceAddressHandle ?? null,
+  ];
+  for (const handle of new Set(candidates)) {
+    if (
+      handle != null
+      && semanticTemplateCursorSourcesMatchExactly(describeAddress(store, handle), activeSource)
+    ) {
+      return handle;
+    }
+  }
+  return null;
+}
+
+/** Refine only router loci whose authored value grammar proves a narrower active token at this exact cursor. */
+function cursorRouteActiveSource(
+  store: KernelStore,
+  cursorContext: TemplateCompletionCursorContext,
+  valueSite: SemanticTemplateCursorValueSiteRow | null,
+  activeSource: SemanticSourceReference | null,
+): SemanticSourceReference | null {
+  const locus = cursorContext.query.locus;
+  if (
+    locus.kind !== InquiryLocusKind.SourceCursor
+    || locus.cursor.offset == null
+    || cursorContext.valueSiteProductHandle == null
+    || valueSite == null
+  ) {
+    return activeSource;
+  }
+  const exactValueSource = semanticExactSourceReference(valueSite.source);
+  if (
+    exactValueSource?.path == null
+    || canonicalCursorSourcePath(exactValueSource.path) !== canonicalCursorSourcePath(locus.cursor.filePath)
+    || !semanticSourceReferenceContainsOffset(exactValueSource, locus.cursor.offset)
+  ) {
+    return activeSource;
+  }
+  const site = store.productDetails.read(
+    TemplateProductDetails.ValueSite,
+    cursorContext.valueSiteProductHandle,
+  );
+  if (site == null) {
+    return activeSource;
+  }
+  if (cursorContext.selectedRouteTarget?.targetKind === RouterNavigationTargetKind.RouteId) {
+    return exactValueSource;
+  }
+  const attribute = readHtmlAttribute(store, cursorContext.htmlAttributeProductHandle);
+  const nestedRouteIdValue = site.sourceAddressHandle != null
+    && site.sourceAddressHandle !== attribute?.valueAddressHandle
+    && valueSite.bindableName === 'route'
+    && valueSite.bindableAttribute === 'route';
+  if (nestedRouteIdValue) {
+    return exactValueSource;
+  }
+  // Only the value site that owns the whole attribute value uses the primary string-navigation path grammar.
+  // Other nested multi-binding sites do not inherit route-id or route-path identity.
+  if (
+    site.sourceAddressHandle == null
+    || site.sourceAddressHandle !== attribute?.valueAddressHandle
+  ) {
+    return activeSource;
+  }
+  const pathSpan = templateRouteExpressionPathSpanForCursor(
+    store,
+    site,
+    locus.cursor.offset,
+  );
+  if (pathSpan != null) {
+    return sourceReferenceForParserSpan(
+      exactValueSource.path,
+      pathSpan,
+      'route-path',
+      exactValueSource,
+    );
+  }
+  return activeSource;
+}
+
+/**
+ * Prefer a proved authored member-name token over a broader parser range at that same cursor. Member declaration
+ * sources may point into another file (ordinary TypeScript members) or back to an earlier local declaration (a local
+ * use), so exact request-file identity and cursor containment are mandatory before refining the active source.
+ */
+function cursorSelectedMemberActiveSource(
+  activeSource: SemanticSourceReference | null,
+  selectedMember: SemanticTemplateCursorMemberRow | null,
+  cursor: SourceTextCursor | null,
+): SemanticSourceReference | null {
+  if (selectedMember == null || cursor == null) {
+    return activeSource;
+  }
+  const cursorPath = canonicalCursorSourcePath(cursor.filePath);
+  const candidates = [selectedMember.source, selectedMember.declarationSource]
+    .map((source, sourceOrder) => ({
+      source: semanticExactSourceReference(source),
+      sourceOrder,
+    }))
+    .filter((candidate): candidate is { source: SemanticSourceReference; sourceOrder: number } =>
+      candidate.source?.path != null
+      && candidate.source.role === 'name'
+      && canonicalCursorSourcePath(candidate.source.path) === cursorPath
+      && semanticSourceReferenceContainsOffset(candidate.source, cursor.offset)
+    )
+    .sort((left, right) =>
+      sourceReferenceSpanLength(left.source) - sourceReferenceSpanLength(right.source)
+      || (left.source.start ?? 0) - (right.source.start ?? 0)
+      || left.sourceOrder - right.sourceOrder
+    );
+  const selectedSource = candidates[0]?.source ?? null;
+  if (selectedSource == null) {
+    return activeSource;
+  }
+
+  const exactActiveSource = semanticExactSourceReference(activeSource);
+  const activeSourceAuthenticatesCursor = exactActiveSource?.path != null
+    && canonicalCursorSourcePath(exactActiveSource.path) === cursorPath
+    && semanticSourceReferenceContainsOffset(exactActiveSource, cursor.offset);
+  if (
+    activeSourceAuthenticatesCursor
+    && exactActiveSource.start != null
+    && exactActiveSource.end != null
+    && selectedSource.start != null
+    && selectedSource.end != null
+    && !(
+      exactActiveSource.start <= selectedSource.start
+      && selectedSource.end <= exactActiveSource.end
+    )
+  ) {
+    return activeSource;
+  }
+  return selectedSource;
+}
+
+const resourceAvailabilityMissingInputs = new Set<string>([
+  FrameworkRegistrationCapability.RuntimeHtmlDefaultResources,
+  FrameworkRegistrationCapability.I18nDefaultResources,
+  FrameworkRegistrationCapability.ValidationHtmlDefaultResources,
+  FrameworkRegistrationCapability.RouterDefaultResources,
+  FrameworkRegistrationCapability.UiVirtualizationDefaultResources,
+  FrameworkRegistrationCapability.StateDefaultResources,
+]);
+
+function cursorUncertainty(
+  store: KernelStore,
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  cursorContext: TemplateCompletionCursorContext,
+  missingInputs: readonly string[],
+  selectedDefinition: SemanticTemplateCursorDefinitionRow | null,
+  selectedBindable: SemanticTemplateCursorBindableRow | null,
+  selectedMember: SemanticTemplateCursorMemberRow | null,
+): SemanticTemplateCursorUncertainty | null {
+  return classifySemanticTemplateCursorUncertainty({
+    missingInputs,
+    selectedDefinition: selectedDefinition != null,
+    selectedBindableValueType: selectedBindable?.valueType,
+    selectedBindableOwnsLocus: selectedBindable?.valueType === null
+      && cursorSelectsBindableTypeLocus(store, resource, cursorContext),
+    selectedMemberTypeDisplay: selectedMember?.typeDisplay,
+    selectedExpressionOpen: cursorContext.selectedExpression?.openKind != null,
+    selectedScopeSlotTypeOpen:
+      cursorContext.selectedScopeSlot?.slot.targetType?.origin === CheckerTypeProjectionOrigin.Open,
+  });
+}
+
+export interface SemanticTemplateCursorUncertaintyEvidence {
+  readonly missingInputs: readonly string[];
+  readonly selectedDefinition: boolean;
+  /** Undefined means no selected bindable; null means the selected bindable has no projected type. */
+  readonly selectedBindableValueType: string | null | undefined;
+  /** Exact cursor locus is an authored bindable name/attribute declaration or compiled attribute target. */
+  readonly selectedBindableOwnsLocus?: boolean;
+  /** Undefined means no selected member; null means the selected member has no projected type. */
+  readonly selectedMemberTypeDisplay: string | null | undefined;
+  readonly selectedExpressionOpen: boolean;
+  /** Exact selected scope-slot type retained a partial projection whose origin remains open. */
+  readonly selectedScopeSlotTypeOpen: boolean;
+}
+
+/** Translate only cursor-locus pressure that can be tied to the displayed semantic answer. */
+export function classifySemanticTemplateCursorUncertainty(
+  evidence: SemanticTemplateCursorUncertaintyEvidence,
+): SemanticTemplateCursorUncertainty | null {
+  const { missingInputs } = evidence;
+  if (missingInputs.includes('router-navigation-target-open')) {
+    return {
+      category: 'dynamic-route-target',
+      affectedDomain: 'route',
+      affectedLocus: 'route-target',
+    };
+  }
+  if (missingInputs.includes('router-navigation-target-ambiguous')) {
+    return {
+      category: 'route-configuration-ambiguous',
+      affectedDomain: 'route',
+      affectedLocus: 'route-target',
+    };
+  }
+  if (missingInputs.some((input) =>
+    input === 'router-navigation-target'
+    || input === 'router-navigation-target-products'
+    || input === 'router-navigation-target-source'
+  )) {
+    return {
+      category: 'route-information-incomplete',
+      affectedDomain: 'route',
+      affectedLocus: 'route-target',
+    };
+  }
+  if (evidence.selectedExpressionOpen) {
+    return {
+      category: 'type-information-incomplete',
+      affectedDomain: 'binding-context',
+      affectedLocus: 'selected-expression',
+    };
+  }
+  if (
+    evidence.selectedBindableOwnsLocus === true
+    && evidence.selectedBindableValueType === null
+  ) {
+    return {
+      category: 'type-information-incomplete',
+      affectedDomain: 'bindable',
+      affectedLocus: 'selected-bindable',
+    };
+  }
+  if (
+    evidence.selectedMemberTypeDisplay === null
+    || (
+      evidence.selectedMemberTypeDisplay !== undefined
+      && evidence.selectedScopeSlotTypeOpen
+      && missingInputs.includes('scope-slot:type-projection-open')
+    )
+  ) {
+    return {
+      category: 'type-information-incomplete',
+      affectedDomain: 'member',
+      affectedLocus: 'selected-member',
+    };
+  }
+  if (
+    evidence.selectedDefinition
+    && missingInputs.some((input) => resourceAvailabilityMissingInputs.has(input))
+  ) {
+    return {
+      category: 'resource-availability-incomplete',
+      affectedDomain: 'resource',
+      affectedLocus: 'selected-resource',
+    };
+  }
+  return null;
+}
+
+function cursorSelectsBindableTypeLocus(
+  store: KernelStore,
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  cursorContext: TemplateCompletionCursorContext,
+): boolean {
+  const bindable = cursorContext.selectedBindable;
+  const locus = cursorContext.query.locus;
+  if (
+    bindable == null
+    || locus.kind !== InquiryLocusKind.SourceCursor
+    || locus.cursor.offset == null
+  ) {
+    return false;
+  }
+  const declarationHandles = [
+    bindable.reference.nameSourceAddressHandle,
+    bindable.reference.attributeSourceAddressHandle,
+  ];
+  if (declarationHandles.some((handle) =>
+    cursorTouchesExactSourceAddress(store, handle, locus.cursor)
+  )) {
+    return true;
+  }
+
+  const selectedAttribute = bindable.reference.attribute.toLowerCase();
+  const topLevelTarget = resource.compilation.attributeClassification.classifications.some((classification) => {
+    if (!sameCursorBindableReference(classification.bindable, bindable)) {
+      return false;
+    }
+    const syntax = resource.compilation.authoredAttributeSyntaxes.find((candidate) =>
+      candidate.productHandle === classification.syntaxProductHandle
+    ) ?? null;
+    return syntax?.target.toLowerCase() === selectedAttribute
+      && cursorTouchesExactSourceAddress(store, syntax.targetSourceAddressHandle, locus.cursor);
+  });
+  if (topLevelTarget) {
+    return true;
+  }
+
+  return resource.compilation.bindingCommandLowering.multiBindingSegments.some((segment) => {
+    if (!sameCursorBindableReference(segment.bindable, bindable)) {
+      return false;
+    }
+    const syntax = resource.compilation.authoredAttributeSyntaxes.find((candidate) =>
+      candidate.productHandle === segment.syntaxProductHandle
+    ) ?? null;
+    return syntax?.target.toLowerCase() === selectedAttribute
+      && cursorTouchesExactSourceAddress(store, segment.targetSourceAddressHandle, locus.cursor);
+  });
+}
+
+function sameCursorBindableReference(
+  left: TemplateBindableReference | null,
+  right: TemplateBindableReference,
+): boolean {
+  return left != null
+    && left.reference.ownerDefinitionProductHandle === right.reference.ownerDefinitionProductHandle
+    && left.reference.name === right.reference.name
+    && left.reference.attribute === right.reference.attribute
+    && left.reference.sourceAddressHandle === right.reference.sourceAddressHandle
+    && left.reference.nameSourceAddressHandle === right.reference.nameSourceAddressHandle
+    && left.reference.attributeSourceAddressHandle === right.reference.attributeSourceAddressHandle;
+}
+
+function cursorTouchesExactSourceAddress(
+  store: KernelStore,
+  addressHandle: AddressHandle | null,
+  cursor: SourceTextCursor,
+): boolean {
+  const source = semanticExactSourceReference(describeAddress(store, addressHandle));
+  return source?.path != null
+    && cursor.offset != null
+    && canonicalCursorSourcePath(source.path) === canonicalCursorSourcePath(cursor.filePath)
+    && semanticSourceReferenceContainsOffset(source, cursor.offset);
 }
 
 function cursorRouteTargetRow(
@@ -2662,6 +3406,7 @@ function cursorBindableRow(
   store: KernelStore,
   projector: CheckerTypeProjector,
   bindable: TemplateBindableReference | null,
+  selectedBindableValueType: CheckerTypeReference | null,
   includeHandles: boolean,
 ): SemanticTemplateCursorBindableRow | null {
   if (bindable == null) {
@@ -2673,12 +3418,31 @@ function cursorBindableRow(
         ResourceProductDetails.Definition,
         bindable.reference.ownerDefinitionProductHandle,
       );
+  const definitionSurface = projectBindableDefinitionSurface(
+    store,
+    projector,
+    bindable.definition,
+    ownerDefinition?.target ?? null,
+  );
+  const contextualSurface = definitionSurface.valueType == null
+    && selectedBindableValueType != null
+    && selectedBindableValueType.origin !== CheckerTypeProjectionOrigin.Open
+      ? readCheckerReferenceSurface(store, selectedBindableValueType)
+      : null;
   return {
     name: bindable.reference.name,
     attribute: bindable.reference.attribute,
     callback: bindable.definition.callback,
     mode: bindable.definition.mode,
-    ...projectBindableDefinitionSurface(store, projector, bindable.definition, ownerDefinition?.target ?? null),
+    ...definitionSurface,
+    ...(contextualSurface?.display == null ? {} : {
+      valueType: contextualSurface.display,
+      valueTypeShapeKind: contextualSurface.shapeKind,
+      effectiveValueTypeShapeKind: contextualSurface.effectiveShapeKind,
+      valueTypeHasCallSignature: contextualSurface.hasCallSignature,
+      valueTypeHasMembers: contextualSurface.hasMembers,
+      valueTypeIsWeak: contextualSurface.isWeak,
+    }),
     ...projectBindableDefinitionSources(store, bindable.definition),
     ownerDefinitionProductHandle: bindable.reference.ownerDefinitionProductHandle,
     source: describeAddress(store, bindable.reference.sourceAddressHandle),
@@ -2815,6 +3579,7 @@ function cursorSelectedMemberRow(
       typeDisplay: ownerType.indexedValueType.display,
       isOptional: false,
       isReadonly: false,
+      scopeRole: null,
       source: null,
       declarationSource: null,
     };
@@ -2828,6 +3593,7 @@ function cursorSelectedMemberRow(
     typeDisplay: member.valueType?.display ?? null,
     isOptional: member.isOptional,
     isReadonly: member.isReadonly,
+    scopeRole: null,
     source: describeAddress(store, checkerTypeMemberSourceAddressHandle(store, member)),
     declarationSource: describeAddress(store, checkerTypeMemberSourceAddressHandle(store, member)),
     ...(includeHandles ? {
@@ -2870,6 +3636,7 @@ function cursorScopeSlotMemberRow(
     isOptional: member?.isOptional ?? false,
     isReadonly: slot.assignmentAccessKind === BindingContextSlotAssignmentAccessKind.FrameworkManagedReadOnly
       || (member?.isReadonly ?? false),
+    scopeRole: selection.scopeRole,
     source: describeAddress(store, sourceAddressHandle),
     declarationSource: describeAddress(store, declarationSourceAddressHandle),
     ...(includeHandles ? {

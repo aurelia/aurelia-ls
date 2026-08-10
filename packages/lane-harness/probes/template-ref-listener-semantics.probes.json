@@ -42,6 +42,16 @@
         "verdict": "correct",
         "reason": "Listener hover projects keydown through the DOM event map as KeyboardEvent.",
         "note": "NEW 2026-07-13. Representative event-family TypeChecker projection at the IDE boundary."
+      },
+      {
+        "id": "resource-alias-focus",
+        "file": "src/template-ref-listener-semantics-app.html",
+        "anchor": "<ref-panel focus focus-ring.ref=\"aliasFocusRingController\"></ref-panel>",
+        "at": "focus",
+        "atOccurrence": 1,
+        "verdict": "correct",
+        "reason": "Hover leads with the exact bare custom-attribute alias and keeps its canonical resource name and source-backed implementation as subordinate context.",
+        "note": "B2 non-tag alias witness: exact attribute-source ownership must outrank the unrelated default bindable carrier and its suppressed type uncertainty."
       }
     ],
     "definition": [

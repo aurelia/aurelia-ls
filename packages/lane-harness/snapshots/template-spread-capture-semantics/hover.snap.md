@@ -32,8 +32,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 198,
-    "range": null
+    "markdownCodePoints": 38,
+    "range": {
+      "end": {
+        "character": 29,
+        "line": 1
+      },
+      "start": {
+        "character": 18,
+        "line": 1
+      }
+    },
+    "rangeText": "spreadState"
   }
 }
 ```
@@ -41,21 +51,9 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 ### Hover markdown
 
 ````markdown
-**spreadState**
-
 ```ts
 spreadState: SpreadCardState
 ```
-
-kind: `property`
-owner: `TemplateSpreadCaptureSemanticsApp`
-owner shape: `class`
-
----
-
-**Resource** `spread-card`
-
-kind: `custom-element`
 ````
 
 ## spread-inferred-member
@@ -84,8 +82,18 @@ kind: `custom-element`
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 287,
-    "range": null
+    "markdownCodePoints": 84,
+    "range": {
+      "end": {
+        "character": 41,
+        "line": 2
+      },
+      "start": {
+        "character": 34,
+        "line": 2
+      }
+    },
+    "rangeText": "details"
   }
 }
 ```
@@ -93,21 +101,9 @@ kind: `custom-element`
 ### Hover markdown
 
 ````markdown
-**details**
-
 ```ts
 details: { title: string; count: number; tone: string; internal: string; }
 ```
-
-kind: `property`
-owner: `{ details: { title: string; count: number; tone: string; internal: string; }; }`
-owner shape: `object`
-
----
-
-**Resource** `spread-card`
-
-kind: `custom-element`
 ````
 
 ## spread-repeat-local
@@ -119,11 +115,11 @@ kind: `custom-element`
   "anchor": "repeat.for=\"card of spreadCards\" ...card",
   "at": "card",
   "atOccurrence": 2,
-  "displayPosition": "src/template-spread-capture-semantics-app.html:8:52",
+  "displayPosition": "src/template-spread-capture-semantics-app.html:9:52",
   "file": "src/template-spread-capture-semantics-app.html",
   "lspPosition": {
     "character": 51,
-    "line": 7
+    "line": 8
   },
   "occurrence": 1
 }
@@ -136,8 +132,18 @@ kind: `custom-element`
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 116,
-    "range": null
+    "markdownCodePoints": 46,
+    "range": {
+      "end": {
+        "character": 55,
+        "line": 8
+      },
+      "start": {
+        "character": 51,
+        "line": 8
+      }
+    },
+    "rangeText": "card"
   }
 }
 ```
@@ -145,19 +151,11 @@ kind: `custom-element`
 ### Hover markdown
 
 ````markdown
-**card**
-
 ```ts
 card: SpreadCardState
 ```
 
-kind: `property`
-
----
-
-**Resource** `spread-card`
-
-kind: `custom-element`
+Repeat local.
 ````
 
 ## spread-value-converter-resource
@@ -169,11 +167,11 @@ kind: `custom-element`
   "anchor": "spreadState | spreadIdentity",
   "at": "spreadIdentity",
   "atOccurrence": 1,
-  "displayPosition": "src/template-spread-capture-semantics-app.html:6:45",
+  "displayPosition": "src/template-spread-capture-semantics-app.html:7:45",
   "file": "src/template-spread-capture-semantics-app.html",
   "lspPosition": {
     "character": 44,
-    "line": 5
+    "line": 6
   },
   "occurrence": 1
 }
@@ -186,19 +184,31 @@ kind: `custom-element`
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 54,
-    "range": null
+    "markdownCodePoints": 118,
+    "range": {
+      "end": {
+        "character": 58,
+        "line": 6
+      },
+      "start": {
+        "character": 44,
+        "line": 6
+      }
+    },
+    "rangeText": "spreadIdentity"
   }
 }
 ```
 
 ### Hover markdown
 
-```markdown
-**Resource** `spreadIdentity`
-
-kind: `value-converter`
+````markdown
+```text
+(value converter) spreadIdentity
 ```
+
+Aurelia value converter. Implementation: `SpreadIdentityValueConverter`.
+````
 
 ## captured-expression-member
 
@@ -209,11 +219,11 @@ kind: `value-converter`
   "anchor": "value.bind=\"capturedValue\"",
   "at": "capturedValue",
   "atOccurrence": 1,
-  "displayPosition": "src/template-spread-capture-semantics-app.html:19:17",
+  "displayPosition": "src/template-spread-capture-semantics-app.html:30:17",
   "file": "src/template-spread-capture-semantics-app.html",
   "lspPosition": {
     "character": 16,
-    "line": 18
+    "line": 29
   },
   "occurrence": 1
 }
@@ -226,8 +236,18 @@ kind: `value-converter`
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 195,
-    "range": null
+    "markdownCodePoints": 31,
+    "range": {
+      "end": {
+        "character": 29,
+        "line": 29
+      },
+      "start": {
+        "character": 16,
+        "line": 29
+      }
+    },
+    "rangeText": "capturedValue"
   }
 }
 ```
@@ -235,21 +255,9 @@ kind: `value-converter`
 ### Hover markdown
 
 ````markdown
-**capturedValue**
-
 ```ts
 capturedValue: string
 ```
-
-kind: `property`
-owner: `TemplateSpreadCaptureSemanticsApp`
-owner shape: `class`
-
----
-
-**Resource** `capture-shell`
-
-kind: `custom-element`
 ````
 
 ## captured-listener-event
@@ -261,11 +269,11 @@ kind: `custom-element`
   "anchor": "click.trigger=\"handleCaptured($event)\"",
   "at": "$event",
   "atOccurrence": 1,
-  "displayPosition": "src/template-spread-capture-semantics-app.html:21:35",
+  "displayPosition": "src/template-spread-capture-semantics-app.html:32:35",
   "file": "src/template-spread-capture-semantics-app.html",
   "lspPosition": {
     "character": 34,
-    "line": 20
+    "line": 31
   },
   "occurrence": 1
 }
@@ -278,8 +286,18 @@ kind: `custom-element`
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 119,
-    "range": null
+    "markdownCodePoints": 58,
+    "range": {
+      "end": {
+        "character": 40,
+        "line": 31
+      },
+      "start": {
+        "character": 34,
+        "line": 31
+      }
+    },
+    "rangeText": "$event"
   }
 }
 ```
@@ -287,19 +305,11 @@ kind: `custom-element`
 ### Hover markdown
 
 ````markdown
-**$event**
-
 ```ts
 $event: PointerEvent
 ```
 
-kind: `property`
-
----
-
-**Resource** `capture-shell`
-
-kind: `custom-element`
+Listener contextual value.
 ````
 
 ## receiver-local-custom-attribute
@@ -311,11 +321,11 @@ kind: `custom-element`
   "anchor": "input-mark=\"receiver-local-mark\"",
   "at": "input-mark",
   "atOccurrence": 1,
-  "displayPosition": "src/template-spread-capture-semantics-app.html:24:5",
+  "displayPosition": "src/template-spread-capture-semantics-app.html:35:5",
   "file": "src/template-spread-capture-semantics-app.html",
   "lspPosition": {
     "character": 4,
-    "line": 23
+    "line": 34
   },
   "occurrence": 1
 }
@@ -328,16 +338,28 @@ kind: `custom-element`
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 51,
-    "range": null
+    "markdownCodePoints": 97,
+    "range": {
+      "end": {
+        "character": 14,
+        "line": 34
+      },
+      "start": {
+        "character": 4,
+        "line": 34
+      }
+    },
+    "rangeText": "input-mark"
   }
 }
 ```
 
 ### Hover markdown
 
-```markdown
-**Resource** `input-mark`
-
-kind: `custom-attribute`
+````markdown
+```text
+(custom attribute) input-mark
 ```
+
+Aurelia custom attribute. Implementation: `InputMark`.
+````

@@ -32,8 +32,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 100,
-    "range": null
+    "markdownCodePoints": 23,
+    "range": {
+      "end": {
+        "character": 9,
+        "line": 1
+      },
+      "start": {
+        "character": 4,
+        "line": 1
+      }
+    },
+    "rangeText": "label"
   }
 }
 ```
@@ -41,15 +51,9 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 ### Hover markdown
 
 ````markdown
-**label**
-
 ```ts
 label: string
 ```
-
-kind: `property`
-owner: `LoosePicklist`
-owner shape: `class`
 ````
 
 ## parent-specialized-option-label
@@ -78,8 +82,18 @@ owner shape: `class`
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 129,
-    "range": null
+    "markdownCodePoints": 32,
+    "range": {
+      "end": {
+        "character": 20,
+        "line": 4
+      },
+      "start": {
+        "character": 15,
+        "line": 4
+      }
+    },
+    "rangeText": "label"
   }
 }
 ```
@@ -87,16 +101,9 @@ owner shape: `class`
 ### Hover markdown
 
 ````markdown
-**label**
-
 ```ts
-label: string
+readonly label: string
 ```
-
-kind: `property`
-owner: `TicketOption<FulfillmentMethod>`
-owner shape: `class`
-readonly
 ````
 
 ## masked-member-shellTone-label
@@ -125,8 +132,18 @@ readonly
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 214,
-    "range": null
+    "markdownCodePoints": 139,
+    "range": {
+      "end": {
+        "character": 24,
+        "line": 11
+      },
+      "start": {
+        "character": 19,
+        "line": 11
+      }
+    },
+    "rangeText": "label"
   }
 }
 ```
@@ -134,14 +151,55 @@ readonly
 ### Hover markdown
 
 ```markdown
-**label**
-
-owner: `"ticket-shell"`
-owner shape: `primitive`
-
----
-
-**information: missing-expression-member**
-
-Member "label" is not projected on the owner type, so semantic tooling cannot validate or navigate it.
+Warning `missing-expression-member`: Member "label" is not projected on the owner type, so semantic tooling cannot validate or navigate it.
 ```
+
+## weak-member-withheld-context
+
+### Probe
+
+```json
+{
+  "anchor": "${weakMetadata.source}",
+  "at": "source",
+  "atOccurrence": 1,
+  "displayPosition": "src/app.html:11:46",
+  "file": "src/app.html",
+  "lspPosition": {
+    "character": 45,
+    "line": 10
+  },
+  "occurrence": 1
+}
+```
+
+### hover
+
+```json
+{
+  "outcome": "result",
+  "result": {
+    "contentsKind": "markdown",
+    "markdownCodePoints": 25,
+    "range": {
+      "end": {
+        "character": 51,
+        "line": 10
+      },
+      "start": {
+        "character": 45,
+        "line": 10
+      }
+    },
+    "rangeText": "source"
+  }
+}
+```
+
+### Hover markdown
+
+````markdown
+```ts
+source: unknown
+```
+````

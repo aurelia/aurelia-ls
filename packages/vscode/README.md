@@ -5,17 +5,20 @@ Language intelligence for Aurelia 2 templates, powered by the shared Aurelia sem
 The extension analyzes your Aurelia project to understand what your components are, what they accept, where they came from, and how templates connect to TypeScript. It handles decorators, conventions, `static $au`, `.define()` calls, third-party packages, and Aurelia binding syntax.
 
 When it cannot prove a fact, it preserves that uncertainty in semantic evidence instead of fabricating a confident
-answer. Broad or non-actionable uncertainty stays out of Problems and remains available through focused hover and
-resource evidence.
+answer. Broad or non-actionable uncertainty stays out of Problems and hover. Hover translates only typed uncertainty
+that materially affects its exact selected answer; broader resource state remains available in Aurelia Resources.
 
 ## Features
 
 ### Hover — understand your templates
 
-Hover over supported Aurelia constructs to see what they are, what they accept, and where they came from. Hover uses
-the exact authored range. Custom elements show their bindable interface with types, nullability, and binding modes;
-expressions include resolved types, including bare `$this`; and template controllers show contextual variables such as
-`$index`, `$first`, and `$even`.
+Hover over a supported Aurelia-authored token for one bounded answer at its exact authored range. Template members and
+locals show the selected type, with a local role when semantic evidence proves it; bare `$this` shows the current
+binding-context type. Resource tokens show authored identity and Aurelia kind, with an alias relationship or
+implementation only when source-backed evidence proves it. Bindable attributes and declarations show the public type
+and declaration-default mode. Exact static route-id or route-path tokens show the selected route context. A card may then
+include at most one presented cursor diagnostic or one typed uncertainty that affects that answer. Resource tags do not
+enumerate a component's bindables, and hover omits origin and provenance by default.
 
 ### Diagnostics — catch real problems
 
@@ -113,8 +116,9 @@ Most framework tooling either achieves complete knowledge by restricting what yo
 
 This extension takes a different approach: it analyzes what it can analyze, and when it reaches a limit (a dynamic
 registration pattern or a complex third-party package), it keeps the uncertainty explicit in the semantic evidence.
-Problems stays focused on source-linked, actionable findings; hover and the Aurelia Resources view can disclose broader
-context and provenance without turning every open seam into a squiggle.
+Problems stays focused on source-linked, actionable findings. Hover stays on the exact selected identity and directly
+owned Aurelia context, plus at most one presented cursor diagnostic or typed uncertainty. Aurelia Resources remains the
+place for broader resource inventory and origin context.
 
 The goal is that you can trust what the extension tells you.
 

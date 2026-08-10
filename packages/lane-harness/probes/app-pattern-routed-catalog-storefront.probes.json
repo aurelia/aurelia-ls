@@ -617,7 +617,7 @@
         "at": "searchText",
         "verdict": "correct",
         "reason": "",
-        "note": "Comparable cursor for the rename template-member-searchText probe. Verdict pass: semantically correct. NOTE (2026-07-07): earlier presentation complaints (raw offsets, repeated Aurelia actions blocks) described a phantom 2026-06-26 build; current HEAD hover is lean and does not have them."
+        "note": "Hover leads with the exact authored member signature `searchText: string`; internal owner shape, provenance, offsets, and action machinery stay outside the card."
       },
       {
         "id": "template-member-onlyInStock",
@@ -626,7 +626,7 @@
         "at": "onlyInStock",
         "verdict": "correct",
         "reason": "",
-        "note": "Comparable cursor for the rename template-member-onlyInStock probe. Verdict pass: semantically correct. NOTE (2026-07-07): earlier presentation complaints (raw offsets, repeated Aurelia actions blocks) described a phantom 2026-06-26 build; current HEAD hover is lean and does not have them."
+        "note": "Hover leads with the exact authored member signature `onlyInStock: boolean` and returns the authored token range."
       },
       {
         "id": "template-getter-visibleItems",
@@ -635,7 +635,7 @@
         "at": "visibleItems",
         "verdict": "correct",
         "reason": "",
-        "note": "Comparable cursor for the rename template-getter-visibleItems probe. Verdict pass: semantically correct; readonly Item[] and accessor kind are right. NOTE (2026-07-07): earlier presentation complaints (raw offsets, repeated Aurelia actions blocks) described a phantom 2026-06-26 build; current HEAD hover is lean and does not have them."
+        "note": "Hover preserves the proved readonly `Item[]` signature while omitting internal accessor and owner-shape detail."
       },
       {
         "id": "repeat-local-item",
@@ -644,7 +644,7 @@
         "at": "item",
         "verdict": "correct",
         "reason": "",
-        "note": "FLIPPED wrong->correct 2026-07-07. Hover now leads with the lexical local answer `item: Item`. It still appends repeat/custom-attribute context blocks; that is presentation noise rather than a semantic wrong answer."
+        "note": "Hover leads with the lexical `item: Item` identity and the proved `Repeat local.` role; repeat-controller and bindable machinery must be absent."
       },
       {
         "id": "let-local-item-target",
@@ -671,7 +671,7 @@
         "at": "item.bind",
         "verdict": "correct",
         "reason": "",
-        "note": "Comparable cursor for the rename bindable-attr-item probe. Verdict pass: selectedBindable hover is semantically correct. Presentation note, not RCA: the hover omits the bindable's declared type Item | null."
+        "note": "Hover presents the public bindable attribute with its proved `Item | null` value type and correctly labels the declaration mode as `Default mode`."
       },
       {
         "id": "repeat-local-badge-three-sites",
@@ -680,7 +680,25 @@
         "at": "badge",
         "verdict": "correct",
         "reason": "",
-        "note": "FLIPPED wrong->correct 2026-07-07. Hover now leads with `badge: ItemBadge | \"all\"`. The remaining repeat/custom-attribute blocks are presentation noise and should stay outside the RCA cluster ledger."
+        "note": "Hover leads with `badge: ItemBadge | \"all\"` and the proved `Repeat local.` role; repeat-controller and custom-attribute machinery must be absent."
+      },
+      {
+        "id": "router-path-item-detail",
+        "file": "src/app.html",
+        "anchor": "load=\"items/item-1?ref=featured#details\"",
+        "at": "item-1",
+        "verdict": "correct",
+        "reason": "Hover preserves the exact authored parameterized path, discloses the distinct configured route id, and ranges only the path before query and fragment text.",
+        "note": "B2 exact-route witness: the selected route target authenticates the configured pattern match without replacing the author's concrete path with `items/:itemId`."
+      },
+      {
+        "id": "router-query-no-hover",
+        "file": "src/app.html",
+        "anchor": "load=\"items/item-1?ref=featured#details\"",
+        "at": "ref",
+        "verdict": "correct",
+        "reason": "Query text is not a route-target or resource-token hover locus, so the exact answer is null.",
+        "note": "B2 fail-closed witness: contextual `load` resource metadata must not manufacture a card for the selected query text."
       },
       {
         "id": "ts-property-state",

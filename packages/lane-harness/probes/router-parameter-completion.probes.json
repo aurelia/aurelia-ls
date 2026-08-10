@@ -20,6 +20,26 @@
         "reason": "",
         "note": "NEW 2026-08-03. A statically reduced bound route segment uses the same eager route-id target and lands on the exact id literal rather than the RouteConfig carrier."
       }
+    ],
+    "hover": [
+      {
+        "id": "router-bound-literal-route-id",
+        "file": "src/routes/parameter-workspace.html",
+        "anchor": "route.bind: 'product-detail'; params.bind: { }",
+        "at": "product-detail",
+        "verdict": "correct",
+        "reason": "Hover preserves the authored single-quoted route id and authenticates the exact statically reduced target.",
+        "note": "B2 exact-route-id witness; product-owned quoting retains the author's quote style when the active source includes it."
+      },
+      {
+        "id": "router-open-context-route-id",
+        "file": "src/routes/parameter-workspace.html",
+        "anchor": "route: product-detail; context.bind: alternateContext; params.bind: { }",
+        "at": "product-detail",
+        "verdict": "correct",
+        "reason": "With an open alternate context and no proved route target, hover returns only the typed `Dynamic route target.` uncertainty at the exact nested route value.",
+        "note": "B2 uncertainty-only witness: no inferred route identity, resource card, or broad multi-binding range is permitted."
+      }
     ]
   }
 }

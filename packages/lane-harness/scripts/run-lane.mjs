@@ -846,6 +846,7 @@ async function runHoverProbe(client, fixtureRoot, probe, readFixtureText) {
     probe,
     relativeFile,
     anchor,
+    sourceText,
     hoverResponse,
   };
 }
@@ -2109,7 +2110,7 @@ function renderLaneSnapshotSections(lines, result) {
     case "hover":
       lines.push("### hover");
       lines.push("");
-      lines.push(fencedJson(summarizeHoverResponse(result.hoverResponse)));
+      lines.push(fencedJson(summarizeHoverResponse(result.hoverResponse, result.sourceText)));
       lines.push("");
       lines.push("### Hover markdown");
       lines.push("");
@@ -2241,7 +2242,7 @@ function summarizeRpcResponse(response) {
   };
 }
 
-function summarizeHoverResponse(response) {
+function summarizeHoverResponse(response, sourceText) {
   if (response.error) {
     return {
       outcome: "error",
@@ -2260,8 +2261,11 @@ function summarizeHoverResponse(response) {
     outcome: "result",
     result: {
       contentsKind: markdown.kind,
-      markdownCharacters: markdown.value.length,
+      markdownCodePoints: Array.from(markdown.value).length,
       range: normalizeSnapshotValue(response.result.range ?? null),
+      rangeText: response.result.range == null
+        ? null
+        : readRangeText(sourceText, response.result.range),
     },
   };
 }

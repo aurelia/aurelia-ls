@@ -43,6 +43,7 @@ import {
   diagnosticRepairAffordanceForSuggestion,
   semanticExactSourceReference,
   SemanticRuntimeAnswerResult,
+  SemanticRuntimeAnswerSelection,
 } from "@aurelia-ls/semantic-runtime";
 import type { DocumentUri, WorkspaceDocumentUris } from "../utils/document-uri.js";
 import { languageIdForSource } from "../utils/document-kind.js";
@@ -58,6 +59,12 @@ import {
   semanticSourceReferencePath,
   semanticSourceReferenceUri,
 } from "./source-locations.js";
+import {
+  renderHoverCard,
+  type HoverCard,
+  type HoverCardContextLine,
+  type HoverCardStatus,
+} from "./hover-card.js";
 import type { SemanticRuntimeLspDocumentSnapshot } from "../runtime/semantic-runtime-session.js";
 
 export type LookupTextFn = (uri: DocumentUri) => string | null;
@@ -707,189 +714,15 @@ export function mapSemanticRuntimeTemplateHover(
       failures: [`Semantic runtime returned hover result=${answer.result}.`],
     };
   }
+  if (answer.selection !== SemanticRuntimeAnswerSelection.Exact) {
+    return {
+      value: null,
+      failures: [`Semantic runtime returned hover selection=${answer.selection}; exact selection is required.`],
+    };
+  }
 
   const value = answer.value;
-  let selectedExpressionText: string | null = null;
-  if (value.selectedExpression != null) {
-    const expression = value.selectedExpression;
-    if (
-      value.selectedMember != null
-      || value.selectedMemberName != null
-      || value.memberOwnerType != null
-    ) {
-      return {
-        value: null,
-        failures: ["Hover cannot select both a member and a bare expression."],
-      };
-    }
-    const activeSource = semanticExactSourceReference(value.activeSource);
-    const expressionSource = semanticExactSourceReference(expression.source);
-    if (activeSource == null || expressionSource == null) {
-      return {
-        value: null,
-        failures: ["Hover selected expression source has no exact authored span."],
-      };
-    }
-    const expressionSourceUri = semanticSourceReferenceUri(expressionSource, options.documentUris);
-    if (
-      expressionSourceUri == null
-      || !options.documentUris.sameDocument(expressionSourceUri, options.originDocument.uri)
-    ) {
-      return {
-        value: null,
-        failures: ["Hover selected expression source does not target the requesting document."],
-      };
-    }
-    if (!sameExactSourceReference(activeSource, expressionSource, options.documentUris)) {
-      return {
-        value: null,
-        failures: ["Hover selected expression source does not match the active authored range."],
-      };
-    }
-    const expressionRange = semanticSourceRangeForDocument(expressionSource, options.originDocument);
-    if (expressionRange == null) {
-      return {
-        value: null,
-        failures: ["Hover selected expression source is outside the current document text."],
-      };
-    }
-    selectedExpressionText = options.originDocument.getText(expressionRange);
-    if (expression.expressionKind !== "AccessThis" || selectedExpressionText !== "$this") {
-      return {
-        value: null,
-        failures: ["Hover selected expression is not the exact authored current-context `$this` token."],
-      };
-    }
-    if (expression.openKind == null && expression.typeDisplay == null) {
-      return {
-        value: null,
-        failures: ["Hover selected expression is closed but has no type display."],
-      };
-    }
-    if (
-      expression.openKind != null
-      && !value.missingInputs.includes(`selected-expression-type:${expression.openKind}`)
-    ) {
-      return {
-        value: null,
-        failures: ["Hover selected expression is open without matching analysis pressure."],
-      };
-    }
-  }
-  const lines: string[] = [];
-
-  if (value.selectedMember != null || value.selectedMemberName != null || value.memberOwnerType != null) {
-    const name = value.selectedMemberName ?? value.selectedMember?.name ?? "(selected member)";
-    lines.push(`**${escapeMarkdown(name)}**`);
-    if (value.selectedMember?.typeDisplay != null) {
-      lines.push("", "```ts", `${name}: ${value.selectedMember.typeDisplay}`, "```");
-    }
-    const details = [
-      value.selectedMember?.memberKind == null ? null : `kind: \`${value.selectedMember.memberKind}\``,
-      value.memberOwnerType?.display == null ? null : `owner: \`${value.memberOwnerType.display}\``,
-      value.memberOwnerType?.shapeKind == null ? null : `owner shape: \`${value.memberOwnerType.shapeKind}\``,
-      value.memberOwnerType?.origin == null ? null : `owner origin: \`${value.memberOwnerType.origin}\``,
-      value.selectedMember?.isReadonly === true ? "readonly" : null,
-      value.selectedMember?.isOptional === true ? "optional" : null,
-    ].filter((part): part is string => part != null);
-    if (details.length > 0) {
-      lines.push("", details.join("  \n"));
-    }
-  }
-
-  if (value.selectedExpression != null) {
-    const expression = value.selectedExpression;
-    addSectionBreak(lines);
-    lines.push(`**Expression** \`${escapeMarkdownCode(selectedExpressionText ?? "$this")}\``);
-    if (expression.typeDisplay != null) {
-      lines.push("", "```ts", `${selectedExpressionText ?? "$this"}: ${expression.typeDisplay}`, "```");
-    } else {
-      lines.push("", "type: unavailable");
-    }
-    const details = [
-      expression.typeShapeKind == null ? null : `type shape: \`${expression.typeShapeKind}\``,
-      expression.typeOrigin == null ? null : `type origin: \`${expression.typeOrigin}\``,
-      expression.openKind == null ? null : `analysis: \`${expression.openKind}\``,
-    ].filter((part): part is string => part != null);
-    if (details.length > 0) {
-      lines.push("", details.join("  \n"));
-    }
-    if (expression.openReason != null) {
-      lines.push("", expression.openReason);
-    }
-  }
-
-  if (value.selectedBindable != null) {
-    addSectionBreak(lines);
-    lines.push(
-      `**Bindable** \`${value.selectedBindable.attribute}\``,
-      "",
-      `name: \`${value.selectedBindable.name}\`  `,
-      value.selectedBindable.valueType == null
-        ? "type: unavailable  "
-        : `type: \`${escapeMarkdownCode(value.selectedBindable.valueType)}\`  `,
-      `mode: \`${value.selectedBindable.mode}\``,
-    );
-    if (value.selectedBindable.nullable != null) {
-      lines.push(`nullable: \`${String(value.selectedBindable.nullable)}\``);
-    }
-  }
-
-  if (value.selectedDefinition != null) {
-    addSectionBreak(lines);
-    const definitionName = value.selectedDefinition.name ?? value.selectedDefinition.targetName ?? "(unnamed)";
-    lines.push(
-      `**Resource** \`${definitionName}\``,
-      "",
-      `kind: \`${value.selectedDefinition.resourceKind}\``,
-    );
-  }
-
-  if (lines.length === 0 && value.valueSite != null) {
-    lines.push(
-      `**Aurelia ${value.valueSite.siteKind}**`,
-      "",
-      value.valueSite.bindingCommandName == null ? "" : `command: \`${value.valueSite.bindingCommandName}\`  `,
-      value.valueSite.bindableAttribute == null ? "" : `bindable: \`${value.valueSite.bindableAttribute}\`  `,
-      `value: \`${truncateHoverValue(value.valueSite.rawValue)}\``,
-    );
-  }
-
-  if (lines.length === 0 && value.selectedDefinition == null && value.html.attributeName != null) {
-    lines.push(
-      `**HTML attribute** \`${value.html.attributeName}\``,
-      "",
-      value.html.tagName == null ? "template HTML" : `on \`<${value.html.tagName}>\``,
-    );
-  }
-
-  if (value.diagnostics.length > 0) {
-    for (const diagnostic of value.diagnostics) {
-      addSectionBreak(lines);
-      const code = diagnostic.frameworkErrorCode
-        ?? (diagnostic.typeScriptDiagnosticCode == null ? null : `TS${diagnostic.typeScriptDiagnosticCode}`)
-        ?? diagnostic.diagnosticKind;
-      lines.push(
-        `**${diagnostic.severity}: ${code}**`,
-        "",
-        diagnostic.summary,
-      );
-    }
-  }
-
-  if (value.missingInputs.length > 0) {
-    addSectionBreak(lines);
-    const visible = value.missingInputs.slice(0, 2).map((input) => `\`${escapeMarkdownCode(input)}\``);
-    const remaining = value.missingInputs.length - visible.length;
-    lines.push(
-      remaining === 0
-        ? `Analysis is incomplete because ${visible.join(" and ")} could not be established.`
-        : `Analysis is incomplete because ${visible.join(", ")} and ${remaining} more input${remaining === 1 ? "" : "s"} could not be established.`,
-    );
-  }
-
-  const content = lines.filter((line) => line.length > 0 || lines.length > 1).join("\n");
-  if (content.trim().length === 0) {
+  if (!semanticRuntimeHoverHasPotentialCard(value)) {
     return { value: null, failures: [] };
   }
 
@@ -914,33 +747,1005 @@ export function mapSemanticRuntimeTemplateHover(
       failures: ["Hover active source is outside the current document text."],
     };
   }
+  const activeText = options.originDocument.getText(range);
+  if (activeText.length === 0) {
+    return {
+      value: null,
+      failures: ["Hover active source selects an empty authored span."],
+    };
+  }
+
+  const cardMapping = semanticRuntimeHoverCard(
+    value,
+    source,
+    activeText,
+    options.documentUris,
+    options.originDocument,
+  );
+  if (cardMapping.failures.length > 0) {
+    return { value: null, failures: cardMapping.failures };
+  }
+  if (cardMapping.value == null) {
+    return { value: null, failures: [] };
+  }
+  const content = renderHoverCard(cardMapping.value);
+  if (content == null) {
+    return {
+      value: null,
+      failures: ["Hover card could not preserve its mandatory labeled content within the product budget."],
+    };
+  }
+  const effectiveRange = semanticRuntimeHoverEffectiveRange(
+    value,
+    cardMapping.value,
+    range,
+    options.originDocument,
+  );
+  if (effectiveRange == null) {
+    return {
+      value: null,
+      failures: ["Hover presented diagnostic primary could not produce an exact display range."],
+    };
+  }
 
   return {
     value: {
       contents: { kind: "markdown", value: content },
-      range,
+      range: effectiveRange,
     },
     failures: [],
   };
 }
 
-function addSectionBreak(lines: string[]): void {
-  if (lines.length > 0) {
-    lines.push("", "---", "");
+function semanticRuntimeHoverEffectiveRange(
+  value: SemanticTemplateCursorInfoResult,
+  card: HoverCard,
+  activeRange: Range,
+  originDocument: TextDocument,
+): Range | null {
+  if (card.identity != null || card.status?.kind !== "diagnostic") return activeRange;
+  const presentation = value.diagnosticPresentation;
+  if (presentation?.kind !== "presented") return null;
+  const primary = value.diagnostics[presentation.group.primary.rowIndex];
+  return primary == null
+    ? null
+    : semanticSourceRangeForDocument(primary.source, originDocument);
+}
+
+type SemanticRuntimeHoverLocus =
+  | "route-target"
+  | "selected-bindable"
+  | "selected-bindable-mode"
+  | "selected-expression"
+  | "selected-member"
+  | "selected-resource";
+
+interface SemanticRuntimeHoverSelection {
+  readonly identity: NonNullable<HoverCard["identity"]>;
+  readonly context: readonly HoverCardContextLine[];
+  readonly locus: SemanticRuntimeHoverLocus;
+}
+
+function semanticRuntimeHoverHasPotentialCard(value: SemanticTemplateCursorInfoResult): boolean {
+  return value.selectedMember != null
+    || value.selectedExpression != null
+    || value.selectedBindable != null
+    || value.selectedRouteTarget != null
+    || value.selectedDefinition != null
+    || value.diagnosticPresentation != null
+    || value.uncertainty != null;
+}
+
+function semanticRuntimeHoverCard(
+  value: SemanticTemplateCursorInfoResult,
+  activeSource: SemanticSourceReference,
+  activeText: string,
+  documentUris: WorkspaceDocumentUris,
+  originDocument: TextDocument,
+): SemanticRuntimeReadMapping<HoverCard | null> {
+  const selection = semanticRuntimeHoverSelection(value, activeSource, activeText, documentUris);
+  if (selection.failures.length > 0) return { value: null, failures: selection.failures };
+
+  const status = semanticRuntimeHoverStatus(
+    value,
+    selection.value?.locus ?? null,
+    activeSource,
+    documentUris,
+    originDocument,
+  );
+  if (status.failures.length > 0) return { value: null, failures: status.failures };
+  if (selection.value == null && status.value == null) return { value: null, failures: [] };
+  return {
+    value: {
+      identity: selection.value?.identity ?? null,
+      context: selection.value?.context ?? [],
+      status: status.value,
+    },
+    failures: [],
+  };
+}
+
+function semanticRuntimeHoverSelection(
+  value: SemanticTemplateCursorInfoResult,
+  activeSource: SemanticSourceReference,
+  activeText: string,
+  documentUris: WorkspaceDocumentUris,
+): SemanticRuntimeReadMapping<SemanticRuntimeHoverSelection | null> {
+  if (value.selectedExpression != null) {
+    if (
+      value.selectedMember != null
+      || value.selectedMemberName != null
+      || value.memberOwnerType != null
+    ) {
+      return { value: null, failures: ["Hover cannot select both a member and a bare expression."] };
+    }
+    const expressionSource = semanticExactSourceReference(value.selectedExpression.source);
+    if (expressionSource == null) {
+      return { value: null, failures: ["Hover selected expression source has no exact authored span."] };
+    }
+    const expressionSourceUri = semanticSourceReferenceUri(expressionSource, documentUris);
+    const activeSourceUri = semanticSourceReferenceUri(activeSource, documentUris);
+    if (
+      expressionSourceUri == null
+      || activeSourceUri == null
+      || !documentUris.sameDocument(expressionSourceUri, activeSourceUri)
+    ) {
+      return {
+        value: null,
+        failures: ["Hover selected expression source does not target the requesting document."],
+      };
+    }
+    if (!sameExactSourceReference(activeSource, expressionSource, documentUris)) {
+      return {
+        value: null,
+        failures: ["Hover selected expression source does not match the active authored range."],
+      };
+    }
+    if (value.selectedExpression.expressionKind !== "AccessThis" || activeText !== "$this") {
+      return {
+        value: null,
+        failures: ["Hover selected expression is not the exact authored current-context `$this` token."],
+      };
+    }
+    if (
+      value.selectedExpression.typeDisplay == null
+      && !semanticRuntimeUncertaintyMatchesLocus(value, "selected-expression")
+    ) {
+      return {
+        value: null,
+        failures: ["Hover selected expression has neither a type nor typed binding-context uncertainty."],
+      };
+    }
+    return {
+      value: {
+        locus: "selected-expression",
+        identity: {
+          language: "ts",
+          authored: activeText,
+          typeDetail: value.selectedExpression.typeDisplay == null
+            ? null
+            : `: ${value.selectedExpression.typeDisplay}`,
+        },
+        context: [{ prefix: "Current Aurelia binding context." }],
+      },
+      failures: [],
+    };
+  }
+
+  if (value.selectedBindable != null) {
+    const declaration = semanticRuntimeBindableDeclarationHoverSelection(
+      value,
+      activeSource,
+      activeText,
+      documentUris,
+    );
+    if (declaration.failures.length > 0 || declaration.value != null) return declaration;
+  }
+
+  if (value.selectedMember != null) {
+    const member = value.selectedMember;
+    if (value.selectedMemberName != null && value.selectedMemberName !== member.name) {
+      return { value: null, failures: ["Hover selected member names do not agree."] };
+    }
+    const ownsDeclarationToken = sameExactSourceReference(
+      activeSource,
+      member.source,
+      documentUris,
+    );
+    if (activeText !== member.name && !ownsDeclarationToken) {
+      return { value: null, failures: ["Hover selected member does not match the exact authored token."] };
+    }
+    const role = semanticRuntimeScopeRoleContext(member.scopeRole);
+    if (member.scopeRole != null && role == null) {
+      return { value: null, failures: ["Hover selected member has an unsupported scope role."] };
+    }
+    if (
+      member.typeDisplay == null
+      && !semanticRuntimeUncertaintyMatchesLocus(value, "selected-member")
+    ) {
+      return {
+        value: null,
+        failures: ["Hover selected member has neither a type nor typed member uncertainty."],
+      };
+    }
+    return {
+      value: {
+        locus: "selected-member",
+        identity: {
+          language: "ts",
+          prefix: member.isReadonly ? "readonly " : "",
+          authored: activeText,
+          suffix: member.isOptional ? "?" : "",
+          typeDetail: member.typeDisplay == null ? null : `: ${member.typeDisplay}`,
+        },
+        context: role == null ? [] : [{ prefix: role }],
+      },
+      failures: [],
+    };
+  }
+
+  if (value.selectedRouteTarget != null) {
+    return semanticRuntimeRouteHoverSelection(value, activeText);
+  }
+
+  if (
+    value.selectedBindable != null
+    && value.siteKind === "attribute-name"
+    && semanticRuntimeBindableTargetName(value.html.attributeName) === activeText
+    && value.selectedBindable.attribute.toLowerCase() === activeText.toLowerCase()
+  ) {
+    return semanticRuntimeBindableHoverSelection(value, activeSource, activeText, documentUris);
+  }
+
+  if (
+    value.selectedDefinition != null
+    && semanticRuntimeResourceMayOwnActiveLocus(
+      value,
+      activeSource,
+      activeText,
+      documentUris,
+    )
+  ) {
+    return semanticRuntimeResourceHoverSelection(value, activeSource, activeText, documentUris);
+  }
+
+  return { value: null, failures: [] };
+}
+
+function semanticRuntimeBindableDeclarationHoverSelection(
+  value: SemanticTemplateCursorInfoResult,
+  activeSource: SemanticSourceReference,
+  activeText: string,
+  documentUris: WorkspaceDocumentUris,
+): SemanticRuntimeReadMapping<SemanticRuntimeHoverSelection | null> {
+  const bindable = value.selectedBindable;
+  if (bindable == null) return { value: null, failures: [] };
+  const matches = [
+    { kind: "name" as const, source: bindable.nameSource, authored: bindable.name },
+    { kind: "attribute" as const, source: bindable.attributeSource, authored: bindable.attribute },
+    { kind: "mode" as const, source: bindable.modeSource, authored: bindable.mode },
+  ].filter((candidate) => sameExactSourceReference(activeSource, candidate.source, documentUris));
+  if (matches.length === 0) return { value: null, failures: [] };
+  if (matches.length !== 1) {
+    return {
+      value: null,
+      failures: ["Hover selected bindable has ambiguous exact declaration sources."],
+    };
+  }
+  const declaration = matches[0]!;
+  if (activeText !== declaration.authored) {
+    return {
+      value: null,
+      failures: ["Hover selected bindable declaration does not match the exact authored token."],
+    };
+  }
+  const mode = semanticRuntimeBindableModeLabel(bindable.mode);
+  if (mode == null) {
+    return { value: null, failures: ["Hover selected bindable has an unsupported default mode."] };
+  }
+  if (declaration.kind === "mode") {
+    return {
+      value: {
+        locus: "selected-bindable-mode",
+        identity: {
+          language: "text",
+          prefix: "(binding mode) ",
+          authored: activeText,
+        },
+        context: [{ prefix: "Default for:", value: bindable.attribute, suffix: "." }],
+      },
+      failures: [],
+    };
+  }
+  if (
+    bindable.valueType == null
+    && !semanticRuntimeUncertaintyMatchesLocus(value, "selected-bindable")
+  ) {
+    return {
+      value: null,
+      failures: ["Hover selected bindable has neither a type nor typed bindable uncertainty."],
+    };
+  }
+  const relationship = declaration.kind === "name"
+    ? bindable.name === bindable.attribute
+      ? null
+      : { prefix: "Public attribute:", value: bindable.attribute, suffix: "." }
+    : bindable.name === bindable.attribute
+      ? null
+      : { prefix: "Maps to:", value: bindable.name, suffix: "." };
+  const defaultMode = { prefix: `Default mode: ${mode}.` };
+  return {
+    value: {
+      locus: "selected-bindable",
+      identity: {
+        language: "ts",
+        prefix: "(bindable) ",
+        authored: activeText,
+        typeDetail: bindable.valueType == null ? null : `: ${bindable.valueType}`,
+      },
+      context: relationship == null
+        ? [defaultMode]
+        : [{ ...relationship, tertiary: defaultMode }],
+    },
+    failures: [],
+  };
+}
+
+function semanticRuntimeScopeRoleContext(role: string | null): string | null {
+  switch (role) {
+    case "repeat-local": return "Repeat local.";
+    case "repeat-contextual": return "Repeat contextual value.";
+    case "let-local": return "Let local.";
+    case "callback-parameter": return "Callback parameter.";
+    case "listener-contextual": return "Listener contextual value.";
+    case null: return null;
+    default: return null;
   }
 }
 
-function truncateHoverValue(value: string): string {
-  const normalized = value.replace(/\s+/g, " ").trim();
-  return normalized.length <= 80 ? normalized : `${normalized.slice(0, 77)}...`;
+function semanticRuntimeBindableHoverSelection(
+  value: SemanticTemplateCursorInfoResult,
+  activeSource: SemanticSourceReference,
+  activeText: string,
+  documentUris: WorkspaceDocumentUris,
+): SemanticRuntimeReadMapping<SemanticRuntimeHoverSelection | null> {
+  const bindable = value.selectedBindable;
+  if (bindable == null) return { value: null, failures: [] };
+  const rawAttribute = value.html.attributeName;
+  if (rawAttribute == null) {
+    return {
+      value: null,
+      failures: ["Hover selected bindable has no authored attribute spelling."],
+    };
+  }
+  const commandSeparator = rawAttribute.indexOf(".");
+  const authoredAttribute = semanticRuntimeBindableTargetName(rawAttribute) ?? "";
+  const authoredCommand = commandSeparator < 0
+    ? null
+    : rawAttribute.slice(commandSeparator + 1);
+  const attributeSource = semanticExactSourceReference(value.html.attributeSource);
+  const exactActiveSource = semanticExactSourceReference(activeSource);
+  const carriedCommand = value.valueSite?.bindingCommandName ?? null;
+  if (
+    value.siteKind !== "attribute-name"
+    || authoredAttribute.length === 0
+    || activeText !== authoredAttribute
+    || !semanticRuntimeExactSourceContains(value.html.attributeSource, activeSource, documentUris)
+    || attributeSource?.start !== exactActiveSource?.start
+    || authoredAttribute.toLowerCase() !== bindable.attribute.toLowerCase()
+    || authoredCommand === ""
+    || (
+      carriedCommand != null
+      && carriedCommand !== authoredCommand
+    )
+  ) {
+    return {
+      value: null,
+      failures: ["Hover selected bindable metadata does not match the authored attribute spelling."],
+    };
+  }
+
+  const mode = semanticRuntimeBindableModeLabel(bindable.mode);
+  if (mode == null) {
+    return { value: null, failures: ["Hover selected bindable has an unsupported default mode."] };
+  }
+  if (
+    bindable.valueType == null
+    && !semanticRuntimeUncertaintyMatchesLocus(value, "selected-bindable")
+  ) {
+    return {
+      value: null,
+      failures: ["Hover selected bindable has neither a type nor typed bindable uncertainty."],
+    };
+  }
+  const context: HoverCardContextLine[] = [];
+  if (bindable.attribute.toLowerCase() !== bindable.name.toLowerCase()) {
+    const owner = value.selectedDefinition?.targetName;
+    const ownerIsSourceBacked = owner != null
+      && semanticExactSourceReference(value.selectedDefinition?.targetSource ?? null) != null;
+    context.push({
+      prefix: "Maps to:",
+      value: ownerIsSourceBacked ? `${owner}.${bindable.name}` : bindable.name,
+      suffix: ".",
+    });
+  }
+  context.push({ prefix: `Default mode: ${mode}.` });
+
+  return {
+    value: {
+      locus: "selected-bindable",
+      identity: {
+        language: "ts",
+        prefix: "(bindable) ",
+        authored: authoredAttribute,
+        typeDetail: bindable.valueType == null ? null : `: ${bindable.valueType}`,
+      },
+      context,
+    },
+    failures: [],
+  };
 }
 
-function escapeMarkdown(value: string): string {
-  return value.replace(/([\\`*_{}[\]()#+.!|-])/g, "\\$1");
+function semanticRuntimeBindableTargetName(rawAttribute: string | null): string | null {
+  if (rawAttribute == null) return null;
+  const commandSeparator = rawAttribute.indexOf(".");
+  return commandSeparator < 0 ? rawAttribute : rawAttribute.slice(0, commandSeparator);
 }
 
-function escapeMarkdownCode(value: string): string {
-  return value.replace(/`/g, "\\`");
+function semanticRuntimeBindableModeLabel(mode: string): string | null {
+  switch (mode) {
+    case "default": return "default";
+    case "oneTime": return "one time";
+    case "toView": return "to view";
+    case "fromView": return "from view";
+    case "twoWay": return "two way";
+    default: return null;
+  }
+}
+
+function semanticRuntimeRouteHoverSelection(
+  value: SemanticTemplateCursorInfoResult,
+  activeText: string,
+): SemanticRuntimeReadMapping<SemanticRuntimeHoverSelection | null> {
+  const route = value.selectedRouteTarget;
+  if (route == null) return { value: null, failures: [] };
+  if (semanticExactSourceReference(route.targetSource) == null) {
+    return { value: null, failures: ["Hover selected route target has no exact declaration source."] };
+  }
+  const targetLabel = route.targetKind === "route-id"
+    ? "route id"
+    : route.targetKind === "route-path"
+      ? "route path"
+      : null;
+  if (targetLabel == null) {
+    return { value: null, failures: ["Hover selected route target has an unsupported target kind."] };
+  }
+  const authoredName = semanticRuntimeAuthoredRouteName(activeText);
+  const validAuthoredPath = route.targetKind === "route-path"
+    && authoredName != null
+    && authoredName.length > 0
+    && !/[?#]/u.test(authoredName);
+  if (
+    authoredName == null
+    || authoredName.length === 0
+    || (
+      route.targetKind === "route-id"
+        ? authoredName !== route.matchedName
+        : !validAuthoredPath
+    )
+  ) {
+    return {
+      value: null,
+      failures: ["Hover selected route target does not match the exact authored token."],
+    };
+  }
+  const distinctRouteId = route.routeConfigId != null
+    && route.routeConfigId !== route.matchedName;
+  const context: HoverCardContextLine[] = distinctRouteId
+    ? [{ prefix: "Configured route id:", value: route.routeConfigId, suffix: "." }]
+    : [];
+  const hasAuthoredQuotes = (activeText.startsWith("\"") && activeText.endsWith("\""))
+    || (activeText.startsWith("'") && activeText.endsWith("'"));
+  return {
+    value: {
+      locus: "route-target",
+      identity: {
+        language: "text",
+        prefix: `(${targetLabel}) ${hasAuthoredQuotes ? "" : "\""}`,
+        authored: activeText,
+        suffix: hasAuthoredQuotes ? "" : "\"",
+      },
+      context,
+    },
+    failures: [],
+  };
+}
+
+function semanticRuntimeAuthoredRouteName(activeText: string): string | null {
+  if (activeText.length === 0 || /\r|\n/u.test(activeText)) return null;
+  const first = activeText[0];
+  const last = activeText[activeText.length - 1];
+  if ((first === "\"" || first === "'") && last === first) {
+    return activeText.slice(1, -1);
+  }
+  return first === "\"" || first === "'" || last === "\"" || last === "'"
+    ? null
+    : activeText;
+}
+
+function semanticRuntimeResourceHoverSelection(
+  value: SemanticTemplateCursorInfoResult,
+  activeSource: SemanticSourceReference,
+  activeText: string,
+  documentUris: WorkspaceDocumentUris,
+): SemanticRuntimeReadMapping<SemanticRuntimeHoverSelection | null> {
+  const definition = value.selectedDefinition;
+  if (definition == null) return { value: null, failures: [] };
+  const matchedName = definition.matchedName;
+  if (
+    matchedName == null
+    || matchedName.length === 0
+  ) {
+    return {
+      value: null,
+      failures: ["Hover selected resource has no public matched name."],
+    };
+  }
+
+  const kind = semanticRuntimeResourceKindLabel(definition.resourceKind);
+  if (kind == null) {
+    return { value: null, failures: ["Hover selected resource has an unsupported public kind."] };
+  }
+  const isElement = definition.resourceKind === "custom-element";
+  const ownsTagSource = isElement && (
+    sameExactSourceReference(activeSource, value.html.tagNameSource, documentUris)
+    || sameExactSourceReference(activeSource, value.html.closingTagNameSource, documentUris)
+  );
+  if (ownsTagSource) {
+    if (
+      activeText.toLowerCase() !== matchedName.toLowerCase()
+      || value.html.tagName?.toLowerCase() !== matchedName.toLowerCase()
+    ) {
+      return {
+        value: null,
+        failures: ["Hover selected custom element does not own the exact authored tag token."],
+      };
+    }
+  } else if (
+    activeText !== matchedName
+    || (
+      isElement
+      && !semanticRuntimeResourceValueLocusOwnsActiveSource(
+        value,
+        activeSource,
+        activeText,
+        documentUris,
+      )
+    )
+  ) {
+    return {
+      value: null,
+      failures: ["Hover selected resource does not match the exact authored token."],
+    };
+  }
+
+  const canonicalName = definition.name;
+  const isAlias = canonicalName != null
+    && canonicalName.toLowerCase() !== matchedName.toLowerCase();
+  const implementation = definition.targetName != null
+    && semanticExactSourceReference(definition.targetSource) != null
+    ? { prefix: "Implementation:", value: definition.targetName, suffix: "." }
+    : null;
+  const context: HoverCardContextLine[] = [{
+    prefix: isAlias ? `Aurelia ${kind}. Alias for:` : `Aurelia ${kind}.`,
+    value: isAlias ? canonicalName : null,
+    suffix: isAlias ? "." : "",
+    tertiary: implementation,
+  }];
+  return {
+    value: {
+      locus: "selected-resource",
+      identity: ownsTagSource
+        ? { language: "html", prefix: "<", authored: activeText, suffix: ">" }
+        : { language: "text", prefix: `(${kind}) `, authored: activeText },
+      context,
+    },
+    failures: [],
+  };
+}
+
+function semanticRuntimeResourceMayOwnActiveLocus(
+  value: SemanticTemplateCursorInfoResult,
+  activeSource: SemanticSourceReference,
+  activeText: string,
+  documentUris: WorkspaceDocumentUris,
+): boolean {
+  const definition = value.selectedDefinition;
+  if (definition == null) return false;
+  if (definition.matchedName == null || definition.matchedName.length === 0) return true;
+  switch (definition.resourceKind) {
+    case "custom-element":
+      return sameExactSourceReference(activeSource, value.html.tagNameSource, documentUris)
+        || sameExactSourceReference(activeSource, value.html.closingTagNameSource, documentUris)
+        || semanticRuntimeResourceValueLocusOwnsActiveSource(
+          value,
+          activeSource,
+          activeText,
+          documentUris,
+        );
+    case "custom-attribute":
+    case "template-controller":
+    case "attribute-pattern":
+      return semanticRuntimeResourceAttributeLocusOwnsActiveSource(
+        value,
+        activeSource,
+        activeText,
+        documentUris,
+      );
+    case "binding-command":
+      return value.siteKind === "binding-command-name";
+    case "value-converter":
+      return value.siteKind === "expression-value-converter";
+    case "binding-behavior":
+      return value.siteKind === "expression-binding-behavior";
+    default:
+      return true;
+  }
+}
+
+function semanticRuntimeResourceAttributeLocusOwnsActiveSource(
+  value: SemanticTemplateCursorInfoResult,
+  activeSource: SemanticSourceReference,
+  activeText: string,
+  documentUris: WorkspaceDocumentUris,
+): boolean {
+  const authoredTarget = semanticRuntimeBindableTargetName(value.html.attributeName);
+  const attributeSource = semanticExactSourceReference(value.html.attributeSource);
+  const exactActiveSource = semanticExactSourceReference(activeSource);
+  return authoredTarget != null
+    && authoredTarget.length > 0
+    && activeText === authoredTarget
+    && semanticRuntimeExactSourceContains(value.html.attributeSource, activeSource, documentUris)
+    && attributeSource?.start === exactActiveSource?.start;
+}
+
+function semanticRuntimeResourceValueLocusOwnsActiveSource(
+  value: SemanticTemplateCursorInfoResult,
+  activeSource: SemanticSourceReference,
+  activeText: string,
+  documentUris: WorkspaceDocumentUris,
+): boolean {
+  if (
+    value.siteKind !== "attribute-value"
+    || value.html.attributeName?.toLowerCase() !== "as-element"
+    || value.html.attributeValue !== activeText
+  ) {
+    return false;
+  }
+  return semanticRuntimeExactSourceContains(value.valueSite?.source ?? null, activeSource, documentUris)
+    || semanticRuntimeExactSourceContains(value.html.attributeSource, activeSource, documentUris);
+}
+
+function semanticRuntimeResourceKindLabel(kind: string): string | null {
+  switch (kind) {
+    case "custom-element": return "custom element";
+    case "custom-attribute": return "custom attribute";
+    case "template-controller": return "template controller";
+    case "value-converter": return "value converter";
+    case "binding-behavior": return "binding behavior";
+    case "binding-command": return "binding command";
+    case "attribute-pattern": return "attribute pattern";
+    default: return null;
+  }
+}
+
+function semanticRuntimeHoverStatus(
+  value: SemanticTemplateCursorInfoResult,
+  locus: SemanticRuntimeHoverLocus | null,
+  activeSource: SemanticSourceReference,
+  documentUris: WorkspaceDocumentUris,
+  originDocument: TextDocument,
+): SemanticRuntimeReadMapping<HoverCardStatus | null> {
+  const presentation = value.diagnosticPresentation;
+  if (presentation != null) {
+    const presentationFailure = semanticRuntimeHoverPresentationFailure(
+      value,
+      activeSource,
+      documentUris,
+      originDocument,
+    );
+    if (presentationFailure != null) return { value: null, failures: [presentationFailure] };
+    if (presentation.kind === "presented") {
+      const primary = presentation.group.primary;
+      const diagnostic = value.diagnostics[primary.rowIndex]!;
+      return {
+        value: {
+          kind: "diagnostic",
+          severity: diagnostic.severity,
+          code: semanticRuntimeHoverDiagnosticCode(diagnostic),
+          summary: diagnostic.summary,
+        },
+        failures: [],
+      };
+    }
+    if (presentation.kind !== "withheld") {
+      return { value: null, failures: ["Hover diagnostic presentation has an unsupported outcome."] };
+    }
+  }
+
+  const uncertainty = value.uncertainty;
+  if (uncertainty == null) return { value: null, failures: [] };
+  if (!semanticRuntimeUncertaintyIsValid(value)) {
+    return { value: null, failures: ["Hover uncertainty has an unsupported domain or locus relationship."] };
+  }
+  if (
+    locus == null
+    && uncertainty.category !== "dynamic-route-target"
+    && uncertainty.category !== "route-configuration-ambiguous"
+    && uncertainty.category !== "route-information-incomplete"
+  ) {
+    return { value: null, failures: [] };
+  }
+  if (locus != null && locus !== uncertainty.affectedLocus) {
+    return { value: null, failures: [] };
+  }
+  const category = semanticRuntimeUncertaintyLabel(value);
+  return category == null
+    ? { value: null, failures: [] }
+    : { value: { kind: "uncertainty", category }, failures: [] };
+}
+
+function semanticRuntimeHoverPresentationFailure(
+  value: SemanticTemplateCursorInfoResult,
+  activeSource: SemanticSourceReference,
+  documentUris: WorkspaceDocumentUris,
+  originDocument: TextDocument,
+): string | null {
+  const presentation = value.diagnosticPresentation;
+  if (presentation == null) return null;
+  if (presentation.rawRowCount !== value.diagnostics.length) {
+    return "Hover diagnostic presentation does not conserve its compact raw rows.";
+  }
+  if (presentation.kind === "withheld") {
+    const withheld = presentation.withheld;
+    if (
+      !Number.isInteger(withheld.rowIndex)
+        || withheld.rowIndex < 0
+        || withheld.rowIndex >= value.diagnostics.length
+        || withheld.reason !== "context-only-weak-owner"
+    ) {
+      return "Hover diagnostic presentation has no valid compact withheld row.";
+    }
+    const diagnostic = value.diagnostics[withheld.rowIndex]!;
+    if (!semanticRuntimeHoverSeverityIsValid(diagnostic.severity)) {
+      return "Hover diagnostic presentation has an unsupported severity.";
+    }
+    if (
+      diagnostic.diagnosticAuthority !== "semantic-authoring-policy"
+      || diagnostic.diagnosticKind !== "weak-expression-member-owner"
+      || !Array.isArray(diagnostic.missingInputs)
+      || diagnostic.missingInputs.includes("expression-member-owner-type:missing-slot-type")
+    ) {
+      return "Hover diagnostic presentation withheld row is not eligible weak-owner context.";
+    }
+    return semanticRuntimeHoverPrimarySourceFailure(
+      diagnostic.source,
+      activeSource,
+      documentUris,
+      originDocument,
+      "withheld diagnostic row",
+    );
+  }
+  if (presentation.kind !== "presented") {
+    return "Hover diagnostic presentation has an unsupported outcome.";
+  }
+
+  const group = presentation.group;
+  const rows = [group.primary, ...group.related];
+  if (
+    group.rawRowCount !== rows.length
+    || group.primary.role !== "primary"
+    || group.primary.relation !== null
+    || group.primary.rowId.length === 0
+  ) {
+    return "Hover diagnostic presentation has an invalid group structure.";
+  }
+  if (
+    !semanticRuntimeHoverSeverityIsValid(group.primarySeverity)
+    || !semanticRuntimeHoverSeverityIsValid(group.maxRawSeverity)
+  ) {
+    return "Hover diagnostic presentation has an unsupported severity.";
+  }
+  const claimed = new Set<number>();
+  for (const row of rows) {
+    if (
+      !Number.isInteger(row.rowIndex)
+      || row.rowIndex < 0
+      || row.rowIndex >= value.diagnostics.length
+      || claimed.has(row.rowIndex)
+      || row.rowId.length === 0
+    ) {
+      return "Hover diagnostic presentation has an invalid or duplicate compact row index.";
+    }
+    if (!semanticRuntimeHoverSeverityIsValid(value.diagnostics[row.rowIndex]?.severity)) {
+      return "Hover diagnostic presentation has an unsupported severity.";
+    }
+    if (
+      row !== group.primary
+      && (
+        row.role !== "contextual"
+        || !semanticRuntimeHoverRelationIsValid(row.relation)
+      )
+    ) {
+      return "Hover diagnostic presentation has an invalid contextual row.";
+    }
+    claimed.add(row.rowIndex);
+  }
+  const primary = value.diagnostics[group.primary.rowIndex];
+  if (primary == null || primary.severity !== group.primarySeverity) {
+    return "Hover diagnostic presentation primary severity does not match its compact row.";
+  }
+  const primarySourceFailure = semanticRuntimeHoverPrimarySourceFailure(
+    primary.source,
+    activeSource,
+    documentUris,
+    originDocument,
+    "presented diagnostic primary",
+  );
+  if (primarySourceFailure != null) return primarySourceFailure;
+  const maximumSeverity = maximumHoverDiagnosticSeverity(
+    rows.map((row) => value.diagnostics[row.rowIndex]!.severity),
+  );
+  return maximumSeverity !== group.maxRawSeverity
+    ? "Hover diagnostic presentation maximum severity does not match its compact rows."
+    : null;
+}
+
+function semanticRuntimeHoverPrimarySourceFailure(
+  source: SemanticSourceReference | null,
+  activeSource: SemanticSourceReference,
+  documentUris: WorkspaceDocumentUris,
+  originDocument: TextDocument,
+  subject: "presented diagnostic primary" | "withheld diagnostic row",
+): string | null {
+  const primary = semanticExactSourceReference(source);
+  const active = semanticExactSourceReference(activeSource);
+  if (primary == null) {
+    return `Hover ${subject} has no exact authored source.`;
+  }
+  const primaryUri = semanticSourceReferenceUri(primary, documentUris);
+  const activeUri = active == null ? null : semanticSourceReferenceUri(active, documentUris);
+  if (
+    primaryUri == null
+    || activeUri == null
+    || !documentUris.sameDocument(primaryUri, activeUri)
+    || !documentUris.sameDocument(primaryUri, originDocument.uri)
+  ) {
+    return `Hover ${subject} does not target the requesting document.`;
+  }
+  if (semanticSourceRangeForDocument(primary, originDocument) == null) {
+    return `Hover ${subject} is outside the current document text.`;
+  }
+  const overlaps = primary.start != null
+    && primary.end != null
+    && active?.start != null
+    && active.end != null
+    && primary.start < active.end
+    && primary.end > active.start;
+  return overlaps
+    ? null
+    : `Hover ${subject} does not overlap the active authored locus.`;
+}
+
+function semanticRuntimeHoverSeverityIsValid(
+  severity: unknown,
+): severity is SemanticTemplateCursorInfoResult["diagnostics"][number]["severity"] {
+  return severity === "error" || severity === "warning" || severity === "information";
+}
+
+function semanticRuntimeHoverRelationIsValid(
+  relation: SemanticDiagnosticPresentationRelation | null,
+): relation is SemanticDiagnosticPresentationRelation {
+  return relation === "same-subject"
+    || relation === "semantic-explanation"
+    || relation === "checker-evidence"
+    || relation === "derived-consequence"
+    || relation === "runtime-consequence";
+}
+
+function maximumHoverDiagnosticSeverity(
+  severities: readonly SemanticTemplateCursorInfoResult["diagnostics"][number]["severity"][],
+): SemanticTemplateCursorInfoResult["diagnostics"][number]["severity"] {
+  if (severities.includes("error")) return "error";
+  if (severities.includes("warning")) return "warning";
+  return "information";
+}
+
+function semanticRuntimeHoverDiagnosticCode(
+  diagnostic: SemanticTemplateCursorInfoResult["diagnostics"][number],
+): string {
+  if (diagnostic.frameworkErrorCode != null && diagnostic.frameworkErrorCode.length > 0) {
+    return diagnostic.frameworkErrorCode;
+  }
+  if (diagnostic.typeScriptDiagnosticCode != null) {
+    return `TS${diagnostic.typeScriptDiagnosticCode}`;
+  }
+  return diagnostic.diagnosticKind;
+}
+
+function semanticRuntimeUncertaintyMatchesLocus(
+  value: SemanticTemplateCursorInfoResult,
+  locus:
+    | "selected-bindable"
+    | "selected-expression"
+    | "selected-member"
+    | "selected-resource"
+    | "route-target",
+): boolean {
+  return semanticRuntimeUncertaintyIsValid(value) && value.uncertainty?.affectedLocus === locus;
+}
+
+function semanticRuntimeUncertaintyIsValid(value: SemanticTemplateCursorInfoResult): boolean {
+  const uncertainty = value.uncertainty;
+  if (uncertainty == null) return false;
+  switch (uncertainty.category) {
+    case "type-information-incomplete":
+      return (
+        uncertainty.affectedDomain === "member"
+        && uncertainty.affectedLocus === "selected-member"
+        && value.selectedMember != null
+      ) || (
+        uncertainty.affectedDomain === "binding-context"
+        && uncertainty.affectedLocus === "selected-expression"
+        && value.selectedExpression != null
+      ) || (
+        uncertainty.affectedDomain === "bindable"
+        && uncertainty.affectedLocus === "selected-bindable"
+        && value.selectedBindable != null
+        && value.selectedBindable.valueType == null
+      );
+    case "resource-availability-incomplete":
+      return uncertainty.affectedDomain === "resource"
+        && uncertainty.affectedLocus === "selected-resource"
+        && value.selectedDefinition != null;
+    case "dynamic-route-target":
+    case "route-configuration-ambiguous":
+    case "route-information-incomplete":
+      return uncertainty.affectedDomain === "route"
+        && uncertainty.affectedLocus === "route-target";
+    default:
+      return false;
+  }
+}
+
+function semanticRuntimeUncertaintyLabel(value: SemanticTemplateCursorInfoResult): string | null {
+  const uncertainty = value.uncertainty;
+  if (uncertainty == null) return null;
+  switch (uncertainty.category) {
+    case "type-information-incomplete":
+      if (uncertainty.affectedDomain === "binding-context") {
+        return "Current binding-context type is unavailable.";
+      }
+      if (uncertainty.affectedDomain === "bindable") {
+        return "Type unavailable for this bindable.";
+      }
+      if (value.selectedMember?.typeDisplay != null) {
+        return "Type information is incomplete for this expression.";
+      }
+      return value.selectedMember?.scopeRole == null
+        ? "Type unavailable for this expression."
+        : "Type unavailable in the current template scope.";
+    case "resource-availability-incomplete":
+      return "Resource availability could not be fully determined.";
+    case "dynamic-route-target":
+      return "Dynamic route target.";
+    case "route-configuration-ambiguous":
+      return "Route configuration is ambiguous.";
+    case "route-information-incomplete":
+      return "Route information is incomplete.";
+    default:
+      return null;
+  }
 }
 
 // ============================================================================
@@ -1122,6 +1927,26 @@ function sameExactSourceReference(
     && documentUris.sameDocument(leftUri, rightUri)
     && leftExact.start === rightExact.start
     && leftExact.end === rightExact.end;
+}
+
+function semanticRuntimeExactSourceContains(
+  outer: SemanticSourceReference | null,
+  inner: SemanticSourceReference | null,
+  documentUris: WorkspaceDocumentUris,
+): boolean {
+  const outerExact = semanticExactSourceReference(outer);
+  const innerExact = semanticExactSourceReference(inner);
+  const outerUri = outerExact == null ? null : semanticSourceReferenceUri(outerExact, documentUris);
+  const innerUri = innerExact == null ? null : semanticSourceReferenceUri(innerExact, documentUris);
+  return outerExact?.start != null
+    && outerExact.end != null
+    && innerExact?.start != null
+    && innerExact.end != null
+    && outerUri != null
+    && innerUri != null
+    && documentUris.sameDocument(outerUri, innerUri)
+    && outerExact.start <= innerExact.start
+    && outerExact.end >= innerExact.end;
 }
 
 function containingDefinitionRange(

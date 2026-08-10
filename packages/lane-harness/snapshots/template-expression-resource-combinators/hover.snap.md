@@ -32,8 +32,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 125,
-    "range": null
+    "markdownCodePoints": 41,
+    "range": {
+      "end": {
+        "character": 99,
+        "line": 4
+      },
+      "start": {
+        "character": 92,
+        "line": 4
+      }
+    },
+    "rangeText": "heading"
   }
 }
 ```
@@ -41,16 +51,9 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 ### Hover markdown
 
 ````markdown
-**heading**
-
 ```ts
-heading: "Scope paths"
+readonly heading: "Scope paths"
 ```
-
-kind: `property`
-owner: `ScopePathGallery`
-owner shape: `class`
-readonly
 ````
 
 ## reserved-current-context-member
@@ -79,8 +82,18 @@ readonly
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 114,
-    "range": null
+    "markdownCodePoints": 30,
+    "range": {
+      "end": {
+        "character": 51,
+        "line": 2
+      },
+      "start": {
+        "character": 44,
+        "line": 2
+      }
+    },
+    "rangeText": "$parent"
   }
 }
 ```
@@ -88,14 +101,7 @@ readonly
 ### Hover markdown
 
 ````markdown
-**$parent**
-
 ```ts
-$parent: 17
+readonly $parent: 17
 ```
-
-kind: `property`
-owner: `ScopePathGallery`
-owner shape: `class`
-readonly
 ````

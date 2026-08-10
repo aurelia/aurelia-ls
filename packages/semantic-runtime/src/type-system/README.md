@@ -32,7 +32,8 @@ source, value, expression, or template-local slot.
 - Key product-owned synthetic members by the owning type-shape product and semantic member name. Caller-local projection
   seeds may select or hydrate an owner shape, but must not mint duplicate child identities for that same owner.
 - Materialize declaration source spans for checker-backed members, including Program files that were not boot-admitted
-  as app sources, so hover/definition targets can point at TypeScript declaration truth instead of only the owning type.
+  as app sources, so definition and explicit explanation/navigation targets can point at TypeScript declaration truth
+  instead of only the owning type.
 - Allow hot product details to retain `ts.TypeChecker`, `ts.Type`, `ts.Symbol`, and declaration carriers when that
   avoids lossy re-resolution.
 - Keep type references cheap enough for scope slots, resource definitions, and future parser frontiers to point at.

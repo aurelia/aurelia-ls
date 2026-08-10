@@ -182,7 +182,8 @@ function diagnosticSummaryKey(row: SemanticAppDiagnosticRow): string {
   ].join('\0');
 }
 
-function templateDiagnosticContributesToAppDiagnostics(
+/** Shared admission boundary for template facts entering app-level diagnostic presentation. */
+export function templateDiagnosticContributesToAppDiagnostics(
   row: SemanticTemplateDiagnosticRow,
 ): boolean {
   return row.diagnosticKind !== 'router-framework-error';
@@ -426,7 +427,8 @@ function observationAppDiagnosticRow(
   });
 }
 
-function templateAppDiagnosticRow(
+/** Shared normalization of one admitted template diagnostic into the app presentation vocabulary. */
+export function templateAppDiagnosticRow(
   projectKey: string,
   row: SemanticTemplateDiagnosticRow,
 ): SemanticAppDiagnosticRow {
@@ -522,7 +524,7 @@ function dialogAppDiagnosticRow(
   });
 }
 
-function routerAppDiagnosticRow(
+export function routerAppDiagnosticRow(
   row: SemanticRouterIssueRow,
 ): SemanticAppDiagnosticRow {
   return ownedIssueAppDiagnosticRow(row, 'router', 'router-issues', {

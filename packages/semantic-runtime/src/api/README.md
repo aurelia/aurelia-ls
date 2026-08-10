@@ -739,9 +739,11 @@ lane. It is the shared footing for hover, definition, diagnostics, and explanati
 metadata source fields separately from `propertySource` and `callbackTargetSource`; definition can therefore target the
 implementation while references and rename retain all authored metadata declarations. Expression-member selection
 keeps the owner type available for completion and diagnostics, and distinguishes the source that introduced a scope slot
-from the TypeScript `declarationSource` reached by its identity. The owner type row likewise exposes both the template/expression projection source and the TypeScript
-declaration source. Hover/explanation can point at the projection source when answering "why this type here?", while
-definition and owner-type repair planning should prefer the declaration source when the checker can name one.
+from the TypeScript `declarationSource` reached by its identity. The owner type row likewise exposes both the
+template/expression projection source and the TypeScript declaration source. Explanation consumers can point at the
+projection source when answering "why this type here?"; default hover keeps projection and declaration provenance below
+its presentation boundary. Definition and owner-type repair planning should prefer the declaration source when the
+checker can name one.
 A cursor on router navigation syntax can additionally expose one `selectedRouteTarget`. Plain `load`/`href` route
 expressions resolve through the recognized route to an exact authored RouteConfig path, while eager `route:` forms
 resolve through their endpoint plan to the exact authored RouteConfig id. Query and fragment text, open navigation
@@ -773,8 +775,8 @@ such as primitive or array-like keyed reads, must not make arbitrary dot members
 authored on a known owner type but the owner does not project that member, cursor-info reports
 `missing-expression-member` with an inspect or declare-member action target instead of hiding the mismatch behind a
 successful completion list.
-Cursor-info answers also own `displayText` for MCP/LSP-style hover or explanation surfaces: selected HTML/value site,
-resource/bindable/member/owner facts, cursor diagnostics, missing inputs, and the next focused tool family.
+Cursor-info answers also retain `displayText` for compact MCP/debug summaries. LSP hover consumes the structured selected
+facts, `diagnosticPresentation`, and typed uncertainty; it does not render raw `missingInputs`.
 `TemplateReferences` and `TemplateRename` share one canonical binding-resolution target and authored-occurrence closure.
 The parse owns exact tokens, the rendered binding owns target interpretation, and a runtime access use is attached only
 when Aurelia actually has an operation that spends that resolution. This keeps a `fromView`-only attribute source

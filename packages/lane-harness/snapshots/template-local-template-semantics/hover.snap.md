@@ -32,19 +32,31 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 49,
-    "range": null
+    "markdownCodePoints": 49,
+    "range": {
+      "end": {
+        "character": 13,
+        "line": 1
+      },
+      "start": {
+        "character": 3,
+        "line": 1
+      }
+    },
+    "rangeText": "mode-panel"
   }
 }
 ```
 
 ### Hover markdown
 
-```markdown
-**Resource** `mode-panel`
-
-kind: `custom-element`
+````markdown
+```html
+<mode-panel>
 ```
+
+Aurelia custom element.
+````
 
 ## local-bindable-property-declaration
 
@@ -72,8 +84,18 @@ kind: `custom-element`
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 198,
-    "range": null
+    "markdownCodePoints": 102,
+    "range": {
+      "end": {
+        "character": 32,
+        "line": 23
+      },
+      "start": {
+        "character": 20,
+        "line": 23
+      }
+    },
+    "rangeText": "oneTimeValue"
   }
 }
 ```
@@ -81,26 +103,11 @@ kind: `custom-element`
 ### Hover markdown
 
 ````markdown
-**oneTimeValue**
-
 ```ts
-oneTimeValue: string
+(bindable) oneTimeValue: string
 ```
 
-kind: `property`
-
----
-
-**Bindable** `one-time-value`
-
-name: `oneTimeValue`
-mode: `oneTime`
-
----
-
-**Resource** `mode-panel`
-
-kind: `custom-element`
+Public attribute: `one-time-value`. Default mode: one time.
 ````
 
 ## local-bindable-property-use
@@ -129,8 +136,18 @@ kind: `custom-element`
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 66,
-    "range": null
+    "markdownCodePoints": 30,
+    "range": {
+      "end": {
+        "character": 24,
+        "line": 33
+      },
+      "start": {
+        "character": 12,
+        "line": 33
+      }
+    },
+    "rangeText": "oneTimeValue"
   }
 }
 ```
@@ -138,13 +155,9 @@ kind: `custom-element`
 ### Hover markdown
 
 ````markdown
-**oneTimeValue**
-
 ```ts
 oneTimeValue: string
 ```
-
-kind: `property`
 ````
 
 ## local-bindable-union-use
@@ -173,8 +186,18 @@ kind: `property`
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 71,
-    "range": null
+    "markdownCodePoints": 37,
+    "range": {
+      "end": {
+        "character": 21,
+        "line": 38
+      },
+      "start": {
+        "character": 11,
+        "line": 38
+      }
+    },
+    "rangeText": "mixedValue"
   }
 }
 ```
@@ -182,13 +205,9 @@ kind: `property`
 ### Hover markdown
 
 ````markdown
-**mixedValue**
-
 ```ts
 mixedValue: string | number
 ```
-
-kind: `property`
 ````
 
 ## local-bindable-alias
@@ -217,26 +236,31 @@ kind: `property`
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 125,
-    "range": null
+    "markdownCodePoints": 93,
+    "range": {
+      "end": {
+        "character": 59,
+        "line": 23
+      },
+      "start": {
+        "character": 45,
+        "line": 23
+      }
+    },
+    "rangeText": "one-time-value"
   }
 }
 ```
 
 ### Hover markdown
 
-```markdown
-**Bindable** `one-time-value`
-
-name: `oneTimeValue`
-mode: `oneTime`
-
----
-
-**Resource** `mode-panel`
-
-kind: `custom-element`
+````markdown
+```ts
+(bindable) one-time-value: string
 ```
+
+Maps to: `oneTimeValue`. Default mode: one time.
+````
 
 ## local-bindable-mode
 
@@ -264,26 +288,31 @@ kind: `custom-element`
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 125,
-    "range": null
+    "markdownCodePoints": 66,
+    "range": {
+      "end": {
+        "character": 74,
+        "line": 23
+      },
+      "start": {
+        "character": 67,
+        "line": 23
+      }
+    },
+    "rangeText": "oneTime"
   }
 }
 ```
 
 ### Hover markdown
 
-```markdown
-**Bindable** `one-time-value`
-
-name: `oneTimeValue`
-mode: `oneTime`
-
----
-
-**Resource** `mode-panel`
-
-kind: `custom-element`
+````markdown
+```text
+(binding mode) oneTime
 ```
+
+Default for: `one-time-value`.
+````
 
 ## nested-local-resource
 
@@ -311,16 +340,28 @@ kind: `custom-element`
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 50,
-    "range": null
+    "markdownCodePoints": 50,
+    "range": {
+      "end": {
+        "character": 18,
+        "line": 40
+      },
+      "start": {
+        "character": 7,
+        "line": 40
+      }
+    },
+    "rangeText": "nested-note"
   }
 }
 ```
 
 ### Hover markdown
 
-```markdown
-**Resource** `nested-note`
-
-kind: `custom-element`
+````markdown
+```html
+<nested-note>
 ```
+
+Aurelia custom element.
+````

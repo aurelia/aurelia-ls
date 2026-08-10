@@ -7,7 +7,7 @@ source and disclose partial, refused, or failed results instead of filling seman
 
 ### Language intelligence
 
-- Reworked hover to preserve the exact authored range and show resource origin, bindable type and nullability, binding mode, contextual variables, and typed bare `$this`.
+- Reworked hover into bounded exact-locus cards for member, local, and bare `$this` types; resource, implementation, and alias identity when proved; bindable type and declaration-default mode; selected static route ids or paths; and at most one Stage 6A-presented cursor diagnostic or typed uncertainty. Raw origin, provenance, handles, and analysis keys stay out of default cards.
 - Made completions carry exact replacement edits, including safe `.bind` composition for bindables and `.for` for the framework `repeat` controller, without duplicating an existing command or inferring framework behavior from spelling alone.
 - Added exact Go to Definition targets from static router `load` paths and route ids to their owning route-configuration declarations.
 - Made Find References report unverified or unmappable candidates instead of presenting a verified subset as complete.

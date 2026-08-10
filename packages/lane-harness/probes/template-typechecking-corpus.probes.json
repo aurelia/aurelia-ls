@@ -31,8 +31,8 @@
         "anchor": "${maybeItem?.label}",
         "at": "label",
         "verdict": "correct",
-        "reason": "Describes the selected `label` member as `string` while retaining the nullable `CorpusItem | null` owner context; optional access does not erase member identity or widen the member value.",
-        "note": "NEW 2026-07-12. Adapter witness for lazy member projection through the checker non-nullable value lane."
+        "reason": "Describes the selected `label` member as `string`; optional access does not erase member identity or widen the member value, and internal nullable-owner shape stays outside the card.",
+        "note": "B2 member-card witness: exact `label: string` identity with no raw owner-shape or provenance context."
       },
       {
         "id": "logical-and-narrowed-member-type",
@@ -41,7 +41,25 @@
         "at": "label",
         "verdict": "correct",
         "reason": "Describes the right-branch `label` member as `string` under the existing short-circuit branch scope.",
-        "note": "NEW 2026-07-12. Adapter witness that expression-owner projection spends the checker branch-scope product rather than re-deriving nullish narrowing in presentation code."
+        "note": "B2 narrowed-member witness: exact `label: string` identity with no raw owner-shape or branch-analysis detail."
+      },
+      {
+        "id": "let-local-kebab-declaration",
+        "file": "src/scope-projections.html",
+        "anchor": "<let upper-label.bind=\"item.label.toUpperCase()\">",
+        "at": "upper-label",
+        "verdict": "correct",
+        "reason": "Hover preserves the exact kebab-case declaration spelling while presenting the proved let-local type and role.",
+        "note": "B2 declaration-spelling witness: source equality authorizes `upper-label`; ordinary uses remain keyed by semantic `upperLabel`."
+      },
+      {
+        "id": "pathological-long-diagnostic-summary",
+        "file": "src/read-expressions.html",
+        "anchor": "${describe(true)}",
+        "at": "true",
+        "verdict": "correct",
+        "reason": "The status-only TS2769 hover ranges exactly over `true`, normalizes and deterministically clips the long overload summary, and remains within the 640-code-point card budget.",
+        "note": "B2 production budget canary using the existing checker diagnostic; no synthetic long-type fixture is required for this packet."
       }
     ],
     "references": [

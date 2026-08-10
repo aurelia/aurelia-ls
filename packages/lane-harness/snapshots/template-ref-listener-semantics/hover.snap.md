@@ -32,19 +32,31 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 51,
-    "range": null
+    "markdownCodePoints": 97,
+    "range": {
+      "end": {
+        "character": 12,
+        "line": 8
+      },
+      "start": {
+        "character": 2,
+        "line": 8
+      }
+    },
+    "rangeText": "focus-ring"
   }
 }
 ```
 
 ### Hover markdown
 
-```markdown
-**Resource** `focus-ring`
-
-kind: `custom-attribute`
+````markdown
+```text
+(custom attribute) focus-ring
 ```
+
+Aurelia custom attribute. Implementation: `FocusRing`.
+````
 
 ## keyboard-listener-event
 
@@ -55,11 +67,11 @@ kind: `custom-attribute`
   "anchor": "handleKeyboard($event)",
   "at": "$event",
   "atOccurrence": 1,
-  "displayPosition": "src/template-ref-listener-semantics-app.html:21:51",
+  "displayPosition": "src/template-ref-listener-semantics-app.html:22:51",
   "file": "src/template-ref-listener-semantics-app.html",
   "lspPosition": {
     "character": 50,
-    "line": 20
+    "line": 21
   },
   "occurrence": 1
 }
@@ -72,8 +84,18 @@ kind: `custom-attribute`
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 61,
-    "range": null
+    "markdownCodePoints": 59,
+    "range": {
+      "end": {
+        "character": 56,
+        "line": 21
+      },
+      "start": {
+        "character": 50,
+        "line": 21
+      }
+    },
+    "rangeText": "$event"
   }
 }
 ```
@@ -81,11 +103,61 @@ kind: `custom-attribute`
 ### Hover markdown
 
 ````markdown
-**$event**
-
 ```ts
 $event: KeyboardEvent
 ```
 
-kind: `property`
+Listener contextual value.
+````
+
+## resource-alias-focus
+
+### Probe
+
+```json
+{
+  "anchor": "<ref-panel focus focus-ring.ref=\"aliasFocusRingController\"></ref-panel>",
+  "at": "focus",
+  "atOccurrence": 1,
+  "displayPosition": "src/template-ref-listener-semantics-app.html:13:12",
+  "file": "src/template-ref-listener-semantics-app.html",
+  "lspPosition": {
+    "character": 11,
+    "line": 12
+  },
+  "occurrence": 1
+}
+```
+
+### hover
+
+```json
+{
+  "outcome": "result",
+  "result": {
+    "contentsKind": "markdown",
+    "markdownCodePoints": 117,
+    "range": {
+      "end": {
+        "character": 16,
+        "line": 12
+      },
+      "start": {
+        "character": 11,
+        "line": 12
+      }
+    },
+    "rangeText": "focus"
+  }
+}
+```
+
+### Hover markdown
+
+````markdown
+```text
+(custom attribute) focus
+```
+
+Aurelia custom attribute. Alias for: `focus-ring`. Implementation: `FocusRing`.
 ````

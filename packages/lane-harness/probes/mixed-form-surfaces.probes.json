@@ -88,7 +88,7 @@
         "at": "label",
         "verdict": "correct",
         "reason": "",
-        "note": "Hover correctly reports label: string on LoosePicklist. Explicit @bindable presentation remains tracked separately as polish rather than a semantic defect."
+        "note": "Hover reports the ordinary `label: string` member identity; it must not fabricate a bindable section merely because the backing property is decorated."
       },
       {
         "id": "parent-specialized-option-label",
@@ -106,7 +106,16 @@
         "at": "label",
         "verdict": "correct",
         "reason": "",
-        "note": "Hover at a member that does not exist on string (shellTone = 'ticket-shell'). The observed row claims state=source pointing at the shellTone declaration (owner fallback). Key question: does hover or any diagnostic surface the missing member, or does the masquerade reach the human surface? VERDICT REASONING (2026-07-07): missing-expression-member with the primitive owner display is honest and correct; the substrate row behind this cursor still claims state=source (proposed/member-source-state-conflation) but hover does not consume that lie."
+        "note": "Hover presents exactly one authenticated missing-member diagnostic at `label`; it must not fabricate a member identity, owner shape, raw evidence dump, or uncertainty section."
+      },
+      {
+        "id": "weak-member-withheld-context",
+        "file": "src/app.html",
+        "anchor": "${weakMetadata.source}",
+        "at": "source",
+        "verdict": "correct",
+        "reason": "Hover keeps the proved `source: unknown` member identity while the weak-owner diagnostic presentation is validated and withheld from the card.",
+        "note": "B2 withheld-policy canary: the exact weak-owner row remains compact semantic evidence but produces no diagnostic or synthetic uncertainty status."
       }
     ]
   }

@@ -32,23 +32,28 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 124,
-    "range": null
+    "markdownCodePoints": 134,
+    "range": {
+      "end": {
+        "character": 26,
+        "line": 1
+      },
+      "start": {
+        "character": 5,
+        "line": 1
+      }
+    },
+    "rangeText": "view-factory-template"
   }
 }
 ```
 
 ### Hover markdown
 
-```markdown
-**Bindable** `value`
-
-name: `value`
-mode: `toView`
-
----
-
-**Resource** `view-factory-template`
-
-kind: `template-controller`
+````markdown
+```text
+(template controller) view-factory-template
 ```
+
+Aurelia template controller. Implementation: `ViewFactoryTemplateController`.
+````

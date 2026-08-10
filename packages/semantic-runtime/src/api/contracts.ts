@@ -35,6 +35,7 @@ import type {
   TemplateCompletionCandidateKind,
   TemplateCompletionCandidateSourceKind,
   TemplateCompletionDomainKind,
+  TemplateCompletionScopeRole,
   TemplateCompletionSiteKind,
 } from '../inquiry/template-completion.js';
 import type { SemanticAppAnalysisDepth } from '../configuration/app-analysis.js';
@@ -4294,12 +4295,17 @@ export interface SemanticTemplateCursorBindableRow extends SemanticBindableDefin
   };
 }
 
+export type SemanticTemplateCursorScopeRole =
+  TemplateCompletionScopeRole | `${TemplateCompletionScopeRole}`;
+
 export interface SemanticTemplateCursorMemberRow {
   readonly name: string;
   readonly memberKind: CheckerTypeMemberKind | `${CheckerTypeMemberKind}`;
   readonly typeDisplay: string | null;
   readonly isOptional: boolean;
   readonly isReadonly: boolean;
+  /** Author-facing role proved for this exact scope slot; null for ordinary members and unproved cases. */
+  readonly scopeRole: SemanticTemplateCursorScopeRole | null;
   /** Authored source that introduced this name into the active template scope. */
   readonly source: SemanticSourceReference | null;
   /** TypeScript member declaration reached by the slot identity, when distinct from its scope source. */
@@ -4757,6 +4763,50 @@ export interface SemanticTemplateCursorRouteTargetRow {
   };
 }
 
+export type SemanticTemplateCursorDiagnosticPresentation =
+  | {
+    readonly kind: 'presented';
+    /** Number of compact raw rows retained in `SemanticTemplateCursorInfoResult.diagnostics`. */
+    readonly rawRowCount: number;
+    /** One presenter-selected group with every row index rebased into the compact raw rows. */
+    readonly group: SemanticDiagnosticPresentationGroup;
+  }
+  | {
+    readonly kind: 'withheld';
+    /** Number of compact raw rows retained in `SemanticTemplateCursorInfoResult.diagnostics`. */
+    readonly rawRowCount: number;
+    /** One presenter-withheld row with its index rebased into the compact raw rows. */
+    readonly withheld: SemanticDiagnosticPresentationWithheldRow;
+  };
+
+export type SemanticTemplateCursorUncertaintyCategory =
+  | 'type-information-incomplete'
+  | 'resource-availability-incomplete'
+  | 'dynamic-route-target'
+  | 'route-configuration-ambiguous'
+  | 'route-information-incomplete';
+
+export type SemanticTemplateCursorUncertaintyAffectedDomain =
+  | 'member'
+  | 'binding-context'
+  | 'bindable'
+  | 'resource'
+  | 'route';
+
+export type SemanticTemplateCursorUncertaintyAffectedLocus =
+  | 'selected-member'
+  | 'selected-expression'
+  | 'selected-bindable'
+  | 'selected-resource'
+  | 'route-target';
+
+/** Stable author-facing uncertainty translated from exact semantic pressure at the displayed cursor locus. */
+export interface SemanticTemplateCursorUncertainty {
+  readonly category: SemanticTemplateCursorUncertaintyCategory;
+  readonly affectedDomain: SemanticTemplateCursorUncertaintyAffectedDomain;
+  readonly affectedLocus: SemanticTemplateCursorUncertaintyAffectedLocus;
+}
+
 export interface SemanticTemplateCursorInfoResult {
   readonly displayText: string;
   readonly siteKind: TemplateCompletionSiteKind | `${TemplateCompletionSiteKind}`;
@@ -4777,6 +4827,8 @@ export interface SemanticTemplateCursorInfoResult {
   readonly selectedMember: SemanticTemplateCursorMemberRow | null;
   /** Typed presentation for a selected bare expression such as standalone `$this`. */
   readonly selectedExpression: SemanticTemplateCursorExpressionRow | null;
+  /** Stable uncertainty only when exact semantic pressure materially affects a displayed cursor answer. */
+  readonly uncertainty: SemanticTemplateCursorUncertainty | null;
   readonly memberOwnerType: {
     readonly display: string | null;
     readonly shapeKind: string | null;
@@ -4793,6 +4845,8 @@ export interface SemanticTemplateCursorInfoResult {
     };
   } | null;
   readonly diagnostics: readonly SemanticTemplateCursorDiagnosticRow[];
+  /** Stage 6A admission/presentation outcome for the selected compact cursor diagnostic rows. */
+  readonly diagnosticPresentation: SemanticTemplateCursorDiagnosticPresentation | null;
   readonly handles?: {
     /** Null for parser-span expression tokens, which intentionally avoid one kernel address per token. */
     readonly activeSourceAddressHandle: AddressHandle | null;

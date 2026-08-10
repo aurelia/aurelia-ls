@@ -32,8 +32,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 57,
-    "range": null
+    "markdownCodePoints": 50,
+    "range": {
+      "end": {
+        "character": 31,
+        "line": 5
+      },
+      "start": {
+        "character": 27,
+        "line": 5
+      }
+    },
+    "rangeText": "item"
   }
 }
 ```
@@ -41,13 +51,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 ### Hover markdown
 
 ````markdown
-**item**
-
 ```ts
 item: AccessUseItem
 ```
 
-kind: `property`
+Callback parameter.
 ````
 
 ## form-name-member
@@ -76,8 +84,18 @@ kind: `property`
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 103,
-    "range": null
+    "markdownCodePoints": 22,
+    "range": {
+      "end": {
+        "character": 55,
+        "line": 17
+      },
+      "start": {
+        "character": 51,
+        "line": 17
+      }
+    },
+    "rangeText": "name"
   }
 }
 ```
@@ -85,13 +103,59 @@ kind: `property`
 ### Hover markdown
 
 ````markdown
-**name**
-
 ```ts
 name: string
 ```
+````
 
-kind: `property`
-owner: `{ name: string; }`
-owner shape: `object`
+## bare-current-context
+
+### Probe
+
+```json
+{
+  "anchor": "${$this} / ${items.map(item => $this).length}",
+  "at": "$this",
+  "atOccurrence": 1,
+  "displayPosition": "src/runtime-expression-access-uses-app.html:12:7",
+  "file": "src/runtime-expression-access-uses-app.html",
+  "lspPosition": {
+    "character": 6,
+    "line": 11
+  },
+  "occurrence": 1
+}
+```
+
+### hover
+
+```json
+{
+  "outcome": "result",
+  "result": {
+    "contentsKind": "markdown",
+    "markdownCodePoints": 81,
+    "range": {
+      "end": {
+        "character": 11,
+        "line": 11
+      },
+      "start": {
+        "character": 6,
+        "line": 11
+      }
+    },
+    "rangeText": "$this"
+  }
+}
+```
+
+### Hover markdown
+
+````markdown
+```ts
+$this: RuntimeExpressionAccessUsesApp
+```
+
+Current Aurelia binding context.
 ````

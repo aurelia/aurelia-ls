@@ -390,9 +390,20 @@ export class CheckerExpressionMemberOwnerProjector {
         expression,
         context,
       );
+      const contextualArrowParameter = contextualScope != null && expression.$kind === 'ArrowFunction'
+        ? expression.args.find((parameter) => this.expressionContainsOffset(parameter, offset)) ?? null
+        : null;
       const result = this.findAtOffset(
-        contextualScope != null && expression.$kind === 'ArrowFunction' && this.expressionContainsOffset(expression.body, offset)
-          ? context.childInScope(expression.body, contextualScope, `args:${index}:arrow-body`)
+        contextualScope != null && expression.$kind === 'ArrowFunction'
+          ? contextualArrowParameter != null
+            ? context.childInScope(
+                contextualArrowParameter,
+                contextualScope,
+                `args:${index}:arrow-parameter:${expression.args.indexOf(contextualArrowParameter)}`,
+              )
+            : this.expressionContainsOffset(expression.body, offset)
+              ? context.childInScope(expression.body, contextualScope, `args:${index}:arrow-body`)
+              : context.child(expression, `args:${index}`, contextualType)
           : context.child(expression, `args:${index}`, contextualType),
         offset,
         select,

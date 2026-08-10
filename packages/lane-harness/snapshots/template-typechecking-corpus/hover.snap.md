@@ -32,8 +32,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 104,
-    "range": null
+    "markdownCodePoints": 23,
+    "range": {
+      "end": {
+        "character": 46,
+        "line": 3
+      },
+      "start": {
+        "character": 41,
+        "line": 3
+      }
+    },
+    "rangeText": "label"
   }
 }
 ```
@@ -41,15 +51,9 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 ### Hover markdown
 
 ````markdown
-**label**
-
 ```ts
 label: string
 ```
-
-kind: `property`
-owner: `CorpusItem | null`
-owner shape: `union`
 ````
 
 ## logical-and-narrowed-member-type
@@ -61,11 +65,11 @@ owner shape: `union`
   "anchor": "${maybeItem && maybeItem.label}",
   "at": "label",
   "atOccurrence": 1,
-  "displayPosition": "src/read-expressions.html:12:64",
+  "displayPosition": "src/read-expressions.html:13:64",
   "file": "src/read-expressions.html",
   "lspPosition": {
     "character": 63,
-    "line": 11
+    "line": 12
   },
   "occurrence": 1
 }
@@ -78,8 +82,18 @@ owner shape: `union`
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 101,
-    "range": null
+    "markdownCodePoints": 23,
+    "range": {
+      "end": {
+        "character": 68,
+        "line": 12
+      },
+      "start": {
+        "character": 63,
+        "line": 12
+      }
+    },
+    "rangeText": "label"
   }
 }
 ```
@@ -87,13 +101,107 @@ owner shape: `union`
 ### Hover markdown
 
 ````markdown
-**label**
-
 ```ts
 label: string
 ```
-
-kind: `property`
-owner: `CorpusItem`
-owner shape: `interface`
 ````
+
+## let-local-kebab-declaration
+
+### Probe
+
+```json
+{
+  "anchor": "<let upper-label.bind=\"item.label.toUpperCase()\">",
+  "at": "upper-label",
+  "atOccurrence": 1,
+  "displayPosition": "src/scope-projections.html:11:12",
+  "file": "src/scope-projections.html",
+  "lspPosition": {
+    "character": 11,
+    "line": 10
+  },
+  "occurrence": 1
+}
+```
+
+### hover
+
+```json
+{
+  "outcome": "result",
+  "result": {
+    "contentsKind": "markdown",
+    "markdownCodePoints": 41,
+    "range": {
+      "end": {
+        "character": 22,
+        "line": 10
+      },
+      "start": {
+        "character": 11,
+        "line": 10
+      }
+    },
+    "rangeText": "upper-label"
+  }
+}
+```
+
+### Hover markdown
+
+````markdown
+```ts
+upper-label: string
+```
+
+Let local.
+````
+
+## pathological-long-diagnostic-summary
+
+### Probe
+
+```json
+{
+  "anchor": "${describe(true)}",
+  "at": "true",
+  "atOccurrence": 1,
+  "displayPosition": "src/read-expressions.html:21:42",
+  "file": "src/read-expressions.html",
+  "lspPosition": {
+    "character": 41,
+    "line": 20
+  },
+  "occurrence": 1
+}
+```
+
+### hover
+
+```json
+{
+  "outcome": "result",
+  "result": {
+    "contentsKind": "markdown",
+    "markdownCodePoints": 237,
+    "range": {
+      "end": {
+        "character": 45,
+        "line": 20
+      },
+      "start": {
+        "character": 41,
+        "line": 20
+      }
+    },
+    "rangeText": "true"
+  }
+}
+```
+
+### Hover markdown
+
+```markdown
+Error `TS2769`: No overload matches this call. Overload 1 of 2, '(value: string): string', gave the following error. Argument of type 'boolean' is not assignable to parameter of type 'string'. Overload 2 of 2, '(value: number): number',…
+```

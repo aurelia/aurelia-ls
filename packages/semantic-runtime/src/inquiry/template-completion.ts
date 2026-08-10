@@ -1,6 +1,6 @@
 import {
   ExpressionExpectedContinuationClass,
-  ExpressionFrontierKind,
+  type ExpressionFrontierKind,
   type InterpolationActiveHoleCompanion,
   ExpressionParseResultKind,
   type ExpressionParseResult,
@@ -38,13 +38,18 @@ import {
 import {
   BindingContextKind,
   BindingContextSlotAssignmentAccessKind,
-  BindingContextSlot,
-  BindingScope,
+  type BindingContextSlot,
+  type BindingScope,
+  BindingScopeCreatorKind,
   BindingScopeOwnerKind,
 } from '../configuration/scope.js';
 import {
   TemplateProductDetails,
 } from '../template/product-details.js';
+import {
+  LetBindingTargetContext,
+  RuntimeBindingScopeEffectKind,
+} from '../template/runtime-binding.js';
 import {
   bindingExpressionAstForProductAtOffset,
   readTemplateExpressionParse,
@@ -59,7 +64,7 @@ import {
 import {
   CheckerExpressionTypeEvaluationContext,
 } from '../type-system/expression-type-context.js';
-import { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
+import type { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
 import { checkerNullishType } from '../type-system/checker-related-types.js';
 import type {
   CheckerIndexedAccessKeyKind,
@@ -106,7 +111,7 @@ import { I18nProductDetails } from '../i18n/product-details.js';
 import type { I18nTranslationKey } from '../i18n/model.js';
 import {
   TemplateCompilerWorld,
-  TemplateResourceScope,
+  type TemplateResourceScope,
   templateBindableReferences,
 } from '../template/compiler-world.js';
 import {
@@ -119,7 +124,7 @@ import {
   isValueConverterOccurrence,
 } from '../template/expression-resource-occurrence.js';
 import {
-  TemplateVisibleResource,
+  type TemplateVisibleResource,
   sameTemplateVisibleResource,
   type TemplateBindableReference,
 } from '../template/compiler-world-reference.js';
@@ -151,7 +156,7 @@ import {
 } from '../template/runtime-ref-target.js';
 import { runtimeEventModifierCatalog } from '../template/runtime-event-modifier.js';
 import {
-  HtmlAttribute,
+  type HtmlAttribute,
   HtmlElement,
   type HtmlIrNode,
 } from '../template/html-ir.js';
@@ -494,6 +499,8 @@ export class TemplateCompletionCursorContext {
     readonly valueSiteProductHandle: ProductHandle | null,
     /** Bindable selected by the cursor's classification or active value site, when one exists. */
     readonly selectedBindable: TemplateBindableReference | null,
+    /** Exact converged binding-context type for the selected bindable's authored declaration, when one exists. */
+    readonly selectedBindableValueType: CheckerTypeReference | null,
     /** Public resource name matched at this cursor; differs from the canonical name for alias usages. */
     readonly selectedDefinitionMatchedName: string | null,
     /** Binding-scope slot and exact owning scope selected by a root access such as `message` or `save()`. */
@@ -523,11 +530,22 @@ export class TemplateCompletionCursorContext {
   ) {}
 }
 
+/** Author-facing role proved for one exact selected template-scope slot. */
+export const enum TemplateCompletionScopeRole {
+  RepeatLocal = 'repeat-local',
+  RepeatContextual = 'repeat-contextual',
+  LetLocal = 'let-local',
+  CallbackParameter = 'callback-parameter',
+  ListenerContextual = 'listener-contextual',
+}
+
 /** Coupled lookup result retained when cursor dispatch selects a runtime scope slot. */
 export class TemplateCompletionScopeSlotSelection {
   constructor(
     readonly scope: BindingScope,
     readonly slot: BindingContextSlot,
+    /** Closed author-facing role proved from this exact slot lane and its durable creator/effect evidence. */
+    readonly scopeRole: TemplateCompletionScopeRole | null,
     /** Exact selected declaration source when narrower than the reusable slot carrier. */
     readonly declarationSourceAddressHandle: AddressHandle | null = null,
     /** Durable scope, type-shape, or expression-parse product that owns the selected local. */
@@ -655,6 +673,7 @@ class TemplateCompletionCursorContextBuilder {
       null,
       null,
       null,
+      null,
       false,
       ['source-offset'],
     );
@@ -751,6 +770,10 @@ class TemplateCompletionCursorContextBuilder {
       semanticMultiBindingSegment,
     )
       ?? declarationBindable;
+    const selectedBindableValueType = selectedBindableValueTypeForCursor(
+      this.input.resource,
+      selectedBindable,
+    );
     const selectedScopeSlot = selectedScopeSlotForCursor({
       store: this.store,
       resource: this.input.resource,
@@ -868,6 +891,7 @@ class TemplateCompletionCursorContextBuilder {
       htmlAttribute?.productHandle ?? null,
       valueSite?.productHandle ?? null,
       selectedBindable,
+      selectedBindableValueType,
       selectedDefinition?.matchedName ?? null,
       selectedScopeSlot,
       selectedMemberName,
@@ -1013,7 +1037,7 @@ class TemplateCompletionCursorContextBuilder {
     const valueSourceAddressHandle = valueSite.sourceAddressHandle;
     if (
       valueSourceAddressHandle == null
-      || !cursorTouchesRouteExpressionPath(this.store, valueSite, offset)
+      || templateRouteExpressionPathSpanForCursor(this.store, valueSite, offset) == null
     ) {
       return null;
     }
@@ -1321,6 +1345,7 @@ function selectedScopeSlotForCursor(
     return new TemplateCompletionScopeSlotSelection(
       declarationSelection.scope,
       declarationSelection.slot,
+      declarationSelection.scopeRole,
       declarationSelection.sourceSpan.handle,
     );
   }
@@ -1377,6 +1402,13 @@ function selectedScopeSlotForCursor(
       return new TemplateCompletionScopeSlotSelection(
         located.scope,
         located.slot,
+        selectedScopeSlotRole(
+          input.store,
+          located.scope,
+          located.slot,
+          located.context?.contextKind ?? null,
+          lexicalAuthority != null,
+        ),
         lexicalAuthority?.declarationSourceAddressHandle ?? null,
         lexicalAuthority?.ownerProductHandle ?? null,
       );
@@ -1384,6 +1416,63 @@ function selectedScopeSlotForCursor(
   }
 
   return null;
+}
+
+function selectedScopeSlotRole(
+  store: KernelStore,
+  scope: BindingScope,
+  slot: BindingContextSlot,
+  contextKind: BindingContextKind | null,
+  lexicalLocal: boolean,
+): TemplateCompletionScopeRole | null {
+  if (lexicalLocal) {
+    return TemplateCompletionScopeRole.CallbackParameter;
+  }
+  if (contextKind == null) {
+    return null;
+  }
+
+  let introductionScope = scope;
+  while (predecessorHasScopeSlot(introductionScope.predecessor, contextKind, slot)) {
+    introductionScope = introductionScope.predecessor!;
+  }
+  const roles = uniqueValues(introductionScope.scopeCreators.flatMap((creator) => {
+    if (!creator.introducedSlotNames.includes(slot.name)) {
+      return [];
+    }
+    if (creator.creatorKind === BindingScopeCreatorKind.ListenerEvent) {
+      return contextKind === BindingContextKind.Override
+        ? [TemplateCompletionScopeRole.ListenerContextual]
+        : [];
+    }
+    if (creator.creatorKind !== BindingScopeCreatorKind.RuntimeBindingScopeEffect) {
+      return [];
+    }
+    const effect = store.productDetails.read(
+      TemplateProductDetails.RuntimeBindingScopeEffect,
+      creator.productHandle,
+    );
+    if (effect?.effectKind === RuntimeBindingScopeEffectKind.Iterator) {
+      if (contextKind === BindingContextKind.Override) {
+        return effect.localNames.includes(slot.name)
+          ? []
+          : [TemplateCompletionScopeRole.RepeatContextual];
+      }
+      return effect.localNames.includes(slot.name)
+        ? [TemplateCompletionScopeRole.RepeatLocal]
+        : [];
+    }
+    if (effect?.effectKind === RuntimeBindingScopeEffectKind.Let) {
+      const effectContextKind = effect.targetContext === LetBindingTargetContext.OverrideContext
+        ? BindingContextKind.Override
+        : introductionScope.bindingContext.contextKind;
+      return effect.target === slot.name && effectContextKind === contextKind
+        ? [TemplateCompletionScopeRole.LetLocal]
+        : [];
+    }
+    return [];
+  }));
+  return roles.length === 1 ? roles[0] ?? null : null;
 }
 
 interface TemplateBareExpressionCursorSelectionRequest {
@@ -1607,6 +1696,7 @@ interface SourceBackedScopeSlotDeclarationSelection {
   readonly slot: BindingContextSlot;
   readonly contextKind: BindingContextKind;
   readonly sourceSpan: SourceSpanAddress;
+  readonly scopeRole: TemplateCompletionScopeRole | null;
 }
 
 function sourceBackedScopeSlotDeclarationForCursor(
@@ -1639,7 +1729,13 @@ function sourceBackedScopeSlotDeclarationForCursor(
         ) {
           continue;
         }
-        candidates.push({ scope, slot, contextKind, sourceSpan: span });
+        candidates.push({
+          scope,
+          slot,
+          contextKind,
+          sourceSpan: span,
+          scopeRole: selectedScopeSlotRole(store, scope, slot, contextKind, false),
+        });
       }
     }
   }
@@ -1648,9 +1744,19 @@ function sourceBackedScopeSlotDeclarationForCursor(
   if (narrowest.length === 0 || !scopeSlotDeclarationCandidatesConverge(narrowest)) {
     return null;
   }
-  return [...narrowest].sort((left, right) =>
+  const selected = [...narrowest].sort((left, right) =>
     left.scope.productHandle.localeCompare(right.scope.productHandle)
   )[0] ?? null;
+  if (selected == null) {
+    return null;
+  }
+  const provedRoles = uniqueValues(narrowest.flatMap((candidate) =>
+    candidate.scopeRole == null ? [] : [candidate.scopeRole]
+  ));
+  return {
+    ...selected,
+    scopeRole: provedRoles.length === 1 ? provedRoles[0] ?? null : null,
+  };
 }
 
 function predecessorHasScopeSlot(
@@ -1676,12 +1782,19 @@ function scopeSlotDeclarationCandidatesConverge(
   }
   return candidates.every((candidate) =>
     candidate.contextKind === first.contextKind
-    && candidate.slot.name === first.slot.name
-    && candidate.slot.sourceAddressHandle === first.slot.sourceAddressHandle
-    && candidate.slot.targetIdentityHandle === first.slot.targetIdentityHandle
-    && candidate.slot.targetTypeMemberHandle === first.slot.targetTypeMemberHandle
-    && sameNullableCheckerTypeReference(candidate.slot.targetType, first.slot.targetType)
+    && scopeSlotValueEvidenceConverges(candidate.slot, first.slot)
   );
+}
+
+function scopeSlotValueEvidenceConverges(
+  left: BindingContextSlot,
+  right: BindingContextSlot,
+): boolean {
+  return left.name === right.name
+    && left.sourceAddressHandle === right.sourceAddressHandle
+    && left.targetIdentityHandle === right.targetIdentityHandle
+    && left.targetTypeMemberHandle === right.targetTypeMemberHandle
+    && sameNullableCheckerTypeReference(left.targetType, right.targetType);
 }
 
 function sameNullableCheckerTypeReference(
@@ -2584,28 +2697,33 @@ function isRouterResourceValueSite(store: KernelStore, site: TemplateValueSite):
     );
 }
 
-function cursorTouchesRouteExpressionPath(
+/** Exact authored path portion of a router string value, excluding context prefixes, query, and fragment syntax. */
+export function templateRouteExpressionPathSpanForCursor(
   store: KernelStore,
   site: TemplateValueSite,
   offset: number,
-): boolean {
-  if (site.siteKind !== TemplateValueSiteKind.CustomAttributeValue) {
-    return false;
+): SourceSpan | null {
+  if (
+    site.siteKind !== TemplateValueSiteKind.CustomAttributeValue
+    || !isRouterResourceValueSite(store, site)
+  ) {
+    return null;
   }
   const span = sourceSpanFor(store, site.sourceAddressHandle);
   if (span == null) {
-    return false;
+    return null;
   }
   try {
     const parsed = parseRouterStringNavigationInstruction(site.rawValue);
     const pathStart = site.rawValue.length - parsed.routeExpressionInput.length;
-    const relativeOffset = offset - span.start;
-    return parsed.routeExpression.pathLength > 0
-      && relativeOffset >= pathStart
-      && relativeOffset < pathStart + parsed.routeExpression.pathLength;
+    const start = span.start + pathStart;
+    const end = start + parsed.routeExpression.pathLength;
+    return parsed.routeExpression.pathLength > 0 && offset >= start && offset < end
+      ? { start, end }
+      : null;
   } catch (error) {
     if (error instanceof RouteExpressionParseFailure) {
-      return false;
+      return null;
     }
     throw error;
   }
@@ -4350,6 +4468,41 @@ function selectedBindableForCursor(
     ?? valueSite?.bindable
     ?? classification?.bindable
     ?? null;
+}
+
+/**
+ * Read the exact generated binding-context property type already constructed for one authored bindable declaration.
+ * Local-template bindables have no TypeScript resource target, but their definition-wide root scope retains the merged
+ * types delivered by every admitted parent binding. Exact declaration-source identity and full slot convergence keep
+ * this join independent of cursor position and reject conflicting instance projections.
+ */
+function selectedBindableValueTypeForCursor(
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  bindable: TemplateBindableReference | null,
+): CheckerTypeReference | null {
+  const sourceAddressHandle = bindable?.reference.nameSourceAddressHandle ?? null;
+  if (bindable == null || sourceAddressHandle == null) {
+    return null;
+  }
+  const candidates = resource.runtimeAnalysis.scopes.readScopes().flatMap((scope) =>
+    scope.bindingContext.slots.filter((slot) =>
+      slot.name === bindable.reference.name
+      && slot.sourceAddressHandle === sourceAddressHandle
+      && !predecessorHasScopeSlot(
+        scope.predecessor,
+        scope.bindingContext.contextKind,
+        slot,
+      )
+    )
+  );
+  const first = candidates[0] ?? null;
+  if (
+    first == null
+    || !candidates.every((candidate) => scopeSlotValueEvidenceConverges(candidate, first))
+  ) {
+    return null;
+  }
+  return first.targetType;
 }
 
 function selectedBindableForDeclarationCursor(

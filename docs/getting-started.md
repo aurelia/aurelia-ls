@@ -15,7 +15,7 @@ resource and template counts once analysis completes.
 
 Try these to verify it's working:
 
-- **Hover** a custom element tag to see its bindable interface
+- **Hover** a custom element tag to see its exact resource identity and Aurelia kind
 - **Ctrl+click** a tag name to jump to the component class
 - **Type `<`** inside a template to see element completions
 - Open the **Resource Explorer** in the sidebar to browse your project's resources

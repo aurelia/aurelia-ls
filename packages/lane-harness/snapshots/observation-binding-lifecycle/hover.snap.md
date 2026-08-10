@@ -32,8 +32,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 141,
-    "range": null
+    "markdownCodePoints": 35,
+    "range": {
+      "end": {
+        "character": 77,
+        "line": 7
+      },
+      "start": {
+        "character": 60,
+        "line": 7
+      }
+    },
+    "rangeText": "attributeFromView"
   }
 }
 ```
@@ -41,15 +51,9 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 ### Hover markdown
 
 ````markdown
-**attributeFromView**
-
 ```ts
 attributeFromView: string
 ```
-
-kind: `property`
-owner: `ObservationBindingLifecycleApp`
-owner shape: `class`
 ````
 
 ## reached-effective-two-way-assignment
@@ -78,8 +82,18 @@ owner shape: `class`
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 141,
-    "range": null
+    "markdownCodePoints": 35,
+    "range": {
+      "end": {
+        "character": 24,
+        "line": 29
+      },
+      "start": {
+        "character": 7,
+        "line": 29
+      }
+    },
+    "rangeText": "reachedChildValue"
   }
 }
 ```
@@ -87,15 +101,9 @@ owner shape: `class`
 ### Hover markdown
 
 ````markdown
-**reachedChildValue**
-
 ```ts
 reachedChildValue: number
 ```
-
-kind: `property`
-owner: `ObservationBindingLifecycleApp`
-owner shape: `class`
 ````
 
 ## blocked-effective-two-way-assignment
@@ -124,8 +132,18 @@ owner shape: `class`
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 141,
-    "range": null
+    "markdownCodePoints": 35,
+    "range": {
+      "end": {
+        "character": 24,
+        "line": 31
+      },
+      "start": {
+        "character": 7,
+        "line": 31
+      }
+    },
+    "rangeText": "blockedChildValue"
   }
 }
 ```
@@ -133,13 +151,7 @@ owner shape: `class`
 ### Hover markdown
 
 ````markdown
-**blockedChildValue**
-
 ```ts
 blockedChildValue: string
 ```
-
-kind: `property`
-owner: `ObservationBindingLifecycleApp`
-owner shape: `class`
 ````
