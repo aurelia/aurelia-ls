@@ -14,6 +14,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../
 const serverPath = path.join(repoRoot, 'packages/mcp/out/server.js');
 const fixtureRoot = path.join(repoRoot, 'packages/semantic-runtime/fixtures/pressure/app-pattern-state-backed-form');
 const openSeamSitesFixtureRoot = path.join(repoRoot, 'packages/semantic-runtime/fixtures/pressure/evaluation-open-seam-sites');
+const frameworkCapabilityFixtureRoot = path.join(repoRoot, 'packages/semantic-runtime/fixtures/pressure/unregistered-plugin-resources');
 const typescriptDiagnosticsFixtureRoot = path.join(repoRoot, 'packages/semantic-runtime/fixtures/pressure/typescript-project-diagnostics');
 const projectConfigurationFixtureRoot = path.join(repoRoot, 'playground/issue-tracker');
 const projectConfigurationDiagnosticsFixtureRoot = path.join(repoRoot, 'packages/mcp/fixtures/project-configuration-diagnostics');
@@ -64,6 +65,7 @@ try {
   await verifyStrictCuratedSelectors();
   await verifyPageClampAndTextPreview();
   await verifyObservedDependencyLocus();
+  await verifyFrameworkCapabilityExplanation();
   await verifyWorkspaceOverviewContinuations();
   await verifyAnalysisDepthEnvelope();
   await verifyProfileDrivenRetention();
@@ -141,7 +143,7 @@ async function verifyToolSurfaceBudget() {
     .map((tool) => `${tool.name}=${tool.bytes}`)
     .join(', ');
   expect(
-    surfaceBytes < 68_000,
+    surfaceBytes < 69_000,
     `tools/list should stay below the fixed 19-tool schema budget; observed ${surfaceBytes} bytes; largest tools: ${largestTools}.`,
   );
   expect(response.result?.tools?.length === 19, 'tools/list should advertise the expected public tool count.');
@@ -173,6 +175,11 @@ async function verifyToolInputSchemaDescriptions() {
   expect(JSON.stringify(appQuery?.inputSchema).includes('Check supportsSourceFile'), 'sourceFile schema description should point callers to supportsSourceFile.');
   expect(JSON.stringify(appQuery?.inputSchema).includes('result=unsupported'), 'sourceFilePath schema description should promise honest unsupported answers.');
   expect(JSON.stringify(appQuery?.inputSchema).includes('observedDependencyLocus'), 'Generic app-query schema should expose family-owned observed-dependency loci.');
+  expect('frameworkCapability' in workspaceProperties, 'Generic app-query schema should expose the closed framework-capability explanation selector.');
+  expect(
+    JSON.stringify(workspaceProperties.frameworkCapability).includes('capability-demand rows and diagnostic continuations'),
+    'Framework-capability selector should direct callers to engine-owned selector values without duplicating the vocabulary in every tool schema.',
+  );
   const openSeamOverview = tools.find((tool) => tool.name === 'aurelia_open_seam_overview');
   expect(openSeamOverview?.description?.includes('unique authored source site'), 'Open-seam overview should describe its authored-site-first projection.');
   expect(!('detail' in (openSeamOverview?.inputSchema?.properties ?? {})), 'Open-seam overview should not advertise unsupported detail.');
@@ -421,6 +428,45 @@ async function verifyObservedDependencyLocus() {
       && selectedRows[0]?.rowKey === firstRow.rowKey,
     'MCP should preserve an observed-dependency row locus through strict schema validation and adapter projection.',
   );
+}
+
+async function verifyFrameworkCapabilityExplanation() {
+  const input = {
+    workspaceRoot: frameworkCapabilityFixtureRoot,
+    queryKind: 'framework-capability-explanation',
+    cursor: {
+      filePath: 'src/unregistered-plugin-resources-app.html',
+      line: 0,
+      character: 8,
+      offset: 8,
+    },
+    frameworkCapability: 'router.default-resources',
+  };
+  const response = await callTool('aurelia_app_query', input);
+  const answer = response.result?.structuredContent?.value;
+  expect(response.result?.isError !== true, 'Generic MCP app-query should admit a valid closed framework-capability selector.');
+  expect(answer?.result === 'answered', 'Framework-capability explanation should retain the semantic answer envelope through MCP.');
+  expect(answer?.selection === 'exact', 'Framework-capability explanation should retain exact cursor selection through MCP.');
+  expect(
+    answer?.value?.explanation?.subject?.requiredCapability === 'router.default-resources',
+    'MCP should preserve the exact explained capability subject.',
+  );
+  expect(
+    answer?.value?.explanation?.conclusion?.kind === 'not-admitted',
+    'MCP should preserve the engine-owned not-admitted conclusion.',
+  );
+  expect(
+    Array.isArray(answer?.value?.explanation?.nextSteps)
+      && answer.value.explanation.nextSteps.length <= 3,
+    'MCP should preserve the bounded engine-owned explanation actions.',
+  );
+
+  const invalid = await callTool('aurelia_app_query', {
+    ...input,
+    frameworkCapability: 'router.not-a-capability',
+  });
+  expect(invalid.result?.isError === true, 'MCP should reject unknown framework capabilities at its closed schema boundary.');
+  expect(resultText(invalid).includes('frameworkCapability'), 'Unknown capability rejection should name the invalid selector.');
 }
 
 async function verifyWorkspaceOverviewContinuations() {

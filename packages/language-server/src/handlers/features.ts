@@ -46,6 +46,7 @@ import {
 } from "./inlay-hints.js";
 import {
   codeActionKindMatchesOnly,
+  mapFrameworkCapabilityExplanationCodeActions,
   mapSemanticRuntimeTemplateCodeActions,
   mapSemanticRuntimeUnresolvedTemplateCodeActions,
   mapSemanticRuntimeTemplateDefinition,
@@ -399,12 +400,19 @@ export async function handleCodeAction(
       });
     },
   };
-  return ctx.clientSupportsCodeActionResolveEdit
+  const repairActions = ctx.clientSupportsCodeActionResolveEdit
     ? mapSemanticRuntimeUnresolvedTemplateCodeActions(response, (uri) => operation.documents.lookupDocumentSnapshot(uri), {
         ...mappingOptions,
         position: params.range.start,
       })
     : mapSemanticRuntimeTemplateCodeActions(response, (uri) => operation.documents.lookupDocumentSnapshot(uri), mappingOptions);
+  const explanationActions = mapFrameworkCapabilityExplanationCodeActions(
+    params.context.diagnostics,
+    doc,
+    params.context.only,
+  );
+  const actions = [...(repairActions ?? []), ...explanationActions];
+  return actions.length === 0 ? null : actions;
 }
 
 export async function handleCodeActionResolve(

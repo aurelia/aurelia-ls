@@ -1,5 +1,6 @@
 /** Client-owned contribution identifiers mirrored by package.json and guarded by a manifest contract test. */
 export const AureliaCommand = {
+  ExplainFrameworkCapability: "aurelia.explainFrameworkCapability",
   GoToResource: "aurelia.goToResource",
   GoToAvailableResource: "aurelia.goToAvailableResource",
   OpenResource: "aurelia.openResource",

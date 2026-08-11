@@ -34,6 +34,7 @@ export function createTestOperation(
     authoredSourceOwnership: unsupportedTestOperationMethod,
     nativeProjectConfigurations: unsupportedTestOperationMethod,
     analysisLimitations: unsupportedTestOperationMethod,
+    frameworkCapabilityExplanation: unsupportedTestOperationMethod,
     projectConfigurationDiagnostics: unsupportedTestOperationMethod,
     templateCompletions: unsupportedTestOperationMethod,
     appDiagnostics: unsupportedTestOperationMethod,

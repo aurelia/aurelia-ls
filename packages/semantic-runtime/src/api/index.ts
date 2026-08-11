@@ -38,6 +38,12 @@ export {
   BUILT_IN_RESOURCE_PACKAGES,
 } from '../resources/built-in-resources.js';
 export {
+  FRAMEWORK_REGISTRATION_CAPABILITIES,
+  FrameworkRegistrationCapability,
+  frameworkRegistrationCapabilityFromString,
+  isFrameworkRegistrationCapability,
+} from '../registration/framework-registration-manifest.js';
+export {
   NodeSemanticRuntimeProjectInputHost,
   SemanticRuntimeProjectInputAuthority,
   SemanticRuntimeProjectInputChange,

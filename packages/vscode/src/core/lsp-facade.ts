@@ -3,6 +3,8 @@ import {
   AureliaProtocolNotification,
   AureliaProtocolRequest,
   type AnalysisLimitationsResponse,
+  type FrameworkCapabilityExplanationParams,
+  type FrameworkCapabilityExplanationResponse,
   type ResourceInventoryParams,
   type ResourceInventoryResponse,
   type SourceOwnershipResponse,
@@ -18,6 +20,7 @@ import {
 } from "../resource-discovery-host-control.js";
 import type {
   AnalysisLimitationsSnapshot,
+  FrameworkCapabilityExplanationSnapshot,
   ProtocolWorkspaceEdit,
   RelatedFilesResponse,
   RenameFromTsResponse,
@@ -213,6 +216,21 @@ export class LspFacade implements Disposable {
       );
     }
     this.#logTemplateAvailabilityIssues(response, session.workspace.key);
+    return { ...response, workspace: session.workspace };
+  }
+
+  async getFrameworkCapabilityExplanation(
+    params: FrameworkCapabilityExplanationParams,
+    token?: CancellationToken,
+  ): Promise<FrameworkCapabilityExplanationSnapshot | null> {
+    const session = this.#sessionForUri(params.uri);
+    if (session == null) return null;
+    const response = await this.#sendRequest<FrameworkCapabilityExplanationResponse>(
+      session,
+      AureliaProtocolRequest.FrameworkCapabilityExplanation,
+      params,
+      token,
+    );
     return { ...response, workspace: session.workspace };
   }
 

@@ -41,6 +41,7 @@ import type {
 import {
   canonicalTypeSystemPath,
   diagnosticRepairAffordanceForSuggestion,
+  frameworkRegistrationCapabilityFromString,
   semanticExactSourceReference,
   SemanticRuntimeAnswerResult,
   SemanticRuntimeAnswerSelection,
@@ -49,7 +50,9 @@ import type { DocumentUri, WorkspaceDocumentUris } from "../utils/document-uri.j
 import { languageIdForSource } from "../utils/document-kind.js";
 import {
   AURELIA_TEMPLATE_CODE_ACTION_RESOLVE_SCHEMA,
+  AureliaProtocolCommand,
   templateCodeActionResolveRefusalFromValue,
+  type FrameworkCapabilityExplanationParams,
   type TemplateCodeActionResolveRefusal,
   type TemplateCodeActionResolveData,
 } from "../protocol.js";
@@ -2308,6 +2311,97 @@ export function mapSemanticRuntimeTemplateCodeActions(
     });
   }
   return actions.length === 0 ? null : actions;
+}
+
+/**
+ * Project an engine-authored capability diagnostic into a command-only explanation affordance.
+ * Diagnostic data seeds the request but is never accepted as the explanation authority; the
+ * command must issue a fresh framework-capability-explanation query for this exact locus.
+ */
+export function mapFrameworkCapabilityExplanationCodeActions(
+  diagnostics: readonly Diagnostic[],
+  originDocument: TextDocument,
+  only: readonly CodeActionKind[] | undefined,
+): CodeAction[] {
+  if (!codeActionKindMatchesOnly(CodeActionKind.QuickFix, only)) return [];
+  const actions: CodeAction[] = [];
+  const seen = new Set<string>();
+  for (const diagnostic of diagnostics) {
+    const seed = frameworkCapabilityExplanationSeed(diagnostic, originDocument);
+    if (seed == null) continue;
+    const identity = JSON.stringify([
+      seed.projectKey,
+      seed.frameworkCapability,
+      seed.range.start.line,
+      seed.range.start.character,
+      seed.range.end.line,
+      seed.range.end.character,
+    ]);
+    if (seen.has(identity)) continue;
+    seen.add(identity);
+    actions.push({
+      title: "Explain this Aurelia diagnostic",
+      kind: CodeActionKind.QuickFix,
+      diagnostics: [diagnostic],
+      isPreferred: false,
+      command: {
+        title: "Explain Aurelia diagnostic",
+        command: AureliaProtocolCommand.ExplainFrameworkCapability,
+        arguments: [seed],
+      },
+      data: {
+        semanticRuntime: {
+          queryKind: "framework-capability-explanation",
+          explanationSeed: seed,
+        },
+      },
+    });
+  }
+  return actions;
+}
+
+function frameworkCapabilityExplanationSeed(
+  diagnostic: Diagnostic,
+  originDocument: TextDocument,
+): FrameworkCapabilityExplanationParams | null {
+  const runtime = semanticRuntimeDiagnosticDataPayload(diagnostic.data);
+  if (
+    runtime?.["queryKind"] !== "app-diagnostics"
+    || runtime["diagnosticAuthority"] !== "semantic-authoring-policy"
+    || (
+      runtime["diagnosticKind"] !== "framework-capability-not-registered"
+      && runtime["diagnosticKind"] !== "framework-capability-configured-out"
+    )
+    || typeof runtime["projectKey"] !== "string"
+    || runtime["projectKey"].length === 0
+    || typeof runtime["missingInput"] !== "string"
+    || runtime["missingInput"].length === 0
+  ) {
+    return null;
+  }
+  const frameworkCapability = frameworkRegistrationCapabilityFromString(runtime["missingInput"]);
+  if (frameworkCapability == null) return null;
+  const suggestion = runtime["suggestion"];
+  const actionTarget = suggestion != null && typeof suggestion === "object" && !Array.isArray(suggestion)
+    ? (suggestion as Record<string, unknown>)["actionTarget"]
+    : null;
+  if (
+    actionTarget == null
+    || typeof actionTarget !== "object"
+    || Array.isArray(actionTarget)
+    || (actionTarget as Record<string, unknown>)["targetKind"] !== "framework-capability"
+    || (actionTarget as Record<string, unknown>)["memberName"] !== runtime["missingInput"]
+  ) {
+    return null;
+  }
+  return {
+    uri: originDocument.uri,
+    position: diagnostic.range.start,
+    range: diagnostic.range,
+    documentVersion: originDocument.version,
+    projectKey: runtime["projectKey"],
+    frameworkCapability,
+  };
 }
 
 export function mapSemanticRuntimeUnresolvedTemplateCodeActions(

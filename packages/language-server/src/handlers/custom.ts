@@ -6,11 +6,19 @@
  * distinct from normal semantic absence and refusal.
  */
 import type { CancellationToken } from "vscode-languageserver/node";
-import { canonicalTypeSystemPath } from "@aurelia-ls/semantic-runtime";
+import {
+  canonicalTypeSystemPath,
+  frameworkRegistrationCapabilityFromString,
+} from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
 import type {
   AnalysisLimitationsResponse,
   DocumentUriParams,
+  FrameworkCapabilityExplanationParams,
+  FrameworkCapabilityExplanationAnswerTransport,
+  FrameworkCapabilityExplanationContender,
+  FrameworkCapabilityExplanationRefusalKind,
+  FrameworkCapabilityExplanationResponse,
   RelatedFileCandidate,
   RelatedFilesResponse,
   RenameFromTsParams,
@@ -24,7 +32,15 @@ import type {
   WorkspaceStatusResponse,
   WorkspaceStatusParams,
 } from "../protocol.js";
-import { AureliaProtocolRequest } from "../protocol.js";
+import {
+  AureliaProtocolRequest,
+  frameworkCapabilityExplanationRefusal,
+} from "../protocol.js";
+import {
+  mapFrameworkCapabilityExplanation,
+  mapFrameworkCapabilityExplanationAnswer,
+  mapFrameworkCapabilityExplanationContender,
+} from "../mapping/framework-capability-explanation.js";
 import {
   mapAnalysisLimitationEffectivePolicy,
   mapAnalysisLimitationItem,
@@ -54,6 +70,8 @@ import {
 
 export type {
   AnalysisLimitationsResponse,
+  FrameworkCapabilityExplanationParams,
+  FrameworkCapabilityExplanationResponse,
   RenameFromTsParams,
   RenameFromTsResponse,
   ResourceInventoryParams,
@@ -63,6 +81,127 @@ export type {
   TemplateResourceAvailabilityParams,
   TemplateResourceAvailabilityResponse,
 } from "../protocol.js";
+
+export async function handleFrameworkCapabilityExplanation(
+  ctx: ServerContext,
+  params: FrameworkCapabilityExplanationParams,
+  operation: SemanticRuntimeLspOperation,
+): Promise<FrameworkCapabilityExplanationResponse> {
+  if (!frameworkCapabilityExplanationParamsAreValid(params)) {
+    throw new Error(
+      "Framework capability explanation requires an exact document URI, version, diagnostic range, project key, and capability.",
+    );
+  }
+  const fingerprint = operation.generation.fingerprint;
+  const document = operation.documents.ensureProgramDocument(params.uri);
+  if (document == null) {
+    return refusedFrameworkCapabilityExplanation(
+      fingerprint,
+      null,
+      null,
+      "documentUnavailable",
+    );
+  }
+  if (document.version !== params.documentVersion) {
+    return refusedFrameworkCapabilityExplanation(
+      fingerprint,
+      document.version,
+      null,
+      "documentVersionMismatch",
+    );
+  }
+
+  const frameworkCapability = frameworkRegistrationCapabilityFromString(params.frameworkCapability);
+  if (frameworkCapability == null) {
+    return refusedFrameworkCapabilityExplanation(
+      fingerprint,
+      document.version,
+      null,
+      "invalidFrameworkCapability",
+    );
+  }
+
+  const answer = await operation.frameworkCapabilityExplanation(
+    params.projectKey,
+    document.uri,
+    params.position,
+    frameworkCapability,
+  );
+  const mappingContext = {
+    documentUris: ctx.documentUris,
+    lookupText: (uri: string) => operation.documents.lookupText(uri),
+  };
+  const answerTransport = mapFrameworkCapabilityExplanationAnswer(answer, mappingContext);
+  if (`${answer.result}` !== "answered") {
+    return refusedFrameworkCapabilityExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "semanticAnswerUnavailable",
+    );
+  }
+  const contenders = answer.value.contenders.map((contender) =>
+    mapFrameworkCapabilityExplanationContender(contender, mappingContext)
+  );
+  if (`${answer.selection}` === "absent") {
+    return refusedFrameworkCapabilityExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "subjectAbsent",
+      contenders,
+    );
+  }
+  if (`${answer.selection}` === "ambiguous") {
+    return refusedFrameworkCapabilityExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "subjectAmbiguous",
+      contenders,
+    );
+  }
+  if (`${answer.selection}` !== "exact" || answer.value.explanation == null) {
+    return refusedFrameworkCapabilityExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "subjectMismatch",
+      contenders,
+    );
+  }
+
+  const explanation = mapFrameworkCapabilityExplanation(answer.value.explanation, mappingContext);
+  if (explanation.subject.source.state !== "available") {
+    return refusedFrameworkCapabilityExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "subjectSourceUnavailable",
+      contenders,
+    );
+  }
+  if (
+    explanation.subject.projectKey !== params.projectKey
+    || explanation.subject.requiredCapability !== params.frameworkCapability
+    || !ctx.documentUris.sameDocument(explanation.subject.source.location.uri, document.uri)
+    || !protocolRangesEqual(explanation.subject.source.location.range, params.range)
+  ) {
+    return refusedFrameworkCapabilityExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "subjectMismatch",
+      contenders,
+    );
+  }
+  return {
+    fingerprint,
+    documentVersion: document.version,
+    answer: answerTransport,
+    result: { status: "explained", explanation, contenders },
+  };
+}
 
 export async function handleAnalysisLimitations(
   ctx: ServerContext,
@@ -477,6 +616,21 @@ export function registerCustomHandlers(ctx: ServerContext): void {
   ctx.connection.onRequest(AureliaProtocolRequest.SourceOwnership, (params: SourceOwnershipParams, token: CancellationToken) =>
     request(ctx, "sourceOwnership", token, params?.uri,
       (guard) => handleSourceOwnership(ctx, params, guard)));
+  ctx.connection.onRequest(
+    AureliaProtocolRequest.FrameworkCapabilityExplanation,
+    (params: FrameworkCapabilityExplanationParams, token: CancellationToken) =>
+      documentRequest(ctx, "frameworkCapabilityExplanation", token, params.uri,
+        (operation): FrameworkCapabilityExplanationResponse => {
+          const document = operation.documents.ensureProgramDocument(params.uri);
+          return refusedFrameworkCapabilityExplanation(
+            operation.generation.fingerprint,
+            document?.version ?? null,
+            null,
+            "sourceNotAuthored",
+          );
+        },
+        (guard) => handleFrameworkCapabilityExplanation(ctx, params, guard)),
+  );
   ctx.connection.onRequest(AureliaProtocolRequest.ResourceInventory, (params: ResourceInventoryParams, token: CancellationToken) =>
     request(ctx, "resourceInventory", token, undefined,
       (guard) => handleResourceInventory(ctx, params, guard)));
@@ -508,6 +662,76 @@ export function registerCustomHandlers(ctx: ServerContext): void {
         candidateCount: 0,
       }),
       (guard) => handleRenameFromTs(ctx, params, guard)));
+}
+
+function refusedFrameworkCapabilityExplanation(
+  fingerprint: string,
+  documentVersion: number | null,
+  answer: FrameworkCapabilityExplanationAnswerTransport | null,
+  kind: FrameworkCapabilityExplanationRefusalKind,
+  contenders: readonly FrameworkCapabilityExplanationContender[] = [],
+): FrameworkCapabilityExplanationResponse {
+  return {
+    fingerprint,
+    documentVersion,
+    answer,
+    result: {
+      status: "refused",
+      refusal: frameworkCapabilityExplanationRefusal(kind),
+      contenders,
+    },
+  };
+}
+
+function frameworkCapabilityExplanationParamsAreValid(
+  params: FrameworkCapabilityExplanationParams | null | undefined,
+): params is FrameworkCapabilityExplanationParams {
+  return params != null
+    && typeof params.uri === "string"
+    && params.uri.length > 0
+    && Number.isSafeInteger(params.documentVersion)
+    && params.documentVersion >= 0
+    && typeof params.projectKey === "string"
+    && params.projectKey.length > 0
+    && typeof params.frameworkCapability === "string"
+    && params.frameworkCapability.length > 0
+    && protocolPositionIsValid(params.position)
+    && protocolRangeIsValid(params.range)
+    && params.position.line === params.range.start.line
+    && params.position.character === params.range.start.character;
+}
+
+function protocolPositionIsValid(position: unknown): position is { readonly line: number; readonly character: number } {
+  if (position == null || typeof position !== "object" || Array.isArray(position)) return false;
+  const candidate = position as Record<string, unknown>;
+  return Number.isSafeInteger(candidate["line"])
+    && (candidate["line"] as number) >= 0
+    && Number.isSafeInteger(candidate["character"])
+    && (candidate["character"] as number) >= 0;
+}
+
+function protocolRangeIsValid(range: unknown): range is {
+  readonly start: { readonly line: number; readonly character: number };
+  readonly end: { readonly line: number; readonly character: number };
+} {
+  if (range == null || typeof range !== "object" || Array.isArray(range)) return false;
+  const candidate = range as Record<string, unknown>;
+  if (!protocolPositionIsValid(candidate["start"]) || !protocolPositionIsValid(candidate["end"])) return false;
+  return candidate["end"].line > candidate["start"].line
+    || (
+      candidate["end"].line === candidate["start"].line
+      && candidate["end"].character >= candidate["start"].character
+    );
+}
+
+function protocolRangesEqual(
+  left: { readonly start: { readonly line: number; readonly character: number }; readonly end: { readonly line: number; readonly character: number } },
+  right: { readonly start: { readonly line: number; readonly character: number }; readonly end: { readonly line: number; readonly character: number } },
+): boolean {
+  return left.start.line === right.start.line
+    && left.start.character === right.start.character
+    && left.end.line === right.end.line
+    && left.end.character === right.end.character;
 }
 
 function documentRequest<T>(

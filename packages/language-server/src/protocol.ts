@@ -1,7 +1,12 @@
 import type {
   ApplicationFileRole,
+  FrameworkRegistrationCapability,
   SemanticAnalysisLimitationRow,
   SemanticAnalysisLimitationsResult,
+  SemanticAppQuery,
+  SemanticFrameworkCapabilityExplanation,
+  SemanticFrameworkCapabilityExplanationContender,
+  SemanticRuntimeContinuationRow,
   SemanticProjectFindingEffectivePolicy,
   SemanticProjectAnalysisCount,
   SemanticResourceDeclarationMode,
@@ -22,11 +27,17 @@ import type { Position, Range, WorkspaceEdit } from "vscode-languageserver/node"
 export const AureliaProtocolRequest = {
   SourceOwnership: "aurelia/sourceOwnership",
   AnalysisLimitations: "aurelia/analysisLimitations",
+  FrameworkCapabilityExplanation: "aurelia/frameworkCapabilityExplanation",
   ResourceInventory: "aurelia/resourceInventory",
   TemplateResourceAvailability: "aurelia/templateResourceAvailability",
   RelatedFiles: "aurelia/getRelatedFiles",
   WorkspaceStatus: "aurelia/workspaceStatus",
   RenameFromTypeScript: "aurelia/renameFromTs",
+} as const;
+
+/** Client-owned commands surfaced by protocol code actions. */
+export const AureliaProtocolCommand = {
+  ExplainFrameworkCapability: "aurelia.explainFrameworkCapability",
 } as const;
 
 export const AureliaProtocolNotification = {
@@ -163,7 +174,7 @@ export function templateCodeActionResolveRefusalFromValue(
 
 type RuntimeAnswerTransportFields = Pick<
   SemanticRuntimeAnswer<unknown>,
-  "schemaVersion" | "result" | "selection" | "coverage" | "summary" | "page" | "analysisDepth" | "continuations"
+  "schemaVersion" | "result" | "selection" | "coverage" | "summary" | "analysisBasis" | "page" | "analysisDepth" | "continuations"
 >;
 
 /** JSON transport form of semantic-runtime's const-enum answer vocabulary. */
@@ -178,6 +189,209 @@ export type RuntimeAnswerTransport = Omit<
 
 export type ProtocolWorkspaceEdit = WorkspaceEdit;
 export type ProtocolRange = Range;
+
+/**
+ * Exact diagnostic locus handed from a command-only quick fix to the explanation request.
+ * The document version is part of the subject: callers must not silently retarget a stale
+ * action to newer text or to the editor's current cursor.
+ */
+export interface FrameworkCapabilityExplanationParams {
+  readonly uri: string;
+  readonly position: Position;
+  readonly range: Range;
+  readonly documentVersion: number;
+  readonly projectKey: string;
+  readonly frameworkCapability: `${FrameworkRegistrationCapability}`;
+}
+
+export type FrameworkCapabilityExplanationSourceUnavailableReason =
+  | "source-uri-unavailable"
+  | "source-text-unavailable"
+  | "source-range-unavailable";
+
+/** URI-safe projection of one engine-owned source reference. */
+export type FrameworkCapabilityExplanationSourceTarget =
+  | {
+      readonly state: "available";
+      readonly location: {
+        readonly uri: string;
+        readonly range: Range;
+        readonly label: string;
+      };
+    }
+  | { readonly state: "absent" }
+  | {
+      readonly state: "unavailable";
+      readonly reason: FrameworkCapabilityExplanationSourceUnavailableReason;
+    };
+
+export type FrameworkCapabilityExplanationFileTarget =
+  | { readonly state: "available"; readonly uri: string }
+  | { readonly state: "unavailable"; readonly reason: "source-uri-unavailable" };
+
+export type FrameworkCapabilityExplanationAppQuery = Omit<
+  SemanticAppQuery,
+  "sourceFile" | "cursor" | "observedDependencyLocus"
+> & {
+  readonly sourceFile?: FrameworkCapabilityExplanationFileTarget | null;
+  readonly cursor?: {
+    readonly sourceFile: FrameworkCapabilityExplanationFileTarget;
+    readonly line: number;
+    readonly character: number;
+    readonly offset?: number | null;
+  } | null;
+  readonly observedDependencyLocus?: (
+    Omit<NonNullable<SemanticAppQuery["observedDependencyLocus"]>, "sourceFile">
+    & { readonly sourceFile?: FrameworkCapabilityExplanationFileTarget }
+  ) | null;
+};
+
+type SemanticFrameworkCapabilityExplanationSubject =
+  SemanticFrameworkCapabilityExplanation["subject"];
+type SemanticFrameworkCapabilityExplanationPackageEvidenceRow =
+  SemanticFrameworkCapabilityExplanation["evidence"]["package"]["evidence"][number];
+type SemanticFrameworkCapabilityExplanationBlocker =
+  SemanticFrameworkCapabilityExplanation["evidence"]["blockers"][number];
+type SemanticFrameworkCapabilityExplanationNextStep =
+  SemanticFrameworkCapabilityExplanation["nextSteps"][number];
+
+export type FrameworkCapabilityExplanationSubject = Omit<
+  SemanticFrameworkCapabilityExplanationSubject,
+  "source" | "templateSource"
+> & {
+  readonly source: FrameworkCapabilityExplanationSourceTarget;
+  readonly templateSource: FrameworkCapabilityExplanationSourceTarget;
+};
+
+export type FrameworkCapabilityExplanation = Omit<
+  SemanticFrameworkCapabilityExplanation,
+  "subject" | "evidence" | "nextSteps"
+> & {
+  readonly subject: FrameworkCapabilityExplanationSubject;
+  readonly evidence: {
+    readonly admission: Omit<
+      SemanticFrameworkCapabilityExplanation["evidence"]["admission"],
+      "sources"
+    > & { readonly sources: readonly FrameworkCapabilityExplanationSourceTarget[] };
+    readonly configuration: Omit<
+      SemanticFrameworkCapabilityExplanation["evidence"]["configuration"],
+      "sources"
+    > & { readonly sources: readonly FrameworkCapabilityExplanationSourceTarget[] };
+    readonly package: Omit<
+      SemanticFrameworkCapabilityExplanation["evidence"]["package"],
+      "evidence"
+    > & {
+      readonly evidence: readonly (Omit<
+        SemanticFrameworkCapabilityExplanationPackageEvidenceRow,
+        "source" | "handles"
+      > & { readonly source: FrameworkCapabilityExplanationSourceTarget })[];
+    };
+    readonly blockers: readonly (Omit<
+      SemanticFrameworkCapabilityExplanationBlocker,
+      "sources"
+    > & { readonly sources: readonly FrameworkCapabilityExplanationSourceTarget[] })[];
+  };
+  readonly nextSteps: readonly (Omit<
+    SemanticFrameworkCapabilityExplanationNextStep,
+    "source" | "targetQuery"
+  > & {
+    readonly source: FrameworkCapabilityExplanationSourceTarget;
+    readonly targetQuery: FrameworkCapabilityExplanationAppQuery | null;
+  })[];
+};
+
+export type FrameworkCapabilityExplanationContender = Omit<
+  SemanticFrameworkCapabilityExplanationContender,
+  "subject"
+> & { readonly subject: FrameworkCapabilityExplanationSubject };
+
+type SemanticFrameworkCapabilityExplanationContinuationEvidence =
+  NonNullable<SemanticRuntimeContinuationRow["evidence"]>;
+
+export type FrameworkCapabilityExplanationContinuation = Omit<
+  SemanticRuntimeContinuationRow,
+  "targetQuery" | "evidence"
+> & {
+  readonly targetQuery?: FrameworkCapabilityExplanationAppQuery | null;
+  readonly evidence: (Omit<
+    SemanticFrameworkCapabilityExplanationContinuationEvidence,
+    "sourceFacts"
+  > & {
+    readonly sourceFacts: readonly (Omit<
+      SemanticFrameworkCapabilityExplanationContinuationEvidence["sourceFacts"][number],
+      "source"
+    > & { readonly source: FrameworkCapabilityExplanationSourceTarget })[];
+  }) | null;
+};
+
+export type FrameworkCapabilityExplanationAnswerTransport = Omit<
+  RuntimeAnswerTransport,
+  "continuations"
+> & { readonly continuations?: readonly FrameworkCapabilityExplanationContinuation[] };
+
+export const FRAMEWORK_CAPABILITY_EXPLANATION_REFUSAL_REASONS = {
+  documentUnavailable: "the source document is no longer available",
+  sourceNotAuthored: "the source document is not authored by the current Aurelia workspace",
+  invalidFrameworkCapability: "the requested framework capability is not part of the engine vocabulary",
+  documentVersionMismatch: "the source document version no longer matches the diagnostic",
+  semanticAnswerUnavailable: "the semantic runtime did not answer the explanation query",
+  subjectAbsent: "the current source no longer contains that framework capability demand",
+  subjectAmbiguous: "the current source contains multiple matching framework capability demands",
+  subjectMismatch: "the current explanation does not match the requested diagnostic subject",
+  subjectSourceUnavailable: "the current diagnostic subject source could not be mapped safely",
+} as const;
+
+export type FrameworkCapabilityExplanationRefusalKind =
+  keyof typeof FRAMEWORK_CAPABILITY_EXPLANATION_REFUSAL_REASONS;
+
+export type FrameworkCapabilityExplanationRefusal = {
+  readonly [Kind in FrameworkCapabilityExplanationRefusalKind]: {
+    readonly kind: Kind;
+    readonly reason: (typeof FRAMEWORK_CAPABILITY_EXPLANATION_REFUSAL_REASONS)[Kind];
+  };
+}[FrameworkCapabilityExplanationRefusalKind];
+
+export function frameworkCapabilityExplanationRefusal(
+  kind: FrameworkCapabilityExplanationRefusalKind,
+): FrameworkCapabilityExplanationRefusal {
+  switch (kind) {
+    case "documentUnavailable":
+      return { kind, reason: FRAMEWORK_CAPABILITY_EXPLANATION_REFUSAL_REASONS.documentUnavailable };
+    case "sourceNotAuthored":
+      return { kind, reason: FRAMEWORK_CAPABILITY_EXPLANATION_REFUSAL_REASONS.sourceNotAuthored };
+    case "invalidFrameworkCapability":
+      return { kind, reason: FRAMEWORK_CAPABILITY_EXPLANATION_REFUSAL_REASONS.invalidFrameworkCapability };
+    case "documentVersionMismatch":
+      return { kind, reason: FRAMEWORK_CAPABILITY_EXPLANATION_REFUSAL_REASONS.documentVersionMismatch };
+    case "semanticAnswerUnavailable":
+      return { kind, reason: FRAMEWORK_CAPABILITY_EXPLANATION_REFUSAL_REASONS.semanticAnswerUnavailable };
+    case "subjectAbsent":
+      return { kind, reason: FRAMEWORK_CAPABILITY_EXPLANATION_REFUSAL_REASONS.subjectAbsent };
+    case "subjectAmbiguous":
+      return { kind, reason: FRAMEWORK_CAPABILITY_EXPLANATION_REFUSAL_REASONS.subjectAmbiguous };
+    case "subjectMismatch":
+      return { kind, reason: FRAMEWORK_CAPABILITY_EXPLANATION_REFUSAL_REASONS.subjectMismatch };
+    case "subjectSourceUnavailable":
+      return { kind, reason: FRAMEWORK_CAPABILITY_EXPLANATION_REFUSAL_REASONS.subjectSourceUnavailable };
+  }
+}
+
+export type FrameworkCapabilityExplanationResponse = {
+  readonly fingerprint: string;
+  readonly documentVersion: number | null;
+  readonly answer: FrameworkCapabilityExplanationAnswerTransport | null;
+  readonly result:
+    | {
+        readonly status: "explained";
+        readonly explanation: FrameworkCapabilityExplanation;
+        readonly contenders: readonly FrameworkCapabilityExplanationContender[];
+      }
+    | {
+        readonly status: "refused";
+        readonly refusal: FrameworkCapabilityExplanationRefusal;
+        readonly contenders: readonly FrameworkCapabilityExplanationContender[];
+      };
+};
 
 export type DocumentUriParams = { uri: string };
 

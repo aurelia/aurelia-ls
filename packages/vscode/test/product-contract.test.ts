@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
+import { AureliaProtocolCommand } from "@aurelia-ls/language-server/protocol";
 import { AureliaCommand, AureliaContext, AureliaView } from "../out/product-contract.js";
 
 interface ExtensionManifest {
@@ -78,6 +79,14 @@ describe("VS Code product contract", () => {
     expect(contributedCommands).toEqual(expectedCommands);
     expect(new Set(menuCommands)).toEqual(new Set(expectedCommands));
     expect(manifest.contributes?.keybindings).toBeUndefined();
+    expect(AureliaCommand.ExplainFrameworkCapability).toBe(
+      AureliaProtocolCommand.ExplainFrameworkCapability,
+    );
+    expect(manifest.contributes?.commands).toContainEqual({
+      command: AureliaCommand.ExplainFrameworkCapability,
+      title: "Explain Diagnostic",
+      category: "Aurelia",
+    });
   });
 
   test("contributes the resource explorer only to VS Code's built-in Explorer", () => {
@@ -194,6 +203,7 @@ describe("VS Code product contract", () => {
       },
     ]);
     for (const command of [
+      AureliaCommand.ExplainFrameworkCapability,
       AureliaCommand.OpenResourceDeclaration,
       AureliaCommand.OpenResourceImplementation,
       AureliaCommand.OpenResourceToSide,

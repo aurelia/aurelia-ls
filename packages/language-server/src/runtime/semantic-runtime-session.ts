@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import {
   isSemanticRuntimeAnalysisCurrentnessError,
+  type FrameworkRegistrationCapability,
   ManagedSemanticWorkspaceOperationStaleError,
   ManagedSemanticWorkspaceSession,
   semanticRuntimeOptionsForWorkspaceDescriptor,
@@ -25,6 +26,7 @@ import {
   type SemanticRuntimeProjectInputHost,
   type SemanticRuntimeProjectInputCurrentnessPolicy,
   type SemanticAppDiagnosticsResult,
+  type SemanticFrameworkCapabilityExplanationResult,
   type SemanticResourceDefinitionsResult,
   type SemanticResourceInventoryResult,
   type SemanticRuntimeAnswer,
@@ -96,6 +98,12 @@ export interface SemanticRuntimeLspOperation {
   authoredSourceOwnership(uri: DocumentUri): Promise<SemanticRuntimeAnswer<SemanticAuthoredSourceOwnershipResult>>;
   nativeProjectConfigurations(sourceUris: readonly DocumentUri[]): Promise<SemanticRuntimeAnswer<SemanticNativeProjectConfigurationsResult>>;
   analysisLimitations(projectKey: string): Promise<SemanticRuntimeAnswer<SemanticAnalysisLimitationsResult>>;
+  frameworkCapabilityExplanation(
+    projectKey: string,
+    uri: DocumentUri,
+    position: Position,
+    frameworkCapability: FrameworkRegistrationCapability,
+  ): Promise<SemanticRuntimeAnswer<SemanticFrameworkCapabilityExplanationResult>>;
   projectConfigurationDiagnostics(uri: DocumentUri): Promise<SemanticRuntimeAnswer<SemanticProjectConfigurationDiagnosticsResult>>;
   templateCompletions(uri: DocumentUri, position: Position): Promise<SemanticRuntimeAnswer<SemanticTemplateCompletionResult>>;
   appDiagnostics(document: TextDocument): Promise<SemanticRuntimeAnswer<SemanticAppDiagnosticsResult>>;
@@ -910,6 +918,8 @@ export class SemanticRuntimeLspSession {
       authoredSourceOwnership: (uri) => this.authoredSourceOwnership(uri, token),
       nativeProjectConfigurations: (sourceUris) => this.nativeProjectConfigurations(sourceUris, token),
       analysisLimitations: (projectKey) => this.analysisLimitations(projectKey, token),
+      frameworkCapabilityExplanation: (projectKey, uri, position, frameworkCapability) =>
+        this.frameworkCapabilityExplanation(projectKey, uri, position, frameworkCapability, token),
       projectConfigurationDiagnostics: (uri) => this.projectConfigurationDiagnostics(uri, token),
       templateCompletions: (uri, position) => this.templateCompletions(uri, position, token),
       appDiagnostics: (document) => this.appDiagnostics(document, token),
@@ -1295,6 +1305,29 @@ export class SemanticRuntimeLspSession {
         rows,
       }),
     });
+  }
+
+  private async frameworkCapabilityExplanation(
+    projectKey: string,
+    uri: DocumentUri,
+    position: Position,
+    frameworkCapability: FrameworkRegistrationCapability,
+    token: SemanticRuntimeLspRequestToken,
+  ): Promise<SemanticRuntimeAnswer<SemanticFrameworkCapabilityExplanationResult>> {
+    const runtime = this.runtimeForOperation(token);
+    const cursorInput = this.operationSourceCursor(uri, position, token);
+    const answer = await runtime.answerAppQuery({
+      kind: SemanticAppQueryKind.FrameworkCapabilityExplanation,
+      projectKey,
+      sourceFilePath: cursorInput.filePath,
+      cursor: cursorInput,
+      frameworkCapability,
+      inquiryProfile: "lsp-cursor",
+      includeAuthoringTemplates: true,
+      appRetention: "retain-app",
+    }) as SemanticRuntimeAnswer<SemanticFrameworkCapabilityExplanationResult>;
+    this.assertRequestTokenActive(token);
+    return answer;
   }
 
   private async projectsOwningDocument(

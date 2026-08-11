@@ -77,6 +77,7 @@
     "contract:service-root-v2-edges": "pnpm build && node scripts/contract-service-root-v2-edges.mjs",
     "contract:service-root-admission-chain": "pnpm build && node scripts/contract-service-root-admission-chain.mjs",
     "contract:framework-capability-demand-query": "pnpm build && node scripts/contract-framework-capability-demand-query.mjs",
+    "contract:framework-capability-explanation": "pnpm build && node scripts/contract-framework-capability-explanation.mjs",
     "contract:i18n-binding-lifecycle": "pnpm build && node scripts/contract-i18n-binding-lifecycle.mjs",
     "contract:template-diagnostics": "pnpm build && node scripts/contract-template-diagnostics.mjs",
     "contract:template-inlay-hints": "pnpm build && node scripts/contract-template-inlay-hints.mjs",

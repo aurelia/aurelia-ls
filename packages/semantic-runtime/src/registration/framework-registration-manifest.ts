@@ -285,6 +285,25 @@ const frameworkRegistrationKindsByModule = buildKindsByModule(frameworkRegistrat
 const frameworkRegistrationExportEntriesByModule = buildExportEntriesByModule(frameworkRegistrationDescriptors);
 const frameworkRegistrationKindsByCapability = buildKindsByCapability(frameworkRegistrationDescriptors);
 
+/** Closed public vocabulary accepted by framework-capability selectors at transport boundaries. */
+export const FRAMEWORK_REGISTRATION_CAPABILITIES: readonly FrameworkRegistrationCapability[] =
+  [...frameworkRegistrationKindsByCapability.keys()]
+    .sort((left, right) => left.localeCompare(right));
+
+const frameworkRegistrationCapabilitySet: ReadonlySet<string> = new Set(FRAMEWORK_REGISTRATION_CAPABILITIES);
+
+export function isFrameworkRegistrationCapability(
+  value: unknown,
+): value is FrameworkRegistrationCapability {
+  return typeof value === 'string' && frameworkRegistrationCapabilitySet.has(value);
+}
+
+export function frameworkRegistrationCapabilityFromString(
+  value: string,
+): FrameworkRegistrationCapability | null {
+  return isFrameworkRegistrationCapability(value) ? value : null;
+}
+
 export function frameworkRegistrationDescriptorForKind(
   kind: FrameworkRegistrationKind,
 ): FrameworkRegistrationDescriptor {

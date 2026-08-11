@@ -158,6 +158,7 @@ export function mapRuntimeAnswer(answer: SemanticRuntimeAnswer<unknown>): Runtim
     selection: `${answer.selection}`,
     coverage: `${answer.coverage}`,
     summary: answer.summary,
+    ...(answer.analysisBasis == null ? {} : { analysisBasis: answer.analysisBasis }),
     page: answer.page,
     ...(answer.analysisDepth == null ? {} : { analysisDepth: answer.analysisDepth }),
     ...(answer.continuations == null ? {} : { continuations: answer.continuations }),

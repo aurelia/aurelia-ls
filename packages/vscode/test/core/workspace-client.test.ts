@@ -1748,6 +1748,28 @@ describe("LspFacade workspace routing", () => {
       undefined,
     );
 
+    const explanationParams = {
+      uri: "file:///work/b/src/my-app.html",
+      position: { line: 4, character: 2 },
+      range: {
+        start: { line: 4, character: 2 },
+        end: { line: 4, character: 18 },
+      },
+      documentVersion: 7,
+      projectKey: "file:///work/b:app",
+      frameworkCapability: "i18n.translation-syntax" as const,
+    };
+    const capabilityExplanation = await facade.getFrameworkCapabilityExplanation(explanationParams);
+    expect(capabilityExplanation).toEqual(expect.objectContaining({
+      fingerprint: "file:///work/b:capability-explanation",
+      workspace: expect.objectContaining({ name: "b" }),
+    }));
+    expect(harness.clients[1]?.sendRequest).toHaveBeenCalledWith(
+      "aurelia/frameworkCapabilityExplanation",
+      explanationParams,
+      undefined,
+    );
+
     const prototypePosition = Object.assign(Object.create({
       get line(): number { return this._line; },
       get character(): number { return this._character; },
@@ -2229,6 +2251,20 @@ function createClientHarness(
           return { fingerprint: `${workspaceUri}:limitations`, projects: [] };
         case "aurelia/sourceOwnership":
           return sourceOwnershipResponse(workspaceUri, (params as { uri: string }).uri);
+        case "aurelia/frameworkCapabilityExplanation":
+          return {
+            fingerprint: `${workspaceUri}:capability-explanation`,
+            documentVersion: (params as { documentVersion: number }).documentVersion,
+            answer: null,
+            result: {
+              status: "refused",
+              refusal: {
+                kind: "subjectAbsent",
+                reason: "the current source no longer contains that framework capability demand",
+              },
+              contenders: [],
+            },
+          };
         case "aurelia/templateResourceAvailability":
           return harnessOptions.templateAvailabilityResponse?.(workspaceUri) ?? {
             fingerprint: `${workspaceUri}:availability`,

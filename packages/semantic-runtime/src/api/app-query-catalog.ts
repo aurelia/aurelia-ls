@@ -16,6 +16,7 @@ import {
   answer,
   COMPLETE_COLLECTION_ANSWER_OPTIONS,
 } from './answer-helpers.js';
+import { isFrameworkRegistrationCapability } from '../registration/framework-registration-manifest.js';
 
 const observedDependencyRowLocusKinds = [
   SemanticObservedDependencyLocusKind.Project,
@@ -63,6 +64,7 @@ const semanticAppQueryCatalogRows = [
   queryRow(SemanticAppQueryKind.FetchClientIssues, 'fetch-client', 'Fetch client configuration and retry-interceptor diagnostics.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true }),
   queryRow(SemanticAppQueryKind.DialogIssues, 'dialog', 'Dialog configuration, service, and child-resolver diagnostics.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true }),
   queryRow(SemanticAppQueryKind.FrameworkCapabilityDemands, 'framework', 'Authored framework/plugin capability demands with registration admission, package/import availability evidence, and source-backed actionability posture.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, supportsSourceFile: true }),
+  queryRow(SemanticAppQueryKind.FrameworkCapabilityExplanation, 'framework', 'Engine-authored causal explanation for the exact template-authored framework capability demand selected at a source cursor.', 'cursor-locus', { requiresCursor: true }),
   queryRow(SemanticAppQueryKind.RouterOverview, 'router', 'Summary-first route, viewport, route-tree, navigation, and router issue overview; opt into row samples with page.size or rowPageSize.', 'overview', { pagingKind: 'row-sample', supportsDetail: true }),
   ...semanticRouteQueryDescriptors.map((descriptor) =>
     queryRow(
@@ -228,6 +230,12 @@ export function semanticAppQueryCatalogShape(
     ...(query.kind !== SemanticAppQueryKind.RouterOverview || query.rowPageSize == null ? {} : { rowPageSize: query.rowPageSize }),
     ...(row.requiresCursor && query.cursor != null ? { cursor: query.cursor } : {}),
     ...(
+      query.kind === SemanticAppQueryKind.FrameworkCapabilityExplanation
+      && query.frameworkCapability != null
+        ? { frameworkCapability: query.frameworkCapability }
+        : {}
+    ),
+    ...(
       query.kind === SemanticAppQueryKind.TemplateResourceAvailability
       && query.templateResourceScopeIdentityKey != null
         ? { templateResourceScopeIdentityKey: query.templateResourceScopeIdentityKey }
@@ -267,6 +275,17 @@ export function unsupportedSemanticAppQuerySelectorFields(
     && query.kind !== SemanticAppQueryKind.TemplateResourceAvailability
   ) {
     unsupportedFields.push('templateResourceScopeIdentityKey');
+  }
+  if (
+    query.frameworkCapability != null
+    && query.kind !== SemanticAppQueryKind.FrameworkCapabilityExplanation
+  ) {
+    unsupportedFields.push('frameworkCapability');
+  } else if (
+    query.frameworkCapability != null
+    && !isFrameworkRegistrationCapability(query.frameworkCapability)
+  ) {
+    unsupportedFields.push('frameworkCapability');
   }
   if (query.includeTypeSurfaces != null && !row.supportsTypeSurfaces) {
     unsupportedFields.push('includeTypeSurfaces');

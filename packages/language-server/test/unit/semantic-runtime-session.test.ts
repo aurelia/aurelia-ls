@@ -7,6 +7,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import {
   InquiryContinuationKind,
+  FrameworkRegistrationCapability,
   ManagedSemanticWorkspaceOperationReceipt,
   NodeSemanticRuntimeProjectInputHost,
   SEMANTIC_RUNTIME_API_VERSION,
@@ -1521,6 +1522,46 @@ describe("SemanticRuntimeLspSession", () => {
 
     expect(metadataStateWitnessFacts(inventory.value.rows))
       .toEqual(HEADER_ONLY_WITNESS_FACTS);
+    await session.dispose();
+  }, 60_000);
+
+  test("routes an exact framework capability explanation through the operation-owned cursor", async () => {
+    const fixtureRoot = path.resolve(
+      fileURLToPath(new URL("../../../semantic-runtime/fixtures/pressure/framework-capability-explanation-no-package", import.meta.url)),
+    );
+    const templatePath = path.join(fixtureRoot, "src", "capability-explanation-app.html");
+    const templateText = fs.readFileSync(templatePath, "utf8");
+    const templateUri = pathToFileURL(templatePath).toString();
+    const template = TextDocument.create(templateUri, "html", 1, templateText);
+    const position = template.positionAt(templateText.indexOf("virtual-repeat.for"));
+    const session = createSession(fixtureRoot, new TestDocumentStore());
+
+    const answer = await session.runRequest(null, async (operation) => {
+      const summary = await operation.workspaceSummary();
+      const project = summary.value.appCandidates[0];
+      if (project == null) throw new Error("Expected the explanation fixture to admit one app project.");
+      return operation.frameworkCapabilityExplanation(
+        project.projectKey,
+        templateUri,
+        position,
+        FrameworkRegistrationCapability.UiVirtualizationDefaultResources,
+      );
+    });
+
+    expect(answer).toMatchObject({
+      result: "answered",
+      selection: "exact",
+      value: {
+        explanation: {
+          subject: {
+            requiredCapability: "ui-virtualization.default-resources",
+            source: { path: expect.stringContaining("capability-explanation-app.html") },
+          },
+          conclusion: { kind: "not-admitted" },
+        },
+        contenders: [{ conclusionKind: "not-admitted" }],
+      },
+    });
     await session.dispose();
   }, 60_000);
 

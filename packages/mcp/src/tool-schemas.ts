@@ -7,6 +7,7 @@ import {
   SEMANTIC_RUNTIME_DETAIL_VALUES,
   SEMANTIC_TYPE_SYSTEM_DEPENDENCY_CACHE_CLEAR_POLICIES,
   SemanticObservedDependencyLocusKind,
+  isFrameworkRegistrationCapability,
 } from '@aurelia-ls/semantic-runtime';
 
 const appQueryKindSchema = z.string()
@@ -57,6 +58,11 @@ const detailSchema = z.enum(SEMANTIC_RUNTIME_DETAIL_VALUES).nullable().optional(
 
 const diagnosticProjectionSchema = z.enum(SEMANTIC_DIAGNOSTIC_PROJECTION_POLICIES).nullable().optional()
   .describe('Diagnostic projection; use type-projection when TypeChecker cost is wanted.');
+
+const frameworkCapabilitySchema = z.string()
+  .refine(isFrameworkRegistrationCapability, 'Unknown Aurelia framework capability.')
+  .nullable().optional()
+  .describe('Exact closed framework capability selector returned by capability-demand rows and diagnostic continuations for framework-capability-explanation.');
 
 const sourceFileSchema = z.object({
   filePath: z.string()
@@ -172,6 +178,7 @@ const semanticAppQuerySchema = z.object({
     .describe('Router overview row-sample size.'),
   cursor: cursorSchema.nullable().optional()
     .describe('Cursor locus for cursor query kinds.'),
+  frameworkCapability: frameworkCapabilitySchema,
   sourceFile: sourceFileSchema.nullable().optional()
     .describe('Per-query file locus. Check supportsSourceFile in aurelia_app_query_catalog.'),
   observedDependencyLocus: observedDependencyLocusSchema.nullable().optional()
@@ -263,6 +270,7 @@ export const appQueryInputSchema = {
   queryKind: appQueryKindSchema,
   cursor: cursorSchema.nullable().optional()
     .describe('Cursor locus. Use member token for member-owner type answers.'),
+  frameworkCapability: frameworkCapabilitySchema,
   sourceFile: sourceFileSchema.nullable().optional()
     .describe('Per-query file scope. Check supportsSourceFile; unsupported returns result=unsupported.'),
   includeTypeSurfaces: z.boolean().nullable().optional()

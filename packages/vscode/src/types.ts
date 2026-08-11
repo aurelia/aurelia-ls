@@ -2,6 +2,8 @@ import type {
   AnalysisLimitationItem,
   AnalysisLimitationsResponse,
   AnalysisChangedPayload,
+  FrameworkCapabilityExplanationParams,
+  FrameworkCapabilityExplanationResponse,
   ProtocolRange,
   ProtocolWorkspaceEdit,
   RelatedFileCandidate,
@@ -18,6 +20,8 @@ export type {
   AnalysisLimitationItem,
   AnalysisLimitationsResponse,
   AnalysisChangedPayload,
+  FrameworkCapabilityExplanationParams,
+  FrameworkCapabilityExplanationResponse,
   ProtocolRange,
   ProtocolWorkspaceEdit,
   RelatedFileCandidate,
@@ -76,6 +80,10 @@ export type TemplateResourceAvailabilitySnapshot = TemplateResourceAvailabilityR
 };
 
 export type SourceOwnershipSnapshot = SourceOwnershipResponse & {
+  readonly workspace: AureliaWorkspaceIdentity;
+};
+
+export type FrameworkCapabilityExplanationSnapshot = FrameworkCapabilityExplanationResponse & {
   readonly workspace: AureliaWorkspaceIdentity;
 };
 

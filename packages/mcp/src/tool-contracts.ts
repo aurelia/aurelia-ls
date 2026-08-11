@@ -129,6 +129,7 @@ export interface AureliaMcpDocsFetchInput {
 export interface AureliaMcpAppQueryInput extends AureliaMcpOpenAppInput, AureliaMcpPageInput, AureliaMcpDetailInput {
   readonly queryKind: SemanticAppQuery['kind'];
   readonly cursor?: SemanticRuntimeSourceCursorInput | null;
+  readonly frameworkCapability?: SemanticAppQuery['frameworkCapability'];
   readonly sourceFile?: SemanticRuntimeSourceFileInput | null;
   readonly diagnosticProjection?: SemanticAppQuery['diagnosticProjection'];
   readonly includeTypeSurfaces?: SemanticAppQuery['includeTypeSurfaces'];

@@ -23,6 +23,7 @@ import {
 import { semanticAppQueryMaterializationPolicy } from './app-query-policy.js';
 import {
   semanticContinuationSourceFacts,
+  semanticExactSourceReference,
   semanticSourceReferencesInAnswerRows,
   semanticSourceFacetsForReference,
   type SemanticSourceReference,
@@ -36,6 +37,7 @@ import {
   type SemanticAppDiagnosticRow,
   type SemanticAppDiagnosticSummaryRow,
   type SemanticFrameworkCapabilityDemandRow,
+  type SemanticFrameworkCapabilityExplanation,
   type SemanticRuntimeAnswer,
   type SemanticRuntimeAppQueryBatchResult,
   type SemanticRuntimeContinuationRow,
@@ -54,6 +56,9 @@ import {
   semanticRuntimeContinuationWithAppBuilderQueryIntentFilter,
   semanticRuntimeContinuationWithAppQueryIntentFilter,
 } from './continuation-helpers.js';
+import {
+  frameworkRegistrationCapabilityFromString,
+} from '../registration/framework-registration-manifest.js';
 
 type ContinuationSeedBase = {
   readonly kind: InquiryContinuationKind;
@@ -560,6 +565,44 @@ function addDiagnosticValueContinuations(
   }
   const frameworkRows = frameworkCapabilityDiagnosticRows(relatedRows);
   if (frameworkRows.length > 0) {
+    if (query.kind === SemanticAppQueryKind.AppDiagnostics) {
+      for (const row of frameworkRows) {
+        if (!('source' in row) || !('missingInput' in row)) {
+          continue;
+        }
+        const source = semanticExactSourceReference(row.source);
+        const frameworkCapability = row.missingInput == null
+          ? null
+          : frameworkRegistrationCapabilityFromString(row.missingInput);
+        if (
+          source?.path == null
+          || source.start == null
+          || source.end == null
+          || source.end < source.start
+          || frameworkCapability == null
+        ) {
+          continue;
+        }
+        seeds.push(
+          withSourceReferences(
+            inspect(
+              'Explain the exact framework capability demand behind this diagnostic.',
+              {
+                kind: SemanticAppQueryKind.FrameworkCapabilityExplanation,
+                cursor: {
+                  filePath: source.path,
+                  line: 0,
+                  character: 0,
+                  offset: source.start + Math.floor((source.end - source.start) / 2),
+                },
+                frameworkCapability,
+              },
+            ),
+            [source],
+          ),
+        );
+      }
+    }
     seeds.push(
       withSourceReferences(
         inspect(
@@ -1158,6 +1201,57 @@ function addFrameworkContinuations(
   sourceFile: SemanticRuntimeSourceFileInput | null,
   page: SemanticRuntimePageInput,
 ): void {
+  if (query.kind === SemanticAppQueryKind.FrameworkCapabilityExplanation) {
+    const explanation = frameworkCapabilityExplanationValue(result.value);
+    if (explanation == null) {
+      if (sourceFile != null) {
+        seeds.push(
+          inspect(
+            'Inspect framework capability-demand rows in the cursor source file.',
+            withSourceFile(rowQuery(SemanticAppQueryKind.FrameworkCapabilityDemands, query, page), sourceFile),
+          ),
+        );
+      }
+      return;
+    }
+    const explanationSourceFile = explanation.subject.source.path == null
+      ? sourceFile
+      : { filePath: explanation.subject.source.path };
+    seeds.push(
+      inspect(
+        'Inspect the source-scoped capability-demand facts behind this explanation.',
+        withSourceFile(
+          rowQuery(SemanticAppQueryKind.FrameworkCapabilityDemands, query, page),
+          explanationSourceFile,
+        ),
+      ),
+    );
+    const relatedStep = explanation.nextSteps.find((step) =>
+      step.kind === 'inspect-query'
+      && step.relatedQueryKind != null
+      && step.relatedQueryKind !== SemanticAppQueryKind.FrameworkCapabilityDemands
+      && step.relatedQueryKind !== SemanticAppQueryKind.OpenSeamSites
+    );
+    seeds.push(
+      inspect(
+        `Inspect ${explanation.subject.requiredCapability} related facts in ${explanation.evidence.admission.state} admission context.`,
+        rowQuery(
+          relatedStep?.relatedQueryKind ?? SemanticAppQueryKind.ConfigurationIssues,
+          query,
+          page,
+        ),
+      ),
+    );
+    if (explanation.evidence.blockers.length > 0) {
+      seeds.push(
+        inspect(
+          'Inspect the open semantic sites behind this capability explanation.',
+          withSourceFile(rowQuery(SemanticAppQueryKind.OpenSeamSites, query, page), explanationSourceFile),
+        ),
+      );
+    }
+    return;
+  }
   if (query.kind !== SemanticAppQueryKind.FrameworkCapabilityDemands) {
     return;
   }
@@ -1202,6 +1296,24 @@ function addFrameworkContinuations(
       ),
     );
   }
+}
+
+function frameworkCapabilityExplanationValue(
+  value: unknown,
+): SemanticFrameworkCapabilityExplanation | null {
+  if (
+    value == null
+    || typeof value !== 'object'
+    || !('explanation' in value)
+    || value.explanation == null
+    || typeof value.explanation !== 'object'
+    || !('subject' in value.explanation)
+    || !('evidence' in value.explanation)
+    || !('nextSteps' in value.explanation)
+  ) {
+    return null;
+  }
+  return value.explanation as SemanticFrameworkCapabilityExplanation;
 }
 
 function addIssueContinuations(
@@ -1759,7 +1871,10 @@ function relatedDiagnosticSourceReferences(
 function frameworkCapabilityDiagnosticRows(
   rows: readonly (SemanticAppDiagnosticRow | SemanticAppDiagnosticSummaryRow)[],
 ): readonly (SemanticAppDiagnosticRow | SemanticAppDiagnosticSummaryRow)[] {
-  return rows.filter((row) => row.diagnosticKind === 'framework-capability-not-registered');
+  return rows.filter((row) =>
+    row.diagnosticKind === 'framework-capability-not-registered'
+    || row.diagnosticKind === 'framework-capability-configured-out'
+  );
 }
 
 function frameworkCapabilityDiagnosticSourceReferences(

@@ -1186,6 +1186,111 @@ describe("handleCodeAction", () => {
     );
   });
 
+  test("keeps repair actions and adds a command-only explanation at the exact diagnostic locus", async () => {
+    const ctx = createMockCodeActionContext();
+    const range = {
+      start: { line: 0, character: codeActionStart },
+      end: { line: 0, character: codeActionStart + "titel".length },
+    };
+    const diagnostic = {
+      range,
+      message: "This syntax needs an unavailable Aurelia surface.",
+      data: {
+        semanticRuntime: {
+          queryKind: "app-diagnostics",
+          projectKey: "app",
+          diagnosticKind: "framework-capability-not-registered",
+          diagnosticAuthority: "semantic-authoring-policy",
+          missingInput: "i18n.translation-syntax",
+          suggestion: {
+            actionTarget: {
+              targetKind: "framework-capability",
+              memberName: "i18n.translation-syntax",
+            },
+          },
+        },
+      },
+    };
+
+    const result = await handleCodeAction(
+      ctx as never,
+      { ...params, context: { diagnostics: [diagnostic] } },
+      createContextTestOperation(ctx),
+    );
+
+    expect(result).toHaveLength(2);
+    expect(result?.[0]?.edit).toBeUndefined();
+    expect(result?.[1]).toEqual({
+      title: "Explain this Aurelia diagnostic",
+      kind: "quickfix",
+      diagnostics: [diagnostic],
+      isPreferred: false,
+      command: {
+        title: "Explain Aurelia diagnostic",
+        command: "aurelia.explainFrameworkCapability",
+        arguments: [{
+          uri: templateUri,
+          position: range.start,
+          range,
+          documentVersion: 5,
+          projectKey: "app",
+          frameworkCapability: "i18n.translation-syntax",
+        }],
+      },
+      data: {
+        semanticRuntime: {
+          queryKind: "framework-capability-explanation",
+          explanationSeed: {
+            uri: templateUri,
+            position: range.start,
+            range,
+            documentVersion: 5,
+            projectKey: "app",
+            frameworkCapability: "i18n.translation-syntax",
+          },
+        },
+      },
+    });
+  });
+
+  test("does not offer explanation commands for detached or mismatched diagnostic data", async () => {
+    const ctx = createMockCodeActionContext({ actions: [] });
+    const range = {
+      start: { line: 0, character: codeActionStart },
+      end: { line: 0, character: codeActionStart + "titel".length },
+    };
+    const result = await handleCodeAction(
+      ctx as never,
+      {
+        ...params,
+        context: {
+          diagnostics: [{
+            range,
+            message: "Detached diagnostic",
+            data: {
+              semanticRuntime: {
+                queryKind: "app-diagnostics",
+                projectKey: "app",
+                diagnosticKind: "framework-capability-configured-out",
+                diagnosticAuthority: "semantic-authoring-policy",
+                missingInput: "i18n.translation-syntax",
+                suggestion: {
+                  actionTarget: {
+                    targetKind: "framework-capability",
+                    memberName: "router.default-resources",
+                  },
+                },
+              },
+            },
+          }],
+        },
+      },
+      createContextTestOperation(ctx),
+    );
+
+    expect(result).toBeNull();
+  });
+
   test("re-plans and resolves a selected code action with current document versions", async () => {
     const ctx = createMockCodeActionContext();
     const actions = await handleCodeAction(

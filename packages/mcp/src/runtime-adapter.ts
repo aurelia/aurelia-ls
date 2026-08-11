@@ -147,6 +147,7 @@ export class AureliaMcpSemanticRuntimeAdapter {
       page: input.page ?? undefined,
       detail: input.detail ?? undefined,
       cursor: input.cursor ?? undefined,
+      frameworkCapability: input.frameworkCapability ?? undefined,
       sourceFile: normalizedSourceFileInput(input.sourceFile, 'sourceFile'),
       diagnosticProjection: input.diagnosticProjection ?? undefined,
       includeTypeSurfaces: input.includeTypeSurfaces ?? undefined,

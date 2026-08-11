@@ -292,6 +292,7 @@ import {
 } from './dialog-projections.js';
 import {
   frameworkCapabilityDemandsDisplayText,
+  readFrameworkCapabilityExplanation,
   readFrameworkCapabilityDemandRows,
   readFrameworkCapabilityDemandDiagnosticRows,
 } from './framework-projections.js';
@@ -371,6 +372,7 @@ import {
   type SemanticEvaluationIssuesResult,
   type SemanticFetchClientIssuesResult,
   type SemanticFrameworkCapabilityDemandsResult,
+  type SemanticFrameworkCapabilityExplanationResult,
   type SemanticI18nTranslationBindingsResult,
   type SemanticI18nTranslationKeysResult,
   type SemanticOpenSeamRow,
@@ -3982,6 +3984,8 @@ export class SemanticApp {
         return answerCurrentQuery(() => this.dialogIssues(query.page, query.detail));
       case SemanticAppQueryKind.FrameworkCapabilityDemands:
         return answerCurrentQuery(() => this.frameworkCapabilityDemands(query.page, query.detail, query.sourceFile));
+      case SemanticAppQueryKind.FrameworkCapabilityExplanation:
+        return answerCurrentQuery(() => this.frameworkCapabilityExplanation(query));
       case SemanticAppQueryKind.RouterOverview:
         return answerCurrentQuery(() => this.routerOverview({
           rowPageSize: query.rowPageSize ?? query.page?.size,
@@ -5346,6 +5350,22 @@ export class SemanticApp {
         rows: paged.rows,
       },
       { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
+    );
+  }
+
+  frameworkCapabilityExplanation(
+    query: SemanticAppQuery,
+  ): SemanticRuntimeAnswer<SemanticFrameworkCapabilityExplanationResult> {
+    const claimed = this.answerPublicQueryIfNeeded<SemanticFrameworkCapabilityExplanationResult>(query);
+    if (claimed != null) {
+      return claimed;
+    }
+    return readFrameworkCapabilityExplanation(
+      this.runtime.workspace.rootDir,
+      this.emission,
+      this.runtime.workspace.store,
+      query.cursor,
+      query.frameworkCapability,
     );
   }
 

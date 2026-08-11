@@ -455,6 +455,7 @@ export const enum SemanticAppQueryKind {
   FetchClientIssues = 'fetch-client-issues',
   DialogIssues = 'dialog-issues',
   FrameworkCapabilityDemands = 'framework-capability-demands',
+  FrameworkCapabilityExplanation = 'framework-capability-explanation',
   RouterOverview = 'router-overview',
   RouterOptions = 'router-options',
   Routes = 'routes',
@@ -544,6 +545,7 @@ export const SEMANTIC_APP_QUERY_KINDS = [
   SemanticAppQueryKind.FetchClientIssues,
   SemanticAppQueryKind.DialogIssues,
   SemanticAppQueryKind.FrameworkCapabilityDemands,
+  SemanticAppQueryKind.FrameworkCapabilityExplanation,
   SemanticAppQueryKind.RouterOverview,
   SemanticAppQueryKind.RouterOptions,
   SemanticAppQueryKind.Routes,
@@ -882,6 +884,8 @@ export interface SemanticAppQuery {
   readonly cursor?: SemanticRuntimeSourceCursorInput | null;
   /** Exact compiler-resource scope selected from a prior template-resource-availability answer. */
   readonly templateResourceScopeIdentityKey?: string | null;
+  /** Exact framework capability selected at a cursor when more than one demand shares the authored locus. */
+  readonly frameworkCapability?: FrameworkRegistrationCapability | `${FrameworkRegistrationCapability}` | null;
   /** Source file used by file-scoped authoring queries such as template diagnostics. */
   readonly sourceFile?: SemanticRuntimeSourceFileInput | null;
   /** Include the declaration/source target when a cursor-scoped references query supports it. */
@@ -3396,6 +3400,111 @@ export interface SemanticFrameworkCapabilityDemandRow {
 export interface SemanticFrameworkCapabilityDemandsResult {
   readonly displayText: string;
   readonly rows: readonly SemanticFrameworkCapabilityDemandRow[];
+}
+
+export type SemanticFrameworkCapabilityExplanationConclusionKind =
+  | 'available'
+  | 'configured-out'
+  | 'not-admitted'
+  | 'admission-unknown'
+  | 'provider-chain-unproven';
+
+export interface SemanticFrameworkCapabilityExplanationSubject {
+  readonly projectKey: string;
+  readonly authoredName: string;
+  readonly siteKind: FrameworkCapabilityDemandSiteKind | `${FrameworkCapabilityDemandSiteKind}`;
+  readonly demandKind: FrameworkCapabilityDemandKind | `${FrameworkCapabilityDemandKind}`;
+  readonly requiredCapability: FrameworkRegistrationCapability | `${FrameworkRegistrationCapability}`;
+  readonly source: SemanticSourceReference;
+  readonly templateSource: SemanticSourceReference | null;
+}
+
+export interface SemanticFrameworkCapabilityExplanationConclusion {
+  readonly kind: SemanticFrameworkCapabilityExplanationConclusionKind;
+  readonly title: string;
+  readonly explanation: string;
+  readonly action: string;
+}
+
+export interface SemanticFrameworkCapabilityExplanationAdmissionEvidence {
+  readonly state: FrameworkCapabilityAdmissionState | `${FrameworkCapabilityAdmissionState}`;
+  readonly requiredRegistrationKinds: readonly (FrameworkRegistrationKind | `${FrameworkRegistrationKind}`)[];
+  readonly sources: readonly SemanticSourceReference[];
+}
+
+export interface SemanticFrameworkCapabilityExplanationConfigurationEvidence {
+  readonly state: 'excluded' | 'open' | 'not-indicated';
+  readonly sources: readonly SemanticSourceReference[];
+}
+
+export interface SemanticFrameworkCapabilityExplanationPackageEvidence {
+  readonly availabilityState: FrameworkCapabilityAvailabilityState | `${FrameworkCapabilityAvailabilityState}`;
+  readonly candidateModuleNames: readonly string[];
+  readonly recommendedModuleName: string | null;
+  readonly evidence: readonly SemanticFrameworkCapabilityPackageEvidenceRow[];
+}
+
+export interface SemanticFrameworkCapabilityExplanationBlocker {
+  readonly kind: 'open-seam';
+  readonly seamKindKey: string;
+  readonly summary: string;
+  readonly reasonKinds: readonly (OpenSeamReasonKind | `${OpenSeamReasonKind}`)[];
+  readonly boundaryKinds: readonly (OpenSeamBoundaryKind | `${OpenSeamBoundaryKind}`)[];
+  readonly sources: readonly SemanticSourceReference[];
+}
+
+export interface SemanticFrameworkCapabilityExplanationEvidence {
+  readonly admission: SemanticFrameworkCapabilityExplanationAdmissionEvidence;
+  readonly configuration: SemanticFrameworkCapabilityExplanationConfigurationEvidence;
+  readonly package: SemanticFrameworkCapabilityExplanationPackageEvidence;
+  readonly blockers: readonly SemanticFrameworkCapabilityExplanationBlocker[];
+}
+
+export type SemanticFrameworkCapabilityExplanationUncertaintyReason =
+  | 'admission-status-unknown'
+  | 'provider-chain-unproven'
+  | 'blocking-open-seam'
+  | 'source-discovery-truncated'
+  | 'configuration-source-unavailable';
+
+export interface SemanticFrameworkCapabilityExplanationUncertainty {
+  readonly state: 'closed' | 'open' | 'truncated';
+  readonly reasons: readonly SemanticFrameworkCapabilityExplanationUncertaintyReason[];
+  readonly explanation: string;
+}
+
+export interface SemanticFrameworkCapabilityExplanationCurrentness {
+  readonly authority: 'answer-analysis-basis';
+  readonly explanation: string;
+}
+
+export interface SemanticFrameworkCapabilityExplanationNextStep {
+  readonly kind: 'inspect-source' | 'inspect-query' | 'requery';
+  readonly label: string;
+  readonly source: SemanticSourceReference | null;
+  readonly relatedQueryKind: SemanticAppQueryKind | `${SemanticAppQueryKind}` | null;
+  readonly targetQuery: SemanticAppQuery | null;
+}
+
+export interface SemanticFrameworkCapabilityExplanation {
+  readonly subject: SemanticFrameworkCapabilityExplanationSubject;
+  readonly conclusion: SemanticFrameworkCapabilityExplanationConclusion;
+  readonly evidence: SemanticFrameworkCapabilityExplanationEvidence;
+  readonly uncertainty: SemanticFrameworkCapabilityExplanationUncertainty;
+  readonly currentness: SemanticFrameworkCapabilityExplanationCurrentness;
+  readonly nextSteps: readonly SemanticFrameworkCapabilityExplanationNextStep[];
+}
+
+export interface SemanticFrameworkCapabilityExplanationContender {
+  readonly subject: SemanticFrameworkCapabilityExplanationSubject;
+  readonly conclusionKind: SemanticFrameworkCapabilityExplanationConclusionKind;
+}
+
+export interface SemanticFrameworkCapabilityExplanationResult {
+  readonly displayText: string;
+  readonly projectKey: string;
+  readonly explanation: SemanticFrameworkCapabilityExplanation | null;
+  readonly contenders: readonly SemanticFrameworkCapabilityExplanationContender[];
 }
 
 export interface SemanticRouteConfigComponentRow {

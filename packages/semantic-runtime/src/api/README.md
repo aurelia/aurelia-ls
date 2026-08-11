@@ -688,6 +688,15 @@ such edit.
 registration-admission sources, configured-out option sources, package/import availability evidence, source-file
 scoping, related issue lanes, and compact actionability posture. Use it to inspect admitted, configured-out, missing,
 unknown, and chain-unproven capability demand facts without changing which rows become diagnostics.
+`FrameworkCapabilityExplanation` is the cursor-locus product answer over those conserved facts. It selects only exact
+template-authored demand spans, optionally narrowed by the closed `frameworkCapability` selector, and fails closed with
+`absent` or `ambiguous` selection rather than choosing a contender in an adapter. An exact answer authors the subject,
+conclusion, admission/configuration/package/blocker evidence, uncertainty, and at most three source- or query-backed
+next steps. Missing package evidence never becomes an install or registration claim. Admission-unknown, chain-unproven,
+and blocker-backed answers retain open coverage. The answer envelope's `analysisBasis` remains the only currentness
+authority; value-level text only tells callers to requery after source or project changes. Source-service API demands
+remain outside this first explanation slice because their consulting-container ownership requires a separate DI/service
+experience.
 Each template demand also exposes its compiler analysis-context handle. The same component definition can be compiled
 under more than one app-root world, so consumers must join by definition plus analysis context rather than collapsing
 rows by source or resource spelling. Built-in ownership follows the resolver-selected resource catalog member; a known
