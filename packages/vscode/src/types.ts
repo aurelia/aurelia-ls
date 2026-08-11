@@ -1,4 +1,6 @@
 import type {
+  AnalysisLimitationItem,
+  AnalysisLimitationsResponse,
   AnalysisChangedPayload,
   ProtocolRange,
   ProtocolWorkspaceEdit,
@@ -13,6 +15,8 @@ import type {
 } from "@aurelia-ls/language-server/protocol";
 
 export type {
+  AnalysisLimitationItem,
+  AnalysisLimitationsResponse,
   AnalysisChangedPayload,
   ProtocolRange,
   ProtocolWorkspaceEdit,
@@ -49,6 +53,22 @@ export type ResourceInventoryWorkspaceSnapshot = AureliaWorkspaceIdentity & (
 /** Session snapshots remain separate because their fingerprints are not globally comparable. */
 export interface ResourceInventorySnapshot {
   readonly workspaces: readonly ResourceInventoryWorkspaceSnapshot[];
+}
+
+export type AnalysisLimitationsWorkspaceSnapshot = AureliaWorkspaceIdentity & (
+  | {
+      readonly status: "ready";
+      readonly response: AnalysisLimitationsResponse;
+    }
+  | {
+      readonly status: "error";
+      readonly error: string;
+    }
+);
+
+/** Session answers remain separate until a consumer proves an exact inventory-generation join. */
+export interface AnalysisLimitationsSnapshot {
+  readonly workspaces: readonly AnalysisLimitationsWorkspaceSnapshot[];
 }
 
 export type TemplateResourceAvailabilitySnapshot = TemplateResourceAvailabilityResponse & {

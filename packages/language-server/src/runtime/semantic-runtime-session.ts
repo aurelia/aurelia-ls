@@ -17,6 +17,7 @@ import {
   SemanticRuntimeProjectInputChange,
   SemanticRuntimeProjectInputChangeKind,
   SemanticAppQueryKind,
+  type SemanticAnalysisLimitationsResult,
   type SemanticApplicationTopologyResult,
   type ManagedSemanticWorkspaceOperationContext,
   type ManagedSemanticWorkspaceOperationReceipt,
@@ -94,6 +95,7 @@ export interface SemanticRuntimeLspOperation {
   workspaceSummary(): Promise<SemanticRuntimeAnswer<SemanticRuntimeSummary>>;
   authoredSourceOwnership(uri: DocumentUri): Promise<SemanticRuntimeAnswer<SemanticAuthoredSourceOwnershipResult>>;
   nativeProjectConfigurations(sourceUris: readonly DocumentUri[]): Promise<SemanticRuntimeAnswer<SemanticNativeProjectConfigurationsResult>>;
+  analysisLimitations(projectKey: string): Promise<SemanticRuntimeAnswer<SemanticAnalysisLimitationsResult>>;
   projectConfigurationDiagnostics(uri: DocumentUri): Promise<SemanticRuntimeAnswer<SemanticProjectConfigurationDiagnosticsResult>>;
   templateCompletions(uri: DocumentUri, position: Position): Promise<SemanticRuntimeAnswer<SemanticTemplateCompletionResult>>;
   appDiagnostics(document: TextDocument): Promise<SemanticRuntimeAnswer<SemanticAppDiagnosticsResult>>;
@@ -907,6 +909,7 @@ export class SemanticRuntimeLspSession {
       workspaceSummary: () => this.workspaceSummary(token),
       authoredSourceOwnership: (uri) => this.authoredSourceOwnership(uri, token),
       nativeProjectConfigurations: (sourceUris) => this.nativeProjectConfigurations(sourceUris, token),
+      analysisLimitations: (projectKey) => this.analysisLimitations(projectKey, token),
       projectConfigurationDiagnostics: (uri) => this.projectConfigurationDiagnostics(uri, token),
       templateCompletions: (uri, position) => this.templateCompletions(uri, position, token),
       appDiagnostics: (document) => this.appDiagnostics(document, token),
@@ -1265,6 +1268,30 @@ export class SemanticRuntimeLspSession {
       rowsForValue: (value) => value.rows,
       mergeValue: (terminalValue, rows) => ({
         ...terminalValue,
+        rows,
+      }),
+    });
+  }
+
+  private async analysisLimitations(
+    projectKey: string,
+    token: SemanticRuntimeLspRequestToken,
+  ): Promise<SemanticRuntimeAnswer<SemanticAnalysisLimitationsResult>> {
+    const runtime = this.runtimeForOperation(token);
+    return drainSemanticRuntimePages({
+      label: "analysis limitation",
+      assertActive: () => this.assertRequestTokenActive(token),
+      readPage: (cursor) => runtime.answerAppQuery({
+        kind: SemanticAppQueryKind.AnalysisLimitations,
+        projectKey,
+        page: { size: 500, cursor },
+        inquiryProfile: "lsp-cursor",
+        appRetention: "retain-app",
+      }) as Promise<SemanticRuntimeAnswer<SemanticAnalysisLimitationsResult>>,
+      rowsForValue: (value) => value.rows,
+      mergeValue: (terminalValue, rows) => ({
+        ...terminalValue,
+        displayText: `Returned ${rows.length} analysis limitation(s).`,
         rows,
       }),
     });

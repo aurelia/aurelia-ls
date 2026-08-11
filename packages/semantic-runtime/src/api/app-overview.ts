@@ -6,6 +6,7 @@ import {
   type SemanticAppQuery,
   type SemanticAppOverviewCollectionSummary,
   type SemanticAppDiagnosticSummaryResult,
+  type SemanticAnalysisLimitationsResult,
   type SemanticRuntimeTypeSystemTypeScriptEnvironmentSummary,
   type SemanticAppSummary,
   type SemanticOpenSeamSitesResult,
@@ -29,7 +30,8 @@ export function readSemanticAppOverview(
   readTypeScriptEnvironment?: () => SemanticRuntimeTypeSystemTypeScriptEnvironmentSummary,
 ): SemanticRuntimeAnswer<SemanticAppOverviewResult> {
   const diagnosticPageSize = request.diagnosticPageSize ?? 5;
-  const openSeamPageSize = request.openSeamPageSize ?? 5;
+  const analysisLimitationPageSize = request.analysisLimitationPageSize ?? 5;
+  const openSeamAuditPageSize = request.openSeamPageSize ?? 0;
   const summary = ask({ kind: SemanticAppQueryKind.Summary }) as SemanticRuntimeAnswer<SemanticAppSummary>;
   const topology = readTopologySummary?.()
     ?? summarizeCollectionAnswer(ask({ kind: SemanticAppQueryKind.AppTopology }) as SemanticRuntimeAnswer<SemanticApplicationTopologyResult>);
@@ -38,9 +40,13 @@ export function readSemanticAppOverview(
     page: { size: diagnosticPageSize },
     diagnosticProjection: 'available-products',
   }) as SemanticRuntimeAnswer<SemanticAppDiagnosticSummaryResult>;
+  const analysisLimitations = ask({
+    kind: SemanticAppQueryKind.AnalysisLimitations,
+    page: { size: analysisLimitationPageSize },
+  }) as SemanticRuntimeAnswer<SemanticAnalysisLimitationsResult>;
   const openSeams = ask({
     kind: SemanticAppQueryKind.OpenSeamSites,
-    page: { size: openSeamPageSize },
+    page: { size: openSeamAuditPageSize },
   }) as SemanticRuntimeAnswer<SemanticOpenSeamSitesResult>;
   const typeScript = readTypeScriptEnvironment?.() ?? {
     analyzer: { version: 'unknown', packageJsonPath: null },
@@ -53,17 +59,19 @@ export function readSemanticAppOverview(
       summary,
       topology,
       diagnostics,
+      analysisLimitations,
       openSeams,
     }),
     typeScript,
     summary,
     topology,
     diagnostics,
+    analysisLimitations,
     openSeams,
   };
   return answer(
     SemanticRuntimeAnswerResult.Answered,
-    `Read app overview: ${summary.summary} ${diagnostics.summary} ${openSeams.summary}`,
+    `Read app overview: ${summary.summary} ${diagnostics.summary} ${analysisLimitations.summary}`,
     value,
     COMPLETE_COLLECTION_ANSWER_OPTIONS,
   );
@@ -100,8 +108,8 @@ function semanticAppOverviewDisplayText(value: Omit<SemanticAppOverviewResult, '
   const app = value.summary.value;
   const topologyCounts = value.topology.value.counts;
   const diagnosticRows = value.diagnostics.value.totalDiagnosticRows;
-  const openSeamRows = value.openSeams.value.totalOpenSeamRows;
-  const openSeamSites = value.openSeams.value.totalOpenSeamSites;
+  const configuredLimitations = value.analysisLimitations.value.candidateCount
+    - value.analysisLimitations.value.suppressedCandidateCount;
   const lines = [
     `App: ${app.projectKey}; analysisDepth=${app.analysisDepth}; roots=${app.appRoots}; components=${topologyCounts.components ?? 0}; routes=${topologyCounts.routes ?? app.routeConfigs}; services=${topologyCounts.services ?? 0}; stateCompositions=${topologyCounts.stateCompositions ?? 0}.`,
     semanticTypeScriptEnvironmentDisplayText(value.typeScript),
@@ -112,144 +120,36 @@ function semanticAppOverviewDisplayText(value: Omit<SemanticAppOverviewResult, '
   if (app.routeConfigs > 0 || app.typedNavigationInstructions > 0) {
     lines.push(`Routing: ${app.routeConfigs} config(s), ${app.routeContexts} potential context(s), ${app.typedNavigationInstructions} typed navigation instruction(s), ${app.componentAgents} planned component agent(s).`);
   }
-  if (diagnosticRows === 0 && openSeamRows === 0) {
-    lines.push('Pressure: no diagnostic rows or open seam sites in the overview page.');
+  if (diagnosticRows === 0 && configuredLimitations === 0) {
+    lines.push('Pressure: no diagnostic rows or configured analysis limitations.');
   } else {
-    lines.push(`Pressure: ${diagnosticRows} diagnostic row(s) and ${openSeamSites} open seam site(s) covering ${openSeamRows} raw derivation row(s).`);
-    const openSeamSamples = overviewOpenSeamSampleDisplay(value.openSeams.value);
-    if (openSeamSamples.length > 0) {
-      lines.push(`Open seam samples: ${openSeamSamples}.`);
-    }
-    const openSeamBoundarySummary = overviewOpenSeamBoundaryDisplay(value.openSeams.value);
-    if (openSeamBoundarySummary.length > 0) {
-      lines.push(`Open seam sample boundaries: ${openSeamBoundarySummary}.`);
-    }
-    const openSeamSourceRoleSummary = overviewOpenSeamSourceRoleDisplay(value.openSeams.value);
-    if (openSeamSourceRoleSummary.length > 0) {
-      lines.push(`Open seam sample source roles: ${openSeamSourceRoleSummary}.`);
-    }
-    const openSeamApplicationRoleSummary = overviewOpenSeamApplicationRoleDisplay(value.openSeams.value);
-    if (openSeamApplicationRoleSummary.length > 0) {
-      lines.push(`Open seam sample application roles: ${openSeamApplicationRoleSummary}.`);
-    }
-    const openSeamStaticEvaluationOriginSummary = overviewOpenSeamStaticEvaluationOriginDisplay(value.openSeams.value);
-    if (openSeamStaticEvaluationOriginSummary.length > 0) {
-      lines.push(`Open seam sample static evaluation origins: ${openSeamStaticEvaluationOriginSummary}.`);
-    }
-    const openSeamReasonSummary = overviewOpenSeamReasonDisplay(value.openSeams.value);
-    if (openSeamReasonSummary.length > 0) {
-      lines.push(`Open seam sample reasons: ${openSeamReasonSummary}.`);
+    lines.push(`Pressure: ${diagnosticRows} diagnostic/finding row(s), including ${configuredLimitations} configured analysis limitation(s).`);
+    const samples = overviewAnalysisLimitationSampleDisplay(value.analysisLimitations.value);
+    if (samples.length > 0) {
+      lines.push(`Analysis limitation samples: ${samples}.`);
     }
   }
-  lines.push('Next: use aurelia_app_query_batch for binding summaries, aurelia_router_overview for routed apps, or diagnostic/open-seam queries for repair planning inputs.');
+  if (value.analysisLimitations.value.suppressedCandidateCount > 0) {
+    lines.push(`Policy: ${value.analysisLimitations.value.suppressedCandidateCount} analysis limitation candidate(s) suppressed; underlying seam evidence remains available to explicit audit queries.`);
+  }
+  lines.push('Next: use analysis-limitations or diagnostic queries for normal pressure, aurelia_app_query_batch for binding summaries, aurelia_router_overview for routed apps, and open-seam queries only for explicit semantic audit.');
   return lines.join('\n');
 }
 
-function overviewOpenSeamSampleDisplay(
-  openSeams: SemanticOpenSeamSitesResult,
+function overviewAnalysisLimitationSampleDisplay(
+  limitations: SemanticAnalysisLimitationsResult,
 ): string {
-  return openSeams.rows
+  return limitations.rows
     .slice(0, 3)
     .map((row) => {
-      const reasons = row.reasonKinds.length === 0 ? '' : ` reasons=${row.reasonKinds.slice(0, 2).join('+')}`;
-      const sourceRole = row.sourceRole == null ? '' : ` sourceRole=${row.sourceRole}`;
-      const appRoles = row.applicationFileRoles.length === 0 ? '' : ` appRoles=${row.applicationFileRoles.slice(0, 2).join('+')}`;
-      const originKinds = overviewOpenSeamStaticEvaluationOriginKinds(row);
-      const evalOrigins = originKinds.length === 0 ? '' : ` evalOrigins=${originKinds.slice(0, 2).join('+')}`;
-      return `${row.seamKindKeys.join('+')} raw=${row.rawRowCount} variants=${row.variantCount} materializations=${row.affectedMaterializationCount} products=${row.affectedProductCount}${reasons}${sourceRole}${appRoles}${evalOrigins} at ${overviewOpenSeamSourceDisplay(row)}`;
+      const productKinds = [...new Set(row.evidence.products.map((product) => product.productKindKey))].sort();
+      return `${row.ruleId} policy=${row.effectivePolicy.disposition} coverage=${row.currentCoverage} affects=${productKinds.join('+') || 'no-product'} at ${overviewAnalysisLimitationSourceDisplay(row)}`;
     })
     .join(' | ');
 }
 
-function overviewOpenSeamBoundaryDisplay(
-  openSeams: SemanticOpenSeamSitesResult,
-): string {
-  const counts = new Map<string, number>();
-  for (const row of openSeams.rows) {
-    for (const boundary of row.boundaryCounts) {
-      counts.set(boundary.key, (counts.get(boundary.key) ?? 0) + boundary.count);
-    }
-  }
-  return [...counts.entries()]
-    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
-    .slice(0, 4)
-    .map(([kind, count]) => `${kind} x${count}`)
-    .join(', ');
-}
-
-function overviewOpenSeamSourceRoleDisplay(
-  openSeams: SemanticOpenSeamSitesResult,
-): string {
-  const counts = new Map<string, number>();
-  for (const row of openSeams.rows) {
-    if (row.sourceRole == null) {
-      continue;
-    }
-    counts.set(row.sourceRole, (counts.get(row.sourceRole) ?? 0) + row.rawRowCount);
-  }
-  return [...counts.entries()]
-    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
-    .slice(0, 4)
-    .map(([role, count]) => `${role} x${count}`)
-    .join(', ');
-}
-
-function overviewOpenSeamApplicationRoleDisplay(
-  openSeams: SemanticOpenSeamSitesResult,
-): string {
-  const counts = new Map<string, number>();
-  for (const row of openSeams.rows) {
-    for (const role of row.applicationFileRoles) {
-      counts.set(role, (counts.get(role) ?? 0) + row.rawRowCount);
-    }
-  }
-  return [...counts.entries()]
-    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
-    .slice(0, 4)
-    .map(([role, count]) => `${role} x${count}`)
-    .join(', ');
-}
-
-function overviewOpenSeamStaticEvaluationOriginDisplay(
-  openSeams: SemanticOpenSeamSitesResult,
-): string {
-  const counts = new Map<string, number>();
-  for (const row of openSeams.rows) {
-    for (const originKind of overviewOpenSeamStaticEvaluationOriginKinds(row)) {
-      counts.set(originKind, (counts.get(originKind) ?? 0) + row.rawRowCount);
-    }
-  }
-  return [...counts.entries()]
-    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
-    .slice(0, 4)
-    .map(([kind, count]) => `${kind} x${count}`)
-    .join(', ');
-}
-
-function overviewOpenSeamStaticEvaluationOriginKinds(
-  row: SemanticOpenSeamSitesResult['rows'][number],
-): readonly string[] {
-  return [...new Set(row.staticEvaluationOrigins.map((origin) => origin.kind))].sort();
-}
-
-function overviewOpenSeamReasonDisplay(
-  openSeams: SemanticOpenSeamSitesResult,
-): string {
-  const counts = new Map<string, number>();
-  for (const row of openSeams.rows) {
-    for (const reason of row.reasonCounts) {
-      counts.set(reason.key, (counts.get(reason.key) ?? 0) + reason.count);
-    }
-  }
-  return [...counts.entries()]
-    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
-    .slice(0, 4)
-    .map(([kind, count]) => `${kind} x${count}`)
-    .join(', ');
-}
-
-function overviewOpenSeamSourceDisplay(
-  row: SemanticOpenSeamSitesResult['rows'][number],
+function overviewAnalysisLimitationSourceDisplay(
+  row: SemanticAnalysisLimitationsResult['rows'][number],
 ): string {
   const exact = semanticExactSourceReference(row.source);
   if (exact?.path != null && row.sourceRange != null) {

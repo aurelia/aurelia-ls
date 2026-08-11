@@ -139,6 +139,7 @@ function navigableInventorySnapshot(includeResource = true) {
 function createHarness(options: {
   readonly visible?: boolean;
   readonly getResourceInventory?: (options?: unknown) => Promise<unknown>;
+  readonly getAnalysisLimitations?: (options?: unknown) => Promise<unknown>;
   readonly informationAction?: "Retry" | "Open Aurelia Output";
 } = {}) {
   const { vscode: stubVscode, recorded } = createVscodeApi();
@@ -172,12 +173,14 @@ function createHarness(options: {
   });
 
   const getResourceInventory = vi.fn(options.getResourceInventory ?? (async () => null));
+  const getAnalysisLimitations = vi.fn(options.getAnalysisLimitations ?? (async () => null));
   const logger = { debug: vi.fn(), warn: vi.fn(), show: vi.fn() };
   const contributions: Disposable[] = [];
   ViewsFeature.activate({
     vscode: stubVscode as unknown as VscodeApi,
     lsp: {
       getResourceInventory,
+      getAnalysisLimitations,
       onAnalysisChanged: analysisChanged.event,
     },
     languageClient: {
@@ -190,6 +193,7 @@ function createHarness(options: {
   });
 
   return {
+    getAnalysisLimitations,
     getResourceInventory,
     logger,
     recorded,

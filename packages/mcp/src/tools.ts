@@ -205,7 +205,7 @@ export function registerAureliaSemanticRuntimeTools(
     aureliaMcpToolNames.appOverview,
     {
       title: 'Aurelia App Overview',
-      description: 'Open an Aurelia app and return compact summary, topology, diagnostics, and open seams.',
+      description: 'Open an Aurelia app and return compact summary, topology, diagnostics, and configured analysis limitations; raw open seams remain an explicit audit input.',
       inputSchema: strictInputSchema(appOverviewInputSchema),
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,

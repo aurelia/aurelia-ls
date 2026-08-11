@@ -134,6 +134,12 @@
         "category": "Aurelia"
       },
       {
+        "command": "aurelia.reviewAnalysisLimitations",
+        "title": "Review Analysis Limitations",
+        "icon": "$(info)",
+        "category": "Aurelia"
+      },
+      {
         "command": "aurelia.goToResource",
         "title": "Go to Resource...",
         "icon": "$(search)",
@@ -202,6 +208,11 @@
           "command": "aurelia.openAureliaOutput",
           "when": "view == aureliaResourceExplorer && aurelia.resourceExplorerHasIssues",
           "group": "status@1"
+        },
+        {
+          "command": "aurelia.reviewAnalysisLimitations",
+          "when": "view == aureliaResourceExplorer && aurelia.resourceExplorerHasAnalysisReview",
+          "group": "analysis@1"
         }
       ],
       "view/item/context": [
@@ -278,6 +289,10 @@
         },
         {
           "command": "aurelia.openAureliaOutput",
+          "when": "false"
+        },
+        {
+          "command": "aurelia.reviewAnalysisLimitations",
           "when": "false"
         }
       ]

@@ -445,11 +445,14 @@ Answerers whose deterministic row order can be derived from compact candidate fa
 row projection. A size-zero or rejected-cursor request must therefore do no selected-row work. Byte-budgeted pages may
 project one additional candidate to decide that it does not fit, but that lookahead is neither returned nor consumed by
 the continuation cursor.
-`OpenSeamSites` reads the same unpaged seam fact set as `OpenSeams`, then groups repeated derivations by exact authored
-root source. One site may therefore retain multiple seam kinds, reason kinds, boundary kinds, and pressure kinds. Use it
-before raw seams or kind summaries when a large app reports hundreds of seams: one
-authored expression can produce many raw evaluator rows after callback/intrinsic expansion, and the public first read
-should say "two authored sites covering six raw rows" rather than making derivation count look like problem count.
+`AnalysisLimitations` is the normal product-pressure read. It applies explicit semantic-runtime rules and effective
+project policy to conserved seam causality, then returns one finding per admitted rule and exact authored source site.
+It is intentionally not a count or filter over all product-pressure seams. `OpenSeamSites` reads the same unpaged seam
+fact set as `OpenSeams`, then groups repeated derivations by exact authored root source for deliberate audit. One site
+may therefore retain multiple seam kinds, reason kinds, boundary kinds, and pressure kinds. Use it before raw seams or
+kind summaries when an audit reports hundreds of seams: one authored expression can produce many raw evaluator rows
+after callback/intrinsic expansion, and the audit should say "two authored sites covering six raw rows" rather than
+making derivation count look like problem count.
 `OpenSeamSummary` remains the typed seam-kind/reason-signature cluster view for understanding dominant seam families after the site-level
 problem count is clear. Raw seam, site, and summary answers all own compact `displayText`: raw rows report seam-kind
 and reason-kind rollups plus a few source-backed samples, site rows report unique authored locations with raw-row and
@@ -458,7 +461,10 @@ variant counts, while summary rows report dominant clusters, source-file coverag
 so a large cluster count always has a direct drill-down path. Summary/site queries do not support handle detail and
 refuse that selector rather than silently dropping it; raw `OpenSeams` owns handle projection.
 `AppOverview` is the compact app-opening answer for MCP and other AI callers. It composes summary, topology counts,
-diagnostic clusters, and open-seam clusters without making adapters reconstruct that answer locally. The topology child read uses a compact summary projection instead of
+diagnostic clusters, and configured analysis limitations without making adapters reconstruct that answer locally. It
+also retains a typed `openSeams` child as explicit audit/compatibility data, but its normal display does not promote raw
+seam counts or samples. `analysisLimitationPageSize` defaults to five; `openSeamPageSize` independently defaults to zero
+and an explicit value still requests raw authored-site audit rows. The topology child read uses a compact summary projection instead of
 asking the full `AppTopology` row DTO and summarizing afterward. Call `AppTopology` directly when row families or
 bindable value type surfaces are needed; those surfaces remain opt-in through `includeTypeSurfaces`, keeping overview
 answers from spending answer-local TypeChecker member projections or retaining broad topology DTOs.
@@ -1491,11 +1497,28 @@ shape env vars: `aurelia-app`, `aurelia-resource-library`, `aurelia-package`, an
 rows. Use it for project/source-root footing pressure before treating a missing import as an evaluator or Aurelia
 semantic gap.
 
+`AnalysisLimitations` is the policy-aware product surface over open semantic facts. The first admitted rule is
+`aurelia.analysis.dynamic-registration-spread`, which defaults to `information`. It reports only exact authored
+app-source registration spreads whose typed runtime/framework reason and materialization evidence prove that the
+`configuration.sequence` product remains open. Evidence-only seams, tool-coverage boundaries, unrelated product
+pressure, imprecise source loci, and other seam families stay queryable but do not become findings merely because they
+exist. New rules require their own adjudicated causal and product predicate.
+
+Each row carries a stable rule-plus-exact-source `findingKey`, semantic-rule authority, explanation and action text,
+typed reason facts, exact authored spread source/range, current `open` coverage, and answer-local seam-site,
+materialization, and affected-product evidence keys. The result also exposes the exact project key, conventional native
+policy-file path and existence, and the effective disposition/authority/source trace for every admitted rule. The
+project configuration can set a rule to `off`, `information`, `warning`, or `error`; `off` removes its rows and normal
+reported count while `candidateCount`/`suppressedCandidateCount` preserve a bounded policy trace and the underlying
+seams remain available through audit queries. Disposition is presentation policy rather than a generic semantic seam
+severity. Reported rows enter `AppDiagnostics` mechanically under the `analysis` domain with
+`semantic-authoring-policy` authority and their configured disposition; suppressed/raw candidates never enter it.
+
 `OpenSeams` is app-emission scoped, not a raw dump of the shared workspace kernel store. In a monorepo runtime session,
 opening another project should not make seam rows bleed into the first app answer. The projection includes source-
 addressed seams owned by the app's admitted/evaluated sources plus emission-local DI, template, runtime rendering,
 observer, value-channel, and data-flow seams that may not have a precise authored address yet.
-`OpenSeamSites` is the default public trust surface for these rows. It keeps raw seam rows available for detail but
+`OpenSeamSites` is the default grouped audit surface for these rows. It keeps raw seam rows available for detail but
 groups them by exact root source path/span, then reports every seam kind, `rawRowCount`, `variantCount`, boundary kinds,
 pressure kinds, reason kinds, materialization/product impact, and the best source range that can be calculated at query time. This grouping is
 answer-local and does not add durable kernel records; it exists because kernel records intentionally preserve

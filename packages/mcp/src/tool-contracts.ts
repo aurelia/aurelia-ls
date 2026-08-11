@@ -133,6 +133,7 @@ export interface AureliaMcpAppQueryInput extends AureliaMcpOpenAppInput, Aurelia
   readonly diagnosticProjection?: SemanticAppQuery['diagnosticProjection'];
   readonly includeTypeSurfaces?: SemanticAppQuery['includeTypeSurfaces'];
   readonly diagnosticPageSize?: SemanticAppQuery['diagnosticPageSize'];
+  readonly analysisLimitationPageSize?: SemanticAppQuery['analysisLimitationPageSize'];
   readonly openSeamPageSize?: SemanticAppQuery['openSeamPageSize'];
   readonly openSeamKindKey?: SemanticAppQuery['openSeamKindKey'];
   readonly openSeamReasonKind?: SemanticAppQuery['openSeamReasonKind'];
@@ -153,6 +154,7 @@ export interface AureliaMcpAppQueryBatchInput extends AureliaMcpOpenAppInput {
 
 export interface AureliaMcpAppOverviewInput extends AureliaMcpOpenAppInput {
   readonly diagnosticPageSize?: number | null;
+  readonly analysisLimitationPageSize?: number | null;
   readonly openSeamPageSize?: number | null;
 }
 

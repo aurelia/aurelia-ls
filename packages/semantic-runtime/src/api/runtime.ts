@@ -262,6 +262,9 @@ import {
   type OpenSeamProjectionFact,
 } from './open-seam-projections.js';
 import {
+  projectSemanticAnalysisLimitations,
+} from '../findings/analysis-limitation-projection.js';
+import {
   readResourceDefinitionPage,
   readResourceIssueRows,
 } from './resource-projections.js';
@@ -361,6 +364,7 @@ import {
   type SemanticBindingValueChannelSummaryResult,
   type SemanticValueConverterApplicationResult,
   type SemanticControlUseInventoryResult,
+  type SemanticAnalysisLimitationsResult,
   type SemanticConfigurationIssuesResult,
   type SemanticDiIssuesResult,
   type SemanticDialogIssuesResult,
@@ -2904,8 +2908,8 @@ function semanticRuntimeSummaryContinuations(
       noAppBlockers,
     ),
     semanticRuntimeSummaryAppContinuation(
-      'Group open seams before paging raw seam rows.',
-      SemanticAppQueryKind.OpenSeamSummary,
+      'Review configured authored analysis limitations after the workspace/app candidate map.',
+      SemanticAppQueryKind.AnalysisLimitations,
       [InquiryContinuationIntent.Inspect, InquiryContinuationIntent.Diagnose],
       noAppBlockers,
     ),
@@ -2931,7 +2935,7 @@ function semanticRuntimeSummaryAppContinuation(
     targetQuery: {
       kind: targetQueryKind,
       ...(targetQueryKind === SemanticAppQueryKind.AppDiagnosticSummary
-        || targetQueryKind === SemanticAppQueryKind.OpenSeamSummary
+        || targetQueryKind === SemanticAppQueryKind.AnalysisLimitations
         ? { page: { size: 0 } }
         : {}),
     },
@@ -3232,6 +3236,35 @@ function openSeamStaticEvaluationOriginKinds(
   row: SemanticOpenSeamSiteRow,
 ): readonly string[] {
   return [...new Set(row.staticEvaluationOrigins.map((origin) => origin.kind))].sort();
+}
+
+function analysisLimitationsDisplayText(
+  result: Omit<SemanticAnalysisLimitationsResult, 'displayText' | 'rows'>,
+  rows: SemanticAnalysisLimitationsResult['rows'],
+  totalActiveRows: number,
+): string {
+  const lines = [
+    `Analysis limitations: returned ${rows.length} of ${totalActiveRows} configured finding(s); ${result.candidateCount} unique authored candidate(s), ${result.suppressedCandidateCount} suppressed by effective policy.`,
+    `Policy: ${result.effectivePolicies.map((policy) =>
+      `${policy.ruleId}=${policy.disposition} (${policy.authority})`
+    ).join(', ') || 'no admitted rules'}.`,
+  ];
+  if (rows.length === 0) {
+    lines.push(totalActiveRows === 0
+      ? 'Findings: none under the current project policy.'
+      : 'Findings: no rows returned on this page.');
+  } else {
+    lines.push(`Findings: ${rows.slice(0, RUNTIME_DISPLAY_SAMPLE_LIMIT).map((row) => {
+      const productKinds = uniqueRuntimeStrings(row.evidence.products.map((product) => product.productKindKey));
+      return `${row.ruleId} (${row.effectivePolicy.disposition}; coverage=${row.currentCoverage}; affects=${runtimeListDisplay(productKinds)}) at ${semanticSourceReferenceRangeDisplay(row.source, row.sourceRange)}: ${trimDisplayLine(row.reason.summary)}`;
+    }).join(' | ')}.`);
+    lines.push('Next: use each finding evidence site/key for explicit open-seam audit when derivation-level detail is needed.');
+  }
+  return lines.join('\n');
+}
+
+function uniqueRuntimeStrings(values: readonly string[]): readonly string[] {
+  return [...new Set(values)].sort();
 }
 
 interface SemanticOpenSeamQueryFilter {
@@ -3910,6 +3943,7 @@ export class SemanticApp {
       case SemanticAppQueryKind.AppOverview:
         return answerCurrentQuery(() => this.overview({
           diagnosticPageSize: query.diagnosticPageSize,
+          analysisLimitationPageSize: query.analysisLimitationPageSize,
           openSeamPageSize: query.openSeamPageSize,
         }));
       case SemanticAppQueryKind.SourceFiles:
@@ -3922,6 +3956,8 @@ export class SemanticApp {
         return answerCurrentQuery(() => this.openSeamSummary(query.page, query));
       case SemanticAppQueryKind.OpenSeamSites:
         return answerCurrentQuery(() => this.openSeamSites(query.page, query));
+      case SemanticAppQueryKind.AnalysisLimitations:
+        return answerCurrentQuery(() => this.analysisLimitations(query.page, query.sourceFile));
       case SemanticAppQueryKind.AppDiagnostics:
         return answerCurrentQuery(() => this.appDiagnostics(query));
       case SemanticAppQueryKind.AppDiagnosticSummary:
@@ -4361,6 +4397,7 @@ export class SemanticApp {
     const claimed = this.answerPublicQueryIfNeeded<SemanticAppOverviewResult>({
       kind: SemanticAppQueryKind.AppOverview,
       diagnosticPageSize: request.diagnosticPageSize,
+      analysisLimitationPageSize: request.analysisLimitationPageSize,
       openSeamPageSize: request.openSeamPageSize,
     });
     if (claimed != null) {
@@ -4533,6 +4570,53 @@ export class SemanticApp {
         rows: paged.rows,
       },
       { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
+    );
+  }
+
+  analysisLimitations(
+    page?: SemanticRuntimePageInput,
+    sourceFile?: SemanticRuntimeSourceFileInput | null,
+  ): SemanticRuntimeAnswer<SemanticAnalysisLimitationsResult> {
+    const claimed = this.answerPublicQueryIfNeeded<SemanticAnalysisLimitationsResult>({
+      kind: SemanticAppQueryKind.AnalysisLimitations,
+      page,
+      sourceFile,
+    });
+    if (claimed != null) {
+      return claimed;
+    }
+    const projection = this.projectAnalysisLimitations(sourceFile);
+    const paged = pageRows(projection.rows, page);
+    const resultWithoutRows = {
+      projectKey: this.project.projectKey,
+      policyFile: {
+        filePath: this.project.projectConfiguration.filePath,
+        exists: this.project.projectConfiguration.exists,
+      },
+      effectivePolicies: projection.effectivePolicies,
+      candidateCount: projection.candidateCount,
+      suppressedCandidateCount: projection.suppressedCandidateCount,
+    };
+    return answer(
+      SemanticRuntimeAnswerResult.Answered,
+      `Returned ${paged.rows.length} of ${projection.rows.length} configured analysis limitation finding(s) from ${projection.candidateCount} unique authored candidate(s).`,
+      {
+        ...resultWithoutRows,
+        displayText: analysisLimitationsDisplayText(resultWithoutRows, paged.rows, projection.rows.length),
+        rows: paged.rows,
+      },
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
+    );
+  }
+
+  private projectAnalysisLimitations(
+    sourceFile?: SemanticRuntimeSourceFileInput | null,
+  ) {
+    const sourceTextCache = new AuthoredSourceTextCache('', this.project.inputGeneration.host);
+    return projectSemanticAnalysisLimitations(
+      this.openSeamFacts({ sourceFile }),
+      this.project.projectConfiguration.findingPolicy,
+      (source) => this.sourceRangeForSourceReference(source, sourceTextCache),
     );
   }
 
@@ -4776,6 +4860,7 @@ export class SemanticApp {
     const dialogRows = readDialogIssueRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
     const routerRows = this.routeQueries.routerIssueRows(detail);
     const routeRows = this.routeQueries.routeRecognizerIssueRows(detail);
+    const analysisLimitationRows = this.projectAnalysisLimitations(query.sourceFile).rows;
     return appDiagnosticRows(
       this.project.sourceFiles,
       this.project.projectKey,
@@ -4794,6 +4879,7 @@ export class SemanticApp {
       dialogRows,
       routerRows,
       routeRows,
+      analysisLimitationRows,
     );
   }
 

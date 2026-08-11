@@ -25,6 +25,7 @@
     "contract:open-seam-causality": "pnpm build && node scripts/contract-open-seam-causality.mjs",
     "contract:open-seam-sites": "pnpm build && node scripts/contract-open-seam-sites.mjs",
     "contract:open-seam-public-quality": "pnpm build && node scripts/contract-open-seam-public-quality.mjs",
+    "contract:analysis-limitations": "pnpm build && node scripts/contract-analysis-limitations.mjs",
     "contract:evaluation-open-seam-reasons": "pnpm build && node scripts/contract-evaluation-open-seam-reasons.mjs",
     "contract:configuration-open-seam-reasons": "pnpm build && node scripts/contract-configuration-open-seam-reasons.mjs",
     "contract:di-registration-open-reasons": "pnpm build && node scripts/contract-di-registration-open-reasons.mjs",

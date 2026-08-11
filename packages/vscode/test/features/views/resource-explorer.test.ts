@@ -1,5 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 import { createHash } from "node:crypto";
+import type { AnalysisLimitationItem } from "@aurelia-ls/language-server/protocol";
 import {
   EXTENSION_HOST_OBSERVATION_EVENT,
   type ExtensionHostObservation,
@@ -8,6 +9,10 @@ import { ResourceExplorerProvider } from "../../../out/features/views/resource-e
 import { AureliaCommand } from "../../../out/product-contract.js";
 import type { VscodeApi } from "../../../out/vscode-api.js";
 import { createVscodeApi } from "../../helpers/vscode-stub.js";
+
+const dynamicRegistrationSpreadRuleId: `${AnalysisLimitationItem["ruleId"]}` =
+  "aurelia.analysis.dynamic-registration-spread";
+const openCoverage: `${AnalysisLimitationItem["currentCoverage"]}` = "open";
 
 interface Node {
   readonly id: string;
@@ -170,21 +175,126 @@ function combinedResponse(...responses: readonly ReturnType<typeof response>[]) 
   return { workspaces: responses.flatMap((entry) => entry.workspaces) };
 }
 
-function createHarness(getResourceInventory: (_options?: unknown) => Promise<unknown>) {
+function limitationRow(input: {
+  readonly findingKey?: string;
+  readonly sourceUri?: string;
+  readonly configurationSource?: boolean;
+} = {}): AnalysisLimitationItem {
+  const source = {
+    state: "available" as const,
+    location: {
+      uri: input.sourceUri ?? "file:///repo/src/main.ts",
+      range: { start: { line: 3, character: 8 }, end: { line: 3, character: 17 } },
+    },
+  };
+  return {
+    findingKey: input.findingKey ?? "finding:dynamic-registration",
+    ruleId: dynamicRegistrationSpreadRuleId as AnalysisLimitationItem["ruleId"],
+    authority: "semantic-runtime-rule",
+    title: "Dynamic registration spread limits resource analysis",
+    explanation: "A runtime-dependent spread prevents Aurelia tooling from proving every registration.",
+    action: "Register static entries, or configure this rule when the dynamic spread is intentional.",
+    reason: {
+      summary: "The registration spread remains dynamic.",
+      seamKindKeys: [],
+      boundaryKinds: [],
+      reasonKinds: [],
+    },
+    source,
+    currentCoverage: openCoverage as AnalysisLimitationItem["currentCoverage"],
+    evidence: { openSeamSiteKey: "site:one", seamKeys: ["seam:one"], materializations: [], products: [] },
+    effectivePolicy: {
+      ruleId: dynamicRegistrationSpreadRuleId as AnalysisLimitationItem["ruleId"],
+      disposition: "information",
+      authority: input.configurationSource ? "project-configuration" : "default",
+      source: input.configurationSource
+        ? {
+            state: "available" as const,
+            location: {
+              uri: "file:///repo/aurelia.project.json",
+              range: { start: { line: 6, character: 4 }, end: { line: 6, character: 58 } },
+            },
+          }
+        : absent(),
+    },
+  };
+}
+
+function limitationsResponse(
+  projects: readonly {
+    readonly projectKey: string;
+    readonly rows: readonly AnalysisLimitationItem[];
+    readonly candidateCount?: number;
+    readonly suppressedCandidateCount?: number;
+    readonly coverage?: "complete" | "open";
+    readonly page?: unknown;
+  }[],
+  owner = workspace(),
+  fingerprint = "semantic-runtime:test",
+) {
+  return {
+    workspaces: [{
+      ...owner,
+      status: "ready" as const,
+      response: {
+        fingerprint,
+        projects: projects.map(({
+          candidateCount,
+          coverage,
+          page,
+          projectKey,
+          rows,
+          suppressedCandidateCount,
+        }) => ({
+          status: "ready" as const,
+          projectKey,
+          answer: {
+            ...completeAnswer,
+            coverage: coverage ?? "complete",
+            page: page ?? null,
+          },
+          policyFile: { uri: `${owner.uri}/aurelia.project.json`, exists: false },
+          effectivePolicies: [],
+          candidateCount: candidateCount ?? rows.length,
+          suppressedCandidateCount: suppressedCandidateCount ?? 0,
+          rows,
+        })),
+      },
+    }],
+  };
+}
+
+function createHarness(
+  getResourceInventory: (_options?: unknown) => Promise<unknown>,
+  getAnalysisLimitations: (_options?: unknown) => Promise<unknown> = async () => null,
+) {
   const { vscode: stubVscode, recorded } = createVscodeApi();
   const vscode = stubVscode as unknown as VscodeApi;
   const logger = { debug: vi.fn(), warn: vi.fn() };
   const inventory = vi.fn(getResourceInventory);
+  const limitations = vi.fn(getAnalysisLimitations);
   const runWithProgress = vi.fn(async (task: () => Promise<unknown>) => await task());
   const provider = new ResourceExplorerProvider(
     vscode,
-    { getResourceInventory: inventory } as never,
+    {
+      getResourceInventory: inventory,
+      getAnalysisLimitations: limitations,
+    } as never,
     logger as never,
     runWithProgress as never,
   );
   const view: { message?: string; description?: string } = {};
   provider.attachView(view as never);
-  return { getResourceInventory: inventory, logger, provider, recorded, runWithProgress, view, vscode };
+  return {
+    getAnalysisLimitations: limitations,
+    getResourceInventory: inventory,
+    logger,
+    provider,
+    recorded,
+    runWithProgress,
+    view,
+    vscode,
+  };
 }
 
 async function roots(provider: ResourceExplorerProvider): Promise<Node[]> {
@@ -201,6 +311,257 @@ function findNode(nodes: readonly Node[], label: string): Node | undefined {
 }
 
 describe("ResourceExplorerProvider", () => {
+  test("joins exact workspace, generation, and project identities before signaling a limitation", async () => {
+    const inventory = response([readyProject([])], workspace(), "semantic-runtime:one");
+    const limitations = limitationsResponse([
+      { projectKey: "app", rows: [limitationRow()] },
+    ], workspace(), "semantic-runtime:one");
+    const harness = createHarness(async () => inventory, async () => limitations);
+
+    await harness.provider.refresh();
+
+    expect(harness.view.message).toContain("Analysis is limited");
+    expect(harness.recorded.contextValues.get("aurelia.resourceExplorerHasAnalysisReview")).toBe(true);
+    expect(harness.provider.analysisLimitationsForReview()).toEqual([
+      expect.objectContaining({
+        workspaceKey: "file:///repo",
+        projectKey: "app",
+        fingerprint: "semantic-runtime:one",
+        row: expect.objectContaining({ findingKey: "finding:dynamic-registration" }),
+      }),
+    ]);
+  });
+
+  test("retires review navigation immediately when the joined generation becomes dirty", async () => {
+    const harness = createHarness(
+      async () => response([readyProject([])], workspace(), "semantic-runtime:one"),
+      async () => limitationsResponse([
+        { projectKey: "app", rows: [limitationRow()] },
+      ], workspace(), "semantic-runtime:one"),
+    );
+    await harness.provider.refresh();
+
+    harness.provider.markUpdating(null);
+
+    expect(harness.provider.analysisLimitationsForReview()).toEqual([]);
+    expect(harness.recorded.contextValues.get("aurelia.resourceExplorerHasAnalysisReview")).toBe(false);
+    expect(harness.view.message).toContain("showing the previous review");
+  });
+
+  test("keeps an all-suppressed candidate visible as a limitation without advertising Review", async () => {
+    const harness = createHarness(
+      async () => response([readyProject([])], workspace(), "semantic-runtime:one"),
+      async () => limitationsResponse([{
+        projectKey: "app",
+        rows: [],
+        candidateCount: 1,
+        suppressedCandidateCount: 1,
+      }], workspace(), "semantic-runtime:one"),
+    );
+
+    await harness.provider.refresh();
+
+    expect(harness.view.message).toBe(
+      "Analysis is limited. Finding policy hides the current details.",
+    );
+    expect(harness.view.message).not.toContain("Review Analysis Limitations");
+    expect(harness.provider.analysisLimitationsForReview()).toEqual([]);
+    expect(harness.recorded.contextValues.get("aurelia.resourceExplorerHasAnalysisReview")).toBe(false);
+  });
+
+  test("retains an all-suppressed limitation as stale when its next answer is unavailable", async () => {
+    const inventory = vi.fn()
+      .mockResolvedValueOnce(response([readyProject([])], workspace(), "semantic-runtime:one"))
+      .mockResolvedValueOnce(response([readyProject([])], workspace(), "semantic-runtime:two"));
+    const limitations = vi.fn()
+      .mockResolvedValueOnce(limitationsResponse([{
+        projectKey: "app",
+        rows: [],
+        candidateCount: 1,
+        suppressedCandidateCount: 1,
+      }], workspace(), "semantic-runtime:one"))
+      .mockResolvedValueOnce({
+        workspaces: [{ ...workspace(), status: "error", error: "transport unavailable" }],
+      });
+    const harness = createHarness(inventory, limitations);
+    await harness.provider.refresh();
+
+    await harness.provider.refresh();
+
+    expect(harness.view.message).toContain("Analysis may be limited");
+    expect(harness.view.message).toContain("previous review");
+    expect(harness.provider.analysisLimitationsForReview()).toEqual([]);
+    expect(harness.recorded.contextValues.get("aurelia.resourceExplorerHasAnalysisReview")).toBe(false);
+  });
+
+  test("retains a previously coherent limitation as stale and bounds a mismatched join retry", async () => {
+    const inventory = vi.fn()
+      .mockResolvedValueOnce(response([readyProject([])], workspace(), "semantic-runtime:one"))
+      .mockResolvedValue(response([readyProject([])], workspace(), "semantic-runtime:two"));
+    const limitations = vi.fn().mockResolvedValue(limitationsResponse([
+      { projectKey: "app", rows: [limitationRow()] },
+    ], workspace(), "semantic-runtime:one"));
+    const harness = createHarness(inventory, limitations);
+    await harness.provider.refresh();
+
+    await harness.provider.refresh();
+
+    expect(inventory).toHaveBeenCalledTimes(3);
+    expect(limitations).toHaveBeenCalledTimes(3);
+    expect(harness.view.message).toContain("showing the previous review");
+    expect(harness.provider.analysisLimitationsForReview()).toEqual([]);
+    expect(harness.recorded.contextValues.get("aurelia.resourceExplorerHasAnalysisReview")).toBe(false);
+  });
+
+  test("preserves returned limitations through transport errors without claiming an unavailable query found none", async () => {
+    const inventory = vi.fn()
+      .mockResolvedValueOnce(response([readyProject([])], workspace(), "semantic-runtime:one"))
+      .mockResolvedValue(response([readyProject([])], workspace(), "semantic-runtime:two"));
+    const limitations = vi.fn()
+      .mockResolvedValueOnce(limitationsResponse([
+        { projectKey: "app", rows: [limitationRow()] },
+      ], workspace(), "semantic-runtime:one"))
+      .mockResolvedValue({
+        workspaces: [{ ...workspace(), status: "error", error: "transport unavailable" }],
+      });
+    const harness = createHarness(inventory, limitations);
+    await harness.provider.refresh();
+
+    await harness.provider.refresh();
+
+    expect(harness.view.message).toContain("showing the previous review");
+    expect(harness.provider.analysisLimitationsForReview()).toEqual([]);
+    expect(harness.recorded.contextValues.get("aurelia.resourceExplorerHasAnalysisReview")).toBe(false);
+
+    const unavailable = createHarness(
+      async () => response([readyProject([])], workspace(), "semantic-runtime:one"),
+      async () => ({
+        workspaces: [{ ...workspace(), status: "error", error: "transport unavailable" }],
+      }),
+    );
+    await unavailable.provider.refresh();
+    expect(unavailable.view.message).toBeUndefined();
+    expect(unavailable.recorded.contextValues.get("aurelia.resourceExplorerHasAnalysisReview")).toBe(false);
+  });
+
+  test("does not publish rows or a negative claim from an open-coverage limitation answer", async () => {
+    const harness = createHarness(
+      async () => response([readyProject([])], workspace(), "semantic-runtime:one"),
+      async () => limitationsResponse([{
+        projectKey: "app",
+        rows: [limitationRow()],
+        coverage: "open",
+      }], workspace(), "semantic-runtime:one"),
+    );
+
+    await harness.provider.refresh();
+
+    expect(harness.view.message).toBeUndefined();
+    expect(harness.provider.analysisLimitationsForReview()).toEqual([]);
+    expect(harness.recorded.contextValues.get("aurelia.resourceExplorerHasAnalysisReview")).toBe(false);
+  });
+
+  test("retains a prior limitation as stale when drained row accounting disagrees with candidate counts", async () => {
+    const inventory = vi.fn()
+      .mockResolvedValueOnce(response([readyProject([])], workspace(), "semantic-runtime:one"))
+      .mockResolvedValueOnce(response([readyProject([])], workspace(), "semantic-runtime:two"));
+    const limitations = vi.fn()
+      .mockResolvedValueOnce(limitationsResponse([{
+        projectKey: "app",
+        rows: [limitationRow()],
+      }], workspace(), "semantic-runtime:one"))
+      .mockResolvedValueOnce(limitationsResponse([{
+        projectKey: "app",
+        rows: [],
+        candidateCount: 1,
+        suppressedCandidateCount: 0,
+      }], workspace(), "semantic-runtime:two"));
+    const harness = createHarness(inventory, limitations);
+    await harness.provider.refresh();
+
+    await harness.provider.refresh();
+
+    expect(inventory).toHaveBeenCalledTimes(2);
+    expect(limitations).toHaveBeenCalledTimes(2);
+    expect(harness.view.message).toContain("showing the previous review");
+    expect(harness.provider.analysisLimitationsForReview()).toEqual([]);
+    expect(harness.recorded.contextValues.get("aurelia.resourceExplorerHasAnalysisReview")).toBe(false);
+  });
+
+  test("rejects a nonterminal page envelope even when its visible row count matches", async () => {
+    const harness = createHarness(
+      async () => response([readyProject([])], workspace(), "semantic-runtime:one"),
+      async () => limitationsResponse([{
+        projectKey: "app",
+        rows: [limitationRow()],
+        page: {
+          size: 1,
+          cursor: null,
+          nextCursor: "page:two",
+          returnedRows: 1,
+          totalRows: 2,
+          exhausted: false,
+        },
+      }], workspace(), "semantic-runtime:one"),
+    );
+
+    await harness.provider.refresh();
+
+    expect(harness.view.message).toBeUndefined();
+    expect(harness.provider.analysisLimitationsForReview()).toEqual([]);
+  });
+
+  test("adds a neutral limitation scent to multi-project roots without adding a tree branch", async () => {
+    const harness = createHarness(
+      async () => response([
+        readyProject([], "shop"),
+        readyProject([], "admin"),
+      ], workspace(), "semantic-runtime:one"),
+      async () => limitationsResponse([
+        { projectKey: "shop", rows: [limitationRow()] },
+        { projectKey: "admin", rows: [] },
+      ], workspace(), "semantic-runtime:one"),
+    );
+
+    await harness.provider.refresh();
+    const projectRoots = await roots(harness.provider);
+
+    expect(projectRoots).toHaveLength(2);
+    expect(projectRoots.find((node) => node.label.includes("shop"))?.description).toContain("analysis limited");
+    expect(projectRoots.find((node) => node.label.includes("admin"))?.description).not.toContain("analysis limited");
+  });
+
+  test("marks retained multi-project limitations as a previous uncertain review", async () => {
+    const inventory = vi.fn()
+      .mockResolvedValueOnce(response([
+        readyProject([], "shop"),
+        readyProject([], "admin"),
+      ], workspace(), "semantic-runtime:one"))
+      .mockResolvedValueOnce(response([
+        readyProject([], "shop"),
+        readyProject([], "admin"),
+      ], workspace(), "semantic-runtime:two"));
+    const limitations = vi.fn()
+      .mockResolvedValueOnce(limitationsResponse([
+        { projectKey: "shop", rows: [limitationRow()] },
+        { projectKey: "admin", rows: [] },
+      ], workspace(), "semantic-runtime:one"))
+      .mockResolvedValueOnce({
+        workspaces: [{ ...workspace(), status: "error", error: "transport unavailable" }],
+      });
+    const harness = createHarness(inventory, limitations);
+    await harness.provider.refresh();
+
+    await harness.provider.refresh();
+    const projectRoots = await roots(harness.provider);
+    const shop = projectRoots.find((node) => node.label.includes("shop"));
+
+    expect(shop?.description).toContain("analysis may be limited · previous review");
+    expect(shop?.description).not.toContain("· analysis limited");
+    expect(harness.provider.analysisLimitationsForReview()).toEqual([]);
+    expect(harness.recorded.contextValues.get("aurelia.resourceExplorerHasAnalysisReview")).toBe(false);
+  });
+
   test("publishes an honest loading view state before the first inventory settles", async () => {
     const observation = captureResourceDiscoveryObservations("resource-explorer");
     const initial = resource({

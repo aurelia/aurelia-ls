@@ -268,20 +268,17 @@ if (!sites.displayText.includes('Application roles: component-source=2') || !sit
 if (!sites.displayText.includes('Static evaluation origins: module-graph-dependency=2, static-evaluation-root=2') || !sites.displayText.includes('evalOrigins=module-graph-dependency, static-evaluation-root')) {
   failures.push(`Expected open-seam-sites display text to include static evaluation origin evidence, observed: ${sites.displayText}`);
 }
-if (!overview.displayText.includes('open seam site(s)') || !overview.displayText.includes('raw derivation row(s)')) {
-  failures.push(`Expected app overview display text to distinguish seam sites from raw derivation rows, observed: ${overview.displayText}`);
+if (overview.openSeams.value.rows.length === 0 || overview.openSeams.value.totalOpenSeamRows === 0) {
+  failures.push('Expected explicit openSeamPageSize to preserve raw seam audit rows in the typed overview child.');
 }
-if (!overview.displayText.includes('src/app.ts:4:48') || !overview.displayText.includes('src/app.ts:5:48')) {
-  failures.push(`Expected app overview display text to include line/column seam samples, observed: ${overview.displayText}`);
+if (overview.analysisLimitations.value.candidateCount !== 0 || overview.analysisLimitations.value.rows.length !== 0) {
+  failures.push(`Expected evidence-only evaluator seams to remain outside configured analysis limitations, observed ${JSON.stringify(overview.analysisLimitations.value)}.`);
 }
-if (!overview.displayText.includes('Open seam sample source roles: app-source x7') || !overview.displayText.includes('sourceRole=app-source')) {
-  failures.push(`Expected app overview display text to include seam source-role evidence, observed: ${overview.displayText}`);
+if (!overview.displayText.includes('no diagnostic rows or configured analysis limitations')) {
+  failures.push(`Expected normal app overview pressure to lead with configured findings, observed: ${overview.displayText}`);
 }
-if (!overview.displayText.includes('Open seam sample application roles: component-source x6') || !overview.displayText.includes('appRoles=component-source')) {
-  failures.push(`Expected app overview display text to include seam application-role evidence, observed: ${overview.displayText}`);
-}
-if (!overview.displayText.includes('Open seam sample static evaluation origins: static-evaluation-root x7, module-graph-dependency x6') || !overview.displayText.includes('evalOrigins=module-graph-dependency+static-evaluation-root')) {
-  failures.push(`Expected app overview display text to include static evaluation origin evidence, observed: ${overview.displayText}`);
+if (/raw derivation|Open seam samples|open seam site\(s\)|src\/app\.ts:4:48|sourceRole=app-source|appRoles=component-source|evalOrigins=/u.test(overview.displayText)) {
+  failures.push(`Expected normal app overview text to keep raw seam audit counts and samples quiet, observed: ${overview.displayText}`);
 }
 const aliasQueryKinds = new Set(openSeamCatalogAlias.rows.map((row) => row.queryKind));
 for (const queryKind of [

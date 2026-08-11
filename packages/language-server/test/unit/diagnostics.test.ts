@@ -261,7 +261,7 @@ describe("document diagnostics handler", () => {
 
   test("returns an empty full report for a project configuration below an excluded workspace root", async () => {
     const configUri = "file:///C:/projects/app/packages/disabled/aurelia.project.json";
-    const configDocument = TextDocument.create(configUri, "json", 3, '{"version":2}');
+    const configDocument = TextDocument.create(configUri, "json", 3, '{"version":3}');
     const harness = createDiagnosticHarness(configDocument);
     harness.ctx.documentUris.configure("file:///C:/projects/app", [
       "file:///C:/projects/app/packages/disabled",
@@ -324,10 +324,10 @@ describe("document diagnostics handler", () => {
 
   test("projects native configuration diagnostics before authored-source gating", async () => {
     const configUri = "file:///C:/projects/app/aurelia.project.json";
-    const configText = '{\n  "version": 2\n}';
+    const configText = '{\n  "version": 3\n}';
     const configDocument = TextDocument.create(configUri, "json", 9, configText);
     const harness = createDiagnosticHarness(configDocument);
-    const start = configText.indexOf("2");
+    const start = configText.indexOf("3");
     harness.projectConfigurationDiagnostics.mockResolvedValue({
       analysisBasis: { revision: "semantic-runtime-analysis:test" },
       value: {
@@ -335,7 +335,7 @@ describe("document diagnostics handler", () => {
           projectKey: "app",
           diagnosticKind: "aurelia-project-config-unsupported-version",
           severity: "error",
-          message: "Only project configuration version 1 is supported.",
+          message: "Only project configuration versions 1 and 2 are supported.",
           source: {
             filePath: harness.ctx.documentUris.hostPath(configUri)!,
             start,

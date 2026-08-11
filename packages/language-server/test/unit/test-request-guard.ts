@@ -33,6 +33,7 @@ export function createTestOperation(
     workspaceSummary: unsupportedTestOperationMethod,
     authoredSourceOwnership: unsupportedTestOperationMethod,
     nativeProjectConfigurations: unsupportedTestOperationMethod,
+    analysisLimitations: unsupportedTestOperationMethod,
     projectConfigurationDiagnostics: unsupportedTestOperationMethod,
     templateCompletions: unsupportedTestOperationMethod,
     appDiagnostics: unsupportedTestOperationMethod,

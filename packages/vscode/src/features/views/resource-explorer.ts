@@ -1,4 +1,5 @@
 import type {
+  AnalysisLimitationsProjectResult,
   ResourceInventoryItem,
   ResourceInventoryProjectResult,
   ResourceSourceLocation,
@@ -16,11 +17,13 @@ import type { LspFacade } from "../../core/lsp-facade.js";
 import type { ClientLogger } from "../../log.js";
 import { AureliaCommand, AureliaContext } from "../../product-contract.js";
 import type {
+  AnalysisLimitationsSnapshot,
   AureliaWorkspaceIdentity,
   ResourceInventorySnapshot,
   ResourceInventoryWorkspaceSnapshot,
   ResourceNavigationRequest,
 } from "../../types.js";
+import type { AnalysisLimitationReviewEntry } from "../analysis-limitations/review.js";
 import type { VscodeApi } from "../../vscode-api.js";
 import {
   emitResourceDiscoveryHostObservation,
@@ -88,6 +91,22 @@ interface ProjectUnit {
   readonly result: ResourceInventoryProjectResult | null;
 }
 
+type ReadyAnalysisLimitationsProject = Extract<AnalysisLimitationsProjectResult, { status: "ready" }>;
+type AnalysisLimitationPublicationKind =
+  | "current-none"
+  | "current-limited"
+  | "stale-limited"
+  | "unavailable";
+
+interface AnalysisLimitationPublication {
+  readonly workspaceKey: string;
+  readonly workspaceUri: string;
+  readonly projectKey: string;
+  readonly fingerprint: string | null;
+  readonly kind: AnalysisLimitationPublicationKind;
+  readonly result: ReadyAnalysisLimitationsProject | null;
+}
+
 export type ResourceExplorerProgressRunner = <T>(task: () => Promise<T>) => PromiseLike<T>;
 export type ResourceExplorerNavigationAction = "declaration" | "implementation" | "beside";
 
@@ -96,6 +115,7 @@ function buildTree(
   staleWorkspaceKeys: ReadonlySet<string>,
   updatingAll: boolean,
   updatingWorkspaceKeys: ReadonlySet<string>,
+  analysisLimitations: readonly AnalysisLimitationPublication[],
 ): readonly TreeNode[] {
   const units = projectUnits(response);
   if (units.length === 0) {
@@ -109,6 +129,14 @@ function buildTree(
   const labels = projectRootLabels(units);
   const rootContexts = projectRootContexts(units);
   const collisionScents = resourceCollisionScents(units, labels);
+  const limitedProjects = new Map<string, "current-limited" | "stale-limited">();
+  for (const entry of analysisLimitations) {
+    if (entry.kind !== "current-limited" && entry.kind !== "stale-limited") continue;
+    limitedProjects.set(
+      projectAnalysisIdentity(entry.workspaceKey, entry.projectKey),
+      entry.kind,
+    );
+  }
   if (units.length === 1) {
     return buildProjectUnit(
       units[0]!,
@@ -125,6 +153,10 @@ function buildTree(
     updatingAll,
     updatingWorkspaceKeys,
     collisionScents,
+    limitedProjects.get(projectAnalysisIdentity(
+      unit.workspace.key,
+      unit.result?.project.projectKey ?? "",
+    )) ?? null,
   ));
 }
 
@@ -154,6 +186,7 @@ function projectRootNode(
   updatingAll: boolean,
   updatingWorkspaceKeys: ReadonlySet<string>,
   collisionScents: ReadonlyMap<object, string>,
+  analysisLimitation: "current-limited" | "stale-limited" | null,
 ): TreeNode {
   const result = unit.result;
   const states = rowStatesForUnit(unit, staleWorkspaceKeys, updatingAll, updatingWorkspaceKeys);
@@ -163,7 +196,7 @@ function projectRootNode(
   const failed = unit.workspace.status === "error"
     || result?.status === "error"
     || (result?.status === "ready" && result.answer.result === "failed");
-  const description = unit.workspace.status === "ready" && result?.status === "ready"
+  const baseDescription = unit.workspace.status === "ready" && result?.status === "ready"
     && result.answer.result !== "answered"
     ? statefulDescription(projectAnswerIssueDescription(result.answer.result), states)
     : failed
@@ -171,6 +204,11 @@ function projectRootNode(
     : result == null
       ? statefulDescription("no Aurelia project", states)
       : projectCountDescription(resourceCount, projectResultIncomplete(result), states);
+  const description = analysisLimitation === "current-limited"
+    ? `${baseDescription} · analysis limited`
+    : analysisLimitation === "stale-limited"
+      ? `${baseDescription} · analysis may be limited · previous review`
+      : baseDescription;
   const issueKind = projectIssueKind(unit, staleWorkspaceKeys);
   const accessibilityLabel = [
     `Aurelia project ${label}`,
@@ -738,6 +776,8 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Dis
   #publicationWorkspaceKey: string | null = null;
   #publicationFingerprint: string | null = null;
   #issueContext: boolean | null = null;
+  #analysisReviewContext: boolean | null = null;
+  #analysisLimitations: readonly AnalysisLimitationPublication[] = [];
 
   constructor(
     vscode: VscodeApi,
@@ -765,11 +805,13 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Dis
     this.#refreshGeneration += 1;
     this.#tree = [];
     this.#response = null;
+    this.#analysisLimitations = [];
     this.#staleWorkspaceKeys.clear();
     this.#updatingAll = false;
     this.#updatingWorkspaceKeys.clear();
     this.#view = null;
     this.#setIssueContext(false);
+    this.#setAnalysisReviewContext(false);
     this.#changeEmitter.dispose();
   }
 
@@ -811,6 +853,20 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Dis
     return currentNode(this.#tree, element)?.retryWorkspaceKey ?? null;
   }
 
+  /** Current, exact-generation rows suitable for explicit source navigation. */
+  analysisLimitationsForReview(): readonly AnalysisLimitationReviewEntry[] {
+    return this.#analysisLimitations.flatMap((publication) =>
+      publication.kind === "current-limited" && publication.fingerprint != null && publication.result != null
+        ? publication.result.rows.map((row) => ({
+            workspaceKey: publication.workspaceKey,
+            projectKey: publication.projectKey,
+            fingerprint: publication.fingerprint!,
+            row,
+          }))
+        : []
+    );
+  }
+
   async refresh(): Promise<void> {
     return this.#refresh(null);
   }
@@ -827,6 +883,10 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Dis
   markUpdating(workspaceKey: string | null): void {
     const changed = this.#markUpdating(workspaceKey);
     if (!changed || this.#response == null) return;
+    this.#analysisLimitations = markAnalysisLimitationsStale(
+      this.#analysisLimitations,
+      workspaceKey,
+    );
     this.#publicationWorkspaceKey = workspaceKey;
     this.#publicationFingerprint = null;
     this.#rebuildTree();
@@ -867,22 +927,39 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Dis
     }
     try {
       this.#logger.debug("resourceExplorer.refresh.start");
-      const response = await this.#runWithProgress(() => this.#lsp.getResourceInventory({
-        ...(workspaceKey == null ? {} : { workspaceKey }),
-        includeTypeSurfaces: true,
-      }));
+      let requested = await this.#requestSnapshots(workspaceKey);
       if (generation !== this.#refreshGeneration) {
         this.#observe("discarded", {
           generation,
           currentGeneration: this.#refreshGeneration,
           reason: "superseded",
           workspaceIdentity: observedIdentity("workspace", workspaceKey),
-          fingerprint: responseFingerprintForWorkspace(response, workspaceKey),
+          fingerprint: responseFingerprintForWorkspace(requested.inventory, workspaceKey),
         });
         return;
       }
-      const admission = admitResourceInventorySnapshot(this.#response, workspaceKey, response);
+      let admission = admitResourceInventorySnapshot(this.#response, workspaceKey, requested.inventory);
+      let limitationAdmission = reconcileAnalysisLimitations(
+        admission.snapshot,
+        requested.limitations,
+        this.#analysisLimitations,
+        workspaceKey,
+      );
+      // A semantic generation can settle between the two independent requests.
+      // Retry the pair once; never spin while the workspace keeps changing.
+      if (limitationAdmission.retrySuggested) {
+        requested = await this.#requestSnapshots(workspaceKey);
+        if (generation !== this.#refreshGeneration) return;
+        admission = admitResourceInventorySnapshot(this.#response, workspaceKey, requested.inventory);
+        limitationAdmission = reconcileAnalysisLimitations(
+          admission.snapshot,
+          requested.limitations,
+          this.#analysisLimitations,
+          workspaceKey,
+        );
+      }
       this.#response = admission.snapshot;
+      this.#analysisLimitations = limitationAdmission.publications;
       this.#clearUpdating(workspaceKey);
       if (workspaceKey == null) {
         this.#staleWorkspaceKeys.clear();
@@ -895,7 +972,7 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Dis
         this.#staleWorkspaceKeys.delete(workspaceKey);
       }
       this.#phase = { kind: "current" };
-      this.#publicationFingerprint = responseFingerprintForWorkspace(response, workspaceKey);
+      this.#publicationFingerprint = responseFingerprintForWorkspace(requested.inventory, workspaceKey);
       this.#rebuildTree();
       this.#observeTreePublication("current");
       this.#changeEmitter.fire();
@@ -907,6 +984,10 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Dis
         message: error instanceof Error ? error.message : String(error),
       });
       this.#phase = hasPrevious ? { kind: "current" } : { kind: "failed" };
+      this.#analysisLimitations = markAnalysisLimitationsStale(
+        this.#analysisLimitations,
+        workspaceKey,
+      );
       this.#clearUpdating(workspaceKey);
       if (!hasPrevious) {
         this.#tree = [infoNode(
@@ -931,6 +1012,31 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Dis
     }
   }
 
+  async #requestSnapshots(workspaceKey: string | null): Promise<{
+    readonly inventory: ResourceInventorySnapshot | null;
+    readonly limitations: AnalysisLimitationsSnapshot | null;
+  }> {
+    return this.#runWithProgress(async () => {
+      const options = workspaceKey == null ? {} : { workspaceKey };
+      const [inventory, limitations] = await Promise.allSettled([
+        this.#lsp.getResourceInventory({ ...options, includeTypeSurfaces: true }),
+        this.#lsp.getAnalysisLimitations(options),
+      ]);
+      if (inventory.status === "rejected") throw inventory.reason;
+      if (limitations.status === "rejected") {
+        this.#logger.warn("resourceExplorer.analysisLimitations.failed", {
+          message: limitations.reason instanceof Error
+            ? limitations.reason.message
+            : String(limitations.reason),
+        });
+      }
+      return {
+        inventory: inventory.value,
+        limitations: limitations.status === "fulfilled" ? limitations.value : null,
+      };
+    });
+  }
+
   #rebuildTree(): void {
     if (this.#response != null) {
       this.#tree = buildTree(
@@ -938,6 +1044,7 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Dis
         this.#staleWorkspaceKeys,
         this.#updatingAll,
         this.#updatingWorkspaceKeys,
+        this.#analysisLimitations,
       );
     } else if (this.#phase.kind === "current") {
       this.#tree = [infoNode(
@@ -965,6 +1072,7 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Dis
       || counts.failures > 0
       || counts.incomplete > 0,
     );
+    this.#setAnalysisReviewContext(hasCurrentAnalysisLimitationRows(this.#analysisLimitations));
     this.#observe("view-state", {
       generation: this.#refreshGeneration,
       state: this.#phase.kind,
@@ -974,10 +1082,19 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Dis
       updatingAll: this.#updatingAll,
       updatingWorkspaceCount: this.#updatingWorkspaceKeys.size,
       staleWorkspaceCount: this.#staleWorkspaceKeys.size,
+      hasAnalysisReview: this.#analysisReviewContext === true,
     });
   }
 
   #viewMessage(counts: ReturnType<typeof resourceResponseCounts>): string | undefined {
+    return withSingleProjectAnalysisMessage(
+      this.#resourceViewMessage(counts),
+      this.#response,
+      this.#analysisLimitations,
+    );
+  }
+
+  #resourceViewMessage(counts: ReturnType<typeof resourceResponseCounts>): string | undefined {
     if (this.#updatingAll || (this.#updatingWorkspaceKeys.size > 0 && counts.boundaries <= 1)) {
       return "Updating — showing previous results";
     }
@@ -1047,6 +1164,20 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Dis
       value,
     ).then(undefined, (error) => {
       this.#logger.warn("resourceExplorer.context.failed", {
+        message: error instanceof Error ? error.message : String(error),
+      });
+    });
+  }
+
+  #setAnalysisReviewContext(value: boolean): void {
+    if (this.#analysisReviewContext === value) return;
+    this.#analysisReviewContext = value;
+    void this.#vscode.commands.executeCommand(
+      "setContext",
+      AureliaContext.ResourceExplorerHasAnalysisReview,
+      value,
+    ).then(undefined, (error) => {
+      this.#logger.warn("resourceExplorer.analysisReviewContext.failed", {
         message: error instanceof Error ? error.message : String(error),
       });
     });
@@ -1263,6 +1394,211 @@ function admitResourceInventorySnapshot(
     snapshot: workspaces.length === 0 ? null : { workspaces },
     retainedTransportErrorKeys,
   };
+}
+
+function reconcileAnalysisLimitations(
+  inventory: ResourceInventorySnapshot | null,
+  incoming: AnalysisLimitationsSnapshot | null,
+  previous: readonly AnalysisLimitationPublication[],
+  workspaceKey: string | null,
+): {
+  readonly publications: readonly AnalysisLimitationPublication[];
+  readonly retrySuggested: boolean;
+} {
+  const publications = workspaceKey == null
+    ? []
+    : previous.filter((entry) => entry.workspaceKey !== workspaceKey);
+  const previousByProject = new Map(previous.map((entry) => [
+    projectAnalysisIdentity(entry.workspaceKey, entry.projectKey),
+    entry,
+  ]));
+  let retrySuggested = false;
+  for (const workspace of inventory?.workspaces ?? []) {
+    if (workspaceKey != null && workspace.key !== workspaceKey) continue;
+    if (workspace.status !== "ready") continue;
+    const limitationWorkspaces = (incoming?.workspaces ?? []).filter((candidate) =>
+      candidate.key === workspace.key && candidate.uri === workspace.uri
+    );
+    const limitationWorkspace = limitationWorkspaces.length === 1
+      ? limitationWorkspaces[0]!
+      : null;
+    const inventoryProjectKeys = exactProjectKeys(
+      workspace.response.projects.map((project) => project.project.projectKey),
+    );
+    const limitationProjectKeys = limitationWorkspace?.status === "ready"
+      ? exactProjectKeys(limitationWorkspace.response.projects.map((project) => project.projectKey))
+      : null;
+    const exactGeneration = limitationWorkspace?.status === "ready"
+      && limitationWorkspace.response.fingerprint === workspace.response.fingerprint;
+    const exactProjects = exactGeneration
+      && inventoryProjectKeys != null
+      && limitationProjectKeys != null
+      && sameStrings(inventoryProjectKeys, limitationProjectKeys);
+    if (
+      limitationWorkspace?.status === "ready"
+      && (!exactGeneration || !exactProjects)
+    ) {
+      retrySuggested = true;
+    }
+
+    for (const project of workspace.response.projects) {
+      const projectKey = project.project.projectKey;
+      const previousPublication = previousByProject.get(
+        projectAnalysisIdentity(workspace.key, projectKey),
+      );
+      const exactLimitationWorkspace = exactProjects && limitationWorkspace?.status === "ready"
+        ? limitationWorkspace
+        : null;
+      const exactResults = exactLimitationWorkspace == null
+        ? []
+        : exactLimitationWorkspace.response.projects.filter((result) => result.projectKey === projectKey);
+      const exactResult = exactResults.length === 1 ? exactResults[0]! : null;
+      if (
+        exactResult?.status === "ready"
+        && authoritativeAnalysisLimitationsResult(exactResult)
+      ) {
+        publications.push({
+          workspaceKey: workspace.key,
+          workspaceUri: workspace.uri,
+          projectKey,
+          fingerprint: exactLimitationWorkspace!.response.fingerprint,
+          kind: exactResult.candidateCount > 0 ? "current-limited" : "current-none",
+          result: exactResult,
+        });
+        continue;
+      }
+      publications.push(staleOrUnavailableAnalysisPublication(
+        workspace.key,
+        workspace.uri,
+        projectKey,
+        previousPublication,
+      ));
+    }
+  }
+  publications.sort((left, right) =>
+    left.workspaceUri.localeCompare(right.workspaceUri)
+    || left.projectKey.localeCompare(right.projectKey)
+  );
+  return { publications, retrySuggested };
+}
+
+function authoritativeAnalysisLimitationsResult(
+  result: ReadyAnalysisLimitationsProject,
+): boolean {
+  if (
+    result.answer.result !== "answered"
+    || result.answer.coverage !== "complete"
+    || !fullyDrainedAnalysisLimitationPage(result)
+  ) {
+    return false;
+  }
+  if (
+    !Number.isSafeInteger(result.candidateCount)
+    || result.candidateCount < 0
+    || !Number.isSafeInteger(result.suppressedCandidateCount)
+    || result.suppressedCandidateCount < 0
+    || result.suppressedCandidateCount > result.candidateCount
+  ) {
+    return false;
+  }
+  return result.rows.length === result.candidateCount - result.suppressedCandidateCount;
+}
+
+function fullyDrainedAnalysisLimitationPage(result: ReadyAnalysisLimitationsProject): boolean {
+  const page = result.answer.page;
+  if (page == null) return true;
+  return page.cursor === null
+    && page.nextCursor === null
+    && page.exhausted === true
+    && page.cursorProblem == null
+    && Number.isSafeInteger(page.returnedRows)
+    && page.returnedRows === result.rows.length
+    && Number.isSafeInteger(page.totalRows)
+    && page.totalRows === result.rows.length;
+}
+
+function staleOrUnavailableAnalysisPublication(
+  workspaceKey: string,
+  workspaceUri: string,
+  projectKey: string,
+  previous: AnalysisLimitationPublication | undefined,
+): AnalysisLimitationPublication {
+  if (
+    previous?.workspaceUri === workspaceUri
+    && previous.result != null
+    && previous.result.candidateCount > 0
+    && (previous.kind === "current-limited" || previous.kind === "stale-limited")
+  ) {
+    return { ...previous, kind: "stale-limited" };
+  }
+  return {
+    workspaceKey,
+    workspaceUri,
+    projectKey,
+    fingerprint: null,
+    kind: "unavailable",
+    result: null,
+  };
+}
+
+function markAnalysisLimitationsStale(
+  publications: readonly AnalysisLimitationPublication[],
+  workspaceKey: string | null,
+): readonly AnalysisLimitationPublication[] {
+  return publications.map((publication) => {
+    if (workspaceKey != null && publication.workspaceKey !== workspaceKey) return publication;
+    if (publication.kind === "current-limited") return { ...publication, kind: "stale-limited" };
+    if (publication.kind === "current-none") {
+      return { ...publication, fingerprint: null, kind: "unavailable", result: null };
+    }
+    return publication;
+  });
+}
+
+function exactProjectKeys(values: readonly string[]): readonly string[] | null {
+  const keys = [...values].sort((left, right) => left.localeCompare(right));
+  return new Set(keys).size === keys.length ? keys : null;
+}
+
+function sameStrings(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function projectAnalysisIdentity(workspaceKey: string, projectKey: string): string {
+  return `${workspaceKey}\u0000${projectKey}`;
+}
+
+function hasCurrentAnalysisLimitationRows(publications: readonly AnalysisLimitationPublication[]): boolean {
+  return publications.some((entry) =>
+    entry.result != null
+    && entry.result.rows.length > 0
+    && entry.kind === "current-limited"
+  );
+}
+
+function withSingleProjectAnalysisMessage(
+  resourceMessage: string | undefined,
+  response: ResourceInventorySnapshot | null,
+  publications: readonly AnalysisLimitationPublication[],
+): string | undefined {
+  if (response == null) return resourceMessage;
+  const units = projectUnits(response);
+  if (units.length !== 1) return resourceMessage;
+  const unit = units[0]!;
+  const projectKey = unit.result?.project.projectKey;
+  if (projectKey == null) return resourceMessage;
+  const limitation = publications.find((entry) =>
+    entry.workspaceKey === unit.workspace.key && entry.projectKey === projectKey
+  );
+  const analysisMessage = limitation?.kind === "current-limited"
+    ? limitation.result != null && limitation.result.rows.length === 0
+      ? "Analysis is limited. Finding policy hides the current details."
+      : "Analysis is limited. Review Analysis Limitations for details."
+    : limitation?.kind === "stale-limited"
+      ? "Analysis may be limited — showing the previous review until refresh succeeds."
+      : undefined;
+  if (analysisMessage == null) return resourceMessage;
+  return resourceMessage == null ? analysisMessage : `${resourceMessage} ${analysisMessage}`;
 }
 
 function resourceResponseCounts(response: ResourceInventorySnapshot | null): {

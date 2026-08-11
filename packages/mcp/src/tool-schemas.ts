@@ -154,8 +154,10 @@ const semanticAppQuerySchema = z.object({
     .describe('Include query-local TypeChecker type surfaces; omit for compact calls.'),
   diagnosticPageSize: z.number().int().positive().nullable().optional()
     .describe('App-overview diagnostic sample size.'),
+  analysisLimitationPageSize: z.number().int().nonnegative().nullable().optional()
+    .describe('App-overview configured analysis-limitation sample size; use zero for counts and policy trace only.'),
   openSeamPageSize: z.number().int().positive().nullable().optional()
-    .describe('App-overview open-seam sample size.'),
+    .describe('App-overview raw open-seam audit sample size; omit for normal product orientation.'),
   openSeamKindKey: z.string().nullable().optional()
     .describe('Open-seam kind filter; use with open-seam query families.'),
   openSeamReasonKind: z.string().nullable().optional()
@@ -267,8 +269,10 @@ export const appQueryInputSchema = {
     .describe('Include query-local TypeChecker type surfaces when the selected query admits them.'),
   diagnosticPageSize: z.number().int().positive().nullable().optional()
     .describe('App-overview diagnostic sample size.'),
+  analysisLimitationPageSize: z.number().int().nonnegative().nullable().optional()
+    .describe('App-overview configured analysis-limitation sample size; use zero for counts and policy trace only.'),
   openSeamPageSize: z.number().int().positive().nullable().optional()
-    .describe('App-overview open-seam sample size.'),
+    .describe('App-overview raw open-seam audit sample size; omit for normal product orientation.'),
   openSeamKindKey: z.string().nullable().optional()
     .describe('Open-seam kind filter.'),
   openSeamReasonKind: z.string().nullable().optional()
@@ -304,8 +308,10 @@ export const appOverviewInputSchema = {
   ...openAppShape,
   diagnosticPageSize: z.number().int().positive().nullable().optional()
     .describe('Diagnostic sample size inside app overview.'),
+  analysisLimitationPageSize: z.number().int().nonnegative().nullable().optional()
+    .describe('Configured analysis-limitation sample size inside app overview; use zero for counts and policy trace only.'),
   openSeamPageSize: z.number().int().positive().nullable().optional()
-    .describe('Open-seam site sample size inside app overview.'),
+    .describe('Raw open-seam audit sample size inside app overview; omit for normal product orientation.'),
 } as const;
 
 export const routerOverviewInputSchema = {

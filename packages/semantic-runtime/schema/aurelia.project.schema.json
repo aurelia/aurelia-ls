@@ -8,12 +8,26 @@
   "type": "object",
   "additionalProperties": false,
   "required": ["version"],
+  "allOf": [
+    {
+      "if": {
+        "required": ["version"],
+        "properties": {
+          "version": { "const": 1 }
+        }
+      },
+      "then": {
+        "not": { "required": ["findings"] }
+      }
+    }
+  ],
   "properties": {
     "$schema": {
       "type": "string"
     },
     "version": {
-      "const": 1
+      "enum": [1, 2],
+      "description": "Configuration format version. Version 1 retains the authored-source-only contract; version 2 admits persisted finding policy."
     },
     "authoredSources": {
       "type": "object",
@@ -29,6 +43,22 @@
           }
         }
       }
+    },
+    "findings": {
+      "description": "Projection-only policy for admitted semantic finding rules. It does not remove underlying analysis evidence.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "aurelia.analysis.dynamic-registration-spread": {
+          "$ref": "#/$defs/findingDisposition"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "findingDisposition": {
+      "description": "Whether and at what presentation level this exact semantic finding is projected.",
+      "enum": ["off", "information", "warning", "error"]
     }
   }
 }

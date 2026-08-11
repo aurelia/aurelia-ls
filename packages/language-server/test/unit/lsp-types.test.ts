@@ -97,10 +97,10 @@ describe("languageIdForSource", () => {
 
 describe("mapSemanticProjectConfigurationDiagnostics", () => {
   test("maps exact config offsets from the current document", () => {
-    const text = '{\n  "version": 2\n}';
+    const text = '{\n  "version": 3\n}';
     const uri = "file:///C:/projects/app/aurelia.project.json";
     const document = TextDocument.create(uri, "json", 4, text);
-    const start = text.indexOf("2");
+    const start = text.indexOf("3");
     const mapped = mapSemanticProjectConfigurationDiagnostics({
       value: {
         rows: [{
@@ -192,9 +192,9 @@ describe("mapSemanticProjectConfigurationDiagnostics", () => {
     const documentUris = new WorkspaceDocumentUris();
     documentUris.configure("vscode-remote://ssh-remote+dev/home/user/my%20app");
     const uri = "vscode-remote://ssh-remote%2Bdev/home/user/my%20app/aurelia.project.json";
-    const text = '{"version":2}';
+    const text = '{"version":3}';
     const document = TextDocument.create(uri, "json", 2, text);
-    const start = text.indexOf("2");
+    const start = text.indexOf("3");
 
     const mapped = mapSemanticProjectConfigurationDiagnostics({
       value: {

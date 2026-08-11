@@ -1169,7 +1169,7 @@ describe('managed semantic workspace session', () => {
     await writeWorkspaceFile(workspaceRoot, 'package.json', '{"name":"configured-workspace"}');
     await writeWorkspaceFile(workspaceRoot, 'src/main.ts', 'export const root = true;\n');
     const rootConfig = await writeWorkspaceFile(workspaceRoot, 'aurelia.project.json', '{"version":1}');
-    const childConfig = await writeWorkspaceFile(childRoot, 'aurelia.project.json', '{"version":2}');
+    const childConfig = await writeWorkspaceFile(childRoot, 'aurelia.project.json', '{"version":3}');
     await writeWorkspaceFile(childRoot, 'src/child.ts', 'export const child = true;\n');
     const authority = new SemanticRuntimeProjectInputAuthority();
     const session = new ManagedSemanticWorkspaceSession({

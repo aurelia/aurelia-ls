@@ -1,5 +1,8 @@
 import type {
   ApplicationFileRole,
+  SemanticAnalysisLimitationRow,
+  SemanticAnalysisLimitationsResult,
+  SemanticProjectFindingEffectivePolicy,
   SemanticProjectAnalysisCount,
   SemanticResourceDeclarationMode,
   SemanticProjectCandidateSummary,
@@ -18,6 +21,7 @@ import type { Position, Range, WorkspaceEdit } from "vscode-languageserver/node"
 
 export const AureliaProtocolRequest = {
   SourceOwnership: "aurelia/sourceOwnership",
+  AnalysisLimitations: "aurelia/analysisLimitations",
   ResourceInventory: "aurelia/resourceInventory",
   TemplateResourceAvailability: "aurelia/templateResourceAvailability",
   RelatedFiles: "aurelia/getRelatedFiles",
@@ -176,6 +180,81 @@ export type ProtocolWorkspaceEdit = WorkspaceEdit;
 export type ProtocolRange = Range;
 
 export type DocumentUriParams = { uri: string };
+
+export type AnalysisLimitationSourceUnavailableReason =
+  | "source-uri-unavailable"
+  | "source-text-unavailable"
+  | "source-range-unavailable"
+  | "source-range-mismatch";
+
+export interface AnalysisLimitationSourceLocation {
+  readonly uri: string;
+  readonly range: Range;
+}
+
+/** Exact source mapping without host paths or guessed fallback locations. */
+export type AnalysisLimitationSourceTarget =
+  | { readonly state: "available"; readonly location: AnalysisLimitationSourceLocation }
+  | { readonly state: "absent" }
+  | { readonly state: "unavailable"; readonly reason: AnalysisLimitationSourceUnavailableReason };
+
+export interface AnalysisLimitationEffectivePolicy {
+  readonly ruleId: SemanticProjectFindingEffectivePolicy["ruleId"];
+  readonly disposition: SemanticProjectFindingEffectivePolicy["disposition"];
+  readonly authority: SemanticProjectFindingEffectivePolicy["authority"];
+  readonly source: AnalysisLimitationSourceTarget;
+}
+
+export interface AnalysisLimitationProductEvidence {
+  readonly productKey: SemanticAnalysisLimitationRow["evidence"]["products"][number]["productKey"];
+  readonly productKindKey: SemanticAnalysisLimitationRow["evidence"]["products"][number]["productKindKey"];
+  readonly source: AnalysisLimitationSourceTarget;
+}
+
+export interface AnalysisLimitationItem {
+  readonly findingKey: SemanticAnalysisLimitationRow["findingKey"];
+  readonly ruleId: SemanticAnalysisLimitationRow["ruleId"];
+  readonly authority: SemanticAnalysisLimitationRow["authority"];
+  readonly title: SemanticAnalysisLimitationRow["title"];
+  readonly explanation: SemanticAnalysisLimitationRow["explanation"];
+  readonly action: SemanticAnalysisLimitationRow["action"];
+  readonly reason: SemanticAnalysisLimitationRow["reason"];
+  readonly source: AnalysisLimitationSourceTarget;
+  readonly currentCoverage: SemanticAnalysisLimitationRow["currentCoverage"];
+  readonly evidence: {
+    readonly openSeamSiteKey: SemanticAnalysisLimitationRow["evidence"]["openSeamSiteKey"];
+    readonly seamKeys: SemanticAnalysisLimitationRow["evidence"]["seamKeys"];
+    readonly materializations: SemanticAnalysisLimitationRow["evidence"]["materializations"];
+    readonly products: readonly AnalysisLimitationProductEvidence[];
+  };
+  readonly effectivePolicy: AnalysisLimitationEffectivePolicy;
+}
+
+export type AnalysisLimitationsProjectResult =
+  | {
+      readonly status: "ready";
+      readonly projectKey: string;
+      readonly answer: RuntimeAnswerTransport;
+      readonly policyFile: {
+        readonly uri: string;
+        readonly exists: boolean;
+      };
+      readonly effectivePolicies: readonly AnalysisLimitationEffectivePolicy[];
+      readonly candidateCount: SemanticAnalysisLimitationsResult["candidateCount"];
+      readonly suppressedCandidateCount: SemanticAnalysisLimitationsResult["suppressedCandidateCount"];
+      readonly rows: readonly AnalysisLimitationItem[];
+    }
+  | {
+      readonly status: "error";
+      readonly projectKey: string;
+      readonly message: string;
+    };
+
+/** One workspace-generation answer with explicit results for every admitted app project. */
+export interface AnalysisLimitationsResponse {
+  readonly fingerprint: string;
+  readonly projects: readonly AnalysisLimitationsProjectResult[];
+}
 
 export interface SourceOwnershipParams {
   readonly uri: string;

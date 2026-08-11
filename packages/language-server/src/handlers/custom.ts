@@ -9,6 +9,7 @@ import type { CancellationToken } from "vscode-languageserver/node";
 import { canonicalTypeSystemPath } from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
 import type {
+  AnalysisLimitationsResponse,
   DocumentUriParams,
   RelatedFileCandidate,
   RelatedFilesResponse,
@@ -24,6 +25,10 @@ import type {
   WorkspaceStatusParams,
 } from "../protocol.js";
 import { AureliaProtocolRequest } from "../protocol.js";
+import {
+  mapAnalysisLimitationEffectivePolicy,
+  mapAnalysisLimitationItem,
+} from "../mapping/analysis-limitations.js";
 import {
   mapSemanticRuntimeTemplatePrepareRename,
   mapSemanticRuntimeTemplateRenameEdit,
@@ -48,6 +53,7 @@ import {
 } from "../runtime/semantic-runtime-session.js";
 
 export type {
+  AnalysisLimitationsResponse,
   RenameFromTsParams,
   RenameFromTsResponse,
   ResourceInventoryParams,
@@ -57,6 +63,52 @@ export type {
   TemplateResourceAvailabilityParams,
   TemplateResourceAvailabilityResponse,
 } from "../protocol.js";
+
+export async function handleAnalysisLimitations(
+  ctx: ServerContext,
+  operation: SemanticRuntimeLspOperation,
+): Promise<AnalysisLimitationsResponse> {
+  const generation = operation.generation;
+  const summary = await operation.workspaceSummary();
+  const mappingContext = {
+    documentUris: ctx.documentUris,
+    lookupText: (uri: string) => operation.documents.lookupText(uri),
+  };
+  const projects: AnalysisLimitationsResponse["projects"][number][] = [];
+  for (const candidate of summary.value.appCandidates) {
+    try {
+      const answer = await operation.analysisLimitations(candidate.projectKey);
+      if (answer.value.projectKey !== candidate.projectKey) {
+        throw new Error(
+          `Analysis limitations returned project '${answer.value.projectKey}' for requested project '${candidate.projectKey}'.`,
+        );
+      }
+      projects.push({
+        status: "ready",
+        projectKey: candidate.projectKey,
+        answer: mapRuntimeAnswer(answer),
+        policyFile: {
+          uri: ctx.documentUris.uriForHostPath(answer.value.policyFile.filePath),
+          exists: answer.value.policyFile.exists,
+        },
+        effectivePolicies: answer.value.effectivePolicies.map((policy) =>
+          mapAnalysisLimitationEffectivePolicy(policy, mappingContext)
+        ),
+        candidateCount: answer.value.candidateCount,
+        suppressedCandidateCount: answer.value.suppressedCandidateCount,
+        rows: answer.value.rows.map((row) => mapAnalysisLimitationItem(row, mappingContext)),
+      });
+    } catch (error) {
+      if (isSemanticRuntimeLspRequestAborted(error)) throw error;
+      projects.push({
+        status: "error",
+        projectKey: candidate.projectKey,
+        message: requestErrorMessage(error),
+      });
+    }
+  }
+  return { fingerprint: generation.fingerprint, projects };
+}
 
 export async function handleSourceOwnership(
   ctx: ServerContext,
@@ -419,6 +471,9 @@ export async function handleGetRelatedFiles(
  * Registers all custom Aurelia request handlers on the connection.
  */
 export function registerCustomHandlers(ctx: ServerContext): void {
+  ctx.connection.onRequest(AureliaProtocolRequest.AnalysisLimitations, (_params: unknown, token: CancellationToken) =>
+    request(ctx, "analysisLimitations", token, undefined,
+      (guard) => handleAnalysisLimitations(ctx, guard)));
   ctx.connection.onRequest(AureliaProtocolRequest.SourceOwnership, (params: SourceOwnershipParams, token: CancellationToken) =>
     request(ctx, "sourceOwnership", token, params?.uri,
       (guard) => handleSourceOwnership(ctx, params, guard)));

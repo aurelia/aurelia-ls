@@ -5,9 +5,9 @@ import type {
   SourceLanguage,
 } from '../kernel/address.js';
 import {
-  SemanticRuntimeInputReadScope,
   SemanticRuntimeProjectInputAuthority,
   SemanticRuntimeProjectInputRead,
+  type SemanticRuntimeInputReadScope,
   type SemanticRuntimeProjectInputGeneration,
 } from '../kernel/project-input.js';
 import { inferSourceFileRole, inferSourceLanguage } from '../kernel/source-classification.js';
@@ -449,6 +449,18 @@ function semanticProjectConfigurationFacts(configuration: ProjectConfigurationRe
     filePath: canonicalTypeSystemPath(configuration.filePath),
     exists: configuration.exists,
     excludedSourceRoots: configuration.excludedSourceRootDirs.map(canonicalTypeSystemPath).sort(),
+    findingPolicy: configuration.findingPolicy.rules.map((rule) => ({
+      ruleId: rule.ruleId,
+      disposition: rule.disposition,
+      authority: rule.authority,
+      source: {
+        filePath: canonicalTypeSystemPath(rule.source.filePath),
+        start: rule.source.start,
+        end: rule.source.end,
+        startPosition: rule.source.startPosition,
+        endPosition: rule.source.endPosition,
+      },
+    })),
     diagnostics: configuration.diagnostics.map((diagnostic) => ({
       projectKey: diagnostic.projectKey,
       diagnosticKind: diagnostic.diagnosticKind,

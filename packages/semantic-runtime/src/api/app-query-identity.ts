@@ -203,6 +203,7 @@ export function semanticAppQueryKey(query: SemanticAppQuery): string {
     shapedQuery.diagnosticProjection ?? 'default-diagnostics',
     shapedQuery.includeTypeSurfaces === true ? 'type-surfaces' : 'no-type-surfaces',
     shapedQuery.diagnosticPageSize ?? 'default-diagnostic-page',
+    shapedQuery.analysisLimitationPageSize ?? 'default-analysis-limitation-page',
     shapedQuery.openSeamPageSize ?? 'default-open-seam-page',
     shapedQuery.openSeamKindKey ?? 'all-open-seam-kinds',
     shapedQuery.openSeamReasonKind ?? 'all-open-seam-reasons',

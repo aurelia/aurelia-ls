@@ -2,6 +2,7 @@ import type { CancellationToken, Disposable, WorkspaceEdit } from "vscode";
 import {
   AureliaProtocolNotification,
   AureliaProtocolRequest,
+  type AnalysisLimitationsResponse,
   type ResourceInventoryParams,
   type ResourceInventoryResponse,
   type SourceOwnershipResponse,
@@ -16,6 +17,7 @@ import {
   type ResourceDiscoveryHostRequest,
 } from "../resource-discovery-host-control.js";
 import type {
+  AnalysisLimitationsSnapshot,
   ProtocolWorkspaceEdit,
   RelatedFilesResponse,
   RenameFromTsResponse,
@@ -31,6 +33,10 @@ type NotificationHandler = (payload: unknown) => void;
 export interface ResourceInventoryOptions {
   readonly workspaceKey?: string;
   readonly includeTypeSurfaces?: boolean;
+}
+
+export interface AnalysisLimitationsOptions {
+  readonly workspaceKey?: string;
 }
 
 /** Routes custom LSP traffic across the active workspace-owned client sessions. */
@@ -136,6 +142,32 @@ export class LspFacade implements Disposable {
       );
     }
     this.#logResourceInventoryIssues(snapshot.workspaces);
+    return snapshot;
+  }
+
+  async getAnalysisLimitations(
+    options: AnalysisLimitationsOptions = {},
+    token?: CancellationToken,
+  ): Promise<AnalysisLimitationsSnapshot | null> {
+    const sessions = options.workspaceKey == null
+      ? this.#clients.sessions
+      : this.#clients.sessions.filter((session) => session.workspace.key === options.workspaceKey);
+    if (sessions.length === 0) return null;
+    const workspaces = await Promise.all(sessions.map(async (session) => {
+      try {
+        const response = await this.#sendRequest<AnalysisLimitationsResponse>(
+          session,
+          AureliaProtocolRequest.AnalysisLimitations,
+          undefined,
+          token,
+        );
+        return { ...session.workspace, status: "ready" as const, response };
+      } catch (error) {
+        return { ...session.workspace, status: "error" as const, error: errorMessage(error) };
+      }
+    }));
+    const snapshot: AnalysisLimitationsSnapshot = { workspaces };
+    this.#logAnalysisLimitationIssues(snapshot);
     return snapshot;
   }
 
@@ -295,6 +327,30 @@ export class LspFacade implements Disposable {
           coverage: project.answer.coverage,
           summary: project.answer.summary,
           completeness: project.completeness,
+        });
+      }
+    }
+  }
+
+  #logAnalysisLimitationIssues(snapshot: AnalysisLimitationsSnapshot): void {
+    for (const workspace of snapshot.workspaces) {
+      if (workspace.status === "error") continue;
+      for (const project of workspace.response.projects) {
+        if (project.status === "error") {
+          this.#logger.warn("analysis-limitations.project.issue", {
+            workspace: workspace.key,
+            project: project.projectKey,
+            message: project.message,
+          });
+          continue;
+        }
+        if (project.answer.result === "answered") continue;
+        this.#logger.warn("analysis-limitations.project.issue", {
+          workspace: workspace.key,
+          project: project.projectKey,
+          result: project.answer.result,
+          coverage: project.answer.coverage,
+          summary: project.answer.summary,
         });
       }
     }

@@ -155,6 +155,10 @@ import type {
   OpenSeamReasonKind,
 } from '../kernel/open-seam.js';
 import type {
+  SemanticProjectFindingEffectivePolicy,
+  SemanticProjectFindingRuleId,
+} from '../findings/analysis-limitation-policy.js';
+import type {
   MaterializationRecord,
   MaterializedProduct,
 } from '../kernel/materialization.js';
@@ -426,6 +430,7 @@ export const enum SemanticAppQueryKind {
   OpenSeams = 'open-seams',
   OpenSeamSummary = 'open-seam-summary',
   OpenSeamSites = 'open-seam-sites',
+  AnalysisLimitations = 'analysis-limitations',
   AppDiagnostics = 'app-diagnostics',
   AppDiagnosticSummary = 'app-diagnostic-summary',
   TypeScriptDiagnostics = 'typescript-diagnostics',
@@ -514,6 +519,7 @@ export const SEMANTIC_APP_QUERY_KINDS = [
   SemanticAppQueryKind.OpenSeams,
   SemanticAppQueryKind.OpenSeamSummary,
   SemanticAppQueryKind.OpenSeamSites,
+  SemanticAppQueryKind.AnalysisLimitations,
   SemanticAppQueryKind.AppDiagnostics,
   SemanticAppQueryKind.AppDiagnosticSummary,
   SemanticAppQueryKind.TypeScriptDiagnostics,
@@ -735,6 +741,7 @@ export interface OpenSemanticAppOptions {
 
 export interface SemanticAppOverviewRequest {
   readonly diagnosticPageSize?: number | null;
+  readonly analysisLimitationPageSize?: number | null;
   readonly openSeamPageSize?: number | null;
 }
 
@@ -855,7 +862,9 @@ export interface SemanticAppQuery {
   readonly includeTypeSurfaces?: boolean | null;
   /** AppOverview diagnostic-cluster page size; defaults to the compact overview budget. */
   readonly diagnosticPageSize?: number | null;
-  /** AppOverview open-seam-cluster page size; defaults to the compact overview budget. */
+  /** AppOverview configured analysis-limitation page size; defaults to the compact overview budget. */
+  readonly analysisLimitationPageSize?: number | null;
+  /** AppOverview raw open-seam audit page size; defaults to zero. */
   readonly openSeamPageSize?: number | null;
   /** Open-seam query filter by exact seam kind key, such as `evaluation.unresolved-identifier`. */
   readonly openSeamKindKey?: OpenSeam['seamKindKey'] | string | null;
@@ -1665,6 +1674,9 @@ export interface SemanticAppOverviewResult {
   readonly summary: SemanticRuntimeAnswer<SemanticAppSummary>;
   readonly topology: SemanticRuntimeAnswer<SemanticAppOverviewCollectionSummary>;
   readonly diagnostics: SemanticRuntimeAnswer<SemanticAppDiagnosticSummaryResult>;
+  /** Configured, adjudicated authored limitations used by normal product orientation. */
+  readonly analysisLimitations: SemanticRuntimeAnswer<SemanticAnalysisLimitationsResult>;
+  /** Conserved raw seam audit data; normal overview text does not promote its counts or samples. */
   readonly openSeams: SemanticRuntimeAnswer<SemanticOpenSeamSitesResult>;
 }
 
@@ -2059,6 +2071,77 @@ export interface SemanticOpenSeamSitesResult {
   readonly totalOpenSeamSites: number;
   readonly displayText: string;
   readonly rows: readonly SemanticOpenSeamSiteRow[];
+}
+
+/** Public authority for an adjudicated limitation rule, independent from configured presentation. */
+export const enum SemanticAnalysisLimitationAuthority {
+  SemanticRuntimeRule = 'semantic-runtime-rule',
+}
+
+/** Typed reason that made one otherwise useful semantic product remain incomplete. */
+export interface SemanticAnalysisLimitationReason {
+  readonly summary: string;
+  readonly seamKindKeys: readonly OpenSeam['seamKindKey'][];
+  readonly boundaryKinds: readonly (OpenSeamBoundaryKind | `${OpenSeamBoundaryKind}`)[];
+  readonly reasonKinds: readonly (OpenSeamReasonKind | `${OpenSeamReasonKind}`)[];
+}
+
+/** One materialization edge retained for exact seam drill-down without exposing kernel handles. */
+export interface SemanticAnalysisLimitationMaterializationEvidence {
+  readonly impactKey: string;
+  readonly outcome: SemanticOpenSeamMaterializationOutcome | `${SemanticOpenSeamMaterializationOutcome}`;
+  readonly ownerKey: string;
+  readonly productKeys: readonly string[];
+  readonly productKindKeys: readonly MaterializedProduct['productKindKey'][];
+}
+
+/** One affected product named by kind so consumers can explain what knowledge is incomplete. */
+export interface SemanticAnalysisLimitationProductEvidence {
+  readonly productKey: string;
+  readonly productKindKey: MaterializedProduct['productKindKey'];
+  readonly source: SemanticSourceReference | null;
+}
+
+/** Exact causal evidence conserved behind one unique authored limitation site. */
+export interface SemanticAnalysisLimitationEvidence {
+  readonly openSeamSiteKey: string;
+  readonly seamKeys: readonly string[];
+  readonly materializations: readonly SemanticAnalysisLimitationMaterializationEvidence[];
+  readonly products: readonly SemanticAnalysisLimitationProductEvidence[];
+}
+
+/** Neutral analysis-limitation finding; configured disposition is presentation policy, not semantic severity. */
+export interface SemanticAnalysisLimitationRow {
+  /** Stable rule plus exact authored-source identity; independent from answer paging and row order. */
+  readonly findingKey: string;
+  readonly ruleId: SemanticProjectFindingRuleId;
+  readonly authority: SemanticAnalysisLimitationAuthority | `${SemanticAnalysisLimitationAuthority}`;
+  readonly title: string;
+  readonly explanation: string;
+  readonly action: string;
+  readonly reason: SemanticAnalysisLimitationReason;
+  readonly source: SemanticSourceReference;
+  readonly sourceRange: SemanticSourceRange;
+  /** The affected semantic knowledge is open even though this collection query enumerated its basis completely. */
+  readonly currentCoverage: InquiryAnswerCoverage.Open;
+  readonly evidence: SemanticAnalysisLimitationEvidence;
+  readonly effectivePolicy: SemanticProjectFindingEffectivePolicy;
+}
+
+export interface SemanticAnalysisLimitationsResult {
+  readonly projectKey: string;
+  /** Exact native policy input, including the conventional path when the file does not exist yet. */
+  readonly policyFile: {
+    readonly filePath: string;
+    readonly exists: boolean;
+  };
+  /** Effective trace for every admitted rule, including rules with no candidates or disposition=off. */
+  readonly effectivePolicies: readonly SemanticProjectFindingEffectivePolicy[];
+  /** Unique rule-plus-authored-site candidates before configured off suppression. */
+  readonly candidateCount: number;
+  readonly suppressedCandidateCount: number;
+  readonly displayText: string;
+  readonly rows: readonly SemanticAnalysisLimitationRow[];
 }
 
 export interface SemanticEvaluationIssueRow {
@@ -2716,6 +2799,7 @@ export interface SemanticProxyObservableEscapesResult {
 }
 
 export type SemanticAppDiagnosticDomain =
+  | 'analysis'
   | 'typescript'
   | 'evaluation'
   | 'configuration'
@@ -2798,6 +2882,8 @@ export type SemanticTypeScriptDiagnosticKind = `TS${number}`;
 
 /** Closed semantic-runtime diagnostic kinds plus TypeScript's explicitly patterned namespace. */
 export type SemanticAppDiagnosticKind =
+  | SemanticProjectFindingRuleId
+  | `${SemanticProjectFindingRuleId}`
   | SemanticTypeScriptDiagnosticKind
   | SemanticTemplateCursorDiagnosticKind
   | EvaluationIssueKind
@@ -2854,7 +2940,7 @@ export interface SemanticAppDiagnosticRow {
   /** Null only when the owning diagnostic product does not currently publish a phase. */
   readonly phase: SemanticAppDiagnosticPhase | null;
   readonly diagnosticKind: SemanticAppDiagnosticKind;
-  readonly diagnosticAuthority: SemanticTemplateCursorDiagnosticAuthority | 'semantic-runtime-product' | 'typescript';
+  readonly diagnosticAuthority: SemanticTemplateCursorDiagnosticAuthority | 'semantic-runtime-product' | 'semantic-authoring-policy' | 'typescript';
   /** TypeScript checker code retained structurally for direct and template-overlay diagnostics. */
   readonly typeScriptDiagnosticCode?: number;
   readonly frameworkErrorCode: string | null;

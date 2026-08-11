@@ -154,6 +154,7 @@ try {
       workspaceRoot: routedFixtureWorkspaceRoot,
       analysisDepth: 'runtime-topology',
       diagnosticPageSize: 2,
+      analysisLimitationPageSize: 2,
       openSeamPageSize: 2,
     },
   });

@@ -1804,6 +1804,22 @@ describe("LspFacade workspace routing", () => {
       undefined,
     );
 
+    const limitations = await facade.getAnalysisLimitations();
+    expect(limitations?.workspaces.map((workspace) => workspace.name)).toEqual(["a", "b"]);
+    expect(limitations?.workspaces.map((workspace) =>
+      workspace.status === "ready" ? workspace.response.fingerprint : null
+    )).toEqual(["file:///work/a:limitations", "file:///work/b:limitations"]);
+    expect(harness.clients[0]?.sendRequest).toHaveBeenCalledWith(
+      "aurelia/analysisLimitations",
+      undefined,
+      undefined,
+    );
+    expect(harness.clients[1]?.sendRequest).toHaveBeenCalledWith(
+      "aurelia/analysisLimitations",
+      undefined,
+      undefined,
+    );
+
     const workspaceAInventoryCalls = harness.clients[0]!.sendRequest.mock.calls
       .filter(([method]) => method === "aurelia/resourceInventory").length;
     const workspaceBInventoryCalls = harness.clients[1]!.sendRequest.mock.calls
@@ -2209,6 +2225,8 @@ function createClientHarness(
         }
         case "aurelia/resourceInventory":
           return harnessOptions.resourceResponse?.(workspaceUri) ?? resourceResponse(workspaceUri);
+        case "aurelia/analysisLimitations":
+          return { fingerprint: `${workspaceUri}:limitations`, projects: [] };
         case "aurelia/sourceOwnership":
           return sourceOwnershipResponse(workspaceUri, (params as { uri: string }).uri);
         case "aurelia/templateResourceAvailability":

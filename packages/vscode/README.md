@@ -145,9 +145,12 @@ semantic-runtime confirms the exact native configuration. Unrelated HTML and Typ
 The exact `aurelia.project.json` filename uses VS Code's built-in JSONC language mode. A syntax-only dialect schema
 allows the same comments and trailing commas as the runtime parser without defining any project properties. VS Code
 therefore owns malformed JSONC and duplicate-key parser diagnostics, while semantic-runtime remains the sole authority
-for schema, project meaning, filesystem checks, and exclusions. The language server publishes those semantic
-configuration diagnostics only from an admitted session; the canonical full schema is shipped but is not statically
-associated with files.
+for schema, project meaning, filesystem checks, exclusions, and shared finding policy. Version `1` keeps the original
+authored-source-only contract. Version `2` additionally accepts stable semantic finding IDs with `off`, `information`,
+`warning`, or `error` presentation; those settings change consumer projection without erasing the underlying analysis
+evidence or changing Resource Explorer completeness. The language server publishes semantic configuration diagnostics
+only from an admitted session. The canonical full schema is shipped for explicit `$schema` use but is not statically
+associated with files, which avoids duplicate semantic diagnostics from VS Code and semantic-runtime.
 
 Set `aurelia.activationMode` per workspace folder when automatic admission is not appropriate:
 

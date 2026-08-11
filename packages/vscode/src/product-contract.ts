@@ -8,11 +8,13 @@ export const AureliaCommand = {
   OpenResourceToSide: "aurelia.openResourceToSide",
   OpenAureliaOutput: "aurelia.openAureliaOutput",
   OpenRelatedFile: "aurelia.openRelatedFile",
+  ReviewAnalysisLimitations: "aurelia.reviewAnalysisLimitations",
   RefreshResourceExplorer: "aurelia.refreshResourceExplorer",
   RetryResourceProject: "aurelia.retryResourceProject",
 } as const;
 
 export const AureliaContext = {
+  ResourceExplorerHasAnalysisReview: "aurelia.resourceExplorerHasAnalysisReview",
   ResourceExplorerHasIssues: "aurelia.resourceExplorerHasIssues",
 } as const;
 

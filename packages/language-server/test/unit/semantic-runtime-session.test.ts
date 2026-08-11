@@ -17,6 +17,7 @@ import {
   SemanticRuntimeAnswerSelection,
   SemanticSourceWorldCurrentnessKind,
   semanticWorkspaceDescriptorForRuntimeOptions,
+  type SemanticAnalysisLimitationsResult,
   type SemanticAuthoredSourceOwnershipResult,
   type SemanticResourceInventoryResult,
   type SemanticRuntimeAnswer,
@@ -1006,7 +1007,7 @@ describe("SemanticRuntimeLspSession", () => {
         headerOnly: 5,
         visibilityOnly: 0,
         localTemplates: 5,
-        excludedCompilerSyntax: 58,
+        excludedCompilerSyntax: 60,
         unnamedDefinitions: 0,
         unresolvedModules: 0,
         openVisibility: 0,
@@ -2253,6 +2254,72 @@ describe("SemanticRuntimeLspSession", () => {
     expect(result.compactTypeSurfacesIncluded).toBe(false);
     expect(result.richTypeSurfacesIncluded).toBe(true);
   });
+
+  test("requests one explicit project and drains every analysis-limitation page", async () => {
+    const originalAnswerAppQuery = SemanticRuntime.prototype.answerAppQuery;
+    const firstRow = { findingKey: "analysis-limitation:first" } as
+      SemanticAnalysisLimitationsResult["rows"][number];
+    const secondRow = { findingKey: "analysis-limitation:second" } as
+      SemanticAnalysisLimitationsResult["rows"][number];
+    const querySpy = vi.spyOn(SemanticRuntime.prototype, "answerAppQuery")
+      .mockImplementation(function (this: SemanticRuntime, query) {
+        if (query.kind !== SemanticAppQueryKind.AnalysisLimitations) {
+          return originalAnswerAppQuery.call(this, query);
+        }
+        const projectKey = query.projectKey;
+        return Promise.resolve(query.page?.cursor == null
+          ? analysisLimitationsPage(projectKey, [firstRow], null, "analysis-page-2", false)
+          : analysisLimitationsPage(projectKey, [secondRow], "analysis-page-2", null, true));
+      });
+    const session = createSession(minimalFixtureRoot(), new TestDocumentStore());
+
+    const result = await session.runRequest(null, async (operation) => {
+      const summary = await operation.workspaceSummary();
+      const projectKey = summary.value.appCandidates[0]?.projectKey;
+      if (projectKey == null) {
+        throw new Error("Expected the fixture to expose one app candidate.");
+      }
+      return {
+        projectKey,
+        answer: await operation.analysisLimitations(projectKey),
+      };
+    });
+
+    expect(result.answer.value.projectKey).toBe(result.projectKey);
+    expect(result.answer.value.rows.map((row) => row.findingKey)).toEqual([
+      "analysis-limitation:first",
+      "analysis-limitation:second",
+    ]);
+    expect(result.answer.page).toBeNull();
+    expect(result.answer.summary).toBe("Returned 2 analysis limitation(s).");
+    expect(result.answer.value.displayText).toBe("Returned 2 analysis limitation(s).");
+    expect(result.answer.value.displayText).not.toContain("Terminal page text");
+    const analysisQueries = querySpy.mock.calls
+      .map(([query]) => query)
+      .filter((query) => query.kind === SemanticAppQueryKind.AnalysisLimitations);
+    expect(analysisQueries).toHaveLength(2);
+    expect(analysisQueries.map((query) => ({
+      projectKey: query.projectKey,
+      page: query.page,
+      inquiryProfile: query.inquiryProfile,
+      appRetention: query.appRetention,
+    }))).toEqual([
+      {
+        projectKey: result.projectKey,
+        page: { size: 500, cursor: undefined },
+        inquiryProfile: "lsp-cursor",
+        appRetention: "retain-app",
+      },
+      {
+        projectKey: result.projectKey,
+        page: { size: 500, cursor: "analysis-page-2" },
+        inquiryProfile: "lsp-cursor",
+        appRetention: "retain-app",
+      },
+    ]);
+
+    await session.dispose();
+  });
 });
 
 describe("SemanticRuntimeLspSession diagnostic receipt cache", () => {
@@ -2776,6 +2843,45 @@ function rowPageAnswer(
       exhausted,
     },
     continuations,
+  };
+}
+
+function analysisLimitationsPage(
+  projectKey: string,
+  rows: SemanticAnalysisLimitationsResult["rows"],
+  cursor: string | null,
+  nextCursor: string | null,
+  exhausted: boolean,
+): SemanticRuntimeAnswer<SemanticAnalysisLimitationsResult> {
+  return {
+    schemaVersion: SEMANTIC_RUNTIME_API_VERSION,
+    result: SemanticRuntimeAnswerResult.Answered,
+    selection: SemanticRuntimeAnswerSelection.Exact,
+    coverage: SemanticRuntimeAnswerCoverage.Open,
+    summary: `${rows.length} analysis limitation row(s).`,
+    value: {
+      projectKey,
+      policyFile: {
+        filePath: path.join(minimalFixtureRoot(), "aurelia.project.json"),
+        exists: false,
+      },
+      effectivePolicies: [],
+      candidateCount: 2,
+      suppressedCandidateCount: 0,
+      displayText: exhausted
+        ? "Terminal page text must not leak."
+        : "First page text must not become the collection answer.",
+      rows,
+    },
+    page: {
+      size: 500,
+      cursor,
+      nextCursor,
+      returnedRows: rows.length,
+      totalRows: 2,
+      exhausted,
+    },
+    continuations: [],
   };
 }
 

@@ -41,6 +41,13 @@ const contractSuites = [
     'open-seams',
     'source-address',
   ], 'contract-open-seam-sites.mjs', 'Repeated evaluator derivations collapse into unique authored open-seam sites with raw-row counts.'),
+  contract('findings', 'fast', [
+    'findings',
+    'policy',
+    'api',
+    'open-seams',
+    'diagnostics',
+  ], 'contract-analysis-limitations.mjs', 'Adjudicated authored product-pressure sites project to configured analysis limitations while raw seams remain conserved audit evidence.'),
   contract('evaluation', 'fast', [
     'evaluation',
     'api',

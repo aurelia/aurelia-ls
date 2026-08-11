@@ -10,6 +10,7 @@ export * from './app-overview.js';
 export * from './app-topology.js';
 export * from './contracts.js';
 export * from './diagnostic-presentation.js';
+export * from '../findings/analysis-limitation-policy.js';
 export * from './i18n-projections.js';
 export * from './managed-workspace-session.js';
 export * from './runtime.js';
@@ -114,6 +115,7 @@ export type {
 } from '../boot/project-root-admission.js';
 export {
   AURELIA_PROJECT_CONFIGURATION_FILE_NAME,
+  AURELIA_PROJECT_CONFIGURATION_SUPPORTED_VERSIONS,
   AURELIA_PROJECT_CONFIGURATION_VERSION,
   SemanticProjectConfigurationDiagnosticKind,
 } from '../boot/project-configuration.js';

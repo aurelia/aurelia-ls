@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
-import { AureliaCommand, AureliaView } from "../out/product-contract.js";
+import { AureliaCommand, AureliaContext, AureliaView } from "../out/product-contract.js";
 
 interface ExtensionManifest {
   readonly api?: string;
@@ -164,6 +164,11 @@ describe("VS Code product contract", () => {
       group: "status@1",
       when: "view == aureliaResourceExplorer && aurelia.resourceExplorerHasIssues",
     }));
+    expect(title).toContainEqual({
+      command: AureliaCommand.ReviewAnalysisLimitations,
+      group: "analysis@1",
+      when: `view == aureliaResourceExplorer && ${AureliaContext.ResourceExplorerHasAnalysisReview}`,
+    });
   });
 
   test("bounds tree context actions and hides contextual commands from the Command Palette", () => {
@@ -194,6 +199,7 @@ describe("VS Code product contract", () => {
       AureliaCommand.OpenResourceToSide,
       AureliaCommand.RetryResourceProject,
       AureliaCommand.OpenAureliaOutput,
+      AureliaCommand.ReviewAnalysisLimitations,
     ]) {
       expect(manifest.contributes?.menus?.commandPalette).toContainEqual({ command, when: "false" });
     }

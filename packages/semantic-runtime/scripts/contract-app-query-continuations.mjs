@@ -300,6 +300,7 @@ function verifyCatalogShapeAndIdentityNormalization() {
     diagnosticProjection: 'type-projection',
     includeTypeSurfaces: true,
     diagnosticPageSize: 3,
+    analysisLimitationPageSize: 2,
     openSeamPageSize: 4,
     rowPageSize: 6,
     cursor: { filePath: 'src/app.html', line: 0, character: 0 },
@@ -443,6 +444,7 @@ function verifyContinuationTargetQueryShapes() {
         detail: 'handles',
         diagnosticProjection: 'type-projection',
         diagnosticPageSize: 3,
+        analysisLimitationPageSize: 2,
         openSeamPageSize: 4,
         rowPageSize: 5,
         cursor: { filePath: 'src/app.html', line: 0, character: 0 },
@@ -480,6 +482,10 @@ function verifyContinuationTargetQueryShapes() {
       expect(
         targetQuery.diagnosticPageSize == null || targetQuery.kind === SemanticAppQueryKind.AppOverview,
         `${kind} -> ${targetQuery.kind} should not carry diagnosticPageSize outside app-overview.`,
+      );
+      expect(
+        targetQuery.analysisLimitationPageSize == null || targetQuery.kind === SemanticAppQueryKind.AppOverview,
+        `${kind} -> ${targetQuery.kind} should not carry analysisLimitationPageSize outside app-overview.`,
       );
       expect(
         targetQuery.openSeamPageSize == null || targetQuery.kind === SemanticAppQueryKind.AppOverview,

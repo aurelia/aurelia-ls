@@ -151,6 +151,7 @@ export class AureliaMcpSemanticRuntimeAdapter {
       diagnosticProjection: input.diagnosticProjection ?? undefined,
       includeTypeSurfaces: input.includeTypeSurfaces ?? undefined,
       diagnosticPageSize: input.diagnosticPageSize ?? undefined,
+      analysisLimitationPageSize: input.analysisLimitationPageSize ?? undefined,
       openSeamPageSize: input.openSeamPageSize ?? undefined,
       openSeamKindKey: input.openSeamKindKey ?? undefined,
       openSeamReasonKind: input.openSeamReasonKind ?? undefined,
@@ -199,6 +200,7 @@ export class AureliaMcpSemanticRuntimeAdapter {
     return this.answerAppQuery(aureliaMcpToolNames.appOverview, input, {
       kind: SemanticAppQueryKind.AppOverview,
       diagnosticPageSize: input.diagnosticPageSize,
+      analysisLimitationPageSize: input.analysisLimitationPageSize,
       openSeamPageSize: input.openSeamPageSize,
     }, project);
   }

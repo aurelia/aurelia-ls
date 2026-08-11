@@ -9,6 +9,7 @@ import type {
   SemanticAppDiagnosticPhase,
   SemanticAppDiagnosticRow,
   SemanticAppDiagnosticSummaryRow,
+  SemanticAnalysisLimitationRow,
   SemanticAppQuery,
   SemanticAppQueryKind,
   SemanticConfigurationIssueRow,
@@ -48,6 +49,7 @@ export function appDiagnosticRows(
   dialogRows: readonly SemanticDialogIssueRow[],
   routerRows: readonly SemanticRouterIssueRow[],
   routeRows: readonly SemanticRouteRecognizerIssueRow[],
+  analysisLimitationRows: readonly SemanticAnalysisLimitationRow[],
 ): readonly SemanticAppDiagnosticRow[] {
   const sourceFilePath = query.sourceFile?.filePath ?? null;
   return [
@@ -94,10 +96,47 @@ export function appDiagnosticRows(
     ...routeRows
       .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
       .map((row) => appDiagnosticRowWithSourceRole(routeAppDiagnosticRow(row), projectKey, sources)),
+    ...analysisLimitationRows
+      .filter((row) => row.effectivePolicy.disposition !== 'off')
+      .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
+      .map((row) => appDiagnosticRowWithSourceRole(
+        analysisLimitationAppDiagnosticRow(projectKey, row),
+        projectKey,
+        sources,
+      )),
   ].sort((left, right) =>
     `${left.source?.path ?? ''}:${left.source?.start ?? 0}:${left.diagnosticDomain}:${left.diagnosticKind}`
       .localeCompare(`${right.source?.path ?? ''}:${right.source?.start ?? 0}:${right.diagnosticDomain}:${right.diagnosticKind}`)
       );
+}
+
+function analysisLimitationAppDiagnosticRow(
+  projectKey: string,
+  row: SemanticAnalysisLimitationRow,
+): SemanticAppDiagnosticRow {
+  if (row.effectivePolicy.disposition === 'off') {
+    throw new Error(`Suppressed analysis limitation '${row.findingKey}' cannot enter app diagnostics.`);
+  }
+  return {
+    projectKey,
+    diagnosticDomain: 'analysis',
+    phase: null,
+    diagnosticKind: row.ruleId,
+    diagnosticAuthority: 'semantic-authoring-policy',
+    frameworkErrorCode: null,
+    frameworkRawErrorAuthority: null,
+    severity: row.effectivePolicy.disposition,
+    summary: `${row.title}. ${row.explanation} ${row.action}`,
+    missingInput: null,
+    missingInputs: [],
+    source: row.source,
+    subject: null,
+    diagnosticIdentityHandle: null,
+    relatedInformation: [],
+    suggestion: null,
+    sourceRole: null,
+    relatedQueryKind: 'analysis-limitations' satisfies `${SemanticAppQueryKind}`,
+  };
 }
 
 export function appDiagnosticSummaryRows(

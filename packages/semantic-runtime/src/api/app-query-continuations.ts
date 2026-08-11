@@ -323,7 +323,11 @@ function addOverviewContinuations(
           diagnosticQuery(SemanticAppQueryKind.AppDiagnosticSummary, query),
         ),
         inspect(
-          'Group open semantic seams before paging seam rows.',
+          'Inspect configured authored analysis limitations before raw semantic audit.',
+          rowQuery(SemanticAppQueryKind.AnalysisLimitations, query),
+        ),
+        inspect(
+          'Explicitly audit open semantic seam clusters when raw evidence is needed.',
           overviewQuery(SemanticAppQueryKind.OpenSeamSummary, query),
         ),
         inspect(
@@ -343,7 +347,11 @@ function addOverviewContinuations(
           diagnosticQuery(SemanticAppQueryKind.AppDiagnosticSummary, query),
         ),
         inspect(
-          'Open seam clusters summarized by the overview.',
+          'Open configured analysis limitations summarized by the overview.',
+          rowQuery(SemanticAppQueryKind.AnalysisLimitations, query),
+        ),
+        inspect(
+          'Explicitly audit raw open seam clusters behind semantic uncertainty.',
           overviewQuery(SemanticAppQueryKind.OpenSeamSummary, query),
         ),
         inspect(
@@ -498,6 +506,26 @@ function addDiagnosticContinuations(
         ),
       );
       break;
+    case SemanticAppQueryKind.AnalysisLimitations: {
+      const sources = semanticSourceReferencesInAnswerRows(result.value);
+      seeds.push(
+        withSourceReferences(
+          diagnose(
+            'Inspect configured analysis limitations through the unified diagnostic presentation.',
+            withSourceFile(diagnosticQuery(SemanticAppQueryKind.AppDiagnostics, query, page), sourceFile),
+          ),
+          sources,
+        ),
+        withSourceReferences(
+          inspect(
+            'Explicitly audit the conserved open seam sites behind these limitations.',
+            withSourceFile(rowQuery(SemanticAppQueryKind.OpenSeamSites, query, page), sourceFile),
+          ),
+          sources,
+        ),
+      );
+      break;
+    }
   }
 }
 
@@ -1705,10 +1733,11 @@ function relatedDiagnosticRepairBlockers(
     row.frameworkErrorCode != null
     || (typeof row.diagnosticAuthority === 'string' && row.diagnosticAuthority.startsWith('framework-'))
     || row.diagnosticAuthority === 'semantic-runtime-product'
+    || row.diagnosticAuthority === 'semantic-authoring-policy'
     || row.diagnosticAuthority === 'typescript'
   );
   if (!hasFrameworkOrSemanticAuthority) {
-    blockers.push('No framework, TypeScript, or semantic-runtime diagnostic authority was returned for this related diagnostic family.');
+    blockers.push('No framework, TypeScript, semantic-runtime, or authoring-policy diagnostic authority was returned for this related diagnostic family.');
   }
   return blockers;
 }

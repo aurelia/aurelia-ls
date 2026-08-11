@@ -5,6 +5,7 @@ import {
   nextResourceDiscoveryHostObservationId,
 } from "../../resource-discovery-host-control.js";
 import { openResourceNavigation } from "../resource-discovery/navigation.js";
+import { reviewAnalysisLimitations } from "../analysis-limitations/review.js";
 import {
   ResourceExplorerProvider,
   type ResourceExplorerNavigationAction,
@@ -161,6 +162,22 @@ export const ViewsFeature: ClientFeature = {
     own(ctx.vscode.commands.registerCommand(
       AureliaCommand.RefreshResourceExplorer,
       () => invalidateAll(true),
+    ));
+    own(ctx.vscode.commands.registerCommand(
+      AureliaCommand.ReviewAnalysisLimitations,
+      async () => {
+        // Re-prove exact generation/project joins before any source navigation.
+        await invalidateAll(true);
+        return reviewAnalysisLimitations(
+          ctx.vscode,
+          ctx.logger,
+          explorer.analysisLimitationsForReview(),
+          async () => {
+            await invalidateAll(true);
+            return explorer.analysisLimitationsForReview();
+          },
+        );
+      },
     ));
     const openTreeResource = async (target: unknown, action: ResourceExplorerNavigationAction): Promise<boolean> => {
       while (true) {

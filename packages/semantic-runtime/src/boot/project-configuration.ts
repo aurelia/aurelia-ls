@@ -3,6 +3,14 @@ import ts from 'typescript';
 
 import type { ComputationRead } from '../kernel/computation-lifecycle.js';
 import { stableKernelLocalHash } from '../kernel/handles.js';
+import {
+  EMPTY_SEMANTIC_PROJECT_FINDING_POLICY,
+  SEMANTIC_PROJECT_FINDING_DISPOSITIONS,
+  SEMANTIC_PROJECT_FINDING_RULE_IDS,
+  type SemanticProjectFindingDisposition,
+  type SemanticProjectFindingPolicy,
+  type SemanticProjectFindingRuleSetting,
+} from '../findings/analysis-limitation-policy.js';
 import type {
   SemanticRuntimeProjectInputGeneration,
   SemanticRuntimeProjectInputReadScope,
@@ -10,7 +18,8 @@ import type {
 import { AuthoredSourceBoundary } from './source-boundary.js';
 
 export const AURELIA_PROJECT_CONFIGURATION_FILE_NAME = 'aurelia.project.json';
-export const AURELIA_PROJECT_CONFIGURATION_VERSION = 1;
+export const AURELIA_PROJECT_CONFIGURATION_VERSION = 2;
+export const AURELIA_PROJECT_CONFIGURATION_SUPPORTED_VERSIONS = Object.freeze([1, 2] as const);
 
 export const enum SemanticProjectConfigurationDiagnosticKind {
   Syntax = 'aurelia-project-config-syntax',
@@ -24,6 +33,8 @@ export const enum SemanticProjectConfigurationDiagnosticKind {
   InvalidAuthoredSources = 'aurelia-project-config-invalid-authored-sources',
   InvalidExcludedRoots = 'aurelia-project-config-invalid-excluded-roots',
   InvalidExcludedRoot = 'aurelia-project-config-invalid-excluded-root',
+  InvalidFindings = 'aurelia-project-config-invalid-findings',
+  InvalidFindingRuleDisposition = 'aurelia-project-config-invalid-finding-rule-disposition',
 }
 
 export interface SemanticProjectConfigurationSourcePosition {
@@ -60,6 +71,7 @@ export class ProjectConfigurationResult {
     readonly filePath: string,
     readonly exists: boolean,
     readonly excludedSourceRootDirs: readonly string[],
+    readonly findingPolicy: SemanticProjectFindingPolicy,
     readonly diagnostics: readonly SemanticProjectConfigurationDiagnostic[],
     private readonly inputReadScope: SemanticRuntimeProjectInputReadScope,
   ) {
@@ -69,6 +81,7 @@ export class ProjectConfigurationResult {
       filePath,
       exists,
       excludedSourceRootDirs,
+      findingPolicy,
       diagnostics,
       inputs: inputReadScope.readRegisteredInputs().map((read) => [read.readKey, read.observedRevision]),
     }));
@@ -86,6 +99,7 @@ interface JsonSourceFileWithParseDiagnostics extends ts.JsonSourceFile {
 
 interface ParsedProjectConfiguration {
   readonly excludedSourceRootDirs: readonly string[];
+  readonly findingPolicy: SemanticProjectFindingPolicy;
   readonly diagnostics: readonly SemanticProjectConfigurationDiagnostic[];
 }
 
@@ -113,10 +127,11 @@ export function buildProjectConfigurationResult(
     throw new Error(`Project-input host returned text for absent Aurelia project configuration '${filePath}'.`);
   }
   const parsed = !exists
-    ? { excludedSourceRootDirs: [], diagnostics: [] }
+    ? { excludedSourceRootDirs: [], findingPolicy: EMPTY_SEMANTIC_PROJECT_FINDING_POLICY, diagnostics: [] }
     : text == null
       ? {
           excludedSourceRootDirs: [],
+          findingPolicy: EMPTY_SEMANTIC_PROJECT_FINDING_POLICY,
           diagnostics: [unreadableProjectConfigurationDiagnostic(inputGeneration.projectKey, filePath)],
         }
       : parseProjectConfiguration(inputGeneration.projectKey, absoluteRootDir, filePath, text, inputReadScope);
@@ -126,6 +141,7 @@ export function buildProjectConfigurationResult(
     filePath,
     exists,
     parsed.excludedSourceRootDirs,
+    parsed.findingPolicy,
     parsed.diagnostics,
     inputReadScope,
   );
@@ -148,12 +164,17 @@ function parseProjectConfiguration(
   if (sourceFile.parseDiagnostics.length > 0) {
     return {
       excludedSourceRootDirs: [],
+      findingPolicy: EMPTY_SEMANTIC_PROJECT_FINDING_POLICY,
       diagnostics: syntaxDiagnosticsForParseDiagnostics(projectKey, sourceFile, sourceFile.parseDiagnostics),
     };
   }
   const dialectDiagnostics = projectConfigurationJsoncDialectDiagnostics(projectKey, sourceFile);
   if (dialectDiagnostics.length > 0) {
-    return { excludedSourceRootDirs: [], diagnostics: dialectDiagnostics };
+    return {
+      excludedSourceRootDirs: [],
+      findingPolicy: EMPTY_SEMANTIC_PROJECT_FINDING_POLICY,
+      diagnostics: dialectDiagnostics,
+    };
   }
 
   const statement = sourceFile.statements.length === 1 ? sourceFile.statements[0] : null;
@@ -172,7 +193,7 @@ function parseProjectConfiguration(
     projectKey,
     sourceFile,
     root,
-    new Set(['$schema', 'version', 'authoredSources']),
+    new Set(['$schema', 'version', 'authoredSources', 'findings']),
   );
   const shapeDiagnostics = [...rootIndex.diagnostics];
   const schema = rootIndex.properties.get('$schema');
@@ -187,25 +208,28 @@ function parseProjectConfiguration(
   }
 
   const version = rootIndex.properties.get('version');
+  let acceptedVersion: (typeof AURELIA_PROJECT_CONFIGURATION_SUPPORTED_VERSIONS)[number] | null = null;
   if (version == null) {
     shapeDiagnostics.push(projectConfigurationDiagnosticForNode(
       projectKey,
       sourceFile,
       SemanticProjectConfigurationDiagnosticKind.MissingVersion,
-      `Aurelia project configuration requires version ${AURELIA_PROJECT_CONFIGURATION_VERSION}.`,
+      `Aurelia project configuration requires a supported version (${AURELIA_PROJECT_CONFIGURATION_SUPPORTED_VERSIONS.join(' or ')}).`,
       root,
     ));
   } else if (
     !ts.isNumericLiteral(version.initializer)
-    || Number(version.initializer.text) !== AURELIA_PROJECT_CONFIGURATION_VERSION
+    || !isSupportedProjectConfigurationVersion(Number(version.initializer.text))
   ) {
     shapeDiagnostics.push(projectConfigurationDiagnosticForNode(
       projectKey,
       sourceFile,
       SemanticProjectConfigurationDiagnosticKind.UnsupportedVersion,
-      `Only Aurelia project configuration version ${AURELIA_PROJECT_CONFIGURATION_VERSION} is supported.`,
+      `Only Aurelia project configuration versions ${AURELIA_PROJECT_CONFIGURATION_SUPPORTED_VERSIONS.join(' and ')} are supported.`,
       version.initializer,
     ));
+  } else {
+    acceptedVersion = Number(version.initializer.text) as (typeof AURELIA_PROJECT_CONFIGURATION_SUPPORTED_VERSIONS)[number];
   }
 
   const authoredSources = rootIndex.properties.get('authoredSources');
@@ -244,6 +268,59 @@ function parseProjectConfiguration(
     }
   }
 
+  const findings = rootIndex.properties.get('findings');
+  const acceptedFindingRules: SemanticProjectFindingRuleSetting[] = [];
+  const findingEntryDiagnostics: SemanticProjectConfigurationDiagnostic[] = [];
+  if (findings != null && acceptedVersion === 1) {
+    shapeDiagnostics.push(projectConfigurationDiagnosticForNode(
+      projectKey,
+      sourceFile,
+      SemanticProjectConfigurationDiagnosticKind.UnknownProperty,
+      "Aurelia project configuration version 1 does not define property 'findings'.",
+      findings.name,
+    ));
+  } else if (findings != null && acceptedVersion === 2) {
+    if (!ts.isObjectLiteralExpression(findings.initializer)) {
+      shapeDiagnostics.push(projectConfigurationDiagnosticForNode(
+        projectKey,
+        sourceFile,
+        SemanticProjectConfigurationDiagnosticKind.InvalidFindings,
+        "'findings' must be an object keyed by an admitted semantic finding rule ID.",
+        findings.initializer,
+      ));
+    } else {
+      const findingIndex = indexObjectProperties(
+        projectKey,
+        sourceFile,
+        findings.initializer,
+        new Set(SEMANTIC_PROJECT_FINDING_RULE_IDS),
+      );
+      shapeDiagnostics.push(...findingIndex.diagnostics);
+      for (const ruleId of SEMANTIC_PROJECT_FINDING_RULE_IDS) {
+        const rule = findingIndex.properties.get(ruleId);
+        if (rule == null) {
+          continue;
+        }
+        if (!ts.isStringLiteral(rule.initializer) || !isSemanticProjectFindingDisposition(rule.initializer.text)) {
+          findingEntryDiagnostics.push(projectConfigurationDiagnosticForNode(
+            projectKey,
+            sourceFile,
+            SemanticProjectConfigurationDiagnosticKind.InvalidFindingRuleDisposition,
+            `Finding rule '${ruleId}' must be one of ${SEMANTIC_PROJECT_FINDING_DISPOSITIONS.map((value) => `'${value}'`).join(', ')}.`,
+            rule.initializer,
+          ));
+          continue;
+        }
+        acceptedFindingRules.push(Object.freeze({
+          ruleId,
+          disposition: rule.initializer.text,
+          authority: 'project-configuration',
+          source: projectConfigurationSourceSpanForNode(sourceFile, rule.initializer),
+        }));
+      }
+    }
+  }
+
   const acceptedRoots: string[] = [];
   const entryDiagnostics: SemanticProjectConfigurationDiagnostic[] = [];
   for (const element of excludedRoots?.elements ?? []) {
@@ -274,15 +351,33 @@ function parseProjectConfiguration(
   if (shapeDiagnostics.length > 0) {
     return {
       excludedSourceRootDirs: [],
-      diagnostics: sortProjectConfigurationDiagnostics([...shapeDiagnostics, ...entryDiagnostics]),
+      findingPolicy: EMPTY_SEMANTIC_PROJECT_FINDING_POLICY,
+      diagnostics: sortProjectConfigurationDiagnostics([
+        ...shapeDiagnostics,
+        ...entryDiagnostics,
+        ...findingEntryDiagnostics,
+      ]),
     };
   }
 
   const boundary = new AuthoredSourceBoundary(rootDir, acceptedRoots);
   return {
     excludedSourceRootDirs: boundary.excludedRootDirs,
-    diagnostics: sortProjectConfigurationDiagnostics(entryDiagnostics),
+    findingPolicy: Object.freeze({
+      rules: Object.freeze([...acceptedFindingRules].sort((left, right) => left.ruleId.localeCompare(right.ruleId))),
+    }),
+    diagnostics: sortProjectConfigurationDiagnostics([...entryDiagnostics, ...findingEntryDiagnostics]),
   };
+}
+
+function isSupportedProjectConfigurationVersion(
+  version: number,
+): version is (typeof AURELIA_PROJECT_CONFIGURATION_SUPPORTED_VERSIONS)[number] {
+  return (AURELIA_PROJECT_CONFIGURATION_SUPPORTED_VERSIONS as readonly number[]).includes(version);
+}
+
+function isSemanticProjectFindingDisposition(value: string): value is SemanticProjectFindingDisposition {
+  return (SEMANTIC_PROJECT_FINDING_DISPOSITIONS as readonly string[]).includes(value);
 }
 
 function indexObjectProperties(
@@ -519,6 +614,7 @@ function invalidWholeConfiguration(
 ): ParsedProjectConfiguration {
   return {
     excludedSourceRootDirs: [],
+    findingPolicy: EMPTY_SEMANTIC_PROJECT_FINDING_POLICY,
     diagnostics: [projectConfigurationDiagnosticForNode(
       projectKey,
       sourceFile,
@@ -527,6 +623,21 @@ function invalidWholeConfiguration(
       node,
     )],
   };
+}
+
+function projectConfigurationSourceSpanForNode(
+  sourceFile: ts.JsonSourceFile,
+  node: ts.Node,
+): SemanticProjectConfigurationSourceSpan {
+  const start = node.getStart(sourceFile);
+  const end = node.getEnd();
+  return Object.freeze({
+    filePath: sourceFile.fileName,
+    start,
+    end,
+    startPosition: Object.freeze(sourceFile.getLineAndCharacterOfPosition(start)),
+    endPosition: Object.freeze(sourceFile.getLineAndCharacterOfPosition(end)),
+  });
 }
 
 function projectConfigurationDiagnosticForNode(

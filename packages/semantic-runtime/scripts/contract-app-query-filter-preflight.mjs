@@ -42,6 +42,7 @@ const unsupportedCatalogSelectorAnswer = app.ask({
   diagnosticProjection: 'type-projection',
   includeTypeSurfaces: true,
   diagnosticPageSize: 5,
+  analysisLimitationPageSize: 5,
   openSeamPageSize: 5,
   rowPageSize: 5,
   includeDeclaration: true,
@@ -174,6 +175,7 @@ const failures = [
   [
     'includeTypeSurfaces',
     'diagnosticPageSize',
+    'analysisLimitationPageSize',
     'openSeamPageSize',
     'rowPageSize',
     'includeDeclaration',

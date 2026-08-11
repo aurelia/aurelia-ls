@@ -31,13 +31,14 @@ const bindingObservedDependencyLocusKinds = [
 
 const semanticAppQueryCatalogRows = [
   queryRow(SemanticAppQueryKind.Summary, 'overview', 'Compact project app-world counts and app shape summary.', 'overview'),
-  queryRow(SemanticAppQueryKind.AppOverview, 'overview', 'Composed compact app answer for available diagnostics, open seams, and topology counts.', 'overview'),
+  queryRow(SemanticAppQueryKind.AppOverview, 'overview', 'Composed compact app answer for diagnostics, configured analysis limitations, topology counts, and an explicit raw-seam audit child.', 'overview'),
   queryRow(SemanticAppQueryKind.AppTopology, 'overview', 'Compact topology counts and scalar facts from the opened app world; bindable type surfaces are opt-in.', 'overview', { supportsTypeSurfaces: true }),
   queryRow(SemanticAppQueryKind.SourceFiles, 'source', 'Admitted source files for the selected project; routed runtime calls can answer this from the booted project frame without opening an app epoch.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, runtimeBoundary: 'project-frame' }),
   queryRow(SemanticAppQueryKind.UnresolvedModules, 'source', 'Static evaluator module edges that could not be resolved; routed runtime calls can answer this from read-only Aurelia project evaluation without opening an app epoch.', 'row-table', { pagingKind: 'offset-cursor', runtimeBoundary: 'static-evaluation' }),
   queryRow(SemanticAppQueryKind.OpenSeams, 'diagnostics', 'Source-backed or product-backed semantic seams still open after app-world construction; filter by source, causal cluster, authored site, seam kind, reason kind, or source role.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, supportsSourceFile: true, supportsOpenSeamFilters: true }),
   queryRow(SemanticAppQueryKind.OpenSeamSummary, 'diagnostics', 'Open seam clusters grouped by seam kind and reason-kind signature; returned cluster keys can narrow sites or raw seam rows within the same app answer epoch.', 'summary-row-table', { pagingKind: 'offset-cursor', supportsSourceFile: true, supportsOpenSeamFilters: true }),
   queryRow(SemanticAppQueryKind.OpenSeamSites, 'diagnostics', 'Open seam sites grouped by exact authored root source; returned site keys can narrow raw seam rows within the same app answer epoch.', 'summary-row-table', { pagingKind: 'offset-cursor', supportsSourceFile: true, supportsOpenSeamFilters: true }),
+  queryRow(SemanticAppQueryKind.AnalysisLimitations, 'diagnostics', 'Configured, adjudicated analysis limitations at unique authored product-pressure sites; raw seams remain available through the explicit open-seam audit queries.', 'row-table', { pagingKind: 'offset-cursor', supportsSourceFile: true }),
   queryRow(SemanticAppQueryKind.AppDiagnostics, 'diagnostics', 'Unified app diagnostics across TypeScript, modeled Aurelia issue lanes, and template diagnostics; optionally narrowed to one source file.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, supportsSourceFile: true, supportsDiagnosticProjection: true, materializationPolicy: 'query-type-projection' }),
   queryRow(SemanticAppQueryKind.AppDiagnosticSummary, 'diagnostics', 'Diagnostic clusters grouped by domain, kind, authority, severity, framework code, and owning query; explicit diagnostic projections include TypeScript diagnostics.', 'summary-row-table', { pagingKind: 'offset-cursor', supportsDetail: true, supportsSourceFile: true, supportsDiagnosticProjection: true, materializationPolicy: 'query-type-projection' }),
   queryRow(SemanticAppQueryKind.TypeScriptDiagnostics, 'diagnostics', 'Ordinary TypeScript project diagnostics from the semantic-runtime Program/tsconfig epoch.', 'row-table', { pagingKind: 'offset-cursor', supportsSourceFile: true, materializationPolicy: 'query-type-projection' }),
@@ -211,6 +212,7 @@ export function semanticAppQueryCatalogShape(
     ...(query.diagnosticProjection == null || !row.supportsDiagnosticProjection ? {} : { diagnosticProjection: query.diagnosticProjection }),
     ...(query.includeTypeSurfaces == null || !row.supportsTypeSurfaces ? {} : { includeTypeSurfaces: query.includeTypeSurfaces }),
     ...(query.kind !== SemanticAppQueryKind.AppOverview || query.diagnosticPageSize == null ? {} : { diagnosticPageSize: query.diagnosticPageSize }),
+    ...(query.kind !== SemanticAppQueryKind.AppOverview || query.analysisLimitationPageSize == null ? {} : { analysisLimitationPageSize: query.analysisLimitationPageSize }),
     ...(query.kind !== SemanticAppQueryKind.AppOverview || query.openSeamPageSize == null ? {} : { openSeamPageSize: query.openSeamPageSize }),
     ...(row.supportsOpenSeamFilters && query.openSeamKindKey != null ? { openSeamKindKey: query.openSeamKindKey } : {}),
     ...(row.supportsOpenSeamFilters && query.openSeamReasonKind != null ? { openSeamReasonKind: query.openSeamReasonKind } : {}),
@@ -271,6 +273,9 @@ export function unsupportedSemanticAppQuerySelectorFields(
   }
   if (query.diagnosticPageSize != null && query.kind !== SemanticAppQueryKind.AppOverview) {
     unsupportedFields.push('diagnosticPageSize');
+  }
+  if (query.analysisLimitationPageSize != null && query.kind !== SemanticAppQueryKind.AppOverview) {
+    unsupportedFields.push('analysisLimitationPageSize');
   }
   if (query.openSeamPageSize != null && query.kind !== SemanticAppQueryKind.AppOverview) {
     unsupportedFields.push('openSeamPageSize');
