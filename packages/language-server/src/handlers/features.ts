@@ -11,6 +11,7 @@ import {
 } from "@aurelia-ls/semantic-runtime";
 import {
   CodeActionKind,
+  CodeActionTriggerKind,
   ResponseError,
   LSPErrorCodes,
   SemanticTokensRequest,
@@ -60,6 +61,7 @@ import {
   withSemanticRuntimeTemplateCodeActionResolveRefusal,
   type LookupTextFn,
 } from "../mapping/lsp-types.js";
+import { mapBindingUncertaintyExplanationCodeAction } from "../mapping/binding-uncertainty-explanation.js";
 import {
   templateCodeActionResolveRefusal,
   type TemplateCodeActionResolveRefusalKind,
@@ -411,7 +413,23 @@ export async function handleCodeAction(
     doc,
     params.context.only,
   );
-  const actions = [...(repairActions ?? []), ...explanationActions];
+  const bindingExplanationAction = params.context.triggerKind === CodeActionTriggerKind.Invoked
+    ? mapBindingUncertaintyExplanationCodeAction(
+        await operation.bindingUncertaintyExplanation(null, doc.uri, params.range.start),
+        doc,
+        params.range.start,
+        params.context.only,
+        {
+          documentUris: ctx.documentUris,
+          lookupText: (uri) => operation.documents.lookupText(uri),
+        },
+      )
+    : null;
+  const actions = [
+    ...(repairActions ?? []),
+    ...explanationActions,
+    ...(bindingExplanationAction == null ? [] : [bindingExplanationAction]),
+  ];
   return actions.length === 0 ? null : actions;
 }
 

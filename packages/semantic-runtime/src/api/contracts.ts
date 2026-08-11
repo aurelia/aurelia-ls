@@ -506,6 +506,7 @@ export const enum SemanticAppQueryKind {
   BindingValueChannelSummary = 'binding-value-channel-summary',
   RuntimeExpressionAccessUses = 'runtime-expression-access-uses',
   BindingDataFlows = 'binding-data-flows',
+  BindingUncertaintyExplanation = 'binding-uncertainty-explanation',
   BindingDataFlowSummary = 'binding-data-flow-summary',
   ControlUseInventory = 'control-use-inventory',
   BindingObservedDependencySummary = 'binding-observed-dependency-summary',
@@ -596,6 +597,7 @@ export const SEMANTIC_APP_QUERY_KINDS = [
   SemanticAppQueryKind.BindingValueChannelSummary,
   SemanticAppQueryKind.RuntimeExpressionAccessUses,
   SemanticAppQueryKind.BindingDataFlows,
+  SemanticAppQueryKind.BindingUncertaintyExplanation,
   SemanticAppQueryKind.BindingDataFlowSummary,
   SemanticAppQueryKind.ControlUseInventory,
   SemanticAppQueryKind.BindingObservedDependencySummary,
@@ -5976,6 +5978,107 @@ export interface SemanticBindingDataFlowRow {
 
 export interface SemanticBindingDataFlowResult {
   readonly rows: readonly SemanticBindingDataFlowRow[];
+}
+
+export type SemanticBindingUncertaintyExplanationConclusionKind =
+  | 'flow-proved'
+  | 'flow-partially-proved'
+  | 'flow-blocked';
+
+/** One cursor-selected template-authored PropertyBinding, independent from store-local handles. */
+export interface SemanticBindingUncertaintyExplanationSubject {
+  /** Structural identity used to reprove that a fresh answer still describes the same authored binding. */
+  readonly subjectKey: string;
+  readonly projectKey: string;
+  readonly definitionName: string;
+  readonly compilationLane: SemanticTemplateCompilationRow['compilationLane'];
+  readonly bindingKind: RuntimeBindingKind | `${RuntimeBindingKind}`;
+  /** Authored binding carrier that owns every returned data-flow lane. */
+  readonly source: SemanticSourceReference;
+  /** Authored expression evaluated or assigned by the binding, when separately addressable. */
+  readonly expressionSource: SemanticSourceReference | null;
+  readonly templateSource: SemanticSourceReference | null;
+  readonly targetProperties: readonly string[];
+}
+
+export interface SemanticBindingUncertaintyExplanationConclusion {
+  readonly kind: SemanticBindingUncertaintyExplanationConclusionKind;
+  readonly title: string;
+  readonly explanation: string;
+  readonly action: string;
+}
+
+/** Typed causal blocker retained by one or more data-flow materializations for the selected binding. */
+export interface SemanticBindingUncertaintyExplanationBlocker {
+  readonly kind: 'open-seam';
+  readonly seamKindKey: string;
+  readonly summary: string;
+  readonly reasonKinds: readonly (OpenSeamReasonKind | `${OpenSeamReasonKind}`)[];
+  readonly boundaryKinds: readonly (OpenSeamBoundaryKind | `${OpenSeamBoundaryKind}`)[];
+  /** Indexes into `evidence.lanes`; one upstream seam can constrain more than one lane. */
+  readonly laneIndexes: readonly number[];
+  readonly sources: readonly SemanticSourceReference[];
+}
+
+export interface SemanticBindingUncertaintyExplanationEvidence {
+  /** Canonical public projections of every data-flow lane owned by the selected binding. */
+  readonly lanes: readonly SemanticBindingDataFlowRow[];
+  readonly blockers: readonly SemanticBindingUncertaintyExplanationBlocker[];
+}
+
+export type SemanticBindingUncertaintyExplanationUncertaintyReason =
+  | 'binding-direction-open'
+  | 'source-evaluation-open'
+  | 'target-realization-open'
+  | 'source-type-open'
+  | 'source-assignment-open'
+  | 'target-to-source-value-open'
+  | 'value-converter-writeback-open'
+  | 'source-to-target-assignability-open'
+  | 'target-to-source-assignability-open'
+  | 'data-flow-open'
+  | 'blocking-open-seam'
+  | 'source-discovery-truncated';
+
+export interface SemanticBindingUncertaintyExplanationUncertainty {
+  readonly state: 'closed' | 'open' | 'truncated';
+  readonly reasons: readonly SemanticBindingUncertaintyExplanationUncertaintyReason[];
+  readonly explanation: string;
+}
+
+/** Human-readable pointer to the answer envelope that owns freshness and revision authority. */
+export interface SemanticBindingUncertaintyExplanationCurrentness {
+  readonly authority: 'answer-analysis-basis';
+  readonly explanation: string;
+}
+
+export interface SemanticBindingUncertaintyExplanationNextStep {
+  readonly kind: 'inspect-source' | 'inspect-query' | 'requery';
+  readonly label: string;
+  readonly source: SemanticSourceReference | null;
+  readonly relatedQueryKind: SemanticAppQueryKind | `${SemanticAppQueryKind}` | null;
+  readonly targetQuery: SemanticAppQuery | null;
+}
+
+export interface SemanticBindingUncertaintyExplanation {
+  readonly subject: SemanticBindingUncertaintyExplanationSubject;
+  readonly conclusion: SemanticBindingUncertaintyExplanationConclusion;
+  readonly evidence: SemanticBindingUncertaintyExplanationEvidence;
+  readonly uncertainty: SemanticBindingUncertaintyExplanationUncertainty;
+  readonly currentness: SemanticBindingUncertaintyExplanationCurrentness;
+  readonly nextSteps: readonly SemanticBindingUncertaintyExplanationNextStep[];
+}
+
+export interface SemanticBindingUncertaintyExplanationContender {
+  readonly subject: SemanticBindingUncertaintyExplanationSubject;
+  readonly conclusionKind: SemanticBindingUncertaintyExplanationConclusionKind;
+}
+
+export interface SemanticBindingUncertaintyExplanationResult {
+  readonly displayText: string;
+  readonly projectKey: string;
+  readonly explanation: SemanticBindingUncertaintyExplanation | null;
+  readonly contenders: readonly SemanticBindingUncertaintyExplanationContender[];
 }
 
 export interface SemanticNullableBooleanCountRow {

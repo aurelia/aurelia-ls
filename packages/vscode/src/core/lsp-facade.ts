@@ -3,6 +3,8 @@ import {
   AureliaProtocolNotification,
   AureliaProtocolRequest,
   type AnalysisLimitationsResponse,
+  type BindingUncertaintyExplanationParams,
+  type BindingUncertaintyExplanationResponse,
   type FrameworkCapabilityExplanationParams,
   type FrameworkCapabilityExplanationResponse,
   type ResourceInventoryParams,
@@ -20,6 +22,7 @@ import {
 } from "../resource-discovery-host-control.js";
 import type {
   AnalysisLimitationsSnapshot,
+  BindingUncertaintyExplanationSnapshot,
   FrameworkCapabilityExplanationSnapshot,
   ProtocolWorkspaceEdit,
   RelatedFilesResponse,
@@ -228,6 +231,21 @@ export class LspFacade implements Disposable {
     const response = await this.#sendRequest<FrameworkCapabilityExplanationResponse>(
       session,
       AureliaProtocolRequest.FrameworkCapabilityExplanation,
+      params,
+      token,
+    );
+    return { ...response, workspace: session.workspace };
+  }
+
+  async getBindingUncertaintyExplanation(
+    params: BindingUncertaintyExplanationParams,
+    token?: CancellationToken,
+  ): Promise<BindingUncertaintyExplanationSnapshot | null> {
+    const session = this.#sessionForUri(params.uri);
+    if (session == null) return null;
+    const response = await this.#sendRequest<BindingUncertaintyExplanationResponse>(
+      session,
+      AureliaProtocolRequest.BindingUncertaintyExplanation,
       params,
       token,
     );

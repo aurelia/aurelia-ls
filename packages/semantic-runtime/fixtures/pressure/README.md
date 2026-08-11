@@ -138,6 +138,13 @@ pressure evidence and app-builder pressure fixtures, not reusable generated-code
   surfaces.
   `pnpm --filter @aurelia-ls/semantic-runtime contract:binding-data-flow-summary` is the focused semantic contract for
   these issue rollups.
+- `binding-uncertainty-explanation` captures the bounded cursor-selected explanation slice for template-authored
+  property bindings: a closed healthy flow, closed readonly/TypeScript-strictness and nullish-assignability negatives,
+  nullable multi-select writeback with a typed causal blocker, shared-template ambiguity across two app worlds, an
+  absent locus, and an excluded listener binding. It exists so IDE/MCP consumers receive one engine-authored statement
+  of what Aurelia can prove and what blocks stronger certainty without joining raw rows or choosing an app world.
+  `pnpm --filter @aurelia-ls/semantic-runtime contract:binding-uncertainty-explanation` is the focused semantic contract
+  for selection, catalog/preflight policy, continuations, currentness, and generic JSON transport.
 - `di-resource-duplicates` captures two source-registered runtime-html resources with the same custom-element name. It
   preserves the runtime-html definition registrar duplicate warning (`element_existed` / `AUR0153`) as a
   resource-registration issue without making recommendable generators emit colliding resource names. Kernel

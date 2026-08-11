@@ -1,5 +1,6 @@
 import { describe, test, expect, vi } from "vitest";
 import {
+  CodeActionTriggerKind,
   CompletionItemKind,
   LSPErrorCodes,
   ResponseError,
@@ -553,7 +554,10 @@ function createMockReferencesContext(options: {
   };
 }
 
-function createMockCodeActionContext(input: { actions?: unknown[] } = {}) {
+function createMockCodeActionContext(input: {
+  actions?: unknown[];
+  bindingExplanationAnswer?: unknown;
+} = {}) {
   const document = {
     uri: templateUri,
     languageId: "html",
@@ -605,9 +609,29 @@ function createMockCodeActionContext(input: { actions?: unknown[] } = {}) {
           },
         }),
       ),
+      bindingUncertaintyExplanation: vi.fn(() => Promise.resolve(
+        input.bindingExplanationAnswer ?? {
+          schemaVersion: "0.2",
+          result: "answered",
+          selection: "absent",
+          coverage: "complete",
+          summary: "No binding uncertainty at the cursor.",
+          value: {
+            displayText: "No binding uncertainty at the cursor.",
+            projectKey: "app",
+            explanation: null,
+            contenders: [],
+          },
+          page: null,
+        },
+      )),
     },
     lookupText: vi.fn((uri: string) =>
-      uri === definitionUri ? definitionText : null,
+      uri === definitionUri
+        ? definitionText
+        : documentUris.sameDocument(uri, templateUri)
+          ? codeActionText
+          : null,
     ),
     lookupDocumentSnapshot: vi.fn((uri: string) =>
       documentUris.resolve(uri).uri === definitionUri
@@ -1289,6 +1313,189 @@ describe("handleCodeAction", () => {
     );
 
     expect(result).toBeNull();
+  });
+
+  test("offers one invoked command-only binding explanation with no diagnostics", async () => {
+    const bindingSource = {
+      kind: "source-span-address",
+      label: `src/my-app.html@${codeActionStart}..${codeActionStart + "titel".length}`,
+      path: "src/my-app.html",
+      start: codeActionStart,
+      end: codeActionStart + "titel".length,
+      role: "binding",
+    };
+    const ctx = createMockCodeActionContext({
+      actions: [],
+      bindingExplanationAnswer: {
+        schemaVersion: "0.2",
+        result: "answered",
+        selection: "exact",
+        coverage: "open",
+        summary: "The selected binding remains open.",
+        value: {
+          displayText: "The selected binding remains open.",
+          projectKey: "app",
+          explanation: {
+            subject: {
+              subjectKey: "binding:my-app:titel",
+              projectKey: "app",
+              definitionName: "my-app",
+              compilationLane: "app-runtime",
+              bindingKind: "property",
+              source: bindingSource,
+              expressionSource: bindingSource,
+              templateSource: {
+                ...bindingSource,
+                start: 0,
+                end: codeActionText.length,
+              },
+              targetProperties: ["textContent"],
+            },
+            conclusion: {
+              kind: "flow-partially-proved",
+              title: "Binding flow is partially proved",
+              explanation: "The source member remains open.",
+              action: "Inspect the source member.",
+            },
+            evidence: { lanes: [], blockers: [] },
+            uncertainty: {
+              state: "open",
+              reasons: ["source-type-open"],
+              explanation: "The source type remains open.",
+            },
+            nextSteps: [],
+          },
+          contenders: [],
+        },
+        page: null,
+      },
+    });
+
+    const result = await handleCodeAction(
+      ctx as never,
+      {
+        ...params,
+        context: {
+          diagnostics: [],
+          triggerKind: CodeActionTriggerKind.Invoked,
+        },
+      },
+      createContextTestOperation(ctx),
+    );
+
+    expect(ctx.semanticRuntime.bindingUncertaintyExplanation).toHaveBeenCalledWith(
+      null,
+      templateUri,
+      params.range.start,
+    );
+    expect(result).toEqual([{
+      title: "Explain this Aurelia binding",
+      kind: "quickfix",
+      isPreferred: false,
+      command: {
+        title: "Explain Aurelia binding",
+        command: "aurelia.explainBindingUncertainty",
+        arguments: [{
+          uri: templateUri,
+          position: params.range.start,
+          range: {
+            start: { line: 0, character: codeActionStart },
+            end: { line: 0, character: codeActionStart + "titel".length },
+          },
+          documentVersion: 5,
+          projectKey: "app",
+        }],
+      },
+      data: {
+        semanticRuntime: {
+          queryKind: "binding-uncertainty-explanation",
+          explanationSeed: expect.any(Object),
+        },
+      },
+    }]);
+    expect(result?.[0]?.edit).toBeUndefined();
+    expect(result?.[0]?.diagnostics).toBeUndefined();
+  });
+
+  test("does not query binding explanation automatically or offer a freshly proved binding", async () => {
+    const automatic = createMockCodeActionContext({ actions: [] });
+    const automaticResult = await handleCodeAction(
+      automatic as never,
+      {
+        ...params,
+        context: {
+          diagnostics: [],
+          triggerKind: CodeActionTriggerKind.Automatic,
+        },
+      },
+      createContextTestOperation(automatic),
+    );
+    expect(automatic.semanticRuntime.bindingUncertaintyExplanation).not.toHaveBeenCalled();
+    expect(automaticResult).toBeNull();
+
+    const bindingSource = {
+      kind: "source-span-address",
+      label: `src/my-app.html@${codeActionStart}..${codeActionStart + "titel".length}`,
+      path: "src/my-app.html",
+      start: codeActionStart,
+      end: codeActionStart + "titel".length,
+      role: "binding",
+    };
+    const proved = createMockCodeActionContext({
+      actions: [],
+      bindingExplanationAnswer: {
+        schemaVersion: "0.2",
+        result: "answered",
+        selection: "exact",
+        coverage: "complete",
+        summary: "The selected binding is proved.",
+        value: {
+          displayText: "The selected binding is proved.",
+          projectKey: "app",
+          explanation: {
+            subject: {
+              subjectKey: "binding:my-app:titel",
+              projectKey: "app",
+              definitionName: "my-app",
+              compilationLane: "app-runtime",
+              bindingKind: "property",
+              source: bindingSource,
+              expressionSource: bindingSource,
+              templateSource: null,
+              targetProperties: ["textContent"],
+            },
+            conclusion: {
+              kind: "flow-proved",
+              title: "Binding flow is proved",
+              explanation: "Every material lane is closed.",
+              action: "No action is required.",
+            },
+            evidence: { lanes: [], blockers: [] },
+            uncertainty: {
+              state: "closed",
+              reasons: [],
+              explanation: "Every material lane is closed.",
+            },
+            nextSteps: [],
+          },
+          contenders: [],
+        },
+        page: null,
+      },
+    });
+    const provedResult = await handleCodeAction(
+      proved as never,
+      {
+        ...params,
+        context: {
+          diagnostics: [],
+          triggerKind: CodeActionTriggerKind.Invoked,
+        },
+      },
+      createContextTestOperation(proved),
+    );
+    expect(proved.semanticRuntime.bindingUncertaintyExplanation).toHaveBeenCalledOnce();
+    expect(provedResult).toBeNull();
   });
 
   test("re-plans and resolves a selected code action with current document versions", async () => {

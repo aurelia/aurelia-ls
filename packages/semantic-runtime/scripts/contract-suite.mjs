@@ -235,6 +235,13 @@ const contractSuites = [
   contract('observation', 'fast', [
     'observation',
     'binding',
+    'explain',
+    'diagnostics',
+    'mcp',
+  ], 'contract-binding-uncertainty-explanation.mjs', 'Cursor-selected property binding explanations conserve proved flow facts and typed causal uncertainty.'),
+  contract('observation', 'fast', [
+    'observation',
+    'binding',
     'authoring',
     'mcp',
   ], 'contract-binding-observed-dependency-summary.mjs', 'Compact binding observed-dependency summary and source-state rollups.'),

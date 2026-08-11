@@ -1565,6 +1565,39 @@ describe("SemanticRuntimeLspSession", () => {
     await session.dispose();
   }, 60_000);
 
+  test("routes a cursor-only binding uncertainty explanation and returns its owning project", async () => {
+    const fixtureRoot = path.resolve(
+      fileURLToPath(new URL("../../../semantic-runtime/fixtures/pressure/aliased-bindable-surfaces", import.meta.url)),
+    );
+    const templatePath = path.join(fixtureRoot, "src", "app.html");
+    const templateText = fs.readFileSync(templatePath, "utf8");
+    const templateUri = pathToFileURL(templatePath).toString();
+    const template = TextDocument.create(templateUri, "html", 1, templateText);
+    const position = template.positionAt(templateText.indexOf("title.bind") + 2);
+    const session = createSession(fixtureRoot, new TestDocumentStore());
+
+    const answer = await session.runRequest(null, (operation) =>
+      operation.bindingUncertaintyExplanation(null, templateUri, position));
+
+    expect(answer).toMatchObject({
+      result: "answered",
+      selection: "exact",
+      value: {
+        projectKey: expect.any(String),
+        explanation: {
+          subject: {
+            projectKey: expect.any(String),
+            definitionName: "app-root",
+            bindingKind: "property",
+            source: { path: expect.stringContaining("app.html") },
+          },
+        },
+      },
+    });
+    expect(answer.value.explanation?.subject.projectKey).toBe(answer.value.projectKey);
+    await session.dispose();
+  }, 60_000);
+
   test("retains ordinary discovery for a gated descriptor belonging to another root", async () => {
     const topology = createAcceptanceTopologyWorkspace();
     stubAcceptanceTopologyEnvironment(topology.descriptorPath);

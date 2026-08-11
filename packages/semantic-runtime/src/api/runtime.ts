@@ -297,6 +297,9 @@ import {
   readFrameworkCapabilityDemandDiagnosticRows,
 } from './framework-projections.js';
 import {
+  readBindingUncertaintyExplanation,
+} from './binding-uncertainty-explanation.js';
+import {
   compilerWorldLabel,
   describeAddress,
   describeSourceAnchorHandle,
@@ -355,6 +358,7 @@ import {
   type SemanticTypeSystemDependencyCacheClearPolicy,
   type SemanticBindingDataFlowResult,
   type SemanticBindingDataFlowSummaryResult,
+  type SemanticBindingUncertaintyExplanationResult,
   type SemanticBindingObservedDependencyResult,
   type SemanticBindingObservedDependencySummaryResult,
   type SemanticBindingBehaviorApplicationResult,
@@ -4119,6 +4123,8 @@ export class SemanticApp {
         return answerCurrentQuery(() => this.bindingValueChannelSummary(query.page));
       case SemanticAppQueryKind.BindingDataFlows:
         return answerCurrentQuery(() => this.bindingDataFlows(query.page, query.detail));
+      case SemanticAppQueryKind.BindingUncertaintyExplanation:
+        return answerCurrentQuery(() => this.bindingUncertaintyExplanation(query));
       case SemanticAppQueryKind.BindingDataFlowSummary:
         return answerCurrentQuery(() => this.bindingDataFlowSummary(query.page));
       case SemanticAppQueryKind.ControlUseInventory:
@@ -5890,6 +5896,35 @@ export class SemanticApp {
       `Returned ${paged.rows.length} of ${rows.length} runtime binding data-flow row(s).`,
       { rows: paged.rows },
       { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
+    );
+  }
+
+  bindingUncertaintyExplanation(
+    query: SemanticAppQuery,
+  ): SemanticRuntimeAnswer<SemanticBindingUncertaintyExplanationResult> {
+    const claimed = this.answerPublicQueryIfNeeded<SemanticBindingUncertaintyExplanationResult>(query);
+    if (claimed != null) {
+      return claimed;
+    }
+    const unavailableValue: SemanticBindingUncertaintyExplanationResult = {
+      displayText: 'Binding uncertainty explanation requires analysisDepth=\'binding-observation\'.',
+      projectKey: this.emission.project.projectKey,
+      explanation: null,
+      contenders: [],
+    };
+    const unsupported = this.requireAnalysisDepth(
+      SemanticAppAnalysisDepth.BindingObservation,
+      'binding uncertainty explanation',
+      unavailableValue,
+    );
+    if (unsupported != null) {
+      return unsupported;
+    }
+    return readBindingUncertaintyExplanation(
+      this.runtime.workspace.rootDir,
+      this.emission,
+      this.runtime.workspace.store,
+      query.cursor,
     );
   }
 

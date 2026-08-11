@@ -1770,6 +1770,27 @@ describe("LspFacade workspace routing", () => {
       undefined,
     );
 
+    const bindingExplanationParams = {
+      uri: "file:///work/b/src/my-app.html",
+      position: { line: 7, character: 24 },
+      range: {
+        start: { line: 7, character: 4 },
+        end: { line: 7, character: 39 },
+      },
+      documentVersion: 8,
+      projectKey: "file:///work/b:app",
+    };
+    const bindingExplanation = await facade.getBindingUncertaintyExplanation(bindingExplanationParams);
+    expect(bindingExplanation).toEqual(expect.objectContaining({
+      fingerprint: "file:///work/b:binding-explanation",
+      workspace: expect.objectContaining({ name: "b" }),
+    }));
+    expect(harness.clients[1]?.sendRequest).toHaveBeenCalledWith(
+      "aurelia/bindingUncertaintyExplanation",
+      bindingExplanationParams,
+      undefined,
+    );
+
     const prototypePosition = Object.assign(Object.create({
       get line(): number { return this._line; },
       get character(): number { return this._character; },
@@ -2261,6 +2282,20 @@ function createClientHarness(
               refusal: {
                 kind: "subjectAbsent",
                 reason: "the current source no longer contains that framework capability demand",
+              },
+              contenders: [],
+            },
+          };
+        case "aurelia/bindingUncertaintyExplanation":
+          return {
+            fingerprint: `${workspaceUri}:binding-explanation`,
+            documentVersion: (params as { documentVersion: number }).documentVersion,
+            answer: null,
+            result: {
+              status: "refused",
+              refusal: {
+                kind: "subjectAbsent",
+                reason: "the current source no longer contains that binding",
               },
               contenders: [],
             },

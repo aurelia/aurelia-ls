@@ -36,6 +36,7 @@ import {
   type SemanticAppQueryCatalogRow,
   type SemanticAppDiagnosticRow,
   type SemanticAppDiagnosticSummaryRow,
+  type SemanticBindingUncertaintyExplanation,
   type SemanticFrameworkCapabilityDemandRow,
   type SemanticFrameworkCapabilityExplanation,
   type SemanticRuntimeAnswer,
@@ -295,11 +296,12 @@ function semanticAppQueryContinuationRows(
   addSourceContinuations(query, seeds, sourceFile, page);
   addDiagnosticContinuations(query, result, seeds, sourceFile, page);
   addDiagnosticValueContinuations(query, result, seeds, sourceFile, page);
+  addBindingDiagnosticExplanationContinuations(query, result, seeds);
   addTemplateContinuations(query, seeds, sourceFile, page);
   addRouterContinuations(query, seeds, page);
   addResourceContinuations(query, seeds, page);
   addObservationContinuations(query, seeds, page);
-  addBindingContinuations(query, seeds, page);
+  addBindingContinuations(query, result, seeds, sourceFile, page);
   addRenderingContinuations(query, seeds, page);
   addStateAndI18nContinuations(query, seeds, page);
   addFrameworkContinuations(query, result, seeds, sourceFile, page);
@@ -612,6 +614,45 @@ function addDiagnosticValueContinuations(
         frameworkCapabilityDiagnosticSourceReferences(frameworkRows),
       ),
     );
+  }
+}
+
+function addBindingDiagnosticExplanationContinuations(
+  query: SemanticAppQuery,
+  result: SemanticRuntimeAnswer<unknown>,
+  seeds: ContinuationSeed[],
+): void {
+  const rows = query.kind === SemanticAppQueryKind.TemplateDiagnostics
+    ? templateDiagnosticValueRows(result.value)
+    : query.kind === SemanticAppQueryKind.AppDiagnostics
+      ? diagnosticValueRows(result.value).filter((row): row is SemanticAppDiagnosticRow => 'source' in row)
+      : [];
+  for (const row of rows) {
+    if (
+      row.diagnosticKind !== 'weak-expression-member-owner'
+      && row.diagnosticKind !== 'binding-source-runtime-branch-open'
+    ) {
+      continue;
+    }
+    const source = semanticExactSourceReference(row.source);
+    if (source?.path == null || source.start == null || source.end == null || source.end < source.start) {
+      continue;
+    }
+    seeds.push(withSourceReferences(
+      inspect(
+        'Explain what Aurelia can prove, and what blocks stronger certainty, for this binding.',
+        {
+          kind: SemanticAppQueryKind.BindingUncertaintyExplanation,
+          cursor: {
+            filePath: source.path,
+            line: 0,
+            character: 0,
+            offset: source.start + Math.floor((source.end - source.start) / 2),
+          },
+        },
+      ),
+      [source],
+    ));
   }
 }
 
@@ -1018,10 +1059,64 @@ function addObservationContinuations(
 
 function addBindingContinuations(
   query: SemanticAppQuery,
+  result: SemanticRuntimeAnswer<unknown>,
   seeds: ContinuationSeed[],
+  sourceFile: SemanticRuntimeSourceFileInput | null,
   page: SemanticRuntimePageInput,
 ): void {
   switch (query.kind) {
+    case SemanticAppQueryKind.BindingUncertaintyExplanation: {
+      const explanation = bindingUncertaintyExplanationValue(result.value);
+      if (explanation == null) {
+        if (query.cursor != null) {
+          seeds.push(inspect(
+            'Inspect the semantic cursor context after no unique property binding explanation was selected.',
+            cursorQuery(SemanticAppQueryKind.TemplateCursorInfo, query),
+          ));
+        }
+        seeds.push(bindingRow(
+          'Inspect app-wide binding data-flow rows without claiming a source-scoped match.',
+          SemanticAppQueryKind.BindingDataFlows,
+          query,
+          page,
+        ));
+        break;
+      }
+      const explanationSourceFile = explanation.subject.source.path == null
+        ? sourceFile
+        : { filePath: explanation.subject.source.path };
+      if (query.cursor != null) {
+        seeds.push(withSourceReferences(
+          inspect(
+            'Inspect the semantic cursor context behind this exact binding explanation.',
+            cursorQuery(SemanticAppQueryKind.TemplateCursorInfo, query),
+          ),
+          [explanation.subject.source, explanation.subject.expressionSource],
+        ));
+      }
+      if (explanation.evidence.blockers.length > 0 && explanationSourceFile != null) {
+        seeds.push(withSourceReferences(
+          inspect(
+            'Inspect the open semantic sites behind this binding uncertainty.',
+            withSourceFile(
+              rowQuery(SemanticAppQueryKind.OpenSeamSites, query, page),
+              explanationSourceFile,
+            ),
+          ),
+          explanation.evidence.blockers.flatMap((blocker) => blocker.sources),
+        ));
+      }
+      seeds.push(withSourceReferences(
+        bindingRow(
+          'Inspect app-wide binding data-flow rows that conserve the typed evidence used here.',
+          SemanticAppQueryKind.BindingDataFlows,
+          query,
+          page,
+        ),
+        [explanation.subject.source, explanation.subject.expressionSource],
+      ));
+      break;
+    }
     case SemanticAppQueryKind.BindingValueChannelSummary:
       seeds.push(bindingRow('Page detailed value-channel rows.', SemanticAppQueryKind.BindingValueChannels, query, page));
       break;
@@ -1314,6 +1409,24 @@ function frameworkCapabilityExplanationValue(
     return null;
   }
   return value.explanation as SemanticFrameworkCapabilityExplanation;
+}
+
+function bindingUncertaintyExplanationValue(
+  value: unknown,
+): SemanticBindingUncertaintyExplanation | null {
+  if (
+    value == null
+    || typeof value !== 'object'
+    || !('explanation' in value)
+    || value.explanation == null
+    || typeof value.explanation !== 'object'
+    || !('subject' in value.explanation)
+    || !('evidence' in value.explanation)
+    || !('uncertainty' in value.explanation)
+  ) {
+    return null;
+  }
+  return value.explanation as SemanticBindingUncertaintyExplanation;
 }
 
 function addIssueContinuations(

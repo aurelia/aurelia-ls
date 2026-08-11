@@ -1,5 +1,9 @@
 import type {
   ApplicationFileRole,
+  SemanticBindingDataFlowRow,
+  SemanticBindingDataFlowValueConverterWritebackStageRow,
+  SemanticBindingUncertaintyExplanation,
+  SemanticBindingUncertaintyExplanationContender,
   FrameworkRegistrationCapability,
   SemanticAnalysisLimitationRow,
   SemanticAnalysisLimitationsResult,
@@ -28,6 +32,7 @@ export const AureliaProtocolRequest = {
   SourceOwnership: "aurelia/sourceOwnership",
   AnalysisLimitations: "aurelia/analysisLimitations",
   FrameworkCapabilityExplanation: "aurelia/frameworkCapabilityExplanation",
+  BindingUncertaintyExplanation: "aurelia/bindingUncertaintyExplanation",
   ResourceInventory: "aurelia/resourceInventory",
   TemplateResourceAvailability: "aurelia/templateResourceAvailability",
   RelatedFiles: "aurelia/getRelatedFiles",
@@ -38,6 +43,7 @@ export const AureliaProtocolRequest = {
 /** Client-owned commands surfaced by protocol code actions. */
 export const AureliaProtocolCommand = {
   ExplainFrameworkCapability: "aurelia.explainFrameworkCapability",
+  ExplainBindingUncertainty: "aurelia.explainBindingUncertainty",
 } as const;
 
 export const AureliaProtocolNotification = {
@@ -390,6 +396,153 @@ export type FrameworkCapabilityExplanationResponse = {
         readonly status: "refused";
         readonly refusal: FrameworkCapabilityExplanationRefusal;
         readonly contenders: readonly FrameworkCapabilityExplanationContender[];
+      };
+};
+
+/**
+ * Exact binding carrier handed from an invoked command-only quick fix to the
+ * explanation request. The cursor may be anywhere inside `range`; the range
+ * itself is the engine-authored binding-carrier source that must be re-proved.
+ */
+export interface BindingUncertaintyExplanationParams {
+  readonly uri: string;
+  readonly position: Position;
+  readonly range: Range;
+  readonly documentVersion: number;
+  readonly projectKey: string;
+}
+
+export type BindingUncertaintyExplanationSourceTarget = FrameworkCapabilityExplanationSourceTarget;
+export type BindingUncertaintyExplanationAppQuery = FrameworkCapabilityExplanationAppQuery;
+
+export type BindingUncertaintyExplanationWritebackStage = Omit<
+  SemanticBindingDataFlowValueConverterWritebackStageRow,
+  "inputTypeSource" | "outputTypeSource" | "source" | "handles"
+> & {
+  readonly inputTypeSource: BindingUncertaintyExplanationSourceTarget;
+  readonly outputTypeSource: BindingUncertaintyExplanationSourceTarget;
+  readonly source: BindingUncertaintyExplanationSourceTarget;
+};
+
+export type BindingUncertaintyExplanationLane = Omit<
+  SemanticBindingDataFlowRow,
+  | "sourceAssignmentOccurrenceSource"
+  | "sourceAssignmentTargetSource"
+  | "valueConverterWritebackStages"
+  | "expressionSource"
+  | "source"
+  | "handles"
+> & {
+  readonly sourceAssignmentOccurrenceSource: BindingUncertaintyExplanationSourceTarget;
+  readonly sourceAssignmentTargetSource: BindingUncertaintyExplanationSourceTarget;
+  readonly valueConverterWritebackStages: readonly BindingUncertaintyExplanationWritebackStage[];
+  readonly expressionSource: BindingUncertaintyExplanationSourceTarget;
+  readonly source: BindingUncertaintyExplanationSourceTarget;
+};
+
+type SemanticBindingUncertaintyExplanationSubject =
+  SemanticBindingUncertaintyExplanation["subject"];
+type SemanticBindingUncertaintyExplanationBlocker =
+  SemanticBindingUncertaintyExplanation["evidence"]["blockers"][number];
+type SemanticBindingUncertaintyExplanationNextStep =
+  SemanticBindingUncertaintyExplanation["nextSteps"][number];
+
+export type BindingUncertaintyExplanationSubject = Omit<
+  SemanticBindingUncertaintyExplanationSubject,
+  "source" | "expressionSource" | "templateSource"
+> & {
+  readonly source: BindingUncertaintyExplanationSourceTarget;
+  readonly expressionSource: BindingUncertaintyExplanationSourceTarget;
+  readonly templateSource: BindingUncertaintyExplanationSourceTarget;
+};
+
+export type BindingUncertaintyExplanation = Omit<
+  SemanticBindingUncertaintyExplanation,
+  "subject" | "evidence" | "nextSteps"
+> & {
+  readonly subject: BindingUncertaintyExplanationSubject;
+  readonly evidence: {
+    readonly lanes: readonly BindingUncertaintyExplanationLane[];
+    readonly blockers: readonly (Omit<
+      SemanticBindingUncertaintyExplanationBlocker,
+      "sources"
+    > & { readonly sources: readonly BindingUncertaintyExplanationSourceTarget[] })[];
+  };
+  readonly nextSteps: readonly (Omit<
+    SemanticBindingUncertaintyExplanationNextStep,
+    "source" | "targetQuery"
+  > & {
+    readonly source: BindingUncertaintyExplanationSourceTarget;
+    readonly targetQuery: BindingUncertaintyExplanationAppQuery | null;
+  })[];
+};
+
+export type BindingUncertaintyExplanationContender = Omit<
+  SemanticBindingUncertaintyExplanationContender,
+  "subject"
+> & { readonly subject: BindingUncertaintyExplanationSubject };
+
+export type BindingUncertaintyExplanationAnswerTransport =
+  FrameworkCapabilityExplanationAnswerTransport;
+
+export const BINDING_UNCERTAINTY_EXPLANATION_REFUSAL_REASONS = {
+  documentUnavailable: "the source document is no longer available",
+  sourceNotAuthored: "the source document is not authored by the current Aurelia workspace",
+  documentVersionMismatch: "the source document version no longer matches the binding",
+  semanticAnswerUnavailable: "the semantic runtime did not answer the binding explanation query",
+  subjectAbsent: "the current source no longer contains that binding",
+  subjectAmbiguous: "the current source contains multiple matching bindings",
+  subjectMismatch: "the current explanation does not match the requested binding subject",
+  subjectSourceUnavailable: "the current binding subject source could not be mapped safely",
+} as const;
+
+export type BindingUncertaintyExplanationRefusalKind =
+  keyof typeof BINDING_UNCERTAINTY_EXPLANATION_REFUSAL_REASONS;
+
+export type BindingUncertaintyExplanationRefusal = {
+  readonly [Kind in BindingUncertaintyExplanationRefusalKind]: {
+    readonly kind: Kind;
+    readonly reason: (typeof BINDING_UNCERTAINTY_EXPLANATION_REFUSAL_REASONS)[Kind];
+  };
+}[BindingUncertaintyExplanationRefusalKind];
+
+export function bindingUncertaintyExplanationRefusal(
+  kind: BindingUncertaintyExplanationRefusalKind,
+): BindingUncertaintyExplanationRefusal {
+  switch (kind) {
+    case "documentUnavailable":
+      return { kind, reason: BINDING_UNCERTAINTY_EXPLANATION_REFUSAL_REASONS.documentUnavailable };
+    case "sourceNotAuthored":
+      return { kind, reason: BINDING_UNCERTAINTY_EXPLANATION_REFUSAL_REASONS.sourceNotAuthored };
+    case "documentVersionMismatch":
+      return { kind, reason: BINDING_UNCERTAINTY_EXPLANATION_REFUSAL_REASONS.documentVersionMismatch };
+    case "semanticAnswerUnavailable":
+      return { kind, reason: BINDING_UNCERTAINTY_EXPLANATION_REFUSAL_REASONS.semanticAnswerUnavailable };
+    case "subjectAbsent":
+      return { kind, reason: BINDING_UNCERTAINTY_EXPLANATION_REFUSAL_REASONS.subjectAbsent };
+    case "subjectAmbiguous":
+      return { kind, reason: BINDING_UNCERTAINTY_EXPLANATION_REFUSAL_REASONS.subjectAmbiguous };
+    case "subjectMismatch":
+      return { kind, reason: BINDING_UNCERTAINTY_EXPLANATION_REFUSAL_REASONS.subjectMismatch };
+    case "subjectSourceUnavailable":
+      return { kind, reason: BINDING_UNCERTAINTY_EXPLANATION_REFUSAL_REASONS.subjectSourceUnavailable };
+  }
+}
+
+export type BindingUncertaintyExplanationResponse = {
+  readonly fingerprint: string;
+  readonly documentVersion: number | null;
+  readonly answer: BindingUncertaintyExplanationAnswerTransport | null;
+  readonly result:
+    | {
+        readonly status: "explained";
+        readonly explanation: BindingUncertaintyExplanation;
+        readonly contenders: readonly BindingUncertaintyExplanationContender[];
+      }
+    | {
+        readonly status: "refused";
+        readonly refusal: BindingUncertaintyExplanationRefusal;
+        readonly contenders: readonly BindingUncertaintyExplanationContender[];
       };
 };
 

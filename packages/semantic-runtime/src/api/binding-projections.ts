@@ -1516,7 +1516,8 @@ function incrementNullableBooleanCounts(
   }
 }
 
-function bindingDataFlowRow(
+/** Project one runtime binding data-flow lane without reconstructing checker or runtime facts in consumers. */
+export function bindingDataFlowRow(
   definitionName: string,
   dataFlow: RuntimeBindingDataFlow,
   store: KernelStore,

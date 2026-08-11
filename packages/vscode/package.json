@@ -133,6 +133,11 @@
         "category": "Aurelia"
       },
       {
+        "command": "aurelia.explainBindingUncertainty",
+        "title": "Explain Binding",
+        "category": "Aurelia"
+      },
+      {
         "command": "aurelia.refreshResourceExplorer",
         "title": "Refresh",
         "icon": "$(refresh)",
@@ -262,6 +267,10 @@
       "commandPalette": [
         {
           "command": "aurelia.explainFrameworkCapability",
+          "when": "false"
+        },
+        {
+          "command": "aurelia.explainBindingUncertainty",
           "when": "false"
         },
         {

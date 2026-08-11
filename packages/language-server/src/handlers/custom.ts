@@ -13,6 +13,11 @@ import {
 import type { ServerContext } from "../context.js";
 import type {
   AnalysisLimitationsResponse,
+  BindingUncertaintyExplanationAnswerTransport,
+  BindingUncertaintyExplanationContender,
+  BindingUncertaintyExplanationParams,
+  BindingUncertaintyExplanationRefusalKind,
+  BindingUncertaintyExplanationResponse,
   DocumentUriParams,
   FrameworkCapabilityExplanationParams,
   FrameworkCapabilityExplanationAnswerTransport,
@@ -34,8 +39,14 @@ import type {
 } from "../protocol.js";
 import {
   AureliaProtocolRequest,
+  bindingUncertaintyExplanationRefusal,
   frameworkCapabilityExplanationRefusal,
 } from "../protocol.js";
+import {
+  mapBindingUncertaintyExplanation,
+  mapBindingUncertaintyExplanationAnswer,
+  mapBindingUncertaintyExplanationContender,
+} from "../mapping/binding-uncertainty-explanation.js";
 import {
   mapFrameworkCapabilityExplanation,
   mapFrameworkCapabilityExplanationAnswer,
@@ -70,6 +81,8 @@ import {
 
 export type {
   AnalysisLimitationsResponse,
+  BindingUncertaintyExplanationParams,
+  BindingUncertaintyExplanationResponse,
   FrameworkCapabilityExplanationParams,
   FrameworkCapabilityExplanationResponse,
   RenameFromTsParams,
@@ -81,6 +94,117 @@ export type {
   TemplateResourceAvailabilityParams,
   TemplateResourceAvailabilityResponse,
 } from "../protocol.js";
+
+export async function handleBindingUncertaintyExplanation(
+  ctx: ServerContext,
+  params: BindingUncertaintyExplanationParams,
+  operation: SemanticRuntimeLspOperation,
+): Promise<BindingUncertaintyExplanationResponse> {
+  if (!bindingUncertaintyExplanationParamsAreValid(params)) {
+    throw new Error(
+      "Binding uncertainty explanation requires an exact document URI, version, binding range, project key, and contained cursor.",
+    );
+  }
+  const fingerprint = operation.generation.fingerprint;
+  const document = operation.documents.ensureProgramDocument(params.uri);
+  if (document == null) {
+    return refusedBindingUncertaintyExplanation(
+      fingerprint,
+      null,
+      null,
+      "documentUnavailable",
+    );
+  }
+  if (document.version !== params.documentVersion) {
+    return refusedBindingUncertaintyExplanation(
+      fingerprint,
+      document.version,
+      null,
+      "documentVersionMismatch",
+    );
+  }
+
+  const answer = await operation.bindingUncertaintyExplanation(
+    params.projectKey,
+    document.uri,
+    params.position,
+  );
+  const mappingContext = {
+    documentUris: ctx.documentUris,
+    lookupText: (uri: string) => operation.documents.lookupText(uri),
+  };
+  const answerTransport = mapBindingUncertaintyExplanationAnswer(answer, mappingContext);
+  if (`${answer.result}` !== "answered") {
+    return refusedBindingUncertaintyExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "semanticAnswerUnavailable",
+    );
+  }
+  const contenders = answer.value.contenders.map((contender) =>
+    mapBindingUncertaintyExplanationContender(contender, mappingContext)
+  );
+  if (`${answer.selection}` === "absent") {
+    return refusedBindingUncertaintyExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "subjectAbsent",
+      contenders,
+    );
+  }
+  if (`${answer.selection}` === "ambiguous") {
+    return refusedBindingUncertaintyExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "subjectAmbiguous",
+      contenders,
+    );
+  }
+  if (`${answer.selection}` !== "exact" || answer.value.explanation == null) {
+    return refusedBindingUncertaintyExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "subjectMismatch",
+      contenders,
+    );
+  }
+
+  const explanation = mapBindingUncertaintyExplanation(answer.value.explanation, mappingContext);
+  if (explanation.subject.source.state !== "available") {
+    return refusedBindingUncertaintyExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "subjectSourceUnavailable",
+      contenders,
+    );
+  }
+  if (
+    answer.value.projectKey !== params.projectKey
+    || explanation.subject.projectKey !== params.projectKey
+    || !ctx.documentUris.sameDocument(explanation.subject.source.location.uri, document.uri)
+    || !protocolRangesEqual(explanation.subject.source.location.range, params.range)
+    || !protocolRangeContainsPosition(params.range, params.position)
+  ) {
+    return refusedBindingUncertaintyExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "subjectMismatch",
+      contenders,
+    );
+  }
+  return {
+    fingerprint,
+    documentVersion: document.version,
+    answer: answerTransport,
+    result: { status: "explained", explanation, contenders },
+  };
+}
 
 export async function handleFrameworkCapabilityExplanation(
   ctx: ServerContext,
@@ -617,6 +741,21 @@ export function registerCustomHandlers(ctx: ServerContext): void {
     request(ctx, "sourceOwnership", token, params?.uri,
       (guard) => handleSourceOwnership(ctx, params, guard)));
   ctx.connection.onRequest(
+    AureliaProtocolRequest.BindingUncertaintyExplanation,
+    (params: BindingUncertaintyExplanationParams, token: CancellationToken) =>
+      documentRequest(ctx, "bindingUncertaintyExplanation", token, params.uri,
+        (operation): BindingUncertaintyExplanationResponse => {
+          const document = operation.documents.ensureProgramDocument(params.uri);
+          return refusedBindingUncertaintyExplanation(
+            operation.generation.fingerprint,
+            document?.version ?? null,
+            null,
+            "sourceNotAuthored",
+          );
+        },
+        (guard) => handleBindingUncertaintyExplanation(ctx, params, guard)),
+  );
+  ctx.connection.onRequest(
     AureliaProtocolRequest.FrameworkCapabilityExplanation,
     (params: FrameworkCapabilityExplanationParams, token: CancellationToken) =>
       documentRequest(ctx, "frameworkCapabilityExplanation", token, params.uri,
@@ -664,6 +803,25 @@ export function registerCustomHandlers(ctx: ServerContext): void {
       (guard) => handleRenameFromTs(ctx, params, guard)));
 }
 
+function refusedBindingUncertaintyExplanation(
+  fingerprint: string,
+  documentVersion: number | null,
+  answer: BindingUncertaintyExplanationAnswerTransport | null,
+  kind: BindingUncertaintyExplanationRefusalKind,
+  contenders: readonly BindingUncertaintyExplanationContender[] = [],
+): BindingUncertaintyExplanationResponse {
+  return {
+    fingerprint,
+    documentVersion,
+    answer,
+    result: {
+      status: "refused",
+      refusal: bindingUncertaintyExplanationRefusal(kind),
+      contenders,
+    },
+  };
+}
+
 function refusedFrameworkCapabilityExplanation(
   fingerprint: string,
   documentVersion: number | null,
@@ -681,6 +839,21 @@ function refusedFrameworkCapabilityExplanation(
       contenders,
     },
   };
+}
+
+function bindingUncertaintyExplanationParamsAreValid(
+  params: BindingUncertaintyExplanationParams | null | undefined,
+): params is BindingUncertaintyExplanationParams {
+  return params != null
+    && typeof params.uri === "string"
+    && params.uri.length > 0
+    && Number.isSafeInteger(params.documentVersion)
+    && params.documentVersion >= 0
+    && typeof params.projectKey === "string"
+    && params.projectKey.length > 0
+    && protocolPositionIsValid(params.position)
+    && protocolRangeIsValid(params.range)
+    && protocolRangeContainsPosition(params.range, params.position);
 }
 
 function frameworkCapabilityExplanationParamsAreValid(
@@ -732,6 +905,21 @@ function protocolRangesEqual(
     && left.start.character === right.start.character
     && left.end.line === right.end.line
     && left.end.character === right.end.character;
+}
+
+function protocolRangeContainsPosition(
+  range: { readonly start: { readonly line: number; readonly character: number }; readonly end: { readonly line: number; readonly character: number } },
+  position: { readonly line: number; readonly character: number },
+): boolean {
+  return compareProtocolPositions(position, range.start) >= 0
+    && compareProtocolPositions(position, range.end) <= 0;
+}
+
+function compareProtocolPositions(
+  left: { readonly line: number; readonly character: number },
+  right: { readonly line: number; readonly character: number },
+): number {
+  return left.line - right.line || left.character - right.character;
 }
 
 function documentRequest<T>(

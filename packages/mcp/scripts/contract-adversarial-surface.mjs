@@ -15,6 +15,7 @@ const serverPath = path.join(repoRoot, 'packages/mcp/out/server.js');
 const fixtureRoot = path.join(repoRoot, 'packages/semantic-runtime/fixtures/pressure/app-pattern-state-backed-form');
 const openSeamSitesFixtureRoot = path.join(repoRoot, 'packages/semantic-runtime/fixtures/pressure/evaluation-open-seam-sites');
 const frameworkCapabilityFixtureRoot = path.join(repoRoot, 'packages/semantic-runtime/fixtures/pressure/unregistered-plugin-resources');
+const bindingUncertaintyFixtureRoot = path.join(repoRoot, 'packages/semantic-runtime/fixtures/pressure/select-multiple-binding-order');
 const typescriptDiagnosticsFixtureRoot = path.join(repoRoot, 'packages/semantic-runtime/fixtures/pressure/typescript-project-diagnostics');
 const projectConfigurationFixtureRoot = path.join(repoRoot, 'playground/issue-tracker');
 const projectConfigurationDiagnosticsFixtureRoot = path.join(repoRoot, 'packages/mcp/fixtures/project-configuration-diagnostics');
@@ -66,6 +67,7 @@ try {
   await verifyPageClampAndTextPreview();
   await verifyObservedDependencyLocus();
   await verifyFrameworkCapabilityExplanation();
+  await verifyBindingUncertaintyExplanation();
   await verifyWorkspaceOverviewContinuations();
   await verifyAnalysisDepthEnvelope();
   await verifyProfileDrivenRetention();
@@ -467,6 +469,93 @@ async function verifyFrameworkCapabilityExplanation() {
   });
   expect(invalid.result?.isError === true, 'MCP should reject unknown framework capabilities at its closed schema boundary.');
   expect(resultText(invalid).includes('frameworkCapability'), 'Unknown capability rejection should name the invalid selector.');
+}
+
+async function verifyBindingUncertaintyExplanation() {
+  const openQuery = {
+    kind: 'binding-uncertainty-explanation',
+    cursor: {
+      filePath: 'src/select-multiple-binding-order-app.html',
+      line: 15,
+      character: 20,
+      offset: 538,
+    },
+  };
+  const open = await callTool('aurelia_app_query', {
+    workspaceRoot: bindingUncertaintyFixtureRoot,
+    queryKind: openQuery.kind,
+    cursor: openQuery.cursor,
+  });
+  const openAnswer = open.result?.structuredContent?.value;
+  expect(open.result?.isError !== true, 'Generic MCP app-query should admit a cursor-selected binding uncertainty explanation.');
+  expect(openAnswer?.result === 'answered', 'Binding uncertainty should retain the semantic answer envelope through MCP.');
+  expect(openAnswer?.selection === 'exact', 'Binding uncertainty should retain exact cursor selection through MCP.');
+  expect(openAnswer?.value?.explanation?.uncertainty?.state === 'open', 'The nullable multi-select binding should retain its engine-owned open uncertainty.');
+  expect(openAnswer?.value?.explanation?.subject?.bindingKind === 'property', 'MCP should preserve the exact PropertyBinding subject.');
+  expect(
+    Array.isArray(openAnswer?.value?.explanation?.evidence?.lanes)
+      && openAnswer.value.explanation.evidence.lanes.length > 0,
+    'MCP should preserve the typed binding data-flow evidence lanes.',
+  );
+  expect(
+    Array.isArray(openAnswer?.value?.explanation?.nextSteps)
+      && openAnswer.value.explanation.nextSteps.length <= 3,
+    'MCP should preserve the bounded engine-owned binding explanation actions.',
+  );
+
+  const closedCursor = {
+    filePath: 'src/select-multiple-binding-order-app.html',
+    line: 0,
+    character: 20,
+    offset: 20,
+  };
+  const closed = await callTool('aurelia_app_query', {
+    workspaceRoot: bindingUncertaintyFixtureRoot,
+    queryKind: 'binding-uncertainty-explanation',
+    cursor: closedCursor,
+  });
+  const closedAnswer = closed.result?.structuredContent?.value;
+  expect(closedAnswer?.selection === 'exact', 'A fully proved binding should remain an exact semantic subject.');
+  expect(closedAnswer?.value?.explanation?.uncertainty?.state === 'closed', 'A fully proved binding should not manufacture uncertainty.');
+  expect(closedAnswer?.value?.explanation?.conclusion?.kind === 'flow-proved', 'A fully proved binding should retain the engine-owned proved conclusion.');
+
+  const absent = await callTool('aurelia_app_query', {
+    workspaceRoot: bindingUncertaintyFixtureRoot,
+    queryKind: 'binding-uncertainty-explanation',
+    cursor: {
+      filePath: 'src/select-multiple-binding-order-app.html',
+      line: 14,
+      character: 0,
+    },
+  });
+  expect(absent.result?.structuredContent?.value?.selection === 'absent', 'A non-binding locus should fail closed as an absent subject.');
+
+  const batch = await callTool('aurelia_app_query_batch', {
+    workspaceRoot: bindingUncertaintyFixtureRoot,
+    queries: [openQuery, {
+      kind: 'binding-uncertainty-explanation',
+      cursor: closedCursor,
+    }],
+  });
+  const batchRows = batch.result?.structuredContent?.value?.value?.rows;
+  expect(
+    Array.isArray(batchRows)
+      && batchRows.length === 2
+      && batchRows[0]?.answer?.selection === 'exact'
+      && batchRows[1]?.answer?.selection === 'exact',
+    'Generic MCP batch queries should preserve both open and proved binding explanation envelopes.',
+  );
+
+  const unsupportedSelector = await callTool('aurelia_app_query', {
+    workspaceRoot: bindingUncertaintyFixtureRoot,
+    queryKind: 'binding-uncertainty-explanation',
+    cursor: openQuery.cursor,
+    frameworkCapability: 'router.default-resources',
+  });
+  expect(
+    unsupportedSelector.result?.structuredContent?.value?.result === 'unsupported',
+    'Binding uncertainty should reject an unrelated framework-capability selector instead of silently ignoring it.',
+  );
 }
 
 async function verifyWorkspaceOverviewContinuations() {

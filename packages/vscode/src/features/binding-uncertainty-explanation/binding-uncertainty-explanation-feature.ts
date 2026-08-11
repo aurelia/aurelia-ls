@@ -1,14 +1,13 @@
 import type {
-  FrameworkCapabilityExplanation,
-  FrameworkCapabilityExplanationParams,
-  FrameworkCapabilityExplanationResponse,
+  BindingUncertaintyExplanation,
+  BindingUncertaintyExplanationParams,
+  BindingUncertaintyExplanationResponse,
 } from "@aurelia-ls/language-server/protocol";
 import type { ClientFeature } from "../../core/feature.js";
 import { sameDocumentUri } from "../../core/uri-identity.js";
 import { AureliaCommand } from "../../product-contract.js";
 import type { VscodeApi } from "../../vscode-api.js";
 import {
-  compareProtocolPositions,
   explanationDocument,
   explanationDocumentIsCurrent,
   explanationStepKey,
@@ -18,32 +17,32 @@ import {
   openExplanationSource,
   presentNativeExplanation,
   protocolPositionWithinRange,
-  protocolRangesOverlap,
+  protocolRangesEqual,
   sourceBackedExplanationSteps,
 } from "../explanation/native-explanation.js";
 
 type CurrentExplanation = {
-  readonly explanation: FrameworkCapabilityExplanation;
+  readonly explanation: BindingUncertaintyExplanation;
 };
 
 const INVALID_ACTION_MESSAGE =
-  "This Aurelia explanation action is no longer valid. Request code actions again.";
+  "This Aurelia binding explanation is no longer valid. Request code actions again.";
 const STALE_ACTION_MESSAGE =
-  "This Aurelia diagnostic changed before it could be explained. Request code actions again.";
+  "This Aurelia binding changed before it could be explained. Request code actions again.";
 const INCOMPLETE_ANSWER_MESSAGE =
-  "Aurelia could not produce a current explanation for this diagnostic.";
+  "Aurelia could not produce a current explanation for this binding.";
 const AMBIGUOUS_SUBJECT_MESSAGE =
-  "Aurelia found multiple current matches for this diagnostic and cannot explain it safely yet.";
+  "Aurelia found multiple current bindings at this cursor and cannot explain one safely yet.";
 const REQUEST_FAILED_MESSAGE =
-  "Aurelia could not load this diagnostic explanation. Try the quick fix again.";
+  "Aurelia could not load this binding explanation. Try the quick fix again.";
 
-/** Presents one engine-owned explanation seeded by a command-only diagnostic quick fix. */
-export const CapabilityExplanationFeature: ClientFeature = {
-  id: "capability-explanation",
+/** Presents one engine-owned explanation seeded by a command-only binding code action. */
+export const BindingUncertaintyExplanationFeature: ClientFeature = {
+  id: "binding-uncertainty-explanation",
   activate: (ctx, own) => {
-    own(ctx.vscode.commands.registerCommand(AureliaCommand.ExplainFrameworkCapability, (value: unknown) =>
-      ctx.errors.capture("command.explainFrameworkCapability", async () => {
-        const seed = frameworkCapabilityExplanationSeed(value);
+    own(ctx.vscode.commands.registerCommand(AureliaCommand.ExplainBindingUncertainty, (value: unknown) =>
+      ctx.errors.capture("command.explainBindingUncertainty", async () => {
+        const seed = bindingUncertaintyExplanationSeed(value);
         if (seed == null) {
           await ctx.vscode.window.showInformationMessage(INVALID_ACTION_MESSAGE);
           return false;
@@ -59,7 +58,7 @@ export const CapabilityExplanationFeature: ClientFeature = {
           return false;
         }
 
-        const response = await ctx.lsp.getFrameworkCapabilityExplanation(seed);
+        const response = await ctx.lsp.getBindingUncertaintyExplanation(seed);
         if (!explanationDocumentIsCurrent(ctx.vscode, document, seed, invocationVersion)) {
           await ctx.vscode.window.showInformationMessage(STALE_ACTION_MESSAGE);
           return false;
@@ -77,7 +76,7 @@ export const CapabilityExplanationFeature: ClientFeature = {
           return false;
         }
 
-        const freshResponse = await ctx.lsp.getFrameworkCapabilityExplanation(seed);
+        const freshResponse = await ctx.lsp.getBindingUncertaintyExplanation(seed);
         if (!explanationDocumentIsCurrent(ctx.vscode, document, seed, invocationVersion)) {
           await ctx.vscode.window.showInformationMessage(STALE_ACTION_MESSAGE);
           return false;
@@ -85,7 +84,7 @@ export const CapabilityExplanationFeature: ClientFeature = {
         const fresh = currentExplanation(ctx.vscode, seed, freshResponse);
         if (
           fresh == null
-          || explanationSubjectKey(fresh.explanation) !== explanationSubjectKey(current.explanation)
+          || fresh.explanation.subject.subjectKey !== current.explanation.subject.subjectKey
         ) {
           await ctx.vscode.window.showInformationMessage(STALE_ACTION_MESSAGE);
           return false;
@@ -99,7 +98,7 @@ export const CapabilityExplanationFeature: ClientFeature = {
         return openExplanationSource(
           ctx.vscode,
           matchingSteps[0]!.source,
-          "The exact source for this explanation could not be opened.",
+          "The exact source for this binding explanation could not be opened.",
         );
       }, { notify: false }).then(async (outcome) => {
         if (!outcome.ok) await ctx.vscode.window.showInformationMessage(REQUEST_FAILED_MESSAGE);
@@ -108,7 +107,7 @@ export const CapabilityExplanationFeature: ClientFeature = {
   },
 };
 
-function frameworkCapabilityExplanationSeed(value: unknown): FrameworkCapabilityExplanationParams | null {
+function bindingUncertaintyExplanationSeed(value: unknown): BindingUncertaintyExplanationParams | null {
   if (value == null || typeof value !== "object" || Array.isArray(value)) return null;
   const candidate = value as Record<string, unknown>;
   if (
@@ -116,22 +115,20 @@ function frameworkCapabilityExplanationSeed(value: unknown): FrameworkCapability
     || candidate["uri"].length === 0
     || typeof candidate["projectKey"] !== "string"
     || candidate["projectKey"].length === 0
-    || typeof candidate["frameworkCapability"] !== "string"
-    || candidate["frameworkCapability"].length === 0
     || !isNonNegativeInteger(candidate["documentVersion"])
     || !isProtocolPositionLike(candidate["position"])
     || !isProtocolRangeLike(candidate["range"])
-    || compareProtocolPositions(candidate["position"], candidate["range"].start) !== 0
+    || !protocolPositionWithinRange(candidate["position"], candidate["range"])
   ) {
     return null;
   }
-  return candidate as unknown as FrameworkCapabilityExplanationParams;
+  return candidate as unknown as BindingUncertaintyExplanationParams;
 }
 
 function currentExplanation(
   vscode: VscodeApi,
-  seed: FrameworkCapabilityExplanationParams,
-  response: FrameworkCapabilityExplanationResponse | null,
+  seed: BindingUncertaintyExplanationParams,
+  response: BindingUncertaintyExplanationResponse | null,
 ): CurrentExplanation | null {
   if (
     response == null
@@ -146,18 +143,18 @@ function currentExplanation(
   const subject = explanation.subject;
   if (
     subject.projectKey !== seed.projectKey
-    || subject.requiredCapability !== seed.frameworkCapability
+    || subject.subjectKey.length === 0
     || subject.source.state !== "available"
     || !sameDocumentUri(vscode, subject.source.location.uri, seed.uri)
+    || !protocolRangesEqual(subject.source.location.range, seed.range)
     || !protocolPositionWithinRange(seed.position, subject.source.location.range)
-    || !protocolRangesOverlap(seed.range, subject.source.location.range)
   ) {
     return null;
   }
   return { explanation };
 }
 
-function explanationRefusalMessage(response: FrameworkCapabilityExplanationResponse | null): string {
+function explanationRefusalMessage(response: BindingUncertaintyExplanationResponse | null): string {
   if (response?.result.status === "refused") {
     switch (response.result.refusal.kind) {
       case "subjectAmbiguous":
@@ -168,27 +165,10 @@ function explanationRefusalMessage(response: FrameworkCapabilityExplanationRespo
       case "subjectAbsent":
       case "subjectMismatch":
         return STALE_ACTION_MESSAGE;
-      case "invalidFrameworkCapability":
-        return INVALID_ACTION_MESSAGE;
       case "semanticAnswerUnavailable":
       case "subjectSourceUnavailable":
         return INCOMPLETE_ANSWER_MESSAGE;
     }
   }
   return INCOMPLETE_ANSWER_MESSAGE;
-}
-
-function explanationSubjectKey(explanation: FrameworkCapabilityExplanation): string {
-  const subject = explanation.subject;
-  const source = subject.source.state === "available"
-    ? [subject.source.location.uri, subject.source.location.range]
-    : [subject.source.state];
-  return JSON.stringify([
-    subject.projectKey,
-    subject.authoredName,
-    subject.siteKind,
-    subject.demandKind,
-    subject.requiredCapability,
-    source,
-  ]);
 }

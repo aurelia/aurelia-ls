@@ -82,9 +82,17 @@ describe("VS Code product contract", () => {
     expect(AureliaCommand.ExplainFrameworkCapability).toBe(
       AureliaProtocolCommand.ExplainFrameworkCapability,
     );
+    expect(AureliaCommand.ExplainBindingUncertainty).toBe(
+      AureliaProtocolCommand.ExplainBindingUncertainty,
+    );
     expect(manifest.contributes?.commands).toContainEqual({
       command: AureliaCommand.ExplainFrameworkCapability,
       title: "Explain Diagnostic",
+      category: "Aurelia",
+    });
+    expect(manifest.contributes?.commands).toContainEqual({
+      command: AureliaCommand.ExplainBindingUncertainty,
+      title: "Explain Binding",
       category: "Aurelia",
     });
   });
@@ -203,6 +211,7 @@ describe("VS Code product contract", () => {
       },
     ]);
     for (const command of [
+      AureliaCommand.ExplainBindingUncertainty,
       AureliaCommand.ExplainFrameworkCapability,
       AureliaCommand.OpenResourceDeclaration,
       AureliaCommand.OpenResourceImplementation,
@@ -212,6 +221,12 @@ describe("VS Code product contract", () => {
       AureliaCommand.ReviewAnalysisLimitations,
     ]) {
       expect(manifest.contributes?.menus?.commandPalette).toContainEqual({ command, when: "false" });
+    }
+    for (const [menuName, entries] of Object.entries(manifest.contributes?.menus ?? {})) {
+      if (menuName === "commandPalette") continue;
+      expect(entries).not.toContainEqual(expect.objectContaining({
+        command: AureliaCommand.ExplainBindingUncertainty,
+      }));
     }
     expect(manifest.contributes?.keybindings).toBeUndefined();
   });

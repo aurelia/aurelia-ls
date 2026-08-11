@@ -112,7 +112,7 @@ function mapFrameworkCapabilityExplanationContinuation(
   };
 }
 
-function mapFrameworkCapabilityExplanationAppQuery(
+export function mapFrameworkCapabilityExplanationAppQuery(
   query: SemanticAppQuery,
   context: FrameworkCapabilityExplanationMappingContext,
 ): FrameworkCapabilityExplanationAppQuery {

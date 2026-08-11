@@ -2093,6 +2093,21 @@ template-to-state/service handoff as read/write interaction rows. This lets idio
 the API reads the binding row's materialized `BindingScope`, locates the root slot, and requires that slot's source to
 match the injected member source before publishing a direct support-member handoff.
 
+`BindingUncertaintyExplanation` is the cursor-locus product answer over those binding facts. V1 selects only
+template-authored `PropertyBinding` products, groups every target-specific data-flow lane by binding identity, and
+fails closed with `absent` or `ambiguous` selection when no unique current template/compiler context owns the cursor.
+It accepts no template-scope selector: shared-template and multi-world ownership remains visible as ambiguity rather
+than becoming client-side choreography. An exact answer authors a structural subject, neutral proved/partial/blocked
+conclusion, canonical data-flow rows, data-flow-owned open-seam blockers with lane indexes, explicit uncertainty, and
+at most three source- or query-backed next steps. Closed negative facts such as false assignability, nullish mismatch,
+readonly/runtime-unassignable writeback, and TypeScript strictness mismatches remain closed but are stated as proved
+incompatibilities; a missing assignability result in a direction that requires it remains open. The answer envelope's
+`analysisBasis` owns freshness. Value-level `currentness` only explains that authority and carries no competing revision
+token. Listener, spread, translation/state, and other binding families remain outside this deliberately small slice.
+IDE, MCP, and future consumers should render the engine-authored conclusion/uncertainty and follow typed sources or
+queries; they must not reconstruct causality from nullable row fields. MCP uses the generic app-query/catalog surface,
+not a binding-specific tool.
+
 `RuntimeExpressionAccessUses` exposes the lossless owner-qualified operation uses beneath binding, watcher,
 source-effect, and computed-observer execution. It deliberately does not enumerate authored template tokens that no
 runtime operation spends; template references and rename consume the binding-resolution layer for that authoring
