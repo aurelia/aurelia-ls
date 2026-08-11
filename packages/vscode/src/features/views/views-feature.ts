@@ -1,5 +1,9 @@
 import type { ClientFeature } from "../../core/feature.js";
 import { AureliaCommand, AureliaView } from "../../product-contract.js";
+import {
+  emitResourceDiscoveryHostObservation,
+  nextResourceDiscoveryHostObservationId,
+} from "../../resource-discovery-host-control.js";
 import { openResourceNavigation } from "../resource-discovery/navigation.js";
 import {
   ResourceExplorerProvider,
@@ -9,20 +13,41 @@ import {
 export const ViewsFeature: ClientFeature = {
   id: "views.workspace",
   activate: (ctx, own) => {
+    const observationId = nextResourceDiscoveryHostObservationId("resource-explorer-view");
+    const observe = (
+      phase: string,
+      detail: Readonly<Record<string, string | number | boolean | null | undefined>> = {},
+    ): void => {
+      if (observationId == null) return;
+      emitResourceDiscoveryHostObservation({
+        source: "resource-explorer-view",
+        observationId,
+        phase,
+        ...detail,
+      });
+    };
     const explorer = own(new ResourceExplorerProvider(
       ctx.vscode,
       ctx.lsp,
       ctx.logger,
-      (task) => ctx.vscode.window.withProgress(
-        { location: { viewId: AureliaView.ResourceExplorer } },
-        () => task(),
-      ),
+      async (task) => {
+        observe("progress", { status: "started", viewId: AureliaView.ResourceExplorer });
+        try {
+          return await ctx.vscode.window.withProgress(
+            { location: { viewId: AureliaView.ResourceExplorer } },
+            () => task(),
+          );
+        } finally {
+          observe("progress", { status: "finished", viewId: AureliaView.ResourceExplorer });
+        }
+      },
     ));
     const view = own(ctx.vscode.window.createTreeView(AureliaView.ResourceExplorer, {
       treeDataProvider: explorer,
       showCollapseAll: true,
     }));
     explorer.attachView(view);
+    observe("visibility", { visible: view.visible, viewId: AureliaView.ResourceExplorer });
 
     // The tree snapshot is presentation state, not semantic authority. Keep it
     // until the view is requested again, but do not spend a workspace-wide
@@ -76,28 +101,46 @@ export const ViewsFeature: ClientFeature = {
       return refreshDrain;
     };
     const invalidateAll = (force = false): Promise<void> => {
+      observe("invalidation", { scope: "all", force, visible: view.visible });
       explorer.markUpdating(null);
-      if (activeRefreshScope !== noActiveRefresh) explorer.supersedeRefresh(null);
+      if (activeRefreshScope !== noActiveRefresh) {
+        observe("superseded", {
+          activeScope: activeRefreshScope ?? "all",
+          replacementScope: "all",
+        });
+        explorer.supersedeRefresh(null);
+      }
       dirtyAll = true;
       dirtyWorkspaceKeys.clear();
+      observe("requeued", { scope: "all" });
       if (force) forceWhileHidden = true;
       return drainRefresh();
     };
     const invalidateWorkspace = (workspaceKey: string): Promise<void> => {
+      observe("invalidation", { scope: "workspace", workspaceKey, visible: view.visible });
       if (activeRefreshScope === null || dirtyAll) {
         explorer.markUpdating(null);
-        if (activeRefreshScope === null) explorer.supersedeRefresh(null);
+        if (activeRefreshScope === null) {
+          observe("superseded", { activeScope: "all", replacementScope: "all", workspaceKey });
+          explorer.supersedeRefresh(null);
+        }
         dirtyAll = true;
         dirtyWorkspaceKeys.clear();
+        observe("requeued", { scope: "all", workspaceKey });
       } else {
         explorer.markUpdating(workspaceKey);
-        if (activeRefreshScope === workspaceKey) explorer.supersedeRefresh(workspaceKey);
+        if (activeRefreshScope === workspaceKey) {
+          observe("superseded", { activeScope: workspaceKey, replacementScope: workspaceKey, workspaceKey });
+          explorer.supersedeRefresh(workspaceKey);
+        }
         if (!dirtyAll) dirtyWorkspaceKeys.add(workspaceKey);
+        observe("requeued", { scope: "workspace", workspaceKey });
       }
       return drainRefresh();
     };
 
     own(view.onDidChangeVisibility((event) => {
+      observe("visibility", { visible: event.visible, viewId: AureliaView.ResourceExplorer });
       if (event.visible) void drainRefresh();
     }));
     // The server publishes only after a newer semantic generation has settled.
@@ -130,16 +173,28 @@ export const ViewsFeature: ClientFeature = {
             action,
             message: error instanceof Error ? error.message : String(error),
           });
+          const recoveryMessage = "The Aurelia resource could not be opened. Try again or open Aurelia Output for details.";
+          observe("recovery-presented", {
+            action,
+            actionCount: 2,
+            message: recoveryMessage,
+            outputActionLabel: "Open Aurelia Output",
+            retryActionLabel: "Retry",
+          });
           const recovery = await ctx.vscode.window.showInformationMessage(
-            "The Aurelia resource could not be opened. Try again or open Aurelia Output for details.",
+            recoveryMessage,
             "Retry",
             "Open Aurelia Output",
           );
+          observe("recovery-choice", { action, choice: recovery ?? "dismissed" });
           if (recovery === "Retry") {
             await invalidateWorkspace(request.workspaceKey);
             continue;
           }
-          if (recovery === "Open Aurelia Output") ctx.logger.show(true);
+          if (recovery === "Open Aurelia Output") {
+            observe("output-requested", { origin: "navigation-recovery", action });
+            ctx.logger.show(true);
+          }
           return false;
         }
       }
@@ -160,12 +215,16 @@ export const ViewsFeature: ClientFeature = {
       AureliaCommand.RetryResourceProject,
       (target: unknown) => {
         const workspaceKey = explorer.retryWorkspaceFor(target);
+        observe("retry", { workspaceKey, admitted: workspaceKey != null });
         return workspaceKey == null ? Promise.resolve() : invalidateWorkspace(workspaceKey);
       },
     ));
     own(ctx.vscode.commands.registerCommand(
       AureliaCommand.OpenAureliaOutput,
-      () => ctx.logger.show(true),
+      () => {
+        observe("output-requested", { origin: "tree-action" });
+        ctx.logger.show(true);
+      },
     ));
     // Registered last so deactivation closes the drain before disposing the
     // view and provider that an already-running refresh still references.

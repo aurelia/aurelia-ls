@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -12,6 +13,7 @@ import {
   SemanticResourceInventoryNavigationRole,
   SemanticResourceInventoryOriginKind,
   SemanticResourceNavigationUnavailableReason,
+  SemanticRuntimeAnswerCoverage,
   SemanticRuntimeAnswerResult,
   SemanticRuntimeAnswerSelection,
   SemanticRuntimeDetail,
@@ -137,6 +139,217 @@ describe('resource discovery', () => {
     expect(repeatVisibility?.handles?.resourceIdentityHandle).not.toBeNull();
   }, 60_000);
 
+  test('keeps the effective TypeScript owner identity and disambiguates shadowed declaration variants', async () => {
+    const fixtureRoot = pressureFixtureRoot('resource-registration-effective-definitions');
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: fixtureRoot,
+      storeKey: 'resource-discovery-declaration-owner-collisions',
+    });
+    const collisionPairs = [
+      {
+        effective: 'decorator-behavior-effective',
+        effectiveIdentityKey: 'typescript-resource:v1:N_9wQxcFLJ9PKt90tj7VZl',
+        shadowed: 'static-behavior-shadowed',
+        shadowedIdentityKey: 'typescript-resource:v1:ahqNZkgGAXtlgKb6VZsI8o',
+      },
+      {
+        effective: 'decorator-attribute-effective',
+        effectiveIdentityKey: 'typescript-resource:v1:C71wZs_MhwBRNSeOLk8diE',
+        shadowed: 'static-attribute-shadowed',
+        shadowedIdentityKey: 'typescript-resource:v1:qshVIO8dHafENTaYiJmgSS',
+      },
+      {
+        effective: 'define-effective',
+        effectiveIdentityKey: 'typescript-resource:v1:p-p3Cna6ld25MyfG1Ot0eD',
+        shadowed: 'decorator-shadowed',
+        shadowedIdentityKey: 'typescript-resource:v1:6qp6kgu_xTcvz2o1sP_oZw',
+      },
+      {
+        effective: 'decorator-effective',
+        effectiveIdentityKey: 'typescript-resource:v1:imSEIe47wln7ThE4LiIbJW',
+        shadowed: 'static-shadowed',
+        shadowedIdentityKey: 'typescript-resource:v1:kyzNhiwNhvi7qRi3goTXRS',
+      },
+      {
+        effective: 'define-converter-effective',
+        effectiveIdentityKey: 'typescript-resource:v1:HKLmzgoo_HEg3E40z6iRPu',
+        shadowed: 'decorator-converter-shadowed',
+        shadowedIdentityKey: 'typescript-resource:v1:SLJq20eOFgfO6LMYQoUgVf',
+      },
+    ] as const;
+    const collisionFacts = (rows: SemanticResourceInventoryResult['rows']) => collisionPairs.map((pair) => ({
+      effective: rows.find((row) => row.name === pair.effective)?.identityKey,
+      shadowed: rows.find((row) => row.name === pair.shadowed)?.identityKey,
+    }));
+    const expectedFacts = collisionPairs.map((pair) => ({
+      effective: pair.effectiveIdentityKey,
+      shadowed: pair.shadowedIdentityKey,
+    }));
+
+    const first = await resourceInventory(runtime);
+    expect(first.value.rows).toHaveLength(49);
+    expect(new Set(first.value.rows.map((row) => row.identityKey)).size).toBe(49);
+    expect(collisionFacts(first.value.rows)).toEqual(expectedFacts);
+    expect(collisionFacts(first.value.rows).every((pair) => pair.effective !== pair.shadowed)).toBe(true);
+
+    runtime.clearAnalysisCache();
+    const repeated = await resourceInventory(runtime);
+    expect(repeated.value.rows).toHaveLength(49);
+    expect(new Set(repeated.value.rows.map((row) => row.identityKey)).size).toBe(49);
+    expect(collisionFacts(repeated.value.rows)).toEqual(expectedFacts);
+  }, 60_000);
+
+  test('keeps same-owner same-name TypeScript variants unique', async () => {
+    const workspaceRoot = await mkdtemp(path.join(packageRoot, '.resource-discovery-same-name-'));
+    const sourceRoot = path.join(workspaceRoot, 'src');
+    try {
+      await mkdir(sourceRoot, { recursive: true });
+      await writeFile(path.join(sourceRoot, 'main.ts'), [
+        "import Aurelia, { customElement } from 'aurelia';",
+        '',
+        "@customElement('same-name-app')",
+        'class SameNameApp {',
+        '  static readonly $au = {',
+        "    type: 'custom-element',",
+        "    name: 'same-name-app',",
+        "    template: '<template>same name</template>',",
+        '  } as const;',
+        '}',
+        '',
+        'Aurelia.app(SameNameApp).start();',
+        '',
+      ].join('\n'));
+      const runtime = await createSemanticRuntime({
+        workspaceRoot,
+        storeKey: 'resource-discovery-same-owner-same-name',
+      });
+
+      const inventory = await resourceInventory(runtime);
+      const sameNameRows = inventory.value.rows.filter((row) => row.name === 'same-name-app');
+      expect(sameNameRows).toHaveLength(2);
+      expect(new Set(sameNameRows.map((row) => row.identityKey)).size).toBe(2);
+    } finally {
+      await rm(workspaceRoot, { recursive: true, force: true });
+    }
+  }, 60_000);
+
+  test('keeps ordinary TypeScript resource identity across public-name, source-offset, and workspace-root changes', async () => {
+    const firstRoot = await mkdtemp(path.join(packageRoot, '.resource-discovery-rename-first-'));
+    const secondRoot = await mkdtemp(path.join(packageRoot, '.resource-discovery-rename-second-'));
+    const writeWorkspace = async (workspaceRoot: string, name: string, prefix: readonly string[]) => {
+      const sourceRoot = path.join(workspaceRoot, 'src');
+      await mkdir(sourceRoot, { recursive: true });
+      await writeFile(path.join(sourceRoot, 'main.ts'), [
+        ...prefix,
+        "import Aurelia, { customElement } from 'aurelia';",
+        '',
+        `@customElement('${name}')`,
+        'export class StableResourceOwner {}',
+        '',
+        'Aurelia.app(StableResourceOwner).start();',
+        '',
+      ].join('\n'));
+    };
+    try {
+      await writeWorkspace(firstRoot, 'before-rename', []);
+      await writeWorkspace(secondRoot, 'after-rename', ['// source shifted', '']);
+      const firstRuntime = await createSemanticRuntime({
+        workspaceRoot: firstRoot,
+        storeKey: 'resource-discovery-rename-first',
+      });
+      const secondRuntime = await createSemanticRuntime({
+        workspaceRoot: secondRoot,
+        storeKey: 'resource-discovery-rename-second',
+      });
+
+      const first = requireInventoryRow((await resourceInventory(firstRuntime)).value, 'custom-element', 'before-rename');
+      const second = requireInventoryRow((await resourceInventory(secondRuntime)).value, 'custom-element', 'after-rename');
+      expect(second.identityKey).toBe(first.identityKey);
+      expect(second.sources.publicName?.start).not.toBe(first.sources.publicName?.start);
+    } finally {
+      await Promise.all([
+        rm(firstRoot, { recursive: true, force: true }),
+        rm(secondRoot, { recursive: true, force: true }),
+      ]);
+    }
+  }, 60_000);
+
+  test('keeps equal-authority TypeScript variants stable across public-name and source-offset changes', async () => {
+    const firstRoot = await mkdtemp(path.join(packageRoot, '.resource-discovery-variants-first-'));
+    const secondRoot = await mkdtemp(path.join(packageRoot, '.resource-discovery-variants-second-'));
+    const writeWorkspace = async (
+      workspaceRoot: string,
+      names: { readonly decorator: string; readonly static: string; readonly effective: string },
+      prefix: readonly string[],
+    ) => {
+      const sourceRoot = path.join(workspaceRoot, 'src');
+      await mkdir(sourceRoot, { recursive: true });
+      await writeFile(path.join(sourceRoot, 'main.ts'), [
+        ...prefix,
+        "import Aurelia, { CustomElement, customElement } from 'aurelia';",
+        '',
+        `@customElement('${names.decorator}')`,
+        'export class StableVariantOwner {',
+        '  static readonly $au = {',
+        "    type: 'custom-element',",
+        `    name: '${names.static}',`,
+        "    template: '<template>static</template>',",
+        '  } as const;',
+        '}',
+        '',
+        'CustomElement.define({',
+        `  name: '${names.effective}',`,
+        "  template: '<template>effective</template>',",
+        '}, StableVariantOwner);',
+        '',
+        'Aurelia.app(StableVariantOwner).start();',
+        '',
+      ].join('\n'));
+    };
+    const firstNames = {
+      decorator: 'a-decorator-before',
+      static: 'z-static-before',
+      effective: 'effective-before',
+    } as const;
+    const secondNames = {
+      decorator: 'z-decorator-after',
+      static: 'a-static-after',
+      effective: 'effective-after',
+    } as const;
+    try {
+      await writeWorkspace(firstRoot, firstNames, []);
+      await writeWorkspace(secondRoot, secondNames, ['// both lower-authority variants shifted', '']);
+      const firstRuntime = await createSemanticRuntime({
+        workspaceRoot: firstRoot,
+        storeKey: 'resource-discovery-variants-first',
+      });
+      const secondRuntime = await createSemanticRuntime({
+        workspaceRoot: secondRoot,
+        storeKey: 'resource-discovery-variants-second',
+      });
+      const firstRows = (await resourceInventory(firstRuntime)).value.rows;
+      const secondRows = (await resourceInventory(secondRuntime)).value.rows;
+      const identities = (
+        rows: SemanticResourceInventoryResult['rows'],
+        names: typeof firstNames | typeof secondNames,
+      ) => ({
+        effective: requireInventoryRowByName(rows, names.effective).identityKey,
+        decorator: requireInventoryRowByName(rows, names.decorator).identityKey,
+        static: requireInventoryRowByName(rows, names.static).identityKey,
+      });
+
+      const firstIdentities = identities(firstRows, firstNames);
+      const secondIdentities = identities(secondRows, secondNames);
+      expect(new Set(Object.values(firstIdentities)).size).toBe(3);
+      expect(secondIdentities).toEqual(firstIdentities);
+    } finally {
+      await Promise.all([
+        rm(firstRoot, { recursive: true, force: true }),
+        rm(secondRoot, { recursive: true, force: true }),
+      ]);
+    }
+  }, 60_000);
+
   test('selects one exact template compiler scope without unioning local resources', async () => {
     const fixtureRoot = pressureFixtureRoot('resource-registration-local-templates');
     const primaryTemplate = path.join(fixtureRoot, 'src/local-templates-app.html');
@@ -257,6 +470,83 @@ describe('resource discovery', () => {
       templateResourceScopeIdentityKey: answer.value.candidates[0]!.scopeIdentityKey,
     });
     expect(unsupported.result).toBe(SemanticRuntimeAnswerResult.Unsupported);
+  }, 60_000);
+
+  test('reports source-discovery guardrails as truncated resource coverage', async () => {
+    const workspaceRoot = await mkdtemp(path.join(packageRoot, '.resource-discovery-guardrail-'));
+    const sourceRoot = path.join(workspaceRoot, 'src');
+    const appFile = path.join(sourceRoot, 'a-app.ts');
+    try {
+      await mkdir(sourceRoot, { recursive: true });
+      await writeFile(appFile, [
+        "import Aurelia, { customElement } from 'aurelia';",
+        '',
+        "@customElement({ name: 'guardrail-app', template: '<div>guardrail</div>' })",
+        'class GuardrailApp {}',
+        '',
+        'Aurelia.app(GuardrailApp).start();',
+        '',
+      ].join('\n'));
+      await writeFile(path.join(sourceRoot, 'z-over-limit.ts'), [
+        "import { customElement } from 'aurelia';",
+        '',
+        "@customElement('over-limit')",
+        'export class OverLimit {}',
+        '',
+      ].join('\n'));
+
+      const runtime = await createSemanticRuntime({
+        workspaceRoot,
+        storeKey: 'resource-discovery-source-guardrail',
+        projects: [{
+          rootDir: workspaceRoot,
+          projectKey: 'guardrail-app',
+          sourceDiscoveryOptions: {
+            extensions: new Set(['.ts']),
+            maxFiles: 1,
+          },
+        }],
+      });
+      const inventory = await resourceInventory(runtime);
+
+      expect(inventory.result).toBe(SemanticRuntimeAnswerResult.Answered);
+      expect(inventory.selection).toBe(SemanticRuntimeAnswerSelection.NotApplicable);
+      expect(inventory.coverage).toBe(SemanticRuntimeAnswerCoverage.Truncated);
+      expect(inventory.value.rows.length).toBeGreaterThan(0);
+      expect(inventory.value.rows.some((row) => row.name === 'over-limit')).toBe(false);
+      expect(inventory.summary).toContain('Source discovery stopped at its configured file guardrail');
+      expect(inventory.value.displayText).toContain('Coverage was truncated by the source-discovery guardrail');
+
+      const templateOffset = readFileSync(appFile, 'utf8').indexOf('guardrail</div>');
+      expect(templateOffset).toBeGreaterThanOrEqual(0);
+      const availability = await runtime.answerAppQuery({
+        kind: SemanticAppQueryKind.TemplateResourceAvailability,
+        cursor: { filePath: appFile, offset: templateOffset },
+        includeAuthoringTemplates: true,
+      }) as SemanticRuntimeAnswer<SemanticTemplateResourceAvailabilityResult>;
+      expect(availability.result).toBe(SemanticRuntimeAnswerResult.Answered);
+      expect(availability.selection).toBe(SemanticRuntimeAnswerSelection.Exact);
+      expect(availability.coverage).toBe(SemanticRuntimeAnswerCoverage.Truncated);
+      expect(availability.value.rows.length).toBeGreaterThan(0);
+
+      const missingCursor = await runtime.answerAppQuery({
+        kind: SemanticAppQueryKind.TemplateResourceAvailability,
+        includeAuthoringTemplates: true,
+      }) as SemanticRuntimeAnswer<SemanticTemplateResourceAvailabilityResult>;
+      expect(missingCursor.selection).toBe(SemanticRuntimeAnswerSelection.Absent);
+      expect(missingCursor.coverage).toBe(SemanticRuntimeAnswerCoverage.Truncated);
+
+      const staleScope = await runtime.answerAppQuery({
+        kind: SemanticAppQueryKind.TemplateResourceAvailability,
+        cursor: { filePath: appFile, offset: templateOffset },
+        templateResourceScopeIdentityKey: 'stale-scope',
+        includeAuthoringTemplates: true,
+      }) as SemanticRuntimeAnswer<SemanticTemplateResourceAvailabilityResult>;
+      expect(staleScope.selection).toBe(SemanticRuntimeAnswerSelection.Absent);
+      expect(staleScope.coverage).toBe(SemanticRuntimeAnswerCoverage.Truncated);
+    } finally {
+      await rm(workspaceRoot, { recursive: true, force: true });
+    }
   }, 60_000);
 
   test('pages compact and rich resource inventory without projecting discarded type surfaces', async () => {
@@ -492,6 +782,17 @@ function requireInventoryRow(
   );
   if (row == null) {
     throw new Error(`Expected resource inventory row ${resourceKind}:${name}.`);
+  }
+  return row;
+}
+
+function requireInventoryRowByName(
+  rows: SemanticResourceInventoryResult['rows'],
+  name: string,
+): SemanticResourceInventoryResult['rows'][number] {
+  const row = rows.find((candidate) => candidate.name === name);
+  if (row == null) {
+    throw new Error(`Expected resource inventory row named ${name}.`);
   }
   return row;
 }

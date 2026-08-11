@@ -6,11 +6,15 @@ import type {
   TemplateResourceScopeCandidate,
 } from "@aurelia-ls/language-server/protocol";
 import type { QuickPickItem, QuickPickItemKind, TextEditor } from "vscode";
+import { createHash } from "node:crypto";
 import type { ClientFeature } from "../../core/feature.js";
 import {
-  emitExtensionHostObservation,
-  nextExtensionHostObservationId,
+  type ExtensionHostObservationValue,
 } from "../../extension-host-observation.js";
+import {
+  emitResourceDiscoveryHostObservation,
+  nextResourceDiscoveryHostObservationId,
+} from "../../resource-discovery-host-control.js";
 import { AureliaCommand } from "../../product-contract.js";
 import type { ClientLogger } from "../../log.js";
 import type {
@@ -89,37 +93,71 @@ type GoToAvailableResourceObservationPhase =
   | "fresh-request-start"
   | "fresh-request-response"
   | "fresh-request-failed"
+  | "availability-selection"
+  | "revalidation"
+  | "recovery-presented"
+  | "recovery-choice"
+  | "output-requested"
+  | "cancelled"
   | "navigation-start"
   | "navigation-stale-retry"
+  | "refused"
   | "navigation-complete"
   | "navigation-failed";
 
 function observeGoToAvailableResource(
   observationId: string | undefined,
   phase: GoToAvailableResourceObservationPhase,
-  detail: {
-    readonly count?: number;
-    readonly character?: number;
-    readonly documentName?: string;
-    readonly languageId?: string;
-    readonly line?: number;
-    readonly projectSelection?: string;
-    readonly resourceCount?: number;
-    readonly status?: string;
-    readonly templateSelection?: string;
-  } = {},
+  detail: Readonly<Record<string, ExtensionHostObservationValue>> = {},
 ): void {
   if (observationId == null) return;
-  emitExtensionHostObservation({
-    source: "go-to-available-resource",
-    observationId,
-    phase,
-    ...detail,
-  });
+  try {
+    emitResourceDiscoveryHostObservation({
+      source: "go-to-available-resource",
+      observationId,
+      phase,
+      ...detail,
+    });
+  } catch {
+    // Acceptance observations must never affect the product transaction.
+  }
+}
+
+function observePreparedGoToAvailableResource(
+  observationId: string | undefined,
+  phase: GoToAvailableResourceObservationPhase,
+  prepare: () => Readonly<Record<string, ExtensionHostObservationValue>>,
+): void {
+  const detail = prepareGoToAvailableResourceObservation(observationId, prepare);
+  if (detail != null) observeGoToAvailableResource(observationId, phase, detail);
+}
+
+function prepareGoToAvailableResourceObservation<T>(
+  observationId: string | undefined,
+  prepare: () => T,
+): T | undefined {
+  if (observationId == null) return undefined;
+  try {
+    return prepare();
+  } catch {
+    return undefined;
+  }
 }
 
 function activeEditor(vscode: VscodeApi): TextEditor | null {
   return vscode.window.activeTextEditor ?? null;
+}
+
+function activeEditorMatches(
+  vscode: VscodeApi,
+  uri: string,
+  position: { readonly line: number; readonly character: number },
+): boolean {
+  const current = vscode.window.activeTextEditor;
+  return current != null
+    && current.document.uri.toString() === uri
+    && current.selection.active.line === position.line
+    && current.selection.active.character === position.character;
 }
 
 export const UserCommandsFeature: ClientFeature = {
@@ -192,7 +230,7 @@ export const UserCommandsFeature: ClientFeature = {
 
     own(vscode.commands.registerCommand(AureliaCommand.GoToAvailableResource, () =>
       run("goToAvailableResource", async () => {
-        const observationId = nextExtensionHostObservationId("go-to-available-resource");
+        const observationId = nextResourceDiscoveryHostObservationId("go-to-available-resource");
         const editor = activeEditor(vscode);
         if (editor == null) {
           vscode.window.showInformationMessage("Open an analyzed Aurelia template to see its available resources.");
@@ -201,14 +239,15 @@ export const UserCommandsFeature: ClientFeature = {
         const uri = editor.document.uri.toString();
         const activePosition = editor.selection.active;
         const position = { line: activePosition.line, character: activePosition.character };
-        observeGoToAvailableResource(observationId, "command-start", {
+        observePreparedGoToAvailableResource(observationId, "command-start", () => ({
           character: position.character,
           documentName: editor.document.uri.path.split("/").at(-1) ?? "",
           languageId: editor.document.languageId,
           line: position.line,
-        });
+        }));
         const history: AvailabilityRequestSelection[] = [];
         let selection: AvailabilityRequestSelection = {};
+        let modelOrdinal = 0;
 
         availabilityFlow: while (true) {
           const currentSelection = selection;
@@ -232,10 +271,13 @@ export const UserCommandsFeature: ClientFeature = {
                     currentSelection,
                     vscode.QuickPickItemKind.Separator,
                   );
-                  observeGoToAvailableResource(
+                  observePreparedGoToAvailableResource(
                     observationId,
                     "initial-request-response",
-                    availabilityObservationDetails(response, selectableAvailabilityItemCount(model.items)),
+                    () => availabilityObservationDetails(
+                      response,
+                      selectableAvailabilityItemCount(model.items),
+                    ),
                   );
                   return model;
                 } catch (error) {
@@ -245,7 +287,11 @@ export const UserCommandsFeature: ClientFeature = {
               },
               history.length > 0,
               observationId,
-              (action) => handleResourceQuickPickTitleAction(ctx.logger, action),
+              (action) => {
+                observeGoToAvailableResource(observationId, "output-requested", { origin: "quick-pick-title" });
+                handleResourceQuickPickTitleAction(ctx.logger, action);
+              },
+              ++modelOrdinal,
             );
           } catch (error) {
             const recovery = await recoverResourceDiscoveryFailure(
@@ -253,42 +299,70 @@ export const UserCommandsFeature: ClientFeature = {
               ctx.logger,
               "Aurelia resource discovery couldn't load resources for the active template.",
               error,
+              (phase, detail) => observeGoToAvailableResource(observationId, phase, detail),
             );
             if (recovery === "retry") continue;
             return;
           }
-          if (outcome.status === "cancelled") return;
+          if (outcome.status === "cancelled") {
+            observeGoToAvailableResource(observationId, "cancelled", { stage: "selection" });
+            return;
+          }
           if (outcome.status === "back") {
+            observeGoToAvailableResource(observationId, "availability-selection", { selectionKind: "back" });
             selection = history.pop() ?? {};
             continue;
           }
           if (outcome.value.selectionKind === "project") {
+            const selectedProject = outcome.value.project;
+            observePreparedGoToAvailableResource(observationId, "availability-selection", () => ({
+              selectionKind: "project",
+              projectKey: selectedProject.projectKey,
+            }));
             history.push(currentSelection);
-            selection = { projectKey: outcome.value.project.projectKey };
+            selection = { projectKey: selectedProject.projectKey };
             continue;
           }
           if (outcome.value.selectionKind === "template") {
+            const selectedTemplate = outcome.value.template;
+            observePreparedGoToAvailableResource(observationId, "availability-selection", () => ({
+              selectionKind: "template",
+              templateName: selectedTemplate.definitionName,
+              templateScopeIdentity: selectedTemplate.scopeIdentityKey,
+            }));
             history.push(currentSelection);
             selection = {
               ...currentSelection,
-              templateResourceScopeIdentityKey: outcome.value.template.scopeIdentityKey,
+              templateResourceScopeIdentityKey: selectedTemplate.scopeIdentityKey,
             };
             continue;
           }
           if (outcome.value.selectionKind === "separator") continue;
           const selectedResource = outcome.value;
+          observePreparedGoToAvailableResource(observationId, "availability-selection", () => ({
+            selectionKind: "resource",
+            resourceName: selectedResource.row.resource.name,
+            resourceIdentity: selectedResource.row.resource.identityKey,
+            projectKey: selectedResource.availabilitySelection.projectKey,
+            templateScopeIdentity: selectedResource.availabilitySelection.templateResourceScopeIdentityKey,
+          }));
 
+          let navigationSnapshotEvidence: {
+            readonly currentFingerprint: string | null;
+            readonly resourcePresence: "present" | "absent" | "unconfirmed";
+          } | null = null;
           while (true) {
             observeGoToAvailableResource(observationId, "fresh-request-start");
             let current: CurrentAvailabilityResolution;
+            let freshResponse: TemplateResourceAvailabilitySnapshot | null = null;
             try {
-              const fresh = await lsp.getTemplateResourceAvailability(
+              freshResponse = await lsp.getTemplateResourceAvailability(
                 uri,
                 position,
                 selectedResource.availabilitySelection.projectKey,
                 selectedResource.availabilitySelection.templateResourceScopeIdentityKey,
               );
-              current = currentAvailabilityResolution(fresh, selectedResource);
+              current = currentAvailabilityResolution(freshResponse, selectedResource);
             } catch (error) {
               observeGoToAvailableResource(observationId, "fresh-request-failed", { status: "failed" });
               const recovery = await recoverResourceDiscoveryFailure(
@@ -296,32 +370,84 @@ export const UserCommandsFeature: ClientFeature = {
                 ctx.logger,
                 "Aurelia resource discovery couldn't refresh resources for the active template.",
                 error,
+                (phase, detail) => observeGoToAvailableResource(observationId, phase, detail),
               );
               if (recovery === "retry") continue;
               return;
             }
-            observeGoToAvailableResource(observationId, "fresh-request-response", {
-              count: current.rowCount,
-              status: current.kind,
-            });
+            observePreparedGoToAvailableResource(
+              observationId,
+              "fresh-request-response",
+              () => ({
+                count: current.rowCount,
+                fingerprint: freshResponse?.fingerprint ?? null,
+                status: current.kind,
+                ...availabilityPostDecisionObservationDetails(freshResponse),
+              }),
+            );
+            observePreparedGoToAvailableResource(
+              observationId,
+              "revalidation",
+              () => ({
+                editorUnchanged: activeEditorMatches(vscode, uri, position),
+                fingerprint: freshResponse?.fingerprint ?? null,
+                outcome: current.kind,
+                rowCount: current.rowCount,
+              }),
+            );
             switch (current.kind) {
               case "restart":
                 history.length = 0;
                 selection = {};
                 continue availabilityFlow;
               case "unsupported": {
+                const message = "Resource discovery is not supported for the current template.";
+                observeGoToAvailableResource(observationId, "recovery-presented", {
+                  actionCount: 1,
+                  message,
+                  outputActionLabel: "Open Aurelia Output",
+                  retryActionLabel: null,
+                });
                 const action = await vscode.window.showInformationMessage(
-                  "Resource discovery is not supported for the current template.",
+                  message,
                   "Open Aurelia Output",
                 );
+                observeGoToAvailableResource(observationId, "recovery-choice", {
+                  choice: action ?? "dismissed",
+                });
                 if (action === "Open Aurelia Output") ctx.logger.show(true);
+                if (action === "Open Aurelia Output") {
+                  observeGoToAvailableResource(observationId, "output-requested", { origin: "unsupported" });
+                }
                 return;
               }
-              case "removed":
-                vscode.window.showInformationMessage(
-                  "That resource is no longer available to the current template scope.",
-                );
+              case "removed": {
+                const message = "That resource is no longer available to the current template scope.";
+                vscode.window.showInformationMessage(message);
+                observePreparedGoToAvailableResource(observationId, "refused", () => {
+                  const currentFingerprint = freshResponse?.fingerprint ?? null;
+                  const authenticatedSnapshotEvidence = navigationSnapshotEvidence?.currentFingerprint != null
+                    && currentFingerprint != null
+                    && navigationSnapshotEvidence.currentFingerprint === currentFingerprint
+                    ? navigationSnapshotEvidence
+                    : null;
+                  const category = authenticatedSnapshotEvidence?.resourcePresence === "present"
+                    ? "availability-changed"
+                    : authenticatedSnapshotEvidence?.resourcePresence === "absent"
+                      ? "resource-removed"
+                      : "unconfirmed";
+                  return {
+                    category,
+                    currentFingerprint: currentFingerprint
+                      ?? navigationSnapshotEvidence?.currentFingerprint
+                      ?? null,
+                    editorUnchanged: activeEditorMatches(vscode, uri, position),
+                    message,
+                    resourcePresence: authenticatedSnapshotEvidence?.resourcePresence ?? "unconfirmed",
+                  };
+                });
                 return;
+              }
               case "source-unavailable":
                 vscode.window.showInformationMessage(
                   "That resource is available to the current template, but its source location is unavailable.",
@@ -339,7 +465,22 @@ export const UserCommandsFeature: ClientFeature = {
               return;
             } catch (error) {
               if (isResourceNavigationSnapshotChangedError(error)) {
-                observeGoToAvailableResource(observationId, "navigation-stale-retry", { status: "stale" });
+                navigationSnapshotEvidence = prepareGoToAvailableResourceObservation(
+                  observationId,
+                  () => ({
+                    currentFingerprint: error.currentFingerprint,
+                    resourcePresence: error.resourcePresence,
+                  }),
+                ) ?? null;
+                observePreparedGoToAvailableResource(
+                  observationId,
+                  "navigation-stale-retry",
+                  () => ({
+                    currentFingerprint: navigationSnapshotEvidence?.currentFingerprint ?? null,
+                    resourcePresence: navigationSnapshotEvidence?.resourcePresence ?? "unconfirmed",
+                    status: "stale",
+                  }),
+                );
                 continue;
               }
               observeGoToAvailableResource(observationId, "navigation-failed", { status: "failed" });
@@ -348,6 +489,7 @@ export const UserCommandsFeature: ClientFeature = {
                 ctx.logger,
                 "Aurelia couldn't open the selected resource.",
                 error,
+                (phase, detail) => observeGoToAvailableResource(observationId, phase, detail),
               );
               if (recovery === "retry") continue;
               return;
@@ -792,16 +934,33 @@ async function recoverResourceDiscoveryFailure(
   logger: ClientLogger,
   message: string,
   error: unknown,
+  observe?: (
+    phase: "recovery-presented" | "recovery-choice" | "output-requested" | "cancelled",
+    detail?: Readonly<Record<string, ExtensionHostObservationValue>>,
+  ) => void,
 ): Promise<"retry" | "stop"> {
-  if (isCancellationError(error)) return "stop";
+  if (isCancellationError(error)) {
+    observe?.("cancelled", { stage: "request" });
+    return "stop";
+  }
   logger.error("resourceDiscovery.operation.failed", undefined, error);
+  observe?.("recovery-presented", {
+    actionCount: 2,
+    message,
+    outputActionLabel: "Open Aurelia Output",
+    retryActionLabel: "Retry",
+  });
   const action = await vscode.window.showErrorMessage(
     message,
     "Retry",
     "Open Aurelia Output",
   );
+  observe?.("recovery-choice", { choice: action ?? "dismissed" });
   if (action === "Retry") return "retry";
-  if (action === "Open Aurelia Output") logger.show(true);
+  if (action === "Open Aurelia Output") {
+    observe?.("output-requested", { origin: "recovery" });
+    logger.show(true);
+  }
   return "stop";
 }
 
@@ -887,14 +1046,26 @@ function availabilityObservationDetails(
   itemCount: number,
 ): {
   readonly count: number;
+  readonly answerResult: string | null;
+  readonly answerCoverage: string | null;
+  readonly answerSelection: string | null;
+  readonly selectedProjectKey: string | null;
+  readonly selectedTemplateScopeIdentity: string | null;
+  readonly templateCandidateCount: number | null;
+  readonly soleTemplateCandidateScopeIdentity: string | null;
+  readonly resourceIdentitySetSha256: string | null;
+  readonly fingerprint: string | null;
   readonly projectSelection: string;
   readonly resourceCount: number;
   readonly status: string;
   readonly templateSelection: string;
 } {
+  const decision = availabilityPostDecisionObservationDetails(response);
   if (response == null) {
     return {
       count: itemCount,
+      ...decision,
+      fingerprint: null,
       projectSelection: "null",
       resourceCount: 0,
       status: "empty",
@@ -905,6 +1076,8 @@ function availabilityObservationDetails(
   if (selection.status !== "exact") {
     return {
       count: itemCount,
+      ...decision,
+      fingerprint: response.fingerprint,
       projectSelection: selection.status,
       resourceCount: 0,
       status: itemCount === 0 ? "empty" : "ready",
@@ -914,6 +1087,8 @@ function availabilityObservationDetails(
   if (selection.answer.result !== "answered") {
     return {
       count: itemCount,
+      ...decision,
+      fingerprint: response.fingerprint,
       projectSelection: "exact",
       resourceCount: 0,
       status: "empty",
@@ -922,11 +1097,62 @@ function availabilityObservationDetails(
   }
   return {
     count: itemCount,
+    ...decision,
+    fingerprint: response.fingerprint,
     projectSelection: "exact",
     resourceCount: selection.resources.length,
     status: itemCount === 0 ? "empty" : "ready",
     templateSelection: selection.answer.selection,
   };
+}
+
+function availabilityPostDecisionObservationDetails(
+  response: TemplateResourceAvailabilitySnapshot | null,
+): {
+  readonly answerResult: string | null;
+  readonly answerCoverage: string | null;
+  readonly answerSelection: string | null;
+  readonly selectedProjectKey: string | null;
+  readonly selectedTemplateScopeIdentity: string | null;
+  readonly templateCandidateCount: number | null;
+  readonly soleTemplateCandidateScopeIdentity: string | null;
+  readonly resourceIdentitySetSha256: string | null;
+} {
+  const selection = response?.projectSelection;
+  if (selection?.status !== "exact") {
+    return {
+      answerResult: null,
+      answerCoverage: null,
+      answerSelection: null,
+      selectedProjectKey: null,
+      selectedTemplateScopeIdentity: null,
+      templateCandidateCount: null,
+      soleTemplateCandidateScopeIdentity: null,
+      resourceIdentitySetSha256: null,
+    };
+  }
+  return {
+    answerResult: selection.answer.result,
+    answerCoverage: selection.answer.coverage,
+    answerSelection: selection.answer.selection,
+    selectedProjectKey: selection.project.projectKey,
+    selectedTemplateScopeIdentity: selection.selectedTemplate?.scopeIdentityKey ?? null,
+    templateCandidateCount: selection.templateCandidates.length,
+    soleTemplateCandidateScopeIdentity: selection.templateCandidates.length === 1
+      ? selection.templateCandidates[0]!.scopeIdentityKey
+      : null,
+    resourceIdentitySetSha256: resourceIdentitySetSha256(
+      selection.resources.map((row) => row.resource.identityKey),
+    ),
+  };
+}
+
+function resourceIdentitySetSha256(identityKeys: readonly string[]): string {
+  const sorted = [...identityKeys].sort((left, right) =>
+    left < right ? -1 : left > right ? 1 : 0
+  );
+  const preimage = `aurelia-resource-identity-set/1\n${JSON.stringify(sorted)}`;
+  return createHash("sha256").update(preimage, "utf8").digest("hex");
 }
 
 type RelatedFileQuickPickItem = QuickPickItem & {

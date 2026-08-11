@@ -1570,11 +1570,16 @@ remain compiler-syntax products and are counted as excluded syntax rather than m
 
 Inventory `identityKey` values are opaque semantic projections, never kernel handles. Framework resources derive
 identity and package origin from their modeled catalog. TypeScript-authored resources use retained module/export/local
-declaration identity plus registration kind, so ordinary edits that move a declaration do not replace its product identity.
+declaration identity plus registration kind as their base, so ordinary public-name changes and source-offset moves do
+not replace a uniquely owned product identity. If several retained candidates share that base, the one authoritative
+full definition keeps it; otherwise header evidence precedes visibility-only evidence. Remaining contenders receive
+deterministic variant identities in their relative semantic-emission order, without adding public names or source
+offsets to the identity. More than one full definition for the same TypeScript owner and registration kind is an
+invariant failure rather than an arbitrary winner.
 Compiler-local templates use their template-family owner, taxonomy kind, public name, and same-owner duplicate ordinal.
 Only a row with no semantic declaration owner falls back to an exact source locus. Aliases and bindables receive child
 identities under the owning resource. The promise is stability across app generations while the semantic owner is unchanged,
-not persistence across arbitrary declaration moves or ambiguous duplicate reordering. `origin` reports project,
+not persistence across arbitrary declaration moves or ambiguous duplicate emission reordering. `origin` reports project,
 framework/package, external, or unknown ownership without guessing package names from paths.
 
 Inventory source roles remain distinct: `sources.publicName` is the exact authored public-name token,

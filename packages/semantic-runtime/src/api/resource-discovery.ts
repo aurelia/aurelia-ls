@@ -167,6 +167,11 @@ interface ResourceInventoryCandidateProjectionBasis {
   readonly orderingKey: string;
 }
 
+interface TypeScriptResourceIdentityBasis {
+  readonly values: readonly unknown[];
+  readonly groupingKey: string;
+}
+
 /** Project the selected app's resource definitions and effective compiler catalogs without leaking kernel handles. */
 export function readSemanticResourceInventory(
   emission: AureliaAppWorldProjectEmission,
@@ -175,11 +180,23 @@ export function readSemanticResourceInventory(
   includeTypeSurfaces = false,
 ): SemanticRuntimeAnswer<SemanticResourceInventoryResult> {
   const projection = new ResourceInventoryBuilder(emission, store, includeTypeSurfaces).read(page);
+  const coverage = resourceInventoryCoverage(
+    projection.completeness,
+    emission.project.sourceDiscovery?.truncated === true,
+  );
   return answer(
     SemanticRuntimeAnswerResult.Answered,
-    `Returned ${projection.rows.length} of ${projection.page.totalRows} runtime resource row(s) for ${emission.project.projectKey}.`,
+    `Returned ${projection.rows.length} of ${projection.page.totalRows} runtime resource row(s) for ${emission.project.projectKey}.`
+      + (coverage === SemanticRuntimeAnswerCoverage.Truncated
+        ? ' Source discovery stopped at its configured file guardrail, so resource coverage is truncated.'
+        : ''),
     {
-      displayText: resourceInventoryDisplayText(projection.rows, projection.page.totalRows, projection.completeness),
+      displayText: resourceInventoryDisplayText(
+        projection.rows,
+        projection.page.totalRows,
+        projection.completeness,
+        coverage,
+      ),
       projectKey: emission.project.projectKey,
       projectRoot: emission.project.rootDir,
       typeSurfacesIncluded: includeTypeSurfaces,
@@ -188,7 +205,7 @@ export function readSemanticResourceInventory(
     },
     {
       selection: SemanticRuntimeAnswerSelection.NotApplicable,
-      coverage: resourceInventoryCoverage(projection.completeness),
+      coverage,
       page: projection.page,
     },
   );
@@ -206,6 +223,10 @@ export function readSemanticTemplateResourceAvailability(
   const inventory = new ResourceInventoryBuilder(emission, store, includeTypeSurfaces);
   inventory.collect();
   const completeness = inventory.completeness();
+  const sourceDiscoveryTruncated = emission.project.sourceDiscovery?.truncated === true;
+  const sourceDiscoveryCoverage = sourceDiscoveryTruncated
+    ? SemanticRuntimeAnswerCoverage.Truncated
+    : SemanticRuntimeAnswerCoverage.Complete;
   const emptyValue = (
     displayText: string,
     candidates: readonly SemanticTemplateResourceScopeCandidate[] = [],
@@ -226,7 +247,7 @@ export function readSemanticTemplateResourceAvailability(
       emptyValue('No template cursor was supplied.'),
       {
         selection: SemanticRuntimeAnswerSelection.Absent,
-        coverage: SemanticRuntimeAnswerCoverage.Complete,
+        coverage: sourceDiscoveryCoverage,
       },
     );
   }
@@ -244,7 +265,7 @@ export function readSemanticTemplateResourceAvailability(
       emptyValue(summary),
       {
         selection: SemanticRuntimeAnswerSelection.Absent,
-        coverage: SemanticRuntimeAnswerCoverage.Complete,
+        coverage: sourceDiscoveryCoverage,
       },
     );
   }
@@ -265,7 +286,7 @@ export function readSemanticTemplateResourceAvailability(
       emptyValue('No compiled template owns this cursor.'),
       {
         selection: SemanticRuntimeAnswerSelection.Absent,
-        coverage: SemanticRuntimeAnswerCoverage.Complete,
+        coverage: sourceDiscoveryCoverage,
       },
     );
   }
@@ -280,7 +301,7 @@ export function readSemanticTemplateResourceAvailability(
       emptyValue('Choose a current template compiler scope before inspecting available resources.', candidates),
       {
         selection: SemanticRuntimeAnswerSelection.Absent,
-        coverage: SemanticRuntimeAnswerCoverage.Complete,
+        coverage: sourceDiscoveryCoverage,
       },
     );
   }
@@ -292,7 +313,7 @@ export function readSemanticTemplateResourceAvailability(
       emptyValue('Choose a template compiler scope before inspecting available resources.', candidates),
       {
         selection: SemanticRuntimeAnswerSelection.Ambiguous,
-        coverage: SemanticRuntimeAnswerCoverage.Complete,
+        coverage: sourceDiscoveryCoverage,
       },
     );
   }
@@ -313,9 +334,11 @@ export function readSemanticTemplateResourceAvailability(
           };
     })
     .filter((row): row is NonNullable<typeof row> => row != null);
-  const coverage = rows.some((row) => row.state === SemanticTemplateResourceAvailabilityState.Open)
-    ? SemanticRuntimeAnswerCoverage.Open
-    : resourceInventoryCoverage(completeness);
+  const coverage = sourceDiscoveryTruncated
+    ? SemanticRuntimeAnswerCoverage.Truncated
+    : rows.some((row) => row.state === SemanticTemplateResourceAvailabilityState.Open)
+      ? SemanticRuntimeAnswerCoverage.Open
+      : resourceInventoryCoverage(completeness);
   return answer(
     SemanticRuntimeAnswerResult.Answered,
     `Returned ${rows.length} resource(s) available to ${selected.candidate.definitionName}.`,
@@ -342,6 +365,12 @@ class ResourceInventoryBuilder {
   private readonly candidatesByFallback = new Map<string, ResourceInventoryCandidate>();
   private readonly candidateByVisibleResource = new Map<TemplateVisibleResource, ResourceInventoryCandidate>();
   private readonly projectionBases = new Map<ResourceInventoryCandidate, ResourceInventoryCandidateProjectionBasis>();
+  private readonly typescriptIdentityBases = new Map<
+    ResourceInventoryCandidate,
+    TypeScriptResourceIdentityBasis | null
+  >();
+  private typescriptIdentityContendersByGroup:
+    ReadonlyMap<string, readonly ResourceInventoryCandidate[]> | null = null;
   private readonly definitionProjections = new Map<ResourceInventoryCandidate, ResourceDefinitionCoreProjection>();
   private readonly definitionSourceProjections = new Map<ResourceInventoryCandidate, ResourceDefinitionSourceProjection>();
   private readonly rowsByCandidate = new Map<ResourceInventoryCandidate, SemanticResourceInventoryRow>();
@@ -397,6 +426,7 @@ class ResourceInventoryBuilder {
     this.readCompiledDefinitions();
     this.readProjectHeaders();
     this.readCompilerVisibility();
+    this.assertUniqueFinalRowIdentities();
   }
 
   private readProjectDefinitions(): void {
@@ -764,7 +794,6 @@ class ResourceInventoryBuilder {
   private identityKeyFor(
     candidate: ResourceInventoryCandidate,
     sources: SemanticResourceInventorySources,
-    targetIdentityHandle: IdentityHandle | null,
   ): string {
     if (candidate.identityKey != null) {
       return candidate.identityKey;
@@ -781,7 +810,7 @@ class ResourceInventoryBuilder {
       const owner = this.candidatesByHandle.get(handleKey(candidate.localOwnerHandle)) ?? null;
       const ownerKey = owner == null
         ? semanticKey('unresolved-template-family', [this.emission.project.projectKey, candidate.localOwnerHandle])
-        : this.identityKeyFor(owner, this.primaryCandidateSources(owner), this.targetIdentityHandle(owner));
+        : this.identityKeyFor(owner, this.primaryCandidateSources(owner));
       candidate.identityKey = semanticKey('local-template-resource', [
         ownerKey,
         candidate.resourceKind,
@@ -790,17 +819,22 @@ class ResourceInventoryBuilder {
       ]);
       return candidate.identityKey;
     }
-    const declarationIdentity = this.declarationIdentityFor(candidate, targetIdentityHandle);
-    if (
-      declarationIdentity?.moduleKey != null
-      && (declarationIdentity.exportedName != null || declarationIdentity.localName != null)
-    ) {
-      candidate.identityKey = semanticKey('typescript-resource', [
-        declarationIdentity.moduleKey,
-        declarationIdentity.exportedName,
-        declarationIdentity.localName,
-        registrationResourceKindFor(candidate.resourceKind),
-      ]);
+    const typescriptBasis = this.typescriptResourceIdentityBasisFor(candidate);
+    if (typescriptBasis != null) {
+      const contenders = this.typescriptResourceIdentityContenders(typescriptBasis.groupingKey);
+      const contenderIndex = contenders.indexOf(candidate);
+      if (contenderIndex < 0) {
+        throw new Error(
+          `TypeScript resource candidate '${candidate.internalKey}' is absent from its declaration-owner identity group.`,
+        );
+      }
+      candidate.identityKey = contenderIndex === 0
+        ? semanticKey('typescript-resource', typescriptBasis.values)
+        : semanticKey('typescript-resource', [
+            ...typescriptBasis.values,
+            'variant',
+            contenderIndex - 1,
+          ]);
       return candidate.identityKey;
     }
     candidate.identityKey = semanticKey('source-resource', [
@@ -810,6 +844,88 @@ class ResourceInventoryBuilder {
       semanticSourceReferenceKey(sources.publicName ?? sources.implementation ?? sources.declaration),
     ]);
     return candidate.identityKey;
+  }
+
+  private typescriptResourceIdentityBasisFor(
+    candidate: ResourceInventoryCandidate,
+  ): TypeScriptResourceIdentityBasis | null {
+    if (this.typescriptIdentityBases.has(candidate)) {
+      return this.typescriptIdentityBases.get(candidate) ?? null;
+    }
+    const declarationIdentity = this.declarationIdentityFor(candidate, this.targetIdentityHandle(candidate));
+    if (
+      declarationIdentity?.moduleKey == null
+      || (declarationIdentity.exportedName == null && declarationIdentity.localName == null)
+    ) {
+      this.typescriptIdentityBases.set(candidate, null);
+      return null;
+    }
+    const values = [
+      declarationIdentity.moduleKey,
+      declarationIdentity.exportedName,
+      declarationIdentity.localName,
+      registrationResourceKindFor(candidate.resourceKind),
+    ] as const;
+    const basis = {
+      values,
+      groupingKey: JSON.stringify(values),
+    };
+    this.typescriptIdentityBases.set(candidate, basis);
+    return basis;
+  }
+
+  private typescriptResourceIdentityContenders(
+    groupingKey: string,
+  ): readonly ResourceInventoryCandidate[] {
+    if (this.typescriptIdentityContendersByGroup == null) {
+      const groups = new Map<string, {
+        candidate: ResourceInventoryCandidate;
+        ordinal: number;
+        authority: number;
+      }[]>();
+      for (const [ordinal, candidate] of this.candidates.entries()) {
+        const basis = this.typescriptResourceIdentityBasisFor(candidate);
+        if (basis == null) continue;
+        const group = groups.get(basis.groupingKey) ?? [];
+        group.push({
+          candidate,
+          ordinal,
+          authority: resourceInventoryCandidateAuthority(candidate),
+        });
+        groups.set(basis.groupingKey, group);
+      }
+      this.typescriptIdentityContendersByGroup = new Map([...groups].map(([key, group]) => {
+        const fullDefinitions = group.filter((entry) => entry.authority === 0);
+        if (fullDefinitions.length > 1) {
+          throw new Error(
+            `TypeScript resource declaration-owner group '${key}' retained ${fullDefinitions.length} full definitions; `
+              + 'effective resource convergence must select one authoritative definition.',
+          );
+        }
+        return [
+          key,
+          group
+            .sort((left, right) => left.authority - right.authority || left.ordinal - right.ordinal)
+            .map((entry) => entry.candidate),
+        ];
+      }));
+    }
+    return this.typescriptIdentityContendersByGroup.get(groupingKey) ?? [];
+  }
+
+  private assertUniqueFinalRowIdentities(): void {
+    const owners = new Map<string, ResourceInventoryCandidate>();
+    for (const candidate of this.candidates) {
+      const identityKey = this.projectionBasisFor(candidate).identityKey;
+      const existing = owners.get(identityKey);
+      if (existing != null) {
+        throw new Error(
+          `Resource inventory projected duplicate final row identity '${identityKey}' for `
+            + `'${existing.resourceKind}:${existing.name}' and '${candidate.resourceKind}:${candidate.name}'.`,
+        );
+      }
+      owners.set(identityKey, candidate);
+    }
   }
 
   private sameOwnerResourceOrdinal(candidate: ResourceInventoryCandidate): number {
@@ -954,7 +1070,7 @@ class ResourceInventoryBuilder {
     }
     const sources = this.primaryCandidateSources(candidate);
     const targetIdentityHandle = this.targetIdentityHandle(candidate);
-    const identityKey = this.identityKeyFor(candidate, sources, targetIdentityHandle);
+    const identityKey = this.identityKeyFor(candidate, sources);
     const origin = this.originFor(candidate, sources, targetIdentityHandle);
     const basis: ResourceInventoryCandidateProjectionBasis = {
       sources,
@@ -1183,6 +1299,12 @@ function assertCandidateIdentity(
   }
 }
 
+function resourceInventoryCandidateAuthority(candidate: ResourceInventoryCandidate): number {
+  if (candidate.definition != null) return 0;
+  if (candidate.header != null) return 1;
+  return 2;
+}
+
 function semanticKey(namespace: string, values: readonly unknown[]): string {
   const digest = createHash('sha256').update(JSON.stringify(values)).digest('base64url').slice(0, 22);
   return `${namespace}:v1:${digest}`;
@@ -1203,7 +1325,11 @@ function sameNameOrdinal<T>(
 
 function resourceInventoryCoverage(
   completeness: SemanticResourceInventoryCompleteness,
+  sourceDiscoveryTruncated = false,
 ): SemanticRuntimeAnswerCoverage {
+  if (sourceDiscoveryTruncated) {
+    return SemanticRuntimeAnswerCoverage.Truncated;
+  }
   return completeness.unnamedDefinitions > 0
       || completeness.unresolvedModules > 0
       || completeness.openVisibility > 0
@@ -1215,6 +1341,7 @@ function resourceInventoryDisplayText(
   rows: readonly SemanticResourceInventoryRow[],
   total: number,
   completeness: SemanticResourceInventoryCompleteness,
+  coverage = resourceInventoryCoverage(completeness),
 ): string {
   const counts = new Map<SemanticResourceInventoryKind, number>();
   for (const row of rows) {
@@ -1223,8 +1350,10 @@ function resourceInventoryDisplayText(
   const groups = SEMANTIC_RESOURCE_INVENTORY_KINDS
     .map((kind) => `${kind}: ${counts.get(kind) ?? 0}`)
     .join(', ');
-  const open = resourceInventoryCoverage(completeness) === SemanticRuntimeAnswerCoverage.Open
-    ? ' Coverage remains open.'
-    : '';
+  const open = coverage === SemanticRuntimeAnswerCoverage.Truncated
+    ? ' Coverage was truncated by the source-discovery guardrail.'
+    : coverage === SemanticRuntimeAnswerCoverage.Open
+      ? ' Coverage remains open.'
+      : '';
   return `Runtime resources (${rows.length} of ${total}): ${groups}.${open}`;
 }

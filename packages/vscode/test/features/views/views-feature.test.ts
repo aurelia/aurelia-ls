@@ -1,5 +1,9 @@
 import type { Disposable } from "vscode";
 import { describe, expect, test, vi } from "vitest";
+import {
+  EXTENSION_HOST_OBSERVATION_EVENT,
+  type ExtensionHostObservation,
+} from "../../../out/extension-host-observation.js";
 import { ViewsFeature } from "../../../out/features/views/views-feature.js";
 import { AureliaCommand } from "../../../out/product-contract.js";
 import type { VscodeApi } from "../../../out/vscode-api.js";
@@ -234,6 +238,51 @@ async function resourceRoots(
 }
 
 describe("ViewsFeature resource inventory lifecycle", () => {
+  test("observes visibility, progress, matching supersede, and requeue as one view lifecycle", async () => {
+    const observation = captureViewObservations();
+    try {
+      const predecessor = deferred<unknown>();
+      const getResourceInventory = vi.fn()
+        .mockResolvedValueOnce(inventorySnapshot("file:///work/a", "file:///work/b"))
+        .mockImplementationOnce(() => predecessor.promise)
+        .mockResolvedValueOnce(inventorySnapshot("file:///work/a"));
+      const harness = createHarness({ visible: true, getResourceInventory });
+      await waitForRootCount(harness.treeDataProvider, 2);
+
+      harness.fireAnalysisChanged("file:///work/a");
+      await vi.waitFor(() => expect(getResourceInventory).toHaveBeenCalledTimes(2));
+      harness.fireAnalysisChanged("file:///work/a");
+      predecessor.resolve(failedInventorySnapshot("file:///work/a"));
+      await vi.waitFor(() => expect(getResourceInventory).toHaveBeenCalledTimes(3));
+      harness.setVisible(false);
+      harness.setVisible(true);
+
+      expect(observation.events).toEqual(expect.arrayContaining([
+        expect.objectContaining({ phase: "visibility", visible: true }),
+        expect.objectContaining({ phase: "progress", status: "started" }),
+        expect.objectContaining({ phase: "progress", status: "finished" }),
+        expect.objectContaining({
+          phase: "invalidation",
+          scope: "workspace",
+          workspaceKey: "file:///work/a",
+        }),
+        expect.objectContaining({
+          phase: "superseded",
+          activeScope: "file:///work/a",
+          replacementScope: "file:///work/a",
+        }),
+        expect.objectContaining({ phase: "requeued", scope: "workspace", workspaceKey: "file:///work/a" }),
+        expect.objectContaining({ phase: "visibility", visible: false }),
+      ]));
+      expect(new Set(observation.events.map((event) => event.observationId))).toHaveLength(1);
+      expect(observation.events.every(Object.isFrozen)).toBe(true);
+      expect(observation.events.every((event) => Object.values(event).every(isObservationPrimitive))).toBe(true);
+      harness.dispose();
+    } finally {
+      observation.dispose();
+    }
+  });
+
   test("uses native view-scoped progress and registers the bounded tree action set", async () => {
     const harness = createHarness({ visible: true });
     await vi.waitFor(() => expect(harness.getResourceInventory).toHaveBeenCalledOnce());
@@ -301,31 +350,57 @@ describe("ViewsFeature resource inventory lifecycle", () => {
   });
 
   test("offers actionable recovery without exposing an operational navigation exception", async () => {
-    let calls = 0;
-    const harness = createHarness({
-      visible: true,
-      informationAction: "Open Aurelia Output",
-      getResourceInventory: async () => {
-        if (calls++ === 0) return navigableInventorySnapshot();
-        throw new Error("C:\\private\\workspace\\raw failure");
-      },
-    });
-    await vi.waitFor(async () => expect(
-      await Promise.resolve(harness.treeDataProvider?.getChildren()),
-    ).toHaveLength(1));
-    const groups = await Promise.resolve(harness.treeDataProvider?.getChildren()) as readonly unknown[];
-    const resources = await Promise.resolve(harness.treeDataProvider?.getChildren(groups[0])) as readonly unknown[];
+    const observation = captureViewObservations();
+    try {
+      let calls = 0;
+      const harness = createHarness({
+        visible: true,
+        informationAction: "Open Aurelia Output",
+        getResourceInventory: async () => {
+          if (calls++ === 0) return navigableInventorySnapshot();
+          throw new Error("C:\\private\\workspace\\raw failure");
+        },
+      });
+      await vi.waitFor(async () => expect(
+        await Promise.resolve(harness.treeDataProvider?.getChildren()),
+      ).toHaveLength(1));
+      const groups = await Promise.resolve(harness.treeDataProvider?.getChildren()) as readonly unknown[];
+      const resources = await Promise.resolve(harness.treeDataProvider?.getChildren(groups[0])) as readonly unknown[];
 
-    await harness.recorded.commandHandlers.get(AureliaCommand.OpenResourceDeclaration)?.(resources[0]);
+      await harness.recorded.commandHandlers.get(AureliaCommand.OpenResourceDeclaration)?.(resources[0]);
 
-    expect(harness.showInformationMessage).toHaveBeenCalledWith(
-      "The Aurelia resource could not be opened. Try again or open Aurelia Output for details.",
-      "Retry",
-      "Open Aurelia Output",
-    );
-    expect(harness.recorded.infoMessages.join(" ")).not.toContain("private");
-    expect(harness.logger.show).toHaveBeenCalledWith(true);
-    harness.dispose();
+      expect(harness.showInformationMessage).toHaveBeenCalledWith(
+        "The Aurelia resource could not be opened. Try again or open Aurelia Output for details.",
+        "Retry",
+        "Open Aurelia Output",
+      );
+      expect(observation.events).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          phase: "recovery-presented",
+          action: "declaration",
+          actionCount: 2,
+          message: "The Aurelia resource could not be opened. Try again or open Aurelia Output for details.",
+          retryActionLabel: "Retry",
+          outputActionLabel: "Open Aurelia Output",
+        }),
+        expect.objectContaining({
+          phase: "recovery-choice",
+          action: "declaration",
+          choice: "Open Aurelia Output",
+        }),
+        expect.objectContaining({
+          phase: "output-requested",
+          origin: "navigation-recovery",
+          action: "declaration",
+        }),
+      ]));
+      expect(JSON.stringify(observation.events)).not.toContain("private");
+      expect(harness.recorded.infoMessages.join(" ")).not.toContain("private");
+      expect(harness.logger.show).toHaveBeenCalledWith(true);
+      harness.dispose();
+    } finally {
+      observation.dispose();
+    }
   });
 
   test("Retry refreshes, re-resolves, and executes the original tree navigation action", async () => {
@@ -410,25 +485,35 @@ describe("ViewsFeature resource inventory lifecycle", () => {
   });
 
   test("retries only the affected project workspace selected by its current issue root", async () => {
-    const first = failedInventorySnapshot("file:///work/a", "file:///work/b");
-    const getResourceInventory = vi.fn(async (options?: { readonly workspaceKey?: string }) =>
-      options?.workspaceKey == null ? first : failedInventorySnapshot(options.workspaceKey));
-    const harness = createHarness({ visible: true, getResourceInventory });
-    await vi.waitFor(() => expect(harness.getResourceInventory).toHaveBeenCalledOnce());
-    await vi.waitFor(async () => expect(
-      await Promise.resolve(harness.treeDataProvider?.getChildren()),
-    ).toHaveLength(2));
-    const roots = await Promise.resolve(harness.treeDataProvider?.getChildren()) as Array<{
-      readonly label: string;
-    }>;
+    const observation = captureViewObservations();
+    try {
+      const first = failedInventorySnapshot("file:///work/a", "file:///work/b");
+      const getResourceInventory = vi.fn(async (options?: { readonly workspaceKey?: string }) =>
+        options?.workspaceKey == null ? first : failedInventorySnapshot(options.workspaceKey));
+      const harness = createHarness({ visible: true, getResourceInventory });
+      await vi.waitFor(() => expect(harness.getResourceInventory).toHaveBeenCalledOnce());
+      await vi.waitFor(async () => expect(
+        await Promise.resolve(harness.treeDataProvider?.getChildren()),
+      ).toHaveLength(2));
+      const roots = await Promise.resolve(harness.treeDataProvider?.getChildren()) as Array<{
+        readonly label: string;
+      }>;
 
-    await harness.recorded.commandHandlers.get(AureliaCommand.RetryResourceProject)?.(roots[1]);
+      await harness.recorded.commandHandlers.get(AureliaCommand.RetryResourceProject)?.(roots[1]);
+      await harness.recorded.commandHandlers.get(AureliaCommand.OpenAureliaOutput)?.();
 
-    expect(harness.getResourceInventory).toHaveBeenLastCalledWith({
-      workspaceKey: "file:///work/b",
-      includeTypeSurfaces: true,
-    });
-    harness.dispose();
+      expect(harness.getResourceInventory).toHaveBeenLastCalledWith({
+        workspaceKey: "file:///work/b",
+        includeTypeSurfaces: true,
+      });
+      expect(observation.events).toEqual(expect.arrayContaining([
+        expect.objectContaining({ phase: "retry", workspaceKey: "file:///work/b", admitted: true }),
+        expect.objectContaining({ phase: "output-requested", origin: "tree-action" }),
+      ]));
+      harness.dispose();
+    } finally {
+      observation.dispose();
+    }
   });
 
   test("scopes settled source invalidation to its workspace and keeps topology refresh aggregate", async () => {
@@ -533,7 +618,88 @@ describe("ViewsFeature resource inventory lifecycle", () => {
     harness.dispose();
   });
 
-  test("supersedes a held full request with a full retry after a scoped invalidation", async () => {
+  test("deduplicates a scoped updating publication until its superseding trailing refresh settles", async () => {
+    const observation = captureResourceDiscoveryObservations("resource-explorer", "resource-explorer-view");
+    const predecessor = deferred<unknown>();
+    const trailing = deferred<unknown>();
+    const next = deferred<unknown>();
+    const getResourceInventory = vi.fn()
+      .mockResolvedValueOnce(inventorySnapshot("file:///work/a", "file:///work/b"))
+      .mockImplementationOnce(() => predecessor.promise)
+      .mockImplementationOnce(() => trailing.promise)
+      .mockImplementationOnce(() => next.promise);
+    const harness = createHarness({ visible: true, getResourceInventory });
+    try {
+      await waitForRootCount(harness.treeDataProvider, 2);
+      observation.events.length = 0;
+
+      harness.fireAnalysisChanged("file:///work/a");
+      await vi.waitFor(() => expect(getResourceInventory).toHaveBeenCalledTimes(2));
+      harness.fireAnalysisChanged("file:///work/a");
+
+      const viewInvalidations = observation.events.filter((event) =>
+        event.source === "resource-explorer-view"
+          && event.phase === "invalidation"
+          && event.scope === "workspace"
+          && event.workspaceKey === "file:///work/a"
+      );
+      const superseded = observation.events.find((event) =>
+        event.source === "resource-explorer-view"
+          && event.phase === "superseded"
+          && event.activeScope === "file:///work/a"
+          && event.replacementScope === "file:///work/a"
+      );
+      const requeued = observation.events.filter((event) =>
+        event.source === "resource-explorer-view"
+          && event.phase === "requeued"
+          && event.scope === "workspace"
+          && event.workspaceKey === "file:///work/a"
+      );
+      expect(viewInvalidations).toHaveLength(2);
+      expect(superseded).toBeDefined();
+      expect(requeued).toHaveLength(2);
+      expect(observation.events.indexOf(viewInvalidations[1]!)).toBeLessThan(observation.events.indexOf(superseded!));
+      expect(observation.events.indexOf(superseded!)).toBeLessThan(observation.events.indexOf(requeued[1]!));
+      expect(observation.events.filter(isUpdatingPublication)).toHaveLength(1);
+
+      predecessor.resolve(failedInventorySnapshot("file:///work/a"));
+      await vi.waitFor(() => expect(getResourceInventory).toHaveBeenCalledTimes(3));
+      expect(observation.events.filter(isUpdatingPublication)).toHaveLength(1);
+
+      trailing.resolve(inventorySnapshot("file:///work/a"));
+      await vi.waitFor(() => expect(observation.events.filter(isCurrentPublication)).toHaveLength(1));
+      await vi.waitFor(async () => expect(
+        (await resourceRoots(harness.treeDataProvider)).every((root) => !root.accessibilityLabel.includes("updating")),
+      ).toBe(true));
+      await Promise.resolve();
+
+      const firstUpdating = observation.events.find(isUpdatingPublication)!;
+      const trailingCurrent = observation.events.find(isCurrentPublication)!;
+      harness.fireAnalysisChanged("file:///work/a");
+      await vi.waitFor(() => expect(getResourceInventory).toHaveBeenCalledTimes(4));
+
+      const updatingPublications = observation.events.filter(isUpdatingPublication);
+      expect(updatingPublications).toHaveLength(2);
+      expect(updatingPublications[1]).toEqual(expect.objectContaining({
+        observationId: firstUpdating.observationId,
+        generation: trailingCurrent.generation,
+        publicationKind: "updating",
+        fingerprint: null,
+      }));
+
+      next.resolve(inventorySnapshot("file:///work/a"));
+      await vi.waitFor(() => expect(observation.events.filter(isCurrentPublication)).toHaveLength(2));
+    } finally {
+      predecessor.resolve(failedInventorySnapshot("file:///work/a"));
+      trailing.resolve(inventorySnapshot("file:///work/a"));
+      next.resolve(inventorySnapshot("file:///work/a"));
+      harness.dispose();
+      observation.dispose();
+    }
+  });
+
+  test("promotes a source invalidation over a held full request and publishes only its full retry", async () => {
+    const observation = captureResourceDiscoveryObservations("resource-explorer", "resource-explorer-view");
     const predecessor = deferred<unknown>();
     const trailing = deferred<unknown>();
     const getResourceInventory = vi.fn()
@@ -541,25 +707,72 @@ describe("ViewsFeature resource inventory lifecycle", () => {
       .mockImplementationOnce(() => predecessor.promise)
       .mockImplementationOnce(() => trailing.promise);
     const harness = createHarness({ visible: true, getResourceInventory });
-    await vi.waitFor(() => expect(getResourceInventory).toHaveBeenCalledOnce());
-    await waitForRootCount(harness.treeDataProvider, 2);
+    try {
+      await vi.waitFor(() => expect(getResourceInventory).toHaveBeenCalledOnce());
+      await waitForRootCount(harness.treeDataProvider, 2);
+      observation.events.length = 0;
 
-    harness.fireAnalysisChanged("file:///work/a", "topology");
-    await vi.waitFor(() => expect(getResourceInventory).toHaveBeenCalledTimes(2));
-    harness.fireAnalysisChanged("file:///work/a");
-    predecessor.resolve(failedInventorySnapshot("file:///work/a", "file:///work/b"));
-    await vi.waitFor(() => expect(getResourceInventory).toHaveBeenCalledTimes(3));
+      harness.fireAnalysisChanged("file:///work/a", "topology");
+      await vi.waitFor(() => expect(getResourceInventory).toHaveBeenCalledTimes(2));
+      harness.fireAnalysisChanged("file:///work/a");
 
-    expect(getResourceInventory.mock.calls.map(([options]) => options)).toEqual([
-      { includeTypeSurfaces: true },
-      { includeTypeSurfaces: true },
-      { includeTypeSurfaces: true },
-    ]);
-    expect(JSON.stringify(await Promise.resolve(harness.treeDataProvider?.getChildren())))
-      .not.toContain("Couldn't load Aurelia resources");
-    trailing.resolve(inventorySnapshot("file:///work/a", "file:///work/b"));
-    await vi.waitFor(() => expect(harness.view.message).toBeUndefined());
-    harness.dispose();
+      const workspaceInvalidation = observation.events.find((event) =>
+        event.source === "resource-explorer-view"
+          && event.phase === "invalidation"
+          && event.scope === "workspace"
+          && event.workspaceKey === "file:///work/a"
+      );
+      const superseded = observation.events.find((event) =>
+        event.source === "resource-explorer-view"
+          && event.phase === "superseded"
+          && event.activeScope === "all"
+          && event.replacementScope === "all"
+          && event.workspaceKey === "file:///work/a"
+      );
+      const requeued = observation.events.find((event) =>
+        event.source === "resource-explorer-view"
+          && event.phase === "requeued"
+          && event.scope === "all"
+          && event.workspaceKey === "file:///work/a"
+      );
+      expect(workspaceInvalidation).toBeDefined();
+      expect(superseded).toBeDefined();
+      expect(requeued).toBeDefined();
+      expect(observation.events.indexOf(workspaceInvalidation!))
+        .toBeLessThan(observation.events.indexOf(superseded!));
+      expect(observation.events.indexOf(superseded!))
+        .toBeLessThan(observation.events.indexOf(requeued!));
+
+      predecessor.resolve(failedInventorySnapshot("file:///work/a", "file:///work/b"));
+      await vi.waitFor(() => expect(getResourceInventory).toHaveBeenCalledTimes(3));
+      const discarded = observation.events.find((event) =>
+        event.source === "resource-explorer"
+          && event.phase === "discarded"
+          && event.reason === "superseded"
+      );
+      expect(discarded).toBeDefined();
+      expect(observation.events.indexOf(requeued!)).toBeLessThan(observation.events.indexOf(discarded!));
+      expect(observation.events.filter(isCurrentPublication)).toHaveLength(0);
+      expect(JSON.stringify(await Promise.resolve(harness.treeDataProvider?.getChildren())))
+        .not.toContain("Couldn't load Aurelia resources");
+
+      trailing.resolve(inventorySnapshot("file:///work/a", "file:///work/b"));
+      await vi.waitFor(() => expect(observation.events.filter(isCurrentPublication)).toHaveLength(1));
+      const current = observation.events.find(isCurrentPublication)!;
+      expect(observation.events.indexOf(discarded!)).toBeLessThan(observation.events.indexOf(current));
+      expect(current).toEqual(expect.objectContaining({ workspaceIdentity: null, fingerprint: null }));
+      expect(harness.view.message).toBeUndefined();
+      expect(getResourceInventory.mock.calls.map(([options]) => options)).toEqual([
+        { includeTypeSurfaces: true },
+        { includeTypeSurfaces: true },
+        { includeTypeSurfaces: true },
+      ]);
+    } finally {
+      predecessor.resolve(failedInventorySnapshot("file:///work/a", "file:///work/b"));
+      trailing.resolve(inventorySnapshot("file:///work/a", "file:///work/b"));
+      harness.dispose();
+      observation.dispose();
+    }
   });
 
   test("allows held workspace A to publish when only unrelated workspace B is invalidated", async () => {
@@ -821,3 +1034,54 @@ describe("ViewsFeature resource inventory lifecycle", () => {
     expect(harness.getResourceInventory).toHaveBeenCalledOnce();
   });
 });
+
+function captureViewObservations(): {
+  readonly events: ExtensionHostObservation[];
+  dispose(): void;
+} {
+  return captureResourceDiscoveryObservations("resource-explorer-view");
+}
+
+function captureResourceDiscoveryObservations(...sources: readonly string[]): {
+  readonly events: ExtensionHostObservation[];
+  dispose(): void;
+} {
+  const observationEnv = "AURELIA_LS_EXTENSION_HOST_OBSERVATION";
+  const acceptanceEnv = "AURELIA_LS_RESOURCE_DISCOVERY_HOST_ACCEPTANCE";
+  const previousObservation = process.env[observationEnv];
+  const previousAcceptance = process.env[acceptanceEnv];
+  const events: ExtensionHostObservation[] = [];
+  const admittedSources = new Set(sources);
+  const listener = (event: ExtensionHostObservation): void => {
+    if (admittedSources.has(event.source)) events.push(event);
+  };
+  process.env[observationEnv] = "1";
+  process.env[acceptanceEnv] = "1";
+  process.on(EXTENSION_HOST_OBSERVATION_EVENT, listener);
+  return {
+    events,
+    dispose: () => {
+      process.off(EXTENSION_HOST_OBSERVATION_EVENT, listener);
+      if (previousObservation == null) delete process.env[observationEnv];
+      else process.env[observationEnv] = previousObservation;
+      if (previousAcceptance == null) delete process.env[acceptanceEnv];
+      else process.env[acceptanceEnv] = previousAcceptance;
+    },
+  };
+}
+
+function isUpdatingPublication(event: ExtensionHostObservation): boolean {
+  return event.source === "resource-explorer"
+    && event.phase === "publish-complete"
+    && event.publicationKind === "updating";
+}
+
+function isCurrentPublication(event: ExtensionHostObservation): boolean {
+  return event.source === "resource-explorer"
+    && event.phase === "publish-complete"
+    && event.publicationKind === "current";
+}
+
+function isObservationPrimitive(value: unknown): boolean {
+  return value == null || ["string", "number", "boolean"].includes(typeof value);
+}

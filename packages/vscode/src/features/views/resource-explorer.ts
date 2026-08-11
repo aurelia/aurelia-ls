@@ -11,6 +11,7 @@ import type {
   TreeItem,
   TreeView,
 } from "vscode";
+import { createHash } from "node:crypto";
 import type { LspFacade } from "../../core/lsp-facade.js";
 import type { ClientLogger } from "../../log.js";
 import { AureliaCommand, AureliaContext } from "../../product-contract.js";
@@ -21,6 +22,11 @@ import type {
   ResourceNavigationRequest,
 } from "../../types.js";
 import type { VscodeApi } from "../../vscode-api.js";
+import {
+  emitResourceDiscoveryHostObservation,
+  nextResourceDiscoveryHostObservationId,
+  resourceDiscoveryHostAcceptanceEnabled,
+} from "../../resource-discovery-host-control.js";
 import {
   RESOURCE_KIND_ORDER,
   preferredResourceSource,
@@ -40,6 +46,10 @@ import {
 
 type TreeNodeKind = "project" | "kind" | "resource" | "alias" | "bindable" | "info";
 type ResourceExplorerPhase = { readonly kind: "empty" | "loading" | "current" | "failed" };
+type ResourceExplorerObservedRowState =
+  | ResourceTreeRowState
+  | "metadata-incomplete"
+  | "non-navigable";
 
 interface TreeNode {
   readonly nodeKind: TreeNodeKind;
@@ -56,6 +66,11 @@ interface TreeNode {
   readonly implementationNavigation?: ResourceNavigationRequest;
   readonly retryWorkspaceKey?: string;
   readonly contextValue: string;
+  /** Exact build-time state facts used only by the gated host observation. */
+  readonly observationStates: readonly ResourceExplorerObservedRowState[];
+  readonly observationAnswerResult?: string | null;
+  readonly observationAnswerCoverage?: string | null;
+  readonly observationAnswerRowCount?: number | null;
 }
 
 interface ReadyProjectInput {
@@ -181,10 +196,24 @@ function projectRootNode(
       : issueKind === "unsupported"
         ? "resourceProjectUnsupported"
         : "resourceProject",
+    observationStates: states,
+    ...(resourceDiscoveryHostAcceptanceEnabled() ? projectAnswerObservation(unit) : {}),
   };
 }
 
 function buildProjectUnit(
+  unit: ProjectUnit,
+  states: readonly ResourceTreeRowState[],
+  projectScent: string,
+  collisionScents: ReadonlyMap<object, string>,
+): readonly TreeNode[] {
+  const nodes = buildProjectUnitCore(unit, states, projectScent, collisionScents);
+  return resourceDiscoveryHostAcceptanceEnabled()
+    ? withProjectAnswerObservation(nodes, unit)
+    : nodes;
+}
+
+function buildProjectUnitCore(
   unit: ProjectUnit,
   states: readonly ResourceTreeRowState[],
   projectScent: string,
@@ -280,6 +309,7 @@ function buildKindGroups(input: ReadyProjectInput): readonly TreeNode[] {
       collapsible: true,
       children: rows.map((resource) => resourceNode(input, resource)),
       contextValue: "resourceKind",
+      observationStates: input.states,
     });
   }
   return nodes;
@@ -336,6 +366,7 @@ function resourceNode(
       collapsible: false,
       ...(navigable ? { navigation: navigationRequest(input, resource, "alias", alias.identityKey) } : {}),
       contextValue: navigable ? "resourceAlias" : "resourceAliasUnavailable",
+      observationStates: observationStates(input.states, resource.metadataState, navigable),
     });
   }
   for (const bindable of resource.bindables) {
@@ -376,6 +407,7 @@ function resourceNode(
       collapsible: false,
       ...(navigable ? { navigation: navigationRequest(input, resource, "bindable", bindable.identityKey) } : {}),
       contextValue: navigable ? "resourceBindable" : "resourceBindableUnavailable",
+      observationStates: observationStates(input.states, resource.metadataState, navigable),
     });
   }
   const navigable = resource.navigation.state === "available";
@@ -408,6 +440,7 @@ function resourceNode(
       : implementationNavigation == null
         ? "resource"
         : "resourceWithImplementation",
+    observationStates: observationStates(input.states, resource.metadataState, navigable),
   };
 }
 
@@ -575,6 +608,7 @@ function infoNode(
     iconId,
     collapsible: false,
     contextValue: "resourceInfo",
+    observationStates: states,
   };
 }
 
@@ -691,6 +725,7 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Dis
   readonly #lsp: LspFacade;
   readonly #logger: ClientLogger;
   readonly #runWithProgress: ResourceExplorerProgressRunner;
+  readonly #observationId = nextResourceDiscoveryHostObservationId("resource-explorer");
   readonly #changeEmitter: { readonly event: Event<void>; fire(): void; dispose(): void };
   #tree: readonly TreeNode[] = [];
   #response: ResourceInventorySnapshot | null = null;
@@ -700,6 +735,8 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Dis
   #updatingAll = false;
   readonly #updatingWorkspaceKeys = new Set<string>();
   #refreshGeneration = 0;
+  #publicationWorkspaceKey: string | null = null;
+  #publicationFingerprint: string | null = null;
   #issueContext: boolean | null = null;
 
   constructor(
@@ -790,7 +827,10 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Dis
   markUpdating(workspaceKey: string | null): void {
     const changed = this.#markUpdating(workspaceKey);
     if (!changed || this.#response == null) return;
+    this.#publicationWorkspaceKey = workspaceKey;
+    this.#publicationFingerprint = null;
     this.#rebuildTree();
+    this.#observeTreePublication("updating");
     this.#changeEmitter.fire();
     this.#publishViewState();
   }
@@ -810,6 +850,8 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Dis
     const hasPrevious = this.#response != null;
     const hadTree = this.#tree.length > 0;
     const workspaceKey = hasPrevious ? requestedWorkspaceKey : null;
+    this.#publicationWorkspaceKey = workspaceKey;
+    this.#publicationFingerprint = null;
     if (hasPrevious) {
       this.#phase = { kind: "current" };
       this.markUpdating(workspaceKey);
@@ -817,7 +859,10 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Dis
       this.#phase = { kind: "loading" };
       this.#tree = [];
       this.#rebuildTree();
-      if (hadTree) this.#changeEmitter.fire();
+      if (hadTree) {
+        this.#observeTreePublication("loading");
+        this.#changeEmitter.fire();
+      }
       this.#publishViewState();
     }
     try {
@@ -826,7 +871,16 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Dis
         ...(workspaceKey == null ? {} : { workspaceKey }),
         includeTypeSurfaces: true,
       }));
-      if (generation !== this.#refreshGeneration) return;
+      if (generation !== this.#refreshGeneration) {
+        this.#observe("discarded", {
+          generation,
+          currentGeneration: this.#refreshGeneration,
+          reason: "superseded",
+          workspaceIdentity: observedIdentity("workspace", workspaceKey),
+          fingerprint: responseFingerprintForWorkspace(response, workspaceKey),
+        });
+        return;
+      }
       const admission = admitResourceInventorySnapshot(this.#response, workspaceKey, response);
       this.#response = admission.snapshot;
       this.#clearUpdating(workspaceKey);
@@ -841,7 +895,9 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Dis
         this.#staleWorkspaceKeys.delete(workspaceKey);
       }
       this.#phase = { kind: "current" };
+      this.#publicationFingerprint = responseFingerprintForWorkspace(response, workspaceKey);
       this.#rebuildTree();
+      this.#observeTreePublication("current");
       this.#changeEmitter.fire();
       this.#publishViewState();
       this.#logger.debug("resourceExplorer.refresh.complete", resourceResponseCounts(this.#response));
@@ -869,6 +925,7 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Dis
         }
         this.#rebuildTree();
       }
+      this.#observeTreePublication(hasPrevious ? "out-of-date" : "failed");
       this.#changeEmitter.fire();
       this.#publishViewState();
     }
@@ -908,6 +965,16 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Dis
       || counts.failures > 0
       || counts.incomplete > 0,
     );
+    this.#observe("view-state", {
+      generation: this.#refreshGeneration,
+      state: this.#phase.kind,
+      message: this.#view?.message ?? null,
+      description: this.#view?.description ?? null,
+      hasIssues: this.#issueContext === true,
+      updatingAll: this.#updatingAll,
+      updatingWorkspaceCount: this.#updatingWorkspaceKeys.size,
+      staleWorkspaceCount: this.#staleWorkspaceKeys.size,
+    });
   }
 
   #viewMessage(counts: ReturnType<typeof resourceResponseCounts>): string | undefined {
@@ -984,18 +1051,175 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Dis
       });
     });
   }
+
+  #observeTreePublication(publicationKind: string): void {
+    if (this.#observationId == null) return;
+    this.#observe("publish-start", {
+      generation: this.#refreshGeneration,
+      publicationKind,
+      workspaceIdentity: observedIdentity("workspace", this.#publicationWorkspaceKey),
+      fingerprint: this.#publicationFingerprint,
+      rootCount: this.#tree.length,
+    });
+    let ordinal = 0;
+    const visit = (nodes: readonly TreeNode[], parentId: string | null): void => {
+      for (const node of nodes) {
+        const nodeId = observedIdentity("tree-node", node.id)!;
+        this.#observe("publish-node", {
+          generation: this.#refreshGeneration,
+          publicationKind,
+          ordinal: ordinal++,
+          parentId,
+          nodeId,
+          nodeKind: node.nodeKind,
+          label: node.label,
+          description: node.description ?? null,
+          accessibilityLabel: node.accessibilityLabel,
+          contextValue: node.contextValue,
+          command: node.navigation == null ? null : AureliaCommand.OpenResource,
+          navigationWorkspaceIdentity: observedIdentity("workspace", node.navigation?.workspaceKey ?? null),
+          navigationProjectKey: node.navigation?.projectKey ?? null,
+          navigationFingerprint: node.navigation?.fingerprint ?? null,
+          navigationResourceIdentity: node.navigation?.resourceIdentityKey ?? null,
+          navigationChildIdentity: node.navigation?.childIdentityKey ?? null,
+          navigationRole: node.navigation?.role ?? null,
+          navigationPlacement: node.navigation == null ? null : node.navigation.placement ?? "preview",
+          implementationAvailable: node.implementationNavigation != null,
+          implementationWorkspaceIdentity: observedIdentity(
+            "workspace",
+            node.implementationNavigation?.workspaceKey ?? null,
+          ),
+          implementationProjectKey: node.implementationNavigation?.projectKey ?? null,
+          implementationFingerprint: node.implementationNavigation?.fingerprint ?? null,
+          implementationResourceIdentity: node.implementationNavigation?.resourceIdentityKey ?? null,
+          implementationRole: node.implementationNavigation?.role ?? null,
+          implementationPlacement: node.implementationNavigation == null
+            ? null
+            : node.implementationNavigation.placement ?? "preview",
+          collapsible: node.collapsible,
+          defaultExpanded: node.defaultExpanded === true,
+          rowStates: node.observationStates.join("|"),
+          answerResult: node.observationAnswerResult ?? null,
+          answerCoverage: node.observationAnswerCoverage ?? null,
+          answerRowCount: node.observationAnswerRowCount ?? null,
+        });
+        visit(node.children ?? [], nodeId);
+      }
+    };
+    visit(this.#tree, null);
+    this.#observe("publish-complete", {
+      generation: this.#refreshGeneration,
+      publicationKind,
+      nodeCount: ordinal,
+      rootCount: this.#tree.length,
+      workspaceIdentity: observedIdentity("workspace", this.#publicationWorkspaceKey),
+      fingerprint: this.#publicationFingerprint,
+    });
+  }
+
+  #observe(
+    phase: string,
+    detail: Readonly<Record<string, string | number | boolean | null | undefined>>,
+  ): void {
+    if (this.#observationId == null) return;
+    emitResourceDiscoveryHostObservation({
+      source: "resource-explorer",
+      observationId: this.#observationId,
+      phase,
+      ...detail,
+    });
+  }
+}
+
+function projectAnswerObservation(unit: ProjectUnit): {
+  readonly observationAnswerResult: string | null;
+  readonly observationAnswerCoverage: string | null;
+  readonly observationAnswerRowCount: number | null;
+} {
+  if (unit.result?.status !== "ready") {
+    return {
+      observationAnswerResult: null,
+      observationAnswerCoverage: null,
+      observationAnswerRowCount: null,
+    };
+  }
+  return {
+    observationAnswerResult: unit.result.answer.result,
+    observationAnswerCoverage: unit.result.answer.coverage,
+    observationAnswerRowCount: unit.result.resources.length,
+  };
+}
+
+function withProjectAnswerObservation(
+  nodes: readonly TreeNode[],
+  unit: ProjectUnit,
+): readonly TreeNode[] {
+  const observation = projectAnswerObservation(unit);
+  return nodes.map((node) => ({
+    ...node,
+    ...observation,
+    ...(node.children == null
+      ? {}
+      : { children: withProjectAnswerObservation(node.children, unit) }),
+  }));
 }
 
 function currentNode(tree: readonly TreeNode[], candidate: unknown): TreeNode | null {
   if (candidate == null || typeof candidate !== "object" || !("id" in candidate)) return null;
   const id = (candidate as { readonly id?: unknown }).id;
   if (typeof id !== "string") return null;
+  return currentNodeById(tree, id, resourceDiscoveryHostAcceptanceEnabled());
+}
+
+function currentNodeById(
+  tree: readonly TreeNode[],
+  id: string,
+  allowObservedIdentity: boolean,
+): TreeNode | null {
   for (const node of tree) {
-    if (node.id === id) return node;
-    const nested = currentNode(node.children ?? [], candidate);
+    if (
+      node.id === id
+      || (allowObservedIdentity && observedIdentity("tree-node", node.id) === id)
+    ) return node;
+    const nested = currentNodeById(node.children ?? [], id, allowObservedIdentity);
     if (nested != null) return nested;
   }
   return null;
+}
+
+function observedIdentity(prefix: string, value: string | null): string | null {
+  if (value == null) return null;
+  return `${prefix}:${createHash("sha256").update(value).digest("hex")}`;
+}
+
+function responseFingerprintForWorkspace(
+  response: ResourceInventorySnapshot | null,
+  workspaceKey: string | null,
+): string | null {
+  if (response == null) return null;
+  if (workspaceKey == null) {
+    if (response.workspaces.length !== 1) return null;
+    const [workspace] = response.workspaces;
+    return workspace?.status === "ready" ? workspace.response.fingerprint : null;
+  }
+  const ready = response.workspaces.flatMap((workspace) =>
+    workspace.status === "ready" && workspace.key === workspaceKey
+      ? [workspace.response.fingerprint]
+      : []
+  );
+  return ready.length === 1 ? ready[0]! : null;
+}
+
+function observationStates(
+  states: readonly ResourceTreeRowState[],
+  metadataState: ResourceInventoryItem["metadataState"],
+  navigable: boolean,
+): readonly ResourceExplorerObservedRowState[] {
+  return [
+    ...states,
+    ...(metadataState === "full-definition" ? [] : ["metadata-incomplete" as const]),
+    ...(navigable ? [] : ["non-navigable" as const]),
+  ];
 }
 
 function admitResourceInventorySnapshot(

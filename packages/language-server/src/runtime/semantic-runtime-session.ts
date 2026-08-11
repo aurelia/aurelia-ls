@@ -51,6 +51,7 @@ import {
 import type { DocumentUri, WorkspaceDocumentUris } from "../utils/document-uri.js";
 import { languageIdForSource } from "../utils/document-kind.js";
 import { stableDigest } from "../utils/stable-digest.js";
+import { loadExtensionHostTestSemanticWorkspaceDescriptor } from "./extension-host-test-topology.js";
 
 export interface SemanticRuntimeLspOpenDocumentMetadata {
   readonly uri: DocumentUri;
@@ -1783,17 +1784,20 @@ function semanticWorkspaceBoundary(
       descriptor: null,
     };
   }
-  const descriptor = semanticWorkspaceDescriptorForRuntimeOptions({
+  const testDescriptor = loadExtensionHostTestSemanticWorkspaceDescriptor(documentUris.workspaceRoot);
+  const descriptor = testDescriptor ?? semanticWorkspaceDescriptorForRuntimeOptions({
     workspaceRoot: documentUris.workspaceRoot,
     excludedWorkspaceRoots: documentUris.excludedWorkspaceRoots,
     projectRootHints,
   });
-  if (descriptor.projectTopology.kind !== 'discover') {
-    throw new Error('LSP workspace topology must use semantic-runtime project discovery.');
+  if (testDescriptor == null && descriptor.projectTopology.kind !== 'discover') {
+    throw new Error('Ordinary LSP workspace topology must use semantic-runtime project discovery.');
   }
   return {
     key: semanticWorkspaceDescriptorKey(descriptor),
-    projectRootHints: descriptor.projectTopology.projectRootHints,
+    projectRootHints: descriptor.projectTopology.kind === 'discover'
+      ? descriptor.projectTopology.projectRootHints
+      : [],
     descriptor,
   };
 }

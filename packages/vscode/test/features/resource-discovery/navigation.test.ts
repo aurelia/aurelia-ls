@@ -1,4 +1,8 @@
 import { describe, expect, test, vi } from "vitest";
+import {
+  EXTENSION_HOST_OBSERVATION_EVENT,
+  type ExtensionHostObservation,
+} from "../../../out/extension-host-observation.js";
 import { openResourceNavigation } from "../../../out/features/resource-discovery/navigation.js";
 import type { ResourceNavigationRequest } from "../../../out/types.js";
 import type { VscodeApi } from "../../../out/vscode-api.js";
@@ -86,6 +90,137 @@ function harness(response: unknown) {
 }
 
 describe("openResourceNavigation", () => {
+  test("observes exact re-resolution and opened URI, range, role, and placement", async () => {
+    const observation = captureNavigationObservations();
+    try {
+      const current = harness(inventory());
+      await expect(openResourceNavigation(
+        current.vscode,
+        current.lsp as never,
+        current.logger as never,
+        { ...request("implementation"), placement: "beside" },
+      )).resolves.toBe(true);
+
+      expect(observation.events).toEqual([
+        expect.objectContaining({
+          phase: "start",
+          requestedFingerprint: "stale",
+          workspaceKey: "file:///repo",
+          projectKey: "app",
+          resourceIdentity: "resource:card",
+          childIdentity: null,
+          role: "implementation",
+          placement: "beside",
+        }),
+        expect.objectContaining({ phase: "refreshed", currentFingerprint: "current" }),
+        expect.objectContaining({
+          phase: "opened",
+          currentFingerprint: "current",
+          uri: "file:///repo/src/product-card.ts",
+          startLine: 11,
+          startCharacter: 2,
+          endLine: 11,
+          endCharacter: 14,
+        }),
+      ]);
+      expect(new Set(observation.events.map((event) => event.observationId))).toHaveLength(1);
+      expect(observation.events.every(Object.isFrozen)).toBe(true);
+      expect(observation.events.every((event) => Object.values(event).every(isObservationPrimitive))).toBe(true);
+    } finally {
+      observation.dispose();
+    }
+  });
+
+  test("observes a conclusive refusal and authenticates that the editor did not move", async () => {
+    const observation = captureNavigationObservations();
+    try {
+      const response = inventory() as any;
+      response.workspaces[0].response.projects[0].resources = [];
+      const current = harness(response);
+
+      await expect(openResourceNavigation(
+        current.vscode,
+        current.lsp as never,
+        current.logger as never,
+        request("resource"),
+      )).resolves.toBe(false);
+
+      expect(observation.events).toEqual([
+        expect.objectContaining({ phase: "start", role: "resource", placement: "preview" }),
+        expect.objectContaining({
+          phase: "refused",
+          category: "resource-removed",
+          currentFingerprint: "current",
+          editorUnchanged: true,
+          message: "That Aurelia resource no longer exists in the current analysis.",
+        }),
+      ]);
+      expect(observation.events.some((event) => event.phase === "opened")).toBe(false);
+      expect(current.recorded.shownDocuments).toEqual([]);
+    } finally {
+      observation.dispose();
+    }
+  });
+
+  test("isolates hostile editor capture, editor re-read, and observation emission", async () => {
+    const observation = captureNavigationObservations();
+    const throwOnOpened = (event: ExtensionHostObservation): void => {
+      if (event.source === "resource-navigation" && event.phase === "opened") {
+        throw new Error("hostile navigation observation listener");
+      }
+    };
+    process.on(EXTENSION_HOST_OBSERVATION_EVENT, throwOnOpened);
+    try {
+      const captureFailure = harness(inventory());
+      Object.defineProperty(captureFailure.vscode.window, "activeTextEditor", {
+        configurable: true,
+        get: () => { throw new Error("hostile initial editor getter"); },
+      });
+
+      await expect(openResourceNavigation(
+        captureFailure.vscode,
+        captureFailure.lsp as never,
+        captureFailure.logger as never,
+        request("resource"),
+      )).resolves.toBe(true);
+      expect(captureFailure.recorded.openedDocuments.at(-1)?.uri.toString()).toBe(
+        "file:///repo/src/product-card.ts",
+      );
+      expect(observation.events).toContainEqual(expect.objectContaining({
+        phase: "opened",
+        resourceIdentity: "resource:card",
+      }));
+
+      const removedResponse = inventory() as any;
+      removedResponse.workspaces[0].response.projects[0].resources = [];
+      const reReadFailure = harness(removedResponse);
+      let editorReads = 0;
+      Object.defineProperty(reReadFailure.vscode.window, "activeTextEditor", {
+        configurable: true,
+        get: () => {
+          editorReads += 1;
+          if (editorReads === 1) return undefined;
+          throw new Error("hostile editor re-read");
+        },
+      });
+
+      await expect(openResourceNavigation(
+        reReadFailure.vscode,
+        reReadFailure.lsp as never,
+        reReadFailure.logger as never,
+        request("resource"),
+      )).resolves.toBe(false);
+      expect(editorReads).toBe(2);
+      expect(reReadFailure.recorded.infoMessages).toEqual([
+        "That Aurelia resource no longer exists in the current analysis.",
+      ]);
+      expect(reReadFailure.recorded.openedDocuments).toEqual([]);
+    } finally {
+      process.off(EXTENSION_HOST_OBSERVATION_EVENT, throwOnOpened);
+      observation.dispose();
+    }
+  });
+
   test.each([
     ["resource", undefined, 3],
     ["implementation", undefined, 11],
@@ -155,7 +290,11 @@ describe("openResourceNavigation", () => {
       shifted.lsp as never,
       shifted.logger as never,
       { ...request("resource"), currentness: "strict-snapshot" },
-    )).rejects.toMatchObject({ code: "AURELIA_RESOURCE_SNAPSHOT_CHANGED" });
+    )).rejects.toMatchObject({
+      code: "AURELIA_RESOURCE_SNAPSHOT_CHANGED",
+      currentFingerprint: "current",
+      resourcePresence: "present",
+    });
     expect(shifted.recorded.infoMessages).toEqual([]);
     expect(shifted.recorded.shownDocuments).toEqual([]);
 
@@ -165,7 +304,11 @@ describe("openResourceNavigation", () => {
       missingWorkspace.lsp as never,
       missingWorkspace.logger as never,
       { ...request("resource"), currentness: "strict-snapshot" },
-    )).rejects.toMatchObject({ code: "AURELIA_RESOURCE_SNAPSHOT_CHANGED" });
+    )).rejects.toMatchObject({
+      code: "AURELIA_RESOURCE_SNAPSHOT_CHANGED",
+      currentFingerprint: null,
+      resourcePresence: "unconfirmed",
+    });
     expect(missingWorkspace.recorded.infoMessages).toEqual([]);
 
     const unsupportedResponse = inventory() as any;
@@ -176,8 +319,63 @@ describe("openResourceNavigation", () => {
       unsupported.lsp as never,
       unsupported.logger as never,
       { ...request("resource"), currentness: "strict-snapshot" },
-    )).rejects.toMatchObject({ code: "AURELIA_RESOURCE_SNAPSHOT_CHANGED" });
+    )).rejects.toMatchObject({
+      code: "AURELIA_RESOURCE_SNAPSHOT_CHANGED",
+      currentFingerprint: "current",
+      resourcePresence: "unconfirmed",
+    });
     expect(unsupported.recorded.infoMessages).toEqual([]);
+
+    const absentResponse = inventory() as any;
+    absentResponse.workspaces[0].response.projects[0].resources = [];
+    const absent = harness(absentResponse);
+    await expect(openResourceNavigation(
+      absent.vscode,
+      absent.lsp as never,
+      absent.logger as never,
+      { ...request("resource"), currentness: "strict-snapshot" },
+    )).rejects.toMatchObject({
+      currentFingerprint: "current",
+      resourcePresence: "absent",
+    });
+
+    absentResponse.workspaces[0].response.projects[0].answer.coverage = "open";
+    const unconfirmed = harness(absentResponse);
+    await expect(openResourceNavigation(
+      unconfirmed.vscode,
+      unconfirmed.lsp as never,
+      unconfirmed.logger as never,
+      { ...request("resource"), currentness: "strict-snapshot" },
+    )).rejects.toMatchObject({
+      currentFingerprint: "current",
+      resourcePresence: "unconfirmed",
+    });
+  });
+
+  test("does not capture editor facts when the resource-discovery observation gate is disabled", async () => {
+    const previousObservation = process.env.AURELIA_LS_EXTENSION_HOST_OBSERVATION;
+    const previousAcceptance = process.env.AURELIA_LS_RESOURCE_DISCOVERY_HOST_ACCEPTANCE;
+    process.env.AURELIA_LS_EXTENSION_HOST_OBSERVATION = "1";
+    process.env.AURELIA_LS_RESOURCE_DISCOVERY_HOST_ACCEPTANCE = "0";
+    try {
+      const current = harness(inventory());
+      const editorRead = vi.fn(() => null);
+      Object.defineProperty(current.vscode.window, "activeTextEditor", {
+        configurable: true,
+        get: editorRead,
+      });
+
+      await expect(openResourceNavigation(
+        current.vscode,
+        current.lsp as never,
+        current.logger as never,
+        request("resource"),
+      )).resolves.toBe(true);
+      expect(editorRead).not.toHaveBeenCalled();
+    } finally {
+      restoreEnvironment("AURELIA_LS_EXTENSION_HOST_OBSERVATION", previousObservation);
+      restoreEnvironment("AURELIA_LS_RESOURCE_DISCOVERY_HOST_ACCEPTANCE", previousAcceptance);
+    }
   });
 
   test.each(["failed", "invalid"] as const)(
@@ -309,3 +507,39 @@ describe("openResourceNavigation", () => {
     expect([...workspaceHarness.recorded.infoMessages, ...projectHarness.recorded.infoMessages]).toEqual([]);
   });
 });
+
+function captureNavigationObservations(): {
+  readonly events: ExtensionHostObservation[];
+  dispose(): void;
+} {
+  const observationEnv = "AURELIA_LS_EXTENSION_HOST_OBSERVATION";
+  const acceptanceEnv = "AURELIA_LS_RESOURCE_DISCOVERY_HOST_ACCEPTANCE";
+  const previousObservation = process.env[observationEnv];
+  const previousAcceptance = process.env[acceptanceEnv];
+  const events: ExtensionHostObservation[] = [];
+  const listener = (event: ExtensionHostObservation): void => {
+    if (event.source === "resource-navigation") events.push(event);
+  };
+  process.env[observationEnv] = "1";
+  process.env[acceptanceEnv] = "1";
+  process.on(EXTENSION_HOST_OBSERVATION_EVENT, listener);
+  return {
+    events,
+    dispose: () => {
+      process.off(EXTENSION_HOST_OBSERVATION_EVENT, listener);
+      if (previousObservation == null) delete process.env[observationEnv];
+      else process.env[observationEnv] = previousObservation;
+      if (previousAcceptance == null) delete process.env[acceptanceEnv];
+      else process.env[acceptanceEnv] = previousAcceptance;
+    },
+  };
+}
+
+function isObservationPrimitive(value: unknown): boolean {
+  return value == null || ["string", "number", "boolean"].includes(typeof value);
+}
+
+function restoreEnvironment(key: string, value: string | undefined): void {
+  if (value == null) delete process.env[key];
+  else process.env[key] = value;
+}

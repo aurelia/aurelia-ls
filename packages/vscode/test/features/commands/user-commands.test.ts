@@ -27,6 +27,9 @@ const answer = {
 };
 
 const EXTENSION_HOST_OBSERVATION_ENV = "AURELIA_LS_EXTENSION_HOST_OBSERVATION";
+const RESOURCE_DISCOVERY_ACCEPTANCE_ENV = "AURELIA_LS_RESOURCE_DISCOVERY_HOST_ACCEPTANCE";
+const PRODUCT_CARD_IDENTITY_SET_SHA256 = "12774ad4796e4569fdaf7e6d636db60708028fe3d950b03503d50cedb19a6787";
+const EMPTY_RESOURCE_IDENTITY_SET_SHA256 = "327fd628cccfccf19e15da66a13fecc7d024224d58d78510a9677f3f10256d3a";
 
 function available(uri: string, role = "public-name", line = 3, label = "src/product-card.ts@42..54") {
   return {
@@ -153,6 +156,17 @@ function exactAvailability() {
       },
     },
   };
+}
+
+function availabilityWithThrowingObservationMap() {
+  const response = exactAvailability();
+  response.projectSelection.resources = new Proxy(response.projectSelection.resources, {
+    get: (target, property, receiver) => {
+      if (property === "map") throw new Error("observation-only identity hashing failed");
+      return Reflect.get(target, property, receiver);
+    },
+  });
+  return response;
 }
 
 function stagedAvailability(
@@ -369,7 +383,7 @@ function createHarness(input: {
     document: { uri, version: 7 },
     selection: { active: { line: 8, character: 5 } },
   };
-  return { recorded, getResourceInventory, getTemplateResourceAvailability, getRelatedFiles };
+  return { recorded, getResourceInventory, getTemplateResourceAvailability, getRelatedFiles, vscode: stubVscode };
 }
 
 describe("UserCommandsFeature", () => {
@@ -1303,32 +1317,213 @@ describe("UserCommandsFeature", () => {
   });
 
   test("silently re-proves availability after an inventory fingerprint shift and refuses a removed row", async () => {
-    const initial = exactAvailability();
-    initial.fingerprint = "semantic-runtime:f1";
-    const freshF1 = exactAvailability();
-    freshF1.fingerprint = "semantic-runtime:f1";
-    const freshF2 = exactAvailability();
-    freshF2.fingerprint = "semantic-runtime:f2";
-    freshF2.projectSelection.resources = [];
-    const availability = vi.fn()
-      .mockReturnValueOnce(initial)
-      .mockReturnValueOnce(freshF1)
-      .mockReturnValueOnce(freshF2);
-    const harness = createHarness({ availability });
-    harness.getResourceInventory.mockResolvedValue(inventory([resource()], "complete", "semantic-runtime:f2"));
+    const observations = captureExtensionHostObservations();
+    try {
+      const initial = exactAvailability();
+      initial.fingerprint = "semantic-runtime:f1";
+      const freshF1 = exactAvailability();
+      freshF1.fingerprint = "semantic-runtime:f1";
+      const freshF2 = exactAvailability();
+      freshF2.fingerprint = "semantic-runtime:f2";
+      freshF2.projectSelection.resources = [];
+      const availability = vi.fn()
+        .mockReturnValueOnce(initial)
+        .mockReturnValueOnce(freshF1)
+        .mockReturnValueOnce(freshF2);
+      const harness = createHarness({ availability });
+      harness.getResourceInventory.mockResolvedValue(inventory([resource()], "complete", "semantic-runtime:f2"));
 
-    const command = harness.recorded.commandHandlers.get(AureliaCommand.GoToAvailableResource)?.();
-    await vi.waitFor(() => expect(harness.recorded.quickPicks[0]?.items).toHaveLength(1));
-    harness.recorded.quickPicks[0]!.accept(0);
-    await command;
+      const command = harness.recorded.commandHandlers.get(AureliaCommand.GoToAvailableResource)?.();
+      await vi.waitFor(() => expect(harness.recorded.quickPicks[0]?.items).toHaveLength(1));
+      harness.recorded.quickPicks[0]!.accept(0);
+      await command;
 
-    expect(availability).toHaveBeenCalledTimes(3);
-    expect(harness.getResourceInventory).toHaveBeenCalledOnce();
-    expect(harness.recorded.errorMessageRequests).toEqual([]);
-    expect(harness.recorded.infoMessages).toContain(
-      "That resource is no longer available to the current template scope.",
-    );
-    expect(harness.recorded.openedDocuments).toEqual([]);
+      expect(availability).toHaveBeenCalledTimes(3);
+      expect(harness.getResourceInventory).toHaveBeenCalledOnce();
+      expect(harness.recorded.errorMessageRequests).toEqual([]);
+      const message = "That resource is no longer available to the current template scope.";
+      expect(harness.recorded.infoMessages).toContain(message);
+      const events = commandObservations(observations.events);
+      expect(events).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          phase: "navigation-stale-retry",
+          currentFingerprint: "semantic-runtime:f2",
+          resourcePresence: "present",
+        }),
+        expect.objectContaining({
+          phase: "refused",
+          category: "availability-changed",
+          currentFingerprint: "semantic-runtime:f2",
+          editorUnchanged: true,
+          message,
+          resourcePresence: "present",
+        }),
+      ]));
+      expect(events.findIndex((event) => event.phase === "refused")).toBeGreaterThan(
+        events.findLastIndex((event) => event.phase === "revalidation"),
+      );
+      expect(harness.recorded.openedDocuments).toEqual([]);
+    } finally {
+      observations.dispose();
+    }
+  });
+
+  test.each([
+    ["absent", "complete", "resource-removed", "That resource is no longer available to the current template scope."],
+    ["unconfirmed", "open", "unconfirmed", "That resource is no longer available to the current template scope."],
+  ] as const)(
+    "classifies a fresh complete missing row from neutral inventory evidence: %s",
+    async (resourcePresence, inventoryCoverage, category, message) => {
+      const observations = captureExtensionHostObservations();
+      try {
+        const initial = exactAvailability();
+        initial.fingerprint = "semantic-runtime:f1";
+        const freshF1 = exactAvailability();
+        freshF1.fingerprint = "semantic-runtime:f1";
+        const freshF2 = exactAvailability();
+        freshF2.fingerprint = "semantic-runtime:f2";
+        freshF2.projectSelection.resources = [];
+        const availability = vi.fn()
+          .mockReturnValueOnce(initial)
+          .mockReturnValueOnce(freshF1)
+          .mockReturnValueOnce(freshF2);
+        const harness = createHarness({ availability });
+        harness.getResourceInventory.mockResolvedValue(inventory([], inventoryCoverage, "semantic-runtime:f2"));
+
+        const command = harness.recorded.commandHandlers.get(AureliaCommand.GoToAvailableResource)?.();
+        await vi.waitFor(() => expect(harness.recorded.quickPicks[0]?.items).toHaveLength(1));
+        harness.recorded.quickPicks[0]!.accept(0);
+        await command;
+
+        expect(availability).toHaveBeenCalledTimes(3);
+        expect(harness.recorded.openedDocuments).toEqual([]);
+        expect(harness.recorded.infoMessages).toContain(message);
+        expect(commandObservations(observations.events)).toEqual(expect.arrayContaining([
+          expect.objectContaining({
+            phase: "navigation-stale-retry",
+            currentFingerprint: "semantic-runtime:f2",
+            resourcePresence,
+          }),
+          expect.objectContaining({
+            phase: "refused",
+            category,
+            currentFingerprint: "semantic-runtime:f2",
+            editorUnchanged: true,
+            message,
+            resourcePresence,
+          }),
+        ]));
+      } finally {
+        observations.dispose();
+      }
+    },
+  );
+
+  test("keeps exact public refusal copy identical with host observations on and off", async () => {
+    const runRemoval = async () => {
+      const initial = exactAvailability();
+      initial.fingerprint = "semantic-runtime:f1";
+      const freshF1 = exactAvailability();
+      freshF1.fingerprint = "semantic-runtime:f1";
+      const freshF2 = exactAvailability();
+      freshF2.fingerprint = "semantic-runtime:f2";
+      freshF2.projectSelection.resources = [];
+      const availability = vi.fn()
+        .mockReturnValueOnce(initial)
+        .mockReturnValueOnce(freshF1)
+        .mockReturnValueOnce(freshF2);
+      const harness = createHarness({ availability });
+      harness.getResourceInventory.mockResolvedValue(
+        inventory([], "complete", "semantic-runtime:f2"),
+      );
+
+      const command = harness.recorded.commandHandlers.get(AureliaCommand.GoToAvailableResource)?.();
+      await vi.waitFor(() => expect(harness.recorded.quickPicks[0]?.items).toHaveLength(1));
+      harness.recorded.quickPicks[0]!.accept(0);
+      await command;
+      expect(harness.recorded.openedDocuments).toEqual([]);
+      return harness.recorded.infoMessages.at(-1);
+    };
+
+    const previousObservation = process.env.AURELIA_LS_EXTENSION_HOST_OBSERVATION;
+    const previousAcceptance = process.env.AURELIA_LS_RESOURCE_DISCOVERY_HOST_ACCEPTANCE;
+    const events: ExtensionHostObservation[] = [];
+    const listener = (event: ExtensionHostObservation): void => { events.push(event); };
+    delete process.env.AURELIA_LS_EXTENSION_HOST_OBSERVATION;
+    delete process.env.AURELIA_LS_RESOURCE_DISCOVERY_HOST_ACCEPTANCE;
+    process.on(EXTENSION_HOST_OBSERVATION_EVENT, listener);
+    let gateOffMessage: string | undefined;
+    try {
+      gateOffMessage = await runRemoval();
+      expect(commandObservations(events)).toEqual([]);
+    } finally {
+      process.off(EXTENSION_HOST_OBSERVATION_EVENT, listener);
+      if (previousObservation == null) delete process.env.AURELIA_LS_EXTENSION_HOST_OBSERVATION;
+      else process.env.AURELIA_LS_EXTENSION_HOST_OBSERVATION = previousObservation;
+      if (previousAcceptance == null) delete process.env.AURELIA_LS_RESOURCE_DISCOVERY_HOST_ACCEPTANCE;
+      else process.env.AURELIA_LS_RESOURCE_DISCOVERY_HOST_ACCEPTANCE = previousAcceptance;
+    }
+
+    const observations = captureExtensionHostObservations();
+    try {
+      const gateOnMessage = await runRemoval();
+      expect(gateOnMessage).toBe(gateOffMessage);
+      expect(gateOnMessage).toBe(
+        "That resource is no longer available to the current template scope.",
+      );
+      expect(commandObservations(observations.events)).toContainEqual(expect.objectContaining({
+        phase: "refused",
+        category: "resource-removed",
+        message: gateOnMessage,
+      }));
+    } finally {
+      observations.dispose();
+    }
+  });
+
+  test("does not consume F2 presence evidence when fresh exact-scope reproof advances to F3", async () => {
+    const observations = captureExtensionHostObservations();
+    try {
+      const initial = exactAvailability();
+      initial.fingerprint = "semantic-runtime:f1";
+      const freshF1 = exactAvailability();
+      freshF1.fingerprint = "semantic-runtime:f1";
+      const freshF3 = exactAvailability();
+      freshF3.fingerprint = "semantic-runtime:f3";
+      freshF3.projectSelection.resources = [];
+      const availability = vi.fn()
+        .mockReturnValueOnce(initial)
+        .mockReturnValueOnce(freshF1)
+        .mockReturnValueOnce(freshF3);
+      const harness = createHarness({ availability });
+      harness.getResourceInventory.mockResolvedValue(
+        inventory([resource()], "complete", "semantic-runtime:f2"),
+      );
+
+      const command = harness.recorded.commandHandlers.get(AureliaCommand.GoToAvailableResource)?.();
+      await vi.waitFor(() => expect(harness.recorded.quickPicks[0]?.items).toHaveLength(1));
+      harness.recorded.quickPicks[0]!.accept(0);
+      await command;
+
+      expect(harness.recorded.openedDocuments).toEqual([]);
+      expect(commandObservations(observations.events)).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          phase: "navigation-stale-retry",
+          currentFingerprint: "semantic-runtime:f2",
+          resourcePresence: "present",
+        }),
+        expect.objectContaining({
+          phase: "refused",
+          category: "unconfirmed",
+          currentFingerprint: "semantic-runtime:f3",
+          editorUnchanged: true,
+          message: "That resource is no longer available to the current template scope.",
+          resourcePresence: "unconfirmed",
+        }),
+      ]));
+    } finally {
+      observations.dispose();
+    }
   });
 
   test("re-proves and opens a still-available row after a strict snapshot shift", async () => {
@@ -1418,29 +1613,45 @@ describe("UserCommandsFeature", () => {
   );
 
   test("keeps fresh unsupported availability distinct and offers Aurelia Output", async () => {
-    const availability = vi.fn()
-      .mockReturnValueOnce(exactAvailability())
-      .mockReturnValueOnce(availabilityWithAnswerResult("unsupported"));
-    const harness = createHarness({
-      availability,
-      informationMessageResponses: ["Open Aurelia Output"],
-    });
+    const observations = captureExtensionHostObservations();
+    try {
+      const availability = vi.fn()
+        .mockReturnValueOnce(exactAvailability())
+        .mockReturnValueOnce(availabilityWithAnswerResult("unsupported"));
+      const harness = createHarness({
+        availability,
+        informationMessageResponses: ["Open Aurelia Output"],
+      });
 
-    const command = harness.recorded.commandHandlers.get(AureliaCommand.GoToAvailableResource)?.();
-    await vi.waitFor(() => expect(harness.recorded.quickPicks[0]?.items).toHaveLength(1));
-    harness.recorded.quickPicks[0]!.accept(0);
-    await command;
+      const command = harness.recorded.commandHandlers.get(AureliaCommand.GoToAvailableResource)?.();
+      await vi.waitFor(() => expect(harness.recorded.quickPicks[0]?.items).toHaveLength(1));
+      harness.recorded.quickPicks[0]!.accept(0);
+      await command;
 
-    expect(harness.recorded.infoMessages).toContain(
-      "Resource discovery is not supported for the current template.",
-    );
-    expect(harness.recorded.infoMessageRequests).toContainEqual({
-      message: "Resource discovery is not supported for the current template.",
-      items: ["Open Aurelia Output"],
-    });
-    expect(harness.recorded.shownOutputChannels).toEqual([{ name: "test", preserveFocus: true }]);
-    expect(harness.recorded.infoMessages).not.toContain("no longer available");
-    expect(harness.recorded.openedDocuments).toEqual([]);
+      expect(harness.recorded.infoMessages).toContain(
+        "Resource discovery is not supported for the current template.",
+      );
+      expect(harness.recorded.infoMessageRequests).toContainEqual({
+        message: "Resource discovery is not supported for the current template.",
+        items: ["Open Aurelia Output"],
+      });
+      expect(commandObservations(observations.events)).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          phase: "recovery-presented",
+          actionCount: 1,
+          message: "Resource discovery is not supported for the current template.",
+          retryActionLabel: null,
+          outputActionLabel: "Open Aurelia Output",
+        }),
+        expect.objectContaining({ phase: "recovery-choice", choice: "Open Aurelia Output" }),
+        expect.objectContaining({ phase: "output-requested", origin: "unsupported" }),
+      ]));
+      expect(harness.recorded.shownOutputChannels).toEqual([{ name: "test", preserveFocus: true }]);
+      expect(harness.recorded.infoMessages).not.toContain("no longer available");
+      expect(harness.recorded.openedDocuments).toEqual([]);
+    } finally {
+      observations.dispose();
+    }
   });
 
   test.each(["absent", "ambiguous", "rerouted"] as const)(
@@ -1560,16 +1771,400 @@ describe("UserCommandsFeature", () => {
       expect(events).toEqual([
         expect.objectContaining({ phase: "command-start", documentName: "my-app.html", line: 8, character: 5 }),
         expect.objectContaining({ phase: "initial-request-start" }),
-        expect.objectContaining({ phase: "initial-request-response", count: 1, status: "ready" }),
+        expect.objectContaining({
+          phase: "initial-request-response",
+          answerResult: "answered",
+          answerCoverage: "complete",
+          answerSelection: "exact",
+          selectedProjectKey: "shop-app",
+          selectedTemplateScopeIdentity: "scope:my-app:v1",
+          templateCandidateCount: 0,
+          soleTemplateCandidateScopeIdentity: null,
+          resourceIdentitySetSha256: PRODUCT_CARD_IDENTITY_SET_SHA256,
+          count: 1,
+          fingerprint: "semantic-runtime:one",
+          status: "ready",
+        }),
+        expect.objectContaining({
+          phase: "availability-selection",
+          selectionKind: "resource",
+          resourceIdentity: "resource:product-card:v1",
+        }),
         expect.objectContaining({ phase: "fresh-request-start" }),
-        expect.objectContaining({ phase: "fresh-request-response", count: 1, status: "available" }),
+        expect.objectContaining({
+          phase: "fresh-request-response",
+          answerResult: "answered",
+          answerCoverage: "complete",
+          answerSelection: "exact",
+          selectedProjectKey: "shop-app",
+          selectedTemplateScopeIdentity: "scope:my-app:v1",
+          templateCandidateCount: 0,
+          soleTemplateCandidateScopeIdentity: null,
+          resourceIdentitySetSha256: PRODUCT_CARD_IDENTITY_SET_SHA256,
+          count: 1,
+          fingerprint: "semantic-runtime:one",
+          status: "available",
+        }),
+        expect.objectContaining({
+          phase: "revalidation",
+          editorUnchanged: true,
+          fingerprint: "semantic-runtime:one",
+          outcome: "available",
+          rowCount: 1,
+        }),
         expect.objectContaining({ phase: "navigation-start" }),
         expect.objectContaining({ phase: "navigation-complete", status: "opened" }),
       ]);
       expect(new Set(events.map((event) => event.observationId))).toEqual(new Set([events[0]!.observationId]));
-      expect(new Set(observations.events.map((event) => event.observationId))).toEqual(new Set([events[0]!.observationId]));
+      const navigationEvents = observations.events.filter((event) => event.source === "resource-navigation");
+      expect(new Set(navigationEvents.map((event) => event.observationId))).toHaveLength(1);
+      expect(navigationEvents[0]?.observationId).toMatch(/^resource-navigation:\d+$/);
+      expect(navigationEvents[0]?.observationId).not.toBe(events[0]!.observationId);
       expect(events[0]!.observationId).toMatch(/^go-to-available-resource:\d+$/);
       expect(events.every(Object.isFrozen)).toBe(true);
+    } finally {
+      observations.dispose();
+    }
+  });
+
+  test.each([
+    ["open", "answered", "open"],
+    ["truncated", "answered", "truncated"],
+    ["complete", "answered", "complete"],
+    ["unsupported", "unsupported", "complete"],
+    ["null", null, null],
+  ] as const)(
+    "observes exact availability answer axes for %s responses",
+    async (variant, answerResult, answerCoverage) => {
+      const observations = captureExtensionHostObservations();
+      try {
+        const response = variant === "null"
+          ? null
+          : variant === "unsupported"
+            ? availabilityWithAnswerResult("unsupported")
+            : (() => {
+              const value = exactAvailability();
+              value.projectSelection.answer.coverage = variant;
+              return value;
+            })();
+        const harness = createHarness({ availability: () => response });
+        if (variant === "null") {
+          harness.getTemplateResourceAvailability.mockResolvedValue(null);
+        }
+
+        const command = harness.recorded.commandHandlers.get(AureliaCommand.GoToAvailableResource)?.();
+        await vi.waitFor(() => expect(commandObservations(observations.events).some((event) =>
+          event.phase === "initial-request-response"
+        )).toBe(true));
+
+        expect(commandObservations(observations.events)).toContainEqual(expect.objectContaining({
+          phase: "initial-request-response",
+          answerResult,
+          answerCoverage,
+          answerSelection: variant === "null" ? null : "exact",
+          selectedProjectKey: variant === "null" ? null : "shop-app",
+          selectedTemplateScopeIdentity: variant === "null" ? null : "scope:my-app:v1",
+          templateCandidateCount: variant === "null" ? null : 0,
+          soleTemplateCandidateScopeIdentity: null,
+          resourceIdentitySetSha256: variant === "null"
+            ? null
+            : variant === "unsupported"
+              ? EMPTY_RESOURCE_IDENTITY_SET_SHA256
+              : PRODUCT_CARD_IDENTITY_SET_SHA256,
+        }));
+        await vi.waitFor(() => expect(harness.recorded.quickPicks).toHaveLength(1));
+        harness.recorded.quickPicks[0]!.hide();
+        await command;
+      } finally {
+        observations.dispose();
+      }
+    },
+  );
+
+  test("observes null project decisions and exact sole template-candidate decisions", async () => {
+    const observations = captureExtensionHostObservations();
+    try {
+      const projectAmbiguous = {
+        fingerprint: "semantic-runtime:project-ambiguous",
+        workspace: owner,
+        projectSelection: {
+          status: "ambiguous" as const,
+          candidates: [project, { ...project, projectKey: "nested-app" }],
+        },
+      };
+      const projectHarness = createHarness({ availability: () => projectAmbiguous });
+      const projectCommand = projectHarness.recorded.commandHandlers.get(
+        AureliaCommand.GoToAvailableResource,
+      )?.();
+      await vi.waitFor(() => expect(projectHarness.recorded.quickPicks[0]?.items).toHaveLength(2));
+      projectHarness.recorded.quickPicks[0]!.hide();
+      await projectCommand;
+
+      const templateAmbiguous = exactAvailability();
+      templateAmbiguous.projectSelection.answer.selection = "ambiguous";
+      templateAmbiguous.projectSelection.selectedTemplate = null as never;
+      templateAmbiguous.projectSelection.resources = [];
+      templateAmbiguous.projectSelection.templateCandidates = [{
+        templateIdentityKey: "template:sole",
+        scopeIdentityKey: "scope:sole",
+        definitionName: "sole-card",
+        compilationLane: "authoring",
+        source: available("file:///repo/src/sole.html", "template"),
+      }];
+      const templateHarness = createHarness({ availability: () => templateAmbiguous });
+      const templateCommand = templateHarness.recorded.commandHandlers.get(
+        AureliaCommand.GoToAvailableResource,
+      )?.();
+      await vi.waitFor(() => expect(templateHarness.recorded.quickPicks[0]?.items).toHaveLength(1));
+      templateHarness.recorded.quickPicks[0]!.hide();
+      await templateCommand;
+
+      const responses = commandObservations(observations.events).filter((event) =>
+        event.phase === "initial-request-response"
+      );
+      expect(responses).toHaveLength(2);
+      expect(responses[0]).toEqual(expect.objectContaining({
+        answerResult: null,
+        answerCoverage: null,
+        answerSelection: null,
+        selectedProjectKey: null,
+        selectedTemplateScopeIdentity: null,
+        templateCandidateCount: null,
+        soleTemplateCandidateScopeIdentity: null,
+        resourceIdentitySetSha256: null,
+      }));
+      expect(responses[1]).toEqual(expect.objectContaining({
+        answerResult: "answered",
+        answerCoverage: "complete",
+        answerSelection: "ambiguous",
+        selectedProjectKey: "shop-app",
+        selectedTemplateScopeIdentity: null,
+        templateCandidateCount: 1,
+        soleTemplateCandidateScopeIdentity: "scope:sole",
+        resourceIdentitySetSha256: EMPTY_RESOURCE_IDENTITY_SET_SHA256,
+      }));
+    } finally {
+      observations.dispose();
+    }
+  });
+
+  test("hashes the sorted resource identity set with the frozen LF preimage", async () => {
+    const observations = captureExtensionHostObservations();
+    try {
+      const response = exactAvailability();
+      response.projectSelection.resources = ["alpha", "Zeta"].map((name) => ({
+        resource: resource(name),
+        state: "available",
+        visibilityKind: "app-root",
+        availabilitySource: available("file:///repo/src/main.ts", "availability"),
+      }));
+      const harness = createHarness({ availability: () => response });
+      const command = harness.recorded.commandHandlers.get(AureliaCommand.GoToAvailableResource)?.();
+      await vi.waitFor(() => expect(harness.recorded.quickPicks[0]?.items).toHaveLength(2));
+      harness.recorded.quickPicks[0]!.hide();
+      await command;
+
+      expect(commandObservations(observations.events)).toContainEqual(expect.objectContaining({
+        phase: "initial-request-response",
+        resourceIdentitySetSha256: "2b3018ec16ebd6e4aa30b6f33b7853d9c7e25ea5271858d0b2eede57e2d8ff47",
+      }));
+    } finally {
+      observations.dispose();
+    }
+  });
+
+  test("observes the fresh stale-scope decision before preserving restart behavior", async () => {
+    const observations = captureExtensionHostObservations();
+    try {
+      const shifted = exactAvailability();
+      shifted.fingerprint = "semantic-runtime:scope-v2";
+      const nextTemplate = {
+        ...shifted.projectSelection.selectedTemplate,
+        scopeIdentityKey: "scope:my-app:v2",
+      };
+      shifted.projectSelection.answer.selection = "absent";
+      shifted.projectSelection.selectedTemplate = null as never;
+      shifted.projectSelection.templateCandidates = [nextTemplate];
+      shifted.projectSelection.resources = [];
+      const availability = vi.fn()
+        .mockReturnValueOnce(exactAvailability())
+        .mockReturnValueOnce(shifted)
+        .mockReturnValueOnce(shifted);
+      const harness = createHarness({ availability });
+
+      const command = harness.recorded.commandHandlers.get(AureliaCommand.GoToAvailableResource)?.();
+      await vi.waitFor(() => expect(harness.recorded.quickPicks[0]?.items).toHaveLength(1));
+      harness.recorded.quickPicks[0]!.accept(0);
+      await vi.waitFor(() => expect(harness.recorded.quickPicks[1]?.busy).toBe(false));
+      expect(harness.recorded.quickPicks[1]).toMatchObject({
+        title: "No Aurelia template at the cursor",
+        items: [],
+      });
+      harness.recorded.quickPicks[1]!.hide();
+      await command;
+
+      expect(commandObservations(observations.events)).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          phase: "fresh-request-response",
+          status: "restart",
+          answerSelection: "absent",
+          selectedProjectKey: "shop-app",
+          selectedTemplateScopeIdentity: null,
+          templateCandidateCount: 1,
+          soleTemplateCandidateScopeIdentity: "scope:my-app:v2",
+          resourceIdentitySetSha256: EMPTY_RESOURCE_IDENTITY_SET_SHA256,
+        }),
+        expect.objectContaining({
+          phase: "revalidation",
+          outcome: "restart",
+          editorUnchanged: true,
+          fingerprint: "semantic-runtime:scope-v2",
+        }),
+      ]));
+      expect(harness.recorded.openedDocuments).toEqual([]);
+    } finally {
+      observations.dispose();
+    }
+  });
+
+  test("keeps the initial product model when observation preparation throws", async () => {
+    const observations = captureExtensionHostObservations();
+    try {
+      const harness = createHarness({ availability: () => availabilityWithThrowingObservationMap() });
+      const command = harness.recorded.commandHandlers.get(AureliaCommand.GoToAvailableResource)?.();
+
+      await vi.waitFor(() => expect(harness.recorded.quickPicks[0]?.items).toHaveLength(1));
+      expect(commandObservations(observations.events).some((event) =>
+        event.phase === "initial-request-response"
+      )).toBe(false);
+      harness.recorded.quickPicks[0]!.hide();
+      await command;
+
+      expect(commandObservations(observations.events).some((event) =>
+        event.phase === "initial-request-failed" || event.phase === "recovery-presented"
+      )).toBe(false);
+      expect(harness.recorded.errorMessageRequests).toEqual([]);
+      expect(harness.recorded.openedDocuments).toEqual([]);
+    } finally {
+      observations.dispose();
+    }
+  });
+
+  test("keeps fresh navigation when observation preparation and emission throw", async () => {
+    const observations = captureExtensionHostObservations();
+    const throwOnRevalidation = (event: ExtensionHostObservation): void => {
+      if (event.source === "go-to-available-resource" && event.phase === "revalidation") {
+        throw new Error("observation listener failed");
+      }
+    };
+    process.on(EXTENSION_HOST_OBSERVATION_EVENT, throwOnRevalidation);
+    try {
+      const availability = vi.fn()
+        .mockReturnValueOnce(exactAvailability())
+        .mockReturnValueOnce(availabilityWithThrowingObservationMap());
+      const harness = createHarness({ availability });
+      const command = harness.recorded.commandHandlers.get(AureliaCommand.GoToAvailableResource)?.();
+
+      await vi.waitFor(() => expect(harness.recorded.quickPicks[0]?.items).toHaveLength(1));
+      harness.recorded.quickPicks[0]!.accept(0);
+      await command;
+
+      const events = commandObservations(observations.events);
+      expect(events.some((event) => event.phase === "fresh-request-response")).toBe(false);
+      expect(events).toContainEqual(expect.objectContaining({
+        phase: "revalidation",
+        outcome: "available",
+        editorUnchanged: true,
+      }));
+      expect(events.some((event) =>
+        event.phase === "fresh-request-failed" || event.phase === "recovery-presented"
+      )).toBe(false);
+      expect(harness.recorded.errorMessageRequests).toEqual([]);
+      expect(harness.recorded.openedDocuments.at(-1)?.uri.toString()).toBe(
+        "file:///repo/src/product-card.ts",
+      );
+    } finally {
+      process.off(EXTENSION_HOST_OBSERVATION_EVENT, throwOnRevalidation);
+      observations.dispose();
+    }
+  });
+
+  test("keeps fresh restart when an observation-only fingerprint getter throws", async () => {
+    const observations = captureExtensionHostObservations();
+    try {
+      const hostile = exactAvailability();
+      const nextTemplate = {
+        ...hostile.projectSelection.selectedTemplate,
+        scopeIdentityKey: "scope:hostile:v2",
+      };
+      hostile.projectSelection.answer.selection = "absent";
+      hostile.projectSelection.selectedTemplate = null as never;
+      hostile.projectSelection.templateCandidates = [nextTemplate];
+      hostile.projectSelection.resources = [];
+      Object.defineProperty(hostile, "fingerprint", {
+        configurable: true,
+        enumerable: true,
+        get: () => { throw new Error("observation-only fingerprint read failed"); },
+      });
+      const restarted = exactAvailability();
+      restarted.projectSelection.answer.selection = "absent";
+      restarted.projectSelection.selectedTemplate = null as never;
+      restarted.projectSelection.templateCandidates = [nextTemplate];
+      restarted.projectSelection.resources = [];
+      const availability = vi.fn()
+        .mockReturnValueOnce(exactAvailability())
+        .mockReturnValueOnce(hostile)
+        .mockReturnValueOnce(restarted);
+      const harness = createHarness({ availability });
+
+      const command = harness.recorded.commandHandlers.get(AureliaCommand.GoToAvailableResource)?.();
+      await vi.waitFor(() => expect(harness.recorded.quickPicks[0]?.items).toHaveLength(1));
+      harness.recorded.quickPicks[0]!.accept(0);
+      await vi.waitFor(() => expect(harness.recorded.quickPicks[1]?.busy).toBe(false));
+      expect(harness.recorded.quickPicks[1]?.title).toBe("No Aurelia template at the cursor");
+      harness.recorded.quickPicks[1]!.hide();
+      await command;
+
+      const events = commandObservations(observations.events);
+      expect(events.some((event) => event.phase === "fresh-request-response")).toBe(false);
+      expect(events.some((event) => event.phase === "revalidation")).toBe(false);
+      expect(events.some((event) =>
+        event.phase === "fresh-request-failed" || event.phase === "recovery-presented"
+      )).toBe(false);
+      expect(harness.recorded.errorMessageRequests).toEqual([]);
+      expect(harness.recorded.openedDocuments).toEqual([]);
+    } finally {
+      observations.dispose();
+    }
+  });
+
+  test("keeps a conclusive refusal when the gated editor proof getter throws", async () => {
+    const observations = captureExtensionHostObservations();
+    try {
+      const removed = exactAvailability();
+      removed.projectSelection.resources = [];
+      const availability = vi.fn()
+        .mockReturnValueOnce(exactAvailability())
+        .mockReturnValueOnce(removed);
+      const harness = createHarness({ availability });
+
+      const command = harness.recorded.commandHandlers.get(AureliaCommand.GoToAvailableResource)?.();
+      await vi.waitFor(() => expect(harness.recorded.quickPicks[0]?.items).toHaveLength(1));
+      Object.defineProperty(harness.vscode.window, "activeTextEditor", {
+        configurable: true,
+        get: () => { throw new Error("observation-only editor proof failed"); },
+      });
+      harness.recorded.quickPicks[0]!.accept(0);
+      await command;
+
+      expect(harness.recorded.infoMessages).toContain(
+        "That resource is no longer available to the current template scope.",
+      );
+      expect(commandObservations(observations.events).some((event) =>
+        event.phase === "fresh-request-failed" || event.phase === "recovery-presented"
+      )).toBe(false);
+      expect(harness.recorded.errorMessageRequests).toEqual([]);
+      expect(harness.recorded.openedDocuments).toEqual([]);
     } finally {
       observations.dispose();
     }
@@ -1603,9 +2198,24 @@ describe("UserCommandsFeature", () => {
         { phase: "command-start", count: undefined, status: undefined },
         { phase: "initial-request-start", count: undefined, status: undefined },
         { phase: "initial-request-response", count: 1, status: "ready" },
+        { phase: "availability-selection", count: undefined, status: undefined },
         { phase: "fresh-request-start", count: undefined, status: undefined },
         { phase: "fresh-request-failed", count: undefined, status: "failed" },
+        { phase: "recovery-presented", count: undefined, status: undefined },
+        { phase: "recovery-choice", count: undefined, status: undefined },
+        { phase: "output-requested", count: undefined, status: undefined },
       ]);
+      expect(commandObservations(observations.events)).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          phase: "recovery-presented",
+          actionCount: 2,
+          message: "Aurelia resource discovery couldn't refresh resources for the active template.",
+          retryActionLabel: "Retry",
+          outputActionLabel: "Open Aurelia Output",
+        }),
+        expect.objectContaining({ phase: "recovery-choice", choice: "Open Aurelia Output" }),
+        expect.objectContaining({ phase: "output-requested", origin: "recovery" }),
+      ]));
       expect(harness.recorded.openedDocuments).toHaveLength(0);
       expect(harness.recorded.errorMessageRequests).toEqual([{
         message: "Aurelia resource discovery couldn't refresh resources for the active template.",
@@ -1618,16 +2228,34 @@ describe("UserCommandsFeature", () => {
   });
 
   test("treats protocol cancellation as a silent availability exit", async () => {
-    const cancelled = Object.assign(new Error("cancelled"), { code: -32800 });
-    const harness = createHarness({ availability: () => Promise.reject(cancelled) });
+    const observations = captureExtensionHostObservations();
+    try {
+      const cancelled = Object.assign(new Error("cancelled"), { code: -32800 });
+      const harness = createHarness({ availability: () => Promise.reject(cancelled) });
 
-    await harness.recorded.commandHandlers.get(AureliaCommand.GoToAvailableResource)?.();
+      await harness.recorded.commandHandlers.get(AureliaCommand.GoToAvailableResource)?.();
 
-    expect(harness.recorded.errorMessages).toEqual([]);
-    expect(harness.recorded.errorMessageRequests).toEqual([]);
-    expect(harness.recorded.outputLogs).toEqual([]);
-    expect(harness.recorded.shownOutputChannels).toEqual([]);
-    expect(harness.recorded.openedDocuments).toEqual([]);
+      expect(commandObservations(observations.events).map((event) => event.phase)).toEqual([
+        "command-start",
+        "initial-request-start",
+        "initial-request-failed",
+        "cancelled",
+      ]);
+      expect(commandObservations(observations.events).at(-1)).toEqual(expect.objectContaining({
+        phase: "cancelled",
+        stage: "request",
+      }));
+      expect(commandObservations(observations.events).some((event) =>
+        event.phase === "recovery-presented" || event.phase === "output-requested"
+      )).toBe(false);
+      expect(harness.recorded.errorMessages).toEqual([]);
+      expect(harness.recorded.errorMessageRequests).toEqual([]);
+      expect(harness.recorded.outputLogs).toEqual([]);
+      expect(harness.recorded.shownOutputChannels).toEqual([]);
+      expect(harness.recorded.openedDocuments).toEqual([]);
+    } finally {
+      observations.dispose();
+    }
   });
 
   test("openRelatedFile asks the user to resolve genuine topology ambiguity", async () => {
@@ -1687,9 +2315,11 @@ function captureExtensionHostObservations(): {
   dispose(): void;
 } {
   const previous = process.env[EXTENSION_HOST_OBSERVATION_ENV];
+  const previousAcceptance = process.env[RESOURCE_DISCOVERY_ACCEPTANCE_ENV];
   const events: ExtensionHostObservation[] = [];
   const listener = (event: ExtensionHostObservation): void => { events.push(event); };
   process.env[EXTENSION_HOST_OBSERVATION_ENV] = "1";
+  process.env[RESOURCE_DISCOVERY_ACCEPTANCE_ENV] = "1";
   process.on(EXTENSION_HOST_OBSERVATION_EVENT, listener);
   return {
     events,
@@ -1699,6 +2329,11 @@ function captureExtensionHostObservations(): {
         delete process.env[EXTENSION_HOST_OBSERVATION_ENV];
       } else {
         process.env[EXTENSION_HOST_OBSERVATION_ENV] = previous;
+      }
+      if (previousAcceptance == null) {
+        delete process.env[RESOURCE_DISCOVERY_ACCEPTANCE_ENV];
+      } else {
+        process.env[RESOURCE_DISCOVERY_ACCEPTANCE_ENV] = previousAcceptance;
       }
     },
   };

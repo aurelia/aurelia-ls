@@ -2354,7 +2354,11 @@ export interface SemanticResourceInventoryLocality {
 }
 
 export interface SemanticResourceInventoryRow {
-  /** Opaque deterministic projection of semantic owner identity; never a store-local kernel handle. */
+  /**
+   * Opaque deterministic projection of semantic owner identity; never a store-local kernel handle.
+   * A unique TypeScript declaration owner keeps its name-insensitive base identity. Lower-authority rows sharing that
+   * owner and registration kind receive deterministic variants; competing full definitions are invalid.
+   */
   readonly identityKey: string;
   readonly projectKey: string;
   readonly resourceKind: SemanticResourceInventoryKind;

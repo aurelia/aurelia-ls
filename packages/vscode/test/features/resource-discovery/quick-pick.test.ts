@@ -13,16 +13,22 @@ import { createVscodeApi } from "../../helpers/vscode-stub.js";
 
 describe("resource discovery Quick Pick", () => {
   const observationEnv = "AURELIA_LS_EXTENSION_HOST_OBSERVATION";
+  const acceptanceEnv = "AURELIA_LS_RESOURCE_DISCOVERY_HOST_ACCEPTANCE";
   let previousObservationEnv: string | undefined;
+  let previousAcceptanceEnv: string | undefined;
 
   beforeEach(() => {
     previousObservationEnv = process.env[observationEnv];
+    previousAcceptanceEnv = process.env[acceptanceEnv];
     process.env[observationEnv] = "1";
+    process.env[acceptanceEnv] = "1";
   });
 
   afterEach(() => {
     if (previousObservationEnv == null) delete process.env[observationEnv];
     else process.env[observationEnv] = previousObservationEnv;
+    if (previousAcceptanceEnv == null) delete process.env[acceptanceEnv];
+    else process.env[acceptanceEnv] = previousAcceptanceEnv;
   });
 
   test("observes a ready picker through selection and disposal", async () => {
@@ -41,10 +47,13 @@ describe("resource discovery Quick Pick", () => {
 
       await expect(outcome).resolves.toEqual({ status: "selected", value: { label: "app" } });
       expectObservationSequence(observation.events, [
+        { phase: "model-start" },
         { phase: "shown" },
+        { phase: "model-item", itemOrdinal: 0, itemKind: "item", label: "app" },
         { phase: "model-ready", itemCount: 1, title: "Choose project" },
         { phase: "active-changed", activeLabel: "app" },
         { phase: "accept", selectedLabel: "app" },
+        { phase: "outcome", status: "selected" },
         { phase: "hidden" },
         { phase: "finished", status: "selected" },
         { phase: "disposed" },
@@ -70,9 +79,12 @@ describe("resource discovery Quick Pick", () => {
 
       await expect(outcome).resolves.toEqual({ status: "cancelled" });
       expectObservationSequence(observation.events, [
+        { phase: "model-start" },
         { phase: "shown" },
         { phase: "model-ready", itemCount: 0, title: "No resources" },
         { phase: "hidden" },
+        { phase: "cancelled" },
+        { phase: "outcome", status: "cancelled" },
         { phase: "finished", status: "cancelled" },
         { phase: "disposed" },
       ]);
@@ -99,8 +111,11 @@ describe("resource discovery Quick Pick", () => {
       await expect(outcome).resolves.toEqual({ status: "cancelled" });
       expect(requestToken?.isCancellationRequested).toBe(true);
       expectObservationSequence(observation.events, [
+        { phase: "model-start" },
         { phase: "shown" },
         { phase: "hidden" },
+        { phase: "cancelled" },
+        { phase: "outcome", status: "cancelled" },
         { phase: "finished", status: "cancelled" },
         { phase: "disposed" },
       ]);
@@ -121,6 +136,7 @@ describe("resource discovery Quick Pick", () => {
 
       await expect(outcome).rejects.toThrow("private C:\\workspace\\detail");
       expectObservationSequence(observation.events, [
+        { phase: "model-start" },
         { phase: "shown" },
         { phase: "load-failed" },
         { phase: "hidden" },
@@ -134,41 +150,126 @@ describe("resource discovery Quick Pick", () => {
   });
 
   test("publishes no observations without the explicit Extension Host test gate", async () => {
-    process.env[observationEnv] = "0";
+    process.env[acceptanceEnv] = "0";
     const observation = recordObservations();
     const { vscode: stubVscode, recorded } = createVscodeApi();
     const vscode = stubVscode as unknown as VscodeApi;
+    const items = [{ label: "app" }];
+    const indexOf = vi.spyOn(items, "indexOf");
+    const iterator = vi.spyOn(items, Symbol.iterator);
 
     try {
       const outcome = showResourceQuickPick(vscode, "Resources", async () => ({
         title: "Resources",
         placeholder: "Choose one",
-        items: [],
+        items,
       }));
       await vi.waitFor(() => expect(recorded.quickPicks[0]?.busy).toBe(false));
-      recorded.quickPicks[0]!.hide();
-      await expect(outcome).resolves.toEqual({ status: "cancelled" });
+      recorded.quickPicks[0]!.accept(0);
+      await expect(outcome).resolves.toEqual({ status: "selected", value: { label: "app" } });
       expect(observation.events).toEqual([]);
+      expect(indexOf).not.toHaveBeenCalled();
+      expect(iterator).not.toHaveBeenCalled();
     } finally {
       observation.dispose();
     }
   });
 
   test("returns Back as a distinct outcome in a multi-step flow", async () => {
+    const observation = recordObservations();
     const { vscode: stubVscode, recorded } = createVscodeApi();
     const vscode = stubVscode as unknown as VscodeApi;
+    try {
+      const outcome = showResourceQuickPick(vscode, "Resources", async () => ({
+        title: "Choose project",
+        placeholder: "Choose one",
+        items: [{ kind: -1, label: "Projects" }, { label: "app" }],
+        step: 2,
+        totalSteps: 3,
+      }), true, undefined, undefined, 2);
+      await vi.waitFor(() => expect(recorded.quickPicks[0]?.items).toHaveLength(2));
+      recorded.quickPicks[0]!.back();
 
-    const outcome = showResourceQuickPick(vscode, "Resources", async () => ({
-      title: "Choose project",
-      placeholder: "Choose one",
-      items: [{ label: "app" }],
-      step: 2,
-      totalSteps: 3,
-    }), true);
-    await vi.waitFor(() => expect(recorded.quickPicks[0]?.items).toHaveLength(1));
-    recorded.quickPicks[0]!.back();
+      await expect(outcome).resolves.toEqual({ status: "back" });
+      expectObservationSequence(observation.events, [
+        { phase: "model-start" },
+        { phase: "shown" },
+        { phase: "model-item", itemOrdinal: 0, itemKind: "separator", label: "Projects" },
+        { phase: "model-item", itemOrdinal: 1, itemKind: "item", label: "app" },
+        { phase: "model-button", buttonKind: "back", buttonOrdinal: 0 },
+        { phase: "model-ready", itemCount: 2, title: "Choose project", step: 2, totalSteps: 3 },
+        { phase: "back" },
+        { phase: "outcome", status: "back" },
+        { phase: "hidden" },
+        { phase: "finished", status: "back" },
+        { phase: "disposed" },
+      ], 2);
+    } finally {
+      observation.dispose();
+    }
+  });
 
-    await expect(outcome).resolves.toEqual({ status: "back" });
+  test("keeps one command correlation id while separating repeated model ordinals", async () => {
+    const observation = recordObservations();
+    const { vscode: stubVscode, recorded } = createVscodeApi();
+    const vscode = stubVscode as unknown as VscodeApi;
+    try {
+      const first = showResourceQuickPick(
+        vscode,
+        "Resources",
+        async () => ({ title: "Choose project", placeholder: "Project", items: [{ label: "app" }] }),
+        false,
+        "go-to-available-resource:shared",
+        undefined,
+        1,
+      );
+      await vi.waitFor(() => expect(recorded.quickPicks[0]?.busy).toBe(false));
+      recorded.quickPicks[0]!.hide();
+      await expect(first).resolves.toEqual({ status: "cancelled" });
+
+      const second = showResourceQuickPick(
+        vscode,
+        "Resources",
+        async () => ({ title: "Choose resource", placeholder: "Resource", items: [{ label: "card" }] }),
+        true,
+        "go-to-available-resource:shared",
+        undefined,
+        2,
+      );
+      await vi.waitFor(() => expect(recorded.quickPicks[1]?.busy).toBe(false));
+      recorded.quickPicks[1]!.accept(0);
+      await expect(second).resolves.toEqual({ status: "selected", value: { label: "card" } });
+
+      expect(new Set(observation.events.map((event) => event.observationId))).toEqual(
+        new Set(["go-to-available-resource:shared"]),
+      );
+      expect(observation.events.filter((event) => event.modelOrdinal === 1).map((event) => event.phase)).toEqual([
+        "model-start",
+        "shown",
+        "model-item",
+        "model-ready",
+        "hidden",
+        "cancelled",
+        "outcome",
+        "finished",
+        "disposed",
+      ]);
+      expect(observation.events.filter((event) => event.modelOrdinal === 2).map((event) => event.phase)).toEqual([
+        "model-start",
+        "shown",
+        "model-item",
+        "model-button",
+        "model-ready",
+        "active-changed",
+        "accept",
+        "outcome",
+        "hidden",
+        "finished",
+        "disposed",
+      ]);
+    } finally {
+      observation.dispose();
+    }
   });
 
   test("runs a typed title action without settling or hiding the picker", async () => {
@@ -186,7 +287,10 @@ describe("resource discovery Quick Pick", () => {
           title: "Resources — incomplete",
           placeholder: "Choose one",
           items: [{ label: "app" }],
-          titleActions: [ResourceQuickPickTitleActionKind.OpenOutput],
+          titleActions: [
+            ResourceQuickPickTitleActionKind.OpenOutput,
+            ResourceQuickPickTitleActionKind.OpenOutput,
+          ],
         }),
         false,
         undefined,
@@ -208,10 +312,15 @@ describe("resource discovery Quick Pick", () => {
       recorded.quickPicks[0]!.hide();
       await expect(outcome).resolves.toEqual({ status: "cancelled" });
       expectObservationSequence(observation.events, [
+        { phase: "model-start" },
         { phase: "shown" },
+        { phase: "model-item", itemOrdinal: 0, itemKind: "item", label: "app" },
+        { phase: "model-button", buttonKind: "open-output", buttonOrdinal: 0 },
         { phase: "model-ready", itemCount: 1, title: "Resources — incomplete" },
         { phase: "title-action", action: "open-output" },
         { phase: "hidden" },
+        { phase: "cancelled" },
+        { phase: "outcome", status: "cancelled" },
         { phase: "finished", status: "cancelled" },
         { phase: "disposed" },
       ]);
@@ -282,14 +391,17 @@ function recordObservations(): {
 function expectObservationSequence(
   events: readonly ExtensionHostObservation[],
   expected: readonly ExpectedObservation[],
+  modelOrdinal = 1,
 ): void {
   expect(events).toHaveLength(expected.length);
   const observationId = events[0]?.observationId;
   expect(observationId).toMatch(/^quick-pick:\d+$/);
-  expect(events.map(({ source: _source, observationId: _observationId, ...event }) => event)).toEqual(expected);
-  for (const event of events) {
+  expect(events.map((event) => event.phase)).toEqual(expected.map((event) => event.phase));
+  for (const [index, event] of events.entries()) {
+    expect(event).toEqual(expect.objectContaining(expected[index]!));
     expect(event.source).toBe("resource-quick-pick");
     expect(event.observationId).toBe(observationId);
+    expect(event.modelOrdinal).toBe(modelOrdinal);
     expect(Object.getPrototypeOf(event)).toBe(Object.prototype);
     expect(Object.isFrozen(event)).toBe(true);
   }

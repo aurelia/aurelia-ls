@@ -1,4 +1,9 @@
 import { describe, expect, test, vi } from "vitest";
+import { createHash } from "node:crypto";
+import {
+  EXTENSION_HOST_OBSERVATION_EVENT,
+  type ExtensionHostObservation,
+} from "../../../out/extension-host-observation.js";
 import { ResourceExplorerProvider } from "../../../out/features/views/resource-explorer.js";
 import { AureliaCommand } from "../../../out/product-contract.js";
 import type { VscodeApi } from "../../../out/vscode-api.js";
@@ -196,6 +201,277 @@ function findNode(nodes: readonly Node[], label: string): Node | undefined {
 }
 
 describe("ResourceExplorerProvider", () => {
+  test("publishes an honest loading view state before the first inventory settles", async () => {
+    const observation = captureResourceDiscoveryObservations("resource-explorer");
+    const initial = resource({
+      identityKey: "resource:initial:loading",
+      name: "initial-card",
+      uri: "file:///repo/initial.ts",
+    });
+    const current = response([readyProject([initial])], workspace(), "initial:current");
+    let settle!: (value: unknown) => void;
+    const inventory = new Promise<unknown>((resolve) => { settle = resolve; });
+    const harness = createHarness(async () => await inventory);
+    const pending = harness.provider.refresh();
+
+    try {
+      expect(harness.view.message).toBe("Discovering Aurelia resources...");
+      expect(observation.events.find((event) =>
+        event.phase === "view-state" && event.state === "loading"
+      )).toEqual(expect.objectContaining({
+        state: "loading",
+        message: "Discovering Aurelia resources...",
+        description: null,
+        updatingAll: false,
+        updatingWorkspaceCount: 0,
+        staleWorkspaceCount: 0,
+      }));
+    } finally {
+      settle(current);
+      await pending;
+      observation.dispose();
+    }
+
+    expect(harness.view.message).toBeUndefined();
+    expect(findNode(await roots(harness.provider), "initial-card")).toBeDefined();
+  });
+
+  test("observes coherent publications with exact row state and navigation facts", async () => {
+    const observation = captureResourceDiscoveryObservations("resource-explorer");
+    try {
+      const card = resource({
+        identityKey: "resource:observed-card:v1",
+        name: "observed-card",
+        uri: "file:///repo/src/observed-card.ts",
+        aliases: ["observed-alias"],
+        bindables: [{ name: "label", valueType: "string" }],
+        metadataState: "header-only",
+        implementationLine: 12,
+      });
+      const harness = createHarness(async () => response(
+        [readyProject([card])],
+        workspace(),
+        "semantic-runtime:observed",
+      ));
+
+      await harness.provider.refresh();
+      const publication = observation.events.filter((event) =>
+        event.phase === "publish-start"
+        || event.phase === "publish-node"
+        || event.phase === "publish-complete"
+      );
+      expect(publication[0]).toEqual(expect.objectContaining({
+        phase: "publish-start",
+        publicationKind: "current",
+        fingerprint: "semantic-runtime:observed",
+        workspaceIdentity: null,
+      }));
+      const resourceRow = publication.find((event) =>
+        event.phase === "publish-node" && event.label === "observed-card"
+      );
+      expect(resourceRow).toEqual(expect.objectContaining({
+        answerResult: "answered",
+        answerCoverage: "complete",
+        answerRowCount: 1,
+        nodeId: expect.stringMatching(/^tree-node:[0-9a-f]{64}$/u),
+        parentId: expect.stringMatching(/^tree-node:[0-9a-f]{64}$/u),
+        navigationWorkspaceIdentity: expect.stringMatching(/^workspace:[0-9a-f]{64}$/u),
+        navigationProjectKey: "app",
+        navigationFingerprint: "semantic-runtime:observed",
+        navigationResourceIdentity: "resource:observed-card:v1",
+        navigationChildIdentity: null,
+        navigationRole: "resource",
+        navigationPlacement: "preview",
+        implementationAvailable: true,
+        implementationResourceIdentity: "resource:observed-card:v1",
+        implementationRole: "implementation",
+        implementationPlacement: "preview",
+        rowStates: "metadata-incomplete",
+      }));
+      const aliasRow = publication.find((event) =>
+        event.phase === "publish-node" && event.label === "observed-alias"
+      );
+      expect(aliasRow).toEqual(expect.objectContaining({
+        answerResult: "answered",
+        answerCoverage: "complete",
+        answerRowCount: 1,
+        navigationResourceIdentity: "resource:observed-card:v1",
+        navigationChildIdentity: "resource:observed-card:v1:alias:observed-alias",
+        navigationRole: "alias",
+        implementationAvailable: false,
+        rowStates: "metadata-incomplete",
+      }));
+      const observedNodeToken = String(resourceRow!.nodeId);
+      expect(harness.provider.navigationFor({ id: observedNodeToken }, "declaration")).toMatchObject({
+        fingerprint: "semantic-runtime:observed",
+        projectKey: "app",
+        resourceIdentityKey: "resource:observed-card:v1",
+        role: "resource",
+      });
+      expect(observedNodeToken).not.toMatch(/file:\/\/\/|observed-card:v1/iu);
+      expect(publication.at(-1)).toEqual(expect.objectContaining({
+        phase: "publish-complete",
+        fingerprint: "semantic-runtime:observed",
+        workspaceIdentity: null,
+      }));
+      harness.provider.markUpdating("file:///repo");
+      const updatingResourceRow = [...observation.events].reverse().find((event) =>
+        event.phase === "publish-node" && event.label === "observed-card"
+      );
+      expect(updatingResourceRow).toEqual(expect.objectContaining({
+        nodeId: resourceRow!.nodeId,
+        publicationKind: "updating",
+        navigationFingerprint: "semantic-runtime:observed",
+        rowStates: "updating|metadata-incomplete",
+      }));
+      const replacement = resource({
+        identityKey: "resource:replacement:v1",
+        name: "replacement-card",
+        uri: "file:///repo/src/replacement-card.ts",
+      });
+      harness.getResourceInventory.mockResolvedValueOnce(response(
+        [readyProject([replacement])],
+        workspace(),
+        "semantic-runtime:replacement",
+      ));
+      await harness.provider.refresh();
+      expect(harness.provider.navigationFor({ id: observedNodeToken }, "declaration")).toBeNull();
+      expect(JSON.stringify(observation.events)).not.toMatch(/file:\/\/\/repo/iu);
+      expect(publication.every((event) => Object.isFrozen(event))).toBe(true);
+      expect(publication.every((event) => Object.values(event).every(isObservationPrimitive))).toBe(true);
+    } finally {
+      observation.dispose();
+    }
+  });
+
+  test("observes exact answer coverage and null/non-answered project boundaries", async () => {
+    const observation = captureResourceDiscoveryObservations("resource-explorer");
+    try {
+      const card = resource({
+        identityKey: "resource:coverage-card:v1",
+        name: "coverage-card",
+        uri: "file:///repo/src/coverage-card.ts",
+      });
+      const projectError = response([{
+        status: "error",
+        project: project("app"),
+        message: "private project detail",
+      }]);
+      const getResourceInventory = vi.fn()
+        .mockResolvedValueOnce(response([readyProject([card], "app", "open")]))
+        .mockResolvedValueOnce(response([readyProject([card], "app", "truncated")]))
+        .mockResolvedValueOnce(response([readyProject([card], "app", "complete", "failed")]))
+        .mockResolvedValueOnce(projectError);
+      const harness = createHarness(getResourceInventory);
+      const lastPublished = () => [...observation.events].reverse().find((event) =>
+        event.phase === "publish-node"
+      );
+
+      await harness.provider.refresh();
+      expect(lastPublished()).toEqual(expect.objectContaining({
+        answerResult: "answered",
+        answerCoverage: "open",
+        answerRowCount: 1,
+      }));
+
+      await harness.provider.refresh();
+      expect(lastPublished()).toEqual(expect.objectContaining({
+        answerResult: "answered",
+        answerCoverage: "truncated",
+        answerRowCount: 1,
+      }));
+
+      await harness.provider.refresh();
+      expect(lastPublished()).toEqual(expect.objectContaining({
+        answerResult: "failed",
+        answerCoverage: "complete",
+        answerRowCount: 1,
+      }));
+
+      await harness.provider.refresh();
+      expect(lastPublished()).toEqual(expect.objectContaining({
+        answerResult: null,
+        answerCoverage: null,
+        answerRowCount: null,
+      }));
+    } finally {
+      observation.dispose();
+    }
+  });
+
+  test("keeps aggregate fingerprints null across multiple workspace boundaries", async () => {
+    const observation = captureResourceDiscoveryObservations("resource-explorer");
+    try {
+      const workspaceA = workspace("file:///repo/a");
+      const workspaceB = workspace("file:///repo/b");
+      const responseA = response([readyProject([])], workspaceA, "fingerprint:a");
+      const mixed = {
+        workspaces: [
+          ...responseA.workspaces,
+          { ...workspaceB, status: "error" as const, error: "private workspace B failure" },
+        ],
+      };
+      const getResourceInventory = vi.fn()
+        .mockResolvedValueOnce(mixed)
+        .mockResolvedValueOnce(responseA);
+      const harness = createHarness(getResourceInventory);
+
+      await harness.provider.refresh();
+      expect([...observation.events].reverse().find((event) =>
+        event.phase === "publish-complete" && event.publicationKind === "current"
+      )).toEqual(expect.objectContaining({
+        workspaceIdentity: null,
+        fingerprint: null,
+      }));
+
+      await harness.provider.refreshWorkspace(workspaceA.key);
+      expect([...observation.events].reverse().find((event) =>
+        event.phase === "publish-complete" && event.publicationKind === "current"
+      )).toEqual(expect.objectContaining({
+        workspaceIdentity: expect.stringMatching(/^workspace:[0-9a-f]{64}$/u),
+        fingerprint: "fingerprint:a",
+      }));
+    } finally {
+      observation.dispose();
+    }
+  });
+
+  test("keeps observed tree identity proxies disabled outside the dual-gated host lane", async () => {
+    const observationEnv = "AURELIA_LS_EXTENSION_HOST_OBSERVATION";
+    const acceptanceEnv = "AURELIA_LS_RESOURCE_DISCOVERY_HOST_ACCEPTANCE";
+    const previousObservation = process.env[observationEnv];
+    const previousAcceptance = process.env[acceptanceEnv];
+    const events: ExtensionHostObservation[] = [];
+    const listener = (event: ExtensionHostObservation): void => { events.push(event); };
+    process.env[observationEnv] = "1";
+    process.env[acceptanceEnv] = "0";
+    process.on(EXTENSION_HOST_OBSERVATION_EVENT, listener);
+    try {
+      const card = resource({
+        identityKey: "resource:raw-only:v1",
+        name: "raw-only-card",
+        uri: "file:///repo/src/raw-only-card.ts",
+      });
+      const harness = createHarness(async () => response([readyProject([card])]));
+      await harness.provider.refresh();
+      const node = findNode(await roots(harness.provider), "raw-only-card")!;
+      const observedToken = `tree-node:${createHash("sha256").update(node.id).digest("hex")}`;
+
+      expect(harness.provider.navigationFor({ id: observedToken }, "declaration")).toBeNull();
+      expect(harness.provider.navigationFor(node, "declaration")).toMatchObject({
+        resourceIdentityKey: "resource:raw-only:v1",
+      });
+      expect(node).not.toHaveProperty("observationAnswerResult");
+      expect(node).not.toHaveProperty("observationAnswerCoverage");
+      expect(node).not.toHaveProperty("observationAnswerRowCount");
+      expect(events).toEqual([]);
+    } finally {
+      process.off(EXTENSION_HOST_OBSERVATION_EVENT, listener);
+      restoreEnvironment(observationEnv, previousObservation);
+      restoreEnvironment(acceptanceEnv, previousAcceptance);
+    }
+  });
+
   test("builds the settled kind-first tree with exact alias and bindable actions", async () => {
     const card = resource({
       identityKey: "resource:product-card:v1",
@@ -752,6 +1028,45 @@ describe("ResourceExplorerProvider", () => {
     expect(JSON.stringify(tree)).not.toContain("late-scoped-card");
   });
 
+  test("observes a superseded predecessor as discarded without publishing its fingerprint", async () => {
+    const observation = captureResourceDiscoveryObservations("resource-explorer");
+    try {
+      const owner = workspace("file:///repo/a");
+      let resolvePredecessor!: (value: unknown) => void;
+      const predecessor = new Promise<unknown>((resolve) => { resolvePredecessor = resolve; });
+      const getResourceInventory = vi.fn()
+        .mockResolvedValueOnce(response([readyProject([])], owner, "baseline"))
+        .mockImplementationOnce(() => predecessor);
+      const harness = createHarness(getResourceInventory);
+      await harness.provider.refresh();
+      observation.events.length = 0;
+
+      const pending = harness.provider.refreshWorkspace(owner.key);
+      await vi.waitFor(() => expect(getResourceInventory).toHaveBeenCalledTimes(2));
+      harness.provider.supersedeRefresh(owner.key);
+      resolvePredecessor(response([readyProject([])], owner, "retired-predecessor"));
+      await pending;
+
+      expect(observation.events).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          phase: "discarded",
+          reason: "superseded",
+          fingerprint: "retired-predecessor",
+        }),
+      ]));
+      const discarded = observation.events.find((event) => event.phase === "discarded")!;
+      expect(discarded.currentGeneration).toBeGreaterThan(discarded.generation as number);
+      expect(observation.events.some((event) =>
+        event.phase === "publish-complete" && event.fingerprint === "retired-predecessor"
+      )).toBe(false);
+      expect(observation.events.filter((event) => event.phase === "publish-node").every((event) =>
+        event.rowStates === "updating"
+      )).toBe(true);
+    } finally {
+      observation.dispose();
+    }
+  });
+
   test("publishes only the latest refresh and retains the current snapshot while updating", async () => {
     let resolveFirst!: (value: unknown) => void;
     const firstResult = new Promise((resolve) => { resolveFirst = resolve; });
@@ -922,6 +1237,77 @@ describe("ResourceExplorerProvider", () => {
     subscription.dispose();
   });
 
+  test("scopes retained updating rows and view-state counts to the pending workspace", async () => {
+    const observation = captureResourceDiscoveryObservations("resource-explorer");
+    const workspaceA = workspace("file:///repo/a");
+    const workspaceB = workspace("file:///repo/b");
+    const currentA = resource({
+      identityKey: "resource:a:scoped-updating",
+      name: "a-card",
+      uri: "file:///repo/a/card.ts",
+    });
+    const stableB = resource({
+      identityKey: "resource:b:scoped-stable",
+      name: "b-card",
+      uri: "file:///repo/b/card.ts",
+    });
+    const baseline = combinedResponse(
+      response([readyProject([currentA])], workspaceA, "a:baseline"),
+      response([readyProject([stableB])], workspaceB, "b:baseline"),
+    );
+    const recoveredA = response([readyProject([currentA])], workspaceA, "a:recovered");
+    let settle!: (value: unknown) => void;
+    const replacement = new Promise<unknown>((resolve) => { settle = resolve; });
+    const getResourceInventory = vi.fn()
+      .mockResolvedValueOnce(baseline)
+      .mockImplementationOnce(() => replacement);
+    const harness = createHarness(getResourceInventory);
+    await harness.provider.refresh();
+    const baselineB = findNode(await roots(harness.provider), "b-card")!;
+    observation.events.length = 0;
+
+    const pending = harness.provider.refreshWorkspace(workspaceA.key);
+    try {
+      const tree = await roots(harness.provider);
+      const updatingA = findNode(tree, "a-card")!;
+      const retainedB = findNode(tree, "b-card")!;
+      expect(updatingA.description).toContain("updating");
+      expect(updatingA.accessibilityLabel).toContain("updating");
+      expect(retainedB).toEqual(expect.objectContaining({
+        id: baselineB.id,
+        label: baselineB.label,
+        description: baselineB.description,
+        accessibilityLabel: baselineB.accessibilityLabel,
+      }));
+      expect(retainedB.description ?? "").not.toContain("updating");
+      expect(retainedB.accessibilityLabel).not.toContain("updating");
+      expect(harness.view.message).toBeUndefined();
+      expect(observation.events.find((event) =>
+        event.phase === "view-state"
+          && event.updatingWorkspaceCount === 1
+      )).toEqual(expect.objectContaining({
+        state: "current",
+        message: null,
+        updatingAll: false,
+        updatingWorkspaceCount: 1,
+        staleWorkspaceCount: 0,
+      }));
+    } finally {
+      settle(recoveredA);
+      await pending;
+      observation.dispose();
+    }
+
+    const recoveredTree = await roots(harness.provider);
+    expect(findNode(recoveredTree, "a-card")?.description ?? "").not.toContain("updating");
+    expect(findNode(recoveredTree, "b-card")).toEqual(expect.objectContaining({
+      id: baselineB.id,
+      description: baselineB.description,
+      accessibilityLabel: baselineB.accessibilityLabel,
+    }));
+    expect(harness.view.message).toBeUndefined();
+  });
+
   test("publishes an honest no-session row after a successful null response", async () => {
     const harness = createHarness(async () => null);
     await harness.provider.refresh();
@@ -992,3 +1378,39 @@ describe("ResourceExplorerProvider", () => {
     expect(harness.recorded.contextValues.get("aurelia.resourceExplorerHasIssues")).toBe(false);
   });
 });
+
+function captureResourceDiscoveryObservations(source: string): {
+  readonly events: ExtensionHostObservation[];
+  dispose(): void;
+} {
+  const observationEnv = "AURELIA_LS_EXTENSION_HOST_OBSERVATION";
+  const acceptanceEnv = "AURELIA_LS_RESOURCE_DISCOVERY_HOST_ACCEPTANCE";
+  const previousObservation = process.env[observationEnv];
+  const previousAcceptance = process.env[acceptanceEnv];
+  const events: ExtensionHostObservation[] = [];
+  const listener = (event: ExtensionHostObservation): void => {
+    if (event.source === source) events.push(event);
+  };
+  process.env[observationEnv] = "1";
+  process.env[acceptanceEnv] = "1";
+  process.on(EXTENSION_HOST_OBSERVATION_EVENT, listener);
+  return {
+    events,
+    dispose: () => {
+      process.off(EXTENSION_HOST_OBSERVATION_EVENT, listener);
+      if (previousObservation == null) delete process.env[observationEnv];
+      else process.env[observationEnv] = previousObservation;
+      if (previousAcceptance == null) delete process.env[acceptanceEnv];
+      else process.env[acceptanceEnv] = previousAcceptance;
+    },
+  };
+}
+
+function isObservationPrimitive(value: unknown): boolean {
+  return value == null || ["string", "number", "boolean"].includes(typeof value);
+}
+
+function restoreEnvironment(key: string, value: string | undefined): void {
+  if (value == null) delete process.env[key];
+  else process.env[key] = value;
+}

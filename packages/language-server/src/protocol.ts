@@ -270,7 +270,7 @@ export interface ResourceInventoryBindable {
 }
 
 export interface ResourceInventoryItem {
-  /** Stable semantic identity. Kernel/product handles never cross this boundary. */
+  /** Stable owner identity with deterministic variants for lower-authority collisions; kernel handles never cross. */
   readonly identityKey: string;
   readonly projectKey: string;
   readonly kind: ResourceInventoryKind;

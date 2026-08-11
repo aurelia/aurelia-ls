@@ -9,6 +9,12 @@ import {
 } from "@aurelia-ls/language-server/protocol";
 import type { AureliaLanguageClient, AureliaLanguageClientSession } from "../client-core.js";
 import type { ClientLogger } from "../log.js";
+import {
+  createResourceDiscoveryHostControl,
+  type ResourceDiscoveryHostControl,
+  type ResourceDiscoveryHostFault,
+  type ResourceDiscoveryHostRequest,
+} from "../resource-discovery-host-control.js";
 import type {
   ProtocolWorkspaceEdit,
   RelatedFilesResponse,
@@ -34,12 +40,16 @@ export class LspFacade implements Disposable {
   #notificationHandlers = new Map<string, Set<NotificationHandler>>();
   #rawNotificationSubscriptions: Disposable[] = [];
   #sessionSubscription: Disposable;
+  #resourceDiscoveryHostControl: ResourceDiscoveryHostControl | undefined;
   #disposed = false;
 
   constructor(clients: AureliaLanguageClient, logger: ClientLogger) {
     this.#clients = clients;
     this.#logger = logger.child("lsp");
     this.#sessionSubscription = clients.onDidChangeSessions(() => this.#rebindNotifications());
+    this.#resourceDiscoveryHostControl = createResourceDiscoveryHostControl({
+      admittedWorkspaceKeys: () => this.#clients.sessions.map((session) => session.workspace.key),
+    });
   }
 
   dispose(): void {
@@ -52,6 +62,8 @@ export class LspFacade implements Disposable {
     }
     this.#disposeRawNotifications();
     this.#notificationHandlers.clear();
+    this.#resourceDiscoveryHostControl?.dispose();
+    this.#resourceDiscoveryHostControl = undefined;
   }
 
   onNotification<T>(
@@ -85,6 +97,15 @@ export class LspFacade implements Disposable {
       ? this.#clients.sessions
       : this.#clients.sessions.filter((session) => session.workspace.key === options.workspaceKey);
     if (sessions.length === 0) return null;
+    const controlRequest: ResourceDiscoveryHostRequest = {
+      operation: "inventory",
+      workspaceKeys: sessions.map((session) => session.workspace.key),
+      includeTypeSurfaces: options.includeTypeSurfaces === true,
+    };
+    const beforeControl = this.#resourceDiscoveryHostControl;
+    const controlOrdinal = beforeControl == null
+      ? 0
+      : await beforeControl.beforeDispatch(controlRequest, token);
     const params: ResourceInventoryParams = options.includeTypeSurfaces === true
       ? { includeTypeSurfaces: true }
       : {};
@@ -101,8 +122,21 @@ export class LspFacade implements Disposable {
         return { ...session.workspace, status: "error" as const, error: errorMessage(err) };
       }
     }));
-    this.#logResourceInventoryIssues(rows);
-    return { workspaces: rows };
+    let snapshot: ResourceInventorySnapshot = { workspaces: rows };
+    const afterControl = this.#resourceDiscoveryHostControl;
+    if (afterControl != null) {
+      afterControl.noteInventory(snapshot.workspaces);
+      snapshot = await afterControl.afterResponse(
+        controlRequest,
+        controlOrdinal,
+        resourceInventoryFingerprint(snapshot, options.workspaceKey),
+        snapshot,
+        applyResourceInventoryHostFault,
+        token,
+      );
+    }
+    this.#logResourceInventoryIssues(snapshot.workspaces);
+    return snapshot;
   }
 
   async getTemplateResourceAvailability(
@@ -114,7 +148,16 @@ export class LspFacade implements Disposable {
   ): Promise<TemplateResourceAvailabilitySnapshot | null> {
     const session = this.#sessionForUri(uri);
     if (session == null) return null;
-    const response = await this.#sendRequest<TemplateResourceAvailabilityResponse>(
+    const controlRequest: ResourceDiscoveryHostRequest = {
+      operation: "availability",
+      workspaceKeys: [session.workspace.key],
+      ...(projectKey == null ? {} : { projectKey }),
+    };
+    const beforeControl = this.#resourceDiscoveryHostControl;
+    const controlOrdinal = beforeControl == null
+      ? 0
+      : await beforeControl.beforeDispatch(controlRequest, token);
+    let response = await this.#sendRequest<TemplateResourceAvailabilityResponse>(
       session,
       AureliaProtocolRequest.TemplateResourceAvailability,
       {
@@ -125,6 +168,18 @@ export class LspFacade implements Disposable {
       },
       token,
     );
+    const afterControl = this.#resourceDiscoveryHostControl;
+    if (afterControl != null) {
+      afterControl.noteAvailability(session.workspace.key, response.projectSelection);
+      response = await afterControl.afterResponse(
+        controlRequest,
+        controlOrdinal,
+        response.fingerprint,
+        response,
+        (value) => ({ applied: false, value }),
+        token,
+      );
+    }
     this.#logTemplateAvailabilityIssues(response, session.workspace.key);
     return { ...response, workspace: session.workspace };
   }
@@ -352,6 +407,58 @@ export class LspFacade implements Disposable {
       }
     }
   }
+}
+
+function resourceInventoryFingerprint(
+  snapshot: ResourceInventorySnapshot,
+  workspaceKey: string | undefined,
+): string | null {
+  if (workspaceKey == null) {
+    if (snapshot.workspaces.length !== 1) return null;
+    const [workspace] = snapshot.workspaces;
+    return workspace?.status === "ready" ? workspace.response.fingerprint : null;
+  }
+  const fingerprints = snapshot.workspaces.flatMap((workspace) =>
+    workspace.status === "ready" && workspace.key === workspaceKey
+      ? [workspace.response.fingerprint]
+      : []
+  );
+  return fingerprints.length === 1 ? fingerprints[0]! : null;
+}
+
+function applyResourceInventoryHostFault(
+  snapshot: ResourceInventorySnapshot,
+  fault: ResourceDiscoveryHostFault,
+): { readonly applied: boolean; readonly value: ResourceInventorySnapshot } {
+  let applied = false;
+  const message = `Resource discovery host control ${fault.stableCode}.`;
+  const workspaces = snapshot.workspaces.map((workspace) => {
+    if (fault.effect === "newest-error-once") {
+      if (workspace.key !== fault.workspaceKey || workspace.status !== "ready") return workspace;
+      applied = true;
+      return {
+        key: workspace.key,
+        name: workspace.name,
+        uri: workspace.uri,
+        status: "error" as const,
+        error: message,
+      };
+    }
+    if (workspace.status !== "ready") return workspace;
+    if (fault.effect === "project-error-once" && workspace.key !== fault.workspaceKey) return workspace;
+    const projects = workspace.response.projects.map((project) => {
+      if (project.status !== "ready") return project;
+      if (fault.effect === "project-error-once" && project.project.projectKey !== fault.projectKey) return project;
+      applied = true;
+      return {
+        status: "error" as const,
+        project: project.project,
+        message,
+      };
+    });
+    return { ...workspace, response: { ...workspace.response, projects } };
+  });
+  return { applied, value: { workspaces } };
 }
 
 function protocolPosition(position: { readonly line: number; readonly character: number }): {

@@ -540,6 +540,29 @@ export class AureliaLanguageClient {
 
     const nextSessions = new Map(previousSessions);
     const createdSessions: AureliaLanguageClientSession[] = [];
+    const rollbackCreatedSessions = (): void => {
+      // Stop can clear the authoritative publication while an invalidated await
+      // unwinds, so never reconstruct live state from this pass's older snapshot.
+      const publishedSessions = new Map(this.#sessions);
+      let publishedStateChanged = false;
+      for (const created of createdSessions) {
+        if (nextSessions.get(created.workspace.key)?.client === created.client) {
+          nextSessions.delete(created.workspace.key);
+        }
+        if (publishedSessions.get(created.workspace.key)?.client === created.client) {
+          publishedSessions.delete(created.workspace.key);
+          publishedStateChanged = true;
+        }
+      }
+      if (publishedStateChanged) {
+        // A reconcile publishes each admitted root as soon as it is usable. If a
+        // newer lifecycle intent invalidates a later await, withdraw every client
+        // created by this pass before stopping it so the queued pass cannot inherit
+        // a retired client as an established session.
+        this.#publishSessions(publishedSessions);
+      }
+      for (const created of createdSessions) void this.#retireSession(created);
+    };
     const retireActiveSession = (session: AureliaLanguageClientSession): void => {
       if (nextSessions.get(session.workspace.key)?.client === session.client) {
         nextSessions.delete(session.workspace.key);
@@ -568,7 +591,7 @@ export class AureliaLanguageClient {
         intent,
       );
       if (projectRootHintFoldersResult.status === "invalidated") {
-        for (const created of createdSessions) void this.#retireSession(created);
+        rollbackCreatedSessions();
         return;
       }
       const projectRootHintFolders = projectRootHintFoldersResult.value;
@@ -625,7 +648,7 @@ export class AureliaLanguageClient {
         }
         if (session != null) createdSessions.push(session);
         if (!this.#isCurrentLifecycle(intent)) {
-          for (const created of createdSessions) void this.#retireSession(created);
+          rollbackCreatedSessions();
           return;
         }
         if (session == null) continue;
@@ -640,7 +663,7 @@ export class AureliaLanguageClient {
           intent,
         );
         if (statusResult.status === "invalidated" || !this.#isCurrentLifecycle(intent)) {
-          for (const created of createdSessions) void this.#retireSession(created);
+          rollbackCreatedSessions();
           return;
         }
         const status = statusResult.value;

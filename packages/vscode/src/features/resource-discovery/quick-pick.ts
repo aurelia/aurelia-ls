@@ -4,10 +4,12 @@ import type {
   QuickPickItem,
 } from "vscode";
 import {
-  emitExtensionHostObservation,
-  nextExtensionHostObservationId,
   type ExtensionHostObservationValue,
 } from "../../extension-host-observation.js";
+import {
+  emitResourceDiscoveryHostObservation,
+  nextResourceDiscoveryHostObservationId,
+} from "../../resource-discovery-host-control.js";
 import type { VscodeApi } from "../../vscode-api.js";
 
 export interface ResourceQuickPickModel<T extends QuickPickItem> {
@@ -39,32 +41,39 @@ export async function showResourceQuickPick<T extends QuickPickItem>(
   allowBack = false,
   observationId?: string,
   onDidTriggerTitleAction?: (action: ResourceQuickPickTitleAction) => void,
+  modelOrdinal = 1,
 ): Promise<ResourceQuickPickOutcome<T>> {
-  const effectiveObservationId = observationId ?? nextExtensionHostObservationId("quick-pick");
+  const effectiveObservationId = observationId ?? nextResourceDiscoveryHostObservationId("quick-pick");
+  const observing = effectiveObservationId != null;
   const observe = (
     phase: string,
     details: Readonly<Record<string, ExtensionHostObservationValue>> = {},
   ): void => {
     if (effectiveObservationId == null) return;
-    emitExtensionHostObservation({
+    emitResourceDiscoveryHostObservation({
       ...details,
       source: "resource-quick-pick",
       observationId: effectiveObservationId,
       phase,
+      modelOrdinal,
     });
   };
   const cancellation = new vscode.CancellationTokenSource();
   const picker = vscode.window.createQuickPick<T>();
   const titleActionByButton = new Map<QuickInputButton, ResourceQuickPickTitleAction>();
-  const setButtons = (actions: readonly ResourceQuickPickTitleAction[] = []): void => {
+  const setButtons = (
+    actions: readonly ResourceQuickPickTitleAction[] = [],
+  ): readonly ResourceQuickPickTitleAction[] => {
     titleActionByButton.clear();
     const buttons: QuickInputButton[] = allowBack ? [vscode.QuickInputButtons.Back] : [];
-    for (const action of new Set(actions)) {
+    const dedupedActions = [...new Set(actions)];
+    for (const action of dedupedActions) {
       const button = resourceQuickPickTitleButton(vscode, action);
       titleActionByButton.set(button, action);
       buttons.push(button);
     }
     picker.buttons = buttons;
+    return dedupedActions;
   };
   picker.title = initialTitle;
   picker.placeholder = "Discovering Aurelia resources...";
@@ -79,25 +88,40 @@ export async function showResourceQuickPick<T extends QuickPickItem>(
     if (settled) return;
     settled = true;
     finishedStatus = value.status;
+    observe("outcome", { status: value.status });
     settle(value);
     picker.hide();
   };
   const subscriptions = [
     picker.onDidChangeActive((items) => {
-      observe("active-changed", { activeLabel: items[0]?.label ?? null });
+      if (!observing) return;
+      const active = items[0];
+      observe("active-changed", {
+        activeLabel: active?.label ?? null,
+        itemOrdinal: active == null ? null : picker.items.indexOf(active),
+      });
     }),
     picker.onDidAccept(() => {
       const selected = picker.selectedItems[0];
-      observe("accept", { selectedLabel: selected?.label ?? null });
+      if (observing) {
+        observe("accept", {
+          selectedLabel: selected?.label ?? null,
+          itemOrdinal: selected == null ? null : picker.items.indexOf(selected),
+        });
+      }
       if (selected != null) finish({ status: "selected", value: selected });
     }),
     picker.onDidHide(() => {
       observe("hidden");
       cancellation.cancel();
-      finish({ status: "cancelled" });
+      if (!settled) {
+        observe("cancelled");
+        finish({ status: "cancelled" });
+      }
     }),
     picker.onDidTriggerButton((button: QuickInputButton) => {
       if (allowBack && button === vscode.QuickInputButtons.Back) {
+        observe("back");
         finish({ status: "back" });
         return;
       }
@@ -107,6 +131,11 @@ export async function showResourceQuickPick<T extends QuickPickItem>(
       onDidTriggerTitleAction?.(action);
     }),
   ];
+  observe("model-start", {
+    title: initialTitle,
+    placeholder: picker.placeholder,
+    allowBack,
+  });
   picker.show();
   observe("shown");
 
@@ -148,8 +177,37 @@ export async function showResourceQuickPick<T extends QuickPickItem>(
     picker.matchOnDetail = true;
     picker.step = model.step;
     picker.totalSteps = model.totalSteps;
-    setButtons(model.titleActions);
-    observe("model-ready", { itemCount: model.items.length, title: model.title });
+    const titleActions = setButtons(model.titleActions);
+    if (observing) {
+      let itemOrdinal = 0;
+      for (const item of model.items) {
+        const itemKind = "kind" in item && typeof item.kind === "number" ? "separator" : "item";
+        observe("model-item", {
+          itemOrdinal: itemOrdinal++,
+          itemKind,
+          label: item.label,
+          description: item.description ?? null,
+          detail: item.detail ?? null,
+        });
+      }
+      if (allowBack) observe("model-button", { buttonKind: "back", buttonOrdinal: 0 });
+      for (const [index, action] of titleActions.entries()) {
+        observe("model-button", {
+          buttonKind: action,
+          buttonOrdinal: index + (allowBack ? 1 : 0),
+        });
+      }
+    }
+    observe("model-ready", {
+      itemCount: model.items.length,
+      title: model.title,
+      placeholder: model.placeholder,
+      step: model.step ?? null,
+      totalSteps: model.totalSteps ?? null,
+      matchOnDescription: picker.matchOnDescription,
+      matchOnDetail: picker.matchOnDetail,
+      buttonCount: picker.buttons.length,
+    });
     return await outcome;
   } finally {
     if (finishedStatus != null) observe("finished", { status: finishedStatus });

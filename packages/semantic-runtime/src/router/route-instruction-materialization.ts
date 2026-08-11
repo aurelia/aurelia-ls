@@ -1976,6 +1976,10 @@ function expressionRouterResourceValue(
       sourceValueEvaluator,
     );
   }
+  const authoredString = authoredExpressionStringValue(expression, expressionSourceAddressHandle);
+  if (authoredString != null) {
+    return authoredString;
+  }
   const evaluatedInstruction = evaluatedRouterResourceValue(
     expression,
     expressionSourceAddressHandle,
@@ -1987,7 +1991,13 @@ function expressionRouterResourceValue(
   if (evaluatedInstruction != null) {
     return evaluatedInstruction;
   }
-  return expressionStringValue(expression, expressionSourceAddressHandle, site, bindingInstructionProductHandle, sourceValueEvaluator)
+  return evaluatedStringValue(
+    expression,
+    site,
+    bindingInstructionProductHandle,
+    sourceValueEvaluator,
+    expressionSourceAddressHandle,
+  )
     ?? invalidClosedRouterInstructionValue(expression, expressionSourceAddressHandle, site, bindingInstructionProductHandle, sourceValueEvaluator);
 }
 
@@ -2860,12 +2870,9 @@ function readObjectLiteralValue(
   return index < 0 ? null : expression.values[index] ?? null;
 }
 
-function expressionStringValue(
+function authoredExpressionStringValue(
   expression: ExpressionAstNode,
   sourceAddressHandle: AddressHandle | null,
-  site: RouterResourceInstructionSite,
-  bindingInstructionProductHandle: ProductHandle,
-  sourceValueEvaluator: RuntimeBindingSourceValueEvaluator | null = null,
 ): StaticStringBindingValue | null {
   switch (expression.$kind) {
     case 'PrimitiveLiteral':
@@ -2879,9 +2886,17 @@ function expressionStringValue(
           }
         : null;
     case 'Template':
-      return dynamicRouteStringValue(expression.cooked, expression.expressions.length, sourceAddressHandle);
+      return expression.expressions.length === 0
+        ? {
+            state: 'route-expression',
+            value: expression.cooked.join(''),
+            sourceAddressHandle,
+            dynamicPartCount: 0,
+            pressure: [],
+          }
+        : null;
     default:
-      return evaluatedStringValue(expression, site, bindingInstructionProductHandle, sourceValueEvaluator, sourceAddressHandle);
+      return null;
   }
 }
 

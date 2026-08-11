@@ -2,6 +2,13 @@ import { describe, expect, test, vi } from "vitest";
 import type { LanguageClient, LanguageClientOptions } from "vscode-languageclient/node";
 import { AureliaLanguageClient } from "../../out/client-core.js";
 import { LspFacade } from "../../out/core/lsp-facade.js";
+import { EXTENSION_HOST_OBSERVATION_EVENT } from "../../out/extension-host-observation.js";
+import {
+  createResourceDiscoveryHostControl,
+  RESOURCE_DISCOVERY_HOST_CONTROL_EVENT,
+  RESOURCE_DISCOVERY_HOST_CONTROL_SCHEMA,
+  ResourceDiscoveryHostControl,
+} from "../../out/resource-discovery-host-control.js";
 import {
   AureliaActivationMode,
   isWorkspaceNativeProjectConfigurationUri,
@@ -38,6 +45,7 @@ interface ClientHarnessOptions {
   readonly workspaceStatus?: (
     workspaceUri: string,
     requestIndex: number,
+    clientIndex: number,
   ) => WorkspaceStatusResponse | null | Promise<WorkspaceStatusResponse | null>;
   readonly clientStart?: (workspaceUri: string, clientIndex: number) => void | Promise<void>;
   readonly clientStop?: (workspaceUri: string, clientIndex: number) => void | Promise<void>;
@@ -670,6 +678,153 @@ describe("AureliaLanguageClient workspace ownership", () => {
     await manager.stop();
   });
 
+  test("replaces created sessions rolled back while a later candidate is confirming", async () => {
+    const { vscode } = twoWorkspaceApi();
+    const secondStatus = deferred<WorkspaceStatusResponse | null>();
+    const harness = createClientHarness(new Map(), {
+      workspaceStatus: (workspaceUri, _requestIndex, clientIndex) => {
+        if (workspaceUri === "file:///work/b" && clientIndex === 1) {
+          return secondStatus.promise;
+        }
+        return workspaceStatus("app-world");
+      },
+    });
+    const manager = createManager(vscode, harness);
+
+    const starting = manager.start(stubExtensionContext(vscode));
+    await vi.waitFor(() => expect(manager.sessions.map((session) => session.workspace.name)).toEqual(["a"]));
+    await vi.waitFor(() => expect(harness.clients).toHaveLength(2));
+    expect(manager.sessions[0]?.client).toBe(harness.clients[0]?.raw);
+
+    const current = manager.reconcile();
+    await Promise.all([starting, current]);
+
+    expect(harness.clients).toHaveLength(4);
+    expect(harness.clients[0]?.stop).toHaveBeenCalledTimes(1);
+    expect(harness.clients[1]?.stop).toHaveBeenCalledTimes(1);
+    expect(manager.sessions.map((session) => session.client)).toEqual([
+      harness.clients[2]?.raw,
+      harness.clients[3]?.raw,
+    ]);
+    expect(manager.sessions.every((session) =>
+      harness.clients.find((client) => client.raw === session.client)?.stop.mock.calls.length === 0
+    )).toBe(true);
+    await manager.stop();
+  });
+
+  test("replaces a published sibling when primary withdrawal invalidates later reconfirmation", async () => {
+    const primaryUri = "file:///work/z-root";
+    const secondaryUri = "file:///work/a-root";
+    const { vscode } = createVscodeApi({
+      workspaceFolders: [{ name: "primary", uri: primaryUri }],
+      files: {
+        [`${primaryUri}/package.json`]: JSON.stringify({ dependencies: { aurelia: "latest" } }),
+        [`${secondaryUri}/package.json`]: JSON.stringify({ dependencies: { aurelia: "latest" } }),
+      },
+    });
+    const blockedPrimaryStatus = deferred<WorkspaceStatusResponse | null>();
+    const retiredClients = new Set<number>();
+    const harness = createClientHarness(new Map(), {
+      workspaceStatus: (workspaceUri, requestIndex, clientIndex) => {
+        if (workspaceUri === primaryUri && requestIndex === 2) {
+          return blockedPrimaryStatus.promise;
+        }
+        if (retiredClients.has(clientIndex)) {
+          throw new Error("Client is not running");
+        }
+        return workspaceStatus("app-world");
+      },
+      clientStop: (_workspaceUri, clientIndex) => {
+        retiredClients.add(clientIndex);
+      },
+    });
+    const manager = createManager(vscode, harness);
+    await manager.start(stubExtensionContext(vscode));
+
+    vscode.workspace.workspaceFolders?.push({
+      name: "secondary",
+      index: 1,
+      uri: vscode.Uri.parse(secondaryUri),
+    });
+    const adding = manager.reconcile({ reconfirmExisting: true });
+    await vi.waitFor(() => expect(manager.sessions.map((session) => session.workspace.name)).toEqual([
+      "secondary",
+      "primary",
+    ]));
+    await vi.waitFor(() => expect(harness.clients[0]?.sendRequest).toHaveBeenCalledTimes(2));
+    expect(manager.sessions.find((session) => session.workspace.name === "secondary")?.client)
+      .toBe(harness.clients[1]?.raw);
+
+    const primaryIndex = vscode.workspace.workspaceFolders?.findIndex((folder) =>
+      folder.uri.toString() === primaryUri
+    ) ?? -1;
+    expect(primaryIndex).toBeGreaterThanOrEqual(0);
+    vscode.workspace.workspaceFolders?.splice(primaryIndex, 1);
+    const removing = manager.reconcile({ reconfirmExisting: true });
+    await Promise.all([adding, removing]);
+
+    expect(harness.clients).toHaveLength(3);
+    expect(harness.clients[0]?.stop).toHaveBeenCalledTimes(1);
+    expect(harness.clients[1]?.stop).toHaveBeenCalledTimes(1);
+    expect(manager.sessions).toEqual([
+      expect.objectContaining({
+        workspace: expect.objectContaining({ name: "secondary" }),
+        client: harness.clients[2]?.raw,
+      }),
+    ]);
+    expect(harness.clients[2]?.stop).not.toHaveBeenCalled();
+    await manager.stop();
+  });
+
+  test("does not resurrect a primary when stop invalidates a partially published reconcile", async () => {
+    const primaryUri = "file:///work/z-root";
+    const secondaryUri = "file:///work/a-root";
+    const { vscode } = createVscodeApi({
+      workspaceFolders: [{ name: "primary", uri: primaryUri }],
+      files: {
+        [`${primaryUri}/package.json`]: JSON.stringify({ dependencies: { aurelia: "latest" } }),
+        [`${secondaryUri}/package.json`]: JSON.stringify({ dependencies: { aurelia: "latest" } }),
+      },
+    });
+    const blockedPrimaryStatus = deferred<WorkspaceStatusResponse | null>();
+    const harness = createClientHarness(new Map(), {
+      workspaceStatus: (workspaceUri, requestIndex) => {
+        if (workspaceUri === primaryUri && requestIndex === 2) {
+          return blockedPrimaryStatus.promise;
+        }
+        return workspaceStatus("app-world");
+      },
+    });
+    const manager = createManager(vscode, harness);
+    const publications: string[][] = [];
+    manager.onDidChangeSessions((sessions) => {
+      publications.push(sessions.map((session) => session.workspace.name));
+    });
+    await manager.start(stubExtensionContext(vscode));
+
+    vscode.workspace.workspaceFolders?.push({
+      name: "secondary",
+      index: 1,
+      uri: vscode.Uri.parse(secondaryUri),
+    });
+    const adding = manager.reconcile({ reconfirmExisting: true });
+    await vi.waitFor(() => expect(manager.sessions.map((session) => session.workspace.name)).toEqual([
+      "secondary",
+      "primary",
+    ]));
+    await vi.waitFor(() => expect(harness.clients[0]?.sendRequest).toHaveBeenCalledTimes(2));
+
+    const stopping = manager.stop();
+    await Promise.all([adding, stopping]);
+
+    expect(manager.sessions).toEqual([]);
+    expect(harness.clients).toHaveLength(2);
+    expect(harness.clients.every((client) => client.stop.mock.calls.length > 0)).toBe(true);
+    const firstEmptyPublication = publications.findIndex((sessions) => sessions.length === 0);
+    expect(firstEmptyPublication).toBeGreaterThanOrEqual(0);
+    expect(publications.slice(firstEmptyPublication + 1).every((sessions) => sessions.length === 0)).toBe(true);
+  });
+
   test("does not publish a candidate that finishes semantic confirmation after stop", async () => {
     const { vscode } = createVscodeApi({
       workspaceFolders: [{ name: "app", uri: "file:///work/app" }],
@@ -801,7 +956,761 @@ describe("AureliaLanguageClient workspace ownership", () => {
   });
 });
 
+describe("resource discovery host controls", () => {
+  test("allocates no controller or process listener unless both acceptance gates are exact", () => {
+    const previousObservation = process.env.AURELIA_LS_EXTENSION_HOST_OBSERVATION;
+    const previousAcceptance = process.env.AURELIA_LS_RESOURCE_DISCOVERY_HOST_ACCEPTANCE;
+    const listeners = process.listenerCount(RESOURCE_DISCOVERY_HOST_CONTROL_EVENT);
+    try {
+      delete process.env.AURELIA_LS_EXTENSION_HOST_OBSERVATION;
+      delete process.env.AURELIA_LS_RESOURCE_DISCOVERY_HOST_ACCEPTANCE;
+      expect(createResourceDiscoveryHostControl({ admittedWorkspaceKeys: () => ["file:///work/app"] })).toBeUndefined();
+      process.env.AURELIA_LS_RESOURCE_DISCOVERY_HOST_ACCEPTANCE = "1";
+      expect(createResourceDiscoveryHostControl({ admittedWorkspaceKeys: () => ["file:///work/app"] })).toBeUndefined();
+      delete process.env.AURELIA_LS_RESOURCE_DISCOVERY_HOST_ACCEPTANCE;
+      process.env.AURELIA_LS_EXTENSION_HOST_OBSERVATION = "1";
+      expect(createResourceDiscoveryHostControl({ admittedWorkspaceKeys: () => ["file:///work/app"] })).toBeUndefined();
+      expect(process.listenerCount(RESOURCE_DISCOVERY_HOST_CONTROL_EVENT)).toBe(listeners);
+      process.env.AURELIA_LS_RESOURCE_DISCOVERY_HOST_ACCEPTANCE = "1";
+      const controller = createResourceDiscoveryHostControl({ admittedWorkspaceKeys: () => ["file:///work/app"] });
+      expect(controller).toBeDefined();
+      expect(process.listenerCount(RESOURCE_DISCOVERY_HOST_CONTROL_EVENT)).toBe(listeners + 1);
+      controller?.dispose();
+      expect(process.listenerCount(RESOURCE_DISCOVERY_HOST_CONTROL_EVENT)).toBe(listeners);
+    } finally {
+      restoreEnvironment("AURELIA_LS_EXTENSION_HOST_OBSERVATION", previousObservation);
+      restoreEnvironment("AURELIA_LS_RESOURCE_DISCOVERY_HOST_ACCEPTANCE", previousAcceptance);
+    }
+  });
+
+  test("enforces strict one-shot barrier, release, reset, cancellation, rejection, and disposal", async () => {
+    await withResourceDiscoveryHostAcceptance(async (events) => {
+      const workspaceKey = "file:///work/app";
+      const controller = new ResourceDiscoveryHostControl({
+        admittedWorkspaceKeys: () => [workspaceKey],
+        installProcessListener: false,
+      });
+      controller.noteInventory([{
+        key: workspaceKey,
+        status: "ready",
+        response: { projects: [{ status: "ready", project: { projectKey: "app" } }] },
+      }]);
+      controller.dispatch(armControl("barrier:one", {
+        operation: "inventory",
+        stage: "before-dispatch",
+        workspaceKey,
+        includeTypeSurfaces: true,
+      }));
+      const first = controller.beforeDispatch({
+        operation: "inventory",
+        workspaceKeys: [workspaceKey],
+        includeTypeSurfaces: true,
+      });
+      await vi.waitFor(() => expect(events.some((event) =>
+        event.observationId === "barrier:one" && event.phase === "blocked"
+      )).toBe(true));
+      controller.dispatch(releaseControl("barrier:one"));
+      await expect(first).resolves.toBe(1);
+      await expect(controller.beforeDispatch({
+        operation: "inventory",
+        workspaceKeys: [workspaceKey],
+        includeTypeSurfaces: true,
+      })).resolves.toBe(2);
+      expect(events.filter((event) => event.observationId === "barrier:one" && event.phase === "blocked"))
+        .toHaveLength(1);
+
+      controller.dispatch(armControl("barrier:synchronous-release", {
+        operation: "inventory",
+        stage: "after-response",
+        workspaceKey,
+        includeTypeSurfaces: true,
+      }));
+      const releaseOnBlock = (event: { readonly observationId?: unknown; readonly phase?: unknown }): void => {
+        if (event.observationId === "barrier:synchronous-release" && event.phase === "blocked") {
+          controller.dispatch(releaseControl("barrier:synchronous-release"));
+        }
+      };
+      process.on(EXTENSION_HOST_OBSERVATION_EVENT, releaseOnBlock);
+      try {
+        await expect(controller.afterResponse(
+          { operation: "inventory", workspaceKeys: [workspaceKey], includeTypeSurfaces: true },
+          3,
+          "f-synchronous",
+          { fingerprint: "f-synchronous" },
+          (value) => ({ applied: false, value }),
+        )).resolves.toEqual({ fingerprint: "f-synchronous" });
+      } finally {
+        process.off(EXTENSION_HOST_OBSERVATION_EVENT, releaseOnBlock);
+      }
+
+      controller.dispatch(armControl("barrier:cancel", {
+        operation: "availability",
+        stage: "before-dispatch",
+        workspaceKey,
+        projectKey: "app",
+      }));
+      const cancellation = testCancellationToken();
+      const cancelled = controller.beforeDispatch({
+        operation: "availability",
+        workspaceKeys: [workspaceKey],
+        projectKey: "app",
+      }, cancellation.token as never);
+      await vi.waitFor(() => expect(controller.liveControlCount).toBe(1));
+      cancellation.cancel();
+      await expect(cancelled).rejects.toMatchObject({ name: "Canceled", code: -32800 });
+
+      controller.dispatch(armControl("barrier:reset", {
+        operation: "availability",
+        stage: "after-response",
+        workspaceKey,
+        projectKey: "app",
+      }));
+      const reset = controller.afterResponse(
+        { operation: "availability", workspaceKeys: [workspaceKey], projectKey: "app" },
+        4,
+        "f1",
+        { fingerprint: "f1" },
+        (value) => ({ applied: false, value }),
+      );
+      await vi.waitFor(() => expect(controller.liveControlCount).toBe(1));
+      controller.dispatch(resetControl("barrier:reset"));
+      await expect(reset).rejects.toThrow("was reset");
+
+      controller.dispatch({ ...releaseControl("missing"), unexpected: true });
+      controller.dispatch(releaseControl("missing"));
+      controller.dispatch({ ...armControl("bad", {
+        operation: "availability",
+        stage: "before-dispatch",
+        workspaceKey,
+      }), stableCode: "forbidden" });
+      controller.dispatch({
+        schemaVersion: RESOURCE_DISCOVERY_HOST_CONTROL_SCHEMA,
+        action: "unknown",
+        controlId: "unknown-action",
+      });
+      controller.dispatch({
+        ...armControl("unknown-effect", {
+          operation: "inventory",
+          stage: "after-response",
+          workspaceKey,
+          includeTypeSurfaces: true,
+        }),
+        effect: "unknown-effect",
+      });
+      controller.dispatch(armControl("bad-workspace", {
+        operation: "inventory",
+        stage: "after-response",
+        workspaceKey: "file:///work/not-admitted",
+        includeTypeSurfaces: true,
+        effect: "newest-error-once",
+      }));
+      controller.dispatch(armControl("bad-project", {
+        operation: "inventory",
+        stage: "after-response",
+        workspaceKey,
+        includeTypeSurfaces: true,
+        projectKey: "not-admitted",
+        effect: "project-error-once",
+      }));
+      controller.dispatch(armControl("all-on-minimum", {
+        operation: "inventory",
+        stage: "after-response",
+        workspaceKey,
+        includeTypeSurfaces: true,
+        effect: "all-error-once",
+      }));
+      controller.dispatch(armControl("duplicate-live", {
+        operation: "availability",
+        stage: "before-dispatch",
+        workspaceKey,
+        projectKey: "app",
+      }));
+      controller.dispatch(armControl("duplicate-live", {
+        operation: "availability",
+        stage: "before-dispatch",
+        workspaceKey,
+        projectKey: "app",
+      }));
+      controller.dispatch(resetControl("duplicate-live"));
+      expect(events.filter((event) => event.phase === "rejected").map((event) => event.reason)).toEqual([
+        "release-fields-invalid",
+        "barrier-not-blocked",
+        "barrier-stable-code-forbidden",
+        "action-unsupported",
+        "effect-unsupported",
+        "workspace-not-admitted",
+        "project-not-admitted",
+        "effect-not-admitted-in-lane",
+        "duplicate-control-id",
+      ]);
+
+      controller.dispatch(armControl("barrier:dispose", {
+        operation: "availability",
+        stage: "before-dispatch",
+        workspaceKey,
+      }));
+      const disposed = controller.beforeDispatch({ operation: "availability", workspaceKeys: [workspaceKey] });
+      await vi.waitFor(() => expect(controller.liveControlCount).toBe(1));
+      controller.dispose();
+      await expect(disposed).rejects.toThrow("was disposed");
+      expect(controller.liveControlCount).toBe(0);
+      expect(events.at(-1)).toMatchObject({ phase: "disposed", controlCount: 1 });
+      let disposedControlIdReads = 0;
+      let disposedExtraReads = 0;
+      const hostileDisposedPayload: Record<string, unknown> = {};
+      Object.defineProperties(hostileDisposedPayload, {
+        controlId: {
+          enumerable: true,
+          get: () => ++disposedControlIdReads === 1 ? "disposed:hostile" : null,
+        },
+        extra: {
+          enumerable: true,
+          get: () => {
+            disposedExtraReads += 1;
+            return "ignored";
+          },
+        },
+      });
+      expect(() => controller.dispatch(hostileDisposedPayload)).not.toThrow();
+      expect({ disposedControlIdReads, disposedExtraReads }).toEqual({
+        disposedControlIdReads: 1,
+        disposedExtraReads: 1,
+      });
+      expect(events.at(-1)).toMatchObject({
+        observationId: "disposed:hostile",
+        phase: "rejected",
+        reason: "controller-disposed",
+      });
+      for (const event of events) {
+        expect(Object.isFrozen(event)).toBe(true);
+        expect(Object.values(event).every((value) => value === null || ["string", "number", "boolean"].includes(typeof value)))
+          .toBe(true);
+      }
+    });
+  });
+
+  test("rejects inherited controls and meaningless request match axes while admitting null-prototype payloads", async () => {
+    await withResourceDiscoveryHostAcceptance(async (events) => {
+      const workspaceKey = "file:///work/app";
+      const controller = new ResourceDiscoveryHostControl({
+        admittedWorkspaceKeys: () => [workspaceKey],
+        installProcessListener: false,
+      });
+      controller.noteInventory([{
+        key: workspaceKey,
+        status: "ready",
+        response: { projects: [{ status: "ready", project: { projectKey: "app" } }] },
+      }]);
+      try {
+        const inherited = Object.create(armControl("inherited-control", {
+          operation: "inventory",
+          stage: "before-dispatch",
+          workspaceKey,
+          includeTypeSurfaces: true,
+        })) as unknown;
+        expect(() => controller.dispatch(inherited)).not.toThrow();
+
+        const inheritedMatch = Object.create({ workspaceKey });
+        controller.dispatch({
+          ...armControl("inherited-match", {
+            operation: "availability",
+            stage: "before-dispatch",
+            workspaceKey,
+          }),
+          match: inheritedMatch,
+        });
+        controller.dispatch({
+          ...armControl("availability-extra-axis", {
+            operation: "availability",
+            stage: "before-dispatch",
+            workspaceKey,
+          }),
+          match: { workspaceKey, includeTypeSurfaces: undefined },
+        });
+        controller.dispatch(armControl("inventory-project-barrier", {
+          operation: "inventory",
+          stage: "before-dispatch",
+          workspaceKey,
+          includeTypeSurfaces: true,
+          projectKey: "app",
+        }));
+        controller.dispatch(armControl("inventory-project-all", {
+          operation: "inventory",
+          stage: "after-response",
+          workspaceKey,
+          includeTypeSurfaces: true,
+          projectKey: "app",
+          effect: "all-error-once",
+        }));
+        controller.dispatch({
+          ...armControl("null-include-type-surfaces", {
+            operation: "inventory",
+            stage: "before-dispatch",
+            workspaceKey,
+            includeTypeSurfaces: true,
+          }),
+          match: { workspaceKey, includeTypeSurfaces: null },
+        });
+        controller.dispatch({
+          ...armControl("null-project-key", {
+            operation: "availability",
+            stage: "before-dispatch",
+            workspaceKey,
+          }),
+          match: { workspaceKey, projectKey: null },
+        });
+        controller.dispatch({
+          ...armControl("null-stable-code", {
+            operation: "availability",
+            stage: "before-dispatch",
+            workspaceKey,
+          }),
+          stableCode: null,
+        });
+
+        const nullMatch = Object.assign(Object.create(null), {
+          workspaceKey,
+          projectKey: "app",
+        });
+        const nullPayload = Object.assign(Object.create(null), {
+          schemaVersion: RESOURCE_DISCOVERY_HOST_CONTROL_SCHEMA,
+          action: "arm",
+          controlId: "null-prototype",
+          operation: "availability",
+          stage: "before-dispatch",
+          match: nullMatch,
+          effect: "barrier",
+        });
+        expect(() => controller.dispatch(nullPayload)).not.toThrow();
+        expect(controller.liveControlCount).toBe(1);
+        controller.dispatch(resetControl("null-prototype"));
+
+        const rejected = events.filter((event) => event.phase === "rejected");
+        expect(rejected.map((event) => ({ observationId: event.observationId, reason: event.reason }))).toEqual([
+          { observationId: "host-control", reason: "payload-not-plain-object" },
+          { observationId: "inherited-match", reason: "match-fields-invalid" },
+          { observationId: "availability-extra-axis", reason: "include-type-surfaces-invalid" },
+          { observationId: "inventory-project-barrier", reason: "inventory-project-match-forbidden" },
+          { observationId: "inventory-project-all", reason: "inventory-project-match-forbidden" },
+          { observationId: "null-include-type-surfaces", reason: "include-type-surfaces-invalid" },
+          { observationId: "null-project-key", reason: "project-key-invalid" },
+          { observationId: "null-stable-code", reason: "stable-code-invalid" },
+        ]);
+        expect(events).toContainEqual(expect.objectContaining({
+          observationId: "null-prototype",
+          phase: "armed",
+        }));
+      } finally {
+        controller.dispose();
+      }
+    });
+  });
+
+  test("normalizes accepted controls from own fields under Object.prototype pollution", async () => {
+    await withResourceDiscoveryHostAcceptance(async (events) => {
+      const workspaceKey = "file:///work/app";
+      const controller = new ResourceDiscoveryHostControl({
+        admittedWorkspaceKeys: () => [workspaceKey],
+        installProcessListener: false,
+      });
+      const pollution = {
+        controlId: "polluted-control",
+        projectKey: "polluted-project",
+        includeTypeSurfaces: true,
+        stableCode: "POLLUTED_STABLE_CODE",
+      } as const;
+      const previous = new Map<string, PropertyDescriptor | undefined>();
+      try {
+        for (const [key, value] of Object.entries(pollution)) {
+          previous.set(key, Object.getOwnPropertyDescriptor(Object.prototype, key));
+          Object.defineProperty(Object.prototype, key, {
+            configurable: true,
+            enumerable: false,
+            value,
+            writable: true,
+          });
+        }
+
+        const acceptedPayload = {
+          schemaVersion: RESOURCE_DISCOVERY_HOST_CONTROL_SCHEMA,
+          action: "arm",
+          controlId: "pollution:barrier",
+          operation: "availability",
+          stage: "before-dispatch",
+          match: { workspaceKey },
+          effect: "barrier",
+        };
+        controller.dispatch(acceptedPayload);
+        acceptedPayload.match.workspaceKey = "file:///work/mutated-after-dispatch";
+        const blocked = controller.beforeDispatch({
+          operation: "availability",
+          workspaceKeys: [workspaceKey],
+          projectKey: "actual-project",
+        });
+        await vi.waitFor(() => expect(events).toContainEqual(expect.objectContaining({
+          observationId: "pollution:barrier",
+          phase: "blocked",
+        })));
+        controller.dispatch(releaseControl("pollution:barrier"));
+        await expect(blocked).resolves.toBe(1);
+
+        controller.dispatch({
+          schemaVersion: RESOURCE_DISCOVERY_HOST_CONTROL_SCHEMA,
+          action: "arm",
+          controlId: "pollution:reset-target",
+          operation: "availability",
+          stage: "before-dispatch",
+          match: { workspaceKey },
+          effect: "barrier",
+        });
+        controller.dispatch({
+          schemaVersion: RESOURCE_DISCOVERY_HOST_CONTROL_SCHEMA,
+          action: "reset",
+        });
+        expect(controller.liveControlCount).toBe(0);
+        expect(events.filter((event) => event.phase === "rejected")).toEqual([]);
+        expect(events).toContainEqual(expect.objectContaining({
+          observationId: "pollution:reset-target",
+          phase: "reset",
+        }));
+      } finally {
+        controller.dispose();
+        for (const [key, descriptor] of previous) {
+          if (descriptor == null) delete (Object.prototype as Record<string, unknown>)[key];
+          else Object.defineProperty(Object.prototype, key, descriptor);
+        }
+      }
+    });
+  });
+
+  test("rejects null reset ids and snapshots every owned accessor exactly once", async () => {
+    await withResourceDiscoveryHostAcceptance(async (events) => {
+      const workspaceKey = "file:///work/app";
+      const controller = new ResourceDiscoveryHostControl({
+        admittedWorkspaceKeys: () => [workspaceKey],
+        installProcessListener: false,
+      });
+      controller.noteInventory([{
+        key: workspaceKey,
+        status: "ready",
+        response: { projects: [{ status: "ready", project: { projectKey: "app" } }] },
+      }]);
+      const counts = new Map<string, number>();
+      const once = (name: string, value: unknown, subsequent: unknown = value): (() => unknown) => () => {
+        const count = (counts.get(name) ?? 0) + 1;
+        counts.set(name, count);
+        return count === 1 ? value : subsequent;
+      };
+      const accessorRecord = (
+        fields: Readonly<Record<string, () => unknown>>,
+      ): Record<string, unknown> => {
+        const record: Record<string, unknown> = {};
+        for (const [key, get] of Object.entries(fields)) {
+          Object.defineProperty(record, key, { configurable: true, enumerable: true, get });
+        }
+        return record;
+      };
+      try {
+        controller.dispatch(armControl("reset:null-target", {
+          operation: "availability",
+          stage: "before-dispatch",
+          workspaceKey,
+        }));
+        controller.dispatch({
+          schemaVersion: RESOURCE_DISCOVERY_HOST_CONTROL_SCHEMA,
+          action: "reset",
+          controlId: null,
+        });
+        expect(controller.liveControlCount).toBe(1);
+        expect(events).toContainEqual(expect.objectContaining({
+          observationId: "host-control",
+          phase: "rejected",
+          reason: "control-id-invalid",
+        }));
+        controller.dispatch(resetControl("reset:null-target"));
+
+        const match = accessorRecord({
+          workspaceKey: once("match.workspaceKey", workspaceKey, "file:///poisoned"),
+          projectKey: once("match.projectKey", "app", "poisoned"),
+        });
+        const validChanging = accessorRecord({
+          schemaVersion: once("schemaVersion", RESOURCE_DISCOVERY_HOST_CONTROL_SCHEMA, "poisoned"),
+          action: once("action", "arm", "reset"),
+          controlId: once("controlId", "getter:valid", "getter:poisoned"),
+          operation: once("operation", "availability", "inventory"),
+          stage: once("stage", "before-dispatch", "after-response"),
+          match: once("match", match, null),
+          effect: once("effect", "barrier", "unknown-effect"),
+        });
+        expect(() => controller.dispatch(validChanging)).not.toThrow();
+        expect(controller.liveControlCount).toBe(1);
+        expect([...counts.values()]).toEqual(new Array(counts.size).fill(1));
+        const blocked = controller.beforeDispatch({
+          operation: "availability",
+          workspaceKeys: [workspaceKey],
+          projectKey: "app",
+        });
+        await vi.waitFor(() => expect(events).toContainEqual(expect.objectContaining({
+          observationId: "getter:valid",
+          phase: "blocked",
+        })));
+        controller.dispatch(releaseControl("getter:valid"));
+        await expect(blocked).resolves.toBe(1);
+
+        let invalidEffectReads = 0;
+        const invalidChanging = {
+          ...armControl("getter:invalid", {
+            operation: "availability",
+            stage: "before-dispatch",
+            workspaceKey,
+          }),
+        } as Record<string, unknown>;
+        Object.defineProperty(invalidChanging, "effect", {
+          configurable: true,
+          enumerable: true,
+          get: () => ++invalidEffectReads === 1 ? "unknown-effect" : "barrier",
+        });
+        controller.dispatch(invalidChanging);
+        expect(invalidEffectReads).toBe(1);
+        expect(controller.liveControlCount).toBe(0);
+        expect(events).toContainEqual(expect.objectContaining({
+          observationId: "getter:invalid",
+          phase: "rejected",
+          reason: "effect-unsupported",
+        }));
+
+        const throwingReads = { schemaVersion: 0, action: 0, extra: 0 };
+        const throwing = accessorRecord({
+          schemaVersion: () => {
+            throwingReads.schemaVersion += 1;
+            throw new Error("untrusted getter");
+          },
+          action: () => {
+            throwingReads.action += 1;
+            return "arm";
+          },
+          extra: () => {
+            throwingReads.extra += 1;
+            return "untrusted";
+          },
+        });
+        expect(() => controller.dispatch(throwing)).not.toThrow();
+        expect(throwingReads).toEqual({ schemaVersion: 1, action: 1, extra: 1 });
+        expect(events.at(-1)).toMatchObject({
+          observationId: "host-control",
+          phase: "rejected",
+          reason: "payload-read-failed",
+        });
+      } finally {
+        controller.dispose();
+      }
+    });
+  });
+
+  test("applies exact aggregate faults once and keeps genuine sibling rows intact", async () => {
+    await withResourceDiscoveryHostAcceptance(async (events) => {
+      const workspaceUri = "file:///work/app";
+      const { vscode } = createVscodeApi({
+        workspaceFolders: [{ name: "app", uri: workspaceUri }],
+        files: { [`${workspaceUri}/package.json`]: JSON.stringify({ dependencies: { aurelia: "latest" } }) },
+      });
+      const harness = createClientHarness(new Map([
+        [workspaceUri, workspaceStatus("app-world")],
+      ]), {
+        resourceResponse: () => {
+          const base = resourceResponse(workspaceUri);
+          const first = base.projects[0]!;
+          return {
+            ...base,
+            projects: [first, {
+              ...first,
+              project: { ...first.project, projectKey: `${workspaceUri}:sibling` },
+              resources: first.resources.map((resource) => ({ ...resource, projectKey: `${workspaceUri}:sibling` })),
+            }],
+          };
+        },
+      });
+      const manager = createManager(vscode, harness);
+      await manager.start(stubExtensionContext(vscode));
+      const { logger } = createTestServices(vscode as unknown as VscodeApi);
+      const facade = new LspFacade(manager, logger);
+      try {
+        const baseline = await facade.getResourceInventory({ workspaceKey: workspaceUri, includeTypeSurfaces: true });
+        expect(baseline?.workspaces[0]?.status).toBe("ready");
+
+        emitHostControl(armControl("fault:project", {
+          operation: "inventory",
+          stage: "after-response",
+          workspaceKey: workspaceUri,
+          includeTypeSurfaces: true,
+          projectKey: `${workspaceUri}:app`,
+          effect: "project-error-once",
+          stableCode: "RD_PROJECT_ONCE",
+        }));
+        const faulted = await facade.getResourceInventory({ workspaceKey: workspaceUri, includeTypeSurfaces: true });
+        const faultedProjects = faulted?.workspaces[0]?.status === "ready"
+          ? faulted.workspaces[0].response.projects
+          : [];
+        expect(faultedProjects.map((project) => project.status)).toEqual(["error", "ready"]);
+        expect(faultedProjects[0]).toMatchObject({ message: expect.stringContaining("RD_PROJECT_ONCE") });
+        const recovered = await facade.getResourceInventory({ workspaceKey: workspaceUri, includeTypeSurfaces: true });
+        expect(recovered?.workspaces[0]?.status === "ready"
+          ? recovered.workspaces[0].response.projects.map((project) => project.status)
+          : []).toEqual(["ready", "ready"]);
+
+        emitHostControl(armControl("fault:newest", {
+          operation: "inventory",
+          stage: "after-response",
+          workspaceKey: workspaceUri,
+          includeTypeSurfaces: true,
+          effect: "newest-error-once",
+          stableCode: "RD_NEWEST_ONCE",
+        }));
+        const newest = await facade.getResourceInventory({ workspaceKey: workspaceUri, includeTypeSurfaces: true });
+        expect(newest?.workspaces[0]).toMatchObject({ status: "error", error: expect.stringContaining("RD_NEWEST_ONCE") });
+        expect((await facade.getResourceInventory({ workspaceKey: workspaceUri, includeTypeSurfaces: true }))?.workspaces[0]?.status)
+          .toBe("ready");
+
+        emitHostControl(armControl("fault:all", {
+          operation: "inventory",
+          stage: "after-response",
+          workspaceKey: workspaceUri,
+          includeTypeSurfaces: true,
+          effect: "all-error-once",
+          stableCode: "RD_ALL_ONCE",
+        }));
+        const all = await facade.getResourceInventory({ workspaceKey: workspaceUri, includeTypeSurfaces: true });
+        expect(all?.workspaces[0]?.status === "ready"
+          ? all.workspaces[0].response.projects.map((project) => project.status)
+          : []).toEqual(["error", "error"]);
+        expect(events.filter((event) => event.phase === "fault-applied").map((event) => event.observationId))
+          .toEqual(["fault:project", "fault:newest", "fault:all"]);
+      } finally {
+        facade.dispose();
+        await manager.stop();
+      }
+    }, true);
+  });
+
+  test("applies an all-project fault across admitted workspace boundaries once", async () => {
+    await withResourceDiscoveryHostAcceptance(async (events) => {
+      const workspaceA = "file:///work/a";
+      const workspaceB = "file:///work/b";
+      const { vscode } = twoWorkspaceApi();
+      let failWorkspaceB = false;
+      const harness = createClientHarness(new Map([
+        [workspaceA, workspaceStatus("app-world")],
+        [workspaceB, workspaceStatus("app-world")],
+      ]), {
+        resourceResponse: (workspaceUri) => {
+          if (failWorkspaceB && workspaceUri === workspaceB) {
+            throw new Error("private workspace B transport failure");
+          }
+          return resourceResponse(workspaceUri);
+        },
+      });
+      const manager = createManager(vscode, harness);
+      await manager.start(stubExtensionContext(vscode));
+      const { logger } = createTestServices(vscode as unknown as VscodeApi);
+      const facade = new LspFacade(manager, logger);
+      try {
+        emitHostControl(armControl("barrier:aggregate:a", {
+          operation: "inventory",
+          stage: "after-response",
+          workspaceKey: workspaceA,
+          includeTypeSurfaces: true,
+        }));
+        const aggregate = facade.getResourceInventory({ includeTypeSurfaces: true });
+        await vi.waitFor(() => expect(events.find((event) =>
+          event.observationId === "barrier:aggregate:a" && event.phase === "blocked"
+        )).toMatchObject({ responseFingerprint: null }));
+        emitHostControl(releaseControl("barrier:aggregate:a"));
+        await aggregate;
+
+        failWorkspaceB = true;
+        emitHostControl(armControl("barrier:mixed:a", {
+          operation: "inventory",
+          stage: "after-response",
+          workspaceKey: workspaceA,
+          includeTypeSurfaces: true,
+        }));
+        const mixed = facade.getResourceInventory({ includeTypeSurfaces: true });
+        await vi.waitFor(() => expect(events.find((event) =>
+          event.observationId === "barrier:mixed:a" && event.phase === "blocked"
+        )).toMatchObject({ responseFingerprint: null }));
+        emitHostControl(releaseControl("barrier:mixed:a"));
+        await mixed;
+        failWorkspaceB = false;
+
+        emitHostControl(armControl("fault:all:a", {
+          operation: "inventory",
+          stage: "after-response",
+          workspaceKey: workspaceA,
+          includeTypeSurfaces: true,
+          effect: "all-error-once",
+          stableCode: "RD_ALL_A_ONCE",
+        }));
+
+        const faulted = await facade.getResourceInventory({ includeTypeSurfaces: true });
+        expect(faulted?.workspaces.map((workspace) => ({
+          key: workspace.key,
+          status: workspace.status,
+          projectStatuses: workspace.status === "ready"
+            ? workspace.response.projects.map((project) => project.status)
+            : [],
+        }))).toEqual([
+          { key: workspaceA, status: "ready", projectStatuses: ["error"] },
+          { key: workspaceB, status: "ready", projectStatuses: ["error"] },
+        ]);
+
+        const recovered = await facade.getResourceInventory({ includeTypeSurfaces: true });
+        expect(recovered?.workspaces.map((workspace) => workspace.status === "ready"
+          ? workspace.response.projects.map((project) => project.status)
+          : [])).toEqual([["ready"], ["ready"]]);
+      } finally {
+        facade.dispose();
+        await manager.stop();
+      }
+    }, true);
+  });
+});
+
 describe("LspFacade workspace routing", () => {
+  test("dispatches inventory synchronously when no host controller exists", async () => {
+    const previousObservation = process.env.AURELIA_LS_EXTENSION_HOST_OBSERVATION;
+    const previousAcceptance = process.env.AURELIA_LS_RESOURCE_DISCOVERY_HOST_ACCEPTANCE;
+    delete process.env.AURELIA_LS_EXTENSION_HOST_OBSERVATION;
+    delete process.env.AURELIA_LS_RESOURCE_DISCOVERY_HOST_ACCEPTANCE;
+    const workspaceUri = "file:///work/app";
+    const { vscode } = createVscodeApi({
+      workspaceFolders: [{ name: "app", uri: workspaceUri }],
+      files: { [`${workspaceUri}/package.json`]: JSON.stringify({ dependencies: { aurelia: "latest" } }) },
+    });
+    const harness = createClientHarness(new Map([[workspaceUri, workspaceStatus("app-world")]]));
+    const manager = createManager(vscode, harness);
+    let facade: LspFacade | undefined;
+    try {
+      await manager.start(stubExtensionContext(vscode));
+      const { logger } = createTestServices(vscode as unknown as VscodeApi);
+      facade = new LspFacade(manager, logger);
+      const client = harness.clients[0]!;
+      client.sendRequest.mockClear();
+
+      const inventory = facade.getResourceInventory({ workspaceKey: workspaceUri });
+
+      expect(client.sendRequest).toHaveBeenCalledTimes(1);
+      expect(client.sendRequest).toHaveBeenCalledWith("aurelia/resourceInventory", {}, undefined);
+      await expect(inventory).resolves.toEqual(expect.objectContaining({
+        workspaces: [expect.objectContaining({ status: "ready" })],
+      }));
+    } finally {
+      facade?.dispose();
+      await manager.stop();
+      restoreEnvironment("AURELIA_LS_EXTENSION_HOST_OBSERVATION", previousObservation);
+      restoreEnvironment("AURELIA_LS_RESOURCE_DISCOVERY_HOST_ACCEPTANCE", previousAcceptance);
+    }
+  });
+
   test("routes URI requests and conversions while preserving workspace-owned inventory snapshots", async () => {
     const { vscode } = twoWorkspaceApi();
     const harness = createClientHarness(new Map([
@@ -1147,6 +2056,103 @@ describe("LspFacade workspace routing", () => {
   });
 });
 
+function armControl(
+  controlId: string,
+  input: {
+    readonly operation: "inventory" | "availability";
+    readonly stage: "before-dispatch" | "after-response";
+    readonly workspaceKey: string;
+    readonly includeTypeSurfaces?: boolean;
+    readonly projectKey?: string;
+    readonly effect?: "barrier" | "project-error-once" | "all-error-once" | "newest-error-once";
+    readonly stableCode?: string;
+  },
+) {
+  return {
+    schemaVersion: RESOURCE_DISCOVERY_HOST_CONTROL_SCHEMA,
+    action: "arm" as const,
+    controlId,
+    operation: input.operation,
+    stage: input.stage,
+    match: {
+      workspaceKey: input.workspaceKey,
+      ...(input.includeTypeSurfaces == null ? {} : { includeTypeSurfaces: input.includeTypeSurfaces }),
+      ...(input.projectKey == null ? {} : { projectKey: input.projectKey }),
+    },
+    effect: input.effect ?? "barrier",
+    ...(input.stableCode == null ? {} : { stableCode: input.stableCode }),
+  };
+}
+
+function releaseControl(controlId: string) {
+  return {
+    schemaVersion: RESOURCE_DISCOVERY_HOST_CONTROL_SCHEMA,
+    action: "release" as const,
+    controlId,
+  };
+}
+
+function emitHostControl(payload: unknown): void {
+  const host = process as unknown as { emit(eventName: string, payload: unknown): boolean };
+  host.emit(RESOURCE_DISCOVERY_HOST_CONTROL_EVENT, payload);
+}
+
+function resetControl(controlId?: string) {
+  return {
+    schemaVersion: RESOURCE_DISCOVERY_HOST_CONTROL_SCHEMA,
+    action: "reset" as const,
+    ...(controlId == null ? {} : { controlId }),
+  };
+}
+
+function testCancellationToken() {
+  const listeners = new Set<() => void>();
+  let cancelled = false;
+  return {
+    token: {
+      get isCancellationRequested() { return cancelled; },
+      onCancellationRequested(listener: () => void) {
+        listeners.add(listener);
+        return { dispose: () => listeners.delete(listener) };
+      },
+    },
+    cancel() {
+      if (cancelled) return;
+      cancelled = true;
+      for (const listener of [...listeners]) listener();
+    },
+  };
+}
+
+async function withResourceDiscoveryHostAcceptance(
+  run: (events: Array<Readonly<Record<string, string | number | boolean | null>>>) => Promise<void>,
+  currentStable = false,
+): Promise<void> {
+  const environment = [
+    "AURELIA_LS_EXTENSION_HOST_OBSERVATION",
+    "AURELIA_LS_RESOURCE_DISCOVERY_HOST_ACCEPTANCE",
+    "AURELIA_LS_EXTENSION_HOST_EXPECTED_VERSION",
+  ] as const;
+  const previous = new Map(environment.map((key) => [key, process.env[key]]));
+  const events: Array<Readonly<Record<string, string | number | boolean | null>>> = [];
+  const listener = (event: Readonly<Record<string, string | number | boolean | null>>) => events.push(event);
+  process.env.AURELIA_LS_EXTENSION_HOST_OBSERVATION = "1";
+  process.env.AURELIA_LS_RESOURCE_DISCOVERY_HOST_ACCEPTANCE = "1";
+  process.env.AURELIA_LS_EXTENSION_HOST_EXPECTED_VERSION = currentStable ? "stable" : "1.91.0";
+  process.on(EXTENSION_HOST_OBSERVATION_EVENT, listener);
+  try {
+    await run(events);
+  } finally {
+    process.removeListener(EXTENSION_HOST_OBSERVATION_EVENT, listener);
+    for (const key of environment) restoreEnvironment(key, previous.get(key));
+  }
+}
+
+function restoreEnvironment(key: string, value: string | undefined): void {
+  if (value == null) delete process.env[key];
+  else process.env[key] = value;
+}
+
 function twoWorkspaceApi() {
   return createVscodeApi({
     workspaceFolders: [
@@ -1197,7 +2203,7 @@ function createClientHarness(
         case "aurelia/workspaceStatus": {
           const requestIndex = workspaceStatusRequestCount++;
           if (harnessOptions.workspaceStatus != null) {
-            return harnessOptions.workspaceStatus(workspaceUri, requestIndex);
+            return harnessOptions.workspaceStatus(workspaceUri, requestIndex, clientIndex);
           }
           return statusByWorkspace.get(workspaceUri) ?? null;
         }
