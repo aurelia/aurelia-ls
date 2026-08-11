@@ -1003,7 +1003,8 @@ binding behaviors map to `ast_behavior_not_found` (`AUR0101`), and duplicate aut
 `ast_behavior_duplicated` (`AUR0102`) through `RuntimeHtmlAstFrameworkErrorCode`. The repair guidance for those rows
 should route to resource registration or expression rewrite, not callable-expression repair.
 Repeat destructuring is owned by scope construction instead: `RuntimeBindingScopeIssue` products spend checker-backed
-binding-pattern projection and map non-object or non-Array-rest item shapes to `AUR0112`. Keep this partial: the Atlas
+binding-pattern projection and map nullish object-pattern items or non-Array array-rest sources to `AUR0112`. Non-nullish
+primitive object-pattern items remain valid under RC2 semantics. Keep this partial: the Atlas
 runtime `ast*` frontier is broader than these call/destructuring diagnostics, and unmodeled runtime AST failures should
 stay unclaimed until the matching expression, assignment, or scope-effect substrate exists.
 Repeat source compatibility is also scope-owned, but its authority comes from runtime-html `RepeatableHandlerResolver`
@@ -1020,11 +1021,10 @@ can reach `null`. This row has `framework-runtime-behavior` authority rather tha
 passes `null` into the child `Scope`, and ordinary scope lookup later throws a JavaScript error while applying `in` to
 that binding context. `undefined` is intentionally excluded because `with` replaces it with `{}`. The diagnostic source
 is the exact value expression, and the retained source type drives definite-versus-possible severity.
-`unsupported-repeat-declaration` uses the same authority boundary for object binding patterns. The current framework
-parser admits the pattern, but `Repeat` does not recognize that AST kind as destructuring and therefore creates no
-declared locals at runtime. The row intentionally has no framework error code, targets the exact declaration span, and
-recommends rewriting to one repeated local plus property access. Recovery symbols may remain queryable so IDE
-navigation can help perform that rewrite.
+`unsupported-repeat-declaration` now describes the narrower `virtual-repeat` boundary. RC2 core `repeat` admits the
+supported shallow object-pattern lane, but the virtualization controller reads one `BindingIdentifier`; object and
+array patterns therefore create no destructured locals there. The row intentionally has no framework error code,
+targets the exact declaration span, and recommends rewriting to one virtual-repeat local plus property access.
 Repeat option diagnostics are controller-owned. Runtime rendering now publishes `RuntimeControllerIssue` products for
 the `Repeat` constructor failures that inspect iterator tail `MultiAttrInstruction`s: invalid `key` commands
 (`AUR0775`), extraneous option targets (`AUR0776`), and invalid `contextual` commands (`AUR0821`). Template diagnostics

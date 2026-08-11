@@ -1351,6 +1351,11 @@ function capabilityForBuiltInSyntaxGroup(
         demandKind: FrameworkCapabilityDemandKind.StateBindingSyntax,
         requiredCapability: FrameworkRegistrationCapability.StateBindingSyntax,
       };
+    case BuiltInSyntaxGroup.UiVirtualizationSyntax:
+      return {
+        demandKind: FrameworkCapabilityDemandKind.UiVirtualizationDefaultResources,
+        requiredCapability: FrameworkRegistrationCapability.UiVirtualizationDefaultResources,
+      };
     case BuiltInSyntaxGroup.DefaultBindingLanguage:
       return {
         demandKind: FrameworkCapabilityDemandKind.RuntimeHtmlDefaultBindingLanguage,
@@ -1377,6 +1382,11 @@ function capabilityForBuiltInBindingCommand(
       return {
         demandKind: FrameworkCapabilityDemandKind.StateBindingSyntax,
         requiredCapability: FrameworkRegistrationCapability.StateBindingSyntax,
+      };
+    case BuiltInSyntaxGroup.UiVirtualizationSyntax:
+      return {
+        demandKind: FrameworkCapabilityDemandKind.UiVirtualizationDefaultResources,
+        requiredCapability: FrameworkRegistrationCapability.UiVirtualizationDefaultResources,
       };
   }
 }

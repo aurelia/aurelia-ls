@@ -333,10 +333,11 @@ instruction materialization follows every modeled potential context for a compon
 are emitted only when the full recognized instruction chain resolves through `ViewportRequest -> sole ViewportAgent
 candidate -> RouteContext` without an open seam. Without a first-class partial-tree product, prefixes of an unresolved
 chain should stay as open pressure rather than resolved-looking route trees.
-External pressure also caught a faithful-porting bug in parent-relative router resources: the framework's
-`RouteContext.createViewportInstructions(...)` climbs once per `../` before setting the context-changed flag. Setting
-that flag inside the loop stripped extra prefixes without climbing and pushed recognizer matching into a sibling
-configured context. Treat future router-resource normalization drift as framework-source pressure first.
+External pressure also caught a faithful-porting bug in parent-relative router resources. The normalized prefix owns
+both the fully stripped route-expression input and the requested parent traversal count; the context-aware lane spends
+that count while a parent exists and clamps excess traversal at the root. Re-looping over the raw value can leave an
+excess `../` for route-expression parsing or select the wrong configured context. Treat future router-resource
+normalization drift as framework-source pressure first.
 The first `RouteTree` materialization now mirrors the framework's lazy initial tree: a synthetic root `RouteTree` with
 one root `RouteNode` tied to the root route context, root route config, and effective router options. This is deliberately
 weaker than full navigation. The router-resource handoff layer now materializes static `load` and internal `href`
@@ -762,7 +763,9 @@ strictness-gated from the rendering controller because Aurelia's non-strict bind
 throwing; nullish assignment uses the same gate because framework `astAssign` only throws in strict mode. Repeat destructuring diagnostics are deliberately not data-flow rows: `repeat.ts` spends
 `astAssign(...)` while creating/updating repeat scopes, so scope construction now publishes `RuntimeBindingScopeIssue`
 products for `ast_destruct_null` (`AUR0112`) when checker-backed binding-pattern projection can prove or warn about a
-non-object destructuring item or non-Array array-rest source. The Atlas runtime `ast*` frontier remains partial; leave
+nullish object-binding source or non-Array array-rest source. RC2 permits non-nullish primitive object-pattern sources;
+the static projection must not reject those merely because their checker type is not object-shaped. The Atlas runtime
+`ast*` frontier remains partial; leave
 the other runtime evaluator codes unclaimed until the matching expression, assignment, or scope-effect families and
 source spans are modeled. Source-authored `@astTrack` misuse is a sibling observation source-issue lane rather than a
 binding expression evaluator row: non-method decorator targets spend runtime `ast_track_decorator_not_a_method`

@@ -377,19 +377,19 @@
         "dependencies": [
           {
             "specifier": "@aurelia/runtime-html",
-            "versionRange": "^2.0.0-rc.1",
+            "versionRange": "^2.0.0-rc.2",
             "scope": "dependency",
             "kind": "source-plan-package-dependency"
           },
           {
             "specifier": "aurelia",
-            "versionRange": "^2.0.0-rc.1",
+            "versionRange": "^2.0.0-rc.2",
             "scope": "dependency",
             "kind": "source-plan-package-dependency"
           },
           {
             "specifier": "@aurelia/vite-plugin",
-            "versionRange": "^2.0.0-rc.1",
+            "versionRange": "^2.0.0-rc.2",
             "scope": "devDependency",
             "kind": "source-plan-package-dependency"
           },

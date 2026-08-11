@@ -2,7 +2,7 @@ import type { AttributeParser } from "../../parsing/attribute-parser.js";
 import type { ResourceCatalog } from "../../schema/registry.js";
 import type { LetBindingIR, HydrateLetElementIR } from "../../model/ir.js";
 import type { P5Element } from "./lower-shared.js";
-import { attrLoc, attrValueLoc, sourceAttrValue, toBindingSource, toInterpIR, toSpan } from "./lower-shared.js";
+import { attrLoc, attrValueLoc, camelCase, sourceAttrValue, toBindingSource, toInterpIR, toSpan } from "./lower-shared.js";
 import type { LowerContext } from "./lower-context.js";
 import type { ExprTable } from "./lower-shared.js";
 
@@ -45,7 +45,7 @@ function compileLet(
       const valueLoc = attrValueLoc(el, a.name, table.sourceText);
       out.push({
         type: "letBinding",
-        to: s.target,
+        to: normalizeLetBindingTarget(s.target),
         from: toBindingSource(sourceAttrValue(a, valueLoc, table.sourceText), valueLoc, table, "IsProperty"),
         loc: toSpan(loc, table.source),
       });
@@ -61,7 +61,7 @@ function compileLet(
       if (raw.includes("${")) {
         out.push({
           type: "letBinding",
-          to: s.target,
+          to: normalizeLetBindingTarget(s.target),
           from: toInterpIR(raw, valueLoc, table),
           loc: toSpan(loc, table.source),
         });
@@ -86,4 +86,10 @@ function compileLet(
     );
   }
   return { instructions: out, toBindingContext };
+}
+
+function normalizeLetBindingTarget(target: string): string {
+  return target.includes("_")
+    ? target.replace(/-+([A-Za-z0-9])/g, (_match, char: string) => char.toUpperCase())
+    : camelCase(target);
 }

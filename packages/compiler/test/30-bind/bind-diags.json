@@ -131,29 +131,21 @@
     }
   },
   {
-    "name": "DG-08 object destructuring with default value extracts name correctly",
+    "name": "DG-08 object destructuring with default value is rejected by RC2 admission",
     "markup": "<ul repeat.for=\"{x = 5} of items\"><li>${x}</li></ul>",
     "expect": {
       "frames": [
         { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
         { "label": "overlay:iterator@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "iterator" }
       ],
-      "locals": [
-        { "frame": "overlay:iterator@1", "kind": "iteratorLocal", "name": "x" },
-        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$index" },
-        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$first" },
-        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$last" },
-        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$even" },
-        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$odd" },
-        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$length" },
-        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" },
-        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$previous" }
-      ],
+      "locals": [],
       "exprs": [
         { "kind": "forOfHeader", "frame": "root" },
         { "kind": "expr", "code": "x", "frame": "overlay:iterator@1" }
       ],
-      "diags": []
+      "diags": [
+        { "code": "aurelia/invalid-binding-pattern" }
+      ]
     }
   },
   {
@@ -185,29 +177,21 @@
     }
   },
   {
-    "name": "DG-10 deeply nested destructuring extracts all names",
+    "name": "DG-10 deeply nested object destructuring is rejected by RC2 admission",
     "markup": "<ul repeat.for=\"{a: {b: {c}}} of items\"><li>${c}</li></ul>",
     "expect": {
       "frames": [
         { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
         { "label": "overlay:iterator@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "iterator" }
       ],
-      "locals": [
-        { "frame": "overlay:iterator@1", "kind": "iteratorLocal", "name": "c" },
-        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$index" },
-        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$first" },
-        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$last" },
-        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$even" },
-        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$odd" },
-        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$length" },
-        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" },
-        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$previous" }
-      ],
+      "locals": [],
       "exprs": [
         { "kind": "forOfHeader", "frame": "root" },
         { "kind": "expr", "code": "c", "frame": "overlay:iterator@1" }
       ],
-      "diags": []
+      "diags": [
+        { "code": "aurelia/invalid-binding-pattern" }
+      ]
     }
   },
   {

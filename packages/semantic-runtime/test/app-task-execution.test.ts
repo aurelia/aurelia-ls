@@ -6,6 +6,7 @@ import { describe, expect, test } from 'vitest';
 
 import { SemanticAppQueryKind } from '../src/api/contracts.js';
 import { createSemanticRuntime } from '../src/api/runtime.js';
+import { runtimeEventModifierCatalog } from '../src/template/runtime-event-modifier.js';
 
 describe('AppTask registration execution', () => {
   test('spends only executed registries and preserves each callback capture at a shared factory site', async () => {
@@ -94,6 +95,19 @@ describe('AppTask registration execution', () => {
     expect(keyMapping?.keyDomainClosed).toBe(false);
     expect(keyMapping?.keys.some((entry) => entry.modifier === 'escape')).toBe(true);
   }, 30_000);
+
+  test('keeps the complete RC2 default alphabet key mapping', () => {
+    const candidates = runtimeEventModifierCatalog('keydown').candidates;
+    const names = new Set(candidates.map((candidate) => candidate.name));
+
+    expect(names.has('z')).toBe(true);
+    expect(names.has('90')).toBe(true);
+    expect(names.has('122')).toBe(true);
+    expect([...names].filter((name) => /^[a-z]$/u.test(name))).toHaveLength(26);
+    expect(names.has('{')).toBe(false);
+    expect(names.has('91')).toBe(false);
+    expect(names.has('123')).toBe(false);
+  });
 });
 
 function fixturePath(name: string): string {

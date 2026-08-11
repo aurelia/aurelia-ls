@@ -1244,11 +1244,12 @@ export function runtimeBindingScopeIssueDiagnostic(
     return repeatNonIterableDiagnostic(issue, source);
   }
   if (issue.issueKind === RuntimeBindingScopeIssueKind.UnsupportedRepeatDeclaration) {
-    return unsupportedRepeatDeclarationDiagnostic(source);
+    return unsupportedRepeatDeclarationDiagnostic(issue, source);
   }
   if (issue.issueKind === RuntimeBindingScopeIssueKind.WithNullBindingContext) {
     return withNullBindingContextDiagnostic(issue, source);
   }
+  const destructuringSuggestion = runtimeBindingScopeIssueDestructuringSuggestion(issue.issueKind);
   return {
     diagnosticKind: 'runtime-binding-scope-framework-error',
     diagnosticAuthority: 'framework-error-code',
@@ -1269,10 +1270,10 @@ export function runtimeBindingScopeIssueDiagnostic(
     ownerTypeShapeKind: issue.sourceType?.shapeKind ?? null,
     ownerTypeOrigin: issue.sourceType?.origin ?? null,
     suggestion: {
-      suggestionKind: 'use-safe-destructuring-source',
+      suggestionKind: destructuringSuggestion.suggestionKind,
       actionKind: 'rewrite-expression',
       actionTarget: suggestionActionTarget('expression', source, null, issue.sourceType?.display ?? null),
-      summary: 'Ensure the repeat item source is object-shaped before destructuring, or guard the repeat with template control flow.',
+      summary: destructuringSuggestion.summary,
       targetMemberName: null,
       ownerTypeDisplay: issue.sourceType?.display ?? null,
       valueTypeDisplay: null,
@@ -1281,7 +1282,33 @@ export function runtimeBindingScopeIssueDiagnostic(
   };
 }
 
+function runtimeBindingScopeIssueDestructuringSuggestion(
+  issueKind: RuntimeBindingScopeIssueKind,
+): {
+  readonly suggestionKind: 'guard-nullish-expression' | 'use-safe-destructuring-source';
+  readonly summary: string;
+} {
+  switch (issueKind) {
+    case RuntimeBindingScopeIssueKind.RepeatObjectBindingNullish:
+      return {
+        suggestionKind: 'guard-nullish-expression',
+        summary: 'Guard or narrow nullish repeat items before projecting object-pattern locals.',
+      };
+    case RuntimeBindingScopeIssueKind.ArrayRestNonArray:
+      return {
+        suggestionKind: 'use-safe-destructuring-source',
+        summary: 'Use an Array-valued repeat item before applying an array rest declaration, or guard the repeat with template control flow.',
+      };
+    default:
+      return {
+        suggestionKind: 'use-safe-destructuring-source',
+        summary: 'Ensure the repeat item is compatible with the object or array declaration before destructuring, or guard the repeat with template control flow.',
+      };
+  }
+}
+
 function unsupportedRepeatDeclarationDiagnostic(
+  issue: RuntimeBindingScopeIssue,
   source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
 ): SemanticTemplateCursorDiagnosticRow {
   return {
@@ -1289,9 +1316,9 @@ function unsupportedRepeatDeclarationDiagnostic(
     diagnosticAuthority: 'framework-runtime-behavior',
     frameworkErrorCode: null,
     severity: 'error',
-    summary: 'The current Aurelia Repeat controller does not materialize locals from an object binding pattern.',
-    missingInput: 'repeat-declaration:object-binding-pattern-runtime-unsupported',
-    missingInputs: ['repeat-declaration:object-binding-pattern-runtime-unsupported'],
+    summary: diagnosticSentence(issue.message),
+    missingInput: 'virtual-repeat-declaration:binding-pattern-runtime-unsupported',
+    missingInputs: ['virtual-repeat-declaration:binding-pattern-runtime-unsupported'],
     source,
     selectedMemberName: null,
     ownerTypeDisplay: null,
@@ -1301,7 +1328,7 @@ function unsupportedRepeatDeclarationDiagnostic(
       suggestionKind: 'fix-template-syntax',
       actionKind: 'rewrite-template-syntax',
       actionTarget: suggestionActionTarget('template-syntax', source, null, null),
-      summary: 'Bind each repeated value to one local and access its properties through that local.',
+      summary: 'Use one virtual-repeat local and access the repeated value through that local.',
       targetMemberName: null,
       ownerTypeDisplay: null,
       valueTypeDisplay: null,

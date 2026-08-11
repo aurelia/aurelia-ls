@@ -1,6 +1,15 @@
 <template>
-  <div virtual-repeat.for="virtualProduct of products">
+  <div virtual-repeat.for="virtualProduct of products; gap: 8">
     <span>${virtualProduct.label}</span>
     <small>${$index}</small>
+  </div>
+  <div virtual-repeat.for="{ label } of products">
+    <span>Unsupported destructuring remains explicit.</span>
+  </div>
+  <div virtual-repeat.for="{ label: nullableLabel } of nullableProducts">
+    <span>Nullable object-pattern pressure must not borrow core Repeat diagnostics.</span>
+  </div>
+  <div virtual-repeat.for="[scalarItem] of scalarProducts">
+    <span>Non-array item pressure must not borrow core Repeat diagnostics.</span>
   </div>
 </template>

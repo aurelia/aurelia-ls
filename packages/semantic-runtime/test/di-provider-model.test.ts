@@ -6,6 +6,7 @@ import { describe, expect, test } from 'vitest';
 
 import {
   createSemanticRuntime,
+  type SemanticApp,
   type SemanticRuntime,
 } from '../src/api/runtime.js';
 import { AppTaskSlot } from '../src/configuration/app-task.js';
@@ -28,7 +29,16 @@ import {
 import { readDiResolveCallSites } from '../src/di/resolve-call-recognition.js';
 import {
   ContainerResolutionFailureKind,
+  frameworkErrorCodeForContainerResolutionFailureKind,
 } from '../src/di/container-lookup.js';
+import {
+  DiClassDependencyAuthority,
+  DiClassDependencyNamedState,
+  DiClassDependencyPositionState,
+  DiClassDependencyProjectView,
+  DiClassDependencySlotState,
+  type DiClassDependencyPlan,
+} from '../src/di/class-dependency-plan.js';
 import { ContainerDefaultResolverPolicy } from '../src/di/container-configuration.js';
 import {
   DiProviderActivationState,
@@ -373,6 +383,40 @@ describe('DI provider model', () => {
     expect(activate('invalidStaticRead').state).toBe(DiProviderActivationState.Failed);
 
     expect(activate('inheritedGetterRead').state).toBe(DiProviderActivationState.Value);
+    const staticCacheBaseFirstBase = activate('staticCacheBaseFirstBaseRead');
+    const staticCacheBaseFirstDerived = activate('staticCacheBaseFirstDerivedRead');
+    expect(staticCacheBaseFirstBase).toMatchObject({ state: DiProviderActivationState.Value });
+    expect(staticCacheBaseFirstDerived).toMatchObject({ state: DiProviderActivationState.Value });
+    expect(marker(instanceProperty(staticCacheBaseFirstBase.value, 'dependency'))).toBe('first-dependency');
+    expect(marker(instanceProperty(staticCacheBaseFirstDerived.value, 'ownDependency'))).toBe('second-dependency');
+    expect(marker(instanceProperty(activate('staticCacheDerivedFirstDerivedRead').value, 'ownDependency')))
+      .toBe('second-dependency');
+    expect(dependencyMarker('staticCacheDerivedFirstBaseRead')).toBe('first-dependency');
+    expect(dependencyMarker('decoratorCacheBaseFirstBaseRead')).toBe('first-dependency');
+    expect(marker(instanceProperty(activate('decoratorCacheBaseFirstDerivedRead').value, 'ownDependency')))
+      .toBe('second-dependency');
+    expect(marker(instanceProperty(activate('decoratorCacheDerivedFirstDerivedRead').value, 'ownDependency')))
+      .toBe('second-dependency');
+    expect(dependencyMarker('decoratorCacheDerivedFirstBaseRead')).toBe('first-dependency');
+
+    const dependencyPlans = new DiClassDependencyProjectView(fixture.evaluation, fixture.typeSystem);
+    for (const [className, authority, dependencyName] of [
+      ['StaticCacheBaseFirstBase', DiClassDependencyAuthority.StaticInject, 'FirstDependency'],
+      ['StaticCacheBaseFirstDerived', DiClassDependencyAuthority.StaticInject, 'SecondDependency'],
+      ['StaticCacheDerivedFirstBase', DiClassDependencyAuthority.StaticInject, 'FirstDependency'],
+      ['StaticCacheDerivedFirstDerived', DiClassDependencyAuthority.StaticInject, 'SecondDependency'],
+      ['DecoratorCacheBaseFirstBase', DiClassDependencyAuthority.AureliaAnnotation, 'FirstDependency'],
+      ['DecoratorCacheBaseFirstDerived', DiClassDependencyAuthority.AureliaAnnotation, 'SecondDependency'],
+      ['DecoratorCacheDerivedFirstBase', DiClassDependencyAuthority.AureliaAnnotation, 'FirstDependency'],
+      ['DecoratorCacheDerivedFirstDerived', DiClassDependencyAuthority.AureliaAnnotation, 'SecondDependency'],
+    ] as const) {
+      assertExactLocalClassDependencyPlan(
+        readClassDependencyPlan(fixture, dependencyPlans, className),
+        authority,
+        dependencyName,
+      );
+    }
+
     expect(dependencyMarker('cachedGetterReadOne')).toBe('first-dependency');
     expect(dependencyMarker('cachedGetterReadTwo')).toBe('first-dependency');
     expect(dependencyMarker('staticPrecedenceRead')).toBe('first-dependency');
@@ -423,7 +467,9 @@ describe('DI provider model', () => {
     const transientOne = activateNamedSite(fixture, session, 'interfaceDefaultTransientReadOne');
     const transientTwo = activateNamedSite(fixture, session, 'interfaceDefaultTransientReadTwo');
     const fresh = activateNamedSite(fixture, session, 'interfaceDefaultFreshRead');
+    const directMissing = activateNamedSite(fixture, session, 'interfaceMissingRead');
     const missing = activateNamedSite(fixture, session, 'interfaceMissingFreshRead');
+    const scopedMissing = activateNamedSite(fixture, session, 'interfaceMissingScopedRead');
     const instance = activateNamedSite(fixture, session, 'interfaceInstanceFreshRead');
 
     expect(marker(singletonOne.value)).toBe('default-singleton');
@@ -433,7 +479,15 @@ describe('DI provider model', () => {
     expect(transientTwo.value).not.toBe(transientOne.value);
     expect(marker(fresh.value)).toBe('default-singleton');
     expect(fresh.value).not.toBe(singletonOne.value);
+    expect(directMissing).toMatchObject({
+      state: DiProviderActivationState.Failed,
+      failureKind: ContainerResolutionFailureKind.NoJitInterface,
+    });
     expect(missing).toMatchObject({
+      state: DiProviderActivationState.Failed,
+      failureKind: ContainerResolutionFailureKind.InvalidNewInstanceOnInterface,
+    });
+    expect(scopedMissing).toMatchObject({
       state: DiProviderActivationState.Failed,
       failureKind: ContainerResolutionFailureKind.InvalidNewInstanceOnInterface,
     });
@@ -441,6 +495,33 @@ describe('DI provider model', () => {
       state: DiProviderActivationState.Failed,
       failureKind: ContainerResolutionFailureKind.InvalidNewInstanceOnInterface,
     });
+    expect(frameworkErrorCodeForContainerResolutionFailureKind(directMissing.failureKind)).toBe('AUR0012');
+    expect(frameworkErrorCodeForContainerResolutionFailureKind(missing.failureKind)).toBe('AUR0017');
+    expect(frameworkErrorCodeForContainerResolutionFailureKind(scopedMissing.failureKind)).toBe('AUR0017');
+
+    const issueRows = fixture.app.diIssues({ size: 100 }).value.rows;
+    expect(issueRows.find((row) => row.containerApiCall?.keyExpressionText === 'IMissingDefault'))
+      .toMatchObject({
+        diagnosticAuthority: 'framework-error-code',
+        frameworkErrorCode: 'AUR0012',
+        containerApiCall: {
+          methodKind: 'get',
+          keyWrapperKind: null,
+          wrappedKeyName: null,
+        },
+      });
+    expect(issueRows.find((row) => row.containerApiCall?.keyWrapperKind === 'newInstanceOf'
+      && row.containerApiCall.wrappedKeyName === 'IMissingDefault'))
+      .toMatchObject({
+        diagnosticAuthority: 'framework-error-code',
+        frameworkErrorCode: 'AUR0017',
+      });
+    expect(issueRows.find((row) => row.containerApiCall?.keyWrapperKind === 'newInstanceForScope'
+      && row.containerApiCall.wrappedKeyName === 'IMissingDefault'))
+      .toMatchObject({
+        diagnosticAuthority: 'framework-error-code',
+        frameworkErrorCode: 'AUR0017',
+      });
   });
 
   test('models the complete Aurelia resolver family and requestor-local scope', async () => {
@@ -1430,6 +1511,7 @@ describe('DI provider model', () => {
 });
 
 interface ProviderActivationFixture {
+  readonly app: SemanticApp;
   readonly runtime: SemanticRuntime;
   readonly activation: DiProviderActivationView;
   readonly container: Container;
@@ -1461,6 +1543,7 @@ async function openProviderActivationFixture(
     }
   }
   return {
+    app,
     runtime,
     activation: new DiProviderActivationView(
       runtime.workspace.store,
@@ -1476,6 +1559,48 @@ async function openProviderActivationFixture(
     typeSystem: app.emission.typeSystem,
     diWorld: app.emission.appWorld.diWorld,
   };
+}
+
+function readClassDependencyPlan(
+  fixture: ProviderActivationFixture,
+  plans: DiClassDependencyProjectView,
+  className: string,
+): DiClassDependencyPlan {
+  const source = fixture.typeSystem.readProgramSourceFileByProjectPath('src/main.ts');
+  const declaration = source?.statements.find((statement): statement is ts.ClassDeclaration =>
+    ts.isClassDeclaration(statement) && statement.name?.text === className
+  ) ?? null;
+  if (declaration == null) {
+    throw new Error(`Expected the ${className} class declaration.`);
+  }
+  const plan = plans.readForDeclaration(declaration);
+  if (plan == null) {
+    throw new Error(`Expected a class dependency plan for ${className}.`);
+  }
+  return plan;
+}
+
+function assertExactLocalClassDependencyPlan(
+  plan: DiClassDependencyPlan,
+  authority: DiClassDependencyAuthority,
+  dependencyName: string,
+): void {
+  expect(plan.authority).toBe(authority);
+  expect(plan.positionState).toBe(DiClassDependencyPositionState.Exact);
+  expect(plan.namedState).toBe(DiClassDependencyNamedState.Exact);
+  expect(plan.inheritedPlan).toBeNull();
+  expect(plan.slots).toHaveLength(1);
+
+  const slot = plan.slots[0]!;
+  expect(slot.state).toBe(DiClassDependencySlotState.Present);
+  expect(slot.sourceExpression?.getText()).toBe(dependencyName);
+  expect(slot.lookupKeyExpression?.getText()).toBe(dependencyName);
+  expect(slot.carrierExpression.getText()).toBe(dependencyName);
+  expect(slot.evidence?.openSeams).toHaveLength(0);
+  expect(slot.evidence?.value.kind).toBe(EvaluationValueKind.Class);
+  expect(slot.evidence?.value.kind === EvaluationValueKind.Class
+    ? slot.evidence.value.declaration.name?.getText()
+    : null).toBe(dependencyName);
 }
 
 function activationContainerForFixture(

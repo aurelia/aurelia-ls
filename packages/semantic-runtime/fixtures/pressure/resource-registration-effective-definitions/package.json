@@ -6,8 +6,8 @@
     "check": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@aurelia/template-compiler": "^2.0.0-rc.1",
-    "aurelia": "^2.0.0-rc.1"
+    "@aurelia/template-compiler": "^2.0.0-rc.2",
+    "aurelia": "^2.0.0-rc.2"
   },
   "devDependencies": {
     "typescript": "^6.0.3"

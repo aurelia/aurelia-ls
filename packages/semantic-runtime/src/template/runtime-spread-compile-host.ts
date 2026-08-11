@@ -707,7 +707,7 @@ class RuntimeSpreadCommandBuildContext implements BindingCommandBuildContext {
 
   parseIteratorExpression(expression: string, _info: BindingCommandBuildInfo): BindingCommandIteratorParse {
     const parse = this.host.publishExpressionParse(this.request, this.syntax, this.targetNode, expression, 'IsIterator', this.command, this.bindable);
-    return new BindingCommandIteratorParse(parse.productHandle, [], null, null);
+    return new BindingCommandIteratorParse(parse.productHandle, [], [], null, null);
   }
 
   parseAttributeSyntax(_rawName: string, _rawValue: string, _info: BindingCommandBuildInfo): BindingCommandTailSyntax | null {

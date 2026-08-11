@@ -76,6 +76,63 @@ export interface IExpressionParser {
 
 type SpanBearing = { span: TextSpan };
 
+const unsupportedObjectBindingPatternCode = "AUR0177";
+const invalidObjectBindingPatternKeyCode = "AUR0164";
+const missingObjectBindingPatternSeparatorCode = "AUR0167";
+const reservedRepeatObjectBindingLocalNames = new Set([
+  ...Object.getOwnPropertyNames(Object.prototype),
+  "$index",
+  "$length",
+  "$odd",
+  "$even",
+  "$first",
+  "$middle",
+  "$last",
+  "$previous",
+  "$item",
+  "__items__",
+]);
+
+interface RepeatObjectBindingPatternRejection {
+  readonly span: SourceSpan;
+  readonly message: string;
+  readonly frameworkErrorCode: string;
+}
+
+function repeatObjectBindingPatternRejection(
+  pattern: ObjectBindingPattern,
+): RepeatObjectBindingPatternRejection | null {
+  if (pattern.rest != null) {
+    return {
+      span: pattern.rest.span,
+      message: "Object binding pattern rest is not supported",
+      frameworkErrorCode: invalidObjectBindingPatternKeyCode,
+    };
+  }
+
+  const localNames = new Set<string>();
+  for (const property of pattern.properties) {
+    const value = property.value;
+    if (value.$kind !== "BindingIdentifier") {
+      return unsupportedRepeatObjectBindingPattern(value.span);
+    }
+    const localName = value.name.name;
+    if (localNames.has(localName) || reservedRepeatObjectBindingLocalNames.has(localName)) {
+      return unsupportedRepeatObjectBindingPattern(value.span);
+    }
+    localNames.add(localName);
+  }
+  return null;
+}
+
+function unsupportedRepeatObjectBindingPattern(span: SourceSpan): RepeatObjectBindingPatternRejection {
+  return {
+    span,
+    message: "Object binding patterns only support identifiers and aliases with unique, non-reserved local names",
+    frameworkErrorCode: unsupportedObjectBindingPatternCode,
+  };
+}
+
 /* eslint-disable @typescript-eslint/no-unsafe-enum-comparison */
 
 /**
@@ -164,6 +221,12 @@ export class CoreParser {
     const declaration = this.parseLhsBinding();
     if (this.isBad(declaration)) {
       return declaration;
+    }
+    if (declaration.$kind === "ObjectBindingPattern") {
+      const rejection = repeatObjectBindingPatternRejection(declaration);
+      if (rejection) {
+        return this.errorAtSpan(rejection.message, rejection.span, rejection.frameworkErrorCode);
+      }
     }
 
     const ofTok = this.peekToken();
@@ -1241,7 +1304,7 @@ export class CoreParser {
     const start = open.start;
 
     const properties: { key: string | number; value: BindingPattern }[] = [];
-    let rest: BindingPattern | null = null;
+    const rest: BindingPattern | null = null;
 
     while (true) {
       const t = this.peekToken();
@@ -1251,21 +1314,7 @@ export class CoreParser {
       }
 
       if (t.type === TokenType.Ellipsis) {
-        if (rest) {
-          return this.error("Only one rest element is allowed in an object pattern", t);
-        }
-        this.nextToken(); // '...'
-        rest = this.parseBindingPatternBase();
-        if (this.isBad(rest)) return rest;
-        const afterRest = this.peekToken();
-        if (afterRest.type === TokenType.Comma) {
-          return this.error("Rest element must be in the last position of an object pattern", afterRest);
-        }
-        if (afterRest.type !== TokenType.CloseBrace) {
-          return this.error("Expected '}' after object pattern rest element", afterRest);
-        }
-        this.nextToken(); // '}'
-        break;
+        return this.error("Object binding pattern rest is not supported", t, invalidObjectBindingPatternKeyCode);
       }
 
       const keyTok = this.peekToken();
@@ -1320,7 +1369,13 @@ export class CoreParser {
         break;
       }
 
-      return this.error("Expected ',' or '}' in object binding pattern", sep);
+      return this.error(
+        "Expected ',' or '}' in object binding pattern",
+        sep,
+        isUnsupportedObjectBindingExpressionContinuation(sep.type)
+          ? unsupportedObjectBindingPatternCode
+          : missingObjectBindingPatternSeparatorCode,
+      );
     }
 
     const span = this.span(start, this.lastTokenEnd);
@@ -1848,7 +1903,7 @@ export class CoreParser {
     return this.span(localStart, localEnd);
   }
 
-  private error(message: string, token?: Token): BadExpression {
+  private error(message: string, token?: Token, frameworkErrorCode?: string): BadExpression {
     const t = token ?? this.peekToken();
     const span = this.span(t.start, Math.max(t.end, t.start));
     const bad: BadExpression = {
@@ -1856,6 +1911,7 @@ export class CoreParser {
       span,
       text: this.source.slice(span.start, span.end),
       message,
+      frameworkErrorCode,
       origin: this.baseSpan ? provenanceFromSpan("parse", span) : null,
     };
     if (!this.failure) {
@@ -1866,6 +1922,25 @@ export class CoreParser {
       this.nextToken();
     }
     // Force subsequent peeks to hit EOF so loops terminate.
+    this.scanner.reset(this.source.length);
+    this.lastTokenEnd = this.source.length;
+    return bad;
+  }
+
+  private errorAtSpan(message: string, span: SourceSpan, frameworkErrorCode: string): BadExpression {
+    const localStart = this.toLocal(span.start);
+    const localEnd = this.toLocal(span.end);
+    const bad: BadExpression = {
+      $kind: "BadExpression",
+      span,
+      text: this.source.slice(localStart, localEnd),
+      message,
+      frameworkErrorCode,
+      origin: this.baseSpan ? provenanceFromSpan("parse", span) : null,
+    };
+    if (!this.failure) {
+      this.failure = bad;
+    }
     this.scanner.reset(this.source.length);
     this.lastTokenEnd = this.source.length;
     return bad;
@@ -2051,6 +2126,46 @@ export class CoreParser {
     "Math",
     "Intl",
   ]);
+}
+
+function isUnsupportedObjectBindingExpressionContinuation(tokenType: TokenType): boolean {
+  switch (tokenType) {
+    case TokenType.Dot:
+    case TokenType.QuestionDot:
+    case TokenType.OpenBracket:
+    case TokenType.OpenParen:
+    case TokenType.Backtick:
+    case TokenType.Question:
+    case TokenType.Plus:
+    case TokenType.Minus:
+    case TokenType.Asterisk:
+    case TokenType.Slash:
+    case TokenType.Percent:
+    case TokenType.StarStar:
+    case TokenType.AmpersandAmpersand:
+    case TokenType.BarBar:
+    case TokenType.QuestionQuestion:
+    case TokenType.LessThan:
+    case TokenType.LessThanOrEqual:
+    case TokenType.GreaterThan:
+    case TokenType.GreaterThanOrEqual:
+    case TokenType.EqualsEquals:
+    case TokenType.EqualsEqualsEquals:
+    case TokenType.ExclamationEquals:
+    case TokenType.ExclamationEqualsEquals:
+    case TokenType.KeywordIn:
+    case TokenType.KeywordInstanceof:
+    case TokenType.PlusEquals:
+    case TokenType.MinusEquals:
+    case TokenType.AsteriskEquals:
+    case TokenType.SlashEquals:
+    case TokenType.PlusPlus:
+    case TokenType.MinusMinus:
+    case TokenType.EqualsGreaterThan:
+      return true;
+    default:
+      return false;
+  }
 }
 
 // --------------------------------------------------------------------------------------------

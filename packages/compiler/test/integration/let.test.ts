@@ -121,6 +121,18 @@ for (const lang of langs) {
       assertSuccess(ts, diags);
     });
 
+    it(`preserves underscores while normalizing repeated hyphens`, async () => {
+      const { ts, diags } = await compileFromEntry({
+        html: `<let my_prop--name.bind="person.name" my_other--name="\${person.name}"></let>\n\${my_propName.toUpperCase()} \${my_otherName.toUpperCase()}`,
+        markupFile: "view.html",
+        isJs: lang.isJs,
+        entrySource: entryWithPerson(lang.isJs),
+        preludeText: PRELUDE_TS, exprParser, attrParser,
+        overlayBaseName: nextBase(lang.langKey, "underscore-normalization"),
+      });
+      assertSuccess(ts, diags);
+    });
+
     it(`duplicate declarations in one <let> (last wins)`, async () => {
       const { ts, diags } = await compileFromEntry({
         html: `<let a.bind="1" a.one-time="'hi'"></let>\n\${a.toUpperCase()}`,

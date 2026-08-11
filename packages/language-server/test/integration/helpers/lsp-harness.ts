@@ -341,7 +341,7 @@ export function createAureliaAppFixture(
       private: true,
       type: "module",
       dependencies: {
-        aurelia: "^2.0.0-rc.1",
+        aurelia: "^2.0.0-rc.2",
         ...additionalDependencies,
       },
       devDependencies: {

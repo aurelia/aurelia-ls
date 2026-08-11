@@ -1805,7 +1805,7 @@
       "packageManager": "host-selected",
       "buildToolPolicy": "app-builder-baseline",
       "dependencySpecifier": "@aurelia/router",
-      "dependencyVersionRange": "^2.0.0-rc.1",
+      "dependencyVersionRange": "^2.0.0-rc.2",
       "dependencyScope": "dependency"
     },
     {
@@ -1816,7 +1816,7 @@
       "packageManager": "host-selected",
       "buildToolPolicy": "app-builder-baseline",
       "dependencySpecifier": "@aurelia/runtime-html",
-      "dependencyVersionRange": "^2.0.0-rc.1",
+      "dependencyVersionRange": "^2.0.0-rc.2",
       "dependencyScope": "dependency"
     },
     {
@@ -1827,7 +1827,7 @@
       "packageManager": "host-selected",
       "buildToolPolicy": "app-builder-baseline",
       "dependencySpecifier": "aurelia",
-      "dependencyVersionRange": "^2.0.0-rc.1",
+      "dependencyVersionRange": "^2.0.0-rc.2",
       "dependencyScope": "dependency"
     },
     {
@@ -1838,7 +1838,7 @@
       "packageManager": "host-selected",
       "buildToolPolicy": "app-builder-baseline",
       "dependencySpecifier": "@aurelia/vite-plugin",
-      "dependencyVersionRange": "^2.0.0-rc.1",
+      "dependencyVersionRange": "^2.0.0-rc.2",
       "dependencyScope": "devDependency"
     },
     {

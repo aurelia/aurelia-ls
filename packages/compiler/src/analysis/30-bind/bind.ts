@@ -463,6 +463,7 @@ function populateControllerFrame(
     if (forOfAst.$kind === "BadExpression") {
       reportDiagnostic(diagEmitter, "aurelia/invalid-binding-pattern", forOfAst.message ?? "Invalid or unsupported iterator header.", {
         span: forOfAst.span,
+        ...(forOfAst.frameworkErrorCode == null ? {} : { data: { aurCode: forOfAst.frameworkErrorCode } }),
       });
       return;
     }

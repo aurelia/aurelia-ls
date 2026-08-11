@@ -849,6 +849,9 @@ function syntaxCatalogInputsForAdmission(
       case FrameworkRegistrationCapability.StateBindingSyntax:
         inputs.push(ExtensionBuiltInSyntaxCatalogs.StateSyntax);
         break;
+      case FrameworkRegistrationCapability.UiVirtualizationDefaultResources:
+        inputs.push(ExtensionBuiltInSyntaxCatalogs.UiVirtualizationSyntax);
+        break;
       case FrameworkRegistrationCapability.RuntimeHtmlCompilerServices:
       case FrameworkRegistrationCapability.RuntimeHtmlDefaultRenderers:
       case FrameworkRegistrationCapability.I18nDefaultResources:
@@ -866,7 +869,6 @@ function syntaxCatalogInputsForAdmission(
       case FrameworkRegistrationCapability.StateRuntimeRenderers:
       case FrameworkRegistrationCapability.StateStoreResolvers:
       case FrameworkRegistrationCapability.StateStoreTasks:
-      case FrameworkRegistrationCapability.UiVirtualizationDefaultResources:
       case FrameworkRegistrationCapability.UiVirtualizationServiceResolvers:
       case FrameworkRegistrationCapability.AppTask:
         break;
@@ -1023,7 +1025,7 @@ function syntaxCatalogSummaryForFrameworkKind(frameworkKind: FrameworkRegistrati
     case FrameworkRegistrationKind.RouterDefaultResources:
       return 'Router DefaultResources admitted resources but no template syntax catalogs.';
     case FrameworkRegistrationKind.UiVirtualizationDefaultConfiguration:
-      return 'DefaultVirtualizationConfiguration admitted virtual-repeat resources but no additional template syntax catalogs.';
+      return 'DefaultVirtualizationConfiguration admitted the virtual-repeat.for pattern and forof binding-command syntax catalog.';
     case FrameworkRegistrationKind.StateDefaultConfiguration:
       return 'StateDefaultConfiguration admitted state template syntax catalogs.';
     case FrameworkRegistrationKind.DialogConfiguration:

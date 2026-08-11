@@ -9664,25 +9664,21 @@
           ]
         },
         {
-          "id": "unsupported-object-binding-pattern-is-diagnosed",
+          "id": "rc2-object-binding-pattern-is-admitted",
           "sourceFile": "src/template-controller-edge-cases-app.html",
           "domainAxis": "diagnostics",
           "expectations": [
             {
-              "name": "object binding pattern is rejected because the checked-in runtime does not create repeat locals for it",
+              "name": "RC2 shallow object binding patterns do not surface the legacy unsupported Repeat diagnostic",
               "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
               "rows": [
                 {
                   "fields": {
                     "diagnosticKind": "unsupported-repeat-declaration",
-                    "diagnosticAuthority": "framework-runtime-behavior",
-                    "frameworkErrorCode": null,
-                    "severity": "error",
-                    "missingInput": "repeat-declaration:object-binding-pattern-runtime-unsupported",
-                    "suggestion.suggestionKind": "fix-template-syntax",
-                    "suggestion.actionKind": "rewrite-template-syntax"
+                    "missingInput": "repeat-declaration:object-binding-pattern-runtime-unsupported"
                   },
-                  "source": { "marker": "repeat.for=\"{ id, label } of products\"", "token": "{ id, label }" }
+                  "source": { "marker": "repeat.for=\"{ id, label } of products\"", "token": "{ id, label }" },
+                  "absent": true
                 }
               ]
             }
@@ -9742,8 +9738,8 @@
               "name": "invalid repeat source consequences are contextual presentation evidence",
               "query": { "kind": "app-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
               "equals": {
-                "value.presentation.rawRowCount": 20,
-                "value.presentation.primaryCount": 12,
+                "value.presentation.rawRowCount": 19,
+                "value.presentation.primaryCount": 11,
                 "value.presentation.contextualCount": 7,
                 "value.presentation.withheldCount": 1
               },

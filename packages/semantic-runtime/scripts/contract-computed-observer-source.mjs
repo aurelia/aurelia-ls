@@ -22,10 +22,10 @@ const app = await runtime.openApp({
 
 const expectedEffects = [
   ExpectedSemanticEffect.exactly(
-    'The fixture should expose eleven getter observer sources: nine decorator-owned and two plain getter descriptors.',
+    'The fixture should expose twelve getter observer sources: ten decorator-owned and two plain getter descriptors.',
     'computed-observer-source',
     'app',
-    11,
+    12,
     null,
     [],
     'signature',
@@ -123,6 +123,19 @@ const expectedEffects = [
       effectFilter('memberName', 'nestedSummary'),
       effectFilter('dependencyKind', 'deep-collection-read'),
       effectFilter('sourceName', 'nested.tags'),
+    ],
+    'signature',
+  ),
+  ExpectedSemanticEffect.atLeast(
+    'Recursive deep dependency types should remain a finite generated candidate graph.',
+    'computed-observer-observed-dependency',
+    'app',
+    1,
+    null,
+    [
+      effectFilter('observerKind', 'controlled-computed-observer'),
+      effectFilter('memberName', 'recursiveSummary'),
+      effectFilter('dependencyKind', 'deep-property-read'),
     ],
     'signature',
   ),
@@ -237,7 +250,7 @@ const expectedEffects = [
     'Decorator metadata should remain a separate definition lane and still include the method declaration.',
     'computed-observation-definition',
     'app',
-    10,
+    11,
     null,
     [],
     'signature',
@@ -260,6 +273,24 @@ const detailedObservedDependencies = app.ask({
 const mutationDependencies = detailedObservedDependencies.filter((row) =>
   row.memberName === 'mutationRoleProbe'
 );
+const recursiveDependencies = detailedObservedDependencies.filter((row) =>
+  row.memberName === 'recursiveSummary'
+    && row.occurrence.dependencyKind === 'deep-property-read'
+);
+if (
+  recursiveDependencies.length < 4
+  || recursiveDependencies.length > 64
+  || new Set(recursiveDependencies.map((row) => row.rowKey)).size !== recursiveDependencies.length
+) {
+  failures.push(`Recursive deep dependency projection should terminate with unique bounded rows, observed ${recursiveDependencies.length}.`);
+}
+if (!recursiveDependencies.every((row) =>
+  row.occurrence.accessUse.origin === 'generated'
+    && row.occurrence.accessUse.coverage === 'open'
+    && row.occurrence.accessUse.coverageReason === 'Deep observation expands a bounded generated candidate graph from the authored dependency key.'
+)) {
+  failures.push('Recursive deep dependency rows should remain generated and explicitly open at the bounded static projection seam.');
+}
 if (!mutationDependencies.some((row) =>
   row.occurrence.accessUse.targetLinks.some((target) =>
     target.authorityProductHandle != null

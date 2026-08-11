@@ -45,7 +45,7 @@ import {
 import { ExpressionParseResultKind } from '../expression/parse-result-algebra.js';
 import { CustomAttributeDefinition } from '../resources/custom-attribute-definition.js';
 import { CustomElementDefinition } from '../resources/custom-element-definition.js';
-import { camelCaseAttributeName } from './attribute-mapper.js';
+import { camelCaseAttributeName, normalizeLetBindingTarget } from './attribute-mapper.js';
 import {
   AU_SLOT_PROCESS_CONTENT_TARGET_NAME,
   AU_SLOT_RESOURCE_NAME,
@@ -1812,7 +1812,7 @@ class CompiledTemplateInstructionTraversal {
           identityHandle,
           node.toReference(),
           attribute.toReference(),
-          camelCaseAttributeName(syntax.target),
+          normalizeLetBindingTarget(syntax.target),
           expressionHandle,
           literalValue,
           attribute.valueAddressHandle ?? attribute.sourceAddressHandle,

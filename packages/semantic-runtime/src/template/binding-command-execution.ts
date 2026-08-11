@@ -116,6 +116,8 @@ export class BindingCommandIteratorParse {
   constructor(
     readonly expressionProductHandle: ProductHandle | null,
     readonly localNames: readonly string[],
+    /** Object-pattern source keys aligned with `localNames`; empty for non-object declarations. */
+    readonly objectBindingSourceKeys: readonly (string | number)[],
     readonly rawTailText: string | null,
     readonly tailSpan: SourceSpan | null,
   ) {}

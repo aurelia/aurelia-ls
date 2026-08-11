@@ -128,7 +128,7 @@ function createWorkspace(): string {
     name: "dependency-currentness-app",
     private: true,
     type: "module",
-    dependencies: { aurelia: "^2.0.0-rc.1" },
+    dependencies: { aurelia: "^2.0.0-rc.2" },
   }));
   writeWorkspaceFile(workspaceRoot, "tsconfig.json", JSON.stringify({
     compilerOptions: {

@@ -1350,9 +1350,8 @@ function normalizeRouteExpressionInput(
   readonly value: string;
 } {
   let routeContext = closed.site.routeContext!;
-  let value = closed.value;
-  let contextChanged = false;
-  const prefix = normalizeRouterStringNavigationInstructionPrefix(value);
+  const prefix = normalizeRouterStringNavigationInstructionPrefix(closed.value);
+  const value = prefix.routeExpressionInput;
 
   switch (prefix.prefixKind) {
     case RouterStringNavigationInstructionPrefixKind.Root:
@@ -1361,29 +1360,21 @@ function normalizeRouteExpressionInput(
         routeContextsByIdentity,
         'Root router instruction could not resolve its root RouteContext reference.',
       );
-      value = prefix.routeExpressionInput;
-      contextChanged = true;
       break;
     case RouterStringNavigationInstructionPrefixKind.Parent:
-      // Match RouteContext.createViewportInstructions: each "../" climbs one context until the framework loop stops.
-      while (
-        value.startsWith('../')
-        && (routeContext.parent != null || contextChanged)
-      ) {
-        value = value.slice(3);
-        if (!contextChanged) {
-          routeContext = requiredRouteContextForReference(
-            routeContext.parent,
-            routeContextsByIdentity,
-            'Parent-relative router instruction could not resolve its parent RouteContext reference.',
-          );
+      // RouteContext.createViewportInstructions consumes every leading "../" and clamps traversal at the root.
+      for (let index = 0; index < prefix.parentContextTraversalCount; index += 1) {
+        if (routeContext.parent == null) {
+          break;
         }
+        routeContext = requiredRouteContextForReference(
+          routeContext.parent,
+          routeContextsByIdentity,
+          'Parent-relative router instruction could not resolve its parent RouteContext reference.',
+        );
       }
-      contextChanged = true;
       break;
     case RouterStringNavigationInstructionPrefixKind.Current:
-      value = prefix.routeExpressionInput;
-      break;
     case RouterStringNavigationInstructionPrefixKind.None:
       break;
   }

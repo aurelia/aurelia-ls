@@ -1,5 +1,7 @@
 import path from 'node:path';
+import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 import {
   createSemanticRuntime,
   SemanticAppQueryKind,
@@ -48,6 +50,42 @@ const expectedCodes = new Map([
 ]);
 
 const expectedIssueCount = [...expectedCodes.values()].reduce((sum, count) => sum + count, 0);
+const emailCanarySource = app.emission.typeSystem.program.getSourceFiles().find((sourceFile) =>
+  sourceFile.fileName.replaceAll('\\', '/').endsWith('/src/validation-rule-source-errors-app.ts')
+);
+const emailCanary = emailCanarySource == null
+  ? null
+  : findPropertyCall(emailCanarySource, 'email');
+const frameworkRuleProviderPath = path.resolve(packageRoot, '../../aurelia/packages/validation/src/rule-provider.ts');
+const frameworkRuleProviderText = await readFile(frameworkRuleProviderPath, 'utf8');
+const frameworkRuleProviderSource = ts.createSourceFile(
+  frameworkRuleProviderPath,
+  frameworkRuleProviderText,
+  ts.ScriptTarget.Latest,
+  true,
+  ts.ScriptKind.TS,
+);
+const frameworkEmailMethod = findMethodDeclaration(frameworkRuleProviderSource, 'email');
+let emailConsumerDeprecationVisible = false;
+
+if (emailCanary == null) {
+  failures.push('Expected one framework PropertyRule.email() compatibility canary.');
+} else {
+  const checker = app.emission.typeSystem.program.getTypeChecker();
+  const symbol = checker.getSymbolAtLocation(emailCanary.expression.name);
+  const declarations = symbol?.declarations ?? [];
+  if (!declarations.some((declaration) =>
+    declaration.getSourceFile().fileName.replaceAll('\\', '/').includes('/aurelia/packages/validation/')
+  )) {
+    failures.push('Expected the email() canary to resolve to the framework PropertyRule declaration.');
+  }
+  emailConsumerDeprecationVisible = (symbol?.getJsDocTags(checker) ?? [])
+    .some((tag) => tag.name === 'deprecated');
+}
+
+if (frameworkEmailMethod == null || ts.getJSDocDeprecatedTag(frameworkEmailMethod) == null) {
+  failures.push('Expected the framework PropertyRule.email() source declaration to remain @deprecated.');
+}
 
 if (validationIssues.rows.length !== expectedIssueCount) {
   failures.push(`Expected ${expectedIssueCount} source-backed validation issues, observed ${validationIssues.rows.length}.`);
@@ -127,8 +165,46 @@ if (failures.length > 0) {
       rootResolvesDiKeyClaims: rootResolvesDiKeyClaims.length,
       sourceDemandProducts: sourceDemandProducts.length,
       frameworkCodes: Object.fromEntries(frameworkCodes),
+      deprecatedEmailCanary: emailCanary != null,
+      emailConsumerDeprecationVisible,
     },
   }, null, 2));
+}
+
+function findPropertyCall(sourceFile, name) {
+  let match = null;
+  const visit = (node) => {
+    if (
+      match == null
+      && ts.isCallExpression(node)
+      && ts.isPropertyAccessExpression(node.expression)
+      && node.expression.name.text === name
+    ) {
+      match = node;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return match;
+}
+
+function findMethodDeclaration(sourceFile, name) {
+  let match = null;
+  const visit = (node) => {
+    if (
+      match == null
+      && ts.isMethodDeclaration(node)
+      && ts.isIdentifier(node.name)
+      && node.name.text === name
+    ) {
+      match = node;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return match;
 }
 
 function countBy(rows, read) {

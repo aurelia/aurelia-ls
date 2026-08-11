@@ -66,6 +66,58 @@ class InheritedGetterConsumer extends InheritedGetterBase {
   readonly marker = 'inherited-getter-consumer';
 }
 
+class StaticCacheBaseFirstBase {
+  static inject = [FirstDependency];
+
+  constructor(readonly dependency: unknown) {}
+}
+
+class StaticCacheBaseFirstDerived extends StaticCacheBaseFirstBase {
+  static inject = [SecondDependency];
+
+  constructor(readonly ownDependency: unknown) {
+    super(undefined);
+  }
+}
+
+class StaticCacheDerivedFirstBase {
+  static inject = [FirstDependency];
+
+  constructor(readonly dependency: unknown) {}
+}
+
+class StaticCacheDerivedFirstDerived extends StaticCacheDerivedFirstBase {
+  static inject = [SecondDependency];
+
+  constructor(readonly ownDependency: unknown) {
+    super(undefined);
+  }
+}
+
+@inject(FirstDependency)
+class DecoratorCacheBaseFirstBase {
+  constructor(readonly dependency: unknown) {}
+}
+
+@inject(SecondDependency)
+class DecoratorCacheBaseFirstDerived extends DecoratorCacheBaseFirstBase {
+  constructor(readonly ownDependency: unknown) {
+    super(undefined);
+  }
+}
+
+@inject(FirstDependency)
+class DecoratorCacheDerivedFirstBase {
+  constructor(readonly dependency: unknown) {}
+}
+
+@inject(SecondDependency)
+class DecoratorCacheDerivedFirstDerived extends DecoratorCacheDerivedFirstBase {
+  constructor(readonly ownDependency: unknown) {
+    super(undefined);
+  }
+}
+
 let getterDependency: unknown = FirstDependency;
 
 class CachedGetterConsumer {
@@ -157,6 +209,14 @@ container.register(
   Registration.transient(ExplicitUndefinedStaticConsumer, ExplicitUndefinedStaticConsumer),
   Registration.transient(InvalidStaticConsumer, InvalidStaticConsumer),
   Registration.transient(InheritedGetterConsumer, InheritedGetterConsumer),
+  Registration.transient(StaticCacheBaseFirstBase, StaticCacheBaseFirstBase),
+  Registration.transient(StaticCacheBaseFirstDerived, StaticCacheBaseFirstDerived),
+  Registration.transient(StaticCacheDerivedFirstBase, StaticCacheDerivedFirstBase),
+  Registration.transient(StaticCacheDerivedFirstDerived, StaticCacheDerivedFirstDerived),
+  Registration.transient(DecoratorCacheBaseFirstBase, DecoratorCacheBaseFirstBase),
+  Registration.transient(DecoratorCacheBaseFirstDerived, DecoratorCacheBaseFirstDerived),
+  Registration.transient(DecoratorCacheDerivedFirstBase, DecoratorCacheDerivedFirstBase),
+  Registration.transient(DecoratorCacheDerivedFirstDerived, DecoratorCacheDerivedFirstDerived),
   Registration.transient(CachedGetterConsumer, CachedGetterConsumer),
   Registration.transient(StaticPrecedenceConsumer, StaticPrecedenceConsumer),
   Registration.transient(UndefinedStaticConsumer, UndefinedStaticConsumer),
@@ -176,6 +236,14 @@ export const sparseStaticRead = container.get(SparseStaticConsumer);
 export const explicitUndefinedStaticRead = container.get(ExplicitUndefinedStaticConsumer);
 export const invalidStaticRead = container.get(InvalidStaticConsumer);
 export const inheritedGetterRead = container.get(InheritedGetterConsumer);
+export const staticCacheBaseFirstBaseRead = container.get(StaticCacheBaseFirstBase);
+export const staticCacheBaseFirstDerivedRead = container.get(StaticCacheBaseFirstDerived);
+export const staticCacheDerivedFirstDerivedRead = container.get(StaticCacheDerivedFirstDerived);
+export const staticCacheDerivedFirstBaseRead = container.get(StaticCacheDerivedFirstBase);
+export const decoratorCacheBaseFirstBaseRead = container.get(DecoratorCacheBaseFirstBase);
+export const decoratorCacheBaseFirstDerivedRead = container.get(DecoratorCacheBaseFirstDerived);
+export const decoratorCacheDerivedFirstDerivedRead = container.get(DecoratorCacheDerivedFirstDerived);
+export const decoratorCacheDerivedFirstBaseRead = container.get(DecoratorCacheDerivedFirstBase);
 export const cachedGetterReadOne = container.get(CachedGetterConsumer);
 export const cachedGetterReadTwo = container.get(CachedGetterConsumer);
 export const staticPrecedenceRead = container.get(StaticPrecedenceConsumer);

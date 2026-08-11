@@ -8,7 +8,11 @@ import { afterEach, describe, expect, test } from 'vitest';
 import {
   createSemanticRuntime,
   SemanticAppQueryKind,
+  type SemanticRecognizedRoutesResult,
+  type SemanticRouterIssuesResult,
+  type SemanticRouteTreesResult,
   type SemanticTemplateCursorInfoResult,
+  type SemanticViewportInstructionTreesResult,
 } from '../src/index.js';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -89,6 +93,116 @@ describe('router resource literal closure', () => {
       });
     }
   }, 120_000);
+
+  test('consumes every parent prefix and clamps scalar route instructions at the root', async () => {
+    const workspaceRoot = await createRoutedAppShellWorkspace();
+    const rootTemplatePath = path.join(workspaceRoot, 'src/app.html');
+    const detailTemplatePath = path.join(workspaceRoot, 'src/routes/detail-route.html');
+    const rootTemplate = `<main>
+  <nav>
+    <a load="./home">Current root</a>
+    <a load="../home">Parent from root</a>
+    <a load="../../../home">Excess parent from root</a>
+  </nav>
+  <au-viewport name="main"></au-viewport>
+</main>
+`;
+    const detailTemplate = `<section>
+  <a load="/home">Root from nested</a>
+  <a load="../home">Parent from nested</a>
+  <a load="../../home">Repeated parent from nested</a>
+  <a load="../../../../home">Excess parent from nested</a>
+</section>
+`;
+    await writeFile(rootTemplatePath, rootTemplate, 'utf8');
+    await writeFile(detailTemplatePath, detailTemplate, 'utf8');
+
+    const runtime = await createSemanticRuntime({
+      workspaceRoot,
+      storeKey: 'router-parent-prefix-closure',
+    });
+    const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
+    const instructionTrees = app.ask({
+      kind: SemanticAppQueryKind.ViewportInstructionTrees,
+      detail: 'handles',
+      page: { size: 100 },
+    }).value as SemanticViewportInstructionTreesResult;
+    const recognizedRoutes = app.ask({
+      kind: SemanticAppQueryKind.RecognizedRoutes,
+      detail: 'handles',
+      page: { size: 100 },
+    }).value as SemanticRecognizedRoutesResult;
+    const routeTrees = app.ask({
+      kind: SemanticAppQueryKind.RouteTrees,
+      detail: 'handles',
+      page: { size: 100 },
+    }).value as SemanticRouteTreesResult;
+    const routerIssues = app.ask({
+      kind: SemanticAppQueryKind.RouterIssues,
+      detail: 'handles',
+      page: { size: 100 },
+    }).value as SemanticRouterIssuesResult;
+
+    const cases = [
+      { filePath: 'src/app.html', sourceText: rootTemplate, literal: './home' },
+      { filePath: 'src/app.html', sourceText: rootTemplate, literal: '../home' },
+      { filePath: 'src/app.html', sourceText: rootTemplate, literal: '../../../home' },
+      { filePath: 'src/routes/detail-route.html', sourceText: detailTemplate, literal: '/home' },
+      { filePath: 'src/routes/detail-route.html', sourceText: detailTemplate, literal: '../home' },
+      { filePath: 'src/routes/detail-route.html', sourceText: detailTemplate, literal: '../../home' },
+      { filePath: 'src/routes/detail-route.html', sourceText: detailTemplate, literal: '../../../../home' },
+    ] as const;
+
+    for (const candidate of cases) {
+      const offset = candidate.sourceText.indexOf(candidate.literal) + candidate.literal.lastIndexOf('home') + 1;
+      const ownsOffset = (source: { readonly path?: string; readonly start?: number; readonly end?: number } | null) =>
+        source?.path === candidate.filePath
+        && source.start != null
+        && source.end != null
+        && source.start <= offset
+        && offset < source.end;
+      const instructionTree = instructionTrees.rows.find((row) => ownsOffset(row.source));
+      const recognizedRoute = recognizedRoutes.rows.find((row) => ownsOffset(row.source));
+      const routeTree = routeTrees.rows.find((row) => ownsOffset(row.source));
+      const cursor = app.ask({
+        kind: SemanticAppQueryKind.TemplateCursorInfo,
+        detail: 'handles',
+        cursor: cursorAtMarker(
+          candidate.sourceText,
+          candidate.literal,
+          'home',
+          candidate.filePath,
+        ),
+      }).value as SemanticTemplateCursorInfoResult;
+
+      expect(instructionTree, candidate.literal).toMatchObject({
+        closure: 'closed',
+        routeContext: { label: 'app-root' },
+        instructionCount: 1,
+      });
+      expect(recognizedRoute, candidate.literal).toMatchObject({
+        path: 'home',
+        residue: null,
+        routeContext: { label: 'app-root' },
+        endpoint: { path: 'home' },
+      });
+      expect(routeTree, candidate.literal).toMatchObject({
+        realizationStage: 'planned',
+      });
+      expect(recognizedRoute?.handles?.viewportInstructionTreeProductHandle, candidate.literal)
+        .toBe(instructionTree?.handles?.productHandle);
+      expect(routeTree?.handles?.instructionTreeProductHandle, candidate.literal)
+        .toBe(instructionTree?.handles?.productHandle);
+      expect(cursor.selectedRouteTarget, candidate.literal).toMatchObject({
+        targetKind: 'route-path',
+        matchedName: 'home',
+        routeConfigId: 'home',
+      });
+      expect(cursor.missingInputs, candidate.literal).toEqual([]);
+      expect(cursor.uncertainty, candidate.literal).toBeNull();
+      expect(routerIssues.rows.some((row) => ownsOffset(row.source)), candidate.literal).toBe(false);
+    }
+  }, 120_000);
 });
 
 async function createBroadRoutedWorkspace(): Promise<string> {
@@ -111,6 +225,17 @@ async function createBroadRoutedWorkspace(): Promise<string> {
       { recursive: true },
     );
   }
+  return workspaceRoot;
+}
+
+async function createRoutedAppShellWorkspace(): Promise<string> {
+  const workspaceRoot = await mkdtemp(path.join(tmpdir(), 'router-parent-prefix-closure-'));
+  temporaryRoots.push(workspaceRoot);
+  await cp(
+    path.join(pressureFixtureRoot, 'app-pattern-routed-app-shell'),
+    workspaceRoot,
+    { recursive: true },
+  );
   return workspaceRoot;
 }
 
@@ -139,6 +264,7 @@ function cursorAtMarker(
   sourceText: string,
   marker: string,
   needle: string,
+  filePath = 'src/app.html',
 ): { readonly filePath: string; readonly line: number; readonly character: number; readonly offset: number } {
   const markerOffset = sourceText.indexOf(marker);
   if (markerOffset < 0) {
@@ -151,7 +277,7 @@ function cursorAtMarker(
   const offset = needleOffset + Math.min(1, needle.length - 1);
   const lines = sourceText.slice(0, offset).split(/\r?\n/u);
   return {
-    filePath: 'src/app.html',
+    filePath,
     line: lines.length - 1,
     character: lines.at(-1)?.length ?? 0,
     offset,

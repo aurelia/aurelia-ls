@@ -2387,7 +2387,7 @@
         "overlay"
       ],
       "summary": "Built-in runtime-html and ui-virtualization template-controller flow now share one framework-resource-backed overlay contract surface.",
-      "rationale": "The built-in controller fixture covers if/else, repeat, with, portal, promise/pending/then/catch, and switch/case/default-case through runtime controller rows, durable BindingScope narrowing, and generated overlay type inference, including repeat array/map/set/number source categories, strict-literal, typeof, property-presence, and instanceof if/else narrowing, plus switch/case discriminant replay for scalar cases, array cases, default exclusions, and static fall-through chains. The focused contract compares runtime-html template-controller semantics with the runtime-html built-in resource catalog and the framework-source-derived target/name table. It also admits @aurelia/ui-virtualization DefaultVirtualizationConfiguration, materializes the virtual-repeat resource catalog row, proves frameworkTemplateControllerSemantics includes virtual-repeat, and uses a dedicated fixture to prove virtual-repeat.for item locals and $index flow through the same overlay path. Future work should extend the framework-shaped semantics, scope materializer, narrower, and overlay prelude owners rather than adding answer-local TypeScript fallbacks or fixture-only patches.",
+      "rationale": "The built-in controller fixture covers if/else, repeat, with, portal, promise/pending/then/catch, and switch/case/default-case through runtime controller rows, durable BindingScope narrowing, and generated overlay type inference, including repeat array/map/set/number source categories, strict-literal, typeof, property-presence, and instanceof if/else narrowing, plus switch/case discriminant replay for scalar cases, array cases, default exclusions, and static fall-through chains. The focused contract compares runtime-html template-controller semantics with the runtime-html built-in resource catalog and the framework-source-derived target/name table. It also admits @aurelia/ui-virtualization DefaultVirtualizationConfiguration, materializes the exact virtual-repeat.for pattern and plugin forof command catalog, carries the framework IterateBindingInstruction identity as a plugin subtype of the shared semantic iterator abstraction, retains static gap tail data, refuses virtual-repeat destructuring without inventing locals, and proves ordinary item/$index flow through the shared overlay path. Future work should extend the framework-shaped semantics, scope materializer, narrower, and overlay prelude owners rather than adding answer-local TypeScript fallbacks or fixture-only patches.",
       "guidance": [
         "Start with template-controller-semantics.ts when a runtime-html template-controller needs a value property, flow kind, or child-view cardinality.",
         "Use TemplateControllerFlowScopeMaterializer for child Scope effects; with.bind value scopes should project the non-nullish object binding context before BindingScopeSlotProjector derives visible members.",
@@ -2398,7 +2398,7 @@
         "Durable BindingScope slot narrowing for if/else strict literal equality, typeof primitive guards, property-presence `in` guards, `instanceof` constructor guards, switch equality, and fall-through belongs in CheckerExpressionScopeNarrower and TemplateControllerFlowScopeMaterializer; overlay replay should spend those scope facts rather than duplicating API answer code.",
         "Run pnpm --filter @aurelia-ls/semantic-runtime contract:template-controller-built-ins after changing built-in template-controller semantics, scope replay, resource catalog mirrors, framework-registration admission, or overlay helper generation.",
         "Use pnpm --filter @aurelia-ls/atlas framework:resources -- --projection=convergence --resourceKind=template-controller --detail --rows=30 when deciding whether a template-controller coverage claim is runtime-html-only or broader framework/plugin pressure.",
-        "Treat virtual-repeat template-controller resource/scope/overlay flow as covered by this contract, but keep ui-virtualization CollectionStrategyLocator, IDomRenderer, scroller, DOM renderer, and plugin error-policy semantics as a separate deeper pressure frontier."
+        "Treat exact virtual-repeat.for admission, forof lowering, single-identifier scope/overlay flow, static option carriers, and definite destructuring refusal as covered by this contract; keep IterateBinding execution, inner collection observation, CollectionStrategyLocator, IDomRenderer, scroller, DOM renderer, and plugin error-policy behavior as the deeper pressure frontier."
       ],
       "anchors": [
         {
@@ -2459,7 +2459,7 @@
         }
       ],
       "createdAt": "2026-05-23",
-      "updatedAt": "2026-05-23"
+      "updatedAt": "2026-08-11"
     },
     {
       "id": "reuse:template-overlay-expression-prelude-algebra",
@@ -2540,12 +2540,12 @@
         "framework-grounding",
         "ui-virtualization"
       ],
-      "summary": "UI virtualization now has template-controller resource/scope/overlay coverage plus configuration-owned service resolver effects, while DOM renderer, scroller, collection strategy, and error-policy runtime semantics remain open.",
-      "rationale": "DefaultVirtualizationConfiguration registers CollectionStrategyLocator, DefaultDomRenderer, and VirtualRepeat. Semantic-runtime recognizes the configuration, admits the virtual-repeat resource catalog row, models virtual-repeat as repeat-like iteration for template scope and TypeScript overlay flow, and spends the CollectionStrategyLocator/IDomRenderer service registrations as framework resolver effects. That closes the template-controller and DI service surface, but not the plugin's DOM renderer/scroller substrate, collection strategy policy, or framework error-code diagnostics.",
+      "summary": "UI virtualization has exact virtual-repeat.for syntax/lowering, template-controller scope/overlay coverage, static option carriers, and configuration-owned service resolver effects; binding execution, DOM renderer, scroller, collection strategy, and error-policy runtime semantics remain open.",
+      "rationale": "RC2 DefaultVirtualizationConfiguration registers CollectionStrategyLocator, DefaultDomRenderer, VirtualRepeatForAttributePattern, IterateBindingCommand, IterateBindingRenderer, and VirtualRepeat. Semantic-runtime recognizes that exact plugin syntax catalog, lowers virtual-repeat.for through forof into a type-200 IterateBindingInstruction subtype of the shared iterator abstraction, retains static gap tail data, admits the resource row, projects only BindingIdentifier locals, and spends the service registrations as resolver effects. That closes the shallow authored syntax/instruction/scope and DI surface, but not IterateBinding execution or inner collection observation, the plugin's DOM renderer/scroller/collection-strategy substrate, or framework error-code diagnostics.",
       "guidance": [
         "Start with this frontier when external app pressure or framework error-code pressure involves @aurelia/ui-virtualization beyond ordinary virtual-repeat item-scope typing.",
-        "Do not add local virtual-repeat fixture hacks: resource admission belongs in FrameworkRegistrationKind/Capability plus UiVirtualizationBuiltInResourceCatalogs, and item-scope semantics belong in frameworkTemplateControllerSemantics.",
-        "Treat scroller lookup, horizontal/table policy, item sizing, near-top/near-bottom events, and collection-strategy runtime behavior as deeper runtime/plugin semantics, not as template-controller scope facts.",
+        "Do not add local virtual-repeat fixture hacks: exact pattern/command admission belongs in the ui-virtualization built-in syntax catalog, resource admission belongs in FrameworkRegistrationKind/Capability plus UiVirtualizationBuiltInResourceCatalogs, and item-scope semantics belong in frameworkTemplateControllerSemantics.",
+        "Treat IterateBinding execution and inner collection observation, scroller lookup, horizontal/table policy, runtime sizing/gap behavior, near-top/near-bottom events, and collection-strategy behavior as deeper runtime/plugin semantics, not as static syntax or template-controller scope facts.",
         "Do not reopen DefaultVirtualizationConfiguration merely because CollectionStrategyLocator and DefaultDomRenderer are services: semantic-runtime spends those as framework resolver effects; further work should target their runtime behavior and diagnostics.",
         "Use Atlas framework error and DI lenses against the ui-virtualization package before adding diagnostics for virtualization errors; the current template-controller contract does not prove renderer/scroller/strategy error authority."
       ],
@@ -2555,7 +2555,13 @@
           "kind": "source",
           "filePath": "aurelia/packages/ui-virtualization/src/configuration.ts",
           "symbolName": "DefaultVirtualizationConfiguration",
-          "summary": "Framework registry that admits CollectionStrategyLocator, DefaultDomRenderer, and VirtualRepeat."
+          "summary": "RC2 framework registry that admits CollectionStrategyLocator, DefaultDomRenderer, VirtualRepeatForAttributePattern, IterateBindingCommand, IterateBindingRenderer, and VirtualRepeat."
+        },
+        {
+          "kind": "source",
+          "filePath": "aurelia/packages/ui-virtualization/src/iterate-binding.ts",
+          "symbolName": "VirtualRepeatForAttributePattern",
+          "summary": "Framework-owned exact virtual-repeat.for to virtual-repeat/forof syntax and IterateBindingInstruction lowering surface."
         },
         {
           "kind": "source",
@@ -2577,6 +2583,12 @@
         },
         {
           "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/built-in-syntax.ts",
+          "symbolName": "VirtualRepeatForAttributePattern",
+          "summary": "Semantic-runtime mirror for exact plugin pattern, forof command, instruction identity, and static tail instruction carriers."
+        },
+        {
+          "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/template-controller-semantics.ts",
           "symbolName": "UiVirtualizationVirtualRepeatTemplateControllerSemantics",
           "summary": "Repeat-like template scope/value-flow semantics for virtual-repeat."
@@ -2589,7 +2601,7 @@
         {
           "kind": "script",
           "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:template-controller-built-ins",
-          "summary": "Contract that verifies runtime-html template controllers plus virtual-repeat plugin controller coverage."
+          "summary": "Contract that verifies runtime-html controllers plus exact virtual-repeat syntax, forof lowering, static gap carrier, single-identifier scope, and destructuring refusal."
         },
         {
           "kind": "lens",
@@ -2614,7 +2626,7 @@
         }
       ],
       "createdAt": "2026-05-23",
-      "updatedAt": "2026-07-13"
+      "updatedAt": "2026-08-11"
     },
     {
       "id": "frontier:template-overlay-integration-hardening",

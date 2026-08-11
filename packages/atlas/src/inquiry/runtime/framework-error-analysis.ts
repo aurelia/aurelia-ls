@@ -2453,10 +2453,10 @@ function intentionalUnclaimedFrameworkRawErrorReason(
     packageId === "runtime" &&
     filePath === "aurelia/packages/runtime/src/queue.ts"
   ) {
-    if (publicLine === 133) {
-      return "runTasks constructs this only when a live scheduler flush recursively queues more than the framework deadlock guard allows; semantic-runtime does not execute Aurelia task queues or model host scheduling as a source product.";
+    if (publicLine === 321) {
+      return "runTasks constructs this only when an explicit synchronous drain exceeds the framework's internal manual flush budget; automatic drains yield through host timers instead of throwing merely because work continues. Semantic-runtime does not execute Aurelia task queues or model host scheduling as a source product.";
     }
-    if (publicLine === 586) {
+    if (publicLine === 783) {
       return "Task.run throws this for a mutable task instance that is no longer pending; semantic-runtime does not expose live Task objects or queue lifecycle mutation as authored-app semantics.";
     }
   }

@@ -6,11 +6,11 @@
     "check": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@aurelia/i18n": "^2.0.0-rc.1",
-    "@aurelia/router": "^2.0.0-rc.1",
-    "@aurelia/validation": "^2.0.0-rc.1",
-    "@aurelia/validation-html": "^2.0.0-rc.1",
-    "aurelia": "^2.0.0-rc.1"
+    "@aurelia/i18n": "^2.0.0-rc.2",
+    "@aurelia/router": "^2.0.0-rc.2",
+    "@aurelia/validation": "^2.0.0-rc.2",
+    "@aurelia/validation-html": "^2.0.0-rc.2",
+    "aurelia": "^2.0.0-rc.2"
   },
   "devDependencies": {
     "typescript": "^6.0.3"

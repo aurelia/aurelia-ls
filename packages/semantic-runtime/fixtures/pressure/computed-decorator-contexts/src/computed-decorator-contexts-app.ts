@@ -14,6 +14,11 @@ interface MutationRoleState {
   optional?: string;
 }
 
+interface RecursiveComputedState {
+  readonly label: string;
+  readonly self: RecursiveComputedState | null;
+}
+
 @customElement({ name: 'computed-decorator-contexts-app', template })
 export class ComputedDecoratorContextsApp {
   value = 1;
@@ -31,6 +36,10 @@ export class ComputedDecoratorContextsApp {
     values: ['one'],
     entries: { one: 1 },
     optional: 'present',
+  };
+  recursiveState: RecursiveComputedState = {
+    label: 'root',
+    self: null,
   };
 
   @computed({ deps: ['value'] })
@@ -51,6 +60,11 @@ export class ComputedDecoratorContextsApp {
   @computed({ deps: ['nested'], deep: true })
   get nestedSummary(): string {
     return `${this.nested.detail.count}:${this.nested.tags.join(',')}`;
+  }
+
+  @computed({ deps: ['recursiveState'], deep: true })
+  get recursiveSummary(): string {
+    return this.recursiveState.label;
   }
 
   @computed('nested.detail.count')

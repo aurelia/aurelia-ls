@@ -387,7 +387,10 @@ pressure evidence and app-builder pressure fixtures, not reusable generated-code
 - `validation-rule-source-errors` captures source-authored validation rule mistakes: a `PropertyRule` modifier before
   any rule has been added, an accessor function that `parsePropertyName` cannot reduce, a group rule result that names
   a property outside the group, and default model-based rules with an unsupported rule key and an empty property name.
-  It preserves validation `AUR4101`, `AUR4102`, `AUR4105`, `AUR4106`, and `AUR4108` pressure without making recommendable generators emit invalid validation DSL inputs.
+  It also keeps one `.email().when(...)` compatibility canary: `email` is deprecated but still adds a rule, so it must
+  not make the following modifier look like `AUR4101`. The fixture preserves validation `AUR4101`, `AUR4102`,
+  `AUR4105`, `AUR4106`, and `AUR4108` pressure without making recommendable generators emit invalid or deprecated
+  validation DSL inputs.
 - `fetch-client-config-errors` captures closed @aurelia/fetch-client configuration mistakes: invalid
   `HttpClient.configure(...)` input and callback returns, `Headers` defaults, duplicate or non-tail retry interceptors,
   and invalid retry strategies/intervals. It preserves fetch-client `AUR5001`, `AUR5002`, `AUR5003`, `AUR5004`,

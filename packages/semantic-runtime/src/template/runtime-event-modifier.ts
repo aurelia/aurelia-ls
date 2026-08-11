@@ -187,8 +187,7 @@ function defaultRuntimeKeyMappings(): readonly RuntimeKeyMappingEntry[] {
     new RuntimeKeyMappingEntry(RuntimeEventModifierName.Space, 'Space'),
     new RuntimeKeyMappingEntry(RuntimeEventModifierName.Tab, 'tab'),
   ];
-  // Framework docs and source comments promise A-Z/a-z. The vendored runtime's length 25 is an off-by-one bug;
-  // tooling models the intended range so `z`, `90`, and `122` remain authorable after the runtime correction.
+  // RC2's framework key map covers the complete A-Z/a-z range, including `z`, `90`, and `122`.
   for (let index = 0; index < 26; index += 1) {
     const upper = String.fromCharCode(65 + index);
     const lower = String.fromCharCode(97 + index);

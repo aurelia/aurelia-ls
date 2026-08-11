@@ -40,6 +40,7 @@ import {
   type ParseOutcome,
 } from './parse-failure.js';
 import { ExpressionFrameworkErrorCode } from './framework-error-code.js';
+import { admitRepeatObjectBindingPattern } from './repeat-object-binding-pattern.js';
 
 interface ParsedIteratorTailSplit {
   readonly semiIdx: number;
@@ -106,6 +107,19 @@ export class CompletedInputIteratorCorridor {
     const declaration = this.bindingPattern.parseLhsBinding();
     if (isParseFailure(declaration)) {
       return this.iteratorDeclarationFailurePublication(declaration);
+    }
+    if (declaration.$kind === 'ObjectBindingPattern') {
+      const admission = admitRepeatObjectBindingPattern(declaration);
+      if (!admission.admitted) {
+        const localStart = this.state.toLocal(admission.span.start);
+        const localEnd = this.state.toLocal(admission.span.end);
+        return this.iteratorDeclarationFailurePublication(this.state.failures.hardErrorAt(
+          admission.span,
+          admission.message,
+          this.state.source.slice(localStart, localEnd),
+          admission.frameworkErrorCode,
+        ));
+      }
     }
     return this.parseHeaderAfterDeclaration(declaration);
   }

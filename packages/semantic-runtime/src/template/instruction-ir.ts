@@ -296,11 +296,19 @@ export class IteratorBindingInstruction {
     readonly attribute: HtmlAttributeReference,
     readonly targetProperty: string,
     readonly localNames: readonly string[],
+    /** Object-pattern source keys aligned with `localNames`; empty for non-object declarations. */
+    readonly objectBindingSourceKeys: readonly (string | number)[],
     readonly iterableExpressionProductHandle: ProductHandle | null,
     readonly tailInstructionProductHandles: readonly ProductHandle[],
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<TemplateInstructionField>[] = [],
   ) {}
+}
+
+/** Plugin-owned type-200 iterator instruction, carried through the shared iterator semantic abstraction. */
+@auLink('ui-virtualization:IterateBindingInstruction')
+export class IterateBindingInstruction extends IteratorBindingInstruction {
+  readonly frameworkInstructionType = 200 as const;
 }
 
 /** Lowered ref instruction. */

@@ -188,7 +188,7 @@ test("routes template navigation definitions to exact path and id declarations",
       "export class ItemDetailRoute {}",
     ].join("\n"),
   }, {
-    "@aurelia/router": "^2.0.0-rc.1",
+    "@aurelia/router": "^2.0.0-rc.2",
   });
 
   const htmlUri = fileUri(fixture, "src/app.html");

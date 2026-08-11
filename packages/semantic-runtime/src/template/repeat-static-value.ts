@@ -84,9 +84,15 @@ export function repeatStaticLocalValue(
       [evaluation],
     );
   }
-  const localValue = effect.localNames.length === 1
-    ? item
-    : readRepresentativeProperty(item, localName);
+  const localIndex = effect.localNames.indexOf(localName);
+  const objectBindingSourceKey = localIndex < 0
+    ? undefined
+    : effect.objectBindingSourceKeys[localIndex];
+  const localValue = objectBindingSourceKey === undefined
+    ? effect.localNames.length === 1
+      ? item
+      : readRepresentativeProperty(item, localName)
+    : readRepresentativeProperty(item, String(objectBindingSourceKey));
   return localValue == null
     ? bindingSourceValueEvaluationWithPressure(
         openBindingSourceSlotNoStaticValue(

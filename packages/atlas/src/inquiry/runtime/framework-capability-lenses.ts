@@ -1845,8 +1845,20 @@ export const FRAMEWORK_CAPABILITY_ROWS: readonly FrameworkCapabilityRow[] = [
     id: "ui-virtualization:admission",
     title: "UI virtualization plugin admission",
     domain: FrameworkCapabilityDomain.Plugin,
-    frameworkConcepts: ["@aurelia/ui-virtualization", "DefaultVirtualizationConfiguration", "virtual-repeat"],
-    userFacingForms: ["register DefaultVirtualizationConfiguration", "virtual-repeat.for"],
+    frameworkConcepts: [
+      "@aurelia/ui-virtualization",
+      "DefaultVirtualizationConfiguration",
+      "VirtualRepeatForAttributePattern",
+      "IterateBindingCommand",
+      "IterateBindingInstruction",
+      "IterateBindingRenderer",
+      "virtual-repeat",
+    ],
+    userFacingForms: [
+      "register DefaultVirtualizationConfiguration",
+      "virtual-repeat.for",
+      "virtual-repeat.for=\"item of items; gap: 10\"",
+    ],
     localities: [
       FrameworkCapabilityLocality.AppGlobal,
       FrameworkCapabilityLocality.PackageGlobalRegistration,
@@ -1873,15 +1885,15 @@ export const FRAMEWORK_CAPABILITY_ROWS: readonly FrameworkCapabilityRow[] = [
       ),
       capabilityRequirement(
         "resource:template-controller",
-        "virtual-repeat is a template-controller-shaped resource with synthetic view control-flow semantics.",
+        "virtual-repeat is a template-controller-shaped resource whose exact .for pattern lowers through the plugin-owned forof command and type-200 IterateBindingInstruction.",
       ),
     ],
     summary:
-      "@aurelia/ui-virtualization admits the virtual-repeat template controller plus the collection-strategy and DOM-renderer services it depends on.",
+      "@aurelia/ui-virtualization admits the exact virtual-repeat.for pattern, plugin-owned forof command/instruction renderer, virtual-repeat controller, and its collection-strategy and DOM-renderer services.",
     evidence: [
       lensEvidence(LensId.PluginArchitecture, "surfaces", "Plugin architecture lens grounds ui-virtualization resource and DI surfaces.", "DefaultVirtualizationConfiguration"),
-      lensEvidence(LensId.FrameworkAdmission, "relationships", "Admission lens should expose DefaultVirtualizationConfiguration's registered CollectionStrategyLocator, DefaultDomRenderer, and VirtualRepeat.", "DefaultVirtualizationConfiguration"),
-      docsEvidence("ui-virtualization", "UI virtualization docs/tests seed promoted virtual-repeat and scroller behavior forms."),
+      lensEvidence(LensId.FrameworkAdmission, "relationships", "Admission lens should expose DefaultVirtualizationConfiguration's registered CollectionStrategyLocator, DefaultDomRenderer, VirtualRepeatForAttributePattern, IterateBindingCommand, IterateBindingRenderer, and VirtualRepeat.", "DefaultVirtualizationConfiguration"),
+      docsEvidence("ui-virtualization", "UI virtualization source/tests ground the exact virtual-repeat.for syntax, semicolon options including non-negative static gap, and deeper scroller behavior."),
     ],
   }),
   capability({

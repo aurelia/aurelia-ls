@@ -9,8 +9,14 @@ import {
 import {
   expressionParseErrorDiagnostic,
   expressionRuntimeEvaluationErrorDiagnostic,
+  runtimeBindingScopeIssueDiagnostic,
   templateCompilerErrorDiagnostic,
 } from "../src/api/template-diagnostic-policy.js";
+import type { RuntimeBindingScopeIssue } from "../src/template/runtime-binding-scope-issue.js";
+import {
+  RuntimeBindingScopeIssueCertainty,
+  RuntimeBindingScopeIssueKind,
+} from "../src/template/runtime-binding-scope-issue.js";
 import { RuntimeAstFrameworkErrorCode } from "../src/type-system/framework-error-code.js";
 
 const packageRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
@@ -70,6 +76,37 @@ describe("template diagnostic policy", () => {
     expect(evaluation).toMatchObject({
       frameworkErrorCode: RuntimeAstFrameworkErrorCode.AstNotAFunction,
       summary: "The selected value is not callable.",
+    });
+  });
+
+  test.each([
+    {
+      issueKind: RuntimeBindingScopeIssueKind.RepeatObjectBindingNullish,
+      suggestionKind: "guard-nullish-expression",
+      summary: "Guard or narrow nullish repeat items before projecting object-pattern locals.",
+    },
+    {
+      issueKind: RuntimeBindingScopeIssueKind.ArrayRestNonArray,
+      suggestionKind: "use-safe-destructuring-source",
+      summary: "Use an Array-valued repeat item before applying an array rest declaration, or guard the repeat with template control flow.",
+    },
+    {
+      issueKind: RuntimeBindingScopeIssueKind.DestructuringNonObject,
+      suggestionKind: "use-safe-destructuring-source",
+      summary: "Ensure the repeat item is compatible with the object or array declaration before destructuring, or guard the repeat with template control flow.",
+    },
+  ] as const)("keeps $issueKind repair guidance issue-specific", ({ issueKind, suggestionKind, summary }) => {
+    const issue = {
+      issueKind,
+      certainty: RuntimeBindingScopeIssueCertainty.Definite,
+      message: "Framework-shaped destructuring pressure",
+      frameworkErrorCode: RuntimeAstFrameworkErrorCode.AstDestructNull,
+      sourceType: null,
+    } as unknown as RuntimeBindingScopeIssue;
+
+    expect(runtimeBindingScopeIssueDiagnostic(issue, source).suggestion).toMatchObject({
+      suggestionKind,
+      summary,
     });
   });
 

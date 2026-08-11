@@ -406,8 +406,9 @@ classification, expression parsing, and instruction lowering converge on the sam
   template-controller value-scope issues point back to the lowered controller instruction rather than inventing a
   scope-effect owner.
   Repeat destructuring now publishes `RuntimeBindingScopeIssue` products for `AUR0112` when the checker-backed
-  binding-pattern projector can prove or warn that the item shape is not object-compatible, or that an array-rest
-  destructuring source is not an actual Array. Repeat source compatibility publishes the same issue product shape for
+  binding-pattern projector can prove or warn that an object-pattern item is nullish, or that an array-rest
+  destructuring source is not an actual Array. Non-nullish primitive object-pattern items remain valid under RC2
+  semantics. Repeat source compatibility publishes the same issue product shape for
   runtime-html `repeat_non_iterable` (`AUR0777`) when a repeat source is outside the framework's built-in
   `RepeatableHandlerResolver` categories. The iterator effect is also the retained causal authority for later
   diagnostics: its runtime binding identifies assignment evidence for the same operation, while
@@ -422,12 +423,12 @@ classification, expression parsing, and instruction lowering converge on the sam
   context for `undefined`, but passes `null` to `Scope.fromParent`, after which ordinary `Scope.getContext` lookup throws
   while evaluating `name in bindingContext`. Scope typing may still project the non-null value lane for useful child
   analysis, but it must retain and diagnose reachable `null` at the exact authored value address.
-  Repeat object binding patterns expose a separate parser/controller mismatch. The expression parser admits
-  `ObjectBindingPattern`, but the current `Repeat` controller recognizes only `ArrayDestructuring` and
-  `ObjectDestructuring` when creating locals, and the parser has no object-destructuring construction path. Scope
-  construction therefore publishes a repeat-scope-effect-owned `UnsupportedRepeatDeclaration` issue at the exact
-  declaration span. Recovery locals remain available for navigation and rewriting, but they do not make the
-  declaration runtime-valid.
+  RC2 core `repeat` admits a deliberately shallow `ObjectBindingPattern` projection: property source keys map to
+  identifier or alias locals, while rest, defaults, nested targets, duplicate locals, and reserved names are rejected
+  by the iterator parser. `virtual-repeat` retains a different runtime boundary because its controller reads one
+  `BindingIdentifier`. Object and array patterns therefore publish a virtual-repeat-scope-effect-owned
+  `UnsupportedRepeatDeclaration` issue at the exact declaration span, and scope construction does not project their
+  destructured locals.
 - `runtime-controller-issue.ts` owns framework-runtime diagnostics discovered while emulating controller construction or
   hydration. Runtime rendering uses it for renderer resource lookup failures when a lowered instruction carries a
   resource name but the rendering container cannot resolve it: missing custom elements (`AUR0752`), custom attributes
@@ -770,8 +771,12 @@ classification, expression parsing, and instruction lowering converge on the sam
   `framework.resources -- --projection=convergence --resourceKind=template-controller` is the broader framework check:
   it currently sees the twelve runtime-html controllers plus `ui-virtualization:VirtualRepeat`. The runtime-html
   contract stays exact, while the full framework semantics catalog also covers `virtual-repeat` through the
-  `@aurelia/ui-virtualization` resource-admission path. Deeper virtualization service, DOM renderer, scroller, and
-  collection-strategy behavior remains separate plugin pressure.
+  `@aurelia/ui-virtualization` resource-admission path. `DefaultVirtualizationConfiguration` also admits the plugin's
+  exact `virtual-repeat.for` attribute pattern and `forof` command. That command lowers to the plugin-owned type-`200`
+  `IterateBindingInstruction`, implemented as a subtype of the shared semantic iterator abstraction so local scope/type
+  facts and static tail options such as `gap` survive without pretending to model the plugin's collection observer, DOM
+  renderer, scroller, measurement, or scheduling behavior. Virtual repeat remains a single-identifier iterator; core
+  repeat's binding-pattern support does not widen this plugin boundary.
 - `built-in-syntax.ts` records framework-provided attribute-pattern and binding-command handlers as concrete
   runtime-shaped model classes with `auLink` anchors.
 - `built-in-syntax-catalog-materializer.ts` materializes framework-owned syntax catalogs into kernel-backed catalog, executable,

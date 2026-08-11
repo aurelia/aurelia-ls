@@ -124,7 +124,7 @@ async function writeFixture(root) {
     version: '0.0.0',
     type: 'module',
     dependencies: {
-      aurelia: '2.0.0-rc.1',
+      aurelia: '2.0.0-rc.2',
       '@acme/source-toolkit': '0.0.0',
       '@acme/opaque-toolkit': '0.0.0',
     },

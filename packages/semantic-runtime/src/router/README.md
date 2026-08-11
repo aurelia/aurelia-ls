@@ -433,9 +433,9 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
   lane only after endpoint path generation succeeds. Keep failures as router issue products when the framework would
   throw, not as recognizer misses.
 - Relative router-resource strings must normalize against `RouteContext.createViewportInstructions(...)` before
-  recognizer matching. In particular, every `../` prefix climbs one parent route context before the runtime flips its
-  context-changed flag; stripping multiple prefixes while climbing only once sends recognition into the wrong
-  `RouteConfigContext` and can surface false viewport-resolution seams.
+  recognizer matching. The prefix reader consumes every leading `../`; materialization then climbs once per prefix while
+  a parent exists and clamps excess traversal at the root. Re-reading the raw value in the context-aware lane can leave
+  excess prefixes for `RouteExpression.parse(...)` or recognize against the wrong `RouteConfigContext`.
 - `@aurelia/route-recognizer` is a lower-level route matching engine. Do not model it as app semantics until router
   materializers actually need recognizer-level route matching facts. State and endpoint products are now parser-like
   substrate; candidate and recognized-route products should follow the same framework-grounded path rather than becoming

@@ -1434,6 +1434,7 @@ function renderPropertyRuntimeBinding(input: RuntimeRendererInvocation): Runtime
       new RuntimeBindingReference(RuntimeBindingKind.Property, allocation.productHandle, allocation.identityHandle, instruction.sourceAddressHandle),
       input.owner?.productHandle ?? instruction.productHandle,
       instruction.localNames,
+      instruction.objectBindingSourceKeys,
       instruction.iterableExpressionProductHandle,
       input.owner?.templateControllerName ?? null,
       instruction.sourceAddressHandle,

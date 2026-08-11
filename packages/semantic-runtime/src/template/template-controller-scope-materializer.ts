@@ -2476,21 +2476,28 @@ export class TemplateControllerScopeMaterializer {
       const declaration = iteratorProjection.parse?.result.kind === ExpressionParseResultKind.IteratorSuccess
         ? iteratorProjection.parse.result.ast.declaration
         : null;
-      if (declaration?.$kind === 'ObjectBindingPattern') {
+      if (
+        effect.templateControllerName === 'virtual-repeat'
+        && (declaration?.$kind === 'ObjectBindingPattern' || declaration?.$kind === 'ArrayBindingPattern')
+      ) {
         frame.addScopeIssue(this.scopeIssuePublisher.publish(
-          `${input.localKey}:scope:${localSuffix}:unsupported-object-binding-pattern`,
+          `${input.localKey}:scope:${localSuffix}:unsupported-virtual-repeat-binding-pattern`,
           KernelVocabulary.Binding.ScopeEffect.key,
           effect.productHandle,
           effect.identityHandle,
           RuntimeBindingScopeIssuePhase.IteratorLocalProjection,
           RuntimeBindingScopeIssueKind.UnsupportedRepeatDeclaration,
           RuntimeBindingScopeIssueCertainty.Definite,
-          'The Aurelia parser admits object binding patterns, but the current Repeat controller does not materialize their locals',
+          'Virtual repeat requires a single binding identifier and does not materialize destructured locals',
           null,
           effect.sourceAddressHandle,
           declaration.span,
           null,
         ));
+        // VirtualRepeat only reads BindingIdentifier.name. Core Repeat's
+        // object/array projection path never runs, so its destructuring
+        // runtime issues do not apply to this rejected declaration.
+        return;
       }
       iteratorProjection.localProjection.runtimeIssues.forEach((issue, index) => {
         frame.addScopeIssue(this.scopeIssuePublisher.publish(
@@ -2524,6 +2531,15 @@ export class TemplateControllerScopeMaterializer {
       input,
       bindingExpressionScopes,
     } = frame;
+    const declaration = iteratorProjection.parse?.result.kind === ExpressionParseResultKind.IteratorSuccess
+      ? iteratorProjection.parse.result.ast.declaration
+      : null;
+    if (
+      effect.templateControllerName === 'virtual-repeat'
+      && (declaration?.$kind === 'ObjectBindingPattern' || declaration?.$kind === 'ArrayBindingPattern')
+    ) {
+      return new IteratorLocalSlotProjection([], []);
+    }
     const localSources = this.iteratorLocalSourceAddresses(input, effect, iteratorProjection);
     return new IteratorLocalSlotProjection(effect.localNames.map((name) => new BindingContextSlotDraft(
       name,
@@ -3055,6 +3071,8 @@ function runtimeScopeIssueKind(
       return RuntimeBindingScopeIssueKind.ArrayRestNonArray;
     case CheckerBindingPatternRuntimeIssueKind.DestructuringNonObject:
       return RuntimeBindingScopeIssueKind.DestructuringNonObject;
+    case CheckerBindingPatternRuntimeIssueKind.RepeatObjectBindingNullish:
+      return RuntimeBindingScopeIssueKind.RepeatObjectBindingNullish;
   }
 }
 

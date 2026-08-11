@@ -223,6 +223,13 @@ export function camelCaseAttributeName(value: string): string {
   return value.replace(/-([a-z])/g, (_match, char: string) => char.toUpperCase());
 }
 
+/** RC2 `<let>` target normalization preserves underscores as authored. */
+export function normalizeLetBindingTarget(target: string): string {
+  return target.includes('_')
+    ? target.replace(/-+([A-Za-z0-9])/g, (_match, char: string) => char.toUpperCase())
+    : camelCaseAttributeName(target);
+}
+
 export function shouldDefaultToTwoWay(
   owner: TemplateAttributeMapperNode,
   attr: string,

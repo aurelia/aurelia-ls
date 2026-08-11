@@ -102,6 +102,7 @@ const PROPERTY_RULE_RESET_METHODS = new Set([
 const PROPERTY_RULE_ADD_METHODS = new Set([
   'required',
   'matches',
+  // Deprecated by the framework but still a rule-producing call in existing source chains.
   'email',
   'minLength',
   'maxLength',

@@ -352,6 +352,7 @@ export type RuntimeBindingScopeEffectField =
   | 'value'
   | 'targetContext'
   | 'localNames'
+  | 'objectBindingSourceKeys'
   | 'iterable'
   | 'templateController'
   | 'source';
@@ -479,6 +480,8 @@ export class IteratorBindingScopeEffect {
     readonly binding: RuntimeBindingReference,
     readonly ownerInstructionProductHandle: ProductHandle,
     readonly localNames: readonly string[],
+    /** One-way reactive Repeat property projections aligned with `localNames`. */
+    readonly objectBindingSourceKeys: readonly (string | number)[],
     readonly iterableExpressionProductHandle: ProductHandle | null,
     readonly templateControllerName: string | null,
     readonly sourceAddressHandle: AddressHandle | null,

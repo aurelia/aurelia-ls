@@ -19,6 +19,7 @@ export class ValidationRuleSourceErrorsApp {
 
 class Person {
   name = '';
+  email = '';
   age = 0;
 }
 
@@ -44,6 +45,12 @@ class ValidationRuleSourceErrors {
   }
 
   configure(): void {
+    this.rules
+      .on(Person)
+      .ensure('email')
+      .email()
+      .when(() => true);
+
     this.rules
       .on(Person)
       .ensure('name')

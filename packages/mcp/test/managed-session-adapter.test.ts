@@ -134,7 +134,7 @@ describe('managed MCP workspace operations', () => {
             name: 'managed-mcp-nested-app',
             private: true,
             type: 'module',
-            dependencies: { aurelia: '^2.0.0-rc.1' },
+            dependencies: { aurelia: '^2.0.0-rc.2' },
           }), 'utf8');
           return projectDetachedAureliaMcpResponse(response);
         },

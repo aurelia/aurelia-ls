@@ -67,7 +67,6 @@ export class SignupForm {
         .minLength(2)
       .ensure('email')
         .required()
-        .email()
       .ensure('password')
         .required()
         .minLength(8)

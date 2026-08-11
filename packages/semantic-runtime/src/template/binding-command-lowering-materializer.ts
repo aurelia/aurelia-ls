@@ -43,6 +43,7 @@ import {
   ExpressionParseResultKind,
 } from '../expression/parse-result-algebra.js';
 import { visitExpressionAstNodes } from '../expression/parse-result-inspection.js';
+import { admitRepeatObjectBindingPattern } from '../expression/repeat-object-binding-pattern.js';
 import { CustomAttributeDefinition } from '../resources/custom-attribute-definition.js';
 import type { AttributeSyntaxParseEmission } from './attribute-syntax-materializer.js';
 import type {
@@ -532,6 +533,7 @@ class CommandLoweringExecutionContext implements BindingCommandBuildContext {
     return new BindingCommandIteratorParse(
       publication.parse.productHandle,
       iteratorLocalNames(result),
+      iteratorObjectBindingSourceKeys(result),
       iteratorRawTailText(result),
       iteratorTailSpan(result),
     );
@@ -1422,7 +1424,22 @@ function iteratorLocalNames(result: IteratorParseResult): readonly string[] {
   if (result.kind !== ExpressionParseResultKind.IteratorSuccess) {
     return [];
   }
+  if (result.ast.declaration.$kind === 'ObjectBindingPattern') {
+    const admission = admitRepeatObjectBindingPattern(result.ast.declaration);
+    return admission.admitted ? admission.localNames : [];
+  }
   return bindingNames(result.ast.declaration);
+}
+
+function iteratorObjectBindingSourceKeys(result: IteratorParseResult): readonly (string | number)[] {
+  if (
+    result.kind !== ExpressionParseResultKind.IteratorSuccess
+    || result.ast.declaration.$kind !== 'ObjectBindingPattern'
+  ) {
+    return [];
+  }
+  const admission = admitRepeatObjectBindingPattern(result.ast.declaration);
+  return admission.admitted ? admission.sourceKeys : [];
 }
 
 function bindingNames(pattern: BindingIdentifierOrPattern): readonly string[] {
