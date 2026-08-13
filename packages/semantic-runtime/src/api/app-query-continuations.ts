@@ -750,6 +750,22 @@ function addTemplateContinuations(
           ),
         );
         break;
+      case SemanticAppQueryKind.AttributeInterpretationExplanation:
+        seeds.push(
+          inspect(
+            'Inspect semantic cursor context behind this exact attribute interpretation.',
+            cursorQuery(SemanticAppQueryKind.TemplateCursorInfo, query),
+          ),
+          inspect(
+            'Inspect compiled template rows behind this attribute interpretation.',
+            rowQuery(SemanticAppQueryKind.TemplateCompilations, query, page),
+          ),
+          inspect(
+            'Inspect exact source-backed open compiler seams that may qualify this interpretation.',
+            withSourceFile(rowQuery(SemanticAppQueryKind.OpenSeamSites, query, page), sourceFile),
+          ),
+        );
+        break;
     }
   }
 

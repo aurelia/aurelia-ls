@@ -247,6 +247,13 @@ const contractSuites = [
     'diagnostics',
     'mcp',
   ], 'contract-binding-uncertainty-explanation.mjs', 'Cursor-selected property binding explanations conserve proved flow facts and typed causal uncertainty.'),
+  contract('template', 'fast', [
+    'template',
+    'compiler',
+    'explain',
+    'authoring',
+    'mcp',
+  ], 'contract-attribute-interpretation-explanation.mjs', 'Exact authored attribute-name explanations conserve compiler syntax, classification, lowering, effects, issues, and bounded uncertainty without omission inference.'),
   contract('observation', 'fast', [
     'observation',
     'binding',

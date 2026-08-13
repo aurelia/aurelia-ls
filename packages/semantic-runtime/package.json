@@ -55,6 +55,7 @@
     "contract:template-route-definition": "pnpm build && node scripts/contract-template-route-definition.mjs",
     "contract:binding-data-flow-summary": "pnpm build && node scripts/contract-binding-data-flow-summary.mjs",
     "contract:binding-uncertainty-explanation": "pnpm build && node scripts/contract-binding-uncertainty-explanation.mjs",
+    "contract:attribute-interpretation-explanation": "pnpm build && node scripts/contract-attribute-interpretation-explanation.mjs",
     "contract:binding-observed-dependency-summary": "pnpm build && node scripts/contract-binding-observed-dependency-summary.mjs",
     "contract:control-use-inventory": "pnpm build && node scripts/contract-control-use-inventory.mjs",
     "contract:binding-source-arrow-callbacks": "pnpm build && node scripts/contract-binding-source-arrow-callbacks.mjs",

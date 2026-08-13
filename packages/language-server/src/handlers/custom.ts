@@ -13,6 +13,11 @@ import {
 import type { ServerContext } from "../context.js";
 import type {
   AnalysisLimitationsResponse,
+  AttributeInterpretationExplanationAnswerTransport,
+  AttributeInterpretationExplanationContender,
+  AttributeInterpretationExplanationParams,
+  AttributeInterpretationExplanationRefusalKind,
+  AttributeInterpretationExplanationResponse,
   BindingUncertaintyExplanationAnswerTransport,
   BindingUncertaintyExplanationContender,
   BindingUncertaintyExplanationParams,
@@ -44,10 +49,16 @@ import type {
 } from "../protocol.js";
 import {
   AureliaProtocolRequest,
+  attributeInterpretationExplanationRefusal,
   bindingUncertaintyExplanationRefusal,
   frameworkCapabilityExplanationRefusal,
   resourceAvailabilityExplanationRefusal,
 } from "../protocol.js";
+import {
+  mapAttributeInterpretationExplanation,
+  mapAttributeInterpretationExplanationAnswer,
+  mapAttributeInterpretationExplanationContender,
+} from "../mapping/attribute-interpretation-explanation.js";
 import {
   mapBindingUncertaintyExplanation,
   mapBindingUncertaintyExplanationAnswer,
@@ -92,6 +103,8 @@ import {
 
 export type {
   AnalysisLimitationsResponse,
+  AttributeInterpretationExplanationParams,
+  AttributeInterpretationExplanationResponse,
   BindingUncertaintyExplanationParams,
   BindingUncertaintyExplanationResponse,
   FrameworkCapabilityExplanationParams,
@@ -107,6 +120,124 @@ export type {
   TemplateResourceAvailabilityParams,
   TemplateResourceAvailabilityResponse,
 } from "../protocol.js";
+
+export async function handleAttributeInterpretationExplanation(
+  ctx: ServerContext,
+  params: AttributeInterpretationExplanationParams,
+  operation: SemanticRuntimeLspOperation,
+): Promise<AttributeInterpretationExplanationResponse> {
+  if (!attributeInterpretationExplanationParamsAreValid(params)) {
+    throw new Error(
+      "Attribute interpretation explanation requires an exact document URI, version, attribute-name range, project key, and range-start cursor.",
+    );
+  }
+  const fingerprint = operation.generation.fingerprint;
+  const document = operation.documents.ensureProgramDocument(params.uri);
+  if (document == null) {
+    return refusedAttributeInterpretationExplanation(
+      fingerprint,
+      null,
+      null,
+      "documentUnavailable",
+    );
+  }
+  if (document.version !== params.documentVersion) {
+    return refusedAttributeInterpretationExplanation(
+      fingerprint,
+      document.version,
+      null,
+      "documentVersionMismatch",
+    );
+  }
+
+  const answer = await operation.attributeInterpretationExplanation(
+    params.projectKey,
+    document.uri,
+    params.position,
+  );
+  const mappingContext = {
+    documentUris: ctx.documentUris,
+    lookupText: (uri: string) => operation.documents.lookupText(uri),
+  };
+  const answerTransport = mapAttributeInterpretationExplanationAnswer(answer, mappingContext);
+  if (`${answer.result}` !== "answered") {
+    return refusedAttributeInterpretationExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "semanticAnswerUnavailable",
+    );
+  }
+  const contenders = answer.value.contenders.map((contender) =>
+    mapAttributeInterpretationExplanationContender(contender, mappingContext)
+  );
+  if (`${answer.selection}` === "absent") {
+    return refusedAttributeInterpretationExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "subjectAbsent",
+      contenders,
+    );
+  }
+  if (`${answer.selection}` === "ambiguous") {
+    return refusedAttributeInterpretationExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "subjectAmbiguous",
+      contenders,
+    );
+  }
+  if (`${answer.selection}` !== "exact" || answer.value.explanation == null) {
+    return refusedAttributeInterpretationExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "subjectMismatch",
+      contenders,
+    );
+  }
+
+  const explanation = mapAttributeInterpretationExplanation(
+    answer.value.explanation,
+    mappingContext,
+  );
+  if (explanation.subject.nameSource.state !== "available") {
+    return refusedAttributeInterpretationExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "subjectSourceUnavailable",
+      contenders,
+    );
+  }
+  if (
+    answer.value.projectKey !== params.projectKey
+    || explanation.subject.projectKey !== params.projectKey
+    || !ctx.documentUris.sameDocument(
+      explanation.subject.nameSource.location.uri,
+      document.uri,
+    )
+    || !protocolRangesEqual(explanation.subject.nameSource.location.range, params.range)
+    || params.position.line !== params.range.start.line
+    || params.position.character !== params.range.start.character
+  ) {
+    return refusedAttributeInterpretationExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "subjectMismatch",
+      contenders,
+    );
+  }
+  return {
+    fingerprint,
+    documentVersion: document.version,
+    answer: answerTransport,
+    result: { status: "explained", explanation, contenders },
+  };
+}
 
 export async function handleResourceAvailabilityExplanation(
   ctx: ServerContext,
@@ -876,6 +1007,21 @@ export function registerCustomHandlers(ctx: ServerContext): void {
     request(ctx, "sourceOwnership", token, params?.uri,
       (guard) => handleSourceOwnership(ctx, params, guard)));
   ctx.connection.onRequest(
+    AureliaProtocolRequest.AttributeInterpretationExplanation,
+    (params: AttributeInterpretationExplanationParams, token: CancellationToken) =>
+      documentRequest(ctx, "attributeInterpretationExplanation", token, params.uri,
+        (operation): AttributeInterpretationExplanationResponse => {
+          const document = operation.documents.ensureProgramDocument(params.uri);
+          return refusedAttributeInterpretationExplanation(
+            operation.generation.fingerprint,
+            document?.version ?? null,
+            null,
+            "sourceNotAuthored",
+          );
+        },
+        (guard) => handleAttributeInterpretationExplanation(ctx, params, guard)),
+  );
+  ctx.connection.onRequest(
     AureliaProtocolRequest.BindingUncertaintyExplanation,
     (params: BindingUncertaintyExplanationParams, token: CancellationToken) =>
       documentRequest(ctx, "bindingUncertaintyExplanation", token, params.uri,
@@ -953,6 +1099,25 @@ export function registerCustomHandlers(ctx: ServerContext): void {
       (guard) => handleRenameFromTs(ctx, params, guard)));
 }
 
+function refusedAttributeInterpretationExplanation(
+  fingerprint: string,
+  documentVersion: number | null,
+  answer: AttributeInterpretationExplanationAnswerTransport | null,
+  kind: AttributeInterpretationExplanationRefusalKind,
+  contenders: readonly AttributeInterpretationExplanationContender[] = [],
+): AttributeInterpretationExplanationResponse {
+  return {
+    fingerprint,
+    documentVersion,
+    answer,
+    result: {
+      status: "refused",
+      refusal: attributeInterpretationExplanationRefusal(kind),
+      contenders,
+    },
+  };
+}
+
 function refusedBindingUncertaintyExplanation(
   fingerprint: string,
   documentVersion: number | null,
@@ -1023,6 +1188,22 @@ function bindingUncertaintyExplanationParamsAreValid(
     && protocolPositionIsValid(params.position)
     && protocolRangeIsValid(params.range)
     && protocolRangeContainsPosition(params.range, params.position);
+}
+
+function attributeInterpretationExplanationParamsAreValid(
+  params: AttributeInterpretationExplanationParams | null | undefined,
+): params is AttributeInterpretationExplanationParams {
+  return params != null
+    && typeof params.uri === "string"
+    && params.uri.length > 0
+    && Number.isSafeInteger(params.documentVersion)
+    && params.documentVersion >= 0
+    && typeof params.projectKey === "string"
+    && params.projectKey.length > 0
+    && protocolPositionIsValid(params.position)
+    && protocolRangeIsValid(params.range)
+    && params.position.line === params.range.start.line
+    && params.position.character === params.range.start.character;
 }
 
 function frameworkCapabilityExplanationParamsAreValid(

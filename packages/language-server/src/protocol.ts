@@ -1,5 +1,7 @@
 import type {
   ApplicationFileRole,
+  SemanticAttributeInterpretationExplanation,
+  SemanticAttributeInterpretationExplanationContender,
   SemanticBindingDataFlowRow,
   SemanticBindingDataFlowValueConverterWritebackStageRow,
   SemanticBindingUncertaintyExplanation,
@@ -35,6 +37,7 @@ export const AureliaProtocolRequest = {
   AnalysisLimitations: "aurelia/analysisLimitations",
   FrameworkCapabilityExplanation: "aurelia/frameworkCapabilityExplanation",
   BindingUncertaintyExplanation: "aurelia/bindingUncertaintyExplanation",
+  AttributeInterpretationExplanation: "aurelia/attributeInterpretationExplanation",
   ResourceInventory: "aurelia/resourceInventory",
   TemplateResourceAvailability: "aurelia/templateResourceAvailability",
   ResourceAvailabilityExplanation: "aurelia/resourceAvailabilityExplanation",
@@ -47,6 +50,7 @@ export const AureliaProtocolRequest = {
 export const AureliaProtocolCommand = {
   ExplainFrameworkCapability: "aurelia.explainFrameworkCapability",
   ExplainBindingUncertainty: "aurelia.explainBindingUncertainty",
+  ExplainAttributeInterpretation: "aurelia.explainAttributeInterpretation",
   ExplainResourceAvailability: "aurelia.explainResourceAvailability",
 } as const;
 
@@ -547,6 +551,167 @@ export type BindingUncertaintyExplanationResponse = {
         readonly status: "refused";
         readonly refusal: BindingUncertaintyExplanationRefusal;
         readonly contenders: readonly BindingUncertaintyExplanationContender[];
+      };
+};
+
+/**
+ * Exact authored attribute-name carrier handed from an invoked command-only
+ * quick fix to the explanation request. `position` is always `range.start`;
+ * both are re-proved against the engine-owned subject `nameSource`.
+ */
+export interface AttributeInterpretationExplanationParams {
+  readonly uri: string;
+  readonly position: Position;
+  readonly range: Range;
+  readonly documentVersion: number;
+  readonly projectKey: string;
+}
+
+export type AttributeInterpretationExplanationSourceTarget =
+  FrameworkCapabilityExplanationSourceTarget;
+export type AttributeInterpretationExplanationAppQuery =
+  FrameworkCapabilityExplanationAppQuery;
+
+type SemanticAttributeInterpretationExplanationSubject =
+  SemanticAttributeInterpretationExplanation["subject"];
+type SemanticAttributeInterpretationExplanationValueSite =
+  SemanticAttributeInterpretationExplanation["evidence"]["valueSites"][number];
+type SemanticAttributeInterpretationExplanationLowering =
+  SemanticAttributeInterpretationExplanation["evidence"]["lowerings"][number];
+type SemanticAttributeInterpretationExplanationEffect =
+  SemanticAttributeInterpretationExplanation["evidence"]["effects"][number];
+type SemanticAttributeInterpretationExplanationIssue =
+  SemanticAttributeInterpretationExplanation["evidence"]["issues"][number];
+type SemanticAttributeInterpretationExplanationBlocker =
+  SemanticAttributeInterpretationExplanation["evidence"]["blockers"][number];
+type SemanticAttributeInterpretationExplanationNextStep =
+  SemanticAttributeInterpretationExplanation["nextSteps"][number];
+
+export type AttributeInterpretationExplanationSubject = Omit<
+  SemanticAttributeInterpretationExplanationSubject,
+  "source" | "nameSource" | "valueSource" | "templateSource"
+> & {
+  readonly source: AttributeInterpretationExplanationSourceTarget;
+  readonly nameSource: AttributeInterpretationExplanationSourceTarget;
+  readonly valueSource: AttributeInterpretationExplanationSourceTarget;
+  readonly templateSource: AttributeInterpretationExplanationSourceTarget;
+};
+
+export type AttributeInterpretationExplanation = Omit<
+  SemanticAttributeInterpretationExplanation,
+  "subject" | "evidence" | "nextSteps"
+> & {
+  readonly subject: AttributeInterpretationExplanationSubject;
+  readonly evidence: {
+    readonly syntax: Omit<
+      SemanticAttributeInterpretationExplanation["evidence"]["syntax"],
+      "nameSource" | "targetSource" | "commandSource"
+    > & {
+      readonly nameSource: AttributeInterpretationExplanationSourceTarget;
+      readonly targetSource: AttributeInterpretationExplanationSourceTarget;
+      readonly commandSource: AttributeInterpretationExplanationSourceTarget;
+    };
+    readonly classification:
+      SemanticAttributeInterpretationExplanation["evidence"]["classification"];
+    readonly valueSites: readonly (Omit<
+      SemanticAttributeInterpretationExplanationValueSite,
+      "source"
+    > & { readonly source: AttributeInterpretationExplanationSourceTarget })[];
+    readonly lowerings: readonly (Omit<
+      SemanticAttributeInterpretationExplanationLowering,
+      "source"
+    > & { readonly source: AttributeInterpretationExplanationSourceTarget })[];
+    readonly effects: readonly (Omit<
+      SemanticAttributeInterpretationExplanationEffect,
+      "source"
+    > & { readonly source: AttributeInterpretationExplanationSourceTarget })[];
+    readonly issues: readonly (Omit<
+      SemanticAttributeInterpretationExplanationIssue,
+      "source" | "relatedSources"
+    > & {
+      readonly source: AttributeInterpretationExplanationSourceTarget;
+      readonly relatedSources: readonly AttributeInterpretationExplanationSourceTarget[];
+    })[];
+    readonly blockers: readonly (Omit<
+      SemanticAttributeInterpretationExplanationBlocker,
+      "sources"
+    > & { readonly sources: readonly AttributeInterpretationExplanationSourceTarget[] })[];
+  };
+  readonly nextSteps: readonly (Omit<
+    SemanticAttributeInterpretationExplanationNextStep,
+    "source" | "targetQuery"
+  > & {
+    readonly source: AttributeInterpretationExplanationSourceTarget;
+    readonly targetQuery: AttributeInterpretationExplanationAppQuery | null;
+  })[];
+};
+
+export type AttributeInterpretationExplanationContender = Omit<
+  SemanticAttributeInterpretationExplanationContender,
+  "subject"
+> & { readonly subject: AttributeInterpretationExplanationSubject };
+
+export type AttributeInterpretationExplanationAnswerTransport =
+  FrameworkCapabilityExplanationAnswerTransport;
+
+export const ATTRIBUTE_INTERPRETATION_EXPLANATION_REFUSAL_REASONS = {
+  documentUnavailable: "the source document is no longer available",
+  sourceNotAuthored: "the source document is not authored by the current Aurelia workspace",
+  documentVersionMismatch: "the source document version no longer matches the attribute",
+  semanticAnswerUnavailable: "the semantic runtime did not answer the attribute explanation query",
+  subjectAbsent: "the current source no longer contains that attribute",
+  subjectAmbiguous: "the current source contains multiple matching attributes",
+  subjectMismatch: "the current explanation does not match the requested attribute subject",
+  subjectSourceUnavailable: "the current attribute-name source could not be mapped safely",
+} as const;
+
+export type AttributeInterpretationExplanationRefusalKind =
+  keyof typeof ATTRIBUTE_INTERPRETATION_EXPLANATION_REFUSAL_REASONS;
+
+export type AttributeInterpretationExplanationRefusal = {
+  readonly [Kind in AttributeInterpretationExplanationRefusalKind]: {
+    readonly kind: Kind;
+    readonly reason: (typeof ATTRIBUTE_INTERPRETATION_EXPLANATION_REFUSAL_REASONS)[Kind];
+  };
+}[AttributeInterpretationExplanationRefusalKind];
+
+export function attributeInterpretationExplanationRefusal(
+  kind: AttributeInterpretationExplanationRefusalKind,
+): AttributeInterpretationExplanationRefusal {
+  switch (kind) {
+    case "documentUnavailable":
+      return { kind, reason: ATTRIBUTE_INTERPRETATION_EXPLANATION_REFUSAL_REASONS.documentUnavailable };
+    case "sourceNotAuthored":
+      return { kind, reason: ATTRIBUTE_INTERPRETATION_EXPLANATION_REFUSAL_REASONS.sourceNotAuthored };
+    case "documentVersionMismatch":
+      return { kind, reason: ATTRIBUTE_INTERPRETATION_EXPLANATION_REFUSAL_REASONS.documentVersionMismatch };
+    case "semanticAnswerUnavailable":
+      return { kind, reason: ATTRIBUTE_INTERPRETATION_EXPLANATION_REFUSAL_REASONS.semanticAnswerUnavailable };
+    case "subjectAbsent":
+      return { kind, reason: ATTRIBUTE_INTERPRETATION_EXPLANATION_REFUSAL_REASONS.subjectAbsent };
+    case "subjectAmbiguous":
+      return { kind, reason: ATTRIBUTE_INTERPRETATION_EXPLANATION_REFUSAL_REASONS.subjectAmbiguous };
+    case "subjectMismatch":
+      return { kind, reason: ATTRIBUTE_INTERPRETATION_EXPLANATION_REFUSAL_REASONS.subjectMismatch };
+    case "subjectSourceUnavailable":
+      return { kind, reason: ATTRIBUTE_INTERPRETATION_EXPLANATION_REFUSAL_REASONS.subjectSourceUnavailable };
+  }
+}
+
+export type AttributeInterpretationExplanationResponse = {
+  readonly fingerprint: string;
+  readonly documentVersion: number | null;
+  readonly answer: AttributeInterpretationExplanationAnswerTransport | null;
+  readonly result:
+    | {
+        readonly status: "explained";
+        readonly explanation: AttributeInterpretationExplanation;
+        readonly contenders: readonly AttributeInterpretationExplanationContender[];
+      }
+    | {
+        readonly status: "refused";
+        readonly refusal: AttributeInterpretationExplanationRefusal;
+        readonly contenders: readonly AttributeInterpretationExplanationContender[];
       };
 };
 

@@ -186,6 +186,11 @@ import type {
 } from '../resources/resource-issue.js';
 import type { TemplateResourceVisibilityKind } from '../template/compiler-world-reference.js';
 import type {
+  AttributeClassificationKind,
+  AttributeSyntaxKind,
+} from '../template/attribute-syntax.js';
+import type { BindingCommandLoweringState } from '../template/binding-command-execution.js';
+import type {
   TemplateBindingMode,
   TemplateInstructionKind,
   TemplateListenerStrategy,
@@ -282,7 +287,11 @@ import type { RuntimeBindingIssuePhase } from '../template/runtime-binding-issue
 import type { RuntimeBindingScopeIssuePhase } from '../template/runtime-binding-scope-issue.js';
 import type { RuntimeControllerIssuePhase } from '../template/runtime-controller-issue.js';
 import type { RuntimeRendererIssuePhase } from '../template/runtime-renderer-issue.js';
-import type { TemplateCompilerIssuePhase } from '../template/compiler-issue.js';
+import type {
+  TemplateCompilerIssueKind,
+  TemplateCompilerIssuePhase,
+  TemplateCompilerIssueSeverity,
+} from '../template/compiler-issue.js';
 import type {
   CompiledNativeSlotNameKind,
   CompiledTemplateState,
@@ -482,6 +491,7 @@ export const enum SemanticAppQueryKind {
   TemplateResourceAvailability = 'template-resource-availability',
   ResourceAvailabilityExplanation = 'resource-availability-explanation',
   TemplateCompilations = 'template-compilations',
+  AttributeInterpretationExplanation = 'attribute-interpretation-explanation',
   TemplateCompletions = 'template-completions',
   TemplateCursorInfo = 'template-cursor-info',
   TemplateReferences = 'template-references',
@@ -574,6 +584,7 @@ export const SEMANTIC_APP_QUERY_KINDS = [
   SemanticAppQueryKind.TemplateResourceAvailability,
   SemanticAppQueryKind.ResourceAvailabilityExplanation,
   SemanticAppQueryKind.TemplateCompilations,
+  SemanticAppQueryKind.AttributeInterpretationExplanation,
   SemanticAppQueryKind.TemplateCompletions,
   SemanticAppQueryKind.TemplateCursorInfo,
   SemanticAppQueryKind.TemplateReferences,
@@ -4475,6 +4486,181 @@ export interface SemanticTemplateCompilationRow {
 
 export interface SemanticTemplateCompilationResult {
   readonly rows: readonly SemanticTemplateCompilationRow[];
+}
+
+export type SemanticAttributeInterpretationExplanationConclusionKind =
+  | 'instruction-backed'
+  | 'captured'
+  | 'compiler-control'
+  | 'plain-attribute'
+  | 'invalid'
+  | 'open';
+
+/** One cursor-selected top-level authored HTML attribute, independent from store-local handles. */
+export interface SemanticAttributeInterpretationExplanationSubject {
+  /** Structural identity used to reprove that a fresh answer still describes the same authored attribute. */
+  readonly subjectKey: string;
+  readonly projectKey: string;
+  readonly definitionName: string;
+  readonly compilationLane: SemanticTemplateCompilationRow['compilationLane'];
+  readonly rawName: string;
+  /** Full authored HTML attribute carrier. */
+  readonly source: SemanticSourceReference;
+  /** Exact top-level authored attribute-name span; this is the cursor and consumer reproof authority. */
+  readonly nameSource: SemanticSourceReference;
+  readonly valueSource: SemanticSourceReference | null;
+  readonly templateSource: SemanticSourceReference | null;
+}
+
+export interface SemanticAttributeInterpretationExplanationConclusion {
+  readonly kind: SemanticAttributeInterpretationExplanationConclusionKind;
+  readonly title: string;
+  readonly explanation: string;
+  readonly action: string;
+}
+
+export interface SemanticAttributeInterpretationExplanationSyntaxEvidence {
+  readonly syntaxKind: AttributeSyntaxKind | `${AttributeSyntaxKind}`;
+  readonly target: string;
+  readonly command: string | null;
+  readonly parts: readonly string[];
+  readonly pattern: string | null;
+  readonly nameSource: SemanticSourceReference;
+  readonly targetSource: SemanticSourceReference | null;
+  readonly commandSource: SemanticSourceReference | null;
+}
+
+export interface SemanticAttributeInterpretationExplanationClassificationEvidence {
+  readonly classificationKind: AttributeClassificationKind | `${AttributeClassificationKind}`;
+  readonly resourceKind: ResourceDefinitionKind | `${ResourceDefinitionKind}` | null;
+  readonly resourceName: string | null;
+  readonly bindableName: string | null;
+  readonly bindableAttribute: string | null;
+  readonly bindingCommandName: string | null;
+  readonly openReason: string | null;
+}
+
+export interface SemanticAttributeInterpretationExplanationValueSiteEvidence {
+  readonly siteKind: TemplateValueSiteKind | `${TemplateValueSiteKind}`;
+  readonly rawValue: string;
+  readonly entryFamily: string | null;
+  readonly parseState: TemplateExpressionParseState | `${TemplateExpressionParseState}` | null;
+  readonly resultKind: ExpressionParseResultKind | `${ExpressionParseResultKind}` | null;
+  readonly source: SemanticSourceReference | null;
+}
+
+export type SemanticAttributeInterpretationExplanationEffectKind =
+  | 'hydrate-element'
+  | 'hydrate-attribute'
+  | 'control-view'
+  | 'bind-property'
+  | 'interpolate'
+  | 'listen'
+  | 'iterate'
+  | 'assign-reference'
+  | 'bind-let'
+  | 'set-property'
+  | 'set-attribute'
+  | 'set-class'
+  | 'set-style'
+  | 'bind-style'
+  | 'bind-attribute'
+  | 'spread-bindings'
+  | 'spread-value'
+  | 'translate'
+  | 'bind-state'
+  | 'dispatch-state';
+
+export interface SemanticAttributeInterpretationExplanationEffect {
+  readonly kind: SemanticAttributeInterpretationExplanationEffectKind;
+  readonly instructionKind: TemplateInstructionKind | `${TemplateInstructionKind}`;
+  readonly summary: string;
+  readonly source: SemanticSourceReference | null;
+}
+
+export interface SemanticAttributeInterpretationExplanationLoweringEvidence {
+  readonly commandName: string;
+  readonly state: BindingCommandLoweringState | `${BindingCommandLoweringState}`;
+  readonly message: string | null;
+  readonly frameworkErrorCode: string | null;
+  /** Indexes into `evidence.effects`. */
+  readonly effectIndexes: readonly number[];
+  readonly source: SemanticSourceReference | null;
+}
+
+export interface SemanticAttributeInterpretationExplanationIssueEvidence {
+  readonly phase: TemplateCompilerIssuePhase | `${TemplateCompilerIssuePhase}`;
+  readonly issueKind: TemplateCompilerIssueKind | `${TemplateCompilerIssueKind}`;
+  readonly severity: TemplateCompilerIssueSeverity;
+  readonly message: string;
+  readonly frameworkErrorCode: string | null;
+  readonly source: SemanticSourceReference | null;
+  readonly relatedSources: readonly SemanticSourceReference[];
+}
+
+export interface SemanticAttributeInterpretationExplanationBlocker {
+  readonly kind: 'open-classification' | 'open-lowering' | 'open-seam';
+  readonly summary: string;
+  readonly reasonKinds: readonly (OpenSeamReasonKind | `${OpenSeamReasonKind}`)[];
+  readonly boundaryKinds: readonly (OpenSeamBoundaryKind | `${OpenSeamBoundaryKind}`)[];
+  readonly sources: readonly SemanticSourceReference[];
+}
+
+export interface SemanticAttributeInterpretationExplanationEvidence {
+  readonly syntax: SemanticAttributeInterpretationExplanationSyntaxEvidence;
+  readonly classification: SemanticAttributeInterpretationExplanationClassificationEvidence | null;
+  readonly valueSites: readonly SemanticAttributeInterpretationExplanationValueSiteEvidence[];
+  readonly lowerings: readonly SemanticAttributeInterpretationExplanationLoweringEvidence[];
+  readonly effects: readonly SemanticAttributeInterpretationExplanationEffect[];
+  readonly issues: readonly SemanticAttributeInterpretationExplanationIssueEvidence[];
+  readonly blockers: readonly SemanticAttributeInterpretationExplanationBlocker[];
+}
+
+export type SemanticAttributeInterpretationExplanationUncertaintyReason =
+  | 'attribute-syntax-open'
+  | 'attribute-classification-open'
+  | 'binding-command-lowering-open'
+  | 'compiler-open-seam'
+  | 'source-discovery-truncated';
+
+export interface SemanticAttributeInterpretationExplanationUncertainty {
+  readonly state: 'closed' | 'open' | 'truncated';
+  readonly reasons: readonly SemanticAttributeInterpretationExplanationUncertaintyReason[];
+  readonly explanation: string;
+}
+
+export interface SemanticAttributeInterpretationExplanationCurrentness {
+  readonly authority: 'answer-analysis-basis';
+  readonly explanation: string;
+}
+
+export interface SemanticAttributeInterpretationExplanationNextStep {
+  readonly kind: 'inspect-source' | 'inspect-query' | 'requery';
+  readonly label: string;
+  readonly source: SemanticSourceReference | null;
+  readonly relatedQueryKind: SemanticAppQueryKind | `${SemanticAppQueryKind}` | null;
+  readonly targetQuery: SemanticAppQuery | null;
+}
+
+export interface SemanticAttributeInterpretationExplanation {
+  readonly subject: SemanticAttributeInterpretationExplanationSubject;
+  readonly conclusion: SemanticAttributeInterpretationExplanationConclusion;
+  readonly evidence: SemanticAttributeInterpretationExplanationEvidence;
+  readonly uncertainty: SemanticAttributeInterpretationExplanationUncertainty;
+  readonly currentness: SemanticAttributeInterpretationExplanationCurrentness;
+  readonly nextSteps: readonly SemanticAttributeInterpretationExplanationNextStep[];
+}
+
+export interface SemanticAttributeInterpretationExplanationContender {
+  readonly subject: SemanticAttributeInterpretationExplanationSubject;
+  readonly conclusionKind: SemanticAttributeInterpretationExplanationConclusionKind;
+}
+
+export interface SemanticAttributeInterpretationExplanationResult {
+  readonly displayText: string;
+  readonly projectKey: string;
+  readonly explanation: SemanticAttributeInterpretationExplanation | null;
+  readonly contenders: readonly SemanticAttributeInterpretationExplanationContender[];
 }
 
 export interface SemanticTemplateCompletionCandidateRow {

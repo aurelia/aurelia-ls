@@ -2,6 +2,8 @@ import type {
   AnalysisLimitationItem,
   AnalysisLimitationsResponse,
   AnalysisChangedPayload,
+  AttributeInterpretationExplanationParams,
+  AttributeInterpretationExplanationResponse,
   BindingUncertaintyExplanationParams,
   BindingUncertaintyExplanationResponse,
   FrameworkCapabilityExplanationParams,
@@ -24,6 +26,8 @@ export type {
   AnalysisLimitationItem,
   AnalysisLimitationsResponse,
   AnalysisChangedPayload,
+  AttributeInterpretationExplanationParams,
+  AttributeInterpretationExplanationResponse,
   BindingUncertaintyExplanationParams,
   BindingUncertaintyExplanationResponse,
   FrameworkCapabilityExplanationParams,
@@ -92,6 +96,10 @@ export type SourceOwnershipSnapshot = SourceOwnershipResponse & {
 };
 
 export type FrameworkCapabilityExplanationSnapshot = FrameworkCapabilityExplanationResponse & {
+  readonly workspace: AureliaWorkspaceIdentity;
+};
+
+export type AttributeInterpretationExplanationSnapshot = AttributeInterpretationExplanationResponse & {
   readonly workspace: AureliaWorkspaceIdentity;
 };
 

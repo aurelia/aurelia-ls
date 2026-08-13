@@ -36,6 +36,7 @@ export function createTestOperation(
     analysisLimitations: unsupportedTestOperationMethod,
     frameworkCapabilityExplanation: unsupportedTestOperationMethod,
     bindingUncertaintyExplanation: unsupportedTestOperationMethod,
+    attributeInterpretationExplanation: unsupportedTestOperationMethod,
     projectConfigurationDiagnostics: unsupportedTestOperationMethod,
     templateCompletions: unsupportedTestOperationMethod,
     appDiagnostics: unsupportedTestOperationMethod,

@@ -1594,6 +1594,39 @@ describe("SemanticRuntimeLspSession", () => {
     await session.dispose();
   }, 60_000);
 
+  test("routes a cursor-only attribute interpretation at the authored name", async () => {
+    const fixtureRoot = path.resolve(
+      fileURLToPath(new URL("../../../semantic-runtime/fixtures/pressure/binding-uncertainty-explanation", import.meta.url)),
+    );
+    const templatePath = path.join(fixtureRoot, "src", "exact-app.html");
+    const templateText = fs.readFileSync(templatePath, "utf8");
+    const templateUri = pathToFileURL(templatePath).toString();
+    const template = TextDocument.create(templateUri, "html", 1, templateText);
+    const position = template.positionAt(templateText.indexOf("click.trigger") + 2);
+    const session = createSession(fixtureRoot, new TestDocumentStore());
+
+    const answer = await session.runRequest(null, (operation) =>
+      operation.attributeInterpretationExplanation(null, templateUri, position));
+
+    expect(answer).toMatchObject({
+      result: "answered",
+      selection: "exact",
+      value: {
+        projectKey: expect.any(String),
+        explanation: {
+          subject: {
+            projectKey: expect.any(String),
+            rawName: "click.trigger",
+            nameSource: { path: expect.stringContaining("exact-app.html") },
+          },
+          conclusion: { kind: "instruction-backed" },
+        },
+      },
+    });
+    expect(answer.value.explanation?.subject.projectKey).toBe(answer.value.projectKey);
+    await session.dispose();
+  }, 60_000);
+
   test("routes one exact resource availability subject at runtime-topology depth", async () => {
     const fixtureRoot = minimalFixtureRoot();
     const templatePath = path.join(fixtureRoot, "src", "app.html");

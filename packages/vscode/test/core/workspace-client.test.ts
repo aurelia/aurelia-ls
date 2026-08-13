@@ -1848,6 +1848,27 @@ describe("LspFacade workspace routing", () => {
       undefined,
     );
 
+    const attributeExplanationParams = {
+      uri: "file:///work/b/src/my-app.html",
+      position: { line: 8, character: 4 },
+      range: {
+        start: { line: 8, character: 4 },
+        end: { line: 8, character: 20 },
+      },
+      documentVersion: 9,
+      projectKey: "file:///work/b:app",
+    };
+    const attributeExplanation = await facade.getAttributeInterpretationExplanation(attributeExplanationParams);
+    expect(attributeExplanation).toEqual(expect.objectContaining({
+      fingerprint: "file:///work/b:attribute-explanation",
+      workspace: expect.objectContaining({ name: "b" }),
+    }));
+    expect(harness.clients[1]?.sendRequest).toHaveBeenCalledWith(
+      "aurelia/attributeInterpretationExplanation",
+      attributeExplanationParams,
+      undefined,
+    );
+
     const resourceAvailabilityExplanationParams = {
       uri: "file:///work/b/src/my-app.html",
       position: { line: 9, character: 6 },
@@ -2375,6 +2396,20 @@ function createClientHarness(
               refusal: {
                 kind: "subjectAbsent",
                 reason: "the current source no longer contains that binding",
+              },
+              contenders: [],
+            },
+          };
+        case "aurelia/attributeInterpretationExplanation":
+          return {
+            fingerprint: `${workspaceUri}:attribute-explanation`,
+            documentVersion: (params as { documentVersion: number }).documentVersion,
+            answer: null,
+            result: {
+              status: "refused",
+              refusal: {
+                kind: "subjectAbsent",
+                reason: "the current source no longer contains that attribute",
               },
               contenders: [],
             },

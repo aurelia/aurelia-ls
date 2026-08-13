@@ -404,6 +404,25 @@ requests normalize to an empty source-file list and no limit.
 app templates from source-file-selected authoring templates. Use `authoringTemplateLimit` only as an explicit pressure
 budget or fallback when no source file is known.
 
+`AttributeInterpretationExplanation` is the projection-only compiler companion for one exact top-level authored HTML
+attribute name. The cursor must fall inside the exact name span; attribute values, expression tokens, and secondary
+inline multi-binding names do not select this V1 query. Equally specific app-runtime or authoring compiler contexts
+return `ambiguous` with distinct structural subjects rather than choosing a scope. An exact answer projects the
+already-materialized AttrSyntax, classification, value-site/parser, binding-command lowering, final instruction,
+compiler-issue, capture, and exact source-backed compiler-seam facts. It does not reparse source, run TypeChecker work,
+or create a second compiler model.
+
+Conclusions distinguish instruction-backed effects, capture, compiler control, ordinary HTML attributes, closed
+compiler errors, and honestly open interpretation. Effects use author-facing verbs while retaining the typed
+instruction kind as evidence. A plain attribute is queryable as an exact `plain-attribute` answer, but IDE affordances
+may deliberately suppress that inert row. Missing instruction products are never presented as proof that Aurelia
+"ignored" or "omitted" an attribute: without an explicit final-disposition carrier, a classified non-plain attribute
+with no proved effect remains open. Only open facts tied to the exact attribute carrier qualify the answer; unrelated
+project module debt does not contaminate it. Source-discovery truncation remains answer-wide and produces typed
+`truncated` uncertainty. The answer envelope `analysisBasis` is the freshness authority, next steps are capped at
+three, and the first available source step points to the selected bindable/resource/command declaration before an
+issue/blocker source and requery guidance. MCP consumes the same generic app-query result without a dedicated schema.
+
 Cursor-locus callers can skip that manual open step by asking the runtime facade directly:
 
 ```ts

@@ -557,6 +557,7 @@ function createMockReferencesContext(options: {
 function createMockCodeActionContext(input: {
   actions?: unknown[];
   bindingExplanationAnswer?: unknown;
+  attributeExplanationAnswer?: unknown;
 } = {}) {
   const document = {
     uri: templateUri,
@@ -625,6 +626,22 @@ function createMockCodeActionContext(input: {
           page: null,
         },
       )),
+      attributeInterpretationExplanation: vi.fn(() => Promise.resolve(
+        input.attributeExplanationAnswer ?? {
+          schemaVersion: "0.2",
+          result: "answered",
+          selection: "absent",
+          coverage: "complete",
+          summary: "No attribute interpretation at the cursor.",
+          value: {
+            displayText: "No attribute interpretation at the cursor.",
+            projectKey: "app",
+            explanation: null,
+            contenders: [],
+          },
+          page: null,
+        },
+      )),
     },
     lookupText: vi.fn((uri: string) =>
       uri === definitionUri
@@ -638,6 +655,72 @@ function createMockCodeActionContext(input: {
         ? snapshot(definitionUri, definitionText, 9, "typescript")
         : null,
     ),
+  };
+}
+
+function mockAttributeExplanationAnswer(
+  conclusionKind: "instruction-backed" | "plain-attribute" = "instruction-backed",
+) {
+  const nameSource = {
+    kind: "source-span-address",
+    label: `src/my-app.html@${codeActionStart}..${codeActionStart + "titel".length}`,
+    path: "src/my-app.html",
+    start: codeActionStart,
+    end: codeActionStart + "titel".length,
+    role: "attribute-name",
+  };
+  return {
+    schemaVersion: "0.2",
+    result: "answered",
+    selection: "exact",
+    coverage: "complete",
+    summary: "The selected attribute has an exact interpretation.",
+    value: {
+      displayText: "The selected attribute has an exact interpretation.",
+      projectKey: "app",
+      explanation: {
+        subject: {
+          subjectKey: "attribute:my-app:titel",
+          projectKey: "app",
+          definitionName: "my-app",
+          compilationLane: "app-runtime",
+          rawName: "titel",
+          source: nameSource,
+          nameSource,
+          valueSource: null,
+          templateSource: null,
+        },
+        conclusion: {
+          kind: conclusionKind,
+          title: "Attribute interpretation",
+          explanation: "The compiler classified the attribute.",
+          action: "Inspect the compiler evidence.",
+        },
+        evidence: {
+          syntax: {
+            syntaxKind: "bare",
+            target: "titel",
+            command: null,
+            parts: ["titel"],
+            pattern: null,
+            nameSource,
+            targetSource: nameSource,
+            commandSource: null,
+          },
+          classification: null,
+          valueSites: [],
+          lowerings: [],
+          effects: [],
+          issues: [],
+          blockers: [],
+        },
+        uncertainty: { state: "closed", reasons: [], explanation: "Compiler evidence is closed." },
+        currentness: { authority: "answer-analysis-basis", explanation: "Current answer basis." },
+        nextSteps: [],
+      },
+      contenders: [],
+    },
+    page: null,
   };
 }
 
@@ -1496,6 +1579,84 @@ describe("handleCodeAction", () => {
     );
     expect(proved.semanticRuntime.bindingUncertaintyExplanation).toHaveBeenCalledOnce();
     expect(provedResult).toBeNull();
+  });
+
+  test("offers an invoked-only command at the exact engine-authored attribute name", async () => {
+    const ctx = createMockCodeActionContext({
+      actions: [],
+      attributeExplanationAnswer: mockAttributeExplanationAnswer(),
+    });
+    const result = await handleCodeAction(
+      ctx as never,
+      {
+        ...params,
+        context: { diagnostics: [], triggerKind: CodeActionTriggerKind.Invoked },
+      },
+      createContextTestOperation(ctx),
+    );
+
+    expect(ctx.semanticRuntime.attributeInterpretationExplanation).toHaveBeenCalledWith(
+      null,
+      templateUri,
+      params.range.start,
+    );
+    expect(result).toEqual([{
+      title: "Explain how Aurelia uses this attribute",
+      kind: "quickfix",
+      isPreferred: false,
+      command: {
+        title: "Explain how Aurelia uses this attribute",
+        command: "aurelia.explainAttributeInterpretation",
+        arguments: [{
+          uri: templateUri,
+          position: { line: 0, character: codeActionStart },
+          range: {
+            start: { line: 0, character: codeActionStart },
+            end: { line: 0, character: codeActionStart + "titel".length },
+          },
+          documentVersion: 5,
+          projectKey: "app",
+        }],
+      },
+      data: {
+        semanticRuntime: {
+          queryKind: "attribute-interpretation-explanation",
+          explanationSeed: expect.any(Object),
+        },
+      },
+    }]);
+    expect(result?.[0]?.edit).toBeUndefined();
+    expect(result?.[0]?.diagnostics).toBeUndefined();
+  });
+
+  test("does not offer the attribute explanation automatically or for a closed plain row", async () => {
+    const automatic = createMockCodeActionContext({
+      actions: [],
+      attributeExplanationAnswer: mockAttributeExplanationAnswer(),
+    });
+    expect(await handleCodeAction(
+      automatic as never,
+      {
+        ...params,
+        context: { diagnostics: [], triggerKind: CodeActionTriggerKind.Automatic },
+      },
+      createContextTestOperation(automatic),
+    )).toBeNull();
+    expect(automatic.semanticRuntime.attributeInterpretationExplanation).not.toHaveBeenCalled();
+
+    const plain = createMockCodeActionContext({
+      actions: [],
+      attributeExplanationAnswer: mockAttributeExplanationAnswer("plain-attribute"),
+    });
+    expect(await handleCodeAction(
+      plain as never,
+      {
+        ...params,
+        context: { diagnostics: [], triggerKind: CodeActionTriggerKind.Invoked },
+      },
+      createContextTestOperation(plain),
+    )).toBeNull();
+    expect(plain.semanticRuntime.attributeInterpretationExplanation).toHaveBeenCalledOnce();
   });
 
   test("re-plans and resolves a selected code action with current document versions", async () => {

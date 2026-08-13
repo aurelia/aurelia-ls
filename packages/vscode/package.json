@@ -128,6 +128,11 @@
     },
     "commands": [
       {
+        "command": "aurelia.explainAttributeInterpretation",
+        "title": "Explain Attribute",
+        "category": "Aurelia"
+      },
+      {
         "command": "aurelia.explainFrameworkCapability",
         "title": "Explain Diagnostic",
         "category": "Aurelia"
@@ -275,6 +280,10 @@
         }
       ],
       "commandPalette": [
+        {
+          "command": "aurelia.explainAttributeInterpretation",
+          "when": "false"
+        },
         {
           "command": "aurelia.explainFrameworkCapability",
           "when": "false"

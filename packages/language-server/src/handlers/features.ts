@@ -62,6 +62,7 @@ import {
   type LookupTextFn,
 } from "../mapping/lsp-types.js";
 import { mapBindingUncertaintyExplanationCodeAction } from "../mapping/binding-uncertainty-explanation.js";
+import { mapAttributeInterpretationExplanationCodeAction } from "../mapping/attribute-interpretation-explanation.js";
 import {
   templateCodeActionResolveRefusal,
   type TemplateCodeActionResolveRefusalKind,
@@ -425,10 +426,23 @@ export async function handleCodeAction(
         },
       )
     : null;
+  const attributeExplanationAction = params.context.triggerKind === CodeActionTriggerKind.Invoked
+    ? mapAttributeInterpretationExplanationCodeAction(
+        await operation.attributeInterpretationExplanation(null, doc.uri, params.range.start),
+        doc,
+        params.range.start,
+        params.context.only,
+        {
+          documentUris: ctx.documentUris,
+          lookupText: (uri) => operation.documents.lookupText(uri),
+        },
+      )
+    : null;
   const actions = [
     ...(repairActions ?? []),
     ...explanationActions,
     ...(bindingExplanationAction == null ? [] : [bindingExplanationAction]),
+    ...(attributeExplanationAction == null ? [] : [attributeExplanationAction]),
   ];
   return actions.length === 0 ? null : actions;
 }

@@ -82,6 +82,9 @@ describe("VS Code product contract", () => {
     expect(AureliaCommand.ExplainFrameworkCapability).toBe(
       AureliaProtocolCommand.ExplainFrameworkCapability,
     );
+    expect(AureliaCommand.ExplainAttributeInterpretation).toBe(
+      AureliaProtocolCommand.ExplainAttributeInterpretation,
+    );
     expect(AureliaCommand.ExplainBindingUncertainty).toBe(
       AureliaProtocolCommand.ExplainBindingUncertainty,
     );
@@ -91,6 +94,11 @@ describe("VS Code product contract", () => {
     expect(manifest.contributes?.commands).toContainEqual({
       command: AureliaCommand.ExplainFrameworkCapability,
       title: "Explain Diagnostic",
+      category: "Aurelia",
+    });
+    expect(manifest.contributes?.commands).toContainEqual({
+      command: AureliaCommand.ExplainAttributeInterpretation,
+      title: "Explain Attribute",
       category: "Aurelia",
     });
     expect(manifest.contributes?.commands).toContainEqual({
@@ -224,6 +232,7 @@ describe("VS Code product contract", () => {
       },
     ]);
     for (const command of [
+      AureliaCommand.ExplainAttributeInterpretation,
       AureliaCommand.ExplainBindingUncertainty,
       AureliaCommand.ExplainFrameworkCapability,
       AureliaCommand.ExplainResourceAvailability,
@@ -240,6 +249,9 @@ describe("VS Code product contract", () => {
       if (menuName === "commandPalette") continue;
       expect(entries).not.toContainEqual(expect.objectContaining({
         command: AureliaCommand.ExplainBindingUncertainty,
+      }));
+      expect(entries).not.toContainEqual(expect.objectContaining({
+        command: AureliaCommand.ExplainAttributeInterpretation,
       }));
     }
     for (const menuName of ["view/title", "editor/context"]) {

@@ -273,6 +273,7 @@ import {
   readSemanticTemplateResourceAvailability,
 } from './resource-discovery.js';
 import { readSemanticResourceAvailabilityExplanation } from './resource-availability-explanation.js';
+import { readAttributeInterpretationExplanation } from './attribute-interpretation-explanation.js';
 import {
   readStateGetterBindingRows,
   readStateIssueRows,
@@ -360,6 +361,7 @@ import {
   type SemanticBindingDataFlowResult,
   type SemanticBindingDataFlowSummaryResult,
   type SemanticBindingUncertaintyExplanationResult,
+  type SemanticAttributeInterpretationExplanationResult,
   type SemanticBindingObservedDependencyResult,
   type SemanticBindingObservedDependencySummaryResult,
   type SemanticBindingBehaviorApplicationResult,
@@ -4065,6 +4067,8 @@ export class SemanticApp {
         return answerCurrentQuery(() => this.resourceAvailabilityExplanation(query));
       case SemanticAppQueryKind.TemplateCompilations:
         return answerCurrentQuery(() => this.templateQueries.templateCompilations(query.page, query.detail));
+      case SemanticAppQueryKind.AttributeInterpretationExplanation:
+        return answerCurrentQuery(() => this.attributeInterpretationExplanation(query));
       case SemanticAppQueryKind.TemplateCompletions:
         return answerCurrentQuery(() => this.templateQueries.templateCompletions(query));
       case SemanticAppQueryKind.TemplateCursorInfo:
@@ -5456,6 +5460,21 @@ export class SemanticApp {
       query.cursor,
       query.resourceIdentityKey,
       query.templateResourceScopeIdentityKey,
+    );
+  }
+
+  attributeInterpretationExplanation(
+    query: SemanticAppQuery,
+  ): SemanticRuntimeAnswer<SemanticAttributeInterpretationExplanationResult> {
+    const claimed = this.answerPublicQueryIfNeeded<SemanticAttributeInterpretationExplanationResult>(query);
+    if (claimed != null) {
+      return claimed;
+    }
+    return readAttributeInterpretationExplanation(
+      this.runtime.workspace.rootDir,
+      this.emission,
+      this.runtime.workspace.store,
+      query.cursor,
     );
   }
 

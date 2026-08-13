@@ -16,6 +16,8 @@ const fixtureRoot = path.join(repoRoot, 'packages/semantic-runtime/fixtures/pres
 const openSeamSitesFixtureRoot = path.join(repoRoot, 'packages/semantic-runtime/fixtures/pressure/evaluation-open-seam-sites');
 const frameworkCapabilityFixtureRoot = path.join(repoRoot, 'packages/semantic-runtime/fixtures/pressure/unregistered-plugin-resources');
 const bindingUncertaintyFixtureRoot = path.join(repoRoot, 'packages/semantic-runtime/fixtures/pressure/select-multiple-binding-order');
+const attributeInterpretationFixtureRoot = path.join(repoRoot, 'packages/semantic-runtime/fixtures/pressure/binding-uncertainty-explanation');
+const attributeInterpretationOpenFixtureRoot = path.join(repoRoot, 'packages/semantic-runtime/fixtures/pressure/resource-registration-effective-definitions');
 const typescriptDiagnosticsFixtureRoot = path.join(repoRoot, 'packages/semantic-runtime/fixtures/pressure/typescript-project-diagnostics');
 const projectConfigurationFixtureRoot = path.join(repoRoot, 'playground/issue-tracker');
 const projectConfigurationDiagnosticsFixtureRoot = path.join(repoRoot, 'packages/mcp/fixtures/project-configuration-diagnostics');
@@ -68,6 +70,7 @@ try {
   await verifyObservedDependencyLocus();
   await verifyFrameworkCapabilityExplanation();
   await verifyBindingUncertaintyExplanation();
+  await verifyAttributeInterpretationExplanation();
   await verifyWorkspaceOverviewContinuations();
   await verifyAnalysisDepthEnvelope();
   await verifyProfileDrivenRetention();
@@ -557,6 +560,202 @@ async function verifyBindingUncertaintyExplanation() {
   expect(
     unsupportedSelector.result?.structuredContent?.value?.result === 'unsupported',
     'Binding uncertainty should reject an unrelated framework-capability selector instead of silently ignoring it.',
+  );
+}
+
+async function verifyAttributeInterpretationExplanation() {
+  const exactQuery = {
+    kind: 'attribute-interpretation-explanation',
+    cursor: {
+      filePath: 'src/exact-app.html',
+      line: 9,
+      character: 12,
+    },
+  };
+  const exact = await callTool('aurelia_app_query', {
+    workspaceRoot: attributeInterpretationFixtureRoot,
+    queryKind: exactQuery.kind,
+    cursor: exactQuery.cursor,
+  });
+  const exactAnswer = exact.result?.structuredContent?.value;
+  expect(exact.result?.isError !== true, 'Generic MCP app-query should admit a cursor-selected attribute interpretation explanation.');
+  expect(exactAnswer?.result === 'answered', 'Attribute interpretation should retain the semantic answer envelope through MCP.');
+  expect(exactAnswer?.selection === 'exact', 'Attribute interpretation should retain exact attribute-name selection through MCP.');
+  expect(exactAnswer?.value?.explanation?.subject?.rawName === 'click.trigger', 'MCP should preserve the exact authored attribute-name subject.');
+  expect(exactAnswer?.value?.explanation?.conclusion?.kind !== 'plain-attribute', 'An Aurelia binding command should preserve an Aurelia-shaped engine conclusion.');
+  expect(exactAnswer?.value?.explanation?.currentness?.authority === 'answer-analysis-basis', 'MCP should preserve engine-owned answer currentness.');
+  expect(
+    Array.isArray(exactAnswer?.value?.explanation?.nextSteps)
+      && exactAnswer.value.explanation.nextSteps.length <= 3,
+    'MCP should preserve the bounded engine-owned attribute explanation actions.',
+  );
+
+  const plainCursor = {
+    filePath: 'src/exact-app.html',
+    line: 3,
+    character: 5,
+  };
+  const plain = await callTool('aurelia_app_query', {
+    workspaceRoot: attributeInterpretationFixtureRoot,
+    queryKind: 'attribute-interpretation-explanation',
+    cursor: plainCursor,
+  });
+  const plainAnswer = plain.result?.structuredContent?.value;
+  expect(plainAnswer?.selection === 'exact', 'A plain authored attribute should remain an exact semantic subject rather than disappear.');
+  expect(plainAnswer?.value?.explanation?.subject?.rawName === 'href', 'Plain-attribute truth should remain attached to the exact authored name.');
+  expect(plainAnswer?.value?.explanation?.conclusion?.kind === 'plain-attribute', 'Generic MCP should preserve the engine-owned plain-attribute conclusion without inventing Aurelia work.');
+
+  const absent = await callTool('aurelia_app_query', {
+    workspaceRoot: attributeInterpretationFixtureRoot,
+    queryKind: 'attribute-interpretation-explanation',
+    cursor: {
+      filePath: 'src/exact-app.html',
+      line: 9,
+      character: 27,
+    },
+  });
+  expect(absent.result?.structuredContent?.value?.selection === 'absent', 'A non-attribute-name locus should fail closed as an absent subject.');
+
+  const ambiguous = await callTool('aurelia_app_query', {
+    workspaceRoot: attributeInterpretationFixtureRoot,
+    queryKind: 'attribute-interpretation-explanation',
+    cursor: {
+      filePath: 'src/shared-app.html',
+      line: 0,
+      character: 12,
+    },
+  });
+  const ambiguousAnswer = ambiguous.result?.structuredContent?.value;
+  expect(ambiguousAnswer?.selection === 'ambiguous', 'Equal minimal compilation contexts should remain ambiguous through generic MCP.');
+  expect(
+    Array.isArray(ambiguousAnswer?.value?.contenders)
+      && ambiguousAnswer.value.contenders.length === 2
+      && ambiguousAnswer.value.explanation == null,
+    'Generic MCP should preserve both attribute contenders without choosing one.',
+  );
+
+  const batch = await callTool('aurelia_app_query_batch', {
+    workspaceRoot: attributeInterpretationFixtureRoot,
+    queries: [exactQuery, {
+      kind: 'attribute-interpretation-explanation',
+      cursor: plainCursor,
+    }],
+  });
+  const batchRows = batch.result?.structuredContent?.value?.value?.rows;
+  expect(
+    Array.isArray(batchRows)
+      && batchRows.length === 2
+      && batchRows[0]?.answer?.selection === 'exact'
+      && batchRows[1]?.answer?.selection === 'exact',
+    'Generic MCP batch queries should preserve both Aurelia-shaped and plain attribute explanation envelopes.',
+  );
+
+  const unsupportedSelector = await callTool('aurelia_app_query', {
+    workspaceRoot: attributeInterpretationFixtureRoot,
+    queryKind: 'attribute-interpretation-explanation',
+    cursor: exactQuery.cursor,
+    frameworkCapability: 'router.default-resources',
+  });
+  expect(
+    unsupportedSelector.result?.structuredContent?.value?.result === 'unsupported',
+    'Attribute interpretation should reject an unrelated framework-capability selector instead of silently ignoring it.',
+  );
+
+  const missingCursor = await callTool('aurelia_app_query', {
+    workspaceRoot: attributeInterpretationFixtureRoot,
+    queryKind: 'attribute-interpretation-explanation',
+  });
+  const missingCursorAnswer = missingCursor.result?.structuredContent?.value;
+  expect(missingCursor.result?.isError !== true, 'A missing semantic cursor should remain an ordinary fail-closed answer, not a transport failure.');
+  expect(
+    missingCursorAnswer?.result === 'answered'
+      && missingCursorAnswer?.selection === 'absent'
+      && missingCursorAnswer?.value?.explanation == null,
+    'Attribute interpretation should preserve the engine-owned absent answer when no cursor is supplied.',
+  );
+
+  const malformedCursor = await callTool('aurelia_app_query', {
+    workspaceRoot: attributeInterpretationFixtureRoot,
+    queryKind: 'attribute-interpretation-explanation',
+    cursor: {
+      filePath: 'src/exact-app.html',
+      line: -1,
+      character: 0,
+    },
+  });
+  expect(malformedCursor.result?.isError === true, 'A malformed attribute cursor should be rejected at the generic MCP schema boundary.');
+  expect(resultText(malformedCursor).includes('cursor'), 'Malformed cursor rejection should name the invalid cursor carrier.');
+
+  const open = await callTool('aurelia_app_query', {
+    workspaceRoot: attributeInterpretationOpenFixtureRoot,
+    queryKind: 'attribute-interpretation-explanation',
+    cursor: {
+      filePath: 'src/effective-definitions-app.html',
+      line: 21,
+      character: 15,
+    },
+  });
+  const openAnswer = open.result?.structuredContent?.value;
+  expect(openAnswer?.selection === 'exact', 'An executable but unmodeled binding command should remain an exact attribute subject.');
+  expect(
+    openAnswer?.coverage === 'open'
+      && openAnswer?.value?.explanation?.conclusion?.kind === 'open'
+      && openAnswer?.value?.explanation?.uncertainty?.state === 'open',
+    'Generic MCP should preserve the engine-owned open attribute interpretation envelope.',
+  );
+  expect(
+    openAnswer?.value?.explanation?.uncertainty?.reasons?.includes('binding-command-lowering-open')
+      && openAnswer?.value?.explanation?.evidence?.lowerings?.some((row) => row.commandName === 'shared' && row.state === 'open')
+      && openAnswer?.value?.explanation?.evidence?.blockers?.some((row) => row.kind === 'open-lowering'),
+    'Generic MCP should retain open-lowering evidence without inventing a successful resolution chain.',
+  );
+
+  const truncatedAnswer = {
+    schemaVersion: '0.2',
+    result: 'answered',
+    selection: 'exact',
+    coverage: 'truncated',
+    summary: 'Aurelia compiled this attribute, but source discovery was truncated.',
+    analysisBasis: { sourceWorldRevision: 'semantic-source-world:mcp-truncated-contract' },
+    value: {
+      displayText: 'Aurelia compiled this attribute, but source discovery was truncated.',
+      projectKey: 'attribute-interpretation-explanation-truncated',
+      explanation: {
+        subject: { rawName: 'click.trigger' },
+        conclusion: { kind: 'instruction-backed' },
+        uncertainty: {
+          state: 'truncated',
+          reasons: ['source-discovery-truncated'],
+          explanation: 'Source discovery was truncated.',
+        },
+        currentness: { authority: 'answer-analysis-basis' },
+        nextSteps: [],
+      },
+      contenders: [],
+    },
+    page: null,
+  };
+  const serializationProbeSessions = {
+    run: async (_options, operation) => operation({
+      runtime: {
+        answerAppQuery: async (query) => {
+          expect(query.kind === 'attribute-interpretation-explanation', 'Generic MCP should route the attribute explanation query kind unchanged.');
+          return truncatedAnswer;
+        },
+      },
+    }, null),
+  };
+  const serializationProbe = new AureliaMcpSemanticRuntimeAdapter(serializationProbeSessions);
+  const projected = await serializationProbe.appQuery({
+    workspaceRoot: attributeInterpretationFixtureRoot,
+    queryKind: 'attribute-interpretation-explanation',
+    cursor: exactQuery.cursor,
+  }, projectDetachedAureliaMcpResponse);
+  expect(projected.value?.coverage === 'truncated', 'Generic MCP should preserve a truncated attribute answer envelope.');
+  expect(
+    projected.value?.value?.explanation?.uncertainty?.state === 'truncated'
+      && projected.value?.value?.explanation?.uncertainty?.reasons?.includes('source-discovery-truncated'),
+    'Generic MCP detachment should preserve typed truncated uncertainty without weakening it to an inferred success.',
   );
 }
 

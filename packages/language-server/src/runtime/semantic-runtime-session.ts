@@ -18,6 +18,7 @@ import {
   SemanticRuntimeProjectInputChange,
   SemanticRuntimeProjectInputChangeKind,
   SemanticAppQueryKind,
+  type SemanticAttributeInterpretationExplanationResult,
   type SemanticAnalysisLimitationsResult,
   type SemanticApplicationTopologyResult,
   type SemanticBindingUncertaintyExplanationResult,
@@ -111,6 +112,11 @@ export interface SemanticRuntimeLspOperation {
     uri: DocumentUri,
     position: Position,
   ): Promise<SemanticRuntimeAnswer<SemanticBindingUncertaintyExplanationResult>>;
+  attributeInterpretationExplanation(
+    projectKey: string | null,
+    uri: DocumentUri,
+    position: Position,
+  ): Promise<SemanticRuntimeAnswer<SemanticAttributeInterpretationExplanationResult>>;
   projectConfigurationDiagnostics(uri: DocumentUri): Promise<SemanticRuntimeAnswer<SemanticProjectConfigurationDiagnosticsResult>>;
   templateCompletions(uri: DocumentUri, position: Position): Promise<SemanticRuntimeAnswer<SemanticTemplateCompletionResult>>;
   appDiagnostics(document: TextDocument): Promise<SemanticRuntimeAnswer<SemanticAppDiagnosticsResult>>;
@@ -936,6 +942,8 @@ export class SemanticRuntimeLspSession {
         this.frameworkCapabilityExplanation(projectKey, uri, position, frameworkCapability, token),
       bindingUncertaintyExplanation: (projectKey, uri, position) =>
         this.bindingUncertaintyExplanation(projectKey, uri, position, token),
+      attributeInterpretationExplanation: (projectKey, uri, position) =>
+        this.attributeInterpretationExplanation(projectKey, uri, position, token),
       projectConfigurationDiagnostics: (uri) => this.projectConfigurationDiagnostics(uri, token),
       templateCompletions: (uri, position) => this.templateCompletions(uri, position, token),
       appDiagnostics: (document) => this.appDiagnostics(document, token),
@@ -1377,6 +1385,27 @@ export class SemanticRuntimeLspSession {
       includeAuthoringTemplates: true,
       appRetention: "retain-app",
     }) as SemanticRuntimeAnswer<SemanticBindingUncertaintyExplanationResult>;
+    this.assertRequestTokenActive(token);
+    return answer;
+  }
+
+  private async attributeInterpretationExplanation(
+    projectKey: string | null,
+    uri: DocumentUri,
+    position: Position,
+    token: SemanticRuntimeLspRequestToken,
+  ): Promise<SemanticRuntimeAnswer<SemanticAttributeInterpretationExplanationResult>> {
+    const runtime = this.runtimeForOperation(token);
+    const cursorInput = this.operationSourceCursor(uri, position, token);
+    const answer = await runtime.answerAppQuery({
+      kind: SemanticAppQueryKind.AttributeInterpretationExplanation,
+      ...(projectKey == null ? {} : { projectKey }),
+      sourceFilePath: cursorInput.filePath,
+      cursor: cursorInput,
+      inquiryProfile: "lsp-cursor",
+      includeAuthoringTemplates: true,
+      appRetention: "retain-app",
+    }) as SemanticRuntimeAnswer<SemanticAttributeInterpretationExplanationResult>;
     this.assertRequestTokenActive(token);
     return answer;
   }
