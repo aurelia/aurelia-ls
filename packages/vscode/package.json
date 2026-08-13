@@ -216,7 +216,7 @@
         },
         {
           "command": "aurelia.goToAvailableResource",
-          "when": "view == aureliaResourceExplorer && aurelia.documentOwned && editorLangId == html",
+          "when": "view == aureliaResourceExplorer && aurelia.activeTemplateOwned",
           "group": "navigation@2"
         },
         {
@@ -238,7 +238,7 @@
       "view/item/context": [
         {
           "command": "aurelia.explainResourceAvailability",
-          "when": "view == aureliaResourceExplorer && aurelia.documentOwned && editorLangId == html && (viewItem == resource || viewItem == resourceWithImplementation || viewItem == resourceUnavailable)",
+          "when": "view == aureliaResourceExplorer && aurelia.activeTemplateOwned && (viewItem == resource || viewItem == resourceWithImplementation || viewItem == resourceUnavailable)",
           "group": "availability@1"
         },
         {

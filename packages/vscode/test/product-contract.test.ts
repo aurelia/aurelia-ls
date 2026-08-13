@@ -48,6 +48,9 @@ interface AureliaProjectSchema {
 const manifest = JSON.parse(
   readFileSync(new URL("../package.json", import.meta.url), "utf8"),
 ) as ExtensionManifest;
+const extensionReadme = readFileSync(new URL("../README.md", import.meta.url), "utf8");
+const extensionChangelog = readFileSync(new URL("../CHANGELOG.md", import.meta.url), "utf8");
+const rootReadme = readFileSync(new URL("../../../README.md", import.meta.url), "utf8");
 const projectSchema = JSON.parse(
   readFileSync(
     new URL("../../semantic-runtime/schema/aurelia.project.schema.json", import.meta.url),
@@ -188,7 +191,7 @@ describe("VS Code product contract", () => {
       expect.objectContaining({
         command: AureliaCommand.GoToAvailableResource,
         group: "navigation@2",
-        when: "view == aureliaResourceExplorer && aurelia.documentOwned && editorLangId == html",
+        when: "view == aureliaResourceExplorer && aurelia.activeTemplateOwned",
       }),
       expect.objectContaining({ command: AureliaCommand.RefreshResourceExplorer, group: "navigation@3" }),
     ]);
@@ -210,7 +213,7 @@ describe("VS Code product contract", () => {
     expect(context).toEqual([
       {
         command: AureliaCommand.ExplainResourceAvailability,
-        when: "view == aureliaResourceExplorer && aurelia.documentOwned && editorLangId == html && (viewItem == resource || viewItem == resourceWithImplementation || viewItem == resourceUnavailable)",
+        when: "view == aureliaResourceExplorer && aurelia.activeTemplateOwned && (viewItem == resource || viewItem == resourceWithImplementation || viewItem == resourceUnavailable)",
         group: "availability@1",
       },
       { command: AureliaCommand.OpenResourceDeclaration, when: navigable, group: "navigation@1" },
@@ -296,5 +299,47 @@ describe("VS Code product contract", () => {
       default: false,
       scope: "resource",
     }));
+  });
+
+  test("documents every shipped Stage 6D job without exposing hidden commands as palette workflows", () => {
+    const shippedLabels = [
+      "Review Analysis Limitations",
+      "Explain this Aurelia diagnostic",
+      "Explain this Aurelia binding",
+      "Explain how Aurelia uses this attribute",
+      "Explain Availability in Active Template",
+    ];
+    for (const label of shippedLabels) {
+      expect(extensionReadme).toContain(label);
+      expect(extensionChangelog).toContain(label);
+    }
+
+    expect(extensionReadme).toContain("intentionally absent from the Command");
+    expect(extensionChangelog).toContain("remain absent from the Command Palette");
+    expect(extensionReadme).toContain("`off` can suppress the projected finding and its review row");
+    expect(extensionChangelog).toContain("`off` does not promise a visible review row");
+    for (const command of [
+      AureliaCommand.ExplainAttributeInterpretation,
+      AureliaCommand.ExplainBindingUncertainty,
+      AureliaCommand.ExplainFrameworkCapability,
+      AureliaCommand.ExplainResourceAvailability,
+    ]) {
+      expect(extensionReadme).not.toContain(command);
+      expect(extensionChangelog).not.toContain(command);
+    }
+
+    expect(rootReadme).toContain("Contextual explanations");
+    expect(rootReadme).toContain("shared **Aurelia semantic runtime**");
+    expect(extensionReadme).toContain("may start a provisional language-server session");
+    expect(extensionReadme).toContain("retains only an admitted session");
+    for (const staleClaim of [
+      "confidence-based severity so you don't get false positives",
+      "jump from template to source for any Aurelia construct",
+      "locate all usages of a component or bindable",
+      "built around a **semantic workspace**",
+      "full feature list and screenshots",
+    ]) {
+      expect(rootReadme).not.toContain(staleClaim);
+    }
   });
 });

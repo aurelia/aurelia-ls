@@ -8,10 +8,13 @@ The fastest way to use this project is through the VS Code extension:
 ext install AureliaEffect.aurelia-2
 ```
 
-Open any Aurelia 2 project (one with `aurelia` or `@aurelia/*` in its
-dependencies and a `tsconfig.json`) and the language server starts
-automatically. Once analysis completes, the **Aurelia Resources** view in
-VS Code's Explorer shows the resources admitted for the active workspace.
+Open a filesystem-backed Aurelia 2 project. Dependency manifests, exact
+`aurelia.project.json` presence, or an already-open Aurelia entry source provide
+candidate evidence for a provisional language-server session. Semantic-runtime
+then confirms the workspace's project shape; the extension retains the session
+only for an admitted Aurelia project and otherwise retires it. Once analysis
+completes, the **Aurelia Resources** view in VS Code's Explorer shows the
+resources admitted for the active workspace.
 
 Try these to verify it's working:
 
@@ -25,18 +28,18 @@ If discovery fails, use **Open Aurelia Output** from the view or the affected
 project row. The client channel is named **Aurelia LS (Client)**, and each
 active workspace folder has its own **Aurelia Language Server (...)** channel.
 
-## Using the MCP Preview
+## Using the MCP Release
 
-The `@aurelia-ls/mcp` preview is a local, read-only MCP server for AI coding
+The `@aurelia-ls/mcp` release is a local, read-only MCP server for AI coding
 tools. It can inspect Aurelia workspaces, query TypeScript/Aurelia/template
 diagnostics, read router and open-seam surfaces, and return typed continuation
 hints.
 
-For trustworthy TypeScript diagnostics, install the preview tarball inside the
+For trustworthy TypeScript diagnostics, install the release tarball inside the
 project being analyzed:
 
 ```bash
-npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.1.0-preview.1/aurelia-ls-mcp-0.1.0-preview.1.tgz
+npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.2.0/aurelia-ls-mcp-0.2.0.tgz
 ```
 
 Then configure your MCP client to run:
@@ -51,7 +54,7 @@ Provider-specific config examples are in the
 For a quick smoke test, direct URL `npx` also works:
 
 ```bash
-npx -y https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.1.0-preview.1/aurelia-ls-mcp-0.1.0-preview.1.tgz
+npx -y https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.2.0/aurelia-ls-mcp-0.2.0.tgz
 ```
 
 Project-local install is preferred for serious diagnostics because the analyzer
@@ -74,13 +77,16 @@ cd aurelia-ls
 
 # Build aurelia-ls
 pnpm install
+pnpm bootstrap:aurelia
 pnpm run build
 ```
 
 The project uses the Aurelia framework as a git submodule. The
 `overrides` in `pnpm-workspace.yaml` link directly to packages inside
-`aurelia/`, so the submodule must be initialized. The MCP and semantic-runtime
-preview paths do not require building the Aurelia submodule itself.
+`aurelia/`, so the submodule must be initialized. `pnpm bootstrap:aurelia`
+installs that linked workspace's dependency closure without running lifecycle
+scripts. The MCP and semantic-runtime release paths do not require building the
+Aurelia submodule itself.
 
 > **Note:** The submodule setup is temporary while we work towards full
 > bi-directional compatibility with Aurelia.
@@ -91,7 +97,7 @@ preview paths do not require building the Aurelia submodule itself.
 # Everything
 pnpm test
 
-# IDE features (language server + semantic workspace)
+# IDE features (semantic runtime + language server + VS Code)
 pnpm test:ide
 
 # Feature matrix (cross-feature × cross-resource-kind)
@@ -118,9 +124,6 @@ pnpm test:ssr
 The launch configuration opens the `fixtures/hello-world` test project
 by default. Modify the args in `.vscode/launch.json` to test with a
 different project.
-
-To debug the language server, use the "Attach to Server" configuration
-after launching the extension.
 
 ## Example Apps
 

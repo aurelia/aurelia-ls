@@ -93,6 +93,9 @@ const staticContractPath = fileURLToPath(
 const committedFixturePath = fileURLToPath(
   new URL("fixtures/resource-discovery-host.json", import.meta.url),
 );
+const availabilityOwnerContractPath = fileURLToPath(
+  new URL("../../language-server/test/unit/semantic-runtime-session.test.ts", import.meta.url),
+);
 const contractTempRoot = resolve(
   dirname(runnerPath),
   "../../../.temp/vscode-extension-host/runner-contract",
@@ -733,10 +736,10 @@ describe("Extension Host support runner", () => {
           (manifest.witnesses.openCoverage?.availability as Record<string, unknown>).unknown = true;
         }, /fields must be exactly/u],
         ["ambiguity-row-count", (manifest) => {
-          ambiguityScope(manifest, 0, 0).rowCount = 35;
+          ambiguityScope(manifest, 0, 0).rowCount = 36;
         }, /projectTemplateAmbiguity\.projects\[0\]\.scopes\[0\]\.rowCount/u],
         ["ambiguity-selectable-count", (manifest) => {
-          ambiguityScope(manifest, 0, 0).selectableRowCount = 2;
+          ambiguityScope(manifest, 0, 0).selectableRowCount = 1;
         }, /projectTemplateAmbiguity\.projects\[0\]\.scopes\[0\]\.selectableRowCount/u],
         ["ambiguity-unavailable-reason", (manifest) => {
           ambiguityScope(manifest, 0, 0).navigationUnavailableReason = "self-attested";
@@ -1163,7 +1166,7 @@ describe("Extension Host support runner", () => {
       });
       sourceManifest.witnesses.longSuffixDuplicates = { admission: "required", count: 2 };
       sourceManifest.witnesses.packageOrigins = { admission: "current-only", count: 3 };
-      sourceManifest.witnesses.pageDrain = { admission: "current-only", rowCount: 604 };
+      sourceManifest.witnesses.pageDrain = { admission: "current-only", rowCount: 606 };
       sourceManifest.witnesses.guardrail = { admission: "required", coverage: "truncated" };
       sourceManifest.lanePolicy.currentStableOnlyWitnesses = ["packageOrigins", "pageDrain"];
       writeFileSync(setup.sourceManifestPath, `${JSON.stringify(sourceManifest, null, 2)}\n`);
@@ -1283,6 +1286,24 @@ describe("Extension Host support runner", () => {
         expect.objectContaining({ id: "guardrail", lanes: ["current-stable", "minimum"] }),
         expect.objectContaining({ id: "open-coverage", lanes: ["current-stable", "minimum"] }),
       ]));
+      expect(sourceManifest.witnesses.aliasAndCrossKindCollisions.sameKindRows.filter(
+        (row: { name: string }) => row.name === "canonical-winner" || row.name === "canonical-loser",
+      )).toEqual([
+        {
+          identityKey: "typescript-resource:v1:srXE8wFVDRnRIEtD6VbIjD",
+          kind: "custom-element",
+          name: "canonical-winner",
+          relativePath: "host-corpus/duplicates/src/resources.ts",
+          publicName: { start: 3023, end: 3039 },
+        },
+        {
+          identityKey: "typescript-resource:v1:Y0b7gz-_QxkB9aoja6s220",
+          kind: "custom-element",
+          name: "canonical-loser",
+          relativePath: "host-corpus/duplicates/src/resources.ts",
+          publicName: { start: 3178, end: 3193 },
+        },
+      ]);
 
       const renderLane = (versionLane: "current-stable" | "minimum") => {
         const shardRoot = join(root, versionLane, "worker", "product-support");
@@ -2467,13 +2488,113 @@ describe("Extension Host support runner", () => {
     const digest = (rows: readonly { identityKey: string }[]) =>
       runner.resourceIdentitySetSha256(rows.map((row) => row.identityKey));
     expect(digest(race.baseline.rows))
-      .toBe("a80c1585be956bec2899d73e16ce07645786186b852f9e30e2cf475bb9e37e3f");
+      .toBe("da49710569cbb98fd90a1f70baa120dfe502b16298b5f9a0e7e4bb5800154a26");
     expect(digest(race.scopeEdit.restartWithoutSelection.response.rows))
-      .toBe("aefe1114f11b8cf017acee13575dc078b61ac6e0ce1f0d64b4fb2bc064d4146f");
+      .toBe("446c47031c1ed9b0d8553140a40ad6644ebe1c9226cceee93d0aab984d3db978");
     expect(digest(race.afterRemoval.restartWithoutSelection.response.rows))
-      .toBe("a80c1585be956bec2899d73e16ce07645786186b852f9e30e2cf475bb9e37e3f");
+      .toBe("da49710569cbb98fd90a1f70baa120dfe502b16298b5f9a0e7e4bb5800154a26");
     expect(runner.resourceIdentitySetSha256([]))
       .toBe("327fd628cccfccf19e15da66a13fecc7d024224d58d78510a9677f3f10256d3a");
+  });
+
+  test("keeps the host availability witnesses aligned with the Stage 6D owner contract", async () => {
+    const runner = await import(pathToFileURL(runnerPath).href);
+    const manifest = JSON.parse(readFileSync(committedFixturePath, "utf8"));
+    const race = manifest.witnesses.shiftedAndRemovedNavigation.availabilityRace;
+    const excludedIdentity = "typescript-resource:v1:b079pogsRRexNF_ZxBe0Wk";
+    const answerRows = [
+      race.baseline.rows,
+      race.scopeEdit.restartWithoutSelection.response.rows,
+      race.afterRemoval.restartWithoutSelection.response.rows,
+    ];
+    expect(race.excludedAppRootIdentityKey).toBe(excludedIdentity);
+    expect(answerRows.map((rows: readonly { identityKey: string }[]) => rows.length))
+      .toEqual([28, 28, 28]);
+    expect(answerRows.every((rows: readonly { identityKey: string }[]) =>
+      rows.every((row) => row.identityKey !== excludedIdentity)))
+      .toBe(true);
+    expect([
+      race.baseline.selectableRowCount,
+      race.scopeEdit.restartWithoutSelection.response.selectableRowCount,
+      race.afterRemoval.restartWithoutSelection.response.selectableRowCount,
+    ]).toEqual([1, 1, 1]);
+
+    // Commit 646454bbc is the semantic owner of this contextual-app exclusion. Reprove
+    // that all three owner constants still omit the exact identity before trusting the
+    // separately serialized Electron-host witness.
+    const ownerSource = readFileSync(availabilityOwnerContractPath, "utf8");
+    expect(runner.openCoverageSelectableResourceCount).toBe(0);
+    for (const constantName of [
+      "LONG_SUFFIX_BASELINE_AVAILABILITY_ROWS",
+      "LONG_SUFFIX_RIGHT_ONLY_AVAILABILITY_ROWS",
+      "LONG_SUFFIX_AFTER_REMOVAL_AVAILABILITY_ROWS",
+    ]) {
+      const start = ownerSource.indexOf(`const ${constantName} = [`);
+      const end = ownerSource.indexOf("] as const;", start);
+      expect(start, `${constantName} must remain present in the LS owner contract`).toBeGreaterThanOrEqual(0);
+      expect(end, `${constantName} must remain a bounded constant block`).toBeGreaterThan(start);
+      expect(ownerSource.slice(start, end)).not.toContain(excludedIdentity);
+    }
+    expect(ownerSource).toMatch(
+      /const LONG_SUFFIX_AVAILABILITY_NAVIGATION_FACTS = \{\s*rowCount: 28,\s*selectableRowCount: 1,/u,
+    );
+
+    const ambiguity = manifest.witnesses.projectTemplateAmbiguity;
+    const ambiguityExcludedIdentity = "typescript-resource:v1:5EsohJa8ZPz7ZfvI5o74H5";
+    const scopes = ambiguity.projects.flatMap((project: {
+      scopes: readonly {
+        rowCount: number;
+        selectableRowCount: number;
+        resourceIdentityKeys: readonly string[];
+        navigationUnavailableIdentityKeys: readonly string[];
+      }[];
+    }) => project.scopes);
+    expect(ambiguity.excludedAppRootIdentityKey).toBe(ambiguityExcludedIdentity);
+    expect(scopes.map((scope: { rowCount: number }) => scope.rowCount)).toEqual([35, 27, 27, 35]);
+    expect(scopes.map((scope: { selectableRowCount: number }) => scope.selectableRowCount))
+      .toEqual([0, 0, 0, 0]);
+    for (const scope of scopes) {
+      expect(scope.resourceIdentityKeys).toEqual(scope.navigationUnavailableIdentityKeys);
+      expect(scope.resourceIdentityKeys).not.toContain(ambiguityExcludedIdentity);
+    }
+
+    // The same Stage 6D owner commit removed the contextual app-root row from every
+    // opposing compiler scope. Keep the Electron witness tied to its 27-row base,
+    // optional 8-row i18n extension, and zero-selectable navigation projection.
+    const ownerBaseStart = ownerSource.indexOf("const OVERLAP_BASE_RESOURCE_IDENTITY_KEYS = [");
+    const ownerBaseEnd = ownerSource.indexOf("] as const;", ownerBaseStart);
+    const ownerI18nStart = ownerSource.indexOf("const OVERLAP_I18N_RESOURCE_IDENTITY_KEYS = [");
+    const ownerI18nEnd = ownerSource.indexOf("] as const;", ownerI18nStart);
+    expect(ownerBaseStart).toBeGreaterThanOrEqual(0);
+    expect(ownerBaseEnd).toBeGreaterThan(ownerBaseStart);
+    expect(ownerI18nStart).toBeGreaterThanOrEqual(0);
+    expect(ownerI18nEnd).toBeGreaterThan(ownerI18nStart);
+    const ownerBaseBlock = ownerSource.slice(ownerBaseStart, ownerBaseEnd);
+    const ownerI18nBlock = ownerSource.slice(ownerI18nStart, ownerI18nEnd);
+    expect(ownerBaseBlock).not.toContain(ambiguityExcludedIdentity);
+    expect(ownerI18nBlock).not.toContain(ambiguityExcludedIdentity);
+    expect(ownerBaseBlock.match(/"framework-resource:v1:[^"]+"/gu)).toHaveLength(27);
+    expect(ownerI18nBlock.match(/"framework-resource:v1:[^"]+"/gu)).toHaveLength(8);
+    expect(ownerSource).toMatch(
+      /rowCount: includesI18n \? 35 : 27,\s*selectableRowCount: 0,/u,
+    );
+    expect({
+      openInventoryRows: manifest.witnesses.openCoverage.rowCount,
+      openAvailabilityRows: manifest.witnesses.openCoverage.availability.rowCount,
+      guardrailInventoryRows: manifest.witnesses.guardrail.rowCount,
+      guardrailAvailabilityRows: manifest.witnesses.guardrail.availability.rowCount,
+    }).toEqual({
+      openInventoryRows: 28,
+      openAvailabilityRows: 27,
+      guardrailInventoryRows: 28,
+      guardrailAvailabilityRows: 27,
+    });
+    expect(ownerSource).toMatch(
+      /coverage: preflight\.openAvailability\.coverage,\s*rows: preflight\.openAvailability\.value\.rows\.length,[\s\S]{0,180}coverage: "open",\s*rows: 27,/u,
+    );
+    expect(ownerSource).toMatch(
+      /coverage: preflight\.availability\.coverage,\s*rows: preflight\.availability\.value\.rows\.length,[\s\S]{0,180}coverage: "truncated",\s*rows: 27,/u,
+    );
   });
 
   test("rejects unknown and lane-inapplicable facts before trusting values", async () => {

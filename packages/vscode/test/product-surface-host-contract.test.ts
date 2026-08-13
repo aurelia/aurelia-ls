@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
@@ -212,6 +212,25 @@ interface NativeQuickPickAcceptOptions {
 const uri = "file:///workspace/src/app.html";
 
 describe("Extension Host product-surface contracts", () => {
+  test("keeps declaration and ambiguity host journeys sequential but independently bounded", () => {
+    const source = readFileSync(
+      new URL("./extension-host/suite/product-surface.test.cjs", import.meta.url),
+      "utf8",
+    );
+    const declarationTitle = "navigates the exact Resource Discovery declaration witnesses";
+    const ambiguityTitle = "adjudicates both native Resource Discovery ambiguities and open coverage";
+    const declarationStart = source.indexOf(`test("${declarationTitle}"`);
+    const ambiguityStart = source.indexOf(`test("${ambiguityTitle}"`);
+    expect(declarationStart).toBeGreaterThanOrEqual(0);
+    expect(ambiguityStart).toBeGreaterThan(declarationStart);
+    expect(source.indexOf("test(", declarationStart + 1)).toBe(ambiguityStart);
+    expect(source.slice(declarationStart, ambiguityStart)).toMatch(/this\.timeout\(420_000\)/u);
+    const followingTestStart = source.indexOf("test(", ambiguityStart + 1);
+    expect(followingTestStart).toBeGreaterThan(ambiguityStart);
+    expect(source.slice(ambiguityStart, followingTestStart))
+      .toMatch(/this\.timeout\(420_000\)/u);
+  });
+
   test("settles on a current full receipt followed by serialized unChanged reuse", () => {
     const events = [
       request("full", 2),
@@ -777,7 +796,7 @@ describe("Extension Host product-surface contracts", () => {
     expect(waitCount).toBe(0);
   });
 
-  test("rejects an admitted exact tab close without a matching document-close receipt", async () => {
+  test("accepts exact public document and editor absence when VS Code omits the close receipt", async () => {
     const key = "file:///workspace/left/duplicate-card.ts";
     const target: HostDocument = { uri: { toString: () => key } };
     const exactTab: HostTab = { input: { uri: { toString: () => key } } };
@@ -806,12 +825,46 @@ describe("Extension Host product-surface contracts", () => {
     await expect(closeTextDocumentWithNativeEditor(target, "injected silent-tab cleanup", {
       workspace,
       window,
-      wait: () => {
+      wait: async (predicate) => {
         order.push("wait");
-        return Promise.reject(new Error("native close receipt timed out"));
+        expect(predicate()).toBe(true);
       },
-    })).rejects.toThrow(/native close receipt timed out/u);
+    })).resolves.toBe(key);
     expect(order).toEqual(["listen", "close", "wait", "dispose"]);
+  });
+
+  test("accepts an exact editor close when VS Code retains the document open but hidden", async () => {
+    const key = "file:///workspace/left/duplicate-card.ts";
+    const target: HostDocument = { uri: { toString: () => key } };
+    const exactTab: HostTab = { input: { uri: { toString: () => key } } };
+    const groups = [{ tabs: [exactTab] }];
+    let disposeCount = 0;
+    const workspace = {
+      textDocuments: [target],
+      onDidCloseTextDocument() {
+        return { dispose: () => { disposeCount += 1; } };
+      },
+    };
+    const window = {
+      visibleTextEditors: [{ document: target }],
+      tabGroups: {
+        all: groups,
+        close() {
+          groups[0]!.tabs.splice(0, 1);
+          window.visibleTextEditors.splice(0, 1);
+          return Promise.resolve(true);
+        },
+      },
+    };
+
+    await expect(closeTextDocumentWithNativeEditor(target, "injected retained-document cleanup", {
+      workspace,
+      window,
+      wait: async (predicate) => { expect(predicate()).toBe(true); },
+    })).resolves.toBe(key);
+    expect(workspace.textDocuments).toEqual([target]);
+    expect(window.visibleTextEditors).toEqual([]);
+    expect(disposeCount).toBe(1);
   });
 
   test("rejects an admitted close that leaves an exact target tab open", async () => {
@@ -886,7 +939,7 @@ describe("Extension Host product-surface contracts", () => {
       workspace,
       window,
       wait: async (predicate) => { expect(predicate()).toBe(true); },
-    })).rejects.toThrow(/must correlate exactly one native close/u);
+    })).rejects.toThrow(/may correlate at most one native close event/u);
     expect(disposeCount).toBe(1);
   });
 

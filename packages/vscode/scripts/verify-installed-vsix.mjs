@@ -35,7 +35,7 @@ export { sha256 };
 
 export const installedPlanSchemaVersion = "aurelia-ls/installed-vsix-plan/v2";
 export const installedEvidenceSchemaVersion = "aurelia-ls/installed-vsix-evidence/v2";
-export const installedDriverReportSchemaVersion = "aurelia-ls/installed-vsix-driver-report/v1";
+export const installedDriverReportSchemaVersion = "aurelia-ls/installed-vsix-driver-report/v2";
 export const requestedVSCodeVersion = "stable";
 export const expectedTestElectronVersion = "3.0.0";
 export const installedInventoryPolicy = Object.freeze({
@@ -63,6 +63,7 @@ export const fixtureRoot = path.join(
 export const dependencyRoot = path.join(repoRoot, "packages", "semantic-runtime", "node_modules");
 export const evidenceParent = path.join(repoRoot, ".temp", "vscode-vsix-installed");
 export const targetRelativePath = "src/routes/service-plan-list-route.html";
+export const relatedRelativePath = "src/routes/service-plan-list-route.ts";
 
 const productId = "AureliaEffect.aurelia-2";
 const allowedExtensionsRootMetadata = new Set([".obsolete", "extensions.json"]);
@@ -186,10 +187,12 @@ export function buildHostInvocation({
   layout,
 }) {
   const targetPath = path.join(layout.workspaceRoot, targetRelativePath);
+  const relatedPath = path.join(layout.workspaceRoot, relatedRelativePath);
   const extensionTestsEnv = Object.freeze({
     AURELIA_LS_INSTALLED_REPORT_PATH: layout.driverReportPath,
     AURELIA_LS_INSTALLED_WORKSPACE_ROOT: layout.workspaceRoot,
     AURELIA_LS_INSTALLED_TARGET_PATH: targetPath,
+    AURELIA_LS_INSTALLED_RELATED_PATH: relatedPath,
     AURELIA_LS_INSTALLED_VSCODE_VERSION: resolvedVersion,
     AURELIA_LS_INSTALLED_PRODUCT_VERSION: identity.version,
     AURELIA_LS_INSTALLED_PRODUCT_PUBLISHER: identity.publisher,
@@ -524,6 +527,7 @@ export function validateWorkspaceDependenciesAfterHost(workspaceRoot) {
 export function validateInstalledDriverReport(report, context) {
   const issues = [];
   const geometry = context.geometry ?? expectedCompletionGeometry(context.targetPath);
+  const relatedPath = context.relatedPath ?? path.join(path.dirname(context.targetPath), "service-plan-list-route.ts");
   check(report?.schemaVersion === installedDriverReportSchemaVersion, issues, "driver report schema drifted");
   check(report?.status === "passed", issues, "driver report did not pass");
   check(Array.isArray(report?.errors) && report.errors.length === 0, issues, "driver report retained errors");
@@ -588,6 +592,19 @@ export function validateInstalledDriverReport(report, context) {
   check(report?.observation?.response?.cancellationRequested === false, issues, "completion response was canceled");
   check(fileUriIdentifiesPath(report?.observation?.request?.uri, context.targetPath), issues, "completion request URI drifted");
   check(fileUriIdentifiesPath(report?.observation?.response?.uri, context.targetPath), issues, "completion response URI drifted");
+  check(report?.customJourney?.command === "aurelia.openRelatedFile", issues, "custom journey command drifted");
+  check(report?.customJourney?.commandRegistered === true, issues, "custom journey command was not registered");
+  check(report?.customJourney?.resultOk === true, issues, "custom journey command did not settle successfully");
+  check(fileUriIdentifiesPath(report?.customJourney?.sourceUri, context.targetPath), issues, "custom journey source URI drifted");
+  check(fileUriIdentifiesPath(report?.customJourney?.expectedTargetUri, relatedPath), issues, "custom journey expected target URI drifted");
+  check(fileUriIdentifiesPath(report?.customJourney?.activeEditorUri, relatedPath), issues, "custom journey active editor URI drifted");
+  check(report?.customJourney?.targetLanguageId === "typescript", issues, "custom journey target language drifted");
+  check(report?.customJourney?.targetUnopenedBefore === true, issues, "custom journey target was already open");
+  check(report?.customJourney?.sourceDirtyBefore === false, issues, "custom journey source was dirty before navigation");
+  check(report?.customJourney?.sourceDirtyAfter === false, issues, "custom journey dirtied its source");
+  check(report?.customJourney?.targetDirtyAfter === false, issues, "custom journey dirtied its target");
+  check(report?.customJourney?.sourceBytesUnchanged === true, issues, "custom journey changed source bytes");
+  check(report?.customJourney?.targetBytesUnchanged === true, issues, "custom journey changed target bytes");
   if (issues.length > 0) throw new Error(`Installed driver report failed validation: ${issues.join("; ")}.`);
   return Object.freeze({ status: "passed", issues: Object.freeze([]) });
 }
@@ -736,6 +753,7 @@ export async function verifyInstalledVsix(dependencies = {}) {
       product,
       identity: receipt.identity,
       targetPath: path.join(layout.workspaceRoot, targetRelativePath),
+      relatedPath: path.join(layout.workspaceRoot, relatedRelativePath),
       geometry: expectedGeometry,
     });
     requireCleanLogSlots(state.logs);
@@ -880,6 +898,8 @@ function prepareEvidenceLayout(layout, dependencies) {
   });
   const targetPath = path.join(layout.workspaceRoot, targetRelativePath);
   assertRegularRealFile(targetPath, "Installed completion target");
+  const relatedPath = path.join(layout.workspaceRoot, relatedRelativePath);
+  assertRegularRealFile(relatedPath, "Installed related-file target");
   return Object.freeze({
     fixture: Object.freeze({ source: sourceSnapshot, copied: copiedSnapshot, equal: true }),
     dependencies: workspaceDependencies,

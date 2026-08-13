@@ -55,12 +55,20 @@ async function run() {
 
   return new Promise((resolve, reject) => {
     try {
-      mocha.run((failures) => {
+      const runner = mocha.run((failures) => {
         if (failures > 0) {
           reject(new Error(`${failures} extension-host test(s) failed.`));
         } else {
           resolve();
         }
+      });
+      runner.on("fail", (test, error) => {
+        const detail = error instanceof Error
+          ? (error.stack ?? error.message)
+          : String(error);
+        console.error(
+          `[aurelia-extension-host] ${test.fullTitle()} failed:\n${detail.slice(0, 12_000)}`,
+        );
       });
     } catch (error) {
       reject(error);

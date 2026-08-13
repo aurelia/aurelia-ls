@@ -28,6 +28,21 @@ source and disclose partial, refused, or failed results instead of filling seman
 - Scoped settled **Aurelia Resources** refreshes to the workspace whose analysis changed while retaining full refreshes for topology, session, and explicit user-refresh events.
 - Made an isolated Worker-backed language server the default transport for active roots, with IPC retained for debugging and explicit fallback.
 
+### Explanations and analysis limitations
+
+- Added **Review Analysis Limitations** to the **Aurelia Resources** view when a current limitation is eligible for
+  review. Version 2 `aurelia.project.json` files can set the admitted
+  `aurelia.analysis.dynamic-registration-spread` finding to `off`, `information`, `warning`, or `error` without
+  erasing the underlying semantic evidence; `off` does not promise a visible review row.
+- Added invoked-only **Explain this Aurelia diagnostic** and **Explain this Aurelia binding** Quick Fixes for exact
+  framework-capability Problems and materially uncertain bindings.
+- Added **Explain how Aurelia uses this attribute** only at an exact non-plain, top-level authored HTML attribute name;
+  attribute values, secondary inline multi-binding parts, and plain attributes do not advertise the action.
+- Added **Explain Availability in Active Template** to supported Resource Explorer rows when an Aurelia-owned HTML
+  template is active, with an exact scope choice when current compiler scopes are ambiguous.
+- Kept every explanation in native VS Code UI with fresh document, subject, and source re-checks. The contextual actions
+  remain absent from the Command Palette, and no generic Inspect/report surface was restored.
+
 ### Compatibility and product changes
 
 - Requires VS Code 1.91 or newer and a filesystem-backed workspace. Virtual workspaces are unsupported; remote development is not yet a declared release promise.

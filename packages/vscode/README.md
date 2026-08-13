@@ -40,6 +40,43 @@ declaring a missing view-model member or registering an available framework capa
 edit plan does not advertise a generic repair. Edits are re-planned when selected; if the source changed, VS Code reports
 the exact refusal reason and applies nothing.
 
+### Explanations — ask at the exact source
+
+The extension offers invoked, native explanations only when semantic-runtime can identify one exact current subject:
+
+- On an eligible framework-capability Problem, open Quick Fix and choose **Explain this Aurelia diagnostic**.
+- On an eligible binding with material uncertainty, open Quick Fix and choose **Explain this Aurelia binding**. This
+  action can be available even when the binding does not produce a Problem.
+- Put the cursor in a non-plain, top-level authored HTML attribute name and open Quick Fix to choose
+  **Explain how Aurelia uses this attribute**. Attribute values and secondary inline multi-binding parts do not offer the
+  action, and the extension does not claim that a missing compiler effect means an attribute was ignored.
+- With an Aurelia-owned HTML template active, open a supported **Aurelia Resources** row's context menu and choose
+  **Explain Availability in Active Template**. If more than one current compiler scope is possible, choose the exact scope
+  first.
+
+Explanations use VS Code's native picker and modal UI, can disclose incomplete or truncated evidence, and re-check the
+document and semantic answer before opening a source. These contextual actions are intentionally absent from the Command
+Palette; there is no generic Inspect or report browser.
+
+### Analysis limitations — review current evidence
+
+When the **Aurelia Resources** view reports a current analysis limitation eligible for review, choose
+**Review Analysis Limitations** from the view title to inspect its exact source and reason. Version 2
+`aurelia.project.json` files can control the presentation of the currently admitted rule:
+
+```json
+{
+  "version": 2,
+  "findings": {
+    "aurelia.analysis.dynamic-registration-spread": "warning"
+  }
+}
+```
+
+The accepted dispositions are `off`, `information`, `warning`, and `error`. They change consumer presentation only.
+`off` can suppress the projected finding and its review row; it does not erase the underlying limitation or change
+Resource Explorer completeness.
+
 ### Completions — discover what's available
 
 Context-aware suggestions that reflect your actual project. Element tags, bindable attributes, binding commands,
@@ -177,7 +214,7 @@ workspaces. Virtual workspaces are unsupported, and remote development is not ye
 
 1. Install this extension
 2. Open an Aurelia 2 project
-3. The language server activates after semantic-runtime confirms the workspace project shape
+3. Cheap Aurelia evidence may start a provisional language-server session; semantic-runtime then confirms the workspace project shape, and the extension retains only an admitted session
 4. Check **Aurelia LS (Client)** for activation and session status; each active root also has an **Aurelia Language Server (`<workspace-folder-name>`)** channel
 
 ## Commands

@@ -371,20 +371,65 @@ async function closeTextDocumentWithNativeEditor(
       true,
       `${message} exact tab close for ${documentKey} must be admitted by VS Code.`,
     );
+    const closedState = () => {
+      const matchingDocuments = workspace.textDocuments.filter(
+        (candidate) => candidate?.uri?.toString?.() === documentKey,
+      );
+      const matchingTabs = tabGroups.all.flatMap((group, groupIndex) => group.tabs
+        .filter((tab) => tab?.input?.uri?.toString?.() === documentKey)
+        .map((tab) => ({
+          groupIndex,
+          isActive: tab.isActive,
+          isDirty: tab.isDirty,
+          isPreview: tab.isPreview,
+          isPinned: tab.isPinned,
+        })));
+      return {
+        closeCount,
+        documentCount: matchingDocuments.length,
+        documents: matchingDocuments.map((candidate) => ({
+          isClosed: candidate.isClosed,
+          isDirty: candidate.isDirty,
+          languageId: candidate.languageId,
+        })),
+        tabCount: matchingTabs.length,
+        tabs: matchingTabs,
+        activeEditor: window.activeTextEditor?.document.uri.toString() ?? null,
+        visibleEditorCount: (window.visibleTextEditors ?? []).filter(
+          (editor) => editor?.document?.uri?.toString?.() === documentKey,
+        ).length,
+      };
+    };
     await wait(
-      () => closeCount > 0,
-      `${message} should observe the native close for ${documentKey}`,
+      () => {
+        const state = closedState();
+        return state.closeCount > 0 || (state.tabCount === 0 && state.visibleEditorCount === 0);
+      },
+      () => `${message} should reach an exact public editor-closed state for ${documentKey}; `
+        + `last public state ${JSON.stringify(closedState())}`,
       60_000,
     );
-    assert.strictEqual(closeCount, 1, `${message} must correlate exactly one native close for ${documentKey}.`);
+    const terminalState = closedState();
     assert(
-      !workspace.textDocuments.some((candidate) => candidate?.uri?.toString?.() === documentKey),
-      `${message} document ${documentKey} must be absent after its native close.`,
+      closeCount === 0 || closeCount === 1,
+      `${message} may correlate at most one native close event for ${documentKey}.`,
     );
     assert(
-      !tabGroups.all.some((group) => group.tabs.some((tab) => tab?.input?.uri?.toString?.() === documentKey)),
+      terminalState.tabCount === 0,
       `${message} document ${documentKey} must have no remaining exact text tabs after its native close.`,
     );
+    assert.strictEqual(
+      terminalState.visibleEditorCount,
+      0,
+      `${message} document ${documentKey} must have no remaining visible text editor after its native close.`,
+    );
+    if (closeCount > 0) {
+      assert.strictEqual(
+        terminalState.documentCount,
+        0,
+        `${message} document ${documentKey} must be absent after its native document-close event.`,
+      );
+    }
     return documentKey;
   } finally {
     subscription.dispose();

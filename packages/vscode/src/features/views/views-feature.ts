@@ -69,9 +69,24 @@ export const ViewsFeature: ClientFeature = {
       if (refreshDrain != null) return refreshDrain;
       if (!hasDirtyRefresh() || (!view.visible && !forceWhileHidden)) return Promise.resolve();
 
+      // An explicit hidden refresh is one demand for a coherent current
+      // snapshot, not merely permission for its first attempt. Session and
+      // analysis invalidations can supersede that attempt while it is in
+      // flight, so retain the permission until this drain has consumed the
+      // causally requeued work.
+      let drainWhileHidden = forceWhileHidden;
+      forceWhileHidden = false;
+
       const operation = (async () => {
-        while (acceptingRefreshes && hasDirtyRefresh() && (view.visible || forceWhileHidden)) {
-          forceWhileHidden = false;
+        while (
+          acceptingRefreshes
+          && hasDirtyRefresh()
+          && (view.visible || drainWhileHidden || forceWhileHidden)
+        ) {
+          if (forceWhileHidden) {
+            drainWhileHidden = true;
+            forceWhileHidden = false;
+          }
           if (dirtyAll) {
             dirtyAll = false;
             dirtyWorkspaceKeys.clear();

@@ -46,21 +46,27 @@ ext install AureliaEffect.aurelia-2
 The extension analyzes your Aurelia project and provides:
 
 - **Hover** — exact member and local types, resource and alias identity, bindable types and declaration-default modes, selected static route ids or paths, and one concise cursor diagnostic or typed uncertainty
-- **Diagnostics** — unknown elements, missing bindables, binding mismatches — with confidence-based severity so you don't get false positives on valid code
+- **Diagnostics** — source-linked unknown elements and attributes, expression errors, and binding mismatches, with broad
+  or non-actionable uncertainty kept out of Problems
 - **Completions** — elements, attributes, binding commands, expressions, value converters, binding behaviors — scoped to what's actually registered
-- **Go to Definition** — jump from template to source for any Aurelia construct
-- **Find References** — locate all usages of a component or bindable across templates
+- **Go to Definition** — navigate from supported resource, bindable, expression, local, and static route tokens to exact
+  source-backed definitions
+- **Find References** — return verified resource and member usages and report candidates that could not be verified or
+  mapped
 - **Rename** — cross-file rename with safety checks (won't apply partial changes)
 - **Semantic Tokens** — coloring that distinguishes custom elements from HTML, bindables from plain attributes
 - **Aurelia Resources** — browse exact runtime resources in your project from VS Code's Explorer
+- **Contextual explanations** — use native Quick Fixes or Resource Explorer actions to explain eligible diagnostics,
+  uncertain bindings, authored attribute names, resource availability, and policy-controlled analysis limitations
 
-See the [extension README](packages/vscode/README.md) for the full feature list and screenshots.
+See the [extension README](packages/vscode/README.md) for the full feature list and exact invocation points.
 
 ## How It Works
 
-The project is built around a **semantic workspace** that analyzes your Aurelia project — scanning source files, third-party packages, builtins, and configuration — and builds a unified model of every resource, its bindables, its registration scope, and where each piece of knowledge came from.
-
-The language server and the AOT compiler both consume this model. IDE features get their answers from the same analysis that drives compilation, which means hover, diagnostics, and completions all agree with each other and with the build output.
+The VS Code extension's language server opens each admitted project through the shared **Aurelia semantic runtime**. That
+engine owns project discovery, resource inventory and scope, template/compiler projections, diagnostics, explanations,
+coverage, and source evidence. The language server owns synchronized documents and protocol projection; the extension
+owns VS Code lifecycle and native presentation.
 
 When analysis reaches a dynamic or otherwise unresolved boundary, the semantic model records the missing evidence instead of filling the gap. Problems shows only source-linked, actionable findings. Hover keeps any proved identity or type and adds one author-facing uncertainty status only when a typed carrier proves that the gap materially affects that exact selected answer; broad or unmapped pressure stays out of the default UI.
 
@@ -69,7 +75,7 @@ When analysis reaches a dynamic or otherwise unresolved boundary, the semantic m
 | Package | What it does |
 |---------|-------------|
 | `@aurelia-ls/mcp` | Read-only MCP server for semantic-runtime workspace/app queries |
-| `@aurelia-ls/semantic-runtime` | Aurelia semantic substrate used by the MCP release |
+| `@aurelia-ls/semantic-runtime` | Aurelia semantic substrate used by the language server and MCP release |
 | `@aurelia-ls/atlas` | Internal repo/framework navigation and maintenance lenses |
 | `@aurelia-ls/compiler` | Template compiler and project analysis pipeline |
 | `@aurelia-ls/semantic-workspace` | Semantic model, incremental invalidation, and feature query surface |

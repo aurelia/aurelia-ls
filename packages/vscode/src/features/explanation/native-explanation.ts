@@ -1,5 +1,9 @@
 import type { MessageItem, TextDocument } from "vscode";
 import { sameDocumentUri } from "../../core/uri-identity.js";
+import {
+  emitExtensionHostObservation,
+  nextExtensionHostObservationId,
+} from "../../extension-host-observation.js";
 import type { VscodeApi } from "../../vscode-api.js";
 
 export interface ProtocolPositionLike {
@@ -98,11 +102,32 @@ export async function presentNativeExplanation<TStep extends NativeExplanationNe
     .filter(([, steps]) => steps.length === 1)
     .slice(0, 3)
     .map(([stepKey, [step]]) => ({ title: step!.label, stepKey }));
-  const selected = await vscode.window.showInformationMessage<ExplanationButton>(
+  const observationId = nextExtensionHostObservationId("native-explanation");
+  const presentation = vscode.window.showInformationMessage<ExplanationButton>(
     explanation.conclusion.title,
     { modal: true, detail },
     ...buttons,
   );
+  if (observationId != null) {
+    emitExtensionHostObservation({
+      source: "native-explanation",
+      observationId,
+      phase: "modal-requested",
+      title: explanation.conclusion.title,
+      uncertaintyState: explanation.uncertainty.state,
+      buttonCount: buttons.length,
+      modal: true,
+    });
+  }
+  const selected = await presentation;
+  if (observationId != null) {
+    emitExtensionHostObservation({
+      source: "native-explanation",
+      observationId,
+      phase: "modal-settled",
+      selectedStepKey: selected?.stepKey ?? null,
+    });
+  }
   return selected ?? null;
 }
 

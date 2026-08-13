@@ -1163,6 +1163,12 @@ suite("extension-host product surface", () => {
           && normalize(vscode.workspace.workspaceFolders[0].uri.fsPath) === normalize(aureliaWorkspace),
         "the sole-project hierarchy should retire every non-primary workspace folder",
       );
+      const solePrimaryDocument = await showAureliaDocument("src/my-app.html");
+      await waitForWorkspaceAnswer(
+        solePrimaryDocument,
+        aureliaWorkspace,
+        "the retained primary session should settle after non-primary workspace retirement",
+      );
       const solePublication = await refreshResourceExplorer(
         "the sole admitted project should publish without a redundant project root",
         (_complete, nodes) =>
@@ -1215,22 +1221,24 @@ suite("extension-host product surface", () => {
         "the nested off boundary should retire and re-admit its owning session",
         120_000,
       );
+      const lifecycleEnd = await emitResourceDiscoveryControlReset("c2-lifecycle-window-end");
       const excludedDocument = await vscode.workspace.openTextDocument(vscode.Uri.file(
         path.join(excludedAureliaWorkspace, "src", "excluded-view.html"),
       ));
       const plainDocument = await vscode.workspace.openTextDocument(vscode.Uri.file(
         path.join(plainTypeScriptWorkspace, "src", "plain.ts"),
       ));
+      await vscode.window.showTextDocument(excludedDocument, { preview: false });
+      const excludedDiagnosticSettlement = await waitForCurrentDiagnosticProviderSettlement(
+        quietStartIndex,
+        excludedDocument,
+        "the explicitly shown excluded document should settle without diagnostics",
+      );
       const retainedPrimary = await showAureliaDocument("src/my-app.html");
       await waitForWorkspaceAnswer(
         retainedPrimary,
         aureliaWorkspace,
         "unadmitted additions should leave the retained primary session current",
-      );
-      const excludedDiagnosticSettlement = await waitForCurrentDiagnosticProviderSettlement(
-        quietStartIndex,
-        excludedDocument,
-        "the coarse owner provider should settle the excluded document without diagnostics",
       );
       assert.strictEqual(
         excludedDiagnosticSettlement.reportKind,
@@ -1266,13 +1274,19 @@ suite("extension-host product surface", () => {
         quietStartIndex,
         extensionHostObservations.indexOf(quietEnd),
       );
-      const lifecycleInvalidations = quietEvents.filter((event) =>
+      const lifecycleEvents = extensionHostObservations.slice(
+        quietStartIndex,
+        extensionHostObservations.indexOf(lifecycleEnd),
+      );
+      const lifecycleInvalidations = lifecycleEvents.filter((event) =>
         event.source === "resource-explorer-view" && event.phase === "invalidation"
       );
       assert.strictEqual(
         lifecycleInvalidations.length,
         2,
-        `The nested off boundary must retire and re-admit its owning session exactly once; trace ${JSON.stringify(quietEvents)}`,
+        `The nested off boundary must retire and re-admit its owning session exactly once; `
+          + `observed ${lifecycleInvalidations.length} invalidations ${JSON.stringify(lifecycleInvalidations)} `
+          + `across ${lifecycleEvents.length} lifecycle-window events.`,
       );
       const lifecycleObservationId = lifecycleInvalidations[0].observationId;
       assert.match(lifecycleObservationId, /^resource-explorer-view:\d+$/u);
@@ -1370,6 +1384,9 @@ suite("extension-host product surface", () => {
             normalize(folder.uri.fsPath) === normalize(originalFolders[index].uri.fsPath)
           ),
         "the authenticated Resource Discovery root should be restored",
+      );
+      await awaitRoutedSemanticReadinessAndExplorerPublication(
+        "the restored Resource Discovery root should regain routed semantic and Explorer readiness",
       );
       const publication = await refreshResourceExplorer(
         "the authenticated composite corpus should publish a coherent current tree",
@@ -1694,8 +1711,8 @@ suite("extension-host product surface", () => {
     }
   });
 
-  test("navigates the exact Resource Discovery witnesses and adjudicates both native ambiguities", async function() {
-    this.timeout(300_000);
+  test("navigates the exact Resource Discovery declaration witnesses", async function() {
+    this.timeout(420_000);
     const fixture = resourceDiscoveryAcceptance.fixture;
     const baselineNodes = authenticatedBaselineNodes("exact witness navigation");
     const resourceNode = (identityKey, projectKey) => {
@@ -1853,6 +1870,11 @@ suite("extension-host product surface", () => {
       }
     }
 
+  });
+
+  test("adjudicates both native Resource Discovery ambiguities and open coverage", async function() {
+    this.timeout(420_000);
+    const fixture = resourceDiscoveryAcceptance.fixture;
     const ambiguity = fixture.witnesses.projectTemplateAmbiguity;
     for (const project of ambiguity.projects) {
       for (const scope of project.scopes) assertAmbiguityScopeModelPartition(scope);
@@ -1931,8 +1953,17 @@ suite("extension-host product surface", () => {
     const selectableResourceIdentities = assertAmbiguityScopeModelPartition(selectedScope);
     assert.deepStrictEqual(
       selectableResourceIdentities,
-      ["typescript-resource:v1:5EsohJa8ZPz7ZfvI5o74H5"],
-      "The selected exclusion-bearing scope must expose its one exact navigable local resource.",
+      [],
+      "The selected exclusion-bearing scope must not union in a resource from another compiler context.",
+    );
+    assert.strictEqual(
+      ambiguity.excludedAppRootIdentityKey,
+      "typescript-resource:v1:5EsohJa8ZPz7ZfvI5o74H5",
+      "The ambiguity witness must pin the Stage 6D app-root exclusion.",
+    );
+    assert(
+      !selectedScope.resourceIdentityKeys.includes(ambiguity.excludedAppRootIdentityKey),
+      "The selected exact scope must exclude the contextual app-root resource.",
     );
     const templateOrdinal = selectedProject.scopes.indexOf(selectedScope);
     assert(templateOrdinal >= 0, "The selected exclusion-bearing scope must retain its manifest model ordinal.");
@@ -1972,52 +2003,75 @@ suite("extension-host product surface", () => {
     assert.strictEqual(resourceResponse.templateSelection, "exact");
     assert.strictEqual(resourceResponse.resourceCount, selectedScope.rowCount);
     assert.strictEqual(resourceModel.ready.itemCount, selectedScope.selectableRowCount);
-    assert.deepStrictEqual(
-      resourceModel.items.map((item) => ({ itemKind: item.itemKind, label: item.label })),
-      [{ itemKind: "item", label: selectedScope.definitionName }],
-      "The native resource model must contain only the exact selectable local resource.",
+    assert.deepStrictEqual(resourceModel.items, [], "The exact final scope must publish a complete empty model.");
+    assert.strictEqual(
+      resourceModel.ready.placeholder,
+      `No navigable supported resources are available to ${selectedScope.definitionName}`,
     );
-    const resourceOrdinal = exactQuickPickOrdinal(
-      resourceModel,
-      (item) => item.label === selectedScope.definitionName,
-      "manifest-pinned shared-plugin-app resource",
-    );
-    const resourceAccept = await acceptQuickPickOrdinal(flow, resourceModel, resourceOrdinal);
-    const expectedResourceIdentity = selectableResourceIdentities[0];
-    const resourceSelection = await waitForAvailabilitySelection(
-      flow,
-      "resource",
-      5,
-      (event) => event.resourceIdentity === expectedResourceIdentity,
-      extensionHostObservations.indexOf(resourceAccept) + 1,
-    );
-    const resourceOpened = await waitForExtensionHostObservation(
-      extensionHostObservations.indexOf(resourceSelection) + 1,
-      (event) => event.source === "resource-navigation"
-        && event.phase === "opened"
-        && event.resourceIdentity === expectedResourceIdentity
-        && event.role === "resource"
-        && event.placement === "preview",
-      "the sole selectable ambiguity resource should open through real product navigation",
+    assert(resourceModel.ready.title.startsWith(`Resources available to ${selectedScope.definitionName} — `));
+    assert.strictEqual(resourceModel.ready.step, 3);
+    assert.strictEqual(resourceModel.ready.totalSteps, 3);
+    assert.strictEqual(resourceModel.ready.buttonCount, 1, "Only Back may remain actionable in the empty exact scope.");
+
+    const resourceCancelStart = extensionHostObservations.length;
+    void vscode.commands.executeCommand("workbench.action.closeQuickOpen").then(undefined, () => undefined);
+    const resourceCancelled = await waitForExtensionHostObservation(
+      resourceCancelStart,
+      (event) => event.source === "resource-quick-pick"
+        && event.observationId === resourceModel.ready.observationId
+        && event.phase === "cancelled"
+        && event.modelOrdinal === 5,
+      "the complete empty resource model should cancel quietly",
       flow.settled,
-      120_000,
     );
-    const navigationComplete = await waitForExtensionHostObservation(
-      extensionHostObservations.indexOf(resourceOpened) + 1,
-      (event) => event.source === "go-to-available-resource"
-        && event.observationId === resourceSelection.observationId
-        && event.phase === "navigation-complete"
-        && event.status === "opened",
-      "the ambiguity command should correlate the exact opened navigation",
+    const resourceDisposed = await waitForExtensionHostObservation(
+      resourceCancelStart,
+      (event) => event.source === "resource-quick-pick"
+        && event.observationId === resourceModel.ready.observationId
+        && event.phase === "disposed"
+        && event.modelOrdinal === 5,
+      "the cancelled empty resource model should dispose",
       flow.settled,
-      120_000,
     );
+    await settleObservedCommand(flow, "the exact empty-scope ambiguity flow should settle after cancellation");
+    const resourceCommandCancelled = extensionHostObservations.slice(resourceCancelStart).find((event) =>
+      event.source === "go-to-available-resource"
+        && event.observationId === resourceModel.ready.observationId
+        && event.phase === "cancelled"
+        && event.stage === "selection"
+    );
+    assert(resourceCommandCancelled, "The empty exact scope must terminate as a selection-stage cancellation.");
+    const resourceTrace = extensionHostObservations.filter((event) =>
+      event.observationId === resourceModel.ready.observationId
+    );
+    assert.strictEqual(resourceTrace.filter((event) =>
+      event.source === "resource-quick-pick"
+        && event.phase === "accept"
+        && event.modelOrdinal === 5
+    ).length, 0, "The empty exact scope must not accept a resource row.");
+    assert.strictEqual(resourceTrace.filter((event) =>
+      event.source === "go-to-available-resource"
+        && event.phase === "availability-selection"
+        && event.selectionKind === "resource"
+    ).length, 0, "The empty exact scope must not select a resource.");
+    const emptyModelNavigationWindow = extensionHostObservations.slice(
+      extensionHostObservations.indexOf(resourceModel.ready) + 1,
+      extensionHostObservations.indexOf(resourceCommandCancelled),
+    );
+    assert.strictEqual(emptyModelNavigationWindow.filter((event) =>
+      event.source === "resource-navigation"
+        && (event.phase === "start" || event.phase === "opened")
+    ).length, 0, "The empty exact scope must not start or open resource navigation.");
+    assert.strictEqual(resourceTrace.filter((event) =>
+      event.source === "go-to-available-resource" && event.phase === "navigation-complete"
+    ).length, 0, "The empty exact scope must not complete resource navigation.");
     assert(
-      extensionHostObservations.indexOf(resourceSelection) < extensionHostObservations.indexOf(resourceOpened)
-        && extensionHostObservations.indexOf(resourceOpened) < extensionHostObservations.indexOf(navigationComplete),
-      "The ambiguity selection, resource open, and command completion must remain ordered.",
+      extensionHostObservations.indexOf(resourceResponse) < extensionHostObservations.indexOf(resourceModel.ready)
+        && extensionHostObservations.indexOf(resourceModel.ready) < extensionHostObservations.indexOf(resourceCancelled)
+        && extensionHostObservations.indexOf(resourceCancelled) < extensionHostObservations.indexOf(resourceDisposed)
+        && extensionHostObservations.indexOf(resourceDisposed) < extensionHostObservations.indexOf(resourceCommandCancelled),
+      "The exact response, empty model, picker cancellation/disposal, and command cancellation must remain ordered.",
     );
-    await settleObservedCommand(flow, "the exact ambiguity navigation should settle");
 
     resourceDiscoveryEvidence.facts.quickPick.projectModel = {
       ready: projectModel.ready,
@@ -2036,12 +2090,12 @@ suite("extension-host product surface", () => {
     resourceDiscoveryEvidence.facts.quickPick.resourceModel = {
       ready: resourceModel.ready,
       response: resourceResponse,
-      selection: resourceSelection,
-      opened: resourceOpened,
-      completed: navigationComplete,
+      cancelled: resourceCancelled,
+      disposed: resourceDisposed,
+      commandCancelled: resourceCommandCancelled,
       modelOrdinal: 5,
       itemCount: resourceModel.ready.itemCount,
-      selectedResourceIdentity: expectedResourceIdentity,
+      excludedAppRootIdentityKey: ambiguity.excludedAppRootIdentityKey,
     };
     resourceDiscoveryEvidence.facts.quickPick.back = { event: back };
 
@@ -2359,6 +2413,7 @@ suite("extension-host product surface", () => {
           candidates: [{ scopeIdentityKey: race.baseline.scopeIdentityKey }],
           rows: race.baseline.rows,
         },
+        excludedAppRootIdentityKey: race.excludedAppRootIdentityKey,
         controlId: "c2-availability-scope",
         expectedInventoryPresence: "present",
         includedCurrentRow: rightRow,
@@ -2381,6 +2436,7 @@ suite("extension-host product surface", () => {
       assert.strictEqual(templateDocument.getText(), editedTemplate);
       resourceDiscoveryEvidence.facts.navigation.declarationRestart = await runAvailabilityRestartRace({
         baselineResponse: race.scopeEdit.restartWithoutSelection.response,
+        excludedAppRootIdentityKey: race.excludedAppRootIdentityKey,
         controlId: "c2-availability-removed",
         expectedInventoryPresence: "absent",
         includedCurrentRow: leftRow,
@@ -2424,17 +2480,22 @@ suite("extension-host product surface", () => {
             wait: waitFor,
           },
         );
-        const closeInvalidation = await waitForResourceDiscoveryObservation(
-          closeStart,
-          (event) => event.source === "resource-explorer-view"
-            && event.phase === "invalidation"
-            && event.scope === "workspace"
-            && event.workspaceKey === resourceDiscoveryAcceptance.workspaceKey,
-          `closing the ${side} duplicate declaration should settle through a routed semantic invalidation`,
+        const disposed = !vscode.workspace.textDocuments.some(
+          (candidate) => candidate.uri.toString() === document.uri.toString(),
         );
-        await awaitRoutedSemanticReadinessAndExplorerPublication(
-          `availability-race ${side} cleanup after close invalidation ${closeInvalidation.observationId}`,
-        );
+        if (disposed) {
+          const closeInvalidation = await waitForResourceDiscoveryObservation(
+            closeStart,
+            (event) => event.source === "resource-explorer-view"
+              && event.phase === "invalidation"
+              && event.scope === "workspace"
+              && event.workspaceKey === resourceDiscoveryAcceptance.workspaceKey,
+            `disposing the ${side} duplicate declaration should settle through a routed semantic invalidation`,
+          );
+          await awaitRoutedSemanticReadinessAndExplorerPublication(
+            `availability-race ${side} cleanup after close invalidation ${closeInvalidation.observationId}`,
+          );
+        }
       }
     }
   });
@@ -2928,6 +2989,66 @@ suite("extension-host product surface", () => {
     assertResourceDiscoveryFactsReady(resourceDiscoveryEvidence.facts);
     sealResourceDiscoveryAcceptanceEvidence(resourceDiscoveryEvidence.facts);
   });
+
+  test("requests the native modal API for an exact invoked attribute explanation", async () => {
+    const document = await showAureliaDocument("src/my-app.html");
+    const position = positionIn(document, 'value.bind="state.searchText"', "value.bind");
+    const range = new vscode.Range(position, position);
+    let actions = [];
+    await waitFor(async () => {
+      actions = await executeCodeActionProvider(document.uri, range, 1);
+      return actions.some((action) => action.title === "Explain how Aurelia uses this attribute");
+    }, "the exact authored attribute name should offer its invoked explanation action", 120_000);
+
+    const action = actions.find((candidate) => candidate.title === "Explain how Aurelia uses this attribute");
+    assert(action);
+    assert.strictEqual(action.kind?.value ?? action.kind, vscode.CodeActionKind.QuickFix.value);
+    assert.strictEqual(action.isPreferred, false);
+    assert.strictEqual(action.edit, undefined);
+    assert.strictEqual(action.command?.command, "aurelia.explainAttributeInterpretation");
+    assert.strictEqual(action.command.arguments?.length, 1);
+
+    const observationStart = extensionHostObservations.length;
+    let commandOutcome;
+    const command = vscode.commands.executeCommand(
+      action.command.command,
+      ...action.command.arguments,
+    ).then(
+      (value) => {
+        commandOutcome = { status: "fulfilled", value };
+        return value;
+      },
+      (error) => {
+        commandOutcome = { status: "rejected", error: String(error) };
+        return undefined;
+      },
+    );
+    let requested;
+    const modalDeadline = Date.now() + 120_000;
+    while (Date.now() < modalDeadline && requested == null && commandOutcome == null) {
+      requested = extensionHostObservations.slice(observationStart).find((event) =>
+        event.source === "native-explanation" && event.phase === "modal-requested"
+      );
+      if (requested == null) await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    assert(
+      requested,
+      commandOutcome == null
+        ? "The explanation command did not request its native modal before the deadline."
+        : `Explanation command settled before requesting its modal: ${JSON.stringify(commandOutcome)}.`,
+    );
+    assert.strictEqual(requested.title, "Aurelia gives value.bind one runtime effect.");
+    assert.strictEqual(requested.uncertaintyState, "closed");
+    assert.strictEqual(requested.modal, true);
+    assert(Number.isInteger(requested.buttonCount));
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    assert.strictEqual(
+      commandOutcome,
+      undefined,
+      "VS Code Extension Host tests keep a refused modal API request pending until host teardown.",
+    );
+    void command;
+  });
 });
 
 async function authenticateResourceDiscoveryAcceptanceInputs(extension) {
@@ -3115,12 +3236,12 @@ function assertResourceDiscoveryFactsReady(facts) {
   assertExactHostKeys(facts.quickPick.resourceModel, [
     "ready",
     "response",
-    "selection",
-    "opened",
-    "completed",
+    "cancelled",
+    "disposed",
+    "commandCancelled",
     "modelOrdinal",
     "itemCount",
-    "selectedResourceIdentity",
+    "excludedAppRootIdentityKey",
   ]);
   assertExactHostKeys(facts.quickPick.unownedCursor, ["ready", "response"]);
   assertExactHostKeys(facts.quickPick.noCursor, ["ready", "response"]);
@@ -3569,10 +3690,10 @@ async function awaitRoutedSemanticReadinessAndExplorerPublication(message) {
   return await refreshResourceExplorer(
     `${message}: the current Explorer publication should contain both routed duplicate declarations`,
     (_complete, nodes) => witness.rows.every((row) => nodes.some((node) =>
-      node.navigationWorkspaceIdentity === workspaceIdentity
-        && node.navigationProjectKey === witness.projectKey
-        && node.navigationResourceIdentity === row.identityKey
-    )),
+        node.navigationWorkspaceIdentity === workspaceIdentity
+          && node.navigationProjectKey === witness.projectKey
+          && node.navigationResourceIdentity === row.identityKey
+      )),
   );
 }
 
@@ -3839,6 +3960,7 @@ async function replaceUniqueDocumentSubstringAndSave(document, before, after, cu
 async function runAvailabilityRestartRace({
   baselineResponse,
   controlId,
+  excludedAppRootIdentityKey,
   expectedInventoryPresence,
   includedCurrentRow,
   mutate,
@@ -3873,6 +3995,14 @@ async function runAvailabilityRestartRace({
   assert.strictEqual(restartResponse.selection, "exact");
   assert.strictEqual(restartResponse.coverage, "complete");
   const currentSelectableRows = assertAvailabilityModelPartition(restartResponse);
+  assert(
+    !baselineResponse.rows.some((row) => row.identityKey === excludedAppRootIdentityKey),
+    "The Stage 6D contextual app root must not appear as a selectable resource in its own baseline scope.",
+  );
+  assert(
+    !restartResponse.rows.some((row) => row.identityKey === excludedAppRootIdentityKey),
+    "The Stage 6D contextual app root must not appear as a selectable resource after restart.",
+  );
   assert.deepStrictEqual(
     restartResponse.navigationUnavailableIdentityKeys,
     baselineResponse.navigationUnavailableIdentityKeys,
@@ -3886,9 +4016,15 @@ async function runAvailabilityRestartRace({
   assert(currentSelectableRows.some((row) => row.identityKey === includedCurrentRow.identityKey));
   assert(!currentSelectableRows.some((row) => row.identityKey === excludedCurrentRow.identityKey));
 
-  await vscode.window.showTextDocument(templateDocument, { preview: false });
+  const templateEditor = await vscode.window.showTextDocument(templateDocument, { preview: false });
+  await vscode.commands.executeCommand("workbench.action.focusActiveEditorGroup");
+  assert.strictEqual(
+    vscode.window.activeTextEditor?.document.uri.toString(),
+    templateEditor.document.uri.toString(),
+    "The availability command must target the exact requested template editor.",
+  );
   const position = new vscode.Position(templatePosition.line, templatePosition.character);
-  vscode.window.activeTextEditor.selection = new vscode.Selection(position, position);
+  templateEditor.selection = new vscode.Selection(position, position);
   const editorBefore = publicEditorFact();
   const flow = startObservedCommand("aurelia.goToAvailableResource");
   const model = await waitForQuickPickModel(flow, 1);
@@ -3934,8 +4070,8 @@ async function runAvailabilityRestartRace({
     model.items.filter((item) =>
       item.itemKind === "item" && item.label === baselineResponse.selectedTemplate.definitionName
     ).length,
-    1,
-    "The baseline app-root row must complete the exact two-item model.",
+    0,
+    "The contextual app root must remain absent from its own exact one-item baseline model.",
   );
   const targetOrdinal = exactQuickPickOrdinal(
     model,
@@ -4123,8 +4259,8 @@ async function runAvailabilityRestartRace({
     currentModel.items.filter((item) =>
       item.itemKind === "item" && item.label === restartResponse.selectedTemplate.definitionName
     ).length,
-    1,
-    "The current app-root row must complete the exact two-item restarted model.",
+    0,
+    "The contextual app root must remain absent from its own exact one-item restarted model.",
   );
 
   const cancelStart = extensionHostObservations.length;
@@ -4239,7 +4375,7 @@ function resourceIdentityKeysSha256(identityKeys) {
 
 function assertAmbiguityScopeModelPartition(scope) {
   assert.strictEqual(scope.rowCount, scope.resourceIdentityKeys.length);
-  assert.strictEqual(scope.selectableRowCount, 1);
+  assert.strictEqual(scope.selectableRowCount, 0);
   assert(Array.isArray(scope.navigationUnavailableIdentityKeys));
   assert.strictEqual(
     scope.rowCount,
@@ -4264,9 +4400,9 @@ function assertAmbiguityScopeModelPartition(scope) {
 }
 
 function assertAvailabilityModelPartition(response) {
-  assert.strictEqual(response.rowCount, 29);
+  assert.strictEqual(response.rowCount, 28);
   assert.strictEqual(response.rows.length, response.rowCount);
-  assert.strictEqual(response.selectableRowCount, 2);
+  assert.strictEqual(response.selectableRowCount, 1);
   assert(Array.isArray(response.navigationUnavailableIdentityKeys));
   assert.strictEqual(response.navigationUnavailableIdentityKeys.length, 27);
   assert.strictEqual(

@@ -13,9 +13,10 @@ const {
 const path = require("node:path");
 const vscode = require("vscode");
 
-const schemaVersion = "aurelia-ls/installed-vsix-driver-report/v1";
+const schemaVersion = "aurelia-ls/installed-vsix-driver-report/v2";
 const productId = "AureliaEffect.aurelia-2";
 const driverId = "aurelia-ls-tests.installed-vsix-driver";
+const openRelatedFileCommand = "aurelia.openRelatedFile";
 const observationEvent = "aurelia-ls:extension-host-observation";
 const completionAnchor = "state.servicePlans.searchText";
 const completionPrefix = "state.servicePlans.";
@@ -203,6 +204,58 @@ async function run() {
       request: sanitizeObservation(correlated.request),
       response: sanitizeObservation(correlated.response),
     };
+
+    const relatedUri = vscode.Uri.file(environment.relatedPath);
+    const sourceBytesBefore = readFileSync(environment.targetPath);
+    const targetBytesBefore = readFileSync(environment.relatedPath);
+    const targetUnopenedBefore = !vscode.workspace.textDocuments.some((candidate) =>
+      candidate.uri.toString() === relatedUri.toString()
+    );
+    assert.strictEqual(targetUnopenedBefore, true, "The related-file target must be unopened before the custom journey.");
+    const sourceEditor = await vscode.window.showTextDocument(document, { preview: true });
+    assert.strictEqual(sourceEditor.document.uri.toString(), targetUri.toString());
+    await vscode.commands.executeCommand("workbench.action.focusActiveEditorGroup");
+    const activeSourceEditor = vscode.window.activeTextEditor;
+    assert(activeSourceEditor != null, "Open Related File must start from an active source editor.");
+    assert.strictEqual(
+      activeSourceEditor.document.uri.toString(),
+      targetUri.toString(),
+      "Open Related File must start from the exact authored HTML document.",
+    );
+    const sourceDirtyBefore = document.isDirty;
+    assert.strictEqual(sourceDirtyBefore, false, "The completion source must be clean before related-file navigation.");
+    const registeredCommands = await vscode.commands.getCommands(true);
+    const commandRegistered = registeredCommands.filter((command) => command === openRelatedFileCommand).length === 1;
+    assert.strictEqual(commandRegistered, true, `Expected exactly one registered ${openRelatedFileCommand} command.`);
+
+    const commandResult = await vscode.commands.executeCommand(openRelatedFileCommand);
+    assert.strictEqual(commandResult?.ok, true, "The installed Open Related File command must settle successfully.");
+    const activeEditor = vscode.window.activeTextEditor;
+    assert(activeEditor != null, "Open Related File must leave an active editor.");
+    assert.strictEqual(activeEditor.document.uri.toString(), relatedUri.toString());
+    assertSamePath(activeEditor.document.uri.fsPath, environment.relatedPath, "Related-file active editor");
+    assert.strictEqual(activeEditor.document.languageId, "typescript", "The related-file target must be TypeScript.");
+    assert.strictEqual(document.isDirty, false, "Open Related File must not dirty its source document.");
+    assert.strictEqual(activeEditor.document.isDirty, false, "Open Related File must not dirty its target document.");
+    const sourceBytesUnchanged = readFileSync(environment.targetPath).equals(sourceBytesBefore);
+    const targetBytesUnchanged = readFileSync(environment.relatedPath).equals(targetBytesBefore);
+    assert.strictEqual(sourceBytesUnchanged, true, "Open Related File must not change source bytes.");
+    assert.strictEqual(targetBytesUnchanged, true, "Open Related File must not change target bytes.");
+    report.customJourney = {
+      command: openRelatedFileCommand,
+      commandRegistered,
+      resultOk: commandResult.ok,
+      sourceUri: targetUri.toString(),
+      expectedTargetUri: relatedUri.toString(),
+      activeEditorUri: activeEditor.document.uri.toString(),
+      targetLanguageId: activeEditor.document.languageId,
+      targetUnopenedBefore,
+      sourceDirtyBefore,
+      sourceDirtyAfter: document.isDirty,
+      targetDirtyAfter: activeEditor.document.isDirty,
+      sourceBytesUnchanged,
+      targetBytesUnchanged,
+    };
     report.status = "passed";
   } catch (error) {
     caught = error;
@@ -227,6 +280,7 @@ function strictEnvironment(reportPath) {
     reportPath,
     workspaceRoot: requiredEnvironment("AURELIA_LS_INSTALLED_WORKSPACE_ROOT"),
     targetPath: requiredEnvironment("AURELIA_LS_INSTALLED_TARGET_PATH"),
+    relatedPath: requiredEnvironment("AURELIA_LS_INSTALLED_RELATED_PATH"),
     vscodeVersion: requiredEnvironment("AURELIA_LS_INSTALLED_VSCODE_VERSION"),
     productVersion: requiredEnvironment("AURELIA_LS_INSTALLED_PRODUCT_VERSION"),
     productPublisher: requiredEnvironment("AURELIA_LS_INSTALLED_PRODUCT_PUBLISHER"),
@@ -252,14 +306,18 @@ function strictEnvironment(reportPath) {
   assert(/^\d+\.\d+\.\d+$/.test(values.vscodeVersion), "Resolved VS Code version must be exact and numeric.");
   assertInside(path.dirname(values.reportPath), values.workspaceRoot, "Installed workspace");
   assertInside(values.workspaceRoot, values.targetPath, "Installed target");
+  assertInside(values.workspaceRoot, values.relatedPath, "Installed related target");
   assertRegularDirectory(values.workspaceRoot, "Installed workspace");
   assertRegularDirectory(values.extensionsRoot, "Isolated extensions root");
   assertRegularDirectory(values.sourceExtensionRoot, "Source extension root");
   assertRegularDirectory(values.driverRoot, "Inert driver root");
   const targetInfo = lstatSync(values.targetPath);
   assert(!targetInfo.isSymbolicLink() && targetInfo.isFile(), "Installed target must be a regular non-symlink file.");
+  const relatedInfo = lstatSync(values.relatedPath);
+  assert(!relatedInfo.isSymbolicLink() && relatedInfo.isFile(), "Installed related target must be a regular non-symlink file.");
   assertSamePath(realpathSync(values.workspaceRoot), values.workspaceRoot, "Installed workspace");
   assertSamePath(realpathSync(values.targetPath), values.targetPath, "Installed target");
+  assertSamePath(realpathSync(values.relatedPath), values.relatedPath, "Installed related target");
   assertSamePath(realpathSync(values.extensionsRoot), values.extensionsRoot, "Isolated extensions root");
   assertSamePath(realpathSync(values.sourceExtensionRoot), values.sourceExtensionRoot, "Source extension root");
   assertSamePath(realpathSync(values.driverRoot), values.driverRoot, "Inert driver root");
@@ -286,6 +344,7 @@ function emptyReport() {
     },
     completion: null,
     observation: null,
+    customJourney: null,
   };
 }
 

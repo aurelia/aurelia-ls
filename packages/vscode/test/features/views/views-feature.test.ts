@@ -1019,6 +1019,27 @@ describe("ViewsFeature resource inventory lifecycle", () => {
     harness.dispose();
   });
 
+  test("retains a forced hidden demand across a superseded trailing refresh", async () => {
+    const first = deferred<null>();
+    const getResourceInventory = vi.fn()
+      .mockImplementationOnce(() => first.promise)
+      .mockResolvedValue(null);
+    const harness = createHarness({ getResourceInventory });
+
+    const refresh = harness.refreshCommand();
+    await vi.waitFor(() => expect(getResourceInventory).toHaveBeenCalledOnce());
+    harness.fireSessionsChanged();
+    first.resolve(null);
+
+    await refresh;
+    expect(getResourceInventory).toHaveBeenCalledTimes(2);
+    expect(getResourceInventory.mock.calls.map(([options]) => options)).toEqual([
+      { includeTypeSurfaces: true },
+      { includeTypeSurfaces: true },
+    ]);
+    harness.dispose();
+  });
+
   test("does not start a queued refresh after feature disposal", async () => {
     const first = deferred<null>();
     const getResourceInventory = vi.fn()

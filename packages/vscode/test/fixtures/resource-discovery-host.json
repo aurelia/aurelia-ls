@@ -202,6 +202,7 @@
           "character": 10
         }
       },
+      "excludedAppRootIdentityKey": "typescript-resource:v1:5EsohJa8ZPz7ZfvI5o74H5",
       "projectKeys": [
         "host-alpha",
         "host-beta"
@@ -213,8 +214,8 @@
           "scopes": [
             {
               "scopeIdentityKey": "template-resource-scope:v1:kQWeKrSZ95gLvmXbZfgHGV",
-              "rowCount": 36,
-              "selectableRowCount": 1,
+              "rowCount": 35,
+              "selectableRowCount": 0,
               "navigationUnavailableIdentityKeys": [
                 "framework-resource:v1:ao3wTTlYz7gkydrxZPeA8g",
                 "framework-resource:v1:XFZvawNY8tSHKfMrkPYlVR",
@@ -260,7 +261,6 @@
                 "end": 52
               },
               "resourceIdentityKeys": [
-                "typescript-resource:v1:5EsohJa8ZPz7ZfvI5o74H5",
                 "framework-resource:v1:ao3wTTlYz7gkydrxZPeA8g",
                 "framework-resource:v1:XFZvawNY8tSHKfMrkPYlVR",
                 "framework-resource:v1:JmEwA1AmCPgbpnvMLPw58D",
@@ -301,8 +301,8 @@
             },
             {
               "scopeIdentityKey": "template-resource-scope:v1:sYGd8lgb0DmojJtGcGvScL",
-              "rowCount": 28,
-              "selectableRowCount": 1,
+              "rowCount": 27,
+              "selectableRowCount": 0,
               "navigationUnavailableIdentityKeys": [
                 "framework-resource:v1:ao3wTTlYz7gkydrxZPeA8g",
                 "framework-resource:v1:XFZvawNY8tSHKfMrkPYlVR",
@@ -340,7 +340,6 @@
                 "end": 52
               },
               "resourceIdentityKeys": [
-                "typescript-resource:v1:5EsohJa8ZPz7ZfvI5o74H5",
                 "framework-resource:v1:ao3wTTlYz7gkydrxZPeA8g",
                 "framework-resource:v1:XFZvawNY8tSHKfMrkPYlVR",
                 "framework-resource:v1:JmEwA1AmCPgbpnvMLPw58D",
@@ -388,8 +387,8 @@
           "scopes": [
             {
               "scopeIdentityKey": "template-resource-scope:v1:DyenXVI3F4LdZsCEbczI_4",
-              "rowCount": 28,
-              "selectableRowCount": 1,
+              "rowCount": 27,
+              "selectableRowCount": 0,
               "navigationUnavailableIdentityKeys": [
                 "framework-resource:v1:ao3wTTlYz7gkydrxZPeA8g",
                 "framework-resource:v1:XFZvawNY8tSHKfMrkPYlVR",
@@ -427,7 +426,6 @@
                 "end": 52
               },
               "resourceIdentityKeys": [
-                "typescript-resource:v1:5EsohJa8ZPz7ZfvI5o74H5",
                 "framework-resource:v1:ao3wTTlYz7gkydrxZPeA8g",
                 "framework-resource:v1:XFZvawNY8tSHKfMrkPYlVR",
                 "framework-resource:v1:JmEwA1AmCPgbpnvMLPw58D",
@@ -469,8 +467,8 @@
             },
             {
               "scopeIdentityKey": "template-resource-scope:v1:yNEIWOdR2n--gCE9MlTL-T",
-              "rowCount": 36,
-              "selectableRowCount": 1,
+              "rowCount": 35,
+              "selectableRowCount": 0,
               "navigationUnavailableIdentityKeys": [
                 "framework-resource:v1:ao3wTTlYz7gkydrxZPeA8g",
                 "framework-resource:v1:XFZvawNY8tSHKfMrkPYlVR",
@@ -516,7 +514,6 @@
                 "end": 52
               },
               "resourceIdentityKeys": [
-                "typescript-resource:v1:5EsohJa8ZPz7ZfvI5o74H5",
                 "framework-resource:v1:ao3wTTlYz7gkydrxZPeA8g",
                 "framework-resource:v1:XFZvawNY8tSHKfMrkPYlVR",
                 "framework-resource:v1:JmEwA1AmCPgbpnvMLPw58D",
@@ -727,6 +724,20 @@
           "name": "duplicate-card",
           "relativePath": "host-corpus/duplicates/src/resources.ts",
           "publicName": { "start": 364, "end": 378 }
+        },
+        {
+          "identityKey": "typescript-resource:v1:srXE8wFVDRnRIEtD6VbIjD",
+          "kind": "custom-element",
+          "name": "canonical-winner",
+          "relativePath": "host-corpus/duplicates/src/resources.ts",
+          "publicName": { "start": 3023, "end": 3039 }
+        },
+        {
+          "identityKey": "typescript-resource:v1:Y0b7gz-_QxkB9aoja6s220",
+          "kind": "custom-element",
+          "name": "canonical-loser",
+          "relativePath": "host-corpus/duplicates/src/resources.ts",
+          "publicName": { "start": 3178, "end": 3193 }
         },
         {
           "identityKey": "typescript-resource:v1:JEDJ_gZpqPafx0l4u09HwH",
@@ -985,7 +996,7 @@
         "result": "answered",
         "selection": "exact",
         "coverage": "truncated",
-        "rowCount": 28
+        "rowCount": 27
       }
     },
     "openCoverage": {
@@ -1017,7 +1028,7 @@
         "result": "answered",
         "selection": "exact",
         "coverage": "open",
-        "rowCount": 28
+        "rowCount": 27
       }
     },
     "pageDrain": {
@@ -1029,9 +1040,9 @@
       "pageSize": 500,
       "pageRequestCount": 2,
       "generatedResourceCount": 501,
-      "rowCount": 604,
+      "rowCount": 606,
       "completeness": {
-        "fullDefinitions": 599,
+        "fullDefinitions": 601,
         "headerOnly": 5,
         "visibilityOnly": 0,
         "localTemplates": 5,
@@ -1065,13 +1076,14 @@
           "anchorOffset": 264,
           "cursor": { "line": 6, "character": 29 }
         },
+        "excludedAppRootIdentityKey": "typescript-resource:v1:b079pogsRRexNF_ZxBe0Wk",
         "baseline": {
           "projectKey": "host-alpha",
           "result": "answered",
           "selection": "exact",
           "coverage": "complete",
-          "rowCount": 29,
-          "selectableRowCount": 2,
+          "rowCount": 28,
+          "selectableRowCount": 1,
           "navigationUnavailableIdentityKeys": [
             "framework-resource:v1:ao3wTTlYz7gkydrxZPeA8g",
             "framework-resource:v1:XFZvawNY8tSHKfMrkPYlVR",
@@ -1112,7 +1124,6 @@
           },
           "rows": [
             { "identityKey": "typescript-resource:v1:9FI9Lgdc9qpJlcrJE8OVgA", "state": "available", "visibilityKind": "local" },
-            { "identityKey": "typescript-resource:v1:b079pogsRRexNF_ZxBe0Wk", "state": "available", "visibilityKind": "app-root" },
             { "identityKey": "framework-resource:v1:ao3wTTlYz7gkydrxZPeA8g", "state": "available", "visibilityKind": "local" },
             { "identityKey": "framework-resource:v1:XFZvawNY8tSHKfMrkPYlVR", "state": "available", "visibilityKind": "local" },
             { "identityKey": "framework-resource:v1:JmEwA1AmCPgbpnvMLPw58D", "state": "available", "visibilityKind": "local" },
@@ -1167,7 +1178,7 @@
               "start": 264,
               "end": 297
             },
-            "rowCount": 29,
+            "rowCount": 28,
             "removed": {
               "identityKey": "typescript-resource:v1:9FI9Lgdc9qpJlcrJE8OVgA",
               "state": "available",
@@ -1179,7 +1190,6 @@
               "visibilityKind": "local"
             },
             "retainedIdentityKeys": [
-              "typescript-resource:v1:b079pogsRRexNF_ZxBe0Wk",
               "framework-resource:v1:ao3wTTlYz7gkydrxZPeA8g",
               "framework-resource:v1:XFZvawNY8tSHKfMrkPYlVR",
               "framework-resource:v1:JmEwA1AmCPgbpnvMLPw58D",
@@ -1253,9 +1263,9 @@
               "result": "answered",
               "selection": "exact",
               "coverage": "complete",
-              "displayText": "long-suffix-app: 29 available runtime resource(s).",
-              "rowCount": 29,
-              "selectableRowCount": 2,
+              "displayText": "long-suffix-app: 28 available runtime resource(s).",
+              "rowCount": 28,
+              "selectableRowCount": 1,
               "navigationUnavailableIdentityKeys": [
                 "framework-resource:v1:ao3wTTlYz7gkydrxZPeA8g",
                 "framework-resource:v1:XFZvawNY8tSHKfMrkPYlVR",
@@ -1311,7 +1321,6 @@
               ],
               "rows": [
                 { "identityKey": "typescript-resource:v1:azpBidTgEqjH8hleJeG8v2", "state": "available", "visibilityKind": "local" },
-                { "identityKey": "typescript-resource:v1:b079pogsRRexNF_ZxBe0Wk", "state": "available", "visibilityKind": "app-root" },
                 { "identityKey": "framework-resource:v1:ao3wTTlYz7gkydrxZPeA8g", "state": "available", "visibilityKind": "local" },
                 { "identityKey": "framework-resource:v1:XFZvawNY8tSHKfMrkPYlVR", "state": "available", "visibilityKind": "local" },
                 { "identityKey": "framework-resource:v1:JmEwA1AmCPgbpnvMLPw58D", "state": "available", "visibilityKind": "local" },
@@ -1417,9 +1426,9 @@
               "result": "answered",
               "selection": "exact",
               "coverage": "complete",
-              "displayText": "long-suffix-app: 29 available runtime resource(s).",
-              "rowCount": 29,
-              "selectableRowCount": 2,
+              "displayText": "long-suffix-app: 28 available runtime resource(s).",
+              "rowCount": 28,
+              "selectableRowCount": 1,
               "navigationUnavailableIdentityKeys": [
                 "framework-resource:v1:ao3wTTlYz7gkydrxZPeA8g",
                 "framework-resource:v1:XFZvawNY8tSHKfMrkPYlVR",
@@ -1474,7 +1483,6 @@
                 }
               ],
               "rows": [
-                { "identityKey": "typescript-resource:v1:b079pogsRRexNF_ZxBe0Wk", "state": "available", "visibilityKind": "app-root" },
                 { "identityKey": "framework-resource:v1:ao3wTTlYz7gkydrxZPeA8g", "state": "available", "visibilityKind": "local" },
                 { "identityKey": "framework-resource:v1:XFZvawNY8tSHKfMrkPYlVR", "state": "available", "visibilityKind": "local" },
                 { "identityKey": "framework-resource:v1:JmEwA1AmCPgbpnvMLPw58D", "state": "available", "visibilityKind": "local" },

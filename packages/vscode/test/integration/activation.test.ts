@@ -143,10 +143,10 @@ test("keeps contributions stable while workspace sessions come and go", async ()
 
 test("scopes editor context to the active document's owning session", async () => {
   const { vscode: stubVscode, recorded } = createVscodeApi({
-    activeTextEditor: { document: { uri: "placeholder" } },
+    activeTextEditor: { document: { uri: "placeholder", languageId: "html" } },
   });
   stubVscode.window.activeTextEditor = {
-    document: { uri: stubVscode.Uri.parse("file:///workspace/src/app.html") },
+    document: { uri: stubVscode.Uri.parse("file:///workspace/src/app.html"), languageId: "html" },
   };
   const languageClient = new StubLanguageClient(stubProtocolClient());
   const app = createApp(stubVscode, languageClient, []);
@@ -154,34 +154,83 @@ test("scopes editor context to the active document's owning session", async () =
   await app.activate();
   expect(recorded.contextValues.get("aurelia.active")).toBe(true);
   expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(true);
+  expect(recorded.contextValues.get("aurelia.activeTemplateOwned")).toBe(true);
 
   recorded.fireActiveTextEditorChanged({
-    document: { uri: stubVscode.Uri.parse("file:///workspace/golden/generated.ts") },
+    document: { uri: stubVscode.Uri.parse("file:///workspace/golden/generated.html"), languageId: "html" },
   });
   await settleAsyncWork();
   expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(false);
+  expect(recorded.contextValues.get("aurelia.activeTemplateOwned")).toBe(false);
 
   recorded.fireActiveTextEditorChanged({
-    document: { uri: stubVscode.Uri.parse("file:///plain/src/plain.ts") },
+    document: { uri: stubVscode.Uri.parse("file:///workspace/src/app.ts"), languageId: "typescript" },
   });
   await settleAsyncWork();
-  expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(false);
+  expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(true);
+  expect(recorded.contextValues.get("aurelia.activeTemplateOwned")).toBe(false);
 
   recorded.fireActiveTextEditorChanged(undefined);
   await settleAsyncWork();
   expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(false);
+  expect(recorded.contextValues.get("aurelia.activeTemplateOwned")).toBe(false);
 
   recorded.fireActiveTextEditorChanged({
-    document: { uri: stubVscode.Uri.parse("file:///workspace/src/app.html") },
+    document: { uri: stubVscode.Uri.parse("file:///workspace/src/app.html"), languageId: "html" },
   });
   await settleAsyncWork();
   expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(true);
+  expect(recorded.contextValues.get("aurelia.activeTemplateOwned")).toBe(true);
 
   languageClient.setActive(false);
   await settleAsyncWork();
   expect(recorded.contextValues.get("aurelia.active")).toBe(false);
   expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(false);
+  expect(recorded.contextValues.get("aurelia.activeTemplateOwned")).toBe(false);
   await app.deactivate();
+});
+
+test("rejects late template ownership and rechecks active document language-mode lifecycle", async () => {
+  const firstOwnership = deferred<ReturnType<typeof sourceOwnershipResponse>>();
+  const { vscode: stubVscode, recorded } = createVscodeApi({
+    openDocuments: [{
+      uri: "file:///workspace/src/app.html",
+      languageId: "html",
+      text: "<template></template>",
+    }],
+  });
+  const document = stubVscode.workspace.textDocuments[0]!;
+  stubVscode.window.activeTextEditor = { document };
+  const lsp = stubProtocolClient({
+    sourceOwnership: (uri, requestIndex) => requestIndex === 0
+      ? firstOwnership.promise
+      : sourceOwnershipResponse(uri, true, `language-${requestIndex}`),
+  });
+  const languageClient = new StubLanguageClient(lsp);
+  const app = createApp(stubVscode, languageClient, []);
+
+  const activation = app.activate();
+  await vi.waitFor(() => expect(lsp.sendRequestMock).toHaveBeenCalledTimes(1));
+
+  document.languageId = "typescript";
+  firstOwnership.resolve(sourceOwnershipResponse(document.uri.toString(), true, "language-0"));
+  await activation;
+  await settleAsyncWork();
+  expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(false);
+  expect(recorded.contextValues.get("aurelia.activeTemplateOwned")).toBe(false);
+
+  recorded.fireDocumentOpened(document);
+  await vi.waitFor(() => expect(lsp.sendRequestMock).toHaveBeenCalledTimes(2));
+  await vi.waitFor(() => expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(true));
+  expect(recorded.contextValues.get("aurelia.activeTemplateOwned")).toBe(false);
+
+  document.languageId = "html";
+  recorded.fireDocumentClosed(document);
+  await vi.waitFor(() => expect(lsp.sendRequestMock).toHaveBeenCalledTimes(3));
+  await vi.waitFor(() => expect(recorded.contextValues.get("aurelia.activeTemplateOwned")).toBe(true));
+
+  await app.deactivate();
+  expect(recorded.contextValues.get("aurelia.activeTemplateOwned")).toBe(false);
 });
 
 test("treats canonical server and encoded editor URI spellings as one owned document", async () => {
@@ -307,6 +356,7 @@ test("rolls back all owned contributions when activation fails", async () => {
   expect(languageClient.stopCalls).toBe(1);
   expect(recorded.contextValues.get("aurelia.active")).toBe(false);
   expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(false);
+  expect(recorded.contextValues.get("aurelia.activeTemplateOwned")).toBe(false);
 });
 
 test("rolls back earlier state listeners when listener registration fails", async () => {

@@ -1,4 +1,10 @@
-import type { CancellationTokenSource, Disposable, ExtensionContext, LogOutputChannel } from "vscode";
+import type {
+  CancellationTokenSource,
+  Disposable,
+  ExtensionContext,
+  LogOutputChannel,
+  TextDocument,
+} from "vscode";
 import type { AureliaLanguageClient } from "./client-core.js";
 import type { ClientLogger } from "./log.js";
 import type { VscodeApi } from "./vscode-api.js";
@@ -59,7 +65,7 @@ export class ClientApp {
     const { vscode, logger, languageClient, features } = this.#services;
     const errors = new ErrorReporter(logger, vscode);
     try {
-      await setClientContextKeys(vscode, false, false);
+      await setClientContextKeys(vscode, false, false, null);
       await languageClient.start(this.#extension);
 
       const lsp = new LspFacade(languageClient, logger);
@@ -92,10 +98,19 @@ export class ClientApp {
     const synchronizeContext = () => {
       void this.#queueContextTransition(ctx);
     };
+    const synchronizeActiveDocumentContext = (document: TextDocument) => {
+      const activeDocument = ctx.vscode.window.activeTextEditor?.document;
+      if (activeDocument == null || !sameDocumentUri(ctx.vscode, activeDocument.uri, document.uri)) return;
+      synchronizeContext();
+    };
     const subscriptions: Disposable[] = [];
     try {
       subscriptions.push(ctx.languageClient.onDidChangeSessions(synchronizeContext));
       subscriptions.push(ctx.vscode.window.onDidChangeActiveTextEditor(synchronizeContext));
+      // VS Code closes and reopens a document when its language mode changes.
+      // Re-prove the durable template context for that active document.
+      subscriptions.push(ctx.vscode.workspace.onDidOpenTextDocument(synchronizeActiveDocumentContext));
+      subscriptions.push(ctx.vscode.workspace.onDidCloseTextDocument(synchronizeActiveDocumentContext));
       subscriptions.push(ctx.lsp.onAnalysisChanged((payload) => {
         this.#analysisVersions.set(payload.workspace.key, {
           sequence: ++this.#analysisSequence,
@@ -149,6 +164,7 @@ export class ClientApp {
     const active = ctx.languageClient.hasSessions;
     const document = ctx.vscode.window.activeTextEditor?.document;
     const uri = document?.uri.toString() ?? null;
+    const languageId = document?.languageId ?? null;
     const session = document == null ? undefined : ctx.languageClient.sessionForUri(document.uri);
     const workspaceKey = session?.workspace.key ?? null;
     const analysisVersion = workspaceKey == null
@@ -158,8 +174,8 @@ export class ClientApp {
     if (uri != null && session != null) {
       // Never carry a positive answer from a previous editor or topology while
       // the exact server-owned answer for this document is still in flight.
-      await this.#queueContextCommit(ctx, request, uri, session.client, active, false);
-      if (!this.#contextRequestIsCurrent(ctx, request, uri, session.client)) return;
+      await this.#queueContextCommit(ctx, request, uri, languageId, session.client, active, false);
+      if (!this.#contextRequestIsCurrent(ctx, request, uri, languageId, session.client)) return;
       try {
         ownership = await ctx.lsp.getSourceOwnership(uri, cancellation.token);
       } catch (error) {
@@ -169,7 +185,7 @@ export class ClientApp {
       }
     }
 
-    if (!this.#contextRequestIsCurrent(ctx, request, uri, session?.client)) return;
+    if (!this.#contextRequestIsCurrent(ctx, request, uri, languageId, session?.client)) return;
     const latestAnalysis = workspaceKey == null
       ? null
       : this.#analysisVersions.get(workspaceKey) ?? null;
@@ -189,20 +205,29 @@ export class ClientApp {
       && ownership.workspace.key === workspaceKey
       && sameDocumentUri(ctx.vscode, ownership.sourceUri, uri)
       && ownership.owners.length > 0;
-    await this.#queueContextCommit(ctx, request, uri, session?.client, active, documentOwned);
+    await this.#queueContextCommit(
+      ctx,
+      request,
+      uri,
+      languageId,
+      session?.client,
+      active,
+      documentOwned,
+    );
   }
 
   #queueContextCommit(
     ctx: ClientContext,
     request: number,
     uri: string | null,
+    languageId: string | null,
     sessionClient: unknown,
     active: boolean,
     documentOwned: boolean,
   ): Promise<void> {
     const commit = this.#contextCommit.then(async () => {
-      if (!this.#contextRequestIsCurrent(ctx, request, uri, sessionClient)) return;
-      await setClientContextKeys(ctx.vscode, active, documentOwned);
+      if (!this.#contextRequestIsCurrent(ctx, request, uri, languageId, sessionClient)) return;
+      await setClientContextKeys(ctx.vscode, active, documentOwned, languageId);
     });
     this.#contextCommit = commit.catch((error) => {
       ctx.logger.warn(`[client] context commit failed: ${errorMessage(error)}`);
@@ -214,12 +239,14 @@ export class ClientApp {
     ctx: ClientContext,
     request: number,
     uri: string | null,
+    languageId: string | null,
     sessionClient: unknown,
   ): boolean {
     if (request !== this.#contextRequest || this.#ctx !== ctx) return false;
     const document = ctx.vscode.window.activeTextEditor?.document;
     const currentUri = document?.uri.toString() ?? null;
     if (currentUri !== uri) return false;
+    if ((document?.languageId ?? null) !== languageId) return false;
     const currentSession = document == null ? undefined : ctx.languageClient.sessionForUri(document.uri);
     return currentSession?.client === sessionClient;
   }
@@ -256,7 +283,7 @@ export class ClientApp {
       logger.error("[client] language client shutdown failed", undefined, error);
     }
     try {
-      await setClientContextKeys(vscode, false, false);
+      await setClientContextKeys(vscode, false, false, null);
     } catch (error) {
       logger.error("[client] context reset failed", undefined, error);
     }
@@ -297,10 +324,17 @@ function disposeOwned(logger: ClientLogger, owner: string, disposables: readonly
   }
 }
 
-function setClientContextKeys(vscode: VscodeApi, active: boolean, documentOwned: boolean): Promise<unknown[]> {
+function setClientContextKeys(
+  vscode: VscodeApi,
+  active: boolean,
+  documentOwned: boolean,
+  activeDocumentLanguageId: string | null,
+): Promise<unknown[]> {
+  const activeTemplateOwned = documentOwned && activeDocumentLanguageId === "html";
   return Promise.all([
     vscode.commands.executeCommand("setContext", "aurelia.active", active),
     vscode.commands.executeCommand("setContext", "aurelia.documentOwned", documentOwned),
+    vscode.commands.executeCommand("setContext", "aurelia.activeTemplateOwned", activeTemplateOwned),
   ]);
 }
 

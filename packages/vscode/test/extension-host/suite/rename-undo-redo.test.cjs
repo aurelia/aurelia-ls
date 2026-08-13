@@ -613,7 +613,13 @@ async function renameThroughProvider(document, needle, oldName, newName) {
 }
 
 async function runEditorCommand(command, document) {
-  await vscode.window.showTextDocument(document, { preview: false });
+  const editor = await vscode.window.showTextDocument(document, { preview: false });
+  await vscode.commands.executeCommand("workbench.action.focusActiveEditorGroup");
+  assert.strictEqual(
+    vscode.window.activeTextEditor?.document.uri.toString(),
+    editor.document.uri.toString(),
+    `${command} must target the requested active editor`,
+  );
   await vscode.commands.executeCommand(command);
 }
 

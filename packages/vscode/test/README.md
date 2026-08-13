@@ -33,6 +33,15 @@ Guidelines:
   `pnpm test:vscode:extension-host:ipc` only for the focused current-stable
   product/support control. Every process reports and asserts its actual VS Code
   version, selected transport, and shard before loading the journey.
+  The automated attribute-explanation journey proves the exact invoked Quick
+  Fix, hidden command, and production `showInformationMessage` request with
+  `{ modal: true }`, including the engine-owned title and uncertainty, and
+  records a bounded button count. VS Code's Extension Host test environment
+  deliberately refuses modal DialogService rendering and leaves the extension
+  API request pending until host teardown, so this lane does not claim visible
+  rendering, focus, close, or command settlement. Those UI facts require a
+  separate non-test Development Host manual receipt; the product contains no
+  test-only dialog behavior and the harness uses no private close command.
   Keep this suite focused on client-boundary behavior that Vitest stubs cannot
   observe, such as multi-file edit application,
   lazy code-action resolution, undo/redo grouping, dirty state, diagnostics
@@ -144,7 +153,11 @@ Guidelines:
   under `--extensionDevelopmentPath`. The Aurelia extension must be the sole
   installed product, remain outside the source and driver roots, activate from
   its shipping `workspaceContains` event, and return the exact native
-  `searchText` Property/type-member completion. The retained evidence binds the
+  `searchText` Property/type-member completion for a template that was unopened
+  and unshown at driver entry, then opened without being shown before that completion. It then
+  exercises the shipped **Open Related File** command from
+  that template to its exact file-backed TypeScript counterpart and proves that
+  neither document nor either file's bytes were changed. The retained evidence binds the
   installed payload byte-for-byte to the archive receipt, except for VS Code's
   deterministic `package.json` rewrite: all archived fields remain exact, while
   the canonical tab-serialized `__metadata` must carry a timestamp inside the

@@ -84,30 +84,31 @@ const resourceDiscoveryFixtureWitnessIds = Object.freeze([
   "pageDrain",
   "shiftedAndRemovedNavigation",
 ]);
-const ambiguitySelectableResourceIdentity =
+const ambiguityExcludedAppRootIdentity =
   "typescript-resource:v1:5EsohJa8ZPz7ZfvI5o74H5";
+export const openCoverageSelectableResourceCount = 0;
 const ambiguityScopeContracts = Object.freeze({
   "host-alpha": Object.freeze([
     Object.freeze({
       scopeIdentityKey: "template-resource-scope:v1:kQWeKrSZ95gLvmXbZfgHGV",
-      rowCount: 36,
+      rowCount: 35,
       mustExcludeCount: 0,
     }),
     Object.freeze({
       scopeIdentityKey: "template-resource-scope:v1:sYGd8lgb0DmojJtGcGvScL",
-      rowCount: 28,
+      rowCount: 27,
       mustExcludeCount: 8,
     }),
   ]),
   "host-beta": Object.freeze([
     Object.freeze({
       scopeIdentityKey: "template-resource-scope:v1:DyenXVI3F4LdZsCEbczI_4",
-      rowCount: 28,
+      rowCount: 27,
       mustExcludeCount: 8,
     }),
     Object.freeze({
       scopeIdentityKey: "template-resource-scope:v1:yNEIWOdR2n--gCE9MlTL-T",
-      rowCount: 36,
+      rowCount: 35,
       mustExcludeCount: 0,
     }),
   ]),
@@ -2917,7 +2918,11 @@ function validateOpenCoverageTreeFacts(value, context, label) {
     witness.availability.rowCount,
     `${label}.availabilityObserved.resourceCount`,
   );
-  requirePositiveInteger(availability.event.count, `${label}.availabilityObserved.count`);
+  requireEqual(
+    availability.event.count,
+    openCoverageSelectableResourceCount,
+    `${label}.availabilityObserved.count`,
+  );
   context.openCoverageAvailability = availability;
   context.claims.add("open");
 }
@@ -3119,73 +3124,12 @@ function validateQuickPickFacts(value, context) {
     `${label}.templateModel.accept`,
   );
 
-  const resource = validateQuickPickModelFact(
+  const resource = validateAmbiguityEmptyResourceModel(
     facts.resourceModel,
     `${label}.resourceModel`,
     context,
-    "resource",
-  );
-  requireEqual(resource.fact.modelOrdinal, 5, `${label}.resourceModel.modelOrdinal`);
-  requireEqual(
-    resource.fact.itemCount,
-    selectedScope.selectableRowCount,
-    `${label}.resourceModel.itemCount`,
-  );
-  const unavailable = new Set(selectedScope.navigationUnavailableIdentityKeys);
-  const selectableIdentities = selectedScope.resourceIdentityKeys.filter(
-    (identity) => !unavailable.has(identity),
-  );
-  requireArrayEqual(
-    selectableIdentities,
-    [ambiguitySelectableResourceIdentity],
-    `${label}.resourceModel selectable identities`,
-  );
-  requireEqual(
-    resource.fact.selectedResourceIdentity,
-    selectableIdentities[0],
-    `${label}.resourceModel.selectedResourceIdentity`,
-  );
-  requireEqual(resource.items.length, selectedScope.selectableRowCount, `${label}.resourceModel items`);
-  requireEqual(resource.items[0].event.label, selectedScope.definitionName, `${label}.resourceModel item label`);
-  requireNonemptyString(resource.items[0].event.description, `${label}.resourceModel item description`);
-  requireNonemptyString(resource.items[0].event.detail, `${label}.resourceModel item detail`);
-  requireEqual(
-    resource.ready.event.placeholder,
-    "Search resources available to this exact template scope",
-    `${label}.resourceModel.ready.placeholder`,
-  );
-  requireNonemptyString(resource.ready.event.title, `${label}.resourceModel.ready.title`);
-  if (!resource.ready.event.title.startsWith(`Resources available to ${selectedScope.definitionName} — `)) {
-    throw new Error(`${label}.resourceModel.ready.title does not name the selected manifest scope.`);
-  }
-  requireEqual(resource.selection.event.selectionKind, "resource", `${label}.resourceModel.selectionKind`);
-  requireEqual(
-    resource.selection.event.resourceIdentity,
-    resource.fact.selectedResourceIdentity,
-    `${label}.resourceModel.selection.resourceIdentity`,
-  );
-  requireEqual(
-    resource.selection.event.projectKey,
-    project.fact.selectedProjectKey,
-    `${label}.resourceModel.selection.projectKey`,
-  );
-  requireEqual(
-    resource.selection.event.templateScopeIdentity,
-    template.fact.selectedTemplateScopeIdentity,
-    `${label}.resourceModel.selection.templateScopeIdentity`,
-  );
-  const resourceAccept = validateQuickPickAcceptCorrelation(
-    resource,
-    0,
-    context,
-    `${label}.resourceModel.accept`,
-  );
-  validateAmbiguityResourceResponse(
-    resource,
     selectedProject,
     selectedScope,
-    context,
-    `${label}.resourceModel`,
   );
   requireEqual(project.ready.event.observationId, template.ready.event.observationId, `${label} command observation id`);
   requireEqual(project.ready.event.observationId, resource.ready.event.observationId, `${label} command observation id`);
@@ -3203,10 +3147,9 @@ function validateQuickPickFacts(value, context) {
       template.selection,
       resource.response,
       resource.ready,
-      resourceAccept,
-      resource.selection,
-      resource.opened,
-      resource.completed,
+      resource.cancelled,
+      resource.disposed,
+      resource.commandCancelled,
     ],
     `${label} selected flow`,
   );
@@ -3312,14 +3255,92 @@ export function validateQuickPickCancelCorrelation(cancel, availability, context
   requireStrictOrdinalOrder([availability, models[0], cancel], label);
 }
 
-function validateAmbiguityResourceResponse(resource, selectedProject, selectedScope, context, label) {
-  const response = resource.response;
+function validateAmbiguityEmptyResourceModel(value, label, context, selectedProject, selectedScope) {
+  const fact = exactObject(value, [
+    "ready",
+    "response",
+    "cancelled",
+    "disposed",
+    "commandCancelled",
+    "modelOrdinal",
+    "itemCount",
+    "excludedAppRootIdentityKey",
+  ], label);
+  requireEqual(fact.modelOrdinal, 5, `${label}.modelOrdinal`);
+  requireEqual(fact.itemCount, 0, `${label}.itemCount`);
+  requireEqual(
+    fact.excludedAppRootIdentityKey,
+    ambiguityExcludedAppRootIdentity,
+    `${label}.excludedAppRootIdentityKey`,
+  );
+  requireEqual(
+    fact.excludedAppRootIdentityKey,
+    context.fixture.witnesses.projectTemplateAmbiguity.excludedAppRootIdentityKey,
+    `${label}.fixture excludedAppRootIdentityKey`,
+  );
+  const response = resolveLedgerReference(
+    fact.response,
+    `${label}.response`,
+    context,
+    "go-to-available-resource",
+    "initial-request-response",
+  );
+  const ready = resolveLedgerReference(
+    fact.ready,
+    `${label}.ready`,
+    context,
+    "resource-quick-pick",
+    "model-ready",
+  );
+  const cancelled = resolveLedgerReference(
+    fact.cancelled,
+    `${label}.cancelled`,
+    context,
+    "resource-quick-pick",
+    "cancelled",
+  );
+  const disposed = resolveLedgerReference(
+    fact.disposed,
+    `${label}.disposed`,
+    context,
+    "resource-quick-pick",
+    "disposed",
+  );
+  const commandCancelled = resolveLedgerReference(
+    fact.commandCancelled,
+    `${label}.commandCancelled`,
+    context,
+    "go-to-available-resource",
+    "cancelled",
+  );
+  const flowObservationId = ready.event.observationId;
+  for (const [field, record] of Object.entries({ response, cancelled, disposed, commandCancelled })) {
+    requireEqual(record.event.observationId, flowObservationId, `${label}.${field} observationId`);
+  }
+  for (const [field, record] of Object.entries({ ready, cancelled, disposed })) {
+    requireEqual(record.event.modelOrdinal, 5, `${label}.${field}.modelOrdinal`);
+  }
+  requireEqual(commandCancelled.event.stage, "selection", `${label}.commandCancelled.stage`);
+  requireEqual(ready.event.itemCount, 0, `${label}.ready.itemCount`);
+  requireEqual(ready.event.step, 3, `${label}.ready.step`);
+  requireEqual(ready.event.totalSteps, 3, `${label}.ready.totalSteps`);
+  requireEqual(ready.event.buttonCount, 1, `${label}.ready.buttonCount`);
+  requireEqual(
+    ready.event.placeholder,
+    `No navigable supported resources are available to ${selectedScope.definitionName}`,
+    `${label}.ready.placeholder`,
+  );
+  requireNonemptyString(ready.event.title, `${label}.ready.title`);
+  if (!ready.event.title.startsWith(`Resources available to ${selectedScope.definitionName} — `)) {
+    throw new Error(`${label}.ready.title does not name the selected manifest scope.`);
+  }
+
   requireEqual(response.event.answerResult, "answered", `${label}.response.answerResult`);
   requireEqual(response.event.answerCoverage, "complete", `${label}.response.answerCoverage`);
   requireEqual(response.event.answerSelection, "exact", `${label}.response.answerSelection`);
   requireEqual(response.event.projectSelection, "exact", `${label}.response.projectSelection`);
   requireEqual(response.event.templateSelection, "exact", `${label}.response.templateSelection`);
-  requireEqual(response.event.status, "ready", `${label}.response.status`);
+  requireEqual(response.event.status, "empty", `${label}.response.status`);
   requireEqual(response.event.selectedProjectKey, selectedProject.projectKey, `${label}.response.selectedProjectKey`);
   requireEqual(
     response.event.selectedTemplateScopeIdentity,
@@ -3344,47 +3365,49 @@ function validateAmbiguityResourceResponse(resource, selectedProject, selectedSc
     `${label}.response.resourceIdentitySetSha256`,
   );
   requireNonemptyString(response.event.fingerprint, `${label}.response.fingerprint`);
-
-  const opened = resource.opened;
-  requireEqual(opened.event.resourceIdentity, resource.fact.selectedResourceIdentity, `${label}.opened.resourceIdentity`);
-  requireEqual(opened.event.childIdentity, null, `${label}.opened.childIdentity`);
-  requireEqual(opened.event.role, "resource", `${label}.opened.role`);
-  requireEqual(opened.event.placement, "preview", `${label}.opened.placement`);
-  requireEqual(opened.event.requestedFingerprint, response.event.fingerprint, `${label}.opened.requestedFingerprint`);
-  requireEqual(opened.event.currentFingerprint, response.event.fingerprint, `${label}.opened.currentFingerprint`);
-  validateQuickPickCurrentEvidence(resource, selectedProject, selectedScope, context, label);
-  const matchingOpens = context.ledgerRecords.filter((record) => (
-    record.eventOrdinal > resource.selection.eventOrdinal
-      && record.eventOrdinal < resource.completed.eventOrdinal
-      && record.event.source === "resource-navigation"
-      && record.event.phase === "opened"
-      && record.event.resourceIdentity === resource.fact.selectedResourceIdentity
-  ));
-  requireEqual(matchingOpens.length, 1, `${label} exact opened count`);
-  requireEqual(matchingOpens[0].eventOrdinal, opened.eventOrdinal, `${label} exact opened receipt`);
-
-  const sourceRelativePath = context.fixture.witnesses.projectTemplateAmbiguity.relativePath
-    .replace(/\.html$/u, ".ts");
-  const sourcePath = resolve(context.workspaceRoot, ...sourceRelativePath.split("/"));
-  const sourceText = readBoundedRegularFile(
-    sourcePath,
-    32 * 1024 * 1024,
-    `${label} selected resource source`,
-    context.workspaceRoot,
-  ).toString("utf8");
-  const declarationAnchor = `name: '${selectedScope.definitionName}'`;
-  const declarationStart = sourceText.indexOf(declarationAnchor);
-  if (declarationStart < 0 || sourceText.indexOf(declarationAnchor, declarationStart + 1) >= 0) {
-    throw new Error(`${label} selected resource source does not contain one exact public-name anchor.`);
+  requireArrayEqual(selectedScope.resourceIdentityKeys, selectedScope.navigationUnavailableIdentityKeys, `${label} exact unavailable scope`);
+  if (selectedScope.resourceIdentityKeys.includes(fact.excludedAppRootIdentityKey)) {
+    throw new Error(`${label} re-admits the Stage 6D excluded app-root identity.`);
   }
-  const nameStart = declarationStart + "name: '".length;
-  validateOpenedEventLocation(
-    opened.event,
-    sourcePath,
-    { start: nameStart, end: nameStart + selectedScope.definitionName.length },
-    sourceText,
-    `${label}.opened`,
+  const modelItems = context.ledgerRecords.filter((record) => (
+    record.event.source === "resource-quick-pick"
+      && record.event.observationId === flowObservationId
+      && record.event.phase === "model-item"
+      && record.event.modelOrdinal === 5
+  ));
+  requireEqual(modelItems.length, 0, `${label} model-item count`);
+  const accepts = context.ledgerRecords.filter((record) => (
+    record.event.source === "resource-quick-pick"
+      && record.event.observationId === flowObservationId
+      && record.event.phase === "accept"
+      && record.event.modelOrdinal === 5
+  ));
+  requireEqual(accepts.length, 0, `${label} resource accept count`);
+  const resourceSelections = context.ledgerRecords.filter((record) => (
+    record.event.source === "go-to-available-resource"
+      && record.event.observationId === flowObservationId
+      && record.event.phase === "availability-selection"
+      && record.event.selectionKind === "resource"
+  ));
+  requireEqual(resourceSelections.length, 0, `${label} resource selection count`);
+  const navigation = context.ledgerRecords.filter((record) => (
+    record.eventOrdinal > ready.eventOrdinal
+      && record.eventOrdinal < commandCancelled.eventOrdinal
+      && record.event.source === "resource-navigation"
+      && (record.event.phase === "start" || record.event.phase === "opened")
+  ));
+  requireEqual(navigation.length, 0, `${label} resource navigation count`);
+  const navigationCompletions = context.ledgerRecords.filter((record) => (
+    record.event.source === "go-to-available-resource"
+      && record.event.observationId === flowObservationId
+      && record.event.phase === "navigation-complete"
+  ));
+  requireEqual(navigationCompletions.length, 0, `${label} navigation completion count`);
+  requireStrictOrdinalOrder(
+    [response, ready, cancelled, disposed, commandCancelled],
+    `${label} exact empty cancellation flow`,
   );
+  return { fact, response, ready, cancelled, disposed, commandCancelled };
 }
 
 export function validateQuickPickCurrentEvidence(
@@ -5844,6 +5867,7 @@ function validateProjectTemplateAmbiguityWitness(value) {
     "admission",
     "relativePath",
     "source",
+    "excludedAppRootIdentityKey",
     "projectKeys",
     "projects",
   ]);
@@ -5860,6 +5884,11 @@ function validateProjectTemplateAmbiguityWitness(value) {
   const cursor = exactObject(source.cursor, ["line", "character"], `${label}.source.cursor`);
   requireNonNegativeInteger(cursor.line, `${label}.source.cursor.line`);
   requireNonNegativeInteger(cursor.character, `${label}.source.cursor.character`);
+  requireEqual(
+    witness.excludedAppRootIdentityKey,
+    ambiguityExcludedAppRootIdentity,
+    `${label}.excludedAppRootIdentityKey`,
+  );
   requireUniqueStringArray(witness.projectKeys, `${label}.projectKeys`, 2);
   requireObjectArray(witness.projects, `${label}.projects`, witness.projectKeys.length);
   const projectKeys = [];
@@ -5901,7 +5930,7 @@ function validateProjectTemplateAmbiguityWitness(value) {
         `${scopeLabel}.scopeIdentityKey`,
       );
       requireEqual(scope.rowCount, expectedScope.rowCount, `${scopeLabel}.rowCount`);
-      requireEqual(scope.selectableRowCount, 1, `${scopeLabel}.selectableRowCount`);
+      requireEqual(scope.selectableRowCount, 0, `${scopeLabel}.selectableRowCount`);
       requireEqual(
         scope.navigationUnavailableReason,
         "external-catalog",
@@ -5939,14 +5968,17 @@ function validateProjectTemplateAmbiguityWitness(value) {
       const selectable = scope.resourceIdentityKeys.filter((identity) => !unavailable.has(identity));
       requireArrayEqual(
         selectable,
-        [ambiguitySelectableResourceIdentity],
+        [],
         `${scopeLabel} selectable identity partition`,
       );
       requireArrayEqual(
         scope.navigationUnavailableIdentityKeys,
-        scope.resourceIdentityKeys.filter((identity) => identity !== ambiguitySelectableResourceIdentity),
+        scope.resourceIdentityKeys,
         `${scopeLabel}.navigationUnavailableIdentityKeys order`,
       );
+      if (scope.resourceIdentityKeys.includes(ambiguityExcludedAppRootIdentity)) {
+        throw new Error(`${scopeLabel} re-admits the Stage 6D excluded app-root identity.`);
+      }
       requireEqual(
         scope.mustExcludeResourceIdentityKeys.length,
         expectedScope.mustExcludeCount,
@@ -6047,7 +6079,7 @@ function validateCollisionWitness(value) {
     "crossKindRows",
   ]);
   requireEqual(witness.projectKey, "host-alpha", `${label}.projectKey`);
-  requireObjectArray(witness.sameKindRows, `${label}.sameKindRows`, 8);
+  requireObjectArray(witness.sameKindRows, `${label}.sameKindRows`, 10);
   requireObjectArray(witness.aliases, `${label}.aliases`, 4);
   requireObjectArray(witness.crossKindRows, `${label}.crossKindRows`, 6);
   const identities = new Set();
@@ -6269,7 +6301,7 @@ function validateGuardrailWitness(value) {
   requireEqual(witness.excludedDefinitionName, "over-limit", `${label}.excludedDefinitionName`);
   validateAvailabilityReceipt(witness.availability, `${label}.availability`, {
     coverage: "truncated",
-    rowCount: 28,
+    rowCount: 27,
   });
 }
 
@@ -6314,7 +6346,7 @@ function validateOpenCoverageWitness(value) {
   });
   validateAvailabilityReceipt(witness.availability, `${label}.availability`, {
     coverage: "open",
-    rowCount: 28,
+    rowCount: 27,
   });
 }
 
@@ -6341,9 +6373,9 @@ function validatePageDrainWitness(value) {
   requireEqual(witness.pageSize, 500, `${label}.pageSize`);
   requireEqual(witness.pageRequestCount, 2, `${label}.pageRequestCount`);
   requireEqual(witness.generatedResourceCount, 501, `${label}.generatedResourceCount`);
-  requireEqual(witness.rowCount, 604, `${label}.rowCount`);
+  requireEqual(witness.rowCount, 606, `${label}.rowCount`);
   validateCompleteness(witness.completeness, `${label}.completeness`, {
-    fullDefinitions: 599,
+    fullDefinitions: 601,
     headerOnly: 5,
     visibilityOnly: 0,
     localTemplates: 5,
@@ -6421,7 +6453,13 @@ function validateShiftedAndRemovedWitness(value) {
 }
 
 function validateAvailabilityRaceWitness(value, label, removedIdentityKey) {
-  const race = exactObject(value, ["template", "baseline", "scopeEdit", "afterRemoval"], label);
+  const race = exactObject(value, [
+    "template",
+    "excludedAppRootIdentityKey",
+    "baseline",
+    "scopeEdit",
+    "afterRemoval",
+  ], label);
   const template = exactObject(race.template, [
     "relativePath",
     "size",
@@ -6438,6 +6476,13 @@ function validateAvailabilityRaceWitness(value, label, removedIdentityKey) {
   const cursor = exactObject(template.cursor, ["line", "character"], `${label}.template.cursor`);
   requireNonNegativeInteger(cursor.line, `${label}.template.cursor.line`);
   requireNonNegativeInteger(cursor.character, `${label}.template.cursor.character`);
+  // Stage 6D commit 646454bbc made the app subject contextual rather than a selectable
+  // resource in its own compiler scope. Keep the host witness tied to that owner contract.
+  requireEqual(
+    race.excludedAppRootIdentityKey,
+    "typescript-resource:v1:b079pogsRRexNF_ZxBe0Wk",
+    `${label}.excludedAppRootIdentityKey`,
+  );
   const baseline = validateAvailabilitySelectionWitness(
     race.baseline,
     `${label}.baseline`,
@@ -6449,11 +6494,14 @@ function validateAvailabilityRaceWitness(value, label, removedIdentityKey) {
     template.relativePath,
     `${label}.baseline.templateSource.relativePath`,
   );
-  requireObjectArray(baseline.rows, `${label}.baseline.rows`, 29);
+  requireObjectArray(baseline.rows, `${label}.baseline.rows`, 28);
   const baselineIdentities = new Set();
   for (const [index, rowValue] of baseline.rows.entries()) {
     const row = validateAvailabilityIdentityRow(rowValue, `${label}.baseline.rows[${index}]`);
     requireUnique(baselineIdentities, row.identityKey, `${label}.baseline.rows[${index}].identityKey`);
+  }
+  if (baselineIdentities.has(race.excludedAppRootIdentityKey)) {
+    throw new Error(`${label}.baseline.rows must exclude the Stage 6D contextual app-root identity.`);
   }
   validateAvailabilityNavigationCounts(baseline, baseline.rows, `${label}.baseline`);
   const scopeEdit = exactObject(race.scopeEdit, [
@@ -6499,7 +6547,7 @@ function validateAvailabilityRaceWitness(value, label, removedIdentityKey) {
     template.relativePath,
     `${label}.scopeEdit.expectedAvailability.templateSource.relativePath`,
   );
-  requireEqual(expected.rowCount, 29, `${label}.scopeEdit.expectedAvailability.rowCount`);
+  requireEqual(expected.rowCount, 28, `${label}.scopeEdit.expectedAvailability.rowCount`);
   const removed = validateAvailabilityIdentityRow(
     expected.removed,
     `${label}.scopeEdit.expectedAvailability.removed`,
@@ -6548,11 +6596,11 @@ function validateAvailabilityRaceWitness(value, label, removedIdentityKey) {
       requestedProjectKey: null,
       requestedScopeIdentityKey: null,
       selection: "exact",
-      rowCount: 29,
+      rowCount: 28,
       completeness: availabilityCompleteness(30),
       selectedTemplate: expectedScopeCandidate,
       candidate: expectedScopeCandidate,
-      displayText: "long-suffix-app: 29 available runtime resource(s).",
+      displayText: "long-suffix-app: 28 available runtime resource(s).",
       selectableModel: true,
     },
   );
@@ -6574,6 +6622,9 @@ function validateAvailabilityRaceWitness(value, label, removedIdentityKey) {
     JSON.stringify(expectedScopeRows),
     `${label}.scopeEdit.restartWithoutSelection.response.rows`,
   );
+  if (scopeRestart.response.rows.some((row) => row.identityKey === race.excludedAppRootIdentityKey)) {
+    throw new Error(`${label}.scopeEdit restart rows must exclude the Stage 6D contextual app-root identity.`);
+  }
 
   const afterRemoval = exactObject(race.afterRemoval, [
     "inventory",
@@ -6639,11 +6690,11 @@ function validateAvailabilityRaceWitness(value, label, removedIdentityKey) {
       requestedProjectKey: null,
       requestedScopeIdentityKey: null,
       selection: "exact",
-      rowCount: 29,
+      rowCount: 28,
       completeness: availabilityCompleteness(29),
       selectedTemplate: afterRemovalCandidateValue,
       candidate: afterRemovalCandidateValue,
-      displayText: "long-suffix-app: 29 available runtime resource(s).",
+      displayText: "long-suffix-app: 28 available runtime resource(s).",
       selectableModel: true,
     },
   );
@@ -6658,6 +6709,9 @@ function validateAvailabilityRaceWitness(value, label, removedIdentityKey) {
     `${label}.afterRemoval retired/current candidate`,
   );
   const afterRows = afterRemovalRestart.response.rows;
+  if (afterRows.some((row) => row.identityKey === race.excludedAppRootIdentityKey)) {
+    throw new Error(`${label}.afterRemoval restart rows must exclude the Stage 6D contextual app-root identity.`);
+  }
   if (afterRows.some((row) => row.identityKey === removedIdentityKey)) {
     throw new Error(`${label}.afterRemoval restart rows retain the removed identity.`);
   }
@@ -6768,9 +6822,9 @@ function validateAvailabilityResponseWitness(value, label, expected) {
 }
 
 function validateAvailabilityNavigationCounts(value, rows, label) {
-  requireEqual(value.rowCount, 29, `${label}.rowCount`);
+  requireEqual(value.rowCount, 28, `${label}.rowCount`);
   requireEqual(value.rowCount, rows.length, `${label}.rowCount rows`);
-  requireEqual(value.selectableRowCount, 2, `${label}.selectableRowCount`);
+  requireEqual(value.selectableRowCount, 1, `${label}.selectableRowCount`);
   requireUniqueIdentityArray(
     value.navigationUnavailableIdentityKeys,
     `${label}.navigationUnavailableIdentityKeys`,

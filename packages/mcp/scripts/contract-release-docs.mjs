@@ -1,4 +1,4 @@
-import fs from 'node:fs/promises';
+import fs from "node:fs/promises";
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -12,6 +12,7 @@ const workspacePackage = JSON.parse(await readWorkspaceFile('package.json'));
 
 const docs = {
   rootReadme: await readWorkspaceFile('README.md'),
+  gettingStarted: await readWorkspaceFile('docs/getting-started.md'),
   ciWorkflow: await readWorkspaceFile('.github/workflows/ci.yml'),
   readme: await readPackageFile('README.md'),
   release: await readPackageFile('RELEASE.md'),
@@ -26,6 +27,9 @@ expectIncludes(docs.rootReadme, 'Aurelia Patterns', 'Root README should mention 
 expectIncludes(docs.rootReadme, 'bundled Aurelia docs', 'Root README should mention bundled docs grounding.');
 expectIncludes(docs.rootReadme, 'packages/mcp/release-notes/mcp-v0.2.0.md', 'Root README should link the current MCP release notes.');
 expectIncludes(docs.rootReadme, 'pnpm bootstrap:aurelia', 'Root README should document linked Aurelia dependency bootstrap.');
+expectIncludes(docs.gettingStarted, 'MCP Release', 'Getting Started should describe the current MCP release.');
+expectIncludes(docs.gettingStarted, 'mcp-v0.2.0', 'Getting Started should point to the current MCP release tag.');
+expectIncludes(docs.gettingStarted, 'aurelia-ls-mcp-0.2.0.tgz', 'Getting Started should point to the current MCP release tarball.');
 
 if (workspacePackage?.scripts?.['bootstrap:aurelia'] !== 'npm --prefix aurelia ci --ignore-scripts') {
   throw new Error('Root bootstrap:aurelia should install the linked Aurelia dependency closure without lifecycle scripts.');

@@ -116,6 +116,7 @@ describe("installed VSIX release gate", () => {
     expect(host.extensionTestsEnv).not.toHaveProperty("AURELIA_LS_FORCE_IPC_TRANSPORT");
     expect(host.extensionTestsEnv).toMatchObject({
       AURELIA_LS_INSTALLED_PRODUCT_PATH: productPath,
+      AURELIA_LS_INSTALLED_RELATED_PATH: path.join(layout.workspaceRoot, gate.relatedRelativePath),
       AURELIA_LS_EXTENSION_HOST_OBSERVATION: "1",
       AURELIA_LS_EXTENSION_HOST_TAIL_OBSERVATION: "1",
     });
@@ -656,15 +657,18 @@ describe("installed VSIX release gate", () => {
     const gate = await loadGate();
     const root = contractRoot(gate, "validation-");
     const targetPath = path.join(root, "target.html");
+    const relatedPath = path.join(root, "target.ts");
     writeFileSync(targetPath, "${state.servicePlans.searchText}\n");
+    writeFileSync(relatedPath, "export class Target {}\n");
     const productPath = path.join(root, "product");
     mkdirSync(productPath);
-    const report = validDriverReport({ gate, productPath, targetPath, version: "0.5.0" });
+    const report = validDriverReport({ gate, productPath, targetPath, relatedPath, version: "0.5.0" });
     expect(() => gate.validateInstalledDriverReport(report, {
       resolvedVersion: "1.132.0",
       product: { extensionPath: productPath },
       identity: identity("0.5.0"),
       targetPath,
+      relatedPath,
     })).not.toThrow();
 
     const noItems = structuredClone(report);
@@ -674,6 +678,7 @@ describe("installed VSIX release gate", () => {
       product: { extensionPath: productPath },
       identity: identity("0.5.0"),
       targetPath,
+      relatedPath,
     })).toThrow(/no completion items/u);
 
     const reportMutations: Array<(value: any) => void> = [
@@ -685,6 +690,11 @@ describe("installed VSIX release gate", () => {
       (value) => { value.observation.observationId = ""; value.observation.request.observationId = ""; value.observation.response.observationId = ""; },
       (value) => { value.observation.request.documentVersion = 2; },
       (value) => { value.completion.range.start.character += 1; },
+      (value) => { value.customJourney.command = "aurelia.inspectAtCursor"; },
+      (value) => { value.customJourney.commandRegistered = false; },
+      (value) => { value.customJourney.activeEditorUri = pathToFileURL(targetPath).href; },
+      (value) => { value.customJourney.targetUnopenedBefore = false; },
+      (value) => { value.customJourney.sourceBytesUnchanged = false; },
     ];
     for (const mutate of reportMutations) {
       const drifted = structuredClone(report);
@@ -694,6 +704,7 @@ describe("installed VSIX release gate", () => {
         product: { extensionPath: productPath },
         identity: identity("0.5.0"),
         targetPath,
+        relatedPath,
       })).toThrow(/failed validation/u);
     }
 
@@ -849,8 +860,17 @@ describe("installed VSIX release gate", () => {
     expect(suite).not.toMatch(/\bproduct\.extensionMode\b|\bdriver\.extensionMode\b/u);
     expect(suite).toContain("productionClassification: \"inferred-installed-production\"");
     expect(suite).toContain("linkSync(temporaryPath, reportPath)");
+    expect(suite).toContain('const openRelatedFileCommand = "aurelia.openRelatedFile"');
+    const focusSourceIndex = suite.indexOf('vscode.commands.executeCommand("workbench.action.focusActiveEditorGroup")');
+    const reproveSourceIndex = suite.indexOf("activeSourceEditor.document.uri.toString()");
+    const invokeCustomJourneyIndex = suite.indexOf("vscode.commands.executeCommand(openRelatedFileCommand)");
+    expect(focusSourceIndex).toBeGreaterThanOrEqual(0);
+    expect(reproveSourceIndex).toBeGreaterThan(focusSourceIndex);
+    expect(invokeCustomJourneyIndex).toBeGreaterThan(reproveSourceIndex);
     expect(readme).toContain("VS Code 1.91 and current test");
     expect(readme).toContain("using only the inert driver keeps the installed");
+    expect(readme).toContain("Open Related File");
+    expect(readme).toContain("neither document nor either file's bytes were changed");
   });
 
   test("retains split UTF-8 host output without chunk-boundary corruption", async () => {
@@ -1037,9 +1057,10 @@ function installedHarness(gate: any, prefix: string) {
       counts.host += 1;
       const productPath = invocation.extensionTestsEnv.AURELIA_LS_INSTALLED_PRODUCT_PATH;
       const targetPath = invocation.extensionTestsEnv.AURELIA_LS_INSTALLED_TARGET_PATH;
+      const relatedPath = invocation.extensionTestsEnv.AURELIA_LS_INSTALLED_RELATED_PATH;
       writeFileSync(
         invocation.extensionTestsEnv.AURELIA_LS_INSTALLED_REPORT_PATH,
-        `${JSON.stringify(validDriverReport({ gate, productPath, targetPath, version: "0.5.0" }), null, 2)}\n`,
+        `${JSON.stringify(validDriverReport({ gate, productPath, targetPath, relatedPath, version: "0.5.0" }), null, 2)}\n`,
       );
       return { exitCode: 0, signal: null, stdout: "host\n", stderr: "ambient host text\n", error: null };
     },
@@ -1090,7 +1111,7 @@ function installedHarness(gate: any, prefix: string) {
   return { dependencies, layout, testElectronPackagePath, calls: () => ({ ...counts }) };
 }
 
-function validDriverReport({ gate, productPath, targetPath, version }: any) {
+function validDriverReport({ gate, productPath, targetPath, relatedPath, version }: any) {
   const uri = pathToFileURL(targetPath).href;
   const observationId = "installed-completion:1";
   const text = readFileSync(targetPath, "utf8");
@@ -1179,6 +1200,21 @@ function validDriverReport({ gate, productPath, targetPath, version }: any) {
       documentVersion: 1,
       request,
       response,
+    },
+    customJourney: {
+      command: "aurelia.openRelatedFile",
+      commandRegistered: true,
+      resultOk: true,
+      sourceUri: uri,
+      expectedTargetUri: pathToFileURL(relatedPath).href,
+      activeEditorUri: pathToFileURL(relatedPath).href,
+      targetLanguageId: "typescript",
+      targetUnopenedBefore: true,
+      sourceDirtyBefore: false,
+      sourceDirtyAfter: false,
+      targetDirtyAfter: false,
+      sourceBytesUnchanged: true,
+      targetBytesUnchanged: true,
     },
   };
 }
