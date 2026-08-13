@@ -80,6 +80,7 @@ const semanticAppQueryCatalogRows = [
   queryRow(SemanticAppQueryKind.ResourceIssues, 'resources', 'Resource recognition, visibility, or materialization diagnostics.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true }),
   queryRow(SemanticAppQueryKind.ResourceVisibility, 'resources', 'Resource visibility and scope rows for app and template compilation.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true }),
   queryRow(SemanticAppQueryKind.TemplateResourceAvailability, 'resources', 'Effective runtime resources for one exact source/cursor-selected template compiler scope; bindable type surfaces are opt-in.', 'cursor-locus', { requiresCursor: true, supportsTypeSurfaces: true }),
+  queryRow(SemanticAppQueryKind.ResourceAvailabilityExplanation, 'resources', 'Engine-authored causal explanation of canonical-name availability for one exact resource identity in one source/cursor-selected template compiler scope.', 'cursor-locus', { requiresCursor: true }),
   queryRow(SemanticAppQueryKind.TemplateCompilations, 'template', 'Compiled app-runtime and source-selected authoring template rows.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true }),
   queryRow(SemanticAppQueryKind.TemplateCompletions, 'template', 'Template completion candidates at a source cursor.', 'cursor-locus', { pagingKind: 'continuation-cursor', supportsDetail: true, requiresCursor: true, materializationPolicy: 'query-type-projection', minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingObservation }),
   queryRow(SemanticAppQueryKind.TemplateCursorInfo, 'template', 'Semantic template site, resource, bindable, member, and diagnostic context at a source cursor.', 'cursor-locus', { supportsDetail: true, requiresCursor: true, supportsDiagnosticProjection: true, materializationPolicy: 'query-type-projection', minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingObservation }),
@@ -237,9 +238,18 @@ export function semanticAppQueryCatalogShape(
         : {}
     ),
     ...(
-      query.kind === SemanticAppQueryKind.TemplateResourceAvailability
+      (
+        query.kind === SemanticAppQueryKind.TemplateResourceAvailability
+        || query.kind === SemanticAppQueryKind.ResourceAvailabilityExplanation
+      )
       && query.templateResourceScopeIdentityKey != null
         ? { templateResourceScopeIdentityKey: query.templateResourceScopeIdentityKey }
+        : {}
+    ),
+    ...(
+      query.kind === SemanticAppQueryKind.ResourceAvailabilityExplanation
+      && query.resourceIdentityKey != null
+        ? { resourceIdentityKey: query.resourceIdentityKey }
         : {}
     ),
     ...(query.kind !== SemanticAppQueryKind.TemplateReferences || query.includeDeclaration == null ? {} : { includeDeclaration: query.includeDeclaration }),
@@ -274,8 +284,20 @@ export function unsupportedSemanticAppQuerySelectorFields(
   if (
     query.templateResourceScopeIdentityKey != null
     && query.kind !== SemanticAppQueryKind.TemplateResourceAvailability
+    && query.kind !== SemanticAppQueryKind.ResourceAvailabilityExplanation
   ) {
     unsupportedFields.push('templateResourceScopeIdentityKey');
+  }
+  if (
+    query.resourceIdentityKey != null
+    && query.kind !== SemanticAppQueryKind.ResourceAvailabilityExplanation
+  ) {
+    unsupportedFields.push('resourceIdentityKey');
+  } else if (
+    query.kind === SemanticAppQueryKind.ResourceAvailabilityExplanation
+    && (query.resourceIdentityKey == null || query.resourceIdentityKey.length === 0)
+  ) {
+    unsupportedFields.push('resourceIdentityKey(required)');
   }
   if (
     query.frameworkCapability != null

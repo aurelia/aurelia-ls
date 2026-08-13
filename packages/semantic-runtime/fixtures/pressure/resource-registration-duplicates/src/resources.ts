@@ -100,3 +100,13 @@ export class AliasBeforePrimary {}
 
 @customElement({ name: 'primary-after-alias', template: '<template>primary second</template>' })
 export class PrimaryAfterAlias {}
+
+// CustomElementDefinition.register returns after a primary collision, so the declared alias below must not be spent.
+// The contender remains inventory-visible and retains exact canonical-key exclusion evidence only.
+@alias('canonical-loser')
+@customElement({ name: 'canonical-winner', template: '<template>canonical winner</template>' })
+export class CanonicalWinner {}
+
+@alias('surviving-alias')
+@customElement({ name: 'canonical-loser', template: '<template>canonical loser</template>' })
+export class CanonicalLoserWithSkippedAlias {}

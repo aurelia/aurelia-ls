@@ -178,6 +178,10 @@ const semanticAppQuerySchema = z.object({
     .describe('Router overview row-sample size.'),
   cursor: cursorSchema.nullable().optional()
     .describe('Cursor locus for cursor query kinds.'),
+  resourceIdentityKey: z.string().nullable().optional()
+    .describe('Exact resource-inventory identity; required by resource-availability-explanation.'),
+  templateResourceScopeIdentityKey: z.string().nullable().optional()
+    .describe('Exact compiler-scope identity returned by a resource availability query.'),
   frameworkCapability: frameworkCapabilitySchema,
   sourceFile: sourceFileSchema.nullable().optional()
     .describe('Per-query file locus. Check supportsSourceFile in aurelia_app_query_catalog.'),
@@ -270,6 +274,10 @@ export const appQueryInputSchema = {
   queryKind: appQueryKindSchema,
   cursor: cursorSchema.nullable().optional()
     .describe('Cursor locus. Use member token for member-owner type answers.'),
+  resourceIdentityKey: z.string().nullable().optional()
+    .describe('Exact resource-inventory identity; required by resource-availability-explanation.'),
+  templateResourceScopeIdentityKey: z.string().nullable().optional()
+    .describe('Exact compiler-scope identity returned by a resource availability query.'),
   frameworkCapability: frameworkCapabilitySchema,
   sourceFile: sourceFileSchema.nullable().optional()
     .describe('Per-query file scope. Check supportsSourceFile; unsupported returns result=unsupported.'),

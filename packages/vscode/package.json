@@ -138,6 +138,11 @@
         "category": "Aurelia"
       },
       {
+        "command": "aurelia.explainResourceAvailability",
+        "title": "Explain Availability in Active Template",
+        "category": "Aurelia"
+      },
+      {
         "command": "aurelia.refreshResourceExplorer",
         "title": "Refresh",
         "icon": "$(refresh)",
@@ -227,6 +232,11 @@
       ],
       "view/item/context": [
         {
+          "command": "aurelia.explainResourceAvailability",
+          "when": "view == aureliaResourceExplorer && aurelia.documentOwned && editorLangId == html && (viewItem == resource || viewItem == resourceWithImplementation || viewItem == resourceUnavailable)",
+          "group": "availability@1"
+        },
+        {
           "command": "aurelia.openResourceDeclaration",
           "when": "view == aureliaResourceExplorer && (viewItem == resource || viewItem == resourceWithImplementation || viewItem == resourceAlias || viewItem == resourceBindable)",
           "group": "navigation@1"
@@ -271,6 +281,10 @@
         },
         {
           "command": "aurelia.explainBindingUncertainty",
+          "when": "false"
+        },
+        {
+          "command": "aurelia.explainResourceAvailability",
           "when": "false"
         },
         {

@@ -24,8 +24,11 @@ import {
   runtimeResourceKeyForKind,
 } from '../resources/resource-kind.js';
 import type { ResourceDefinitionKind } from '../resources/resource-kind.js';
-import type { TemplateVisibleResource } from '../template/compiler-world-reference.js';
-import { TemplateResourceVisibilityKind } from '../template/compiler-world-reference.js';
+import {
+  sameTemplateVisibleResource,
+  TemplateResourceVisibilityKind,
+  type TemplateVisibleResource,
+} from '../template/compiler-world-reference.js';
 import {
   readVisibleTemplateResourceDefinition,
   readVisibleTemplateResourceHeader,
@@ -319,7 +322,13 @@ export function readSemanticTemplateResourceAvailability(
   }
 
   const selected = requestedScope ?? selectedScopes[0]!;
-  const rows = selected.selection.resource.compilation.compilerWorld.resourceScope.resources
+  const selectedScope = selected.selection.resource.compilation.compilerWorld.resourceScope;
+  const exactLookupWinners = distinctVisibleLookupWinners(selectedScope.lookups.map((lookup) => lookup.winner));
+  // Preserve the established broad-scope presentation order while excluding owner-only and other non-winning rows.
+  const exactWinners = selectedScope.resources.filter((resource) =>
+    exactLookupWinners.some((winner) => sameTemplateVisibleResource(winner, resource))
+  );
+  const rows = exactWinners
     .map((visibleResource) => {
       const resource = inventory.rowForVisibleResource(visibleResource);
       return resource == null
@@ -359,7 +368,20 @@ export function readSemanticTemplateResourceAvailability(
   );
 }
 
-class ResourceInventoryBuilder {
+function distinctVisibleLookupWinners(
+  resources: readonly TemplateVisibleResource[],
+): readonly TemplateVisibleResource[] {
+  const rows: TemplateVisibleResource[] = [];
+  for (const resource of resources) {
+    if (!rows.some((candidate) => sameTemplateVisibleResource(candidate, resource))) {
+      rows.push(resource);
+    }
+  }
+  return rows;
+}
+
+/** @internal Shared exact-identity projection used by bounded resource inquiry families. */
+export class ResourceInventoryBuilder {
   private readonly candidates: ResourceInventoryCandidate[] = [];
   private readonly candidatesByHandle = new Map<string, ResourceInventoryCandidate>();
   private readonly candidatesByFallback = new Map<string, ResourceInventoryCandidate>();
@@ -493,15 +515,25 @@ class ResourceInventoryBuilder {
         this.excludedCompilerSyntax.add(internalResourceKey(syntaxResource));
       }
       for (const visibleResource of compilerWorld.resourceScope.resources) {
-        if (!isInventoryKind(visibleResource.resourceKind)) {
-          this.excludedCompilerSyntax.add(internalResourceKey(visibleResource));
-          continue;
-        }
-        const candidate = this.candidateForVisibleResource(visibleResource);
-        candidate.visibilityRows.push(visibleResource);
-        this.candidateByVisibleResource.set(visibleResource, candidate);
+        this.registerCompilerVisibleResource(visibleResource);
+      }
+      for (const exclusion of compilerWorld.resourceScope.exclusions) {
+        this.registerCompilerVisibleResource(exclusion.winner);
+        this.registerCompilerVisibleResource(exclusion.loser);
       }
     }
+  }
+
+  private registerCompilerVisibleResource(visibleResource: TemplateVisibleResource): void {
+    if (!isInventoryKind(visibleResource.resourceKind)) {
+      this.excludedCompilerSyntax.add(internalResourceKey(visibleResource));
+      return;
+    }
+    const candidate = this.candidateForVisibleResource(visibleResource);
+    if (!candidate.visibilityRows.includes(visibleResource)) {
+      candidate.visibilityRows.push(visibleResource);
+    }
+    this.candidateByVisibleResource.set(visibleResource, candidate);
   }
 
   private applyDefinition(
@@ -580,6 +612,21 @@ class ResourceInventoryBuilder {
       this.registerCandidateHandles(candidate, visibleResource);
       return candidate;
     }
+    // Alias-specific scope/exclusion carriers can retain the underlying resource handles while projecting the
+    // surviving or losing alias as `name`. Reuse the already canonicalized inventory candidate by exact handle;
+    // alias lookup metadata must never manufacture a second top-level resource identity.
+    const handleCandidate = candidateHandleKeys(visibleResource)
+      .map((key) => this.candidatesByHandle.get(key) ?? null)
+      .find((candidate): candidate is ResourceInventoryCandidate => candidate != null);
+    if (handleCandidate != null) {
+      if (handleCandidate.resourceKind !== visibleResource.resourceKind) {
+        throw new Error(
+          `Resource inventory handle for '${handleCandidate.resourceKind}:${handleCandidate.name}' was reused by '${visibleResource.resourceKind}:${visibleResource.name}'.`,
+        );
+      }
+      this.registerCandidateHandles(handleCandidate, visibleResource);
+      return handleCandidate;
+    }
     const candidate = this.candidateFor({
       resourceKind: visibleResource.resourceKind as SemanticResourceInventoryKind,
       name: visibleResource.name,
@@ -647,6 +694,21 @@ class ResourceInventoryBuilder {
   rowForVisibleResource(visibleResource: TemplateVisibleResource): SemanticResourceInventoryRow | null {
     this.collect();
     const candidate = this.candidateByVisibleResource.get(visibleResource) ?? null;
+    return candidate == null ? null : this.rowForCandidate(candidate);
+  }
+
+  /** Public-safe identity for scope discrimination without materializing optional TypeChecker-backed surfaces. */
+  identityKeyForVisibleResource(visibleResource: TemplateVisibleResource): string | null {
+    this.collect();
+    const candidate = this.candidateByVisibleResource.get(visibleResource) ?? null;
+    return candidate == null ? null : this.identityKeyForCandidate(candidate);
+  }
+
+  rowForIdentityKey(identityKey: string): SemanticResourceInventoryRow | null {
+    this.collect();
+    const candidate = this.candidates.find((current) =>
+      this.identityKeyForCandidate(current) === identityKey
+    ) ?? null;
     return candidate == null ? null : this.rowForCandidate(candidate);
   }
 
@@ -1144,12 +1206,16 @@ class ResourceInventoryBuilder {
   }
 }
 
-interface TemplateScopeSelection {
+/** @internal One exact compiler scope selected from a template cursor. */
+export interface TemplateScopeSelection {
   readonly selection: TemplateResourceCursorSelection;
   readonly candidate: SemanticTemplateResourceScopeCandidate;
+  /** Public-safe semantic discriminator used only when multiple worlds otherwise share one scope key. */
+  readonly scopeFingerprint: string;
 }
 
-function templateScopeSelection(
+/** @internal Project a compiler scope without leaking its kernel identities. */
+export function templateScopeSelection(
   emission: AureliaAppWorldProjectEmission,
   store: KernelStore,
   inventory: ResourceInventoryBuilder,
@@ -1177,8 +1243,10 @@ function templateScopeSelection(
     semanticSourceReferenceKey(describeAddress(store, compilerWorld.world.sourceAddressHandle)),
     semanticSourceReferenceKey(describeAddress(store, compilerWorld.resourceScope.sourceAddressHandle)),
   ]);
+  const scopeFingerprint = templateScopeFingerprint(store, inventory, compilerWorld.resourceScope);
   return {
     selection,
+    scopeFingerprint,
     candidate: {
       templateIdentityKey,
       scopeIdentityKey,
@@ -1204,16 +1272,72 @@ function sameDefinitionProduct(
     || (left.productHandle != null && left.productHandle === right.productHandle);
 }
 
-function distinctTemplateScopeSelections(
+/** @internal Keep one stable selection per exact compiler scope. */
+export function distinctTemplateScopeSelections(
   selections: readonly TemplateScopeSelection[],
 ): readonly TemplateScopeSelection[] {
-  const byScope = new Map<string, TemplateScopeSelection>();
+  const grouped = new Map<string, TemplateScopeSelection[]>();
   for (const selection of selections) {
-    byScope.set(selection.candidate.scopeIdentityKey, selection);
+    const rows = grouped.get(selection.candidate.scopeIdentityKey) ?? [];
+    rows.push(selection);
+    grouped.set(selection.candidate.scopeIdentityKey, rows);
+  }
+  const byScope = new Map<string, TemplateScopeSelection>();
+  for (const [baseKey, rows] of grouped) {
+    const byFingerprint = new Map(rows.map((row) => [row.scopeFingerprint, row]));
+    if (byFingerprint.size === 1) {
+      byScope.set(baseKey, rows.at(-1)!);
+      continue;
+    }
+    for (const row of byFingerprint.values()) {
+      const scopeIdentityKey = semanticKey('template-resource-scope-variant', [baseKey, row.scopeFingerprint]);
+      byScope.set(scopeIdentityKey, {
+        ...row,
+        candidate: { ...row.candidate, scopeIdentityKey },
+      });
+    }
   }
   return [...byScope.values()].sort((left, right) =>
     left.candidate.scopeIdentityKey.localeCompare(right.candidate.scopeIdentityKey)
   );
+}
+
+function templateScopeFingerprint(
+  store: KernelStore,
+  inventory: ResourceInventoryBuilder,
+  scope: TemplateResourceCursorSelection['resource']['compilation']['compilerWorld']['resourceScope'],
+): string {
+  const resourceIdentity = (resource: TemplateVisibleResource): string =>
+    inventory.identityKeyForVisibleResource(resource)
+    ?? semanticKey('unprojected-visible-resource', [
+      resource.resourceKind,
+      resource.name,
+      resource.aliases,
+      semanticSourceReferenceKey(describeAddress(store, resource.sourceAddressHandle)),
+    ]);
+  const lookups = scope.lookups.map((lookup) => [
+    lookup.lookupKey,
+    resourceIdentity(lookup.winner),
+    lookup.lane,
+  ]).sort(compareSemanticRows);
+  const exclusions = scope.exclusions.map((exclusion) => [
+    exclusion.reason,
+    [...exclusion.lookupKeys].sort(),
+    resourceIdentity(exclusion.winner),
+    resourceIdentity(exclusion.loser),
+    exclusion.winnerLane,
+    exclusion.loserLane,
+  ]).sort(compareSemanticRows);
+  const blockedLookups = scope.blockedLookups.map((lookup) => [
+    lookup.lookupKey,
+    lookup.lane,
+    semanticSourceReferenceKey(describeAddress(store, lookup.sourceAddressHandle)),
+  ]).sort(compareSemanticRows);
+  return semanticKey('template-resource-scope-content', [lookups, blockedLookups, exclusions]);
+}
+
+function compareSemanticRows(left: readonly unknown[], right: readonly unknown[]): number {
+  return JSON.stringify(left).localeCompare(JSON.stringify(right));
 }
 
 function inventorySources(

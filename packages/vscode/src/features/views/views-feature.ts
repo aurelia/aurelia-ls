@@ -6,6 +6,7 @@ import {
 } from "../../resource-discovery-host-control.js";
 import { openResourceNavigation } from "../resource-discovery/navigation.js";
 import { reviewAnalysisLimitations } from "../analysis-limitations/review.js";
+import { explainResourceAvailability } from "../resource-availability-explanation/resource-availability-explanation.js";
 import {
   ResourceExplorerProvider,
   type ResourceExplorerNavigationAction,
@@ -227,6 +228,21 @@ export const ViewsFeature: ClientFeature = {
     own(ctx.vscode.commands.registerCommand(
       AureliaCommand.OpenResourceToSide,
       (target: unknown) => openTreeResource(target, "beside"),
+    ));
+    own(ctx.vscode.commands.registerCommand(
+      AureliaCommand.ExplainResourceAvailability,
+      (target: unknown) => ctx.errors.capture(
+        "command.explainResourceAvailability",
+        () => explainResourceAvailability(ctx, explorer, target),
+        { notify: false },
+      ).then(async (outcome) => {
+        if (!outcome.ok) {
+          await ctx.vscode.window.showInformationMessage(
+            "Aurelia could not load this resource availability explanation. Try again.",
+          );
+        }
+        return outcome;
+      }),
     ));
     own(ctx.vscode.commands.registerCommand(
       AureliaCommand.RetryResourceProject,

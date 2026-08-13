@@ -100,6 +100,14 @@ const contractSuites = [
     'bindables',
     'open-seams',
   ], 'contract-resource-bindable-boundary-config.mjs', 'Open bindable configuration spreads publish resource reason kinds while avoiding fabricated mode/setter certainty.'),
+  contract('resources', 'fast', [
+    'resources',
+    'api',
+    'mcp',
+    'configuration',
+    'open-seams',
+    'source-address',
+  ], 'contract-resource-availability-explanation.mjs', 'Exact canonical-name resource explanations preserve scope selection, winner/loser causality, configuration facts, and bounded uncertainty.'),
   contract('configuration', 'fast', [
     'configuration',
     'evaluation',

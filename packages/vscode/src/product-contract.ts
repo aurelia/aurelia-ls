@@ -2,6 +2,7 @@
 export const AureliaCommand = {
   ExplainBindingUncertainty: "aurelia.explainBindingUncertainty",
   ExplainFrameworkCapability: "aurelia.explainFrameworkCapability",
+  ExplainResourceAvailability: "aurelia.explainResourceAvailability",
   GoToResource: "aurelia.goToResource",
   GoToAvailableResource: "aurelia.goToAvailableResource",
   OpenResource: "aurelia.openResource",

@@ -487,7 +487,21 @@ function referencesForTemplateResourceScope(
 ): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     containerReferenceReferences(scope.container),
+    ...(scope.parent == null ? [] : [templateResourceScopeReferenceReferences(scope.parent)]),
     ...scope.resources.map(templateVisibleResourceReferences),
+    ...scope.exclusions.map((exclusion) => mergeKernelDetailReferences(
+      templateVisibleResourceReferences(exclusion.winner),
+      templateVisibleResourceReferences(exclusion.loser),
+      kernelRecordReferences(
+        exclusion.winnerKeySourceAddressHandle,
+        exclusion.loserKeySourceAddressHandle,
+      ),
+    )),
+    ...scope.lookups.map((lookup) => mergeKernelDetailReferences(
+      templateVisibleResourceReferences(lookup.winner),
+      kernelRecordReferences(lookup.sourceAddressHandle),
+    )),
+    ...scope.blockedLookups.map((lookup) => kernelRecordReferences(lookup.sourceAddressHandle)),
     ...scope.syntaxResources.map(templateVisibleResourceReferences),
     kernelFieldProvenanceReferences(scope.fieldProvenance),
   );
@@ -508,6 +522,11 @@ function referencesForTemplateResourceResolverService(
   return mergeKernelDetailReferences(
     containerReferenceReferences(service.container),
     ...service.resources.map(templateVisibleResourceReferences),
+    ...service.lookups.map((lookup) => mergeKernelDetailReferences(
+      templateVisibleResourceReferences(lookup.winner),
+      kernelRecordReferences(lookup.sourceAddressHandle),
+    )),
+    ...service.blockedLookups.map((lookup) => kernelRecordReferences(lookup.sourceAddressHandle)),
     kernelFieldProvenanceReferences(service.fieldProvenance),
   );
 }

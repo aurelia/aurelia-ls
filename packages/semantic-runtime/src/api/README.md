@@ -1636,6 +1636,26 @@ choose a project before opening the app and must choose a candidate scope before
 the chosen `scopeIdentityKey` back as `templateResourceScopeIdentityKey`; a stale or unrelated key returns
 `selection: absent` with the current candidates rather than selecting another scope.
 
+`ResourceAvailabilityExplanation` is the causal companion for one exact top-level inventory identity. It requires a
+cursor and `resourceIdentityKey`, accepts `templateResourceScopeIdentityKey` only to adjudicate a returned compiler-
+scope ambiguity, and never falls back from identity to public name. V1 explains only the resource's canonical runtime
+key. Inventory aliases remain definition metadata and are not treated as proof that an alias was effectively registered.
+If a product remains broadly visible through a surviving alias but has an exact exclusion for its canonical key, that
+canonical-key exclusion wins and the explanation reports `shadowed` rather than `available`.
+The answer distinguishes an effective winner, a retained lookup-key exclusion with exact loser/winner witnesses,
+closed framework configuration exclusion, closed not-admission, and admission that remains unknown because typed
+registration/configuration seams or discovery limits can hide the resource. Source discovery truncation and unresolved
+module evidence therefore never produce a closed `not-admitted` conclusion. The engine authors subject, conclusion,
+evidence, uncertainty, currentness, and at most three next steps; clients must not reconstruct causality by joining
+inventory and availability rows. The answer envelope's `analysisBasis` is the sole freshness authority.
+
+Registration-hiding seams are conservative across the selected container chain. Until the substrate carries an exact
+seam-to-resource-key ordering witness, a relevant seam keeps modeled `available` and `shadowed` winners open as well as
+modeled absences. It also keeps a `configured-out` conclusion open: the closed option remains valid evidence about the
+modeled provider, but the seam can still supply the canonical key through another registration. Recognized framework
+registration groups are exempt only where their closed catalog family proves that a residual non-resource DI seam
+cannot publish the requested resource key.
+
 `ResourceDefinitions` exposes converged Aurelia resource definitions recognized from explicit decorators, runtime
 definition objects, static fields, metadata, and project conventions before app-world/compiler visibility is known.
 This is the right query for plugin-library and monorepo package pressure where a package can define resources without

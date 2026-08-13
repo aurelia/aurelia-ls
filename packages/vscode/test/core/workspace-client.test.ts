@@ -1676,6 +1676,63 @@ describe("resource discovery host controls", () => {
 });
 
 describe("LspFacade workspace routing", () => {
+  test("requires the exact source session even when nested workspace sessions share one raw client", async () => {
+    const { vscode } = createVscodeApi();
+    const sharedClient = {
+      sendRequest: vi.fn(async () => ({
+        fingerprint: "nested:explanation",
+        documentVersion: 4,
+        answer: null,
+        result: {
+          status: "refused",
+          refusal: { kind: "subjectAbsent", reason: "the selected resource is no longer present" },
+          contenders: [],
+        },
+      })),
+      onNotification: vi.fn(() => ({ dispose: vi.fn() })),
+    };
+    const parent = {
+      workspace: { key: "file:///work", name: "work", uri: "file:///work" },
+      client: sharedClient,
+    };
+    const nested = {
+      workspace: { key: "file:///work/app", name: "app", uri: "file:///work/app" },
+      client: sharedClient,
+    };
+    const clients = {
+      sessions: [parent, nested],
+      onDidChangeSessions: vi.fn(() => ({ dispose: vi.fn() })),
+      sessionForUri: vi.fn(() => nested),
+    };
+    const { logger } = createTestServices(vscode as unknown as VscodeApi);
+    const facade = new LspFacade(clients as never, logger);
+    const params = {
+      uri: "file:///work/app/src/my-app.html",
+      position: { line: 2, character: 3 },
+      documentVersion: 4,
+      projectKey: "nested-app",
+      resourceIdentityKey: "resource:product-card",
+    };
+    try {
+      await expect(facade.getResourceAvailabilityExplanation(parent.workspace.key, params))
+        .resolves.toBeNull();
+      expect(sharedClient.sendRequest).not.toHaveBeenCalled();
+
+      await expect(facade.getResourceAvailabilityExplanation(nested.workspace.key, params))
+        .resolves.toEqual(expect.objectContaining({
+          fingerprint: "nested:explanation",
+          workspace: nested.workspace,
+        }));
+      expect(sharedClient.sendRequest).toHaveBeenCalledExactlyOnceWith(
+        "aurelia/resourceAvailabilityExplanation",
+        params,
+        undefined,
+      );
+    } finally {
+      facade.dispose();
+    }
+  });
+
   test("dispatches inventory synchronously when no host controller exists", async () => {
     const previousObservation = process.env.AURELIA_LS_EXTENSION_HOST_OBSERVATION;
     const previousAcceptance = process.env.AURELIA_LS_RESOURCE_DISCOVERY_HOST_ACCEPTANCE;
@@ -1788,6 +1845,28 @@ describe("LspFacade workspace routing", () => {
     expect(harness.clients[1]?.sendRequest).toHaveBeenCalledWith(
       "aurelia/bindingUncertaintyExplanation",
       bindingExplanationParams,
+      undefined,
+    );
+
+    const resourceAvailabilityExplanationParams = {
+      uri: "file:///work/b/src/my-app.html",
+      position: { line: 9, character: 6 },
+      documentVersion: 9,
+      projectKey: "file:///work/b:app",
+      resourceIdentityKey: "resource:product-card",
+      templateResourceScopeIdentityKey: "template:my-app",
+    };
+    const resourceAvailabilityExplanation = await facade.getResourceAvailabilityExplanation(
+      "file:///work/b",
+      resourceAvailabilityExplanationParams,
+    );
+    expect(resourceAvailabilityExplanation).toEqual(expect.objectContaining({
+      fingerprint: "file:///work/b:resource-availability-explanation",
+      workspace: expect.objectContaining({ name: "b" }),
+    }));
+    expect(harness.clients[1]?.sendRequest).toHaveBeenCalledWith(
+      "aurelia/resourceAvailabilityExplanation",
+      resourceAvailabilityExplanationParams,
       undefined,
     );
 
@@ -2296,6 +2375,20 @@ function createClientHarness(
               refusal: {
                 kind: "subjectAbsent",
                 reason: "the current source no longer contains that binding",
+              },
+              contenders: [],
+            },
+          };
+        case "aurelia/resourceAvailabilityExplanation":
+          return {
+            fingerprint: `${workspaceUri}:resource-availability-explanation`,
+            documentVersion: (params as { documentVersion: number }).documentVersion,
+            answer: null,
+            result: {
+              status: "refused",
+              refusal: {
+                kind: "subjectAbsent",
+                reason: "the selected resource or template scope is no longer present",
               },
               contenders: [],
             },

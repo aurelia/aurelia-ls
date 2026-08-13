@@ -35,6 +35,7 @@
     "contract:external-package-source-admission": "pnpm build && node scripts/contract-external-package-source-admission.mjs",
     "contract:resource-import-meta-dependencies": "pnpm build && node scripts/contract-resource-import-meta-dependencies.mjs",
     "contract:resource-bindable-boundary-config": "pnpm build && node scripts/contract-resource-bindable-boundary-config.mjs",
+    "contract:resource-availability-explanation": "pnpm build && node scripts/contract-resource-availability-explanation.mjs",
     "contract:evaluation-class-declaration-order": "pnpm build && node scripts/contract-evaluation-class-declaration-order.mjs",
     "contract:expression-object-literal-shorthand": "pnpm build && node scripts/contract-expression-object-literal-shorthand.mjs",
     "contract:expression-branch-narrowing": "pnpm build && node scripts/contract-expression-branch-narrowing.mjs",

@@ -29,7 +29,10 @@ import {
   type CustomElementDefinition,
 } from '../resources/custom-element-definition.js';
 import type { TemplateCompilableResourceDefinition } from '../resources/resource-definition.js';
-import { ResourceDefinitionKind } from '../resources/resource-kind.js';
+import {
+  ResourceDefinitionKind,
+  runtimeResourceKeyForKind,
+} from '../resources/resource-kind.js';
 import {
   nestedInstructionProductHandlesForInstructions,
   SpreadElementPropBindingInstruction,
@@ -137,6 +140,8 @@ export class TemplateResourceScopeReference {
 export type TemplateResourceScopeField =
   | 'container'
   | 'resources'
+  | 'exclusions'
+  | 'parent'
   | 'syntaxResources'
   | 'source';
 
@@ -499,6 +504,72 @@ export class TemplateCompilerSpreadCompileResult {
   }
 }
 
+/** Why one resource contender did not become an effective compiler-visible row. */
+export const enum TemplateResourceScopeExclusionReason {
+  /** The same resource product was already represented by the effective scope. */
+  DuplicateProduct = 'duplicate-product',
+  /** At least one runtime lookup key was already owned by another resource. */
+  LookupKeyConflict = 'lookup-key-conflict',
+}
+
+/** Whether a resource contender belongs to the current scope or an inherited scope. */
+export const enum TemplateResourceScopeLane {
+  /** App-local/current-container or derived preferred resource. */
+  Local = 'local',
+  /** Ancestor-container or parent compiler-world resource. */
+  Inherited = 'inherited',
+}
+
+/** Exact winner-and-loser witness retained when scope composition excludes a contender. */
+export class TemplateResourceScopeExclusion {
+  constructor(
+    readonly reason: TemplateResourceScopeExclusionReason,
+    readonly winnerLane: TemplateResourceScopeLane,
+    readonly loserLane: TemplateResourceScopeLane,
+    /** Exact runtime keys involved in this exclusion. Empty only when product identity alone caused it. */
+    readonly lookupKeys: readonly string[],
+    readonly winner: TemplateVisibleResource,
+    readonly loser: TemplateVisibleResource,
+    /** Best source witness for the winner's exact key. */
+    readonly winnerKeySourceAddressHandle: AddressHandle | null,
+    /** Best source witness for the loser's exact key. */
+    readonly loserKeySourceAddressHandle: AddressHandle | null,
+  ) {}
+}
+
+/** Exact effective owner of one runtime resource lookup key in a compiler scope. */
+export class TemplateResourceScopeLookup {
+  constructor(
+    readonly lookupKey: string,
+    readonly winner: TemplateVisibleResource,
+    readonly lane: TemplateResourceScopeLane,
+    /** Best source witness for this exact effective key. */
+    readonly sourceAddressHandle: AddressHandle | null,
+  ) {}
+}
+
+/** Occupied runtime resource key whose resolver has no statically usable resource target. */
+export class TemplateResourceScopeBlockedLookup {
+  constructor(
+    readonly lookupKey: string,
+    readonly lane: TemplateResourceScopeLane,
+    /** Best source witness for the registration that occupied this key. */
+    readonly sourceAddressHandle: AddressHandle | null,
+  ) {}
+}
+
+/** Effective resources plus the losing contenders retained while composing them. */
+export class TemplateResourceScopeResolution {
+  constructor(
+    readonly resources: readonly TemplateVisibleResource[],
+    readonly exclusions: readonly TemplateResourceScopeExclusion[],
+    /** Exact lookup-key ownership; resource name/alias metadata must not be used to reconstruct it. */
+    readonly lookups: readonly TemplateResourceScopeLookup[],
+    /** Occupied lookup keys that must neither fall through nor be assigned an invented winner. */
+    readonly blockedLookups: readonly TemplateResourceScopeBlockedLookup[] = [],
+  ) {}
+}
+
 /** Resource and syntax-resource scope visible to a template compiler world. */
 export class TemplateResourceScope {
   constructor(
@@ -516,6 +587,14 @@ export class TemplateResourceScope {
     readonly sourceAddressHandle: AddressHandle | null,
     /** Field-level provenance for source facts that matter to explanation or ambiguity. */
     readonly fieldProvenance: readonly FieldProvenance<TemplateResourceScopeField>[] = [],
+    /** Losing contenders and their exact effective winners. */
+    readonly exclusions: readonly TemplateResourceScopeExclusion[] = [],
+    /** Parent compiler resource scope, when this scope was derived. */
+    readonly parent: TemplateResourceScopeReference | null = null,
+    /** Exact effective runtime lookup-key ownership retained from DI and derived-scope composition. */
+    readonly lookups: readonly TemplateResourceScopeLookup[] = [],
+    /** Occupied lookup keys with no statically usable resource target. */
+    readonly blockedLookups: readonly TemplateResourceScopeBlockedLookup[] = [],
   ) {}
 
   toReference(): TemplateResourceScopeReference {
@@ -540,6 +619,10 @@ export class TemplateResourceResolverService {
     readonly container: ContainerReference,
     /** Resource rows visible to this resolver through the current compiler world. */
     readonly resources: readonly TemplateVisibleResource[],
+    /** Exact runtime lookup-key ownership for resolver selection. */
+    readonly lookups: readonly TemplateResourceScopeLookup[],
+    /** Occupied runtime resource keys that must resolve as misses without falling through. */
+    readonly blockedLookups: readonly TemplateResourceScopeBlockedLookup[],
     /** Source address for the resolver registration or lookup. */
     readonly sourceAddressHandle: AddressHandle | null,
     /** Field-level provenance for source facts that matter to explanation or ambiguity. */
@@ -548,23 +631,23 @@ export class TemplateResourceResolverService {
 
   /** Runtime `IResourceResolver.el(container, name)` shape with the container already fixed by this world. */
   el(name: string): TemplateVisibleResource | null {
-    const key = name.toLowerCase();
-    const resource = this.resources.find((candidate) =>
-      candidate.resourceKind === ResourceDefinitionKind.CustomElement
-      && matchesVisibleResourceName(candidate, key)
-    ) ?? null;
-    return resource;
+    const key = runtimeResourceKeyForKind(ResourceDefinitionKind.CustomElement, name.toLowerCase());
+    return key == null || this.blockedLookups.some((lookup) => lookup.lookupKey === key)
+      ? null
+      : this.lookups.find((lookup) => lookup.lookupKey === key)?.winner ?? null;
   }
 
   /** Runtime `IResourceResolver.attr(container, name)` shape with the container already fixed by this world. */
   attr(name: string): TemplateVisibleResource | null {
     const key = name.toLowerCase();
-    const resource = this.resources.find((candidate) =>
-      (candidate.resourceKind === ResourceDefinitionKind.CustomAttribute
-        || candidate.resourceKind === ResourceDefinitionKind.TemplateController)
-      && matchesVisibleResourceName(candidate, key)
-    ) ?? null;
-    return resource;
+    const attributeKey = runtimeResourceKeyForKind(ResourceDefinitionKind.CustomAttribute, key);
+    const controllerKey = runtimeResourceKeyForKind(ResourceDefinitionKind.TemplateController, key);
+    if (this.blockedLookups.some((lookup) =>
+      lookup.lookupKey === attributeKey || lookup.lookupKey === controllerKey
+    )) return null;
+    return this.lookups.find((lookup) =>
+      lookup.lookupKey === attributeKey || lookup.lookupKey === controllerKey
+    )?.winner ?? null;
   }
 
   bindables(definition: CustomElementDefinition): TemplateElementBindablesInfo;
@@ -1123,14 +1206,6 @@ function renderingInstructionIndex(
     instructionsByProduct.set(instruction.productHandle, instruction);
   }
   return new TemplateRenderingInstructionIndex(instructionsByProduct, nestedInstructionProductHandles);
-}
-
-function matchesVisibleResourceName(
-  resource: TemplateVisibleResource,
-  lookupName: string,
-): boolean {
-  return resource.name.toLowerCase() === lookupName
-    || resource.aliases.some((alias) => alias.toLowerCase() === lookupName);
 }
 
 export function templateBindableReferences(

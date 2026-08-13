@@ -13,6 +13,8 @@ import type {
   RenameFromTsResponse,
   ResourceInventoryItem,
   ResourceInventoryResponse,
+  ResourceAvailabilityExplanationParams,
+  ResourceAvailabilityExplanationResponse,
   SourceOwnershipOwner,
   SourceOwnershipResponse,
   TemplateResourceAvailabilityResponse,
@@ -32,6 +34,8 @@ export type {
   RelatedFilesResponse,
   RenameFromTsResponse,
   ResourceInventoryItem,
+  ResourceAvailabilityExplanationParams,
+  ResourceAvailabilityExplanationResponse,
   SourceOwnershipOwner,
   SourceOwnershipResponse,
 };
@@ -94,6 +98,17 @@ export type FrameworkCapabilityExplanationSnapshot = FrameworkCapabilityExplanat
 export type BindingUncertaintyExplanationSnapshot = BindingUncertaintyExplanationResponse & {
   readonly workspace: AureliaWorkspaceIdentity;
 };
+
+export type ResourceAvailabilityExplanationSnapshot = ResourceAvailabilityExplanationResponse & {
+  readonly workspace: AureliaWorkspaceIdentity;
+};
+
+/** Exact Resource Explorer identity used to seed one active-template explanation. */
+export interface ResourceAvailabilityExplanationSubjectRequest {
+  readonly workspaceKey: string;
+  readonly projectKey: string;
+  readonly resourceIdentityKey: string;
+}
 
 export type ResourceNavigationRole = "resource" | "implementation" | "alias" | "bindable";
 

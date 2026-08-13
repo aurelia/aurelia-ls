@@ -218,6 +218,7 @@ export function semanticAppQueryKey(query: SemanticAppQuery): string {
     shapedQuery.includeDeclaration ?? 'default-include-declaration',
     shapedQuery.newName ?? 'no-new-name',
     shapedQuery.templateResourceScopeIdentityKey ?? 'no-template-resource-scope',
+    shapedQuery.resourceIdentityKey ?? 'no-resource-identity',
     shapedQuery.frameworkCapability ?? 'all-framework-capabilities',
     shapedQuery.cursor == null
       ? 'no-cursor'

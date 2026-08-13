@@ -195,20 +195,40 @@ function mapSourceTarget(
   if (source == null) {
     return { state: "absent" };
   }
-  const exact = semanticExactSourceReference(source);
+  let exact: ReturnType<typeof semanticExactSourceReference>;
+  try {
+    exact = semanticExactSourceReference(source);
+  } catch {
+    return { state: "unavailable", reason: "source-range-unavailable" };
+  }
   if (exact == null) {
     return { state: "unavailable", reason: "source-range-unavailable" };
   }
-  const uri = semanticSourceReferenceUri(exact, context.documentUris);
+  let uri: string | null;
+  try {
+    uri = semanticSourceReferenceUri(exact, context.documentUris);
+  } catch {
+    return { state: "unavailable", reason: "source-uri-unavailable" };
+  }
   if (uri == null) {
     return { state: "unavailable", reason: "source-uri-unavailable" };
   }
-  const text = context.lookupText(uri);
+  let text: string | null;
+  try {
+    text = context.lookupText(uri);
+  } catch {
+    return { state: "unavailable", reason: "source-text-unavailable" };
+  }
   if (text == null) {
     return { state: "unavailable", reason: "source-text-unavailable" };
   }
-  const document = TextDocument.create(uri, languageIdForSource(uri), 0, text);
-  const range = semanticSourceRangeForDocument(exact, document);
+  let range: ReturnType<typeof semanticSourceRangeForDocument>;
+  try {
+    const document = TextDocument.create(uri, languageIdForSource(uri), 0, text);
+    range = semanticSourceRangeForDocument(exact, document);
+  } catch {
+    return { state: "unavailable", reason: "source-range-unavailable" };
+  }
   if (range == null) {
     return { state: "unavailable", reason: "source-range-unavailable" };
   }

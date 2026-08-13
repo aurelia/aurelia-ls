@@ -85,6 +85,9 @@ describe("VS Code product contract", () => {
     expect(AureliaCommand.ExplainBindingUncertainty).toBe(
       AureliaProtocolCommand.ExplainBindingUncertainty,
     );
+    expect(AureliaCommand.ExplainResourceAvailability).toBe(
+      AureliaProtocolCommand.ExplainResourceAvailability,
+    );
     expect(manifest.contributes?.commands).toContainEqual({
       command: AureliaCommand.ExplainFrameworkCapability,
       title: "Explain Diagnostic",
@@ -93,6 +96,11 @@ describe("VS Code product contract", () => {
     expect(manifest.contributes?.commands).toContainEqual({
       command: AureliaCommand.ExplainBindingUncertainty,
       title: "Explain Binding",
+      category: "Aurelia",
+    });
+    expect(manifest.contributes?.commands).toContainEqual({
+      command: AureliaCommand.ExplainResourceAvailability,
+      title: "Explain Availability in Active Template",
       category: "Aurelia",
     });
   });
@@ -192,6 +200,11 @@ describe("VS Code product contract", () => {
     const context = manifest.contributes?.menus?.["view/item/context"] ?? [];
     const navigable = "view == aureliaResourceExplorer && (viewItem == resource || viewItem == resourceWithImplementation || viewItem == resourceAlias || viewItem == resourceBindable)";
     expect(context).toEqual([
+      {
+        command: AureliaCommand.ExplainResourceAvailability,
+        when: "view == aureliaResourceExplorer && aurelia.documentOwned && editorLangId == html && (viewItem == resource || viewItem == resourceWithImplementation || viewItem == resourceUnavailable)",
+        group: "availability@1",
+      },
       { command: AureliaCommand.OpenResourceDeclaration, when: navigable, group: "navigation@1" },
       {
         command: AureliaCommand.OpenResourceImplementation,
@@ -213,6 +226,7 @@ describe("VS Code product contract", () => {
     for (const command of [
       AureliaCommand.ExplainBindingUncertainty,
       AureliaCommand.ExplainFrameworkCapability,
+      AureliaCommand.ExplainResourceAvailability,
       AureliaCommand.OpenResourceDeclaration,
       AureliaCommand.OpenResourceImplementation,
       AureliaCommand.OpenResourceToSide,
@@ -226,6 +240,11 @@ describe("VS Code product contract", () => {
       if (menuName === "commandPalette") continue;
       expect(entries).not.toContainEqual(expect.objectContaining({
         command: AureliaCommand.ExplainBindingUncertainty,
+      }));
+    }
+    for (const menuName of ["view/title", "editor/context"]) {
+      expect(manifest.contributes?.menus?.[menuName]).not.toContainEqual(expect.objectContaining({
+        command: AureliaCommand.ExplainResourceAvailability,
       }));
     }
     expect(manifest.contributes?.keybindings).toBeUndefined();

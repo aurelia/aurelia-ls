@@ -39,6 +39,7 @@ import {
   type SemanticBindingUncertaintyExplanation,
   type SemanticFrameworkCapabilityDemandRow,
   type SemanticFrameworkCapabilityExplanation,
+  type SemanticResourceAvailabilityExplanation,
   type SemanticRuntimeAnswer,
   type SemanticRuntimeAppQueryBatchResult,
   type SemanticRuntimeContinuationRow,
@@ -299,7 +300,7 @@ function semanticAppQueryContinuationRows(
   addBindingDiagnosticExplanationContinuations(query, result, seeds);
   addTemplateContinuations(query, seeds, sourceFile, page);
   addRouterContinuations(query, seeds, page);
-  addResourceContinuations(query, seeds, page);
+  addResourceContinuations(query, result, seeds, page);
   addObservationContinuations(query, seeds, page);
   addBindingContinuations(query, result, seeds, sourceFile, page);
   addRenderingContinuations(query, seeds, page);
@@ -855,6 +856,7 @@ function addRouterContinuations(
 
 function addResourceContinuations(
   query: SemanticAppQuery,
+  result: SemanticRuntimeAnswer<unknown>,
   seeds: ContinuationSeed[],
   page: SemanticRuntimePageInput,
 ): void {
@@ -941,6 +943,51 @@ function addResourceContinuations(
         ),
       );
       break;
+    case SemanticAppQueryKind.ResourceAvailabilityExplanation: {
+      const explanation = resourceAvailabilityExplanationValue(result.value);
+      seeds.push(inspect(
+        'Inspect the complete project resource inventory behind this exact resource identity.',
+        rowQuery(SemanticAppQueryKind.ResourceInventory, query, page),
+      ));
+      if (query.cursor != null) {
+        seeds.push(withSourceReferences(
+          inspect(
+            'Inspect the complete effective resource scope behind this explanation.',
+            {
+              kind: SemanticAppQueryKind.TemplateResourceAvailability,
+              cursor: query.cursor,
+              templateResourceScopeIdentityKey: explanation?.subject.template.scopeIdentityKey
+                ?? query.templateResourceScopeIdentityKey,
+            },
+          ),
+          explanation == null
+            ? []
+            : [
+                explanation.evidence.availabilitySource,
+                explanation.evidence.exclusion?.contenderSource ?? null,
+                explanation.evidence.exclusion?.winnerSource ?? null,
+                ...explanation.evidence.configuration.sources,
+          ],
+        ));
+      }
+      const blockerSources = explanation?.evidence.blockers.flatMap((blocker) => blocker.sources) ?? [];
+      const blockerSource = blockerSources
+        .map(semanticExactSourceReference)
+        .find((source) => source?.path != null) ?? null;
+      if (blockerSource?.path != null) {
+        seeds.push(withSourceReferences(
+          inspect(
+            'Inspect the authored open semantic sites that keep this availability explanation uncertain.',
+            withSourceFile(
+              rowQuery(SemanticAppQueryKind.OpenSeamSites, query, page),
+              { filePath: blockerSource.path },
+            ),
+          ),
+          blockerSources,
+        ));
+      }
+      break;
+    }
   }
 }
 
@@ -1427,6 +1474,24 @@ function bindingUncertaintyExplanationValue(
     return null;
   }
   return value.explanation as SemanticBindingUncertaintyExplanation;
+}
+
+function resourceAvailabilityExplanationValue(
+  value: unknown,
+): SemanticResourceAvailabilityExplanation | null {
+  if (
+    value == null
+    || typeof value !== 'object'
+    || !('explanation' in value)
+    || value.explanation == null
+    || typeof value.explanation !== 'object'
+    || !('subject' in value.explanation)
+    || !('evidence' in value.explanation)
+    || !('uncertainty' in value.explanation)
+  ) {
+    return null;
+  }
+  return value.explanation as SemanticResourceAvailabilityExplanation;
 }
 
 function addIssueContinuations(

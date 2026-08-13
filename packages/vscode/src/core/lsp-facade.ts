@@ -7,6 +7,8 @@ import {
   type BindingUncertaintyExplanationResponse,
   type FrameworkCapabilityExplanationParams,
   type FrameworkCapabilityExplanationResponse,
+  type ResourceAvailabilityExplanationParams,
+  type ResourceAvailabilityExplanationResponse,
   type ResourceInventoryParams,
   type ResourceInventoryResponse,
   type SourceOwnershipResponse,
@@ -28,6 +30,7 @@ import type {
   RelatedFilesResponse,
   RenameFromTsResponse,
   ResourceInventorySnapshot,
+  ResourceAvailabilityExplanationSnapshot,
   SourceOwnershipSnapshot,
   TemplateResourceAvailabilitySnapshot,
   AnalysisChangedPayload,
@@ -246,6 +249,23 @@ export class LspFacade implements Disposable {
     const response = await this.#sendRequest<BindingUncertaintyExplanationResponse>(
       session,
       AureliaProtocolRequest.BindingUncertaintyExplanation,
+      params,
+      token,
+    );
+    return { ...response, workspace: session.workspace };
+  }
+
+  async getResourceAvailabilityExplanation(
+    workspaceKey: string,
+    params: ResourceAvailabilityExplanationParams,
+    token?: CancellationToken,
+  ): Promise<ResourceAvailabilityExplanationSnapshot | null> {
+    const session = this.#clients.sessions.find((candidate) => candidate.workspace.key === workspaceKey);
+    const sourceSession = this.#sessionForUri(params.uri);
+    if (session == null || sourceSession !== session) return null;
+    const response = await this.#sendRequest<ResourceAvailabilityExplanationResponse>(
+      session,
+      AureliaProtocolRequest.ResourceAvailabilityExplanation,
       params,
       token,
     );

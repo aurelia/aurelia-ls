@@ -26,6 +26,9 @@ new Aurelia()
   .register(
     StandardConfiguration,
     coreOnlyValidation,
+    // The closed option still excludes validation-errors, while this unknown registry keeps effective canonical
+    // availability open until registration ordering/key evidence can prove that it cannot provide the same key.
+    UnknownRegistry,
   )
   .app({
     host: document.body,

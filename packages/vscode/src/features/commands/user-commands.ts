@@ -41,6 +41,7 @@ import {
   resourceQuickPickDetail,
   resourceSourceLocationScent,
   sourceLabel,
+  templateScopeQuickPickPresentations,
   type ResourceCollisionScentCandidate,
 } from "../resource-discovery/presentation.js";
 import {
@@ -722,39 +723,18 @@ function availabilityQuickPickModel(
         throw new Error("Template availability was ambiguous without any selectable templates.");
       }
       {
-        const templateScents = resourceCollisionScentMap(selection.templateCandidates.map((template) => ({
-          token: template.definitionName,
-          roleLabel: template.compilationLane === "authoring" ? "authoring template" : "application template",
-          projectLabel: `${selection.project.projectKey} · ${resourceProjectRootScent(
-            selection.project.rootUri,
-            [selection.project.rootUri],
-          )}`,
-          source: template.source,
-          stableKey: template.scopeIdentityKey,
-          value: template,
-        })));
+        const projectContext = `${selection.project.projectKey} · ${resourceProjectRootScent(
+          selection.project.rootUri,
+          [selection.project.rootUri],
+        )}`;
       return {
         title: "Choose the Aurelia template",
         placeholder: "The cursor belongs to more than one equally specific template",
-        items: [...selection.templateCandidates]
-          .sort((left, right) =>
-            left.definitionName.localeCompare(right.definitionName)
-            || left.scopeIdentityKey.localeCompare(right.scopeIdentityKey)
-          )
-          .map((template) => {
-            const role = template.compilationLane === "authoring" ? "authoring template" : "application template";
-            const collisionScent = templateScents.get(template);
-            const ownerContext = templateOwnerContext(selection.project, template);
-            return {
-              label: template.definitionName,
-              description: [role, collisionScent == null ? null : `distinguished by ${collisionScent}`]
-                .filter((value): value is string => value != null)
-                .join(" · "),
-              detail: ownerContext,
-              selectionKind: "template" as const,
-              template,
-            };
-          }),
+        items: templateScopeQuickPickPresentations(selection.templateCandidates, projectContext)
+          .map((presentation) => ({
+            ...presentation,
+            selectionKind: "template" as const,
+          })),
         ...availabilityFlowPosition(requestSelection, "template"),
       };
       }

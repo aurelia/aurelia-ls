@@ -20,6 +20,8 @@ import type {
   SemanticResourceInventoryLocalityKind,
   SemanticResourceInventoryMetadataState,
   SemanticResourceInventoryOrigin,
+  SemanticResourceAvailabilityExplanation,
+  SemanticResourceAvailabilityExplanationContender,
   SemanticResourceNavigationUnavailableReason,
   SemanticRuntimeAnswer,
   SourceFileRole,
@@ -35,15 +37,17 @@ export const AureliaProtocolRequest = {
   BindingUncertaintyExplanation: "aurelia/bindingUncertaintyExplanation",
   ResourceInventory: "aurelia/resourceInventory",
   TemplateResourceAvailability: "aurelia/templateResourceAvailability",
+  ResourceAvailabilityExplanation: "aurelia/resourceAvailabilityExplanation",
   RelatedFiles: "aurelia/getRelatedFiles",
   WorkspaceStatus: "aurelia/workspaceStatus",
   RenameFromTypeScript: "aurelia/renameFromTs",
 } as const;
 
-/** Client-owned commands surfaced by protocol code actions. */
+/** Client-owned commands surfaced by protocol features. */
 export const AureliaProtocolCommand = {
   ExplainFrameworkCapability: "aurelia.explainFrameworkCapability",
   ExplainBindingUncertainty: "aurelia.explainBindingUncertainty",
+  ExplainResourceAvailability: "aurelia.explainResourceAvailability",
 } as const;
 
 export const AureliaProtocolNotification = {
@@ -816,6 +820,141 @@ export interface TemplateResourceAvailabilityResponse {
   readonly fingerprint: string;
   readonly projectSelection: TemplateResourceProjectSelection;
 }
+
+/** Exact Resource Explorer subject interpreted at one current template cursor. */
+export interface ResourceAvailabilityExplanationParams {
+  readonly uri: string;
+  readonly position: Position;
+  readonly documentVersion: number;
+  readonly projectKey: string;
+  readonly resourceIdentityKey: string;
+  readonly templateResourceScopeIdentityKey?: string;
+}
+
+export type ResourceAvailabilityExplanationSourceTarget =
+  FrameworkCapabilityExplanationSourceTarget;
+export type ResourceAvailabilityExplanationAppQuery =
+  FrameworkCapabilityExplanationAppQuery;
+
+type SemanticResourceAvailabilityExplanationSubject =
+  SemanticResourceAvailabilityExplanation["subject"];
+type SemanticResourceAvailabilityExplanationExclusion =
+  NonNullable<SemanticResourceAvailabilityExplanation["evidence"]["exclusion"]>;
+type SemanticResourceAvailabilityExplanationBlocker =
+  SemanticResourceAvailabilityExplanation["evidence"]["blockers"][number];
+type SemanticResourceAvailabilityExplanationNextStep =
+  SemanticResourceAvailabilityExplanation["nextSteps"][number];
+
+export type ResourceAvailabilityExplanationSubject = Omit<
+  SemanticResourceAvailabilityExplanationSubject,
+  "resource" | "template" | "resourceKind"
+> & {
+  readonly resourceKind: `${SemanticResourceAvailabilityExplanationSubject["resourceKind"]}`;
+  readonly resource: ResourceInventoryItem;
+  readonly template: TemplateResourceScopeCandidate;
+};
+
+export type ResourceAvailabilityExplanation = Omit<
+  SemanticResourceAvailabilityExplanation,
+  "subject" | "evidence" | "nextSteps"
+> & {
+  readonly subject: ResourceAvailabilityExplanationSubject;
+  readonly evidence: {
+    readonly effectiveResource: ResourceInventoryItem | null;
+    readonly availabilitySource: ResourceAvailabilityExplanationSourceTarget;
+    readonly exclusion: (Omit<
+      SemanticResourceAvailabilityExplanationExclusion,
+      "contenderSource" | "winnerSource"
+    > & {
+      readonly contenderSource: ResourceAvailabilityExplanationSourceTarget;
+      readonly winnerSource: ResourceAvailabilityExplanationSourceTarget;
+    }) | null;
+    readonly configuration: Omit<
+      SemanticResourceAvailabilityExplanation["evidence"]["configuration"],
+      "sources"
+    > & { readonly sources: readonly ResourceAvailabilityExplanationSourceTarget[] };
+    readonly blockers: readonly (Omit<
+      SemanticResourceAvailabilityExplanationBlocker,
+      "sources"
+    > & { readonly sources: readonly ResourceAvailabilityExplanationSourceTarget[] })[];
+  };
+  readonly nextSteps: readonly (Omit<
+    SemanticResourceAvailabilityExplanationNextStep,
+    "source" | "targetQuery"
+  > & {
+    readonly source: ResourceAvailabilityExplanationSourceTarget;
+    readonly targetQuery: ResourceAvailabilityExplanationAppQuery | null;
+  })[];
+};
+
+export type ResourceAvailabilityExplanationContender = Omit<
+  SemanticResourceAvailabilityExplanationContender,
+  "subject"
+> & { readonly subject: ResourceAvailabilityExplanationSubject };
+
+export type ResourceAvailabilityExplanationAnswerTransport =
+  FrameworkCapabilityExplanationAnswerTransport;
+
+export const RESOURCE_AVAILABILITY_EXPLANATION_REFUSAL_REASONS = {
+  documentUnavailable: "the source document is no longer available",
+  sourceNotAuthored: "the source document is not authored by the current Aurelia workspace",
+  documentVersionMismatch: "the source document version no longer matches the availability request",
+  semanticAnswerUnavailable: "the semantic runtime did not answer the availability explanation query",
+  subjectAbsent: "the selected resource or template scope is no longer present",
+  subjectAmbiguous: "the current template belongs to more than one resource scope",
+  subjectMismatch: "the current explanation does not match the requested resource and template scope",
+  templateSourceUnavailable: "the current template source could not be mapped safely",
+} as const;
+
+export type ResourceAvailabilityExplanationRefusalKind =
+  keyof typeof RESOURCE_AVAILABILITY_EXPLANATION_REFUSAL_REASONS;
+
+export type ResourceAvailabilityExplanationRefusal = {
+  readonly [Kind in ResourceAvailabilityExplanationRefusalKind]: {
+    readonly kind: Kind;
+    readonly reason: (typeof RESOURCE_AVAILABILITY_EXPLANATION_REFUSAL_REASONS)[Kind];
+  };
+}[ResourceAvailabilityExplanationRefusalKind];
+
+export function resourceAvailabilityExplanationRefusal(
+  kind: ResourceAvailabilityExplanationRefusalKind,
+): ResourceAvailabilityExplanationRefusal {
+  switch (kind) {
+    case "documentUnavailable":
+      return { kind, reason: RESOURCE_AVAILABILITY_EXPLANATION_REFUSAL_REASONS.documentUnavailable };
+    case "sourceNotAuthored":
+      return { kind, reason: RESOURCE_AVAILABILITY_EXPLANATION_REFUSAL_REASONS.sourceNotAuthored };
+    case "documentVersionMismatch":
+      return { kind, reason: RESOURCE_AVAILABILITY_EXPLANATION_REFUSAL_REASONS.documentVersionMismatch };
+    case "semanticAnswerUnavailable":
+      return { kind, reason: RESOURCE_AVAILABILITY_EXPLANATION_REFUSAL_REASONS.semanticAnswerUnavailable };
+    case "subjectAbsent":
+      return { kind, reason: RESOURCE_AVAILABILITY_EXPLANATION_REFUSAL_REASONS.subjectAbsent };
+    case "subjectAmbiguous":
+      return { kind, reason: RESOURCE_AVAILABILITY_EXPLANATION_REFUSAL_REASONS.subjectAmbiguous };
+    case "subjectMismatch":
+      return { kind, reason: RESOURCE_AVAILABILITY_EXPLANATION_REFUSAL_REASONS.subjectMismatch };
+    case "templateSourceUnavailable":
+      return { kind, reason: RESOURCE_AVAILABILITY_EXPLANATION_REFUSAL_REASONS.templateSourceUnavailable };
+  }
+}
+
+export type ResourceAvailabilityExplanationResponse = {
+  readonly fingerprint: string;
+  readonly documentVersion: number | null;
+  readonly answer: ResourceAvailabilityExplanationAnswerTransport | null;
+  readonly result:
+    | {
+        readonly status: "explained";
+        readonly explanation: ResourceAvailabilityExplanation;
+        readonly contenders: readonly ResourceAvailabilityExplanationContender[];
+      }
+    | {
+        readonly status: "refused";
+        readonly refusal: ResourceAvailabilityExplanationRefusal;
+        readonly contenders: readonly ResourceAvailabilityExplanationContender[];
+      };
+};
 
 export type RelatedFileRole = Extract<ApplicationFileRole, "component-source" | "component-template">;
 

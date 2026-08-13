@@ -22,6 +22,11 @@ import type { AureliaAppTaskEvaluation } from '../configuration/aurelia-evaluati
 import type { DiIssue } from './di-issue.js';
 import type { ResourceIssue } from '../resources/resource-issue.js';
 import type { DiContainerChainFacts } from './container-chain.js';
+import type {
+  AddressHandle,
+  IdentityHandle,
+  ProductHandle,
+} from '../kernel/handles.js';
 
 /** Runtime resolver objects that can occupy a container resolver slot. */
 export type DiResolverProduct = Resolver | InstanceProvider;
@@ -32,6 +37,24 @@ export class DiRegistrationOpenSeamScope {
     readonly seam: OpenSeam,
     /** Exact registration operation whose spending retained or produced this seam. */
     readonly operation: ContainerRegistrationOperation | null,
+  ) {}
+}
+
+/** One runtime resource-key contender rejected because the owning container already had a winner. */
+export class DiResourceSlotExclusion {
+  constructor(
+    /** Exact runtime resource key whose first registration remains effective. */
+    readonly resourceKey: string,
+    /** Existing container row that won this key. */
+    readonly winner: ContainerResourceSlot,
+    /** Resource identity carried by the rejected registration. */
+    readonly excludedResourceIdentityHandle: IdentityHandle,
+    /** Resource product carried by the rejected registration. */
+    readonly excludedResourceProductHandle: ProductHandle,
+    /** Registration occurrence that attempted to publish the rejected row. */
+    readonly excludedRegistrationSourceAddressHandle: AddressHandle | null,
+    /** Best available witness for the rejected runtime key; registration-site fallback when key-local syntax is absent. */
+    readonly excludedKeySourceAddressHandle: AddressHandle | null,
   ) {}
 }
 
@@ -71,6 +94,8 @@ export class DiWorldConstructionEmission {
     readonly selfResolverSlots: readonly ContainerSelfResolverSlot[],
     /** Container-owned resource slots produced during spending. */
     readonly resourceSlots: readonly ContainerResourceSlot[],
+    /** Resource-key contenders rejected by first-registration-wins container semantics. */
+    readonly resourceSlotExclusions: readonly DiResourceSlotExclusion[],
     /** AppTask registry values actually spent into modeled containers, in registration order. */
     readonly registeredAppTasks: readonly RegisteredAppTask[],
     /** Open seams left by registration spending. */

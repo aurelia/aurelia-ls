@@ -311,6 +311,39 @@ function findNode(nodes: readonly Node[], label: string): Node | undefined {
 }
 
 describe("ResourceExplorerProvider", () => {
+  test("publishes an exact explanation subject only for a live top-level resource object", async () => {
+    const row = resource({
+      identityKey: "resource:product-card",
+      name: "product-card",
+      uri: null,
+      origin: "framework",
+      packageName: "@aurelia/runtime-html",
+      aliases: ["shop-card"],
+    });
+    const harness = createHarness(async () => response([readyProject([row])]));
+    await harness.provider.refresh();
+    const current = findNode(await roots(harness.provider), "product-card")!;
+    const alias = findNode(await roots(harness.provider), "shop-card")!;
+
+    expect(current.contextValue).toBe("resourceUnavailable");
+    expect(harness.provider.availabilityExplanationFor(current)).toEqual({
+      workspaceKey: "file:///repo",
+      projectKey: "app",
+      resourceIdentityKey: "resource:product-card",
+    });
+    expect(harness.provider.availabilityExplanationFor(alias)).toBeNull();
+    expect(harness.provider.availabilityExplanationFor({ ...current })).toBeNull();
+
+    await harness.provider.refresh();
+    const replacement = findNode(await roots(harness.provider), "product-card")!;
+    expect(harness.provider.availabilityExplanationFor(current)).toBeNull();
+    expect(harness.provider.availabilityExplanationFor(replacement)).toEqual({
+      workspaceKey: "file:///repo",
+      projectKey: "app",
+      resourceIdentityKey: "resource:product-card",
+    });
+  });
+
   test("joins exact workspace, generation, and project identities before signaling a limitation", async () => {
     const inventory = response([readyProject([])], workspace(), "semantic-runtime:one");
     const limitations = limitationsResponse([

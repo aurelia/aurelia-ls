@@ -261,7 +261,9 @@ export class TemplateCompilationCohortPlanner {
       localKey,
       TemplateCompilerWorldKind.Component,
       appRootWorld,
-      [admission.visibleResource, ...dependencies],
+      // A controller owner is retained by the compilation/cohort plan itself. Runtime registers only its declared
+      // dependencies into the child container, so the owner must not compete for an exact resource lookup here.
+      dependencies,
       TemplateResourceVisibilityKind.Configured,
       admission.definition.sourceAddressHandle,
     ));

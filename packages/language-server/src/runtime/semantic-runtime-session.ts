@@ -29,6 +29,7 @@ import {
   type SemanticAppDiagnosticsResult,
   type SemanticFrameworkCapabilityExplanationResult,
   type SemanticResourceDefinitionsResult,
+  type SemanticResourceAvailabilityExplanationResult,
   type SemanticResourceInventoryResult,
   type SemanticRuntimeAnswer,
   type SemanticRuntimeContinuationRow,
@@ -127,6 +128,13 @@ export interface SemanticRuntimeLspOperation {
     position: Position,
     templateResourceScopeIdentityKey: string | null,
   ): Promise<SemanticRuntimeAnswer<SemanticTemplateResourceAvailabilityResult>>;
+  resourceAvailabilityExplanation(
+    projectKey: string,
+    uri: DocumentUri,
+    position: Position,
+    resourceIdentityKey: string,
+    templateResourceScopeIdentityKey: string | null,
+  ): Promise<SemanticRuntimeAnswer<SemanticResourceAvailabilityExplanationResult>>;
   appTopology(sourceFilePath: string): Promise<SemanticRuntimeAnswer<SemanticApplicationTopologyResult>>;
   templateInlayHints(document: TextDocument): Promise<SemanticRuntimeAnswer<SemanticTemplateInlayHintsResult>>;
   templateSemanticTokens(document: TextDocument): Promise<SemanticRuntimeAnswer<SemanticTemplateSemanticTokensResult>>;
@@ -950,6 +958,20 @@ export class SemanticRuntimeLspSession {
           templateResourceScopeIdentityKey,
           token,
         ),
+      resourceAvailabilityExplanation: (
+        projectKey,
+        uri,
+        position,
+        resourceIdentityKey,
+        templateResourceScopeIdentityKey,
+      ) => this.resourceAvailabilityExplanation(
+        projectKey,
+        uri,
+        position,
+        resourceIdentityKey,
+        templateResourceScopeIdentityKey,
+        token,
+      ),
       appTopology: (sourceFilePath) => this.appTopology(sourceFilePath, token),
       templateInlayHints: (document) => this.templateInlayHints(document, token),
       templateSemanticTokens: (document) => this.templateSemanticTokens(document, token),
@@ -1404,6 +1426,32 @@ export class SemanticRuntimeLspSession {
       includeAuthoringTemplates: true,
       appRetention: "retain-app",
     }) as SemanticRuntimeAnswer<SemanticTemplateResourceAvailabilityResult>;
+    this.assertRequestTokenActive(token);
+    return answer;
+  }
+
+  private async resourceAvailabilityExplanation(
+    projectKey: string,
+    uri: DocumentUri,
+    position: Position,
+    resourceIdentityKey: string,
+    templateResourceScopeIdentityKey: string | null,
+    token: SemanticRuntimeLspRequestToken,
+  ): Promise<SemanticRuntimeAnswer<SemanticResourceAvailabilityExplanationResult>> {
+    const runtime = this.runtimeForOperation(token);
+    const cursorInput = this.operationSourceCursor(uri, position, token);
+    const answer = await runtime.answerAppQuery({
+      kind: SemanticAppQueryKind.ResourceAvailabilityExplanation,
+      projectKey,
+      sourceFilePath: cursorInput.filePath,
+      cursor: cursorInput,
+      resourceIdentityKey,
+      ...(templateResourceScopeIdentityKey == null ? {} : { templateResourceScopeIdentityKey }),
+      inquiryProfile: "lsp-cursor",
+      analysisDepth: "runtime-topology",
+      includeAuthoringTemplates: true,
+      appRetention: "retain-app",
+    }) as SemanticRuntimeAnswer<SemanticResourceAvailabilityExplanationResult>;
     this.assertRequestTokenActive(token);
     return answer;
   }

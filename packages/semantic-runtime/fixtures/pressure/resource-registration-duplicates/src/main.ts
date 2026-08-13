@@ -6,6 +6,8 @@ import {
   AliasOwnerOne,
   AliasOwnerTwo,
   AliasPrimary,
+  CanonicalLoserWithSkippedAlias,
+  CanonicalWinner,
   DuplicateCommandOneBindingCommand,
   DuplicateCommandTwoBindingCommand,
   DuplicateCardOne,
@@ -41,6 +43,8 @@ Aurelia
     AliasAfterPrimary,
     AliasBeforePrimary,
     PrimaryAfterAlias,
+    CanonicalWinner,
+    CanonicalLoserWithSkippedAlias,
   )
   .app(ResourceRegistrationDuplicatesApp)
   .start();

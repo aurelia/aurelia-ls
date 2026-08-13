@@ -296,6 +296,7 @@ describe("ViewsFeature resource inventory lifecycle", () => {
       expect.any(Function),
     );
     for (const command of [
+      AureliaCommand.ExplainResourceAvailability,
       AureliaCommand.OpenResourceDeclaration,
       AureliaCommand.OpenResourceImplementation,
       AureliaCommand.OpenResourceToSide,

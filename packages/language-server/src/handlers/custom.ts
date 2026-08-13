@@ -30,6 +30,11 @@ import type {
   RenameFromTsResponse,
   ResourceInventoryParams,
   ResourceInventoryResponse,
+  ResourceAvailabilityExplanationAnswerTransport,
+  ResourceAvailabilityExplanationContender,
+  ResourceAvailabilityExplanationParams,
+  ResourceAvailabilityExplanationRefusalKind,
+  ResourceAvailabilityExplanationResponse,
   SourceOwnershipParams,
   SourceOwnershipResponse,
   TemplateResourceAvailabilityParams,
@@ -41,6 +46,7 @@ import {
   AureliaProtocolRequest,
   bindingUncertaintyExplanationRefusal,
   frameworkCapabilityExplanationRefusal,
+  resourceAvailabilityExplanationRefusal,
 } from "../protocol.js";
 import {
   mapBindingUncertaintyExplanation,
@@ -52,6 +58,11 @@ import {
   mapFrameworkCapabilityExplanationAnswer,
   mapFrameworkCapabilityExplanationContender,
 } from "../mapping/framework-capability-explanation.js";
+import {
+  mapResourceAvailabilityExplanation,
+  mapResourceAvailabilityExplanationAnswer,
+  mapResourceAvailabilityExplanationContender,
+} from "../mapping/resource-availability-explanation.js";
 import {
   mapAnalysisLimitationEffectivePolicy,
   mapAnalysisLimitationItem,
@@ -89,11 +100,135 @@ export type {
   RenameFromTsResponse,
   ResourceInventoryParams,
   ResourceInventoryResponse,
+  ResourceAvailabilityExplanationParams,
+  ResourceAvailabilityExplanationResponse,
   SourceOwnershipParams,
   SourceOwnershipResponse,
   TemplateResourceAvailabilityParams,
   TemplateResourceAvailabilityResponse,
 } from "../protocol.js";
+
+export async function handleResourceAvailabilityExplanation(
+  ctx: ServerContext,
+  params: ResourceAvailabilityExplanationParams,
+  operation: SemanticRuntimeLspOperation,
+): Promise<ResourceAvailabilityExplanationResponse> {
+  if (!resourceAvailabilityExplanationParamsAreValid(params)) {
+    throw new Error(
+      "Resource availability explanation requires an exact document URI, version, project, resource identity, optional scope identity, and template cursor.",
+    );
+  }
+  const fingerprint = operation.generation.fingerprint;
+  const document = operation.documents.ensureProgramDocument(params.uri);
+  if (document == null) {
+    return refusedResourceAvailabilityExplanation(
+      fingerprint,
+      null,
+      null,
+      "documentUnavailable",
+    );
+  }
+  if (document.version !== params.documentVersion) {
+    return refusedResourceAvailabilityExplanation(
+      fingerprint,
+      document.version,
+      null,
+      "documentVersionMismatch",
+    );
+  }
+
+  const answer = await operation.resourceAvailabilityExplanation(
+    params.projectKey,
+    document.uri,
+    params.position,
+    params.resourceIdentityKey,
+    params.templateResourceScopeIdentityKey ?? null,
+  );
+  const mappingContext = {
+    documentUris: ctx.documentUris,
+    lookupText: (uri: string) => operation.documents.lookupText(uri),
+  };
+  const answerTransport = mapResourceAvailabilityExplanationAnswer(answer, mappingContext);
+  if (`${answer.result}` !== "answered") {
+    return refusedResourceAvailabilityExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "semanticAnswerUnavailable",
+    );
+  }
+  const contenders = answer.value.contenders.map((contender) =>
+    mapResourceAvailabilityExplanationContender(contender, mappingContext)
+  );
+  if (`${answer.selection}` === "absent") {
+    return refusedResourceAvailabilityExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "subjectAbsent",
+      contenders,
+    );
+  }
+  if (`${answer.selection}` === "ambiguous") {
+    return refusedResourceAvailabilityExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "subjectAmbiguous",
+      contenders,
+    );
+  }
+  if (`${answer.selection}` !== "exact" || answer.value.explanation == null) {
+    return refusedResourceAvailabilityExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "subjectMismatch",
+      contenders,
+    );
+  }
+
+  const explanation = mapResourceAvailabilityExplanation(answer.value.explanation, mappingContext);
+  const templateSourceTarget = explanation.subject.template.source;
+  if (templateSourceTarget.state !== "available") {
+    return refusedResourceAvailabilityExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "templateSourceUnavailable",
+      contenders,
+    );
+  }
+  const subject = explanation.subject;
+  const templateSource = templateSourceTarget.location;
+  if (
+    answer.value.projectKey !== params.projectKey
+    || subject.projectKey !== params.projectKey
+    || subject.resource.projectKey !== params.projectKey
+    || subject.resourceIdentityKey !== params.resourceIdentityKey
+    || subject.resource.identityKey !== params.resourceIdentityKey
+    || (
+      params.templateResourceScopeIdentityKey != null
+      && subject.template.scopeIdentityKey !== params.templateResourceScopeIdentityKey
+    )
+    || !ctx.documentUris.sameDocument(templateSource.uri, document.uri)
+    || !protocolRangeContainsPosition(templateSource.range, params.position)
+  ) {
+    return refusedResourceAvailabilityExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "subjectMismatch",
+      contenders,
+    );
+  }
+  return {
+    fingerprint,
+    documentVersion: document.version,
+    answer: answerTransport,
+    result: { status: "explained", explanation, contenders },
+  };
+}
 
 export async function handleBindingUncertaintyExplanation(
   ctx: ServerContext,
@@ -774,6 +909,21 @@ export function registerCustomHandlers(ctx: ServerContext): void {
     request(ctx, "resourceInventory", token, undefined,
       (guard) => handleResourceInventory(ctx, params, guard)));
   ctx.connection.onRequest(
+    AureliaProtocolRequest.ResourceAvailabilityExplanation,
+    (params: ResourceAvailabilityExplanationParams, token: CancellationToken) =>
+      documentRequest(ctx, "resourceAvailabilityExplanation", token, params.uri,
+        (operation): ResourceAvailabilityExplanationResponse => {
+          const document = operation.documents.ensureProgramDocument(params.uri);
+          return refusedResourceAvailabilityExplanation(
+            operation.generation.fingerprint,
+            document?.version ?? null,
+            null,
+            "sourceNotAuthored",
+          );
+        },
+        (guard) => handleResourceAvailabilityExplanation(ctx, params, guard)),
+  );
+  ctx.connection.onRequest(
     AureliaProtocolRequest.TemplateResourceAvailability,
     (params: TemplateResourceAvailabilityParams, token: CancellationToken) =>
       documentRequest(ctx, "templateResourceAvailability", token, params.uri,
@@ -841,6 +991,25 @@ function refusedFrameworkCapabilityExplanation(
   };
 }
 
+function refusedResourceAvailabilityExplanation(
+  fingerprint: string,
+  documentVersion: number | null,
+  answer: ResourceAvailabilityExplanationAnswerTransport | null,
+  kind: ResourceAvailabilityExplanationRefusalKind,
+  contenders: readonly ResourceAvailabilityExplanationContender[] = [],
+): ResourceAvailabilityExplanationResponse {
+  return {
+    fingerprint,
+    documentVersion,
+    answer,
+    result: {
+      status: "refused",
+      refusal: resourceAvailabilityExplanationRefusal(kind),
+      contenders,
+    },
+  };
+}
+
 function bindingUncertaintyExplanationParamsAreValid(
   params: BindingUncertaintyExplanationParams | null | undefined,
 ): params is BindingUncertaintyExplanationParams {
@@ -872,6 +1041,28 @@ function frameworkCapabilityExplanationParamsAreValid(
     && protocolRangeIsValid(params.range)
     && params.position.line === params.range.start.line
     && params.position.character === params.range.start.character;
+}
+
+function resourceAvailabilityExplanationParamsAreValid(
+  params: ResourceAvailabilityExplanationParams | null | undefined,
+): params is ResourceAvailabilityExplanationParams {
+  return params != null
+    && typeof params.uri === "string"
+    && params.uri.length > 0
+    && Number.isSafeInteger(params.documentVersion)
+    && params.documentVersion >= 0
+    && typeof params.projectKey === "string"
+    && params.projectKey.length > 0
+    && typeof params.resourceIdentityKey === "string"
+    && params.resourceIdentityKey.length > 0
+    && (
+      params.templateResourceScopeIdentityKey === undefined
+      || (
+        typeof params.templateResourceScopeIdentityKey === "string"
+        && params.templateResourceScopeIdentityKey.length > 0
+      )
+    )
+    && protocolPositionIsValid(params.position);
 }
 
 function protocolPositionIsValid(position: unknown): position is { readonly line: number; readonly character: number } {

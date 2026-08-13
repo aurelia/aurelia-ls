@@ -34,7 +34,11 @@ import type {
   TemplateExpressionParserService,
   TemplateRenderingService,
   TemplateResourceResolverService,
+  TemplateResourceScopeBlockedLookup,
+  TemplateResourceScopeExclusion,
+  TemplateResourceScopeLookup,
   TemplateResourceScope,
+  TemplateResourceScopeReference,
 } from './compiler-world.js';
 import type {
   TemplateCompilerServiceReference,
@@ -104,18 +108,95 @@ export function compareTemplateResourceScopeDetails(
   if (
     !sameValues(previous.productHandle, next.productHandle, previous.identityHandle, next.identityHandle)
     || !sameContainerSemantics(previous.container, next.container)
+    || !sameNullable(previous.parent, next.parent, sameTemplateResourceScopeReferenceSemantics)
   ) {
     return KernelPublicationDecisionKind.Replace;
   }
   return combineDecisions(
     compareArrays(previous.resources, next.resources, (left, right) =>
       compareTemplateVisibleResource(left, right, context)),
+    compareArrays(previous.exclusions, next.exclusions, (left, right) =>
+      compareTemplateResourceScopeExclusion(left, right, context)),
+    compareArrays(previous.lookups, next.lookups, (left, right) =>
+      compareTemplateResourceScopeLookup(left, right, context)),
+    compareArrays(previous.blockedLookups, next.blockedLookups, (left, right) =>
+      compareTemplateResourceScopeBlockedLookup(left, right, context)),
     compareArrays(previous.syntaxResources, next.syntaxResources, (left, right) =>
       compareTemplateVisibleResource(left, right, context)),
     witnessDecision(
       sameContainerWitness(previous.container, next.container, context)
+        && sameTemplateResourceScopeReferenceWitness(previous.parent, next.parent, context)
         && sameKernelRecordWitness(previous.sourceAddressHandle, next.sourceAddressHandle, context)
         && sameKernelFieldProvenance(previous.fieldProvenance, next.fieldProvenance, context),
+    ),
+  );
+}
+
+function compareTemplateResourceScopeBlockedLookup(
+  previous: TemplateResourceScopeBlockedLookup,
+  next: TemplateResourceScopeBlockedLookup,
+  context: KernelPublicationComparisonContext,
+): KernelComparablePublicationDecision {
+  if (!sameValues(previous.lookupKey, next.lookupKey, previous.lane, next.lane)) {
+    return KernelPublicationDecisionKind.Replace;
+  }
+  return witnessDecision(sameKernelRecordWitness(
+    previous.sourceAddressHandle,
+    next.sourceAddressHandle,
+    context,
+  ));
+}
+
+function compareTemplateResourceScopeLookup(
+  previous: TemplateResourceScopeLookup,
+  next: TemplateResourceScopeLookup,
+  context: KernelPublicationComparisonContext,
+): KernelComparablePublicationDecision {
+  if (!sameValues(previous.lookupKey, next.lookupKey, previous.lane, next.lane)) {
+    return KernelPublicationDecisionKind.Replace;
+  }
+  return combineDecisions(
+    compareTemplateVisibleResource(previous.winner, next.winner, context),
+    witnessDecision(sameKernelRecordWitness(
+      previous.sourceAddressHandle,
+      next.sourceAddressHandle,
+      context,
+    )),
+  );
+}
+
+function compareTemplateResourceScopeExclusion(
+  previous: TemplateResourceScopeExclusion,
+  next: TemplateResourceScopeExclusion,
+  context: KernelPublicationComparisonContext,
+): KernelComparablePublicationDecision {
+  if (
+    !sameValues(
+      previous.reason,
+      next.reason,
+      previous.winnerLane,
+      next.winnerLane,
+      previous.loserLane,
+      next.loserLane,
+    )
+    || !sameArrays(previous.lookupKeys, next.lookupKeys, (left, right) => left === right)
+  ) {
+    return KernelPublicationDecisionKind.Replace;
+  }
+  return combineDecisions(
+    compareTemplateVisibleResource(previous.winner, next.winner, context),
+    compareTemplateVisibleResource(previous.loser, next.loser, context),
+    witnessDecision(
+      sameKernelRecordWitness(
+        previous.winnerKeySourceAddressHandle,
+        next.winnerKeySourceAddressHandle,
+        context,
+      )
+        && sameKernelRecordWitness(
+          previous.loserKeySourceAddressHandle,
+          next.loserKeySourceAddressHandle,
+          context,
+        ),
     ),
   );
 }
@@ -142,6 +223,10 @@ export function compareTemplateResourceResolverServiceDetails(
     compareContainerService(previous, next, context),
     compareArrays(previous.resources, next.resources, (left, right) =>
       compareTemplateVisibleResource(left, right, context)),
+    compareArrays(previous.lookups, next.lookups, (left, right) =>
+      compareTemplateResourceScopeLookup(left, right, context)),
+    compareArrays(previous.blockedLookups, next.blockedLookups, (left, right) =>
+      compareTemplateResourceScopeBlockedLookup(left, right, context)),
   );
 }
 
@@ -507,6 +592,29 @@ function sameContainerWitness(
   context: KernelPublicationComparisonContext,
 ): boolean {
   return sameKernelRecordWitness(previous.addressHandle, next.addressHandle, context);
+}
+
+function sameTemplateResourceScopeReferenceSemantics(
+  previous: TemplateResourceScopeReference,
+  next: TemplateResourceScopeReference,
+): boolean {
+  return sameValues(
+    previous.productHandle,
+    next.productHandle,
+    previous.identityHandle,
+    next.identityHandle,
+  ) && sameContainerSemantics(previous.container, next.container);
+}
+
+function sameTemplateResourceScopeReferenceWitness(
+  previous: TemplateResourceScopeReference | null,
+  next: TemplateResourceScopeReference | null,
+  context: KernelPublicationComparisonContext,
+): boolean {
+  return previous == null || next == null
+    ? previous === next
+    : sameContainerWitness(previous.container, next.container, context)
+      && sameKernelRecordWitness(previous.sourceAddressHandle, next.sourceAddressHandle, context);
 }
 
 function sameResourceTargetSemantics(

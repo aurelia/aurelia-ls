@@ -4539,10 +4539,54 @@ function definitionForElement(
     candidate instanceof HydrateElementInstruction
     && candidate.node.productHandle === activeElement.productHandle
   ) ?? null;
-  return instruction instanceof HydrateElementInstruction && instruction.definitionProductHandle != null
-      ? {
-        productHandle: instruction.definitionProductHandle,
-        matchedName: instruction.resourceLookupName,
-      }
-    : null;
+  if (instruction instanceof HydrateElementInstruction && instruction.definitionProductHandle != null) {
+    return {
+      productHandle: instruction.definitionProductHandle,
+      matchedName: instruction.resourceLookupName,
+    };
+  }
+  const owner = resource.compilation.definition;
+  // The controller owner is compilation context, not a resource lookup registration. Recursive owner tags still
+  // dispatch to that definition for cursor/navigation semantics even though no exact runtime lookup row is invented.
+  return owner.type === ResourceDefinitionKind.CustomElement
+    && owner.productHandle != null
+    && owner.name.toLowerCase() === activeElement.tagName.toLowerCase()
+    ? { productHandle: owner.productHandle, matchedName: activeElement.tagName }
+    : familyOwnerDefinitionForElement(store, resource, activeElement);
+}
+
+function familyOwnerDefinitionForElement(
+  store: KernelStore,
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  activeElement: HtmlElement,
+): TemplateDefinitionCursorSelection | null {
+  const familyOwnerHandle = resource.compilation.familyOwnerHandle;
+  const matchesFamilyOwner = (definition: FullResourceDefinition | null): definition is FullResourceDefinition =>
+    definition != null
+    && definition.type === ResourceDefinitionKind.CustomElement
+    && (definition.identityHandle === familyOwnerHandle || definition.productHandle === familyOwnerHandle)
+    && definition.name.toLowerCase() === activeElement.tagName.toLowerCase();
+  const contextualDefinition = [
+    resource.compilation.definition,
+    ...resource.compilation.parentCompilerWorld.resourceScope.resources
+      .map((visible) => readVisibleTemplateResourceDefinition(store, visible)),
+    ...resource.compilation.compilerWorld.resourceScope.resources
+      .map((visible) => readVisibleTemplateResourceDefinition(store, visible)),
+  ].find(matchesFamilyOwner) ?? null;
+  // A recursive local-template compilation can narrow every exact lookup row away from its top-level controller.
+  // Resolve that already-carried family identity through the typed definition catalog; this is definition context,
+  // not a claim that the owner is registered under the element's runtime lookup key.
+  const catalogDefinitions = contextualDefinition == null
+    ? store.productDetails.readBySlot(ResourceProductDetails.Definition)
+        .map((entry) => entry.detail)
+        .filter(matchesFamilyOwner)
+    : [];
+  const catalogDefinitionByProduct = new Map(catalogDefinitions.flatMap((definition) =>
+    definition.productHandle == null ? [] : [[definition.productHandle, definition] as const]
+  ));
+  const familyDefinition = contextualDefinition
+    ?? (catalogDefinitionByProduct.size === 1 ? [...catalogDefinitionByProduct.values()][0]! : null);
+  return familyDefinition?.productHandle == null
+    ? null
+    : { productHandle: familyDefinition.productHandle, matchedName: activeElement.tagName };
 }

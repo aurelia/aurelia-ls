@@ -32,6 +32,10 @@ import {
   TemplateRenderingService,
   TemplateResourceResolverService,
   TemplateResourceScope,
+  type TemplateResourceScopeBlockedLookup,
+  type TemplateResourceScopeExclusion,
+  type TemplateResourceScopeLookup,
+  type TemplateResourceScopeReference,
 } from './compiler-world.js';
 import {
   sameTemplateVisibleResourceSet,
@@ -89,7 +93,7 @@ import {
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import type { AttributePatternDefinitionEntry } from '../resources/attribute-pattern-definition.js';
 import { TemplateProductDetails } from './product-details.js';
-import { mergeVisibleResourceScopes } from './resource-scope-builder.js';
+import { mergeVisibleResourceScopeResolution } from './resource-scope-builder.js';
 import type { StaticCallableExecutionBindings } from '../evaluation/function-execution.js';
 
 export class TemplateCompilerWorldConstructionRequest {
@@ -123,6 +127,14 @@ export class TemplateCompilerWorldConstructionRequest {
     /** App-effective IKeyMapping state visible to listener runtime analysis and authoring. */
     readonly runtimeKeyMappingConfiguration: RuntimeKeyMappingConfiguration =
       RuntimeKeyMappingConfiguration.frameworkDefault,
+    /** Losing resource contenders retained by the scope-selection pass. */
+    readonly resourceExclusions: readonly TemplateResourceScopeExclusion[] = [],
+    /** Parent resource scope when this world is derived. */
+    readonly parentResourceScope: TemplateResourceScopeReference | null = null,
+    /** Exact runtime lookup-key ownership selected for this world. */
+    readonly resourceLookups: readonly TemplateResourceScopeLookup[] = [],
+    /** Occupied runtime resource keys with no statically usable target. */
+    readonly blockedResourceLookups: readonly TemplateResourceScopeBlockedLookup[] = [],
   ) {}
 }
 
@@ -388,11 +400,27 @@ export class TemplateCompilerWorldMaterializer {
     input: TemplateCompilerWorldDerivationRequest,
   ): TemplateCompilerWorldConstructionRequest | null {
     const parent = input.parent;
-    const resources = mergeVisibleResourceScopes(
+    const resolution = mergeVisibleResourceScopeResolution(
       input.preferredResources,
       parent.resourceScope.resources,
+      parent.resourceScope.exclusions,
+      parent.resourceScope.lookups,
+      parent.resourceScope.blockedLookups,
     );
-    if (sameTemplateVisibleResourceSet(resources, parent.resourceScope.resources)) {
+    const hasNewExclusions = resolution.exclusions.length !== parent.resourceScope.exclusions.length
+      || resolution.exclusions.some((exclusion, index) =>
+        exclusion !== parent.resourceScope.exclusions[index]
+      );
+    const hasNewLookups = resolution.lookups.length !== parent.resourceScope.lookups.length
+      || resolution.lookups.some((lookup, index) => lookup !== parent.resourceScope.lookups[index]);
+    const hasNewBlockedLookups = resolution.blockedLookups.length !== parent.resourceScope.blockedLookups.length
+      || resolution.blockedLookups.some((lookup, index) => lookup !== parent.resourceScope.blockedLookups[index]);
+    if (
+      sameTemplateVisibleResourceSet(resolution.resources, parent.resourceScope.resources)
+      && !hasNewExclusions
+      && !hasNewLookups
+      && !hasNewBlockedLookups
+    ) {
       return null;
     }
     return new TemplateCompilerWorldConstructionRequest(
@@ -400,7 +428,7 @@ export class TemplateCompilerWorldMaterializer {
       input.worldKind,
       parent.container,
       parent.world.appRoot,
-      resources,
+      resolution.resources,
       parent.attributePatterns,
       parent.bindingCommands,
       parent.runtimeRenderers,
@@ -410,6 +438,10 @@ export class TemplateCompilerWorldMaterializer {
       parent.attributeMapper.configuration,
       parent.world.observerLocatorConfiguration,
       parent.world.runtimeKeyMappingConfiguration,
+      resolution.exclusions,
+      parent.resourceScope.toReference(),
+      resolution.lookups,
+      resolution.blockedLookups,
     );
   }
 
@@ -619,6 +651,10 @@ export class TemplateCompilerWorldMaterializer {
       syntaxResources,
       source.addressHandle,
       [],
+      input.resourceExclusions,
+      input.parentResourceScope,
+      input.resourceLookups,
+      input.blockedResourceLookups,
     );
   }
 
@@ -731,6 +767,8 @@ export class TemplateCompilerWorldMaterializer {
       handles.resourceResolverIdentityHandle,
       input.container.toReference(),
       input.resources,
+      input.resourceLookups,
+      input.blockedResourceLookups,
       source.addressHandle,
       [],
     );

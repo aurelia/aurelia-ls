@@ -299,6 +299,7 @@ function appendDiSourceIssues(
     diWorld.factorySlots,
     diWorld.selfResolverSlots,
     diWorld.resourceSlots,
+    diWorld.resourceSlotExclusions,
     diWorld.registeredAppTasks,
     diWorld.openSeams,
     diWorld.registrationOpenSeamScopes,
@@ -366,7 +367,7 @@ class AppRootCompilerWorldFrame {
     }
     const syntax = syntaxForOperations(operations, this.configuredSyntax);
     const runtimeRenderers = runtimeRenderersForOperations(operations, this.configuredRenderers);
-    const resources = this.resourceVisibilityComposer.construct(
+    const resourceResolution = this.resourceVisibilityComposer.construct(
       container,
       this.diWorld,
       this.configuredResources,
@@ -376,7 +377,7 @@ class AppRootCompilerWorldFrame {
     const registeredSyntax = this.registeredSyntaxResourceMaterializer.materialize({
       localKey: `app-root:${appRoot.productHandle}`,
       admissions: uniqueResourceRegistrationAdmissions(operations),
-      visibleResources: resources,
+      visibleResources: resourceResolution.resources,
       resourceDefinitions: this.resourceDefinitions,
     });
     const frameworkServiceCustomization = this.frameworkServiceCustomizations.forContainer(container);
@@ -393,7 +394,7 @@ class AppRootCompilerWorldFrame {
       TemplateCompilerWorldKind.AppRoot,
       container,
       appRoot.toReference(),
-      resources,
+      resourceResolution.resources,
       [...syntax.attributePatterns, ...registeredSyntax.attributePatterns],
       [...syntax.bindingCommands, ...registeredSyntax.bindingCommands],
       runtimeRenderers,
@@ -403,6 +404,10 @@ class AppRootCompilerWorldFrame {
       frameworkServiceCustomization.attributeMapper,
       frameworkServiceCustomization.observerLocator,
       frameworkServiceCustomization.runtimeKeyMapping,
+      resourceResolution.exclusions,
+      null,
+      resourceResolution.lookups,
+      resourceResolution.blockedLookups,
     );
     return this.compilerWorldMaterializer.construct(request);
   }

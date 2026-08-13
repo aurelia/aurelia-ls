@@ -4,6 +4,7 @@ import type {
   ResourceProject,
   ResourceSourceTarget,
   TemplateResourceAvailabilityItem,
+  TemplateResourceScopeCandidate,
 } from "@aurelia-ls/language-server/protocol";
 import type { AureliaWorkspaceIdentity } from "../../types.js";
 
@@ -43,6 +44,13 @@ export interface ResourceProjectRootScentCandidate<T> {
   /** Stable internal ordering only; it is never emitted. */
   readonly stableKey: string;
   readonly value: T;
+}
+
+export interface TemplateScopeQuickPickPresentation {
+  readonly template: TemplateResourceScopeCandidate;
+  readonly label: string;
+  readonly description: string;
+  readonly detail: string;
 }
 
 const RESOURCE_KIND_PRESENTATION = {
@@ -178,6 +186,45 @@ export function resourceCollisionScentMap<T>(
     }
   }
   return result;
+}
+
+/**
+ * Produces stable, public chooser copy for template scopes, including an exact
+ * range or ordinal distinction when their authored names and owners collide.
+ */
+export function templateScopeQuickPickPresentations(
+  candidates: readonly TemplateResourceScopeCandidate[],
+  projectContext: string,
+): readonly TemplateScopeQuickPickPresentation[] {
+  const scents = resourceCollisionScentMap(candidates.map((template) => ({
+    token: template.definitionName,
+    roleLabel: templateScopeRoleLabel(template),
+    projectLabel: projectContext,
+    source: template.source,
+    stableKey: template.scopeIdentityKey,
+    value: template,
+  })));
+  return [...candidates]
+    .sort((left, right) =>
+      left.definitionName.localeCompare(right.definitionName)
+      || left.scopeIdentityKey.localeCompare(right.scopeIdentityKey)
+    )
+    .map((template) => {
+      const role = templateScopeRoleLabel(template);
+      const scent = scents.get(template);
+      return {
+        template,
+        label: template.definitionName,
+        description: [role, scent == null ? null : `distinguished by ${scent}`]
+          .filter((value): value is string => value != null)
+          .join(" · "),
+        detail: `${projectContext} · ${resourceSourceLocationScent(template.source)}`,
+      };
+    });
+}
+
+function templateScopeRoleLabel(template: TemplateResourceScopeCandidate): string {
+  return template.compilationLane === "authoring" ? "authoring template" : "application template";
 }
 
 /** Closed, author-facing copy for the semantic visibility reason. */

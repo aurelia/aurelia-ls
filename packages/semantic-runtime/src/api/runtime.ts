@@ -272,6 +272,7 @@ import {
   readSemanticResourceInventory,
   readSemanticTemplateResourceAvailability,
 } from './resource-discovery.js';
+import { readSemanticResourceAvailabilityExplanation } from './resource-availability-explanation.js';
 import {
   readStateGetterBindingRows,
   readStateIssueRows,
@@ -397,6 +398,7 @@ import {
   type SemanticRuntimeExpressionAccessUseResult,
   type SemanticResourceDefinitionsResult,
   type SemanticResourceInventoryResult,
+  type SemanticResourceAvailabilityExplanationResult,
   type SemanticResourceIssuesResult,
   type SemanticResourceVisibilityResult,
   type SemanticResourceVisibilityRow,
@@ -4059,6 +4061,8 @@ export class SemanticApp {
         return answerCurrentQuery(() => this.resourceVisibility(query.page, query.detail));
       case SemanticAppQueryKind.TemplateResourceAvailability:
         return answerCurrentQuery(() => this.templateResourceAvailability(query));
+      case SemanticAppQueryKind.ResourceAvailabilityExplanation:
+        return answerCurrentQuery(() => this.resourceAvailabilityExplanation(query));
       case SemanticAppQueryKind.TemplateCompilations:
         return answerCurrentQuery(() => this.templateQueries.templateCompilations(query.page, query.detail));
       case SemanticAppQueryKind.TemplateCompletions:
@@ -5435,6 +5439,23 @@ export class SemanticApp {
       query.cursor,
       query.templateResourceScopeIdentityKey,
       query.includeTypeSurfaces === true,
+    );
+  }
+
+  resourceAvailabilityExplanation(
+    query: SemanticAppQuery,
+  ): SemanticRuntimeAnswer<SemanticResourceAvailabilityExplanationResult> {
+    const claimed = this.answerPublicQueryIfNeeded<SemanticResourceAvailabilityExplanationResult>(query);
+    if (claimed != null) {
+      return claimed;
+    }
+    return readSemanticResourceAvailabilityExplanation(
+      this.runtime.workspace.rootDir,
+      this.emission,
+      this.runtime.workspace.store,
+      query.cursor,
+      query.resourceIdentityKey,
+      query.templateResourceScopeIdentityKey,
     );
   }
 

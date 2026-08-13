@@ -480,6 +480,7 @@ export const enum SemanticAppQueryKind {
   ResourceIssues = 'resource-issues',
   ResourceVisibility = 'resource-visibility',
   TemplateResourceAvailability = 'template-resource-availability',
+  ResourceAvailabilityExplanation = 'resource-availability-explanation',
   TemplateCompilations = 'template-compilations',
   TemplateCompletions = 'template-completions',
   TemplateCursorInfo = 'template-cursor-info',
@@ -571,6 +572,7 @@ export const SEMANTIC_APP_QUERY_KINDS = [
   SemanticAppQueryKind.ResourceIssues,
   SemanticAppQueryKind.ResourceVisibility,
   SemanticAppQueryKind.TemplateResourceAvailability,
+  SemanticAppQueryKind.ResourceAvailabilityExplanation,
   SemanticAppQueryKind.TemplateCompilations,
   SemanticAppQueryKind.TemplateCompletions,
   SemanticAppQueryKind.TemplateCursorInfo,
@@ -886,6 +888,8 @@ export interface SemanticAppQuery {
   readonly cursor?: SemanticRuntimeSourceCursorInput | null;
   /** Exact compiler-resource scope selected from a prior template-resource-availability answer. */
   readonly templateResourceScopeIdentityKey?: string | null;
+  /** Exact top-level resource identity selected from a prior resource-inventory answer. */
+  readonly resourceIdentityKey?: string | null;
   /** Exact framework capability selected at a cursor when more than one demand shares the authored locus. */
   readonly frameworkCapability?: FrameworkRegistrationCapability | `${FrameworkRegistrationCapability}` | null;
   /** Source file used by file-scoped authoring queries such as template diagnostics. */
@@ -2516,6 +2520,115 @@ export interface SemanticTemplateResourceAvailabilityResult {
   readonly candidates: readonly SemanticTemplateResourceScopeCandidate[];
   readonly rows: readonly SemanticTemplateResourceAvailabilityRow[];
   readonly completeness: SemanticResourceInventoryCompleteness;
+}
+
+export type SemanticResourceAvailabilityExplanationConclusionKind =
+  | 'available'
+  | 'shadowed'
+  | 'configured-out'
+  | 'not-admitted'
+  | 'admission-unknown';
+
+/** One exact top-level resource interpreted through its canonical runtime lookup key in one compiler scope. */
+export interface SemanticResourceAvailabilityExplanationSubject {
+  /** Structural identity used to reprove that a fresh answer still describes the same resource/template pair. */
+  readonly subjectKey: string;
+  readonly projectKey: string;
+  readonly resourceIdentityKey: string;
+  readonly resourceKind: SemanticResourceInventoryKind;
+  readonly name: string;
+  /** V1 deliberately explains only the canonical resource name, never an alias child from inventory metadata. */
+  readonly lookupKind: 'canonical-name';
+  readonly registrationKey: string;
+  readonly resource: SemanticResourceInventoryRow;
+  readonly template: SemanticTemplateResourceScopeCandidate;
+}
+
+export interface SemanticResourceAvailabilityExplanationConclusion {
+  readonly kind: SemanticResourceAvailabilityExplanationConclusionKind;
+  readonly title: string;
+  readonly explanation: string;
+  readonly action: string;
+}
+
+export interface SemanticResourceAvailabilityExplanationExclusionEvidence {
+  readonly reason: 'duplicate-product' | 'lookup-key-conflict';
+  readonly lookupKeys: readonly string[];
+  readonly contenderLane: 'local' | 'parent';
+  readonly contenderSource: SemanticSourceReference | null;
+  readonly winnerSource: SemanticSourceReference | null;
+}
+
+export interface SemanticResourceAvailabilityExplanationConfigurationEvidence {
+  readonly state: 'excluded' | 'open' | 'not-indicated';
+  readonly requiredCapability: FrameworkRegistrationCapability | `${FrameworkRegistrationCapability}` | null;
+  readonly sources: readonly SemanticSourceReference[];
+}
+
+export interface SemanticResourceAvailabilityExplanationBlocker {
+  readonly kind: 'open-seam';
+  readonly seamKindKey: string;
+  readonly summary: string;
+  readonly reasonKinds: readonly (OpenSeamReasonKind | `${OpenSeamReasonKind}`)[];
+  readonly boundaryKinds: readonly (OpenSeamBoundaryKind | `${OpenSeamBoundaryKind}`)[];
+  readonly sources: readonly SemanticSourceReference[];
+}
+
+export interface SemanticResourceAvailabilityExplanationEvidence {
+  /** Effective canonical-key winner; equal to the subject resource when the requested resource is available. */
+  readonly effectiveResource: SemanticResourceInventoryRow | null;
+  readonly availabilitySource: SemanticSourceReference | null;
+  readonly exclusion: SemanticResourceAvailabilityExplanationExclusionEvidence | null;
+  readonly configuration: SemanticResourceAvailabilityExplanationConfigurationEvidence;
+  readonly blockers: readonly SemanticResourceAvailabilityExplanationBlocker[];
+}
+
+export type SemanticResourceAvailabilityExplanationUncertaintyReason =
+  | 'registration-admission-open'
+  | 'configuration-membership-open'
+  | 'component-scope-lineage-open'
+  | 'blocking-open-seam'
+  | 'unresolved-modules'
+  | 'source-discovery-truncated';
+
+export interface SemanticResourceAvailabilityExplanationUncertainty {
+  readonly state: 'closed' | 'open' | 'truncated';
+  readonly reasons: readonly SemanticResourceAvailabilityExplanationUncertaintyReason[];
+  readonly explanation: string;
+}
+
+export interface SemanticResourceAvailabilityExplanationCurrentness {
+  readonly authority: 'answer-analysis-basis';
+  readonly explanation: string;
+}
+
+export interface SemanticResourceAvailabilityExplanationNextStep {
+  readonly kind: 'inspect-source' | 'inspect-query' | 'requery';
+  readonly label: string;
+  readonly source: SemanticSourceReference | null;
+  readonly relatedQueryKind: SemanticAppQueryKind | `${SemanticAppQueryKind}` | null;
+  readonly targetQuery: SemanticAppQuery | null;
+}
+
+export interface SemanticResourceAvailabilityExplanation {
+  readonly subject: SemanticResourceAvailabilityExplanationSubject;
+  readonly conclusion: SemanticResourceAvailabilityExplanationConclusion;
+  readonly evidence: SemanticResourceAvailabilityExplanationEvidence;
+  readonly uncertainty: SemanticResourceAvailabilityExplanationUncertainty;
+  readonly currentness: SemanticResourceAvailabilityExplanationCurrentness;
+  readonly nextSteps: readonly SemanticResourceAvailabilityExplanationNextStep[];
+}
+
+export interface SemanticResourceAvailabilityExplanationContender {
+  readonly subject: SemanticResourceAvailabilityExplanationSubject;
+  readonly conclusionKind: SemanticResourceAvailabilityExplanationConclusionKind;
+}
+
+export interface SemanticResourceAvailabilityExplanationResult {
+  readonly displayText: string;
+  readonly projectKey: string;
+  readonly explanation: SemanticResourceAvailabilityExplanation | null;
+  readonly contenders: readonly SemanticResourceAvailabilityExplanationContender[];
 }
 
 export interface SemanticResourceIssuesResult {

@@ -54,7 +54,6 @@ import { WorkspaceDocumentUris } from "../../src/utils/document-uri.js";
 const temporaryWorkspaceRoots: string[] = [];
 
 const OVERLAP_BASE_RESOURCE_IDENTITY_KEYS = [
-  "typescript-resource:v1:5EsohJa8ZPz7ZfvI5o74H5",
   "framework-resource:v1:ao3wTTlYz7gkydrxZPeA8g",
   "framework-resource:v1:XFZvawNY8tSHKfMrkPYlVR",
   "framework-resource:v1:JmEwA1AmCPgbpnvMLPw58D",
@@ -97,30 +96,27 @@ const OVERLAP_I18N_RESOURCE_IDENTITY_KEYS = [
 
 const LONG_SUFFIX_BASELINE_AVAILABILITY_ROWS = [
   availabilityStateFact("typescript-resource:v1:9FI9Lgdc9qpJlcrJE8OVgA", "local"),
-  availabilityStateFact("typescript-resource:v1:b079pogsRRexNF_ZxBe0Wk", "app-root"),
-  ...OVERLAP_BASE_RESOURCE_IDENTITY_KEYS.slice(1).map((identityKey) =>
+  ...OVERLAP_BASE_RESOURCE_IDENTITY_KEYS.map((identityKey) =>
     availabilityStateFact(identityKey, "local")),
 ] as const;
 
 const LONG_SUFFIX_RIGHT_ONLY_AVAILABILITY_ROWS = [
   availabilityStateFact("typescript-resource:v1:azpBidTgEqjH8hleJeG8v2", "local"),
-  availabilityStateFact("typescript-resource:v1:b079pogsRRexNF_ZxBe0Wk", "app-root"),
-  ...OVERLAP_BASE_RESOURCE_IDENTITY_KEYS.slice(1).map((identityKey) =>
+  ...OVERLAP_BASE_RESOURCE_IDENTITY_KEYS.map((identityKey) =>
     availabilityStateFact(identityKey, "local")),
 ] as const;
 
 const LONG_SUFFIX_AFTER_REMOVAL_AVAILABILITY_ROWS = [
-  availabilityStateFact("typescript-resource:v1:b079pogsRRexNF_ZxBe0Wk", "app-root"),
-  ...OVERLAP_BASE_RESOURCE_IDENTITY_KEYS.slice(1).map((identityKey) =>
+  ...OVERLAP_BASE_RESOURCE_IDENTITY_KEYS.map((identityKey) =>
     availabilityStateFact(identityKey, "local")),
   availabilityStateFact("typescript-resource:v1:9FI9Lgdc9qpJlcrJE8OVgA", "local"),
 ] as const;
 
 const LONG_SUFFIX_AVAILABILITY_NAVIGATION_FACTS = {
-  rowCount: 29,
-  selectableRowCount: 2,
-  navigationUnavailableIdentityKeys: OVERLAP_BASE_RESOURCE_IDENTITY_KEYS.slice(1),
-  navigationUnavailable: OVERLAP_BASE_RESOURCE_IDENTITY_KEYS.slice(1).map((identityKey) => ({
+  rowCount: 28,
+  selectableRowCount: 1,
+  navigationUnavailableIdentityKeys: OVERLAP_BASE_RESOURCE_IDENTITY_KEYS,
+  navigationUnavailable: OVERLAP_BASE_RESOURCE_IDENTITY_KEYS.map((identityKey) => ({
     identityKey,
     reason: "external-catalog",
   })),
@@ -207,14 +203,14 @@ function overlapProjectExpectation(
       resourceIdentityKeys: includesI18n
         ? [...OVERLAP_BASE_RESOURCE_IDENTITY_KEYS, ...OVERLAP_I18N_RESOURCE_IDENTITY_KEYS]
         : [...OVERLAP_BASE_RESOURCE_IDENTITY_KEYS],
-      rowCount: includesI18n ? 36 : 28,
-      selectableRowCount: 1,
+      rowCount: includesI18n ? 35 : 27,
+      selectableRowCount: 0,
       navigationUnavailableIdentityKeys: includesI18n
-        ? [...OVERLAP_BASE_RESOURCE_IDENTITY_KEYS.slice(1), ...OVERLAP_I18N_RESOURCE_IDENTITY_KEYS]
-        : [...OVERLAP_BASE_RESOURCE_IDENTITY_KEYS.slice(1)],
+        ? [...OVERLAP_BASE_RESOURCE_IDENTITY_KEYS, ...OVERLAP_I18N_RESOURCE_IDENTITY_KEYS]
+        : [...OVERLAP_BASE_RESOURCE_IDENTITY_KEYS],
       navigationUnavailable: (includesI18n
-        ? [...OVERLAP_BASE_RESOURCE_IDENTITY_KEYS.slice(1), ...OVERLAP_I18N_RESOURCE_IDENTITY_KEYS]
-        : [...OVERLAP_BASE_RESOURCE_IDENTITY_KEYS.slice(1)]).map((identityKey) => ({
+        ? [...OVERLAP_BASE_RESOURCE_IDENTITY_KEYS, ...OVERLAP_I18N_RESOURCE_IDENTITY_KEYS]
+        : [...OVERLAP_BASE_RESOURCE_IDENTITY_KEYS]).map((identityKey) => ({
           identityKey,
           reason: "external-catalog",
         })),
@@ -1004,16 +1000,16 @@ describe("SemanticRuntimeLspSession", () => {
       selection: "not-applicable",
       coverage: "complete",
       completeness: {
-        fullDefinitions: 599,
+        fullDefinitions: 601,
         headerOnly: 5,
         visibilityOnly: 0,
         localTemplates: 5,
-        excludedCompilerSyntax: 60,
+        excludedCompilerSyntax: 61,
         unnamedDefinitions: 0,
         unresolvedModules: 0,
         openVisibility: 0,
       },
-      rowCount: 604,
+      rowCount: 606,
     });
     const inventoryPageQueries = querySpy.mock.calls
       .map(([query]) => query)
@@ -1330,7 +1326,7 @@ describe("SemanticRuntimeLspSession", () => {
         selection: "exact",
         coverage: "complete",
         projectKey: "host-alpha",
-        displayText: "long-suffix-app: 29 available runtime resource(s).",
+        displayText: "long-suffix-app: 28 available runtime resource(s).",
         selectedTemplate: {
           templateIdentityKey: "template-source:v1:Tkv7BxS6oxVmzjOgIRC496",
           scopeIdentityKey: "template-resource-scope:v1:117AGAh7rKTCWxZX1Ks9NB",
@@ -1469,7 +1465,7 @@ describe("SemanticRuntimeLspSession", () => {
         selection: "exact",
         coverage: "complete",
         projectKey: "host-alpha",
-        displayText: "long-suffix-app: 29 available runtime resource(s).",
+        displayText: "long-suffix-app: 28 available runtime resource(s).",
         selectedTemplate: {
           templateIdentityKey: "template-source:v1:Tkv7BxS6oxVmzjOgIRC496",
           scopeIdentityKey: "template-resource-scope:v1:b_7B4CPaLeGYVX6iYBfdsJ",
@@ -1598,6 +1594,81 @@ describe("SemanticRuntimeLspSession", () => {
     await session.dispose();
   }, 60_000);
 
+  test("routes one exact resource availability subject at runtime-topology depth", async () => {
+    const fixtureRoot = minimalFixtureRoot();
+    const templatePath = path.join(fixtureRoot, "src", "app.html");
+    const templateText = fs.readFileSync(templatePath, "utf8");
+    const templateUri = pathToFileURL(templatePath).toString();
+    const template = TextDocument.create(templateUri, "html", 1, templateText);
+    const position = template.positionAt(templateText.indexOf("message") + 2);
+    const originalAnswerAppQuery = SemanticRuntime.prototype.answerAppQuery;
+    const querySpy = vi.spyOn(SemanticRuntime.prototype, "answerAppQuery")
+      .mockImplementation(function (this: SemanticRuntime, query) {
+        if (query.kind !== SemanticAppQueryKind.ResourceAvailabilityExplanation) {
+          return originalAnswerAppQuery.call(this, query);
+        }
+        return Promise.resolve({
+          schemaVersion: "0.2",
+          result: "answered",
+          selection: "absent",
+          coverage: "complete",
+          summary: "The selected resource is absent.",
+          value: {
+            displayText: "The selected resource is absent.",
+            projectKey: query.projectKey,
+            explanation: null,
+            contenders: [],
+          },
+          page: null,
+        } as never);
+      });
+    const session = createSession(fixtureRoot, new TestDocumentStore());
+
+    const result = await session.runRequest(null, async (operation) => {
+      const summary = await operation.workspaceSummary();
+      const projectKey = summary.value.appCandidates[0]?.projectKey;
+      if (projectKey == null) throw new Error("Expected one minimal-app project.");
+      return {
+        projectKey,
+        answer: await operation.resourceAvailabilityExplanation(
+          projectKey,
+          templateUri,
+          position,
+          "resource:app-root:v1",
+          "scope:app-root:v1",
+        ),
+      };
+    });
+
+    expect(result.answer).toMatchObject({
+      result: "answered",
+      selection: "absent",
+      value: { projectKey: result.projectKey, explanation: null, contenders: [] },
+    });
+    const explanationQueries = querySpy.mock.calls
+      .map(([query]) => query)
+      .filter((query) => query.kind === SemanticAppQueryKind.ResourceAvailabilityExplanation);
+    expect(explanationQueries).toHaveLength(1);
+    expect(explanationQueries[0]).toMatchObject({
+      kind: SemanticAppQueryKind.ResourceAvailabilityExplanation,
+      projectKey: result.projectKey,
+      sourceFilePath: templatePath,
+      cursor: {
+        filePath: templatePath,
+        line: position.line,
+        character: position.character,
+        offset: template.offsetAt(position),
+      },
+      resourceIdentityKey: "resource:app-root:v1",
+      templateResourceScopeIdentityKey: "scope:app-root:v1",
+      inquiryProfile: "lsp-cursor",
+      analysisDepth: "runtime-topology",
+      includeAuthoringTemplates: true,
+      appRetention: "retain-app",
+    });
+    await session.dispose();
+  }, 60_000);
+
   test("retains ordinary discovery for a gated descriptor belonging to another root", async () => {
     const topology = createAcceptanceTopologyWorkspace();
     stubAcceptanceTopologyEnvironment(topology.descriptorPath);
@@ -1714,7 +1785,7 @@ describe("SemanticRuntimeLspSession", () => {
       result: "answered",
       selection: "exact",
       coverage: "open",
-      rows: 28,
+      rows: 27,
     });
     const guardrailApp = preflight.guardrail.value.rows.find((row) => row.name === "guardrail-app");
     expect(guardrailApp == null ? null : {
@@ -1737,7 +1808,7 @@ describe("SemanticRuntimeLspSession", () => {
       result: "answered",
       selection: "exact",
       coverage: "truncated",
-      rows: 28,
+      rows: 27,
     });
     expect({
       result: preflight.guardrail.result,

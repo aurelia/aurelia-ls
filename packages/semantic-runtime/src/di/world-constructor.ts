@@ -4,6 +4,7 @@ import {
   OpenSeam,
 } from '../kernel/open-seam.js';
 import type {
+  AddressHandle,
   ClaimHandle,
   OpenSeamHandle,
   ProductHandle,
@@ -74,6 +75,7 @@ import type {
 } from '../resources/built-in-resource-catalog-materializer.js';
 import {
   ResourceDefinitionKind,
+  runtimeResourceKeyForKind,
 } from '../resources/resource-kind.js';
 import type { FullResourceDefinition } from '../resources/resource-definition.js';
 import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
@@ -144,6 +146,7 @@ import {
 } from './provider-activation.js';
 import {
   DiRegistrationOpenSeamScope,
+  type DiResourceSlotExclusion,
   DiWorldConstructionEmission,
   RegisteredAppTask,
   type DiResolverProduct,
@@ -166,6 +169,10 @@ import {
   summaryForRegistryValueOpen,
 } from './world-publication.js';
 
+type ResourceSlotPublicationResult = NonNullable<ReturnType<
+  DiResourceSlotPublicationMaterializer['recordsForResourceDefinitionSlot']
+>>;
+
 interface DiRegistrationSpendingEmission {
   readonly records: readonly KernelStoreRecord[];
   readonly operation: ContainerRegistrationOperation;
@@ -175,6 +182,7 @@ interface DiRegistrationSpendingEmission {
   readonly resolverSlots: readonly ContainerResolverSlot[];
   readonly factorySlots: readonly ContainerFactorySlot[];
   readonly resourceSlots: readonly ContainerResourceSlot[];
+  readonly resourceSlotExclusions: readonly DiResourceSlotExclusion[];
   readonly registeredAppTasks: readonly RegisteredAppTask[];
   readonly openSeams: readonly OpenSeam[];
   readonly registrationOpenSeamScopes: readonly DiRegistrationOpenSeamScope[];
@@ -191,6 +199,7 @@ interface DiRegistrationSpendingCascadeEmission {
   readonly resolverSlots: readonly ContainerResolverSlot[];
   readonly factorySlots: readonly ContainerFactorySlot[];
   readonly resourceSlots: readonly ContainerResourceSlot[];
+  readonly resourceSlotExclusions: readonly DiResourceSlotExclusion[];
   readonly registeredAppTasks: readonly RegisteredAppTask[];
   readonly openSeams: readonly OpenSeam[];
   readonly registrationOpenSeamScopes: readonly DiRegistrationOpenSeamScope[];
@@ -294,6 +303,7 @@ class DiRegistrationSpendingFrame {
   readonly resolverSlots: ContainerResolverSlot[] = [];
   readonly factorySlots: ContainerFactorySlot[] = [];
   readonly resourceSlots: ContainerResourceSlot[] = [];
+  readonly resourceSlotExclusions: DiResourceSlotExclusion[] = [];
   readonly registeredAppTasks: RegisteredAppTask[] = [];
   readonly openSeams: OpenSeam[] = [];
   readonly issues: DiIssue[] = [];
@@ -377,6 +387,7 @@ class DiRegistrationSpendingFrame {
     this.openSeams.push(...emission.openSeams);
     this.issues.push(...emission.issues);
     this.resourceIssues.push(...emission.resourceIssues);
+    this.resourceSlotExclusions.push(...emission.exclusions);
     for (const slot of emission.slots) {
       container.registerResource(slot);
     }
@@ -394,6 +405,7 @@ class DiRegistrationSpendingFrame {
     this.openSeams.push(...effects.openSeams);
     this.issues.push(...effects.issues);
     this.resourceIssues.push(...effects.resourceIssues);
+    this.resourceSlotExclusions.push(...effects.resourceSlotExclusions);
     for (const slot of effects.resolverSlots) {
       container.registerResolver(slot);
     }
@@ -428,6 +440,7 @@ class DiRegistrationSpendingFrame {
       resolverSlots: this.resolverSlots,
       factorySlots: this.factorySlots,
       resourceSlots: this.resourceSlots,
+      resourceSlotExclusions: this.resourceSlotExclusions,
       registeredAppTasks: this.registeredAppTasks,
       openSeams: this.openSeams,
       registrationOpenSeamScopes: this.openSeams.map((seam) => new DiRegistrationOpenSeamScope(
@@ -449,6 +462,7 @@ class DiRegistrationSpendingCascadeFrame {
   private readonly resolverSlots: ContainerResolverSlot[] = [];
   private readonly factorySlots: ContainerFactorySlot[] = [];
   private readonly resourceSlots: ContainerResourceSlot[] = [];
+  private readonly resourceSlotExclusions: DiResourceSlotExclusion[] = [];
   private readonly registeredAppTasks: RegisteredAppTask[] = [];
   private readonly openSeams: OpenSeam[] = [];
   private readonly registrationOpenSeamScopes: DiRegistrationOpenSeamScope[] = [];
@@ -469,6 +483,7 @@ class DiRegistrationSpendingCascadeFrame {
     this.resolverSlots.push(...spent.resolverSlots);
     this.factorySlots.push(...spent.factorySlots);
     this.resourceSlots.push(...spent.resourceSlots);
+    this.resourceSlotExclusions.push(...spent.resourceSlotExclusions);
     this.registeredAppTasks.push(...spent.registeredAppTasks);
     this.openSeams.push(...spent.openSeams);
     this.registrationOpenSeamScopes.push(...spent.registrationOpenSeamScopes);
@@ -485,6 +500,7 @@ class DiRegistrationSpendingCascadeFrame {
     this.resolverSlots.push(...spent.resolverSlots);
     this.factorySlots.push(...spent.factorySlots);
     this.resourceSlots.push(...spent.resourceSlots);
+    this.resourceSlotExclusions.push(...spent.resourceSlotExclusions);
     this.registeredAppTasks.push(...spent.registeredAppTasks);
     this.openSeams.push(...spent.openSeams);
     this.registrationOpenSeamScopes.push(...spent.registrationOpenSeamScopes);
@@ -513,6 +529,7 @@ class DiRegistrationSpendingCascadeFrame {
       resolverSlots: this.resolverSlots,
       factorySlots: this.factorySlots,
       resourceSlots: this.resourceSlots,
+      resourceSlotExclusions: this.resourceSlotExclusions,
       registeredAppTasks: this.registeredAppTasks,
       openSeams: this.openSeams,
       registrationOpenSeamScopes: this.registrationOpenSeamScopes,
@@ -1011,6 +1028,7 @@ class DiRegistrationSpendingCascade {
       resolverSlots: [],
       factorySlots: [],
       resourceSlots: [],
+      resourceSlotExclusions: [],
       registeredAppTasks: [],
       openSeams: [],
       registrationOpenSeamScopes: [],
@@ -1109,6 +1127,7 @@ class DiWorldConstructionFrame {
   readonly factorySlots: ContainerFactorySlot[] = [];
   readonly selfResolverSlots: ContainerSelfResolverSlot[] = [];
   readonly resourceSlots: ContainerResourceSlot[] = [];
+  readonly resourceSlotExclusions: DiResourceSlotExclusion[] = [];
   readonly registeredAppTasks: RegisteredAppTask[] = [];
   readonly openSeams: OpenSeam[] = [];
   readonly registrationOpenSeamScopes: DiRegistrationOpenSeamScope[] = [];
@@ -1152,6 +1171,7 @@ class DiWorldConstructionFrame {
     readonly resolverSlots: readonly ContainerResolverSlot[];
     readonly factorySlots: readonly ContainerFactorySlot[];
     readonly resourceSlots: readonly ContainerResourceSlot[];
+    readonly resourceSlotExclusions: readonly DiResourceSlotExclusion[];
     readonly registeredAppTasks: readonly RegisteredAppTask[];
     readonly openSeams: readonly OpenSeam[];
     readonly registrationOpenSeamScopes: readonly DiRegistrationOpenSeamScope[];
@@ -1181,6 +1201,7 @@ class DiWorldConstructionFrame {
     this.resolverSlots.push(...spent.resolverSlots);
     this.factorySlots.push(...spent.factorySlots);
     this.resourceSlots.push(...spent.resourceSlots);
+    this.resourceSlotExclusions.push(...spent.resourceSlotExclusions);
     this.registeredAppTasks.push(...spent.registeredAppTasks);
     this.openSeams.push(...spent.openSeams);
     this.registrationOpenSeamScopes.push(...spent.registrationOpenSeamScopes);
@@ -1199,6 +1220,7 @@ class DiWorldConstructionFrame {
       this.factorySlots,
       this.selfResolverSlots,
       this.resourceSlots,
+      this.resourceSlotExclusions,
       this.registeredAppTasks,
       this.openSeams,
       this.registrationOpenSeamScopes,
@@ -2066,13 +2088,6 @@ export class DiWorldConstructor {
     local: string,
     provenanceHandle: ProvenanceHandle,
   ): DiResourceSlotEmission {
-    const records: KernelStoreRecord[] = [];
-    const slots: ContainerResourceSlot[] = [];
-    const claimHandles: ClaimHandle[] = [];
-    const openSeams: OpenSeam[] = [];
-    const issues: DiIssue[] = [];
-    const resourceIssues: ResourceIssue[] = [];
-
     const definition = resourceDefinitions?.lookupByProduct(admission.registeredValue.productHandle) ?? null;
     if (definition == null) {
       const seam = recordsForDiOpenSeam(this.store,
@@ -2090,9 +2105,14 @@ export class DiWorldConstructor {
       return new DiResourceSlotEmission([], [], [], []);
     }
 
-    const names = resourceLookupNames(definition, admission.resourceLookupNameOverride);
-    names.forEach((name, index) => {
-      const slot = this.resourceSlotPublication.recordsForResourceDefinitionSlot(
+    return this.spendOrderedResourceKeys(
+      container,
+      definition.type,
+      resourceLookupNames(definition, admission.resourceLookupNameOverride),
+      definition.productHandle,
+      admission.sourceAddressHandle,
+      local,
+      (name, index) => this.resourceSlotPublication.recordsForResourceDefinitionSlot(
         container,
         definition,
         name,
@@ -2100,32 +2120,9 @@ export class DiWorldConstructor {
         `${local}:${index}`,
         provenanceHandle,
         projectKey,
-      );
-      if (slot == null) {
-        return;
-      }
-      records.push(...slot.records);
-      if (slot.slot != null) {
-        slots.push(slot.slot);
-      }
-      claimHandles.push(...slot.claimHandles);
-      issues.push(...slot.issues);
-      resourceIssues.push(...slot.resourceIssues);
-    });
-
-    if (slots.length === 0 && issues.length === 0 && resourceIssues.length === 0) {
-      const seam = recordsForDiOpenSeam(this.store,
-        `${local}:no-resource-key`,
-        KernelVocabulary.Di.OpenRegistrationSpending.key,
-        'Resource registration did not produce any runtime resource-key rows.',
-        admission.sourceAddressHandle,
-        [OpenSeamReasonKind.DiResourceSlotOpen],
-      );
-      records.push(...seam.records);
-      openSeams.push(seam.seam);
-    }
-
-    return new DiResourceSlotEmission(records, slots, claimHandles, openSeams, issues, resourceIssues);
+      ),
+      'Resource registration did not produce any runtime resource-key rows.',
+    );
   }
 
   private recordsForConfiguredResourceSlots(
@@ -2153,16 +2150,16 @@ export class DiWorldConstructor {
       ));
     }
 
-    const records: KernelStoreRecord[] = [];
-    const slots: ContainerResourceSlot[] = [];
-    const claimHandles: ClaimHandle[] = [];
-    const issues: DiIssue[] = [];
-    const resourceIssues: ResourceIssue[] = [];
-    resourceEmissions.forEach((emission, resourceIndex) => {
+    const emissions = resourceEmissions.map((emission, resourceIndex) => {
       const resource = emission.resource;
-      const names = [resource.name, ...resource.aliases];
-      names.forEach((name, nameIndex) => {
-        const slot = this.resourceSlotPublication.recordsForBuiltInResourceSlot(
+      return this.spendOrderedResourceKeys(
+        container,
+        resource.resourceKind,
+        [resource.name, ...resource.aliases],
+        resource.productHandle,
+        operation.sourceAddressHandle,
+        `${local}:${resourceIndex}`,
+        (name, nameIndex) => this.resourceSlotPublication.recordsForBuiltInResourceSlot(
           container,
           resource,
           name,
@@ -2170,21 +2167,138 @@ export class DiWorldConstructor {
           `${local}:${resourceIndex}:${nameIndex}`,
           provenanceHandle,
           projectKey,
-        );
-        if (slot == null) {
-          return;
-        }
-        records.push(...slot.records);
-        if (slot.slot != null) {
-          slots.push(slot.slot);
-        }
-        claimHandles.push(...slot.claimHandles);
-        issues.push(...slot.issues);
-        resourceIssues.push(...slot.resourceIssues);
-      });
+        ),
+      );
     });
 
-    return new DiResourceSlotEmission(records, slots, claimHandles, [], issues, resourceIssues);
+    return new DiResourceSlotEmission(
+      emissions.flatMap((emission) => emission.records),
+      emissions.flatMap((emission) => emission.slots),
+      emissions.flatMap((emission) => emission.claimHandles),
+      emissions.flatMap((emission) => emission.openSeams),
+      emissions.flatMap((emission) => emission.issues),
+      emissions.flatMap((emission) => emission.resourceIssues),
+      emissions.flatMap((emission) => emission.exclusions),
+    );
+  }
+
+  /**
+   * Spend one runtime-shaped ResourceDefinition.register operation in primary/alias order.
+   * Custom elements, converters, behaviors, and commands stop after primary collision. Custom attributes and
+   * template controllers additionally occupy otherwise-free alias resolver keys, but those poisoned aliases have no
+   * effective resource target and therefore remain blocked instead of becoming invented slots.
+   */
+  private spendOrderedResourceKeys(
+    container: Container,
+    kind: ResourceDefinitionKind,
+    names: readonly string[],
+    resourceProductHandle: ProductHandle | null,
+    registrationSourceAddressHandle: AddressHandle | null,
+    local: string,
+    publish: (name: string, index: number) => ResourceSlotPublicationResult | null,
+    emptyEmissionSummary: string | null = null,
+  ): DiResourceSlotEmission {
+    const records: KernelStoreRecord[] = [];
+    const slots: ContainerResourceSlot[] = [];
+    const claimHandles: ClaimHandle[] = [];
+    const openSeams: OpenSeam[] = [];
+    const issues: DiIssue[] = [];
+    const resourceIssues: ResourceIssue[] = [];
+    const exclusions: DiResourceSlotExclusion[] = [];
+
+    for (const [index, name] of names.entries()) {
+      const resourceKey = runtimeResourceKeyForKind(kind, name);
+      const occupied = resourceKey == null
+        ? null
+        : container.readResourceSlots().find((candidate) => candidate.resourceKey === resourceKey) ?? null;
+      const blocked = resourceKey != null && occupied == null && container.hasBlockedResource(resourceKey);
+      if (blocked) {
+        const seam = recordsForDiOpenSeam(
+          this.store,
+          `${local}:${index}:blocked-resource-key`,
+          KernelVocabulary.Di.OpenRegistrationSpending.key,
+          `Resource key ${resourceKey} is occupied by a registration whose effective resource target is unavailable.`,
+          registrationSourceAddressHandle,
+          [OpenSeamReasonKind.DiResourceSlotOpen],
+        );
+        records.push(...seam.records);
+        openSeams.push(seam.seam);
+        if (isAttributeRegistrationKind(kind)) {
+          if (index === 0) {
+            this.blockUnownedResourceAliases(container, kind, names.slice(1));
+            break;
+          }
+          continue;
+        }
+        // A poisoned alias still consumes that resolver key, but a spread registration continues to later aliases.
+        // Only a poisoned primary prevents non-attribute resources from reaching their alias registrations.
+        if (index === 0) break;
+        continue;
+      }
+      if (
+        index > 0
+        && occupied?.resourceProductHandle != null
+        && occupied.resourceProductHandle === resourceProductHandle
+      ) {
+        continue;
+      }
+      const publication = publish(name, index);
+      if (publication == null) {
+        continue;
+      }
+      records.push(...publication.records);
+      claimHandles.push(...publication.claimHandles);
+      issues.push(...publication.issues);
+      resourceIssues.push(...publication.resourceIssues);
+      exclusions.push(...publication.exclusions);
+      if (publication.slot != null) {
+        slots.push(publication.slot);
+        // Accepted rows become visible immediately so later aliases observe the same ordered registration call.
+        container.registerResource(publication.slot);
+      } else if (index === 0) {
+        if (isAttributeRegistrationKind(kind)) {
+          this.blockUnownedResourceAliases(container, kind, names.slice(1));
+        }
+        break;
+      }
+    }
+
+    if (
+      emptyEmissionSummary != null
+      && slots.length === 0
+      && openSeams.length === 0
+      && issues.length === 0
+      && resourceIssues.length === 0
+    ) {
+      const seam = recordsForDiOpenSeam(
+        this.store,
+        `${local}:no-resource-key`,
+        KernelVocabulary.Di.OpenRegistrationSpending.key,
+        emptyEmissionSummary,
+        registrationSourceAddressHandle,
+        [OpenSeamReasonKind.DiResourceSlotOpen],
+      );
+      records.push(...seam.records);
+      openSeams.push(seam.seam);
+    }
+
+    return new DiResourceSlotEmission(records, slots, claimHandles, openSeams, issues, resourceIssues, exclusions);
+  }
+
+  private blockUnownedResourceAliases(
+    container: Container,
+    kind: ResourceDefinitionKind,
+    aliasNames: readonly string[],
+  ): void {
+    for (const aliasName of aliasNames) {
+      const aliasKey = runtimeResourceKeyForKind(kind, aliasName);
+      if (
+        aliasKey != null
+        && !container.readResourceSlots().some((candidate) => candidate.resourceKey === aliasKey)
+      ) {
+        container.blockResourceKey(aliasKey);
+      }
+    }
   }
 
   private recordsForFrameworkRegistrationEffects(
@@ -2261,6 +2375,7 @@ export class DiWorldConstructor {
       resourceEmission.openSeams,
       resourceEmission.issues,
       resourceEmission.resourceIssues,
+      resourceEmission.exclusions,
     );
   }
 
@@ -2274,6 +2389,11 @@ function resourceLookupNames(
     return [];
   }
   return [lookupNameOverride ?? definition.name, ...definition.aliases.map((alias) => alias.name)];
+}
+
+function isAttributeRegistrationKind(kind: ResourceDefinitionKind): boolean {
+  return kind === ResourceDefinitionKind.CustomAttribute
+    || kind === ResourceDefinitionKind.TemplateController;
 }
 
 function summaryForUnmaterializedRegistrationAdmission(
@@ -2402,6 +2522,7 @@ function emptyRegistrationSpendingCascade(): DiRegistrationSpendingCascadeEmissi
     resolverSlots: [],
     factorySlots: [],
     resourceSlots: [],
+    resourceSlotExclusions: [],
     registeredAppTasks: [],
     openSeams: [],
     registrationOpenSeamScopes: [],

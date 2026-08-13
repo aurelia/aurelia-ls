@@ -5,6 +5,7 @@ import { ResourceDefinitionHeaderEmission } from '../resources/resource-definiti
 import type { FullResourceDefinition } from '../resources/resource-definition.js';
 import type { ResourceDefinitionHeaderDetail } from '../resources/product-details.js';
 import type { ResourceDefinitionKind } from '../resources/resource-kind.js';
+import { runtimeResourceKeyForKind } from '../resources/resource-kind.js';
 import type { TemplateResourceScope } from './compiler-world.js';
 import type {
   TemplateVisibleResource,
@@ -20,10 +21,16 @@ export function findVisibleTemplateResource(
   resourceKind: ResourceDefinitionKind,
   name: string,
 ): TemplateVisibleResource | null {
-  return resourceScope == null ? null : [
-    ...resourceScope.resources,
-    ...resourceScope.syntaxResources,
-  ].find((resource) =>
+  if (resourceScope == null) return null;
+  const lookupKey = runtimeResourceKeyForKind(resourceKind, name);
+  if (lookupKey != null) {
+    if (resourceScope.blockedLookups.some((candidate) => candidate.lookupKey === lookupKey)) {
+      return null;
+    }
+    const lookup = resourceScope.lookups.find((candidate) => candidate.lookupKey === lookupKey) ?? null;
+    if (lookup != null) return lookup.winner;
+  }
+  return resourceScope.syntaxResources.find((resource) =>
     resource.resourceKind === resourceKind
     && (resource.name === name || resource.aliases.includes(name))
   ) ?? null;

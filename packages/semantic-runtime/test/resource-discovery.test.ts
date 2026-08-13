@@ -386,6 +386,13 @@ describe('resource discovery', () => {
       path: 'src/main.ts',
       role: 'range',
     });
+    expect(primary.value.rows.map((row) => row.resource.name).slice(0, 5)).toEqual([
+      'local-chip',
+      'local-icon',
+      'outer-local',
+      'global-helper',
+      'secondary-host',
+    ]);
 
     const memberValueAccess = vi.spyOn(CheckerTypeShapeAccess.prototype, 'memberValueAccess');
     const richPrimary = await templateAvailability(

@@ -22,6 +22,7 @@ import type {
   ResourceInventorySnapshot,
   ResourceInventoryWorkspaceSnapshot,
   ResourceNavigationRequest,
+  ResourceAvailabilityExplanationSubjectRequest,
 } from "../../types.js";
 import type { AnalysisLimitationReviewEntry } from "../analysis-limitations/review.js";
 import type { VscodeApi } from "../../vscode-api.js";
@@ -67,6 +68,7 @@ interface TreeNode {
   readonly children?: readonly TreeNode[];
   readonly navigation?: ResourceNavigationRequest;
   readonly implementationNavigation?: ResourceNavigationRequest;
+  readonly availabilityExplanation?: ResourceAvailabilityExplanationSubjectRequest;
   readonly retryWorkspaceKey?: string;
   readonly contextValue: string;
   /** Exact build-time state facts used only by the gated host observation. */
@@ -471,6 +473,11 @@ function resourceNode(
     iconId: kind.icon,
     collapsible: children.length > 0,
     children,
+    availabilityExplanation: {
+      workspaceKey: input.workspace.key,
+      projectKey: input.result.project.projectKey,
+      resourceIdentityKey: resource.identityKey,
+    },
     ...(navigable ? { navigation } : {}),
     ...(implementationNavigation == null ? {} : { implementationNavigation }),
     contextValue: !navigable
@@ -847,6 +854,12 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Dis
     if (action === "implementation") return node.implementationNavigation ?? null;
     if (node.navigation == null) return null;
     return action === "beside" ? { ...node.navigation, placement: "beside" } : node.navigation;
+  }
+
+  /** Re-resolves an actual current top-level row without trusting command arguments as semantic facts. */
+  availabilityExplanationFor(element: unknown): ResourceAvailabilityExplanationSubjectRequest | null {
+    const node = currentNodeReference(this.#tree, element);
+    return node?.nodeKind === "resource" ? node.availabilityExplanation ?? null : null;
   }
 
   retryWorkspaceFor(element: unknown): string | null {
@@ -1300,6 +1313,16 @@ function currentNode(tree: readonly TreeNode[], candidate: unknown): TreeNode | 
   const id = (candidate as { readonly id?: unknown }).id;
   if (typeof id !== "string") return null;
   return currentNodeById(tree, id, resourceDiscoveryHostAcceptanceEnabled());
+}
+
+function currentNodeReference(tree: readonly TreeNode[], candidate: unknown): TreeNode | null {
+  if (candidate == null || typeof candidate !== "object") return null;
+  for (const node of tree) {
+    if (node === candidate) return node;
+    const nested = currentNodeReference(node.children ?? [], candidate);
+    if (nested != null) return nested;
+  }
+  return null;
 }
 
 function currentNodeById(

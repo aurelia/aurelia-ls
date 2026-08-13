@@ -57,6 +57,8 @@ export class Container {
   private readonly _resolvers = new Map<IdentityHandle, ContainerResolverLikeSlot[]>();
   private readonly _factories: Map<IdentityHandle, ContainerFactorySlot>;
   private readonly res = new Map<string, ContainerResourceSlot>();
+  /** Resource resolver keys occupied by runtime registration but not backed by a usable resource lookup row. */
+  private readonly blockedResourceKeys = new Set<string>();
   private readonly _disposableResolvers = new Map<IdentityHandle, Set<ContainerResolverLikeSlot>>();
   private readonly _parent: Container | null;
   private readonly _parentReference: ContainerReference | null;
@@ -161,6 +163,15 @@ export class Container {
     return slot;
   }
 
+  /** Retain a locally occupied resource resolver key whose effective resource target cannot be represented. */
+  blockResourceKey(resourceKey: string): void {
+    this.blockedResourceKeys.add(resourceKey);
+  }
+
+  hasBlockedResource(resourceKey: string): boolean {
+    return this.blockedResourceKeys.has(resourceKey);
+  }
+
   /** Add or replace a root-shared factory row. */
   registerFactory(slot: ContainerFactorySlot): void {
     this._factories.set(slot.keyIdentityHandle, slot);
@@ -175,7 +186,7 @@ export class Container {
 
   /** True when a runtime resource key is visible in this container or optionally its ancestors. */
   hasResource(resourceKey: string, searchAncestors: boolean = false): boolean {
-    return this.res.has(resourceKey)
+    return this.res.has(resourceKey) || this.blockedResourceKeys.has(resourceKey)
       || (searchAncestors && (this._parent?.hasResource(resourceKey, true) ?? false));
   }
 
@@ -408,6 +419,9 @@ export class Container {
     for (const slot of container.readResourceSlots()) {
       imported.push(this.registerResource(factory(this, slot)));
     }
+    for (const resourceKey of container.readBlockedResourceKeys()) {
+      this.blockResourceKey(resourceKey);
+    }
     return imported;
   }
 
@@ -434,6 +448,15 @@ export class Container {
         local,
       );
     }
+    if (this.blockedResourceKeys.has(resourceKey)) {
+      return new ContainerResourceLookup(
+        ContainerLookupState.Miss,
+        resourceKey,
+        this.toReference(),
+        this.toReference(),
+        null,
+      );
+    }
 
     const rootContainer = this.root;
     const rootSlot = rootContainer === this ? null : rootContainer.res.get(resourceKey) ?? null;
@@ -451,6 +474,7 @@ export class Container {
     this.disposeResolvers();
     this._resolvers.clear();
     this.res.clear();
+    this.blockedResourceKeys.clear();
     if (this.root === this) {
       this._factories.clear();
     }
@@ -466,6 +490,10 @@ export class Container {
 
   readResourceSlots(): readonly ContainerResourceSlot[] {
     return [...this.res.values()];
+  }
+
+  readBlockedResourceKeys(): readonly string[] {
+    return [...this.blockedResourceKeys];
   }
 
   readFactorySlots(): readonly ContainerFactorySlot[] {

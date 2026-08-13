@@ -375,6 +375,16 @@ function parseInvocation(args: readonly string[]): {
       index += 1;
       continue;
     }
+    if (key === '--resourceIdentityKey') {
+      input.resourceIdentityKey = requireValue(rest, index, key);
+      index += 1;
+      continue;
+    }
+    if (key === '--templateResourceScopeIdentityKey') {
+      input.templateResourceScopeIdentityKey = requireValue(rest, index, key);
+      index += 1;
+      continue;
+    }
     if (key === '--group') {
       input.group = requireValue(rest, index, key);
       index += 1;
@@ -641,7 +651,7 @@ function usage(): string {
     'Commands: workspace-overview, project-configurations, analysis-cache-overview, clear-analysis-cache, app-query-catalog, pattern-menu, pattern-example, docs-search, docs-fetch, app-overview, router-overview, app-query, app-query-batch, open-seam-overview, diagnostic-overview, app-diagnostics, template-cursor-info, template-completions, template-diagnostics',
     'Public tool names such as aurelia_app_query and aurelia_app_diagnostics are accepted as aliases.',
     'Use --text or --output text to print the same compact text returned through MCP content; JSON remains the default for structured inspection.',
-    'Use --input <json> or a positional JSON object for full adapter input, plus common flags such as --query, --patternId, --documentPath, --documentPathPrefix, --sectionAnchor, --maxChars, --projectKey, --view, --projectRootHint, --excludedWorkspaceRoot, --analysisDepth, --includeAuthoringTemplates [true|false], --includeKernelBreakdowns [true|false], --includeDetailDensity [true|false], --includeQueryClaimRows [true|false], --includeAppProfile [true|false], --includeAppQueryClaimProfiles [true|false], --typeSystemDependencyCacheClearPolicy, --group, --queryKind, --frameworkCapability, --sourceFile, --sourceFilePath (repeat for project-configurations), --cursor file:line:character[:offset], --diagnosticProjection, --analysisLimitationPageSize, --openSeamPageSize, --openSeamKindKey, --openSeamReasonKind, --sourceRole, --continuationIntent, --appRetention, --pageSize/--page.size, --pageCursor/--page.cursor, --projectPageSize/--projectPage.size, --projectPageCursor/--projectPage.cursor, --rowPageSize, and --rowLimit.',
+    'Use --input <json> or a positional JSON object for full adapter input, plus common flags such as --query, --patternId, --documentPath, --documentPathPrefix, --sectionAnchor, --maxChars, --projectKey, --view, --projectRootHint, --excludedWorkspaceRoot, --analysisDepth, --includeAuthoringTemplates [true|false], --includeKernelBreakdowns [true|false], --includeDetailDensity [true|false], --includeQueryClaimRows [true|false], --includeAppProfile [true|false], --includeAppQueryClaimProfiles [true|false], --typeSystemDependencyCacheClearPolicy, --group, --queryKind, --frameworkCapability, --resourceIdentityKey, --templateResourceScopeIdentityKey, --sourceFile, --sourceFilePath (repeat for project-configurations), --cursor file:line:character[:offset], --diagnosticProjection, --analysisLimitationPageSize, --openSeamPageSize, --openSeamKindKey, --openSeamReasonKind, --sourceRole, --continuationIntent, --appRetention, --pageSize/--page.size, --pageCursor/--page.cursor, --projectPageSize/--projectPage.size, --projectPageCursor/--projectPage.cursor, --rowPageSize, and --rowLimit.',
   ].join('\n');
 }
 

@@ -118,6 +118,7 @@ import {
   type ResolverField,
   ResolverStrategy,
 } from './resolver.js';
+import { DiResourceSlotExclusion } from './world-construction.js';
 
 export class DiSourceSet {
   constructor(
@@ -180,6 +181,7 @@ export class DiFrameworkRegistrationEffectEmission {
     readonly openSeams: readonly OpenSeam[] = [],
     readonly issues: readonly DiIssue[] = [],
     readonly resourceIssues: readonly ResourceIssue[] = [],
+    readonly resourceSlotExclusions: readonly DiResourceSlotExclusion[] = [],
   ) {}
 }
 
@@ -823,6 +825,7 @@ export class DiResourceSlotEmission {
     readonly openSeams: readonly OpenSeam[] = [],
     readonly issues: readonly DiIssue[] = [],
     readonly resourceIssues: readonly ResourceIssue[] = [],
+    readonly exclusions: readonly DiResourceSlotExclusion[] = [],
   ) {}
 }
 
@@ -841,7 +844,7 @@ class DiResourceSlotPublication {
     readonly resourceProductHandle: ProductHandle,
     /** Registration site that owns the container slot. */
     readonly registrationSourceAddressHandle: AddressHandle | null,
-    /** Definition, alias, or override token that supplied this exact runtime key. */
+    /** Best available witness for this runtime key; registration-site fallback when key-local syntax is absent. */
     readonly keySourceAddressHandle: AddressHandle | null,
     readonly projectKey: string | null,
     readonly duplicateDiagnostic: ResourceDuplicateDiagnostic | null,
@@ -1236,6 +1239,7 @@ export class DiResourceSlotPublicationMaterializer {
     readonly claimHandles: readonly ClaimHandle[];
     readonly issues: readonly DiIssue[];
     readonly resourceIssues: readonly ResourceIssue[];
+    readonly exclusions: readonly DiResourceSlotExclusion[];
   } | null {
     if (definition.identityHandle == null || definition.productHandle == null) {
       return null;
@@ -1276,6 +1280,7 @@ export class DiResourceSlotPublicationMaterializer {
     readonly claimHandles: readonly ClaimHandle[];
     readonly issues: readonly DiIssue[];
     readonly resourceIssues: readonly ResourceIssue[];
+    readonly exclusions: readonly DiResourceSlotExclusion[];
   } | null {
     if (resource.identityHandle == null || resource.productHandle == null) {
       return null;
@@ -1324,6 +1329,7 @@ export class DiResourceSlotPublicationMaterializer {
       sourceSlot.resourceProductHandle,
       sourceSlot.resolverProductHandle,
       sourceAddressHandle,
+      sourceSlot.keySourceAddressHandle,
       [],
     );
     return {
@@ -1349,6 +1355,7 @@ export class DiResourceSlotPublicationMaterializer {
     readonly claimHandles: readonly ClaimHandle[];
     readonly issues: readonly DiIssue[];
     readonly resourceIssues: readonly ResourceIssue[];
+    readonly exclusions: readonly DiResourceSlotExclusion[];
   } | null {
     const resourceKey = runtimeResourceKeyForKind(publication.resourceKind, publication.lookupName);
     if (resourceKey == null) {
@@ -1357,6 +1364,14 @@ export class DiResourceSlotPublicationMaterializer {
     const existingSlot = container.readResourceSlots().find((slot) => slot.resourceKey === resourceKey) ?? null;
     if (existingSlot != null) {
       const sourceAddressHandle = this.resourceSlotSourceAddress(container, publication);
+      const exclusion = new DiResourceSlotExclusion(
+        resourceKey,
+        existingSlot,
+        publication.resourceIdentityHandle,
+        publication.resourceProductHandle,
+        sourceAddressHandle,
+        publication.keySourceAddressHandle,
+      );
       const resourceIssue = this.publishRuntimeHtmlDuplicateResourceIssue(
         local,
         publication,
@@ -1371,6 +1386,7 @@ export class DiResourceSlotPublicationMaterializer {
           claimHandles: [],
           issues: [],
           resourceIssues: [resourceIssue.issue],
+          exclusions: [exclusion],
         };
       }
       const issue = this.issuePublisher.publishResourceAlreadyExists(
@@ -1387,6 +1403,7 @@ export class DiResourceSlotPublicationMaterializer {
         claimHandles: [],
         issues: [issue.issue],
         resourceIssues: [],
+        exclusions: [exclusion],
       };
     }
 
@@ -1420,6 +1437,7 @@ export class DiResourceSlotPublicationMaterializer {
       claimHandles: handles.claimHandles,
       issues: [],
       resourceIssues: [],
+      exclusions: [],
     };
   }
 
@@ -1505,6 +1523,7 @@ export class DiResourceSlotPublicationMaterializer {
       publication.resourceProductHandle,
       null,
       this.resourceSlotSourceAddress(container, publication),
+      publication.keySourceAddressHandle,
       [],
     );
   }

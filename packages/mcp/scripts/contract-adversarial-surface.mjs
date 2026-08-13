@@ -145,7 +145,7 @@ async function verifyToolSurfaceBudget() {
     .map((tool) => `${tool.name}=${tool.bytes}`)
     .join(', ');
   expect(
-    surfaceBytes < 69_000,
+    surfaceBytes < 70_000,
     `tools/list should stay below the fixed 19-tool schema budget; observed ${surfaceBytes} bytes; largest tools: ${largestTools}.`,
   );
   expect(response.result?.tools?.length === 19, 'tools/list should advertise the expected public tool count.');
@@ -178,6 +178,8 @@ async function verifyToolInputSchemaDescriptions() {
   expect(JSON.stringify(appQuery?.inputSchema).includes('result=unsupported'), 'sourceFilePath schema description should promise honest unsupported answers.');
   expect(JSON.stringify(appQuery?.inputSchema).includes('observedDependencyLocus'), 'Generic app-query schema should expose family-owned observed-dependency loci.');
   expect('frameworkCapability' in workspaceProperties, 'Generic app-query schema should expose the closed framework-capability explanation selector.');
+  expect('resourceIdentityKey' in workspaceProperties, 'Generic app-query schema should expose the exact resource-identity explanation selector.');
+  expect('templateResourceScopeIdentityKey' in workspaceProperties, 'Generic app-query schema should expose the exact template-resource-scope selector.');
   expect(
     JSON.stringify(workspaceProperties.frameworkCapability).includes('capability-demand rows and diagnostic continuations'),
     'Framework-capability selector should direct callers to engine-owned selector values without duplicating the vocabulary in every tool schema.',

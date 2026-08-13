@@ -19,7 +19,11 @@ import { RuntimeHtmlBuiltInResourceCatalogs } from '../resources/built-in-resour
 import type { FullResourceDefinition } from '../resources/resource-definition.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import { RuntimeHtmlBuiltInSyntaxCatalogs } from './built-in-syntax.js';
-import { TemplateCompilerWorldKind } from './compiler-world.js';
+import {
+  TemplateCompilerWorldKind,
+  TemplateResourceScopeLane,
+  TemplateResourceScopeLookup,
+} from './compiler-world.js';
 import {
   TemplateResourceVisibilityKind,
   TemplateVisibleResource,
@@ -29,7 +33,10 @@ import {
   TemplateCompilerWorldMaterializer,
   type TemplateCompilerWorldEmission,
 } from './compiler-world-materializer.js';
-import { visibleResourceForDefinition } from './resource-scope-builder.js';
+import {
+  visibleResourceForDefinition,
+  visibleResourceLookupKeys,
+} from './resource-scope-builder.js';
 import { RuntimeRendererCatalogs } from './runtime-renderer-catalog-materializer.js';
 import type { FrameworkSupportCatalogs } from '../framework/framework-support-authority.js';
 import {
@@ -93,21 +100,28 @@ export class TemplateAuthoringCompilerWorldMaterializer {
     const syntax = this.materializeAuthoringSyntax();
     const builtInResources = this.materializeAuthoringBuiltInResources(request.typeSystem);
     const renderers = this.materializeAuthoringRenderers();
+    const visibleResources = [
+      ...visibleBuiltInResources(builtInResources.resources),
+      ...resources,
+    ];
     return this.compilerWorldMaterializer.construct(new TemplateCompilerWorldConstructionRequest(
       `authoring:${request.projectKey}`,
       TemplateCompilerWorldKind.Component,
       container,
       null,
-      [
-        ...visibleBuiltInResources(builtInResources.resources),
-        ...resources,
-      ],
+      visibleResources,
       syntax.attributePatterns,
       syntax.bindingCommands,
       renderers.renderers,
       TemplateResourceVisibilityKind.Configured,
       sourceAddressHandle,
       request.callableBindings,
+      undefined,
+      undefined,
+      undefined,
+      [],
+      null,
+      authoringResourceLookups(visibleResources),
     ));
   }
 
@@ -214,6 +228,26 @@ export class TemplateAuthoringCompilerWorldMaterializer {
       ),
     ];
   }
+}
+
+/** Authoring-only worlds have no runtime registration pass, so their intentionally broad resource policy supplies rows. */
+function authoringResourceLookups(
+  resources: readonly TemplateVisibleResource[],
+): readonly TemplateResourceScopeLookup[] {
+  const byKey = new Map<string, TemplateResourceScopeLookup>();
+  for (const resource of resources) {
+    for (const lookupKey of visibleResourceLookupKeys(resource)) {
+      if (!byKey.has(lookupKey)) {
+        byKey.set(lookupKey, new TemplateResourceScopeLookup(
+          lookupKey,
+          resource,
+          TemplateResourceScopeLane.Local,
+          resource.sourceAddressHandle,
+        ));
+      }
+    }
+  }
+  return [...byKey.values()];
 }
 
 function visibleAuthoringResources(
