@@ -238,15 +238,16 @@ workspaces. Virtual workspaces are unsupported, and remote development is not ye
 
 ## Commands
 
-The extension does not claim global keyboard shortcuts. Assign shortcuts through VS Code's Keyboard Shortcuts editor if
-these commands are part of your workflow.
+The extension assigns `Alt+R` to **Open Related File** while a supported Aurelia-owned HTML or script editor has text
+focus. This is a configurable VS Code default: use the Keyboard Shortcuts editor to replace or remove it. Other Aurelia
+commands remain unbound unless you assign them.
 
-| Command | Description |
-|---------|-------------|
-| Aurelia: Go to Resource... | Search exact runtime resources across active Aurelia workspace folders |
-| Aurelia: Open Related File | Open a component class or file-backed template, prompting when topology proves multiple counterparts |
-| Aurelia: Go to Resource Available to Active Template... | Search exact runtime resources in the active template cursor's compiler scope |
-| Aurelia: Refresh | Refresh the Aurelia Resources view |
+| Command | Shortcut | Description |
+|---------|----------|-------------|
+| Aurelia: Go to Resource... | — | Search exact runtime resources across active Aurelia workspace folders |
+| Aurelia: Open Related File | `Alt+R` | Open a component class or file-backed template, prompting when topology proves multiple counterparts |
+| Aurelia: Go to Resource Available to Active Template... | — | Search exact runtime resources in the active template cursor's compiler scope |
+| Aurelia: Refresh | — | Refresh the Aurelia Resources view |
 
 ## Troubleshooting
 

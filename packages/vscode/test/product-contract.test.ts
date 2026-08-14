@@ -8,7 +8,11 @@ interface ExtensionManifest {
   readonly activationEvents?: readonly string[];
   readonly contributes?: {
     readonly commands?: readonly { readonly command: string; readonly title?: string; readonly icon?: string }[];
-    readonly keybindings?: readonly unknown[];
+    readonly keybindings?: readonly {
+      readonly command: string;
+      readonly key: string;
+      readonly when?: string;
+    }[];
     readonly snippets?: readonly { readonly language: string; readonly path: string }[];
     readonly semanticTokenTypes?: readonly {
       readonly id: string;
@@ -111,7 +115,9 @@ describe("VS Code product contract", () => {
 
     expect(contributedCommands).toEqual(expectedCommands);
     expect(new Set(menuCommands)).toEqual(new Set(expectedCommands));
-    expect(manifest.contributes?.keybindings).toBeUndefined();
+    expect(manifest.contributes?.keybindings?.map((entry) => entry.command)).toEqual([
+      AureliaCommand.OpenRelatedFile,
+    ]);
     expect(AureliaCommand.ExplainFrameworkCapability).toBe(
       AureliaProtocolCommand.ExplainFrameworkCapability,
     );
@@ -370,24 +376,35 @@ describe("VS Code product contract", () => {
         command: AureliaCommand.ExplainResourceAvailability,
       }));
     }
-    expect(manifest.contributes?.keybindings).toBeUndefined();
   });
 
-  test("offers related-file navigation for every supported script language", () => {
+  test("offers configurable Alt+R related-file navigation only from focused supported editors", () => {
     const menu = manifest.contributes?.menus?.["editor/context"]
       ?.find((entry) => entry.command === AureliaCommand.OpenRelatedFile);
-
-    expect(menu?.when).toBeDefined();
-    for (const languageId of [
+    const palette = manifest.contributes?.menus?.commandPalette
+      ?.find((entry) => entry.command === AureliaCommand.OpenRelatedFile);
+    const keybinding = manifest.contributes?.keybindings
+      ?.find((entry) => entry.command === AureliaCommand.OpenRelatedFile);
+    const supportedLanguages = [
       "html",
       "aurelia-html",
       "typescript",
       "typescriptreact",
       "javascript",
       "javascriptreact",
-    ]) {
-      expect(menu?.when).toContain(`editorLangId == ${languageId}`);
-    }
+    ];
+    const supportedLanguageClause = `(${supportedLanguages
+      .map((languageId) => `editorLangId == ${languageId}`)
+      .join(" || ")})`;
+    const commandContext = `aurelia.active && aurelia.documentOwned && ${supportedLanguageClause}`;
+
+    expect(menu?.when).toBe(commandContext);
+    expect(palette?.when).toBe(commandContext);
+    expect(keybinding).toEqual({
+      command: AureliaCommand.OpenRelatedFile,
+      key: "alt+r",
+      when: `aurelia.active && aurelia.documentOwned && editorTextFocus && ${supportedLanguageClause}`,
+    });
   });
 
   test("keeps product settings resource-scoped with quiet defaults", () => {
