@@ -5,6 +5,7 @@ import type {
 } from "@aurelia-ls/language-server/protocol";
 import type { QuickPickItem, TextDocument } from "vscode";
 import type { ClientContext } from "../../core/context.js";
+import { isTemplateLanguageId } from "../../template-language.js";
 import { sameDocumentUri } from "../../core/uri-identity.js";
 import type {
   ResourceAvailabilityExplanationSnapshot,
@@ -60,7 +61,7 @@ export async function explainResourceAvailability(
     return false;
   }
   const editor = ctx.vscode.window.activeTextEditor;
-  if (editor == null || editor.document.languageId !== "html") {
+  if (editor == null || !isTemplateLanguageId(editor.document.languageId)) {
     await ctx.vscode.window.showInformationMessage(ACTIVE_TEMPLATE_MESSAGE);
     return false;
   }

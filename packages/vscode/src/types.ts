@@ -95,6 +95,11 @@ export type SourceOwnershipSnapshot = SourceOwnershipResponse & {
   readonly workspace: AureliaWorkspaceIdentity;
 };
 
+/** Fail closed while a client/server upgrade can briefly straddle protocol generations. */
+export function sourceOwnershipTemplateOwned(ownership: SourceOwnershipSnapshot): boolean {
+  return ownership.templateOwned === true;
+}
+
 export type FrameworkCapabilityExplanationSnapshot = FrameworkCapabilityExplanationResponse & {
   readonly workspace: AureliaWorkspaceIdentity;
 };

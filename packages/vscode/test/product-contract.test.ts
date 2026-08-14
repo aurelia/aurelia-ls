@@ -9,7 +9,7 @@ interface ExtensionManifest {
   readonly contributes?: {
     readonly commands?: readonly { readonly command: string; readonly title?: string; readonly icon?: string }[];
     readonly keybindings?: readonly unknown[];
-    readonly snippets?: readonly unknown[];
+    readonly snippets?: readonly { readonly language: string; readonly path: string }[];
     readonly semanticTokenTypes?: readonly {
       readonly id: string;
       readonly superType: string;
@@ -18,8 +18,23 @@ interface ExtensionManifest {
     readonly semanticTokenModifiers?: readonly unknown[];
     readonly languages?: readonly {
       readonly id: string;
+      readonly aliases?: readonly string[];
+      readonly extensions?: readonly string[];
       readonly filenames?: readonly string[];
+      readonly mimetypes?: readonly string[];
+      readonly configuration?: string;
     }[];
+    readonly grammars?: readonly {
+      readonly language: string;
+      readonly scopeName: string;
+      readonly path: string;
+      readonly embeddedLanguages?: Readonly<Record<string, string>>;
+    }[];
+    readonly htmlLanguageParticipants?: readonly {
+      readonly languageId: string;
+      readonly autoInsert?: boolean;
+    }[];
+    readonly configurationDefaults?: Readonly<Record<string, unknown>>;
     readonly jsonValidation?: readonly {
       readonly fileMatch: string;
       readonly url: string;
@@ -63,6 +78,21 @@ const projectDialectSchema = JSON.parse(
     "utf8",
   ),
 ) as AureliaProjectSchema;
+const aureliaHtmlGrammar = JSON.parse(
+  readFileSync(new URL("../syntaxes/aurelia-html.tmLanguage.json", import.meta.url), "utf8"),
+) as { readonly scopeName?: string; readonly patterns?: readonly { readonly include?: string }[] };
+const aureliaHtmlLanguageConfiguration = JSON.parse(
+  readFileSync(new URL("../language-configuration.json", import.meta.url), "utf8"),
+) as {
+  readonly colorizedBracketPairs?: readonly unknown[];
+  readonly onEnterRules?: readonly {
+    readonly beforeText?: { readonly flags?: string };
+    readonly afterText?: { readonly flags?: string };
+  }[];
+};
+const aureliaHtmlSnippets = JSON.parse(
+  readFileSync(new URL("../snippets/html.code-snippets", import.meta.url), "utf8"),
+) as Readonly<Record<string, unknown>>;
 
 describe("VS Code product contract", () => {
   test("does not expose the activation object as a public extension API", () => {
@@ -125,16 +155,37 @@ describe("VS Code product contract", () => {
     ]);
   });
 
-  test("does not contribute passive source generators outside semantic completion", () => {
-    expect(manifest.contributes?.snippets).toBeUndefined();
+  test("limits passive source generation to the stock HTML document parity snippet", () => {
+    expect(manifest.contributes?.snippets).toEqual([{
+      language: "aurelia-html",
+      path: "./snippets/html.code-snippets",
+    }]);
+    expect(aureliaHtmlSnippets).toEqual({
+      "html doc": {
+        isFileTemplate: true,
+        body: [
+          "<!DOCTYPE html>",
+          "<html>",
+          "<head>",
+          "\t<meta charset=\"UTF-8\" />",
+          "\t<title>${1:title}</title>",
+          "</head>",
+          "<body>",
+          "\t$0",
+          "</body>",
+          "</html>",
+        ],
+        description: "HTML Document",
+      },
+    });
   });
 
   test("splits exact JSONC parsing from session-owned project semantics", () => {
     expect(manifest.activationEvents).toContain("workspaceContains:**/aurelia.project.json");
-    expect(manifest.contributes?.languages).toEqual([{
+    expect(manifest.contributes?.languages).toContainEqual({
       id: "jsonc",
       filenames: ["aurelia.project.json"],
-    }]);
+    });
     expect(manifest.contributes?.jsonValidation).toEqual([{
       fileMatch: "**/aurelia.project.json",
       url: "./dist/schemas/aurelia.project.jsonc.schema.json",
@@ -157,6 +208,50 @@ describe("VS Code product contract", () => {
     }));
   });
 
+  test("declares a filename-neutral Aurelia HTML participant with native editing assets", () => {
+    const language = manifest.contributes?.languages?.find((candidate) => candidate.id === "aurelia-html");
+    expect(language).toEqual({
+      id: "aurelia-html",
+      aliases: ["Aurelia HTML", "aurelia-html"],
+      configuration: "./language-configuration.json",
+    });
+    expect(language?.extensions).toBeUndefined();
+    expect(language?.filenames).toBeUndefined();
+    expect(language?.mimetypes).toBeUndefined();
+    expect(manifest.contributes?.htmlLanguageParticipants).toEqual([{
+      languageId: "aurelia-html",
+      autoInsert: true,
+    }]);
+    expect(manifest.contributes?.configurationDefaults).toEqual({
+      "emmet.includeLanguages": { "aurelia-html": "html" },
+      "[aurelia-html]": { "editor.suggest.insertMode": "replace" },
+    });
+    expect(JSON.stringify(manifest)).not.toContain("html.validate.styles");
+    expect(JSON.stringify(manifest)).not.toContain("html.validate.scripts");
+    expect(manifest.contributes?.grammars).toEqual([{
+      language: "aurelia-html",
+      scopeName: "text.html.aurelia",
+      path: "./syntaxes/aurelia-html.tmLanguage.json",
+      embeddedLanguages: {
+        "text.html": "aurelia-html",
+        "source.css": "css",
+        "source.js": "javascript",
+        "source.python": "python",
+        "source.smarty": "smarty",
+      },
+      tokenTypes: { "meta.tag string.quoted": "other" },
+    }]);
+    expect(aureliaHtmlGrammar).toEqual(expect.objectContaining({
+      scopeName: "text.html.aurelia",
+      patterns: [{ include: "text.html.basic" }],
+    }));
+    expect(aureliaHtmlLanguageConfiguration.colorizedBracketPairs).toEqual([]);
+    expect(aureliaHtmlLanguageConfiguration.onEnterRules).toHaveLength(2);
+    expect(aureliaHtmlLanguageConfiguration.onEnterRules?.[0]?.beforeText?.flags).toBe("i");
+    expect(aureliaHtmlLanguageConfiguration.onEnterRules?.[0]?.afterText?.flags).toBe("i");
+    expect(aureliaHtmlLanguageConfiguration.onEnterRules?.[1]?.beforeText?.flags).toBe("i");
+  });
+
   test("declares the exact custom semantic token vocabulary with native fallback types", () => {
     expect(manifest.contributes?.semanticTokenTypes).toEqual([
       { id: "aureliaElement", superType: "class", description: "An Aurelia custom or framework element." },
@@ -174,11 +269,11 @@ describe("VS Code product contract", () => {
     expect(manifest.contributes?.semanticTokenModifiers).toBeUndefined();
   });
 
-  test("offers template-scope resource navigation only from an owned HTML document", () => {
+  test("offers template-scope resource navigation only from exact template ownership", () => {
     for (const menuName of ["editor/context", "commandPalette"]) {
       const menu = manifest.contributes?.menus?.[menuName]
         ?.find((entry) => entry.command === AureliaCommand.GoToAvailableResource);
-      expect(menu?.when).toBe("aurelia.active && aurelia.documentOwned && editorLangId == html");
+      expect(menu?.when).toBe("aurelia.active && aurelia.activeTemplateOwned");
     }
   });
 
@@ -205,6 +300,19 @@ describe("VS Code product contract", () => {
       group: "analysis@1",
       when: `view == aureliaResourceExplorer && ${AureliaContext.ResourceExplorerHasAnalysisReview}`,
     });
+  });
+
+  test("uses source and navigation icons without treating implementations as classes", () => {
+    const icons = new Map((manifest.contributes?.commands ?? [])
+      .map((command) => [command.command, command.icon] as const));
+
+    expect(icons.get(AureliaCommand.GoToResource)).toBe("$(search)");
+    expect(icons.get(AureliaCommand.GoToAvailableResource)).toBe("$(target)");
+    expect(icons.get(AureliaCommand.RefreshResourceExplorer)).toBe("$(refresh)");
+    expect(icons.get(AureliaCommand.OpenResourceDeclaration)).toBe("$(go-to-file)");
+    expect(icons.get(AureliaCommand.OpenResourceImplementation)).toBe("$(file-code)");
+    expect(icons.get(AureliaCommand.OpenResourceToSide)).toBe("$(split-horizontal)");
+    expect(icons.get(AureliaCommand.OpenAureliaOutput)).toBe("$(output)");
   });
 
   test("bounds tree context actions and hides contextual commands from the Command Palette", () => {
@@ -272,6 +380,7 @@ describe("VS Code product contract", () => {
     expect(menu?.when).toBeDefined();
     for (const languageId of [
       "html",
+      "aurelia-html",
       "typescript",
       "typescriptreact",
       "javascript",

@@ -108,7 +108,7 @@ describe("analysis limitation review", () => {
     const items = showQuickPick.mock.calls[0]?.[0] as readonly { readonly label: string }[];
     expect(items.map((item) => item.label)).toEqual([
       "Engine finding title",
-      "$(settings-gear) Open Configuration",
+      "Open Configuration",
     ]);
     expect(recorded.openedDocuments[0]?.uri.toString()).toBe("file:///repo/aurelia.project.json");
 

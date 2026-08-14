@@ -2597,6 +2597,7 @@ function sourceOwnershipResponse(workspaceUri: string, sourceUri: string) {
       summary: "owned",
       page: null,
     },
+    templateOwned: true,
     owners: [{
       projectKey: `${workspaceUri}:app`,
       rootUri: workspaceUri,

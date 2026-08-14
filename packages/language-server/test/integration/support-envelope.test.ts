@@ -72,6 +72,7 @@ test("admits and projects every supported script module form through the real se
         projectPath: relativePath.replaceAll("\\", "/"),
         role,
       }));
+      expect(response.templateOwned).toBe(role === "template" || role === "app-source");
     }
   } finally {
     dispose();

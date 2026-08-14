@@ -22,6 +22,7 @@ export class MyApp {
     searchText: '',
     onlyInStock: false,
     selectedSku: 'BK-001',
+    selectionProgressPercent: 40,
   };
 
   readonly items: CatalogItem[] = [

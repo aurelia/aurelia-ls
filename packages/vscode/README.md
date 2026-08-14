@@ -33,6 +33,20 @@ the semantic diagnosis owns the squiggle and the checker fact appears as related
 expose severity overrides, inline suppression, or a blanket strict mode in the 0.5 release line; those controls would
 need a separate, evidence-backed policy.
 
+VS Code's built-in HTML service normally sends embedded style and script text to its CSS and JavaScript validators
+without understanding Aurelia interpolation. After semantic-runtime proves that an open document is an authored
+Aurelia template, the extension moves the settled document into the filename-neutral **Aurelia HTML** language mode.
+That mode retains HTML language-service editing and completion, syntax highlighting, Emmet, the stock HTML document
+snippet, and Aurelia features, while preventing native embedded validators from treating `${...}` holes as CSS or
+JavaScript tokens. For example, `style="width: ${value}%"` is valid Aurelia interpolation and does not retain a CSS
+Problem after admission settles. Ordinary and unowned HTML remains in the native `html` mode with native validation,
+and the extension does not change global `html.validate.*` settings.
+
+A cold first open necessarily begins in native HTML mode while exact semantic ownership is resolved. A native
+CSS/JavaScript diagnostic can therefore appear briefly during that admission window; switching to **Aurelia HTML**
+clears retained native diagnostics once ownership settles. If ownership or the project session is later withdrawn, the
+extension restores native HTML mode and validation.
+
 ### Quick fixes — apply only current plans
 
 Edit-backed diagnostics offer conservative quick fixes for source operations the semantic runtime can prove, such as
@@ -125,6 +139,11 @@ uncertain template availability, updating state, and project-specific failure st
 retains the last coherent tree as out of date. Resource rows provide exact declaration, implementation, and side-by-side
 navigation when those targets are proved. Failed or out-of-date project rows offer **Retry Resource Discovery** and
 **Open Aurelia Output**; unsupported project rows offer Output without implying that retry can change support.
+
+The tree uses a restrained visual grammar: the project keeps one stable project identity, kind groups and resource rows
+are text-led, and icons identify only real relationships such as aliases and bindables. Error, warning, and information
+colors identify actual failed, incomplete or invalid, unsupported, or out-of-date project states; legitimate pathless,
+duplicate, or open resources do not acquire problem styling.
 
 Use **Aurelia: Go to Resource...** to search navigable resources from the exact inventory across active Aurelia workspaces. Use
 **Aurelia: Go to Resource Available to Active Template...** for the exact compiler scope at the current template cursor. The

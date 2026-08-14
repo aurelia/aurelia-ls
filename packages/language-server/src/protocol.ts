@@ -808,6 +808,8 @@ export interface SourceOwnershipResponse {
   readonly fingerprint: string;
   readonly sourceUri: string;
   readonly answer: RuntimeAnswerTransport;
+  /** Engine-owned template-language admission; clients must not reclassify roles. */
+  readonly templateOwned: boolean;
   readonly owners: readonly SourceOwnershipOwner[];
 }
 

@@ -64,6 +64,7 @@ function createMockContext(overrides: Record<string, unknown> = {}) {
         summary: "one exact owner",
         value: {
           sourceFilePath: path.join(workspaceRoot, "src/app.ts"),
+          templateOwned: true,
           owners: [{
             projectKey: "app",
             projectRootDir: workspaceRoot,
@@ -178,6 +179,7 @@ describe("handleSourceOwnership", () => {
         selection: "exact",
         coverage: "complete",
       }),
+      templateOwned: true,
       owners: [{
         projectKey: "app",
         rootUri: ctx.documentUris.uriForHostPath(defaultWorkspaceRoot),

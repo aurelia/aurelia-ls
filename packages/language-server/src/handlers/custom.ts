@@ -653,6 +653,7 @@ export async function handleSourceOwnership(
     fingerprint: generation.fingerprint,
     sourceUri: ctx.documentUris.resolve(params.uri).uri,
     answer: mapRuntimeAnswer(answer),
+    templateOwned: answer.value.templateOwned,
     owners: answer.value.owners.map((owner) => ({
       projectKey: owner.projectKey,
       rootUri: ctx.documentUris.uriForHostPath(owner.projectRootDir),

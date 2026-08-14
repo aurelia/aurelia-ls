@@ -190,6 +190,29 @@ test("scopes editor context to the active document's owning session", async () =
   await app.deactivate();
 });
 
+test("keeps an owned root document out of template-only context", async () => {
+  const { vscode: stubVscode, recorded } = createVscodeApi({
+    openDocuments: [{
+      uri: "file:///workspace/index.html",
+      languageId: "html",
+      text: "<body><app-root></app-root></body>",
+    }],
+  });
+  const document = stubVscode.workspace.textDocuments[0]!;
+  stubVscode.window.activeTextEditor = { document };
+  const lsp = stubProtocolClient({
+    sourceOwnership: (uri) => sourceOwnershipResponse(uri, true, "root-document", false),
+  });
+  const app = createApp(stubVscode, new StubLanguageClient(lsp), []);
+
+  await app.activate();
+
+  expect(document.languageId).toBe("html");
+  expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(true);
+  expect(recorded.contextValues.get("aurelia.activeTemplateOwned")).toBe(false);
+  await app.deactivate();
+});
+
 test("rejects late template ownership and rechecks active document language-mode lifecycle", async () => {
   const firstOwnership = deferred<ReturnType<typeof sourceOwnershipResponse>>();
   const { vscode: stubVscode, recorded } = createVscodeApi({
@@ -202,7 +225,7 @@ test("rejects late template ownership and rechecks active document language-mode
   const document = stubVscode.workspace.textDocuments[0]!;
   stubVscode.window.activeTextEditor = { document };
   const lsp = stubProtocolClient({
-    sourceOwnership: (uri, requestIndex) => requestIndex === 0
+    sourceOwnership: (uri, requestIndex) => requestIndex < 2
       ? firstOwnership.promise
       : sourceOwnershipResponse(uri, true, `language-${requestIndex}`),
   });
@@ -210,7 +233,7 @@ test("rejects late template ownership and rechecks active document language-mode
   const app = createApp(stubVscode, languageClient, []);
 
   const activation = app.activate();
-  await vi.waitFor(() => expect(lsp.sendRequestMock).toHaveBeenCalledTimes(1));
+  await vi.waitFor(() => expect(lsp.sendRequestMock).toHaveBeenCalledTimes(2));
 
   document.languageId = "typescript";
   firstOwnership.resolve(sourceOwnershipResponse(document.uri.toString(), true, "language-0"));
@@ -220,13 +243,13 @@ test("rejects late template ownership and rechecks active document language-mode
   expect(recorded.contextValues.get("aurelia.activeTemplateOwned")).toBe(false);
 
   recorded.fireDocumentOpened(document);
-  await vi.waitFor(() => expect(lsp.sendRequestMock).toHaveBeenCalledTimes(2));
+  await vi.waitFor(() => expect(lsp.sendRequestMock).toHaveBeenCalledTimes(3));
   await vi.waitFor(() => expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(true));
   expect(recorded.contextValues.get("aurelia.activeTemplateOwned")).toBe(false);
 
   document.languageId = "html";
   recorded.fireDocumentClosed(document);
-  await vi.waitFor(() => expect(lsp.sendRequestMock).toHaveBeenCalledTimes(3));
+  await vi.waitFor(() => expect(lsp.sendRequestMock).toHaveBeenCalledTimes(4));
   await vi.waitFor(() => expect(recorded.contextValues.get("aurelia.activeTemplateOwned")).toBe(true));
 
   await app.deactivate();
@@ -423,7 +446,12 @@ function stubProtocolClient(options: {
   } as unknown as StubProtocolClient;
 }
 
-function sourceOwnershipResponse(uri: string, owned: boolean, fingerprint: string) {
+function sourceOwnershipResponse(
+  uri: string,
+  owned: boolean,
+  fingerprint: string,
+  templateOwned = owned && uri.endsWith(".html"),
+) {
   return {
     fingerprint,
     sourceUri: uri,
@@ -435,6 +463,7 @@ function sourceOwnershipResponse(uri: string, owned: boolean, fingerprint: strin
       summary: owned ? "owned" : "unowned",
       page: null,
     },
+    templateOwned,
     owners: owned ? [{
       projectKey: "app",
       rootUri: "file:///workspace",

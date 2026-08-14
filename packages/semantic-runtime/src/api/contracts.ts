@@ -685,6 +685,8 @@ export interface SemanticAuthoredSourceOwner {
 
 export interface SemanticAuthoredSourceOwnershipResult {
   readonly sourceFilePath: string;
+  /** True when at least one exact owner admits this source through the template-edit boundary. */
+  readonly templateOwned: boolean;
   readonly owners: readonly SemanticAuthoredSourceOwner[];
 }
 

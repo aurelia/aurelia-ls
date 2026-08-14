@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   resourceAvailabilityReasonLabel,
+  resourceKindPresentation,
   resourceMetadataStateLabel,
   resourceProjectRootScent,
   resourceProjectRootScentMap,
@@ -9,6 +10,22 @@ import {
 } from "../../../out/features/resource-discovery/presentation.js";
 
 describe("resource discovery presentation vocabulary", () => {
+  test("keeps resource-kind presentation textual instead of projecting implementation symbols", () => {
+    expect([
+      "custom-element",
+      "template-controller",
+      "custom-attribute",
+      "value-converter",
+      "binding-behavior",
+    ].map((kind) => resourceKindPresentation(kind as never))).toEqual([
+      { plural: "Elements", singular: "element", order: 0 },
+      { plural: "Template Controllers", singular: "template controller", order: 1 },
+      { plural: "Attributes", singular: "attribute", order: 2 },
+      { plural: "Value Converters", singular: "value converter", order: 3 },
+      { plural: "Binding Behaviors", singular: "binding behavior", order: 4 },
+    ]);
+  });
+
   test("maps every typed availability reason to closed author-facing copy", () => {
     expect([
       "local",

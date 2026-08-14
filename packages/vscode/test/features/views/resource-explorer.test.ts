@@ -24,6 +24,11 @@ interface Node {
   readonly children?: readonly Node[];
 }
 
+interface IconPresentation {
+  readonly id: string;
+  readonly color?: { readonly id: string };
+}
+
 const completeAnswer = {
   schemaVersion: "0.2",
   result: "answered",
@@ -898,6 +903,12 @@ describe("ResourceExplorerProvider", () => {
       role: "alias",
       childIdentityKey: "resource:product-card:v1:alias:store-card",
     });
+    expect(iconOf(harness.provider, tree[0]!)).toBeUndefined();
+    expect(iconOf(harness.provider, cardNode)).toBeUndefined();
+    expect(iconOf(harness.provider, cardNode.children![0]!)).toEqual({ id: "link", color: undefined });
+    expect(iconOf(harness.provider, cardNode.children![1]!)).toEqual({ id: "symbol-property", color: undefined });
+    expect(iconOf(harness.provider, tree[1]!)).toBeUndefined();
+    expect(iconOf(harness.provider, tree[1]!.children![0]!)).toBeUndefined();
     expect(harness.provider.getTreeItem(tree[0] as never).collapsibleState).toBe(
       harness.vscode.TreeItemCollapsibleState.Collapsed,
     );
@@ -924,6 +935,7 @@ describe("ResourceExplorerProvider", () => {
     const node = (await roots(harness.provider))[0]!.children![0]!;
     expect(node.description).toContain("source location unavailable");
     const item = harness.provider.getTreeItem(node as never);
+    expect(item.iconPath).toBeUndefined();
     expect(item.command).toBeUndefined();
     expect(item.accessibilityInformation?.label).toContain("source location unavailable");
     expect(harness.provider.navigationFor(node, "declaration")).toBeNull();
@@ -984,9 +996,14 @@ describe("ResourceExplorerProvider", () => {
       expect.stringContaining("x/a/shared.ts"),
       expect.stringContaining("z/a/shared.ts"),
     ]);
+    expect(rows.map((node) => iconOf(harness.provider, node))).toEqual([undefined, undefined]);
     const aliases = rows.flatMap((node) => node.children ?? []).filter((node) => node.label === "common-card");
     expect(aliases).toHaveLength(2);
     expect(new Set(aliases.map((node) => node.id)).size).toBe(2);
+    expect(aliases.map((node) => iconOf(harness.provider, node))).toEqual([
+      { id: "link", color: undefined },
+      { id: "link", color: undefined },
+    ]);
     expect(aliases.map((node) => node.description)).toEqual([
       expect.stringContaining("x/a/shared.ts"),
       expect.stringContaining("z/a/shared.ts"),
@@ -1106,7 +1123,49 @@ describe("ResourceExplorerProvider", () => {
     ]);
     expect(tree[1]?.contextValue).toBe("resourceProjectIssue");
     expect(tree[1]?.accessibilityLabel).toContain("resources could not be loaded");
+    expect(iconOf(harness.provider, tree[0]!)).toEqual({ id: "project", color: undefined });
+    expect(iconOf(harness.provider, tree[1]!)).toEqual({
+      id: "project",
+      color: { id: "problemsErrorIcon.foreground" },
+    });
     expect(harness.view.message).toBeUndefined();
+  });
+
+  test("keeps one project glyph while status colors distinguish only semantic project states", async () => {
+    const healthyWorkspace = workspace("file:///repo/healthy", "healthy");
+    const incompleteWorkspace = workspace("file:///repo/incomplete", "incomplete");
+    const invalidWorkspace = workspace("file:///repo/invalid", "invalid");
+    const unsupportedWorkspace = workspace("file:///repo/unsupported", "unsupported");
+    const failedWorkspace = workspace("file:///repo/failed", "failed");
+    const healthy = resource({
+      identityKey: "resource:healthy",
+      name: "healthy-card",
+      uri: "file:///repo/healthy/healthy-card.ts",
+    });
+    const open = resource({
+      identityKey: "resource:open",
+      name: "open-card",
+      uri: "file:///repo/incomplete/open-card.ts",
+    });
+    const harness = createHarness(async () => combinedResponse(
+      response([readyProject([healthy], "healthy-app", "complete", "answered", healthyWorkspace.uri)], healthyWorkspace),
+      response([readyProject([open], "open-app", "open", "answered", incompleteWorkspace.uri)], incompleteWorkspace),
+      response([readyProject([], "invalid-app", "complete", "invalid", invalidWorkspace.uri)], invalidWorkspace),
+      response([readyProject([], "unsupported-app", "not-applicable", "unsupported", unsupportedWorkspace.uri)], unsupportedWorkspace),
+      response([readyProject([], "failed-app", "not-applicable", "failed", failedWorkspace.uri)], failedWorkspace),
+    ));
+    await harness.provider.refresh();
+
+    const tree = await roots(harness.provider);
+    expect(tree.map((node) => [node.label, iconOf(harness.provider, node)])).toEqual([
+      ["healthy · healthy-app", { id: "project", color: undefined }],
+      ["incomplete · open-app", { id: "project", color: { id: "problemsWarningIcon.foreground" } }],
+      ["invalid · invalid-app", { id: "project", color: { id: "problemsWarningIcon.foreground" } }],
+      ["unsupported · unsupported-app", { id: "project", color: { id: "problemsInfoIcon.foreground" } }],
+      ["failed · failed-app", { id: "project", color: { id: "problemsErrorIcon.foreground" } }],
+    ]);
+    expect(iconOf(harness.provider, findNode(tree, "open-card")!)).toBeUndefined();
+    expect(findNode(tree, "open-card")?.description).toContain("discovery incomplete");
   });
 
   test("replaces one workspace snapshot while preserving another root and its navigation fingerprint", async () => {
@@ -1322,6 +1381,11 @@ describe("ResourceExplorerProvider", () => {
     expect(findNode(tree, "a-card")?.description).toContain("out of date");
     expect(findNode(tree, "a-card")?.accessibilityLabel).toContain("out of date");
     expect(findNode(tree, "b-card")?.description).not.toContain("out of date");
+    const staleProject = tree.find((node) => findNode([node], "a-card") != null)!;
+    expect(iconOf(harness.provider, staleProject)).toEqual({
+      id: "project",
+      color: { id: "problemsWarningIcon.foreground" },
+    });
     expect(harness.recorded.contextValues.get("aurelia.resourceExplorerHasIssues")).toBe(true);
   });
 
@@ -1664,9 +1728,11 @@ describe("ResourceExplorerProvider", () => {
     try {
       const tree = await roots(harness.provider);
       const updatingA = findNode(tree, "a-card")!;
+      const updatingProject = tree.find((node) => findNode([node], "a-card") != null)!;
       const retainedB = findNode(tree, "b-card")!;
       expect(updatingA.description).toContain("updating");
       expect(updatingA.accessibilityLabel).toContain("updating");
+      expect(iconOf(harness.provider, updatingProject)).toEqual({ id: "project", color: undefined });
       expect(retainedB).toEqual(expect.objectContaining({
         id: baselineB.id,
         label: baselineB.label,
@@ -1756,6 +1822,7 @@ describe("ResourceExplorerProvider", () => {
     const stale = findNode(await roots(harness.provider), "current-card")!;
     expect(stale.description).toContain("out of date");
     expect(stale.accessibilityLabel).toContain("out of date");
+    expect(iconOf(harness.provider, stale)).toBeUndefined();
     expect(harness.view.message).toBe(
       "Out of date — refresh failed. Refresh to retry; see Aurelia Output for details.",
     );
@@ -1772,6 +1839,10 @@ describe("ResourceExplorerProvider", () => {
     expect(harness.recorded.contextValues.get("aurelia.resourceExplorerHasIssues")).toBe(false);
   });
 });
+
+function iconOf(provider: ResourceExplorerProvider, node: Node): IconPresentation | undefined {
+  return provider.getTreeItem(node as never).iconPath as IconPresentation | undefined;
+}
 
 function captureResourceDiscoveryObservations(source: string): {
   readonly events: ExtensionHostObservation[];

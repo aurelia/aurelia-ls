@@ -44,6 +44,7 @@ function createDiagnosticHarness(programDocument: TextDocument | null = document
     analysisBasis,
     value: {
       sourceFilePath: "C:\\projects\\app\\src\\my-app.html",
+      templateOwned: true,
       owners: [{ projectKey: "app" }],
     },
   }));
@@ -307,6 +308,7 @@ describe("document diagnostics handler", () => {
       analysisBasis: { revision: "semantic-runtime-analysis:test" },
       value: {
         sourceFilePath: "C:\\projects\\app\\golden\\dependency.ts",
+        templateOwned: false,
         owners: [],
       },
     });

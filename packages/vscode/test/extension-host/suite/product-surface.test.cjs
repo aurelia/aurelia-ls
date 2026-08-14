@@ -19,6 +19,12 @@ const {
   applyWorkspaceFolderUpdate: applyWorkspaceFolderUpdateContract,
 } = require("../workspace-folder-update.cjs");
 const {
+  assertSingleBackgroundLanguageTransition,
+  exactOpenDocument,
+  observeExactDocumentLifecycle,
+  waitForExactDocumentLanguage,
+} = require("../template-language-host-driver.cjs");
+const {
   acceptNativeQuickPickOrdinal,
   driveNativeQuickPickOrdinal,
 } = require("../native-quick-pick-driver.cjs");
@@ -200,6 +206,170 @@ suite("extension-host product surface", () => {
     await vscode.commands.executeCommand("workbench.view.explorer");
     await vscode.commands.executeCommand("aureliaResourceExplorer.focus");
     await vscode.commands.executeCommand("aurelia.refreshResourceExplorer");
+  });
+
+  test("contains native embedded diagnostics to exact owned Aurelia templates", async function() {
+    this.timeout(600_000);
+    const ownedUri = vscode.Uri.file(path.join(
+      aureliaWorkspace,
+      "src",
+      "components",
+      "product-card.html",
+    ));
+    assert.strictEqual(
+      vscode.workspace.textDocuments.some((document) => document.uri.toString() === ownedUri.toString()),
+      false,
+      "the background ownership journey requires an exact template not previously known to the editor",
+    );
+
+    const lifecycle = observeExactDocumentLifecycle(
+      vscode.workspace,
+      ownedUri,
+      "the fresh owned-template background journey",
+    );
+    let owned;
+    let ownedBaseline;
+    try {
+      const initialHtmlDocument = await vscode.workspace.openTextDocument(ownedUri);
+      const initialLanguageId = initialHtmlDocument.languageId;
+      assert.strictEqual(
+        initialLanguageId,
+        "html",
+        "a fresh owned .html template must enter the host as native HTML before semantic admission",
+      );
+      assert.strictEqual(
+        vscode.window.visibleTextEditors.some((editor) => editor.document.uri.toString() === ownedUri.toString()),
+        false,
+        "the containment controller must reconcile an owned document while it remains in the background",
+      );
+      owned = await waitForExactDocumentLanguage(
+        vscode.workspace,
+        ownedUri,
+        "aurelia-html",
+        "the background owned template",
+        waitFor,
+      );
+      assert.strictEqual(
+        owned.uri.toString(),
+        ownedUri.toString(),
+        "the settled custom document must retain the exact authored URI",
+      );
+      assert.strictEqual(owned.languageId, "aurelia-html");
+      assert.strictEqual(
+        vscode.window.visibleTextEditors.some((editor) => editor.document.uri.toString() === ownedUri.toString()),
+        false,
+        "the exact language transition must settle while the owned document remains in the background",
+      );
+      assertSingleBackgroundLanguageTransition(
+        lifecycle.snapshot(),
+        "the fresh owned-template background journey",
+      );
+      assert.strictEqual(
+        vscode.workspace.getConfiguration("html", owned.uri).get("validate.styles"),
+        true,
+        "containment must not mutate the user's URI-scoped native HTML validation setting",
+      );
+      await waitFor(
+        () => nativeCssDiagnostics(owned.uri).length === 0,
+        () => `owned style interpolation should retain no native CSS diagnostics; observed ${diagnosticSummary(vscode.languages.getDiagnostics(owned.uri))}`,
+        60_000,
+      );
+
+      await vscode.window.showTextDocument(owned, { preview: false });
+      owned = exactOpenDocument(vscode.workspace, ownedUri, "the visible owned template");
+      const articleStart = owned.getText().indexOf("<article");
+      assert.notStrictEqual(articleStart, -1, "Expected the native article-element completion anchor.");
+      const nativeCompletions = await vscode.commands.executeCommand(
+        "vscode.executeCompletionItemProvider",
+        owned.uri,
+        owned.positionAt(articleStart + "<art".length),
+      );
+      const nativeCompletionItems = Array.isArray(nativeCompletions)
+        ? nativeCompletions
+        : Array.isArray(nativeCompletions?.items) ? nativeCompletions.items : [];
+      assert(
+        nativeCompletionItems.some((item) => completionLabel(item) === "article"),
+        "the Aurelia HTML participant should retain the native article-element completion",
+      );
+      const aureliaCompletions = await completionsAt(owned, "labelText", "labelText");
+      assert(
+        aureliaCompletions.some((item) => completionLabel(item) === "labelText"),
+        "the custom mode must retain Aurelia expression completions",
+      );
+
+      ownedBaseline = owned.getText();
+      const diagnosticProbe = "missingContainmentMember";
+      const changed = ownedBaseline.replace(
+        "  <h3>${labelText}</h3>",
+        `  <h3>\${${diagnosticProbe}}</h3>`,
+      );
+      assert.notStrictEqual(changed, ownedBaseline, "Expected the Aurelia diagnostic probe edit to apply.");
+      await replaceDocumentText(owned, changed);
+      await waitFor(
+        () => vscode.languages.getDiagnostics(owned.uri).some((diagnostic) =>
+          diagnostic.source === "aurelia"
+            && diagnosticCode(diagnostic) === "missing-expression-member"
+            && owned.getText(diagnostic.range) === diagnosticProbe
+        ),
+        () => `custom mode should retain an exact Aurelia diagnostic; observed ${diagnosticSummary(vscode.languages.getDiagnostics(owned.uri))}`,
+        120_000,
+      );
+      assert.deepStrictEqual(
+        nativeCssDiagnostics(owned.uri),
+        [],
+        "Aurelia diagnostic publication must not resurrect a native interpolation false positive",
+      );
+      assertSingleBackgroundLanguageTransition(
+        lifecycle.snapshot(),
+        "the settled fresh owned-template background journey",
+      );
+    } finally {
+      lifecycle.dispose();
+      if (owned != null && ownedBaseline != null && !owned.isClosed && owned.getText() !== ownedBaseline) {
+        await replaceDocumentText(owned, ownedBaseline);
+        await waitFor(
+          () => !vscode.languages.getDiagnostics(owned.uri).some((diagnostic) => diagnostic.source === "aurelia")
+            && nativeCssDiagnostics(owned.uri).length === 0,
+          "owned-template diagnostic cleanup should clear the Aurelia probe without a stale native CSS diagnostic",
+          120_000,
+        );
+      }
+    }
+
+    const ordinaryUri = vscode.Uri.file(path.join(excludedAureliaWorkspace, "src", "excluded-view.html"));
+    const ordinary = await vscode.workspace.openTextDocument(ordinaryUri);
+    const ordinaryBaseline = ordinary.getText();
+    try {
+      await replaceDocumentText(ordinary, '<p style="width: ${excludedMessage}%">${excludedMessage}</p>\n');
+      assert.strictEqual(ordinary.languageId, "html", "an unowned HTML document must retain native HTML mode");
+      assert.strictEqual(
+        vscode.workspace.getConfiguration("html", ordinary.uri).get("validate.styles"),
+        true,
+        "the unowned control must retain native style validation",
+      );
+      await vscode.window.showTextDocument(ordinary, { preview: false });
+      await waitFor(
+        () => hasExactNativeInterpolationDiagnostics(ordinary.uri),
+        () => `ordinary HTML should retain its deliberate native CSS diagnostic; observed ${diagnosticSummary(vscode.languages.getDiagnostics(ordinary.uri))}`,
+        60_000,
+      );
+    } finally {
+      await replaceDocumentText(ordinary, ordinaryBaseline);
+      await waitFor(
+        () => nativeCssDiagnostics(ordinary.uri).length === 0,
+        "ordinary HTML cleanup should clear its deliberate native CSS diagnostics",
+        60_000,
+      );
+      if (owned != null && !owned.isClosed) {
+        await vscode.window.showTextDocument(owned, { preview: false });
+        assert.strictEqual(owned.languageId, "aurelia-html");
+        assert.deepStrictEqual(
+          nativeCssDiagnostics(owned.uri),
+          [],
+          "returning focus to the reopened owned template must retain no stale native CSS diagnostics",
+        );
+      }
+    }
   });
 
   test("navigates through both native resource discovery journeys", async () => {
@@ -1012,8 +1182,17 @@ suite("extension-host product surface", () => {
     assert.deepStrictEqual(definitions ?? [], []);
   });
 
-  test("retires and re-admits the primary Aurelia root without disturbing the secondary root", async () => {
-    const document = await showAureliaDocument("src/my-app.html");
+  test("retires and re-admits the primary Aurelia root without disturbing the secondary root", async function() {
+    this.timeout(600_000);
+    let document = await showAureliaDocument("src/my-app.html");
+    const documentUri = document.uri;
+    document = await waitForExactDocumentLanguage(
+      vscode.workspace,
+      documentUri,
+      "aurelia-html",
+      "the primary template should start in exact owned language mode",
+      waitFor,
+    );
     const originalFolders = [...(vscode.workspace.workspaceFolders ?? [])]
       .map((folder) => ({ uri: folder.uri, name: folder.name }));
     let secondaryDocument;
@@ -1033,6 +1212,13 @@ suite("extension-host product surface", () => {
       );
 
       secondaryDocument = await showAureliaDocument("src/my-app.html", secondaryAureliaWorkspace);
+      secondaryDocument = await waitForExactDocumentLanguage(
+        vscode.workspace,
+        secondaryDocument.uri,
+        "aurelia-html",
+        "the secondary template",
+        waitFor,
+      );
       await waitForWorkspaceAnswer(
         document,
         aureliaWorkspace,
@@ -1056,10 +1242,22 @@ suite("extension-host product surface", () => {
         () => findWorkspaceFolder(aureliaWorkspace) == null,
         "removing the primary Aurelia root should update the workspace",
       );
+      document = await waitForExactDocumentLanguage(
+        vscode.workspace,
+        documentUri,
+        "html",
+        "retiring the owning session should restore native HTML mode",
+        waitFor,
+      );
       await waitFor(
         async () => !(await hoverMarkdown(document, "<product-card", "product-card"))
           .includes("<product-card>"),
         "removing the primary Aurelia root should retire its editor providers",
+        60_000,
+      );
+      await waitFor(
+        () => hasExactNativeInterpolationDiagnostics(document.uri),
+        () => `restored ordinary HTML should regain its native CSS diagnostic; observed ${diagnosticSummary(vscode.languages.getDiagnostics(document.uri))}`,
         60_000,
       );
       await waitForWorkspaceAnswer(
@@ -1087,10 +1285,22 @@ suite("extension-host product surface", () => {
         [...originalFolders.map((folder) => normalize(folder.uri.fsPath)), normalize(secondaryAureliaWorkspace)],
         "Primary re-admission must restore its exact ordinal while retaining the secondary root.",
       );
+      document = await waitForExactDocumentLanguage(
+        vscode.workspace,
+        documentUri,
+        "aurelia-html",
+        "re-admitted primary template",
+        waitFor,
+      );
       await waitForWorkspaceAnswer(
         document,
         aureliaWorkspace,
         "restoring the primary Aurelia root should re-admit its editor providers",
+      );
+      await waitFor(
+        () => nativeCssDiagnostics(document.uri).length === 0,
+        () => `re-admitted ownership should clear the retained native CSS diagnostics; language=${document.languageId}; diagnostics=${diagnosticSummary(vscode.languages.getDiagnostics(document.uri))}`,
+        60_000,
       );
       await waitForWorkspaceAnswer(
         secondaryDocument,
@@ -1124,6 +1334,13 @@ suite("extension-host product surface", () => {
         );
       }
       if (secondaryDocument != null) {
+        secondaryDocument = await waitForExactDocumentLanguage(
+          vscode.workspace,
+          secondaryDocument.uri,
+          "html",
+          "retired secondary template cleanup",
+          waitFor,
+        );
         await waitFor(
           async () => !(await hoverMarkdown(secondaryDocument, "<product-card", "product-card"))
             .includes("<product-card>"),
@@ -4705,9 +4922,19 @@ async function inspectEmptyAvailabilityModel(label) {
 
 async function showAureliaDocument(relativePath, workspaceRoot = aureliaWorkspace) {
   const uri = vscode.Uri.file(path.join(workspaceRoot, ...relativePath.split("/")));
-  const document = vscode.workspace.textDocuments.find((candidate) => candidate.uri.toString() === uri.toString())
+  let document = vscode.workspace.textDocuments.find((candidate) => candidate.uri.toString() === uri.toString())
     ?? await vscode.workspace.openTextDocument(uri);
   await vscode.window.showTextDocument(document, { preview: false });
+  if (relativePath.endsWith(".html")) {
+    document = await waitForExactDocumentLanguage(
+      vscode.workspace,
+      uri,
+      "aurelia-html",
+      `the admitted Aurelia template ${relativePath}`,
+      waitFor,
+    );
+    await vscode.window.showTextDocument(document, { preview: false });
+  }
   return document;
 }
 
@@ -5141,6 +5368,15 @@ function diagnosticSummary(diagnostics) {
       diagnostic.range.end.character,
     ],
   })));
+}
+
+function nativeCssDiagnostics(uri) {
+  return vscode.languages.getDiagnostics(uri).filter((diagnostic) => diagnostic.source === "css");
+}
+
+function hasExactNativeInterpolationDiagnostics(uri) {
+  const codes = new Set(nativeCssDiagnostics(uri).map(diagnosticCode));
+  return codes.has("css-propertyvalueexpected") && codes.has("css-ruleorselectorexpected");
 }
 
 function diagnosticCode(diagnostic) {

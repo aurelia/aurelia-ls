@@ -53,7 +53,7 @@ export async function reviewAnalysisLimitations(
   for (const { entry } of distinctConfigurationSources(entries)) {
     items.push({
       itemKind: "configuration",
-      label: "$(settings-gear) Open Configuration",
+      label: "Open Configuration",
       description: "Aurelia finding policy",
       detail: "Open the exact project policy that controls this finding.",
       entry,

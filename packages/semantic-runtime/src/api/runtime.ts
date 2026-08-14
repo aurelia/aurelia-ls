@@ -17,6 +17,7 @@ import {
 } from '../kernel/project-input.js';
 import { SourceFileRole } from '../kernel/address.js';
 import { externalizeSourceFileRole } from '../kernel/source-classification.js';
+import { projectOwnsTemplateEditSourceFile } from '../boot/source-ownership.js';
 import { canonicalTypeSystemPath } from '../type-system/source-file-path.js';
 import { normalizeSemanticRuntimeOptions } from './workspace-descriptor.js';
 import {
@@ -765,12 +766,15 @@ export class SemanticRuntime {
             || left.projectRootDir.localeCompare(right.projectRootDir)
             || left.projectPath.localeCompare(right.projectPath)
           );
+        const templateOwned = this.workspace.projects.some((project) =>
+          projectOwnsTemplateEditSourceFile(project, sourceFilePath)
+        );
         return answer(
           SemanticRuntimeAnswerResult.Answered,
           owners.length === 0
             ? `Source '${sourceFilePath}' is not boot-authored by any semantic project.`
             : `Source '${sourceFilePath}' is boot-authored by ${owners.length} semantic project(s).`,
-          { sourceFilePath, owners },
+          { sourceFilePath, templateOwned, owners },
           COMPLETE_COLLECTION_ANSWER_OPTIONS,
         );
       },

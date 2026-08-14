@@ -25,6 +25,18 @@ const observedDependencies = app.ask({
   kind: 'binding-observed-dependencies',
   page: { size: 100 },
 }).value.rows;
+const templateDiagnostics = app.ask({
+  kind: 'template-diagnostics',
+  diagnosticProjection: 'type-projection',
+  sourceFile: { filePath: 'src/class-style-interpolation-boundaries-app.html' },
+  page: { size: 100 },
+}).value.rows;
+const appDiagnostics = app.ask({
+  kind: 'app-diagnostics',
+  diagnosticProjection: 'type-projection',
+  sourceFile: { filePath: 'src/class-style-interpolation-boundaries-app.html' },
+  page: { size: 100 },
+}).value.rows;
 
 const failures = [];
 
@@ -32,12 +44,18 @@ expectValueChannelCount(
   'Class interpolation attributes should lower to class token channels, not generic attribute channels.',
   'class-attribute-tokens',
   'class',
-  2,
+  3,
 );
 expectValueChannelCount(
   'Style interpolation attributes should lower to style rule channels, preserving the style-specific value domain.',
   'style-attribute-rules',
   'style',
+  3,
+);
+expectValueChannelCount(
+  'The css alias should use the same whole-style rule channel as style.',
+  'style-attribute-rules',
+  'css',
   1,
 );
 expectDataFlow(
@@ -64,6 +82,72 @@ expectDataFlow(
     targetProperty: 'style',
   },
 );
+expectDataFlow(
+  'CSS punctuation and units surrounding several Aurelia holes should stay static text around one style-rule string flow.',
+  {
+    sourceName: 'progress, accentColor, offset, imageUrl',
+    valueChannelKind: 'style-attribute-rules',
+    targetProperty: 'style',
+  },
+);
+expectDataFlow(
+  'Native global attribute interpolation should type the complete runtime value as a string.',
+  {
+    sourceName: 'itemId',
+    valueChannelKind: 'attribute-value',
+    targetProperty: 'title',
+  },
+);
+expectDataFlow(
+  'Data attribute interpolation should preserve attribute-string semantics.',
+  {
+    sourceName: 'itemId',
+    valueChannelKind: 'attribute-value',
+    targetProperty: 'data-item-id',
+  },
+);
+expectDataFlow(
+  'ARIA interpolation should preserve attribute-string semantics even when static text contains a percent unit.',
+  {
+    sourceName: 'progress',
+    valueChannelKind: 'attribute-value',
+    targetProperty: 'aria-label',
+  },
+);
+expectDataFlow(
+  'SVG viewBox interpolation should preserve one complete attribute string rather than projecting numeric holes onto a DOM property.',
+  {
+    sourceName: 'viewWidth, viewHeight',
+    valueChannelKind: 'attribute-value',
+    targetProperty: 'viewBox',
+  },
+);
+expectDataFlow(
+  'Namespaced SVG href interpolation should preserve exact attribute-string semantics.',
+  {
+    sourceName: 'iconHref',
+    valueChannelKind: 'attribute-value',
+    targetProperty: 'xlink:href',
+  },
+);
+expectBindingCommandFlow(
+  'style.bind should retain the framework whole-style object channel.',
+  'styleRules',
+  'style',
+  'style-attribute-rules',
+);
+expectBindingCommandFlow(
+  'css.bind should retain the framework whole-style object channel.',
+  'styleRules',
+  'css',
+  'style-attribute-rules',
+);
+expectBindingCommandFlow(
+  'The production PROP.style form should retain the single CSS-property value channel.',
+  'widthStyle',
+  'width',
+  'style-property-value',
+);
 expectObservedDependency(
   'Class interpolation should observe the direct class token source.',
   'availabilityClass',
@@ -83,6 +167,12 @@ const openRows = [
 ];
 if (openRows.length !== 0) {
   failures.push(`Expected class/style interpolation fixture to have no open value-channel or data-flow rows, found ${openRows.length}.`);
+}
+if (templateDiagnostics.length !== 0 || appDiagnostics.length !== 0) {
+  failures.push(
+    `Expected valid class/style/css/native/data/ARIA/SVG/namespaced attribute forms to produce no template diagnostics, `
+      + `found template=${templateDiagnostics.length}, app=${appDiagnostics.length}.`,
+  );
 }
 
 if (failures.length !== 0) {
@@ -132,6 +222,26 @@ function expectDataFlow(summary, expected) {
   }
 }
 
+function expectBindingCommandFlow(summary, sourceName, targetProperty, valueChannelKind) {
+  const row = dataFlows.find((candidate) =>
+    candidate.definitionName === 'class-style-interpolation-boundaries-app'
+    && candidate.sourceName === sourceName
+    && candidate.targetProperty === targetProperty
+    && candidate.valueChannelKind === valueChannelKind
+    && candidate.valueSiteKind === 'binding-command-value'
+  );
+  if (row == null) {
+    failures.push(`${summary} Missing binding-command flow ${sourceName} -> ${targetProperty}.`);
+    return;
+  }
+  if (row.direction !== 'source-to-target' || row.sourceToTargetAssignable !== true || row.openReason != null) {
+    failures.push(
+      `${summary} Expected a closed assignable source-to-target flow, found direction=${row.direction}, `
+        + `assignable=${row.sourceToTargetAssignable}, open=${row.openReason ?? 'none'}.`,
+    );
+  }
+}
+
 function expectObservedDependency(summary, sourceName) {
   const row = observedDependencies.find((candidate) =>
     candidate.definitionName === 'class-style-interpolation-boundaries-app'
@@ -149,6 +259,8 @@ function contractSummary() {
     valueChannels: valueChannels.length,
     dataFlows: dataFlows.length,
     observedDependencies: observedDependencies.length,
+    templateDiagnostics: templateDiagnostics.length,
+    appDiagnostics: appDiagnostics.length,
     classChannelCount: valueChannels.filter((row) => row.channelKind === 'class-attribute-tokens').length,
     styleChannelCount: valueChannels.filter((row) => row.channelKind === 'style-attribute-rules').length,
   };

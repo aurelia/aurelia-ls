@@ -26,6 +26,7 @@ function context() {
     authoredSourceOwnership: vi.fn(async (_uri: string) => ({
       value: {
         sourceFilePath: "/app/src/app.html",
+        templateOwned: true,
         owners: [{ projectKey: "app" }],
       },
     })),
@@ -157,7 +158,7 @@ describe("semantic-runtime request boundary", () => {
   test("returns the neutral result without running semantic feature work for an unowned source", async () => {
     const ctx = context();
     ctx.testOperation.authoredSourceOwnership.mockResolvedValue({
-      value: { sourceFilePath: "/app/golden/app.html", owners: [] },
+      value: { sourceFilePath: "/app/golden/app.html", templateOwned: false, owners: [] },
     });
     const handler = vi.fn(async () => "owned");
 

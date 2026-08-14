@@ -11,7 +11,6 @@ import type { AureliaWorkspaceIdentity } from "../../types.js";
 export interface ResourceKindPresentation {
   readonly plural: string;
   readonly singular: string;
-  readonly icon: string;
   readonly order: number;
 }
 
@@ -54,11 +53,11 @@ export interface TemplateScopeQuickPickPresentation {
 }
 
 const RESOURCE_KIND_PRESENTATION = {
-  "custom-element": { plural: "Elements", singular: "element", icon: "symbol-class", order: 0 },
-  "template-controller": { plural: "Template Controllers", singular: "template controller", icon: "symbol-struct", order: 1 },
-  "custom-attribute": { plural: "Attributes", singular: "attribute", icon: "symbol-property", order: 2 },
-  "value-converter": { plural: "Value Converters", singular: "value converter", icon: "symbol-function", order: 3 },
-  "binding-behavior": { plural: "Binding Behaviors", singular: "binding behavior", icon: "symbol-event", order: 4 },
+  "custom-element": { plural: "Elements", singular: "element", order: 0 },
+  "template-controller": { plural: "Template Controllers", singular: "template controller", order: 1 },
+  "custom-attribute": { plural: "Attributes", singular: "attribute", order: 2 },
+  "value-converter": { plural: "Value Converters", singular: "value converter", order: 3 },
+  "binding-behavior": { plural: "Binding Behaviors", singular: "binding behavior", order: 4 },
 } as const satisfies Record<ResourceInventoryKind, ResourceKindPresentation>;
 
 export const RESOURCE_KIND_ORDER = (Object.keys(RESOURCE_KIND_PRESENTATION) as ResourceInventoryKind[])

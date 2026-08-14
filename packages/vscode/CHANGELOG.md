@@ -15,6 +15,10 @@ source and disclose partial, refused, or failed results instead of filling seman
 - Extended TypeScript, TSX, JavaScript, and JSX member renames atomically into admitted templates, while leaving unverified same-name candidates unchanged and reporting them.
 - Made Quick Fixes re-plan against the current document and reject stale, overlapping, or otherwise unsafe workspace edits.
 - Preserved framework and template-checker TypeScript codes through VS Code Problems while leaving ordinary Program diagnostics to VS Code's native TypeScript/JavaScript provider, and hardened native symbols, highlights, selection ranges, paired-tag linked editing, folding ranges, inlay hints, and semantic-token source ranges.
+- Prevented retained native CSS and JavaScript false positives in semantically proved templates, including valid
+  `style="width: ${value}%"` interpolation, by moving settled documents into the scoped **Aurelia HTML** language mode.
+  Ordinary HTML keeps native validation and no global `html.validate.*` setting changes. Cold first-open admission remains
+  asynchronous, so a native diagnostic can appear briefly before exact ownership settles and clears it.
 - Semantic-token responses now require complete, source-backed, non-overlapping single-line classifications, and the extension declares native fallback types for its Aurelia token vocabulary.
 
 ### Workspace and resource discovery
@@ -23,6 +27,9 @@ source and disclose partial, refused, or failed results instead of filling seman
 - Added exact JSONC parsing for `aurelia.project.json`, with parser diagnostics owned by VS Code and admitted semantic
   configuration diagnostics owned by semantic-runtime; the canonical full schema remains packaged but unassociated.
 - Rebuilt **Aurelia Resources** in VS Code's built-in Explorer over exact project inventory, aliases, bindables, origin, ambiguity, and partial or failed analysis state.
+- Replaced the Resource Explorer's arbitrary TypeScript-symbol glyph mapping with a quieter visual grammar: stable project
+  identity, text-led kind and resource rows, relationship icons only for aliases and bindables, and problem color only for
+  true failed, incomplete or invalid, unsupported, or out-of-date project states.
 - Replaced **Find Resource** and **Show Available Resources** with **Go to Resource...** and **Go to Resource Available to Active Template...**, using exact workspace inventory and active-template compiler scope.
 - Added bounded declaration, implementation, and side-by-side resource actions; explicit updating, stale, incomplete, unsupported, and failed states; Retry plus Output recovery on failed or out-of-date project rows; Output-only context for unsupported projects; and searchable owner and metadata-state context in resource Quick Picks.
 - Scoped settled **Aurelia Resources** refreshes to the workspace whose analysis changed while retaining full refreshes for topology, session, and explicit user-refresh events.

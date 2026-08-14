@@ -231,7 +231,7 @@ describe("resource availability explanation protocol boundary", () => {
     const handlers = new Map<string, (params: unknown, token: unknown) => Promise<unknown>>();
     const query = vi.fn();
     const guardedOperation = operation(query, document, {
-      authoredSourceOwnership: vi.fn(async () => ({ value: { owners: [] } })),
+      authoredSourceOwnership: vi.fn(async () => ({ value: { templateOwned: false, owners: [] } })),
     });
     const ctx = {
       connection: {

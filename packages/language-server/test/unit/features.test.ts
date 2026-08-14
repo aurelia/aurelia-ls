@@ -64,7 +64,7 @@ function createInlayRegistrationHarness(operationOverrides: Record<string, unkno
       managedAdmission();
       return await request(createTestOperation({
         authoredSourceOwnership: vi.fn(async () => ({
-          value: { owners: [{ projectKey: "app" }] },
+          value: { templateOwned: true, owners: [{ projectKey: "app" }] },
         })),
         ...operationOverrides,
       }));

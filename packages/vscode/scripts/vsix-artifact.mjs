@@ -40,6 +40,9 @@ const fixedLocalFiles = Object.freeze([
   ["extension/changelog.md", "CHANGELOG.md", "local"],
   ["extension/LICENSE.txt", "LICENSE", "local"],
   ["extension/images/logo.png", "images/logo.png", "local"],
+  ["extension/language-configuration.json", "language-configuration.json", "local"],
+  ["extension/snippets/html.code-snippets", "snippets/html.code-snippets", "local"],
+  ["extension/syntaxes/aurelia-html.tmLanguage.json", "syntaxes/aurelia-html.tmLanguage.json", "local"],
 ]);
 const controlEntries = Object.freeze(["[Content_Types].xml", "extension.vsixmanifest"]);
 const bundleOutputs = Object.freeze([

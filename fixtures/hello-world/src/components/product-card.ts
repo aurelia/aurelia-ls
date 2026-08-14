@@ -10,6 +10,7 @@ export class ProductCard {
   @bindable item: CatalogItem | null = null;
   @bindable({ attribute: 'display-label' }) labelText = '';
   @bindable selected = false;
+  readonly selectionProgressPercent = 40;
 
   get stockText(): string {
     if (this.item == null) {

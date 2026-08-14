@@ -28,6 +28,8 @@ describe('authored edit boundary', () => {
   let runtime: Awaited<ReturnType<typeof createSemanticRuntime>>;
   let appTemplatePath: string;
   let appTemplateText: string;
+  let appSourcePath: string;
+  let rootDocumentPath: string;
   let externalWidgetTemplatePath: string;
   let externalWidgetTemplateText: string;
   let externalHostTemplatePath: string;
@@ -41,6 +43,8 @@ describe('authored edit boundary', () => {
     workspaceRoot = await mkdtemp(path.join(packageRoot, '.authored-edit-boundary-'));
     excludedRoot = path.join(workspaceRoot, 'excluded');
     appTemplatePath = path.join(workspaceRoot, 'src/app.html');
+    appSourcePath = path.join(workspaceRoot, 'src/app.ts');
+    rootDocumentPath = path.join(workspaceRoot, 'index.html');
     externalWidgetTemplatePath = path.join(workspaceRoot, 'src/external-widget.html');
     externalHostTemplatePath = path.join(excludedRoot, 'external-host.html');
     ownedWidgetPath = path.join(workspaceRoot, 'src/owned-widget.ts');
@@ -71,6 +75,7 @@ describe('authored edit boundary', () => {
         include: ['src/**/*.ts', 'excluded/**/*.ts'],
       }),
       'src/aurelia-assets.d.ts': "declare module '*.html' { const markup: string; export default markup; }\n",
+      'index.html': '<body><boundary-app></boundary-app></body>\n',
       'src/entry.ts': "import '../excluded/bootstrap.js';\n",
       'src/app.ts': [
         "import { customElement } from '@aurelia/runtime-html';",
@@ -169,6 +174,21 @@ describe('authored edit boundary', () => {
     expect(completion.value.missingInputs).toEqual(['editable-template-source']);
     expect(completion.summary).toContain('not an editable authored template');
   }, 30_000);
+
+  test('projects the exact template-edit boundary in authored source ownership', () => {
+    const template = runtime.authoredSourceOwnership({ sourceFilePath: appTemplatePath }).value;
+    const appSource = runtime.authoredSourceOwnership({ sourceFilePath: appSourcePath }).value;
+    const rootDocument = runtime.authoredSourceOwnership({ sourceFilePath: rootDocumentPath }).value;
+    const external = runtime.authoredSourceOwnership({ sourceFilePath: externalHostTemplatePath }).value;
+
+    expect(template).toMatchObject({ templateOwned: true, owners: [expect.objectContaining({ role: 'template' })] });
+    expect(appSource).toMatchObject({ templateOwned: true, owners: [expect.objectContaining({ role: 'app-source' })] });
+    expect(rootDocument).toMatchObject({
+      templateOwned: false,
+      owners: [expect.objectContaining({ role: 'root-document' })],
+    });
+    expect(external).toMatchObject({ templateOwned: false, owners: [] });
+  });
 
   test('refuses resource rename atomically when its declaration or an affected template is excluded', async () => {
     const declarationReferences = await resourceReferences(

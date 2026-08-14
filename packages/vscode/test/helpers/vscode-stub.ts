@@ -118,6 +118,7 @@ interface RecordedActions {
   shownOutputChannels: Array<{ name: string; preserveFocus: boolean | undefined }>;
   quickPicks: StubQuickPick[];
   contextValues: Map<string, unknown>;
+  languageChanges: Array<{ document: StubDocument; languageId: string }>;
   fireWorkspaceFoldersChanged(): void;
   fireConfigurationChanged(section?: string): void;
   fireActiveTextEditorChanged(editor: unknown): void;
@@ -169,12 +170,16 @@ export interface StubVscodeApi {
     parse: (value: string) => StubUri;
     joinPath: (base: StubUri, ...segments: string[]) => StubUri;
   };
+  languages: {
+    setTextDocumentLanguage: (document: StubDocument, languageId: string) => Promise<StubDocument>;
+  };
   RelativePattern: new (base: unknown, pattern: string) => { base: unknown; baseUri: StubUri; pattern: string };
   EventEmitter: typeof EventEmitter;
   Disposable: typeof StubDisposable;
   CancellationTokenSource: typeof CancellationTokenSource;
   Position: typeof Position;
   Range: typeof Range;
+  ThemeColor: typeof ThemeColor;
   ThemeIcon: typeof ThemeIcon;
   QuickInputButtons: { Back: object };
   QuickPickItemKind: { Separator: number; Default: number };
@@ -299,8 +304,12 @@ class Range {
   constructor(readonly start: Position, readonly end: Position) {}
 }
 
-class ThemeIcon {
+class ThemeColor {
   constructor(readonly id: string) {}
+}
+
+class ThemeIcon {
+  constructor(readonly id: string, readonly color?: ThemeColor) {}
 }
 
 class QuickPick implements StubQuickPick {
@@ -489,6 +498,7 @@ export function createVscodeApi(options: CreateVscodeApiOptions = {}): { vscode:
   const shownOutputChannels: Array<{ name: string; preserveFocus: boolean | undefined }> = [];
   const quickPicks: StubQuickPick[] = [];
   const contextValues = new Map<string, unknown>();
+  const languageChanges: Array<{ document: StubDocument; languageId: string }> = [];
   const workspaceFoldersChanged = new EventEmitter<void>();
   const configurationChanged = new EventEmitter<{ affectsConfiguration: (section: string) => boolean }>();
   const documentOpened = new EventEmitter<StubDocument>();
@@ -692,10 +702,35 @@ export function createVscodeApi(options: CreateVscodeApiOptions = {}): { vscode:
     joinPath: (base: StubUri, ...segments: string[]) => createUri(`file://${path.join(base.fsPath ?? "", ...segments)}`),
   };
 
+  async function setTextDocumentLanguage(document: StubDocument, languageId: string): Promise<StubDocument> {
+    if (document.languageId === languageId) return document;
+    const documentIndex = textDocuments.indexOf(document);
+    if (documentIndex < 0) {
+      throw new Error(`Cannot change the language of a closed document: ${document.uri.toString()}`);
+    }
+    textDocuments.splice(documentIndex, 1);
+    documentClosed.fire(document);
+    const replacement: StubDocument = {
+      uri: document.uri,
+      languageId,
+      text: document.text,
+      getText: () => replacement.text,
+    };
+    textDocuments.splice(documentIndex, 0, replacement);
+    const activeEditor = options.activeTextEditor as { readonly document?: StubDocument } | undefined;
+    if (activeEditor?.document === document) {
+      options.activeTextEditor = { ...activeEditor, document: replacement };
+    }
+    languageChanges.push({ document: replacement, languageId });
+    documentOpened.fire(replacement);
+    return replacement;
+  }
+
   const vscode: StubVscodeApi = {
     commands: { registerCommand, executeCommand },
     workspace,
     window,
+    languages: { setTextDocumentLanguage },
     Uri,
     RelativePattern,
     EventEmitter,
@@ -703,6 +738,7 @@ export function createVscodeApi(options: CreateVscodeApiOptions = {}): { vscode:
     CancellationTokenSource,
     Position,
     Range,
+    ThemeColor,
     ThemeIcon,
     QuickInputButtons,
     QuickPickItemKind: { Separator: -1, Default: 0 },
@@ -730,6 +766,7 @@ export function createVscodeApi(options: CreateVscodeApiOptions = {}): { vscode:
       shownOutputChannels,
       quickPicks,
       contextValues,
+      languageChanges,
       fireWorkspaceFoldersChanged: () => workspaceFoldersChanged.fire(),
       fireConfigurationChanged: (section = "aurelia") => configurationChanged.fire({
         affectsConfiguration: (candidate) => candidate === section || candidate.startsWith(`${section}.`),

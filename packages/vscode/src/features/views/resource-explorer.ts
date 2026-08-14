@@ -49,6 +49,12 @@ import {
 } from "../resource-discovery/presentation.js";
 
 type TreeNodeKind = "project" | "kind" | "resource" | "alias" | "bindable" | "info";
+type ResourceExplorerIconId = "project" | "link" | "symbol-property" | StatusIconId;
+type StatusIconId = "info" | "warning" | "error";
+type StatusIconColorId =
+  | "problemsInfoIcon.foreground"
+  | "problemsWarningIcon.foreground"
+  | "problemsErrorIcon.foreground";
 type ResourceExplorerPhase = { readonly kind: "empty" | "loading" | "current" | "failed" };
 type ResourceExplorerObservedRowState =
   | ResourceTreeRowState
@@ -62,7 +68,8 @@ interface TreeNode {
   readonly accessibilityLabel: string;
   readonly description?: string;
   readonly tooltip?: string;
-  readonly iconId?: string;
+  readonly iconId?: ResourceExplorerIconId;
+  readonly iconColorId?: StatusIconColorId;
   readonly collapsible: boolean;
   readonly defaultExpanded?: boolean;
   readonly children?: readonly TreeNode[];
@@ -212,6 +219,7 @@ function projectRootNode(
       ? `${baseDescription} · analysis may be limited · previous review`
       : baseDescription;
   const issueKind = projectIssueKind(unit, staleWorkspaceKeys);
+  const iconColorId = projectStatusColorId(unit, staleWorkspaceKeys);
   const accessibilityLabel = [
     `Aurelia project ${label}`,
     description,
@@ -226,7 +234,8 @@ function projectRootNode(
     tooltip: failed
       ? `Aurelia project ${label}\nResources could not be loaded. Retry or open Aurelia Output for details.`
       : `Aurelia project ${label}\nRoot: ${rootContext}`,
-    iconId: failed ? "error" : answered ? "root-folder" : "warning",
+    iconId: "project",
+    ...(iconColorId == null ? {} : { iconColorId }),
     collapsible: true,
     defaultExpanded: true,
     children,
@@ -345,7 +354,6 @@ function buildKindGroups(input: ReadyProjectInput): readonly TreeNode[] {
       label: `${presentation.plural} (${rows.length})`,
       ...(stateText.length === 0 ? {} : { description: stateText }),
       accessibilityLabel: `${presentation.plural} group. ${formatResourceCount(rows.length)}.${stateSentence(input.states)}`,
-      iconId: presentation.icon,
       collapsible: true,
       children: rows.map((resource) => resourceNode(input, resource)),
       contextValue: "resourceKind",
@@ -402,7 +410,7 @@ function resourceNode(
       tooltip: source == null
         ? `Alias ${alias.name} for ${resource.name}\nSource location unavailable`
         : `Alias ${alias.name} for ${resource.name}\nSource: ${source}`,
-      iconId: "symbol-string",
+      iconId: "link",
       collapsible: false,
       ...(navigable ? { navigation: navigationRequest(input, resource, "alias", alias.identityKey) } : {}),
       contextValue: navigable ? "resourceAlias" : "resourceAliasUnavailable",
@@ -443,7 +451,7 @@ function resourceNode(
       tooltip: source == null
         ? `Bindable ${publicName} on ${resource.name}\nSource location unavailable`
         : `Bindable ${publicName} on ${resource.name}\nSource: ${source}`,
-      iconId: "symbol-field",
+      iconId: "symbol-property",
       collapsible: false,
       ...(navigable ? { navigation: navigationRequest(input, resource, "bindable", bindable.identityKey) } : {}),
       contextValue: navigable ? "resourceBindable" : "resourceBindableUnavailable",
@@ -470,7 +478,6 @@ function resourceNode(
       resourceCollisionScent,
     ),
     tooltip: resourceTooltip(resource, input.result.project, input.workspace, input.states),
-    iconId: kind.icon,
     collapsible: children.length > 0,
     children,
     availabilityExplanation: {
@@ -595,6 +602,32 @@ function projectIssueKind(
   return projectHasIssue(unit, staleWorkspaceKeys) ? "recoverable" : null;
 }
 
+function projectStatusColorId(
+  unit: ProjectUnit,
+  staleWorkspaceKeys: ReadonlySet<string>,
+): StatusIconColorId | null {
+  if (
+    unit.workspace.status === "error"
+    || unit.result?.status === "error"
+    || (unit.result?.status === "ready" && unit.result.answer.result === "failed")
+  ) {
+    return "problemsErrorIcon.foreground";
+  }
+  if (
+    staleWorkspaceKeys.has(unit.workspace.key)
+    || (unit.result?.status === "ready" && (
+      unit.result.answer.result === "invalid"
+      || projectResultIncomplete(unit.result)
+    ))
+  ) {
+    return "problemsWarningIcon.foreground";
+  }
+  if (unit.result?.status === "ready" && unit.result.answer.result === "unsupported") {
+    return "problemsInfoIcon.foreground";
+  }
+  return null;
+}
+
 function projectCountDescription(
   count: number,
   incomplete: boolean,
@@ -634,7 +667,7 @@ function infoNode(
   id: string,
   label: string,
   accessibilityLabel: string,
-  iconId: string,
+  iconId: StatusIconId,
   states: readonly ResourceTreeRowState[] = [],
 ): TreeNode {
   const stateText = stateDescription(states);
@@ -651,17 +684,29 @@ function infoNode(
     ...(stateText.length === 0 ? {} : { description: stateText }),
     tooltip: completeAccessibilityLabel,
     iconId,
+    iconColorId: statusIconColorId(iconId),
     collapsible: false,
     contextValue: "resourceInfo",
     observationStates: states,
   };
 }
 
+function statusIconColorId(iconId: StatusIconId): StatusIconColorId {
+  switch (iconId) {
+    case "error":
+      return "problemsErrorIcon.foreground";
+    case "warning":
+      return "problemsWarningIcon.foreground";
+    case "info":
+      return "problemsInfoIcon.foreground";
+  }
+}
+
 function issueInfoNode(
   id: string,
   label: string,
   accessibilityLabel: string,
-  iconId: string,
+  iconId: StatusIconId,
   workspaceKey: string,
   states: readonly ResourceTreeRowState[] = [],
 ): TreeNode {
@@ -676,7 +721,7 @@ function outputInfoNode(
   id: string,
   label: string,
   accessibilityLabel: string,
-  iconId: string,
+  iconId: StatusIconId,
   states: readonly ResourceTreeRowState[] = [],
 ): TreeNode {
   return {
@@ -826,7 +871,12 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Dis
     const item: TreeItem = { label: element.label, id: element.id };
     if (element.description != null) item.description = element.description;
     if (element.tooltip != null) item.tooltip = element.tooltip;
-    if (element.iconId != null) item.iconPath = new this.#vscode.ThemeIcon(element.iconId);
+    if (element.iconId != null) {
+      item.iconPath = new this.#vscode.ThemeIcon(
+        element.iconId,
+        element.iconColorId == null ? undefined : new this.#vscode.ThemeColor(element.iconColorId),
+      );
+    }
     item.accessibilityInformation = { label: element.accessibilityLabel, role: "treeitem" };
     item.collapsibleState = element.collapsible
       ? (element.defaultExpanded === true

@@ -12,8 +12,12 @@ import { createClientContext, type ClientContext } from "./core/context.js";
 import { ErrorReporter } from "./core/errors.js";
 import type { ClientFeature } from "./core/feature.js";
 import { LspFacade } from "./core/lsp-facade.js";
-import type { SourceOwnershipSnapshot } from "./types.js";
+import { sourceOwnershipTemplateOwned, type SourceOwnershipSnapshot } from "./types.js";
 import { sameDocumentUri } from "./core/uri-identity.js";
+import {
+  isTemplateLanguageId,
+  OwnedTemplateLanguageController,
+} from "./template-language.js";
 
 export interface ClientAppServices {
   readonly vscode: VscodeApi;
@@ -36,6 +40,7 @@ export class ClientApp {
   readonly #services: ClientAppServices;
   #ctx: ClientContext | null = null;
   #lsp: LspFacade | null = null;
+  #templateLanguage: OwnedTemplateLanguageController | null = null;
   #subscriptions: readonly Disposable[] = [];
   #featureActivations: readonly Disposable[] = [];
   #contextTransition: Promise<void> = Promise.resolve();
@@ -65,7 +70,7 @@ export class ClientApp {
     const { vscode, logger, languageClient, features } = this.#services;
     const errors = new ErrorReporter(logger, vscode);
     try {
-      await setClientContextKeys(vscode, false, false, null);
+      await setClientContextKeys(vscode, false, false, false, null);
       await languageClient.start(this.#extension);
 
       const lsp = new LspFacade(languageClient, logger);
@@ -79,6 +84,10 @@ export class ClientApp {
         lsp,
       });
       this.#ctx = ctx;
+
+      const templateLanguage = new OwnedTemplateLanguageController(ctx);
+      this.#templateLanguage = templateLanguage;
+      templateLanguage.start();
 
       this.#featureActivations = await activateFeatures(ctx, features);
       this.#subscriptions = this.#registerStateListeners(ctx);
@@ -174,7 +183,7 @@ export class ClientApp {
     if (uri != null && session != null) {
       // Never carry a positive answer from a previous editor or topology while
       // the exact server-owned answer for this document is still in flight.
-      await this.#queueContextCommit(ctx, request, uri, languageId, session.client, active, false);
+      await this.#queueContextCommit(ctx, request, uri, languageId, session.client, active, false, false);
       if (!this.#contextRequestIsCurrent(ctx, request, uri, languageId, session.client)) return;
       try {
         ownership = await ctx.lsp.getSourceOwnership(uri, cancellation.token);
@@ -205,6 +214,9 @@ export class ClientApp {
       && ownership.workspace.key === workspaceKey
       && sameDocumentUri(ctx.vscode, ownership.sourceUri, uri)
       && ownership.owners.length > 0;
+    const templateOwned = documentOwned
+      && ownership != null
+      && sourceOwnershipTemplateOwned(ownership);
     await this.#queueContextCommit(
       ctx,
       request,
@@ -213,6 +225,7 @@ export class ClientApp {
       session?.client,
       active,
       documentOwned,
+      templateOwned,
     );
   }
 
@@ -224,10 +237,11 @@ export class ClientApp {
     sessionClient: unknown,
     active: boolean,
     documentOwned: boolean,
+    templateOwned: boolean,
   ): Promise<void> {
     const commit = this.#contextCommit.then(async () => {
       if (!this.#contextRequestIsCurrent(ctx, request, uri, languageId, sessionClient)) return;
-      await setClientContextKeys(ctx.vscode, active, documentOwned, languageId);
+      await setClientContextKeys(ctx.vscode, active, documentOwned, templateOwned, languageId);
     });
     this.#contextCommit = commit.catch((error) => {
       ctx.logger.warn(`[client] context commit failed: ${errorMessage(error)}`);
@@ -272,6 +286,15 @@ export class ClientApp {
       this.#contextCommit.catch(() => {}),
     ]);
     this.#analysisVersions.clear();
+    const templateLanguage = this.#templateLanguage;
+    this.#templateLanguage = null;
+    if (templateLanguage != null) {
+      try {
+        await templateLanguage.disposeAsync();
+      } catch (error) {
+        logger.error("[client] template language restoration failed", undefined, error);
+      }
+    }
     disposeOwned(logger, "feature contributions", [...this.#featureActivations].reverse());
     this.#featureActivations = [];
     disposeOwned(logger, "LSP facade", this.#lsp == null ? [] : [this.#lsp]);
@@ -283,7 +306,7 @@ export class ClientApp {
       logger.error("[client] language client shutdown failed", undefined, error);
     }
     try {
-      await setClientContextKeys(vscode, false, false, null);
+      await setClientContextKeys(vscode, false, false, false, null);
     } catch (error) {
       logger.error("[client] context reset failed", undefined, error);
     }
@@ -328,9 +351,10 @@ function setClientContextKeys(
   vscode: VscodeApi,
   active: boolean,
   documentOwned: boolean,
+  templateOwned: boolean,
   activeDocumentLanguageId: string | null,
 ): Promise<unknown[]> {
-  const activeTemplateOwned = documentOwned && activeDocumentLanguageId === "html";
+  const activeTemplateOwned = templateOwned && isTemplateLanguageId(activeDocumentLanguageId);
   return Promise.all([
     vscode.commands.executeCommand("setContext", "aurelia.active", active),
     vscode.commands.executeCommand("setContext", "aurelia.documentOwned", documentOwned),

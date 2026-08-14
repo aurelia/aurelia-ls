@@ -308,7 +308,12 @@ export class LspFacade implements Disposable {
       { uri },
       token,
     );
-    return { ...response, workspace: session.workspace };
+    const normalized: SourceOwnershipSnapshot = {
+      ...response,
+      templateOwned: response.templateOwned === true,
+      workspace: session.workspace,
+    };
+    return normalized;
   }
 
   async renameFromTs(

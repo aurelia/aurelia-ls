@@ -103,6 +103,7 @@ const SCRIPT_LANGUAGE_IDS = new Set([
 
 const ANALYZED_DOCUMENT_LANGUAGE_IDS = [
   "html",
+  "aurelia-html",
   "typescript",
   "typescriptreact",
   "javascript",

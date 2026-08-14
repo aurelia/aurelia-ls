@@ -59,6 +59,12 @@ The extension analyzes your Aurelia project and provides:
 - **Contextual explanations** — use native Quick Fixes or Resource Explorer actions to explain eligible diagnostics,
   uncertain bindings, authored attribute names, resource availability, and policy-controlled analysis limitations
 
+For semantically proved Aurelia templates, the extension settles the document into a scoped **Aurelia HTML** mode so
+VS Code's raw embedded CSS/JavaScript validators do not retain false Problems for valid interpolation such as
+`style="width: ${value}%"`. Ordinary HTML stays in native `html` mode with native validation; no global HTML validation
+setting is changed. Exact ownership is asynchronous on a cold first open, so a native diagnostic can appear briefly
+before admission settles and clears it.
+
 See the [extension README](packages/vscode/README.md) for the full feature list and exact invocation points.
 
 ## How It Works

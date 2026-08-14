@@ -37,6 +37,7 @@
   "license": "MIT",
   "activationEvents": [
     "onLanguage:html",
+    "onLanguage:aurelia-html",
     "onLanguage:typescript",
     "onLanguage:typescriptreact",
     "onLanguage:javascript",
@@ -48,12 +49,57 @@
   "contributes": {
     "languages": [
       {
+        "id": "aurelia-html",
+        "aliases": [
+          "Aurelia HTML",
+          "aurelia-html"
+        ],
+        "configuration": "./language-configuration.json"
+      },
+      {
         "id": "jsonc",
         "filenames": [
           "aurelia.project.json"
         ]
       }
     ],
+    "grammars": [
+      {
+        "language": "aurelia-html",
+        "scopeName": "text.html.aurelia",
+        "path": "./syntaxes/aurelia-html.tmLanguage.json",
+        "embeddedLanguages": {
+          "text.html": "aurelia-html",
+          "source.css": "css",
+          "source.js": "javascript",
+          "source.python": "python",
+          "source.smarty": "smarty"
+        },
+        "tokenTypes": {
+          "meta.tag string.quoted": "other"
+        }
+      }
+    ],
+    "htmlLanguageParticipants": [
+      {
+        "languageId": "aurelia-html",
+        "autoInsert": true
+      }
+    ],
+    "snippets": [
+      {
+        "language": "aurelia-html",
+        "path": "./snippets/html.code-snippets"
+      }
+    ],
+    "configurationDefaults": {
+      "emmet.includeLanguages": {
+        "aurelia-html": "html"
+      },
+      "[aurelia-html]": {
+        "editor.suggest.insertMode": "replace"
+      }
+    },
     "jsonValidation": [
       {
         "fileMatch": "**/aurelia.project.json",
@@ -180,7 +226,7 @@
       {
         "command": "aurelia.openResourceImplementation",
         "title": "Open Implementation",
-        "icon": "$(symbol-class)",
+        "icon": "$(file-code)",
         "category": "Aurelia"
       },
       {
@@ -270,12 +316,12 @@
       "editor/context": [
         {
           "command": "aurelia.goToAvailableResource",
-          "when": "aurelia.active && aurelia.documentOwned && editorLangId == html",
+          "when": "aurelia.active && aurelia.activeTemplateOwned",
           "group": "aurelia@1"
         },
         {
           "command": "aurelia.openRelatedFile",
-          "when": "aurelia.active && aurelia.documentOwned && (editorLangId == html || editorLangId == typescript || editorLangId == typescriptreact || editorLangId == javascript || editorLangId == javascriptreact)",
+          "when": "aurelia.active && aurelia.documentOwned && (editorLangId == html || editorLangId == aurelia-html || editorLangId == typescript || editorLangId == typescriptreact || editorLangId == javascript || editorLangId == javascriptreact)",
           "group": "aurelia@2"
         }
       ],
@@ -306,7 +352,7 @@
         },
         {
           "command": "aurelia.goToAvailableResource",
-          "when": "aurelia.active && aurelia.documentOwned && editorLangId == html"
+          "when": "aurelia.active && aurelia.activeTemplateOwned"
         },
         {
           "command": "aurelia.openRelatedFile",
