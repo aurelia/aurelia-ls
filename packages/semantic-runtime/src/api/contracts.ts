@@ -1,7 +1,11 @@
 import type { SemanticSupportState } from '../support-state.js';
 import type { BootProjectDiscoveryMode, BootProjectInput } from '../boot/frames.js';
 import type { ProjectRootAdmissionOrigin } from '../boot/project-root-admission.js';
-import type { SemanticProjectConfigurationDiagnostic } from '../boot/project-configuration.js';
+import type {
+  AureliaProjectConfigurationVersion,
+  SemanticExistingProjectConfigurationApplicationState,
+  SemanticProjectConfigurationDiagnostic,
+} from '../boot/project-configuration.js';
 import type { ApplicationFileRole } from '../application/topology.js';
 import type { SourceFileRole } from '../kernel/address.js';
 import type { SemanticRuntimeProjectInputAuthority } from '../kernel/project-input.js';
@@ -722,8 +726,13 @@ export interface SemanticNativeProjectConfigurationRow {
   readonly projectKey: string;
   readonly projectRootDir: string;
   readonly filePath: string;
-  /** Native exclusions that survived validation and currently contribute to authored-source membership. */
+  /** Accepted native format version; null when the existing file's version is missing, ambiguous, or unsupported. */
+  readonly acceptedVersion: AureliaProjectConfigurationVersion | null;
+  readonly applicationState: SemanticExistingProjectConfigurationApplicationState;
+  /** Complete normalized native exclusions that survived validation and currently contribute to authored-source membership. */
   readonly appliedExcludedSourceRootDirs: readonly string[];
+  /** Complete known finding policy after configured overrides and deterministic defaults are composed. */
+  readonly effectiveFindingPolicies: readonly SemanticProjectFindingEffectivePolicy[];
   readonly diagnosticCount: number;
 }
 

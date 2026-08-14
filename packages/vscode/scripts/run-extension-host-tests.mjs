@@ -67,7 +67,7 @@ const semanticRuntimeFingerprintPattern = new RegExp([
   "^semantic-runtime:",
   "(?<sessionIdentity>[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})",
   ":workspace-(?<workspaceGeneration>0|[1-9]\\d*)",
-  ":source-world-(?<sourceWorldRevision>semantic-source-world/1:",
+  ":source-world-(?<sourceWorldRevision>semantic-source-world/2:",
   "[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048])",
   ":request-(?<requestEpoch>0|[1-9]\\d*)(?![\\s\\S])",
 ].join(""), "u");

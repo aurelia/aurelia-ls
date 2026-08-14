@@ -110,6 +110,53 @@ describe('managed semantic workspace session', () => {
     expect(equivalent.projectInputGenerationIdentity).not.toBe(first.projectInputGenerationIdentity);
   });
 
+  test('rebinds effective finding policy onto the warm runtime without replacing its store', async () => {
+    const workspaceRoot = await createWorkspace();
+    await writeWorkspaceFile(workspaceRoot, 'src/main.ts', 'export const main = true;\n');
+    const configurationFile = await writeWorkspaceFile(
+      workspaceRoot,
+      'aurelia.project.json',
+      '{"version":1,"findings":{"aurelia.analysis.dynamic-registration-spread":"warning"}}',
+    );
+    const authority = new SemanticRuntimeProjectInputAuthority();
+    const session = new ManagedSemanticWorkspaceSession({
+      workspaceRoot,
+      projects: [{ rootDir: workspaceRoot }],
+      projectInputAuthority: authority,
+    });
+    sessions.push(session);
+    const before = await captureRuntime(session);
+
+    await writeFile(
+      configurationFile,
+      '{"version":1,"findings":{"aurelia.analysis.dynamic-registration-spread":"off"}}',
+    );
+    authority.advance([
+      new SemanticRuntimeProjectInputChange(
+        SemanticRuntimeProjectInputChangeKind.FileValue,
+        configurationFile,
+      ),
+    ]);
+    const inventory = await session.run(({ runtime }) => runtime.nativeProjectConfigurations());
+    const after = await captureRuntime(session);
+
+    expect(after.runtimeIdentity).toBe(before.runtimeIdentity);
+    expect(after.storeIdentity).toBe(before.storeIdentity);
+    expect(after.storeKey).toBe(before.storeKey);
+    expect(after.workspaceIdentity).not.toBe(before.workspaceIdentity);
+    expect(after.sourceWorldRevision).toBe(before.sourceWorldRevision);
+    expect(after.projectInputGenerationIdentity).not.toBe(before.projectInputGenerationIdentity);
+    expect(inventory.value.rows).toEqual([expect.objectContaining({
+      acceptedVersion: 1,
+      applicationState: 'applied',
+      effectiveFindingPolicies: [expect.objectContaining({
+        ruleId: 'aurelia.analysis.dynamic-registration-spread',
+        disposition: 'off',
+        authority: 'project-configuration',
+      })],
+    })]);
+  });
+
   test('owns source-world validation at managed ingress and egress, then revokes borrowed answer proof', async () => {
     const workspaceRoot = await createWorkspace();
     await writeWorkspaceFile(workspaceRoot, 'src/main.ts', 'export const main = true;\n');
@@ -137,7 +184,7 @@ describe('managed semantic workspace session', () => {
 
     const sourceWorldRevision = await session.run(({ sourceWorldRevision }) => sourceWorldRevision);
 
-    expect(sourceWorldRevision).toMatch(/^semantic-source-world\/1:/);
+    expect(sourceWorldRevision).toMatch(/^semantic-source-world\/2:/);
     expect(summary).not.toHaveBeenCalled();
   });
 
@@ -1193,7 +1240,7 @@ describe('managed semantic workspace session', () => {
         cursor: answer.page!.nextCursor!,
       };
     });
-    await writeFile(childConfig, '{"version":1,"unknown":true}', 'utf8');
+    await writeFile(childConfig, '{"version":1}', 'utf8');
     authority.advance();
 
     const staleCursor = await session.run(({ runtime }) => {
@@ -1210,10 +1257,20 @@ describe('managed semantic workspace session', () => {
     });
 
     const afterCursor = await captureRuntime(session);
-    expect(afterCursor.storeIdentity).not.toBe(beforeCursor.storeIdentity);
+    const currentInventory = await session.run(({ runtime }) => runtime.nativeProjectConfigurations({
+      sourceFilePaths: [childConfig],
+    }));
+    expect(afterCursor.storeIdentity).toBe(beforeCursor.storeIdentity);
+    expect(afterCursor.storeKey).toBe(beforeCursor.storeKey);
+    expect(afterCursor.sourceWorldRevision).toBe(beforeCursor.sourceWorldRevision);
     expect(staleCursor.result).toBe('invalid');
     expect(staleCursor.cursorProblem?.kind).toBe('stale');
     expect(staleCursor.rows).toEqual([]);
+    expect(currentInventory.value.rows).toEqual([expect.objectContaining({
+      acceptedVersion: 1,
+      applicationState: 'applied',
+      diagnosticCount: 0,
+    })]);
   });
 
   test('keeps a failed fresh transition atomic and retries without reusing its store sequence', async () => {

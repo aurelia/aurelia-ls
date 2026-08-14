@@ -323,9 +323,9 @@ describe("Extension Host support runner", () => {
     const sessionIdentity = "8dd64564-76fb-4950-b783-eb1715e5a0d2";
     const alternateSessionIdentity = "9dd64564-76fb-4950-b783-eb1715e5a0d2";
     const sourceWorldRevision =
-      "semantic-source-world/1:g1Isnfi3oLhqD6pZ1oqa1bVbOSOuA4vG3z8ucoJpcTg";
+      "semantic-source-world/2:g1Isnfi3oLhqD6pZ1oqa1bVbOSOuA4vG3z8ucoJpcTg";
     const alternateSourceWorldRevision =
-      "semantic-source-world/1:g1Isnfi3oLhqD6pZ1oqa1bVbOSOuA4vG3z8ucoJpcTk";
+      "semantic-source-world/2:g1Isnfi3oLhqD6pZ1oqa1bVbOSOuA4vG3z8ucoJpcTk";
     type CanonicalInteger = string | number | bigint;
     const fingerprint = (
       requestEpoch: CanonicalInteger,
@@ -453,7 +453,7 @@ describe("Extension Host support runner", () => {
       ["wrong UUID variant", fingerprint(1, { sessionIdentity: sessionIdentity.replace("-b", "-7") })],
       ["wrong source-world marker", fingerprint(1).replace(":source-world-", ":sourceWorld-")],
       ["wrong source-world version", fingerprint(1, {
-        sourceWorldRevision: sourceWorldRevision.replace("/1:", "/2:"),
+        sourceWorldRevision: sourceWorldRevision.replace("/2:", "/1:"),
       })],
       ["short digest", fingerprint(1, { sourceWorldRevision: sourceWorldRevision.slice(0, -1) })],
       ["long digest", fingerprint(1, { sourceWorldRevision: `${sourceWorldRevision}A` })],

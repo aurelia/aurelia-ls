@@ -5,7 +5,9 @@ import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import {
   createSemanticRuntime,
+  resolveSemanticProjectFindingRulePolicy,
   SemanticAppQueryKind,
+  SemanticProjectFindingRuleId,
   SemanticRuntimeProjectInputAuthority,
   SemanticRuntimeProjectInputChange,
   SemanticRuntimeProjectInputChangeKind,
@@ -170,6 +172,170 @@ describe('semantic source-world currentness', () => {
     const reformatted = excluded.sourceWorld.resolveCurrent();
     expect(reformatted.kind).toBe(SemanticSourceWorldCurrentnessKind.EquivalentPlan);
     expect(reformatted.sourceWorld.sourceWorldRevision).toBe(excluded.sourceWorld.sourceWorldRevision);
+  });
+
+  test('treats an explicit project gaining an empty native configuration as an equivalent plan', async () => {
+    const workspaceRoot = await createWorkspace();
+    await writeWorkspaceFile(workspaceRoot, 'src/main.ts', 'export const main = true;\n');
+    const authority = new SemanticRuntimeProjectInputAuthority();
+    const baseline = resolveSemanticSourceWorld({
+      rootDir: workspaceRoot,
+      projects: [{
+        rootDir: workspaceRoot,
+        sourceFiles: [{ path: 'src/main.ts' }],
+      }],
+      projectInputAuthority: authority,
+    });
+    const boot = bootWorkspaceFromSourceWorld(baseline, 'source-world-empty-config-rebind');
+    const absentConfiguration = baseline.projects[0]!.projectConfiguration;
+    expect(absentConfiguration.applicationState).toBe('absent');
+
+    const configurationFile = await writeWorkspaceFile(
+      workspaceRoot,
+      'aurelia.project.json',
+      '{"version":1}',
+    );
+    authority.advance([
+      new SemanticRuntimeProjectInputChange(
+        SemanticRuntimeProjectInputChangeKind.StructuralMembership,
+        configurationFile,
+      ),
+    ]);
+    const configured = baseline.resolveCurrent();
+    const appliedConfiguration = configured.sourceWorld.projects[0]!.projectConfiguration;
+
+    expect(configured.kind).toBe(SemanticSourceWorldCurrentnessKind.EquivalentPlan);
+    expect(configured.sourceWorld.sourceWorldRevision).toBe(baseline.sourceWorldRevision);
+    expect(appliedConfiguration.revision).not.toBe(absentConfiguration.revision);
+    expect(appliedConfiguration).toMatchObject({
+      exists: true,
+      acceptedVersion: 1,
+      applicationState: 'applied',
+      excludedSourceRootDirs: [],
+    });
+    const rebound = boot.forEquivalentSourceWorld(configured.sourceWorld);
+    expect(rebound.store).toBe(boot.store);
+    expect(rebound.projects[0]?.projectConfiguration).toBe(appliedConfiguration);
+  });
+
+  test('rebinds finding policy and exact provenance without changing source-world topology', async () => {
+    const workspaceRoot = await createWorkspace();
+    await writeWorkspaceFile(workspaceRoot, 'src/main.ts', 'export const main = true;\n');
+    const configurationFile = await writeWorkspaceFile(
+      workspaceRoot,
+      'aurelia.project.json',
+      '{"version":1,"findings":{"aurelia.analysis.dynamic-registration-spread":"warning"}}',
+    );
+    const authority = new SemanticRuntimeProjectInputAuthority();
+    const baseline = resolveSemanticSourceWorld({
+      rootDir: workspaceRoot,
+      projects: [{ rootDir: workspaceRoot }],
+      projectInputAuthority: authority,
+    });
+    const boot = bootWorkspaceFromSourceWorld(baseline, 'source-world-finding-policy-rebind');
+    const baselineConfiguration = baseline.projects[0]!.projectConfiguration;
+    const baselinePolicy = resolveSemanticProjectFindingRulePolicy(
+      baselineConfiguration.findingPolicy,
+      SemanticProjectFindingRuleId.DynamicRegistrationSpread,
+    );
+
+    await writeFile(configurationFile, `{
+      "version": 1,
+      "findings": {
+        "aurelia.analysis.dynamic-registration-spread": "warning"
+      }
+    }`);
+    authority.advance([
+      new SemanticRuntimeProjectInputChange(
+        SemanticRuntimeProjectInputChangeKind.FileValue,
+        configurationFile,
+      ),
+    ]);
+    const reformatted = baseline.resolveCurrent();
+    const reformattedConfiguration = reformatted.sourceWorld.projects[0]!.projectConfiguration;
+    const reformattedPolicy = resolveSemanticProjectFindingRulePolicy(
+      reformattedConfiguration.findingPolicy,
+      SemanticProjectFindingRuleId.DynamicRegistrationSpread,
+    );
+
+    expect(reformatted.kind).toBe(SemanticSourceWorldCurrentnessKind.EquivalentPlan);
+    expect(reformatted.sourceWorld.sourceWorldRevision).toBe(baseline.sourceWorldRevision);
+    expect(reformattedConfiguration.revision).not.toBe(baselineConfiguration.revision);
+    expect(reformattedPolicy).toMatchObject({ disposition: 'warning', authority: 'project-configuration' });
+    expect(reformattedPolicy.source?.start).not.toBe(baselinePolicy.source?.start);
+    const rebound = boot.forEquivalentSourceWorld(reformatted.sourceWorld);
+    expect(rebound.store).toBe(boot.store);
+    expect(rebound.projects[0]?.projectConfiguration).toBe(reformattedConfiguration);
+
+    await writeFile(configurationFile, '{"version":1,"findings":{"aurelia.analysis.dynamic-registration-spread":"off"}}');
+    authority.advance([
+      new SemanticRuntimeProjectInputChange(
+        SemanticRuntimeProjectInputChangeKind.FileValue,
+        configurationFile,
+      ),
+    ]);
+    const policyChanged = reformatted.sourceWorld.resolveCurrent();
+    const changedConfiguration = policyChanged.sourceWorld.projects[0]!.projectConfiguration;
+
+    expect(policyChanged.kind).toBe(SemanticSourceWorldCurrentnessKind.EquivalentPlan);
+    expect(policyChanged.sourceWorld.sourceWorldRevision).toBe(baseline.sourceWorldRevision);
+    expect(resolveSemanticProjectFindingRulePolicy(
+      changedConfiguration.findingPolicy,
+      SemanticProjectFindingRuleId.DynamicRegistrationSpread,
+    )).toMatchObject({ disposition: 'off', authority: 'project-configuration' });
+    const policyRebound = rebound.forEquivalentSourceWorld(policyChanged.sourceWorld);
+    expect(policyRebound.store).toBe(boot.store);
+    expect(policyRebound.projects[0]?.projectConfiguration).toBe(changedConfiguration);
+  });
+
+  test('rebinds rejected configuration as applied when host exclusions keep topology unchanged', async () => {
+    const workspaceRoot = await createWorkspace();
+    await writeWorkspaceFile(workspaceRoot, 'src/main.ts', 'export const main = true;\n');
+    await writeWorkspaceFile(workspaceRoot, 'golden/output.ts', 'export const generated = true;\n');
+    const configurationFile = await writeWorkspaceFile(
+      workspaceRoot,
+      'aurelia.project.json',
+      '{"version":2,"authoredSources":{"excludedRoots":["golden"]}}',
+    );
+    const authority = new SemanticRuntimeProjectInputAuthority();
+    const baseline = resolveSemanticSourceWorld({
+      rootDir: workspaceRoot,
+      projects: [{ rootDir: workspaceRoot, excludedSourceRoots: ['golden'] }],
+      projectInputAuthority: authority,
+    });
+    const boot = bootWorkspaceFromSourceWorld(baseline, 'source-world-masked-config-rebind');
+    const rejectedConfiguration = baseline.projects[0]!.projectConfiguration;
+    expect(rejectedConfiguration).toMatchObject({
+      acceptedVersion: null,
+      applicationState: 'rejected',
+      excludedSourceRootDirs: [],
+    });
+
+    await writeFile(
+      configurationFile,
+      '{"version":1,"authoredSources":{"excludedRoots":["golden"]}}',
+    );
+    authority.advance([
+      new SemanticRuntimeProjectInputChange(
+        SemanticRuntimeProjectInputChangeKind.FileValue,
+        configurationFile,
+      ),
+    ]);
+    const applied = baseline.resolveCurrent();
+    const appliedConfiguration = applied.sourceWorld.projects[0]!.projectConfiguration;
+
+    expect(applied.kind).toBe(SemanticSourceWorldCurrentnessKind.EquivalentPlan);
+    expect(applied.sourceWorld.sourceWorldRevision).toBe(baseline.sourceWorldRevision);
+    expect(appliedConfiguration.revision).not.toBe(rejectedConfiguration.revision);
+    expect(appliedConfiguration).toMatchObject({
+      acceptedVersion: 1,
+      applicationState: 'applied',
+      diagnostics: [],
+    });
+    expect(appliedConfiguration.excludedSourceRootDirs).toEqual([path.join(workspaceRoot, 'golden')]);
+    const rebound = boot.forEquivalentSourceWorld(applied.sourceWorld);
+    expect(rebound.store).toBe(boot.store);
+    expect(rebound.projects[0]?.projectConfiguration).toBe(appliedConfiguration);
   });
 
   test('leaves tsconfig-only changes to project and answer currentness', async () => {

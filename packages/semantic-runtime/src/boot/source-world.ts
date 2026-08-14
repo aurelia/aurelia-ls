@@ -46,7 +46,7 @@ import {
 } from './source-boundary.js';
 import { discoverSourceFiles } from './source-discovery.js';
 
-export const SEMANTIC_SOURCE_WORLD_SCHEMA_VERSION = 'semantic-source-world/1' as const;
+export const SEMANTIC_SOURCE_WORLD_SCHEMA_VERSION = 'semantic-source-world/2' as const;
 
 /** Boot input relevant to source-world resolution; store-local publication policy is deliberately absent. */
 export type SemanticSourceWorldResolutionInput = Pick<
@@ -412,7 +412,6 @@ function semanticSourceWorldRevision(
         admissionOrigins: project.admissionOrigins.map(projectRootAdmissionOriginKey).sort(),
         baseExcludedSourceRoots: project.baseExcludedSourceRootDirs.map(canonicalTypeSystemPath).sort(),
         effectiveExcludedSourceRoots: project.effectiveExcludedSourceRootDirs.map(canonicalTypeSystemPath).sort(),
-        projectConfiguration: semanticProjectConfigurationFacts(project.projectConfiguration),
         sourceDiscovery: project.sourceDiscovery == null
           ? null
           : {
@@ -442,37 +441,4 @@ function semanticSourceWorldRevision(
 
 function semanticSourceWorldWorkspaceKey(descriptorKey: string): string {
   return `semantic-workspace:${sourceTextContentRevision(descriptorKey)}`;
-}
-
-function semanticProjectConfigurationFacts(configuration: ProjectConfigurationResult) {
-  return {
-    filePath: canonicalTypeSystemPath(configuration.filePath),
-    exists: configuration.exists,
-    excludedSourceRoots: configuration.excludedSourceRootDirs.map(canonicalTypeSystemPath).sort(),
-    findingPolicy: configuration.findingPolicy.rules.map((rule) => ({
-      ruleId: rule.ruleId,
-      disposition: rule.disposition,
-      authority: rule.authority,
-      source: {
-        filePath: canonicalTypeSystemPath(rule.source.filePath),
-        start: rule.source.start,
-        end: rule.source.end,
-        startPosition: rule.source.startPosition,
-        endPosition: rule.source.endPosition,
-      },
-    })),
-    diagnostics: configuration.diagnostics.map((diagnostic) => ({
-      projectKey: diagnostic.projectKey,
-      diagnosticKind: diagnostic.diagnosticKind,
-      severity: diagnostic.severity,
-      message: diagnostic.message,
-      source: {
-        filePath: canonicalTypeSystemPath(diagnostic.source.filePath),
-        start: diagnostic.source.start,
-        end: diagnostic.source.end,
-        startPosition: diagnostic.source.startPosition,
-        endPosition: diagnostic.source.endPosition,
-      },
-    })),
-  };
 }

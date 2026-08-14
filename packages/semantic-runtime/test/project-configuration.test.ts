@@ -13,6 +13,7 @@ import {
   NodeSemanticRuntimeProjectInputHost,
   resolveSemanticProjectFindingRulePolicy,
   SemanticAppQueryKind,
+  SemanticProjectConfigurationApplicationState,
   SemanticProjectFindingRuleId,
   SemanticRuntimeProjectInputAuthority,
   SemanticRuntimeProjectInputReadKind,
@@ -35,8 +36,17 @@ describe('native project configuration', () => {
 
     const project = runtime.workspace.projects[0]!;
     expect(project.projectConfiguration.exists).toBe(false);
+    expect(project.projectConfiguration.acceptedVersion).toBeNull();
+    expect(project.projectConfiguration.applicationState)
+      .toBe(SemanticProjectConfigurationApplicationState.Absent);
     expect(project.projectConfiguration.diagnostics).toEqual([]);
     expect(project.projectConfiguration.excludedSourceRootDirs).toEqual([]);
+    expect(project.projectConfiguration.effectiveFindingPolicies).toEqual([{
+      ruleId: SemanticProjectFindingRuleId.DynamicRegistrationSpread,
+      disposition: 'information',
+      authority: 'default',
+      source: null,
+    }]);
     expect(project.projectConfiguration.readRegisteredInputs()).toEqual(expect.arrayContaining([
       expect.objectContaining({
         kind: SemanticRuntimeProjectInputReadKind.FileExistence,
@@ -75,7 +85,10 @@ describe('native project configuration', () => {
         projects: [{ rootDir: workspaceRoot }],
       });
       const policy = runtime.workspace.projects[0]!.projectConfiguration.findingPolicy;
+      const configuration = runtime.workspace.projects[0]!.projectConfiguration;
 
+      expect(configuration.acceptedVersion).toBe(version);
+      expect(configuration.applicationState).toBe(SemanticProjectConfigurationApplicationState.Applied);
       expect(policy.rules).toEqual([]);
       expect(resolveSemanticProjectFindingRulePolicy(
         policy,
@@ -138,6 +151,8 @@ describe('native project configuration', () => {
     const project = runtime.workspace.projects[0]!;
 
     expect(project.projectConfiguration.diagnostics).toHaveLength(1);
+    expect(project.projectConfiguration.acceptedVersion).toBe(1);
+    expect(project.projectConfiguration.applicationState).toBe(SemanticProjectConfigurationApplicationState.Partial);
     expect(project.projectConfiguration.diagnostics[0]?.diagnosticKind)
       .toBe('aurelia-project-config-invalid-finding-rule-disposition');
     expect(project.projectConfiguration.findingPolicy.rules).toEqual([]);
@@ -146,6 +161,18 @@ describe('native project configuration', () => {
       project.projectConfiguration.findingPolicy,
       SemanticProjectFindingRuleId.DynamicRegistrationSpread,
     ).authority).toBe('default');
+    expect(runtime.nativeProjectConfigurations().value.rows).toEqual([expect.objectContaining({
+      acceptedVersion: 1,
+      applicationState: 'partial',
+      appliedExcludedSourceRootDirs: [path.resolve(workspaceRoot, 'golden')],
+      effectiveFindingPolicies: [{
+        ruleId: SemanticProjectFindingRuleId.DynamicRegistrationSpread,
+        disposition: 'information',
+        authority: 'default',
+        source: null,
+      }],
+      diagnosticCount: 1,
+    })]);
   });
 
   test('warns and ignores a future namespaced finding while applying known findings and authored sources', async () => {
@@ -172,6 +199,7 @@ describe('native project configuration', () => {
         severity: 'warning',
       }),
     ]);
+    expect(project.projectConfiguration.applicationState).toBe(SemanticProjectConfigurationApplicationState.Partial);
     expect(project.sourceFiles.some((source) => source.path === 'golden/output.ts')).toBe(false);
     expect(resolveSemanticProjectFindingRulePolicy(
       project.projectConfiguration.findingPolicy,
@@ -211,6 +239,7 @@ describe('native project configuration', () => {
 
     expect(project.projectConfiguration.diagnostics.some((diagnostic) => diagnostic.diagnosticKind === diagnosticKind))
       .toBe(true);
+    expect(project.projectConfiguration.applicationState).toBe(SemanticProjectConfigurationApplicationState.Partial);
     expect(project.projectConfiguration.findingPolicy.rules).toEqual([]);
     expect(project.projectConfiguration.excludedSourceRootDirs.map((root) => path.relative(workspaceRoot, root)))
       .toEqual(['golden']);
@@ -375,10 +404,18 @@ describe('native project configuration', () => {
       projectKey: project.projectKey,
       projectRootDir: workspaceRoot,
       filePath: path.join(workspaceRoot, 'aurelia.project.json').replace(/\\/g, '/'),
+      acceptedVersion: 1,
+      applicationState: 'applied',
       appliedExcludedSourceRootDirs: [
         path.join(workspaceRoot, 'golden'),
         path.join(workspaceRoot, 'future-output'),
       ].map((entry) => path.resolve(entry)),
+      effectiveFindingPolicies: [{
+        ruleId: SemanticProjectFindingRuleId.DynamicRegistrationSpread,
+        disposition: 'information',
+        authority: 'default',
+        source: null,
+      }],
       diagnosticCount: 0,
     }]);
     expect(project.authoredSources.contains(generatedFile)).toBe(false);
@@ -432,6 +469,8 @@ describe('native project configuration', () => {
     const project = runtime.workspace.projects[0]!;
     const diagnostic = project.projectConfiguration.diagnostics[0]!;
 
+    expect(project.projectConfiguration.acceptedVersion).toBe(1);
+    expect(project.projectConfiguration.applicationState).toBe(SemanticProjectConfigurationApplicationState.Rejected);
     expect(project.projectConfiguration.excludedSourceRootDirs).toEqual([]);
     expect(project.sourceFiles.some((source) => source.path === 'golden/output.ts')).toBe(true);
     expect(diagnostic.diagnosticKind).toBe('aurelia-project-config-unknown-property');
@@ -440,12 +479,24 @@ describe('native project configuration', () => {
     expect(runtime.projectConfigurationDiagnostics({
       sourceFilePaths: [path.join(workspaceRoot, 'aurelia.project.json')],
     }).value.rows).toEqual([diagnostic]);
+    expect(runtime.nativeProjectConfigurations().value.rows).toEqual([expect.objectContaining({
+      acceptedVersion: 1,
+      applicationState: 'rejected',
+      appliedExcludedSourceRootDirs: [],
+      effectiveFindingPolicies: [{
+        ruleId: SemanticProjectFindingRuleId.DynamicRegistrationSpread,
+        disposition: 'information',
+        authority: 'default',
+        source: null,
+      }],
+      diagnosticCount: 1,
+    })]);
   });
 
   test('normalizes escaped property identities and reports duplicate fields at their exact CRLF location', async () => {
     const workspaceRoot = await createProjectWorkspace();
     await writeWorkspaceFile(workspaceRoot, 'golden/output.ts', 'export const output = true;\n');
-    const configText = '{\r\n  "ver\\u0073ion": 1,\r\n  "version": 1,\r\n  "authoredSources": { "excludedRoots": ["golden"] }\r\n}';
+    const configText = '{\r\n  "ver\\u0073ion": 1,\r\n  "version": 2,\r\n  "authoredSources": { "excludedRoots": ["golden"] }\r\n}';
     await writeWorkspaceFile(workspaceRoot, 'aurelia.project.json', configText);
 
     const runtime = await createSemanticRuntime({
@@ -457,7 +508,11 @@ describe('native project configuration', () => {
       row.diagnosticKind === 'aurelia-project-config-duplicate-property'
     )!;
 
-    expect(project.projectConfiguration.excludedSourceRootDirs).toEqual([]);
+    expect(project.projectConfiguration).toMatchObject({
+      acceptedVersion: null,
+      applicationState: SemanticProjectConfigurationApplicationState.Rejected,
+      excludedSourceRootDirs: [],
+    });
     expect(project.sourceFiles.some((source) => source.path === 'golden/output.ts')).toBe(true);
     expect(configText.slice(diagnostic.source.start, diagnostic.source.end)).toBe('"version"');
     expect(diagnostic.source.startPosition).toEqual({ line: 2, character: 2 });
@@ -482,6 +537,7 @@ describe('native project configuration', () => {
     const project = runtime.workspace.projects[0]!;
 
     expect(project.projectConfiguration.diagnostics).toHaveLength(3);
+    expect(project.projectConfiguration.applicationState).toBe(SemanticProjectConfigurationApplicationState.Partial);
     expect(new Set(project.projectConfiguration.diagnostics.map((row) => row.diagnosticKind))).toEqual(
       new Set(['aurelia-project-config-invalid-excluded-root']),
     );
@@ -543,6 +599,10 @@ describe('native project configuration', () => {
     });
     expect(runtime.workspace.projects[0]!.projectConfiguration.diagnostics[0]?.diagnosticKind)
       .toBe('aurelia-project-config-unsupported-version');
+    expect(runtime.workspace.projects[0]!.projectConfiguration).toMatchObject({
+      acceptedVersion: null,
+      applicationState: SemanticProjectConfigurationApplicationState.Rejected,
+    });
     expect(runtime.workspace.projects[0]!.sourceFiles.some((source) => source.path === 'golden/output.ts')).toBe(true);
 
     await writeFile(configFile, '{"version":1,,}', 'utf8');
@@ -584,6 +644,8 @@ describe('native project configuration', () => {
 
     expect(runtime.workspace.projects[0]!.projectConfiguration).toMatchObject({
       exists: true,
+      acceptedVersion: null,
+      applicationState: SemanticProjectConfigurationApplicationState.Rejected,
       excludedSourceRootDirs: [],
       diagnostics: [{
         diagnosticKind: 'aurelia-project-config-unreadable',

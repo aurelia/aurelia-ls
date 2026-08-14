@@ -124,9 +124,12 @@ export {
   AURELIA_PROJECT_CONFIGURATION_FILE_NAME,
   AURELIA_PROJECT_CONFIGURATION_SUPPORTED_VERSIONS,
   AURELIA_PROJECT_CONFIGURATION_VERSION,
+  SemanticProjectConfigurationApplicationState,
   SemanticProjectConfigurationDiagnosticKind,
 } from '../boot/project-configuration.js';
 export type {
+  AureliaProjectConfigurationVersion,
+  SemanticExistingProjectConfigurationApplicationState,
   SemanticProjectConfigurationDiagnostic,
   SemanticProjectConfigurationSourcePosition,
   SemanticProjectConfigurationSourceSpan,

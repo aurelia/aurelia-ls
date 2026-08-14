@@ -816,7 +816,10 @@ export class SemanticRuntime {
             projectKey: project.projectKey,
             projectRootDir: project.rootDir,
             filePath: project.projectConfiguration.filePath,
+            acceptedVersion: project.projectConfiguration.acceptedVersion,
+            applicationState: project.projectConfiguration.requireExistingApplicationState(),
             appliedExcludedSourceRootDirs: project.projectConfiguration.excludedSourceRootDirs,
+            effectiveFindingPolicies: project.projectConfiguration.effectiveFindingPolicies,
             diagnosticCount: project.projectConfiguration.diagnostics.length,
           }))
           .sort((left, right) =>

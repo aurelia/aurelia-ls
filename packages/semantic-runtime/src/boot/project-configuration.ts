@@ -8,7 +8,9 @@ import {
   EMPTY_SEMANTIC_PROJECT_FINDING_POLICY,
   SEMANTIC_PROJECT_FINDING_DISPOSITIONS,
   SEMANTIC_PROJECT_FINDING_RULE_IDS,
+  resolveSemanticProjectFindingRulePolicy,
   type SemanticProjectFindingDisposition,
+  type SemanticProjectFindingEffectivePolicy,
   type SemanticProjectFindingPolicy,
   type SemanticProjectFindingRuleSetting,
 } from '../findings/analysis-limitation-policy.js';
@@ -69,6 +71,30 @@ export const enum SemanticProjectConfigurationDiagnosticKind {
   InvalidFindingRuleDisposition = 'aurelia-project-config-invalid-finding-rule-disposition',
 }
 
+/** How much of one exact native configuration contributes to the normalized effective result. */
+export const enum SemanticProjectConfigurationApplicationState {
+  /** No native file exists, so every effective value comes from the built-in defaults. */
+  Absent = 'absent',
+  /** The native file is valid and every authored value was accepted. */
+  Applied = 'applied',
+  /** The root contract is valid, but at least one section or entry was ignored. */
+  Partial = 'partial',
+  /** The file exists but its root contract could not be applied. */
+  Rejected = 'rejected',
+}
+
+/** Application states reachable for an existing native configuration file. */
+export type SemanticExistingProjectConfigurationApplicationState =
+  | SemanticProjectConfigurationApplicationState.Applied
+  | `${SemanticProjectConfigurationApplicationState.Applied}`
+  | SemanticProjectConfigurationApplicationState.Partial
+  | `${SemanticProjectConfigurationApplicationState.Partial}`
+  | SemanticProjectConfigurationApplicationState.Rejected
+  | `${SemanticProjectConfigurationApplicationState.Rejected}`;
+
+export type AureliaProjectConfigurationVersion =
+  (typeof AURELIA_PROJECT_CONFIGURATION_SUPPORTED_VERSIONS)[number];
+
 export interface SemanticProjectConfigurationSourcePosition {
   readonly line: number;
   readonly character: number;
@@ -96,24 +122,38 @@ export interface SemanticProjectConfigurationDiagnostic {
 /** Parsed native project configuration plus the exact input read that produced it. */
 export class ProjectConfigurationResult {
   readonly revision: string;
+  /** Complete known-rule policy after authored overrides and deterministic defaults are composed. */
+  readonly effectiveFindingPolicies: readonly SemanticProjectFindingEffectivePolicy[];
 
   constructor(
     readonly projectKey: string,
     readonly rootDir: string,
     readonly filePath: string,
     readonly exists: boolean,
+    readonly acceptedVersion: AureliaProjectConfigurationVersion | null,
+    readonly applicationState: SemanticProjectConfigurationApplicationState,
     readonly excludedSourceRootDirs: readonly string[],
     readonly findingPolicy: SemanticProjectFindingPolicy,
     readonly diagnostics: readonly SemanticProjectConfigurationDiagnostic[],
     private readonly inputReadScope: SemanticRuntimeProjectInputReadScope,
   ) {
+    if (exists === (applicationState === SemanticProjectConfigurationApplicationState.Absent)) {
+      throw new Error(
+        `Project configuration '${filePath}' has inconsistent existence and application state '${applicationState}'.`,
+      );
+    }
+    this.effectiveFindingPolicies = Object.freeze(SEMANTIC_PROJECT_FINDING_RULE_IDS.map((ruleId) =>
+      resolveSemanticProjectFindingRulePolicy(findingPolicy, ruleId)));
     this.revision = stableKernelLocalHash(JSON.stringify({
       projectKey,
       rootDir,
       filePath,
       exists,
+      acceptedVersion,
+      applicationState,
       excludedSourceRootDirs,
       findingPolicy,
+      effectiveFindingPolicies: this.effectiveFindingPolicies,
       diagnostics,
       inputs: inputReadScope.readRegisteredInputs().map((read) => [read.readKey, read.observedRevision]),
     }));
@@ -123,6 +163,14 @@ export class ProjectConfigurationResult {
     return this.inputReadScope.readRegisteredInputs();
   }
 
+  /** Narrow the application state after proving this result represents an existing native file. */
+  requireExistingApplicationState(): SemanticExistingProjectConfigurationApplicationState {
+    if (!this.exists || this.applicationState === SemanticProjectConfigurationApplicationState.Absent) {
+      throw new Error(`Project configuration '${this.filePath}' does not exist.`);
+    }
+    return this.applicationState;
+  }
+
 }
 
 interface JsonSourceFileWithParseDiagnostics extends ts.JsonSourceFile {
@@ -130,6 +178,8 @@ interface JsonSourceFileWithParseDiagnostics extends ts.JsonSourceFile {
 }
 
 interface ParsedProjectConfiguration {
+  readonly acceptedVersion: AureliaProjectConfigurationVersion | null;
+  readonly applicationState: SemanticProjectConfigurationApplicationState;
   readonly excludedSourceRootDirs: readonly string[];
   readonly findingPolicy: SemanticProjectFindingPolicy;
   readonly diagnostics: readonly SemanticProjectConfigurationDiagnostic[];
@@ -137,6 +187,7 @@ interface ParsedProjectConfiguration {
 
 interface ObjectPropertyIndex {
   readonly properties: ReadonlyMap<string, ts.PropertyAssignment>;
+  readonly duplicateNames: ReadonlySet<string>;
   readonly diagnostics: readonly SemanticProjectConfigurationDiagnostic[];
 }
 
@@ -159,9 +210,17 @@ export function buildProjectConfigurationResult(
     throw new Error(`Project-input host returned text for absent Aurelia project configuration '${filePath}'.`);
   }
   const parsed = !exists
-    ? { excludedSourceRootDirs: [], findingPolicy: EMPTY_SEMANTIC_PROJECT_FINDING_POLICY, diagnostics: [] }
+    ? {
+        acceptedVersion: null,
+        applicationState: SemanticProjectConfigurationApplicationState.Absent,
+        excludedSourceRootDirs: [],
+        findingPolicy: EMPTY_SEMANTIC_PROJECT_FINDING_POLICY,
+        diagnostics: [],
+      }
     : text == null
       ? {
+          acceptedVersion: null,
+          applicationState: SemanticProjectConfigurationApplicationState.Rejected,
           excludedSourceRootDirs: [],
           findingPolicy: EMPTY_SEMANTIC_PROJECT_FINDING_POLICY,
           diagnostics: [unreadableProjectConfigurationDiagnostic(inputGeneration.projectKey, filePath)],
@@ -172,6 +231,8 @@ export function buildProjectConfigurationResult(
     absoluteRootDir,
     filePath,
     exists,
+    parsed.acceptedVersion,
+    parsed.applicationState,
     parsed.excludedSourceRootDirs,
     parsed.findingPolicy,
     parsed.diagnostics,
@@ -195,6 +256,8 @@ function parseProjectConfiguration(
   }
   if (sourceFile.parseDiagnostics.length > 0) {
     return {
+      acceptedVersion: null,
+      applicationState: SemanticProjectConfigurationApplicationState.Rejected,
       excludedSourceRootDirs: [],
       findingPolicy: EMPTY_SEMANTIC_PROJECT_FINDING_POLICY,
       diagnostics: syntaxDiagnosticsForParseDiagnostics(projectKey, sourceFile, sourceFile.parseDiagnostics),
@@ -203,6 +266,8 @@ function parseProjectConfiguration(
   const dialectDiagnostics = projectConfigurationJsoncDialectDiagnostics(projectKey, sourceFile);
   if (dialectDiagnostics.length > 0) {
     return {
+      acceptedVersion: null,
+      applicationState: SemanticProjectConfigurationApplicationState.Rejected,
       excludedSourceRootDirs: [],
       findingPolicy: EMPTY_SEMANTIC_PROJECT_FINDING_POLICY,
       diagnostics: dialectDiagnostics,
@@ -240,6 +305,7 @@ function parseProjectConfiguration(
   }
 
   const version = rootIndex.properties.get('version');
+  let acceptedVersion: AureliaProjectConfigurationVersion | null = null;
   if (version == null) {
     rootDiagnostics.push(projectConfigurationDiagnosticForNode(
       projectKey,
@@ -259,6 +325,8 @@ function parseProjectConfiguration(
       `Only Aurelia project configuration version ${AURELIA_PROJECT_CONFIGURATION_VERSION} is supported.`,
       version.initializer,
     ));
+  } else if (!rootIndex.duplicateNames.has('version')) {
+    acceptedVersion = Number(version.initializer.text) as AureliaProjectConfigurationVersion;
   }
 
   const authoredSources = rootIndex.properties.get('authoredSources');
@@ -396,6 +464,8 @@ function parseProjectConfiguration(
   ]);
   if (rootDiagnostics.length > 0) {
     return {
+      acceptedVersion,
+      applicationState: SemanticProjectConfigurationApplicationState.Rejected,
       excludedSourceRootDirs: [],
       findingPolicy: EMPTY_SEMANTIC_PROJECT_FINDING_POLICY,
       diagnostics,
@@ -404,6 +474,10 @@ function parseProjectConfiguration(
 
   const boundary = new AuthoredSourceBoundary(rootDir, acceptedRoots);
   return {
+    acceptedVersion,
+    applicationState: diagnostics.length === 0
+      ? SemanticProjectConfigurationApplicationState.Applied
+      : SemanticProjectConfigurationApplicationState.Partial,
     excludedSourceRootDirs: boundary.excludedRootDirs,
     findingPolicy: Object.freeze({
       rules: Object.freeze([...acceptedFindingRules].sort((left, right) => left.ruleId.localeCompare(right.ruleId))),
@@ -467,7 +541,7 @@ function indexFindingProperties(
     }
     properties.set(name, property);
   }
-  return { properties, diagnostics };
+  return { properties, duplicateNames, diagnostics };
 }
 
 function indexObjectProperties(
@@ -477,6 +551,7 @@ function indexObjectProperties(
   allowedNames: ReadonlySet<string>,
 ): ObjectPropertyIndex {
   const properties = new Map<string, ts.PropertyAssignment>();
+  const duplicateNames = new Set<string>();
   const diagnostics: SemanticProjectConfigurationDiagnostic[] = [];
   for (const property of object.properties) {
     if (!ts.isPropertyAssignment(property) || !ts.isStringLiteral(property.name)) {
@@ -501,6 +576,7 @@ function indexObjectProperties(
       continue;
     }
     if (properties.has(name)) {
+      duplicateNames.add(name);
       diagnostics.push(projectConfigurationDiagnosticForNode(
         projectKey,
         sourceFile,
@@ -512,7 +588,7 @@ function indexObjectProperties(
     }
     properties.set(name, property);
   }
-  return { properties, diagnostics };
+  return { properties, duplicateNames, diagnostics };
 }
 
 function validateExcludedRoot(
@@ -703,6 +779,8 @@ function invalidWholeConfiguration(
   node: ts.Node,
 ): ParsedProjectConfiguration {
   return {
+    acceptedVersion: null,
+    applicationState: SemanticProjectConfigurationApplicationState.Rejected,
     excludedSourceRootDirs: [],
     findingPolicy: EMPTY_SEMANTIC_PROJECT_FINDING_POLICY,
     diagnostics: [projectConfigurationDiagnosticForNode(
