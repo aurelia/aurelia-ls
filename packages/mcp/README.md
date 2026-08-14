@@ -239,8 +239,11 @@ copy discover-mode `workspaceDescriptor.projectTopology.projectRootHints` and
 
 Descriptor reuse guarantees MCP-to-MCP continuity; it does not discover live VS Code-only workspace-folder or
 `activationMode=off` inputs. Exact editor parity currently requires seeding the first MCP call with those same host
-facts. Durable `aurelia.project.json` authored-source exclusions are shared automatically because semantic-runtime reads
-them for every consumer; a live IDE-to-MCP descriptor handoff remains an explicit integration seam.
+facts. Durable `aurelia.project.json` authored-source exclusions and finding presentation policy are shared
+automatically because semantic-runtime reads them for every consumer; a live IDE-to-MCP descriptor handoff remains an
+explicit integration seam. See the clean-slate V1
+[Project Configuration](https://github.com/aurelia/aurelia-ls/blob/main/docs/project-configuration.md) contract for the
+shared fields and defaults.
 
 Cache-control tools use an explicit two-state selector. Omit `workspace` to inspect or clear every cached session; pass
 `workspace: { workspaceRoot, projectRootHints?, excludedWorkspaceRoots? }` to select one exact shared semantic workspace
@@ -256,13 +259,15 @@ TypeScript dependency `SourceFile` cache once at the top level. A non-preserving
 per registry operation rather than attributed repeatedly to individual workspace sessions. Disposing managed workspace
 sessions preserves this process-owned cache; it remains visible and explicitly clearable even when no session exists.
 
-Use `aurelia_project_configurations` when native `aurelia.project.json` state or applied authored-source exclusions
-matter. It returns exact, paged semantic-runtime rows without opening an app world; omit `sourceFilePaths` for all
-existing configurations, pass an empty list for none, or pass exact absolute/workspace-relative paths to select them.
-The default `view=configurations` returns inventory/applied exclusions; `view=diagnostics` returns the runtime-owned
-diagnostic kind, message, severity, and exact source span. The diagnostic view remains available in config-only or
-malformed workspaces where no app world can open, matching the IDE diagnostic authority rather than exposing only a
-count.
+Use `aurelia_project_configurations` when native `aurelia.project.json` state, applied authored-source exclusions, or
+effective finding presentation matter. It returns exact, paged semantic-runtime rows without opening an app world;
+omit `sourceFilePaths` for all existing configurations, pass an empty list for none, or pass exact
+absolute/workspace-relative paths to select them. The default `view=configurations` returns each existing file's
+accepted version, `applied` / `partial` / `rejected` application state, normalized applied exclusions, complete
+effective finding policies with default or project authority, and diagnostic count. Projects without a native file use
+defaults internally and do not produce inventory rows. `view=diagnostics` returns the runtime-owned diagnostic kind,
+message, severity, and exact source span. The diagnostic view remains available in config-only or malformed workspaces
+where no app world can open, matching the IDE diagnostic authority rather than exposing only a count.
 
 For large dependency-heavy apps, keep first reads at `analysisDepth=runtime-topology` and opt into `binding-targets` or
 `binding-observation` only when binding/type details are needed. Use `aurelia_app_query_catalog` before

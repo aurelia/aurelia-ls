@@ -202,7 +202,7 @@ export const workspaceOverviewInputSchema = {
 export const projectConfigurationsInputSchema = {
   ...workspaceShape,
   view: z.enum(['configurations', 'diagnostics']).nullable().optional()
-    .describe('Return configuration inventory (default) or exact runtime-static diagnostic rows with source spans.'),
+    .describe('Return existing-file configuration state and effective policy (default) or exact runtime-static diagnostic rows with source spans.'),
   projectKey: z.string().nullable().optional()
     .describe('Optional exact semantic project key; omit to select configurations from all projects.'),
   sourceFilePaths: z.array(z.string()).nullable().optional()

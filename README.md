@@ -116,6 +116,7 @@ building the Aurelia submodule itself.
 ## Documentation
 
 - [Getting Started](./docs/getting-started.md) — setup and installation
+- [Project Configuration](./docs/project-configuration.md) — the clean-slate `aurelia.project.json` V1 contract
 - [Architecture](./docs/architecture.md) — how the compiler pipeline works
 
 ## Status

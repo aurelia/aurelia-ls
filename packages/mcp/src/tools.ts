@@ -100,7 +100,7 @@ export function registerAureliaSemanticRuntimeTools(
     aureliaMcpToolNames.projectConfigurations,
     {
       title: 'Aurelia Project Configurations',
-      description: 'Return native aurelia.project.json inventory/applied exclusions or exact diagnostic rows without opening an Aurelia app world, with optional project/path filters and paging.',
+      description: 'Return existing aurelia.project.json files with accepted version, application state, applied exclusions, effective finding policy, and diagnostic count, or exact diagnostic rows, without opening an Aurelia app world.',
       inputSchema: strictInputSchema(projectConfigurationsInputSchema),
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,

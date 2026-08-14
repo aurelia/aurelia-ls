@@ -490,6 +490,9 @@ importers:
       mocha:
         specifier: ^11.7.6
         version: 11.7.6
+      vscode-json-languageservice:
+        specifier: 5.7.2
+        version: 5.7.2
 
   playground:
     dependencies:
@@ -1604,6 +1607,9 @@ packages:
 
   '@vitest/utils@4.0.16':
     resolution: {integrity: sha512-h8z9yYhV3e1LEfaQ3zdypIrnAg/9hguReGZoS7Gl0aBG5xgA410zBqECqmaF/+RkTggRsfnzc1XaAHA6bmUufA==}
+
+  '@vscode/l10n@0.0.18':
+    resolution: {integrity: sha512-KYSIHVmslkaCDyw013pphY+d7x1qV8IZupYfeIfzNA+nsaWHbn5uPuQRvdRFsa9zFzGeudPuoGoZ1Op4jrJXIQ==}
 
   '@vscode/test-electron@3.0.0':
     resolution: {integrity: sha512-TY5mC7aAjxSLDXsyjhrG8cJHgc/HLdiE5lvtW7hABYQrY24Qwozzr5UoO3HiuAM4Hzz4b7K/eZlwrCILj94CcA==}
@@ -3453,6 +3459,9 @@ packages:
       jsdom:
         optional: true
 
+  vscode-json-languageservice@5.7.2:
+    resolution: {integrity: sha512-WtKRDtJfFEmLrgtu+ODexOHm/6/krRF0k6t+uvkKIKW1Jh9ZIyxZQwJJwB3qhrEgvAxa37zbUg+vn+UyUK/U2w==}
+
   vscode-jsonrpc@9.0.1:
     resolution: {integrity: sha512-rfuA6T75H6m5EkbhtEPzre9pT0HPcDI2MMy4+nPFIBks5J8JBAUHD4tRYSgaBOijIEC7SRkC1kKyXTLqbmh9jw==}
     engines: {node: '>=14.0.0'}
@@ -4456,6 +4465,8 @@ snapshots:
     dependencies:
       '@vitest/pretty-format': 4.0.16
       tinyrainbow: 3.0.3
+
+  '@vscode/l10n@0.0.18': {}
 
   '@vscode/test-electron@3.0.0':
     dependencies:
@@ -6480,6 +6491,14 @@ snapshots:
       - terser
       - tsx
       - yaml
+
+  vscode-json-languageservice@5.7.2:
+    dependencies:
+      '@vscode/l10n': 0.0.18
+      jsonc-parser: 3.3.1
+      vscode-languageserver-textdocument: 1.0.13
+      vscode-languageserver-types: 3.18.0
+      vscode-uri: 3.1.0
 
   vscode-jsonrpc@9.0.1: {}
 

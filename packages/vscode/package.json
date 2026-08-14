@@ -453,6 +453,7 @@
     "@vscode/vsce": "3.9.2",
     "esbuild": "0.24.2",
     "jszip": "3.10.1",
-    "mocha": "^11.7.6"
+    "mocha": "^11.7.6",
+    "vscode-json-languageservice": "5.7.2"
   }
 }

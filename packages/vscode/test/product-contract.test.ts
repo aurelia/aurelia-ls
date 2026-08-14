@@ -60,8 +60,59 @@ interface ExtensionManifest {
 }
 
 interface AureliaProjectSchema {
+  readonly [key: string]: unknown;
   readonly allowComments?: boolean;
   readonly allowTrailingCommas?: boolean;
+}
+
+const PROJECT_EDITOR_SCHEMA_ALLOWED_KEYWORDS = new Set([
+  "$schema",
+  "$id",
+  "$defs",
+  "$ref",
+  "title",
+  "description",
+  "default",
+  "examples",
+  "properties",
+  "items",
+  "additionalProperties",
+  "allowComments",
+  "allowTrailingCommas",
+]);
+
+function objectRecord(value: unknown, path: string): Readonly<Record<string, unknown>> {
+  expect(value, `${path} must be an object schema`).not.toBeNull();
+  expect(Array.isArray(value), `${path} must not be an array schema`).toBe(false);
+  expect(typeof value, `${path} must be an object schema`).toBe("object");
+  return value as Readonly<Record<string, unknown>>;
+}
+
+function assertProjectEditorSchemaVocabulary(schema: unknown, path = "$editor"): void {
+  const node = objectRecord(schema, path);
+  for (const keyword of Object.keys(node)) {
+    expect(
+      PROJECT_EDITOR_SCHEMA_ALLOWED_KEYWORDS.has(keyword),
+      `${path} uses validating or unsupported schema keyword '${keyword}'`,
+    ).toBe(true);
+  }
+  if (node.$ref != null) {
+    expect(node.$ref, `${path} may only use assertion-free local definitions`)
+      .toMatch(/^#\/\$defs\//);
+  }
+  for (const mapKeyword of ["$defs", "properties"] as const) {
+    if (node[mapKeyword] == null) continue;
+    const children = objectRecord(node[mapKeyword], `${path}.${mapKeyword}`);
+    for (const [name, child] of Object.entries(children)) {
+      assertProjectEditorSchemaVocabulary(child, `${path}.${mapKeyword}.${name}`);
+    }
+  }
+  if (node.items != null) {
+    assertProjectEditorSchemaVocabulary(node.items, `${path}.items`);
+  }
+  if (node.additionalProperties != null) {
+    assertProjectEditorSchemaVocabulary(node.additionalProperties, `${path}.additionalProperties`);
+  }
 }
 
 const manifest = JSON.parse(
@@ -186,7 +237,7 @@ describe("VS Code product contract", () => {
     });
   });
 
-  test("splits exact JSONC parsing from session-owned project semantics", () => {
+  test("associates non-validating offline assistance while preserving semantic ownership", () => {
     expect(manifest.activationEvents).toContain("workspaceContains:**/aurelia.project.json");
     expect(manifest.contributes?.languages).toContainEqual({
       id: "jsonc",
@@ -196,18 +247,65 @@ describe("VS Code product contract", () => {
       fileMatch: "**/aurelia.project.json",
       url: "./dist/schemas/aurelia.project.jsonc.schema.json",
     }]);
-    expect(Object.keys(projectDialectSchema).sort()).toEqual([
-      "$id",
-      "$schema",
-      "allowComments",
-      "allowTrailingCommas",
-      "description",
-      "title",
-    ]);
     expect(projectDialectSchema).toEqual(expect.objectContaining({
       allowComments: true,
       allowTrailingCommas: true,
     }));
+    assertProjectEditorSchemaVocabulary(projectDialectSchema);
+    const strictRootProperties = objectRecord(projectSchema.properties, "$strict.properties");
+    const editorRootProperties = objectRecord(projectDialectSchema.properties, "$editor.properties");
+    expect(Object.keys(editorRootProperties).sort()).toEqual(
+      Object.keys(strictRootProperties).filter((name) => name !== "$schema").sort(),
+    );
+
+    const strictVersion = objectRecord(strictRootProperties.version, "$strict.properties.version");
+    const editorVersion = objectRecord(editorRootProperties.version, "$editor.properties.version");
+    expect(editorVersion.default).toEqual(strictVersion.const);
+    expect(editorVersion.examples).toEqual([strictVersion.const]);
+
+    const strictAuthoredSources = objectRecord(
+      strictRootProperties.authoredSources,
+      "$strict.properties.authoredSources",
+    );
+    const editorAuthoredSources = objectRecord(
+      editorRootProperties.authoredSources,
+      "$editor.properties.authoredSources",
+    );
+    expect(Object.keys(objectRecord(editorAuthoredSources.properties, "$editor.properties.authoredSources.properties")).sort())
+      .toEqual(Object.keys(objectRecord(
+        strictAuthoredSources.properties,
+        "$strict.properties.authoredSources.properties",
+      )).sort());
+
+    const strictFindings = objectRecord(strictRootProperties.findings, "$strict.properties.findings");
+    const editorFindings = objectRecord(editorRootProperties.findings, "$editor.properties.findings");
+    const strictFindingProperties = objectRecord(
+      strictFindings.properties,
+      "$strict.properties.findings.properties",
+    );
+    const editorFindingProperties = objectRecord(
+      editorFindings.properties,
+      "$editor.properties.findings.properties",
+    );
+    expect(Object.keys(editorFindingProperties).sort()).toEqual(Object.keys(strictFindingProperties).sort());
+    const strictDefinitions = objectRecord(projectSchema.$defs, "$strict.$defs");
+    const findingDisposition = objectRecord(
+      strictDefinitions.findingDisposition,
+      "$strict.$defs.findingDisposition",
+    );
+    expect(objectRecord(
+      editorFindings.additionalProperties,
+      "$editor.properties.findings.additionalProperties",
+    ).examples).toEqual(findingDisposition.enum);
+    for (const [ruleId, strictRuleValue] of Object.entries(strictFindingProperties)) {
+      expect(objectRecord(
+        editorFindingProperties[ruleId],
+        `$editor.properties.findings.properties.${ruleId}`,
+      ).default).toEqual(objectRecord(
+        strictRuleValue,
+        `$strict.properties.findings.properties.${ruleId}`,
+      ).default);
+    }
     expect(projectSchema).toEqual(expect.objectContaining({
       allowComments: true,
       allowTrailingCommas: true,

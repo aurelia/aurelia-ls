@@ -19,11 +19,13 @@ materializers that consume admitted sources and emit their own evidence, claims,
   mode for callers that need one project frame. The default `project-markers` mode names that union directly.
 - Merge `projectRootHints` supplied by a host into that automatic topology. Hints identify existing project boundaries;
   they do not choose project keys, imply Aurelia shape, or override configuration semantics.
-- Parse exact-root `aurelia.project.json` through the captured project-input generation before source admission. Version
-  `1` retains the strict `authoredSources.excludedRoots` boundary. Version `2` also admits projection-only finding
-  policy with stable semantic rule IDs and `off` / `information` / `warning` / `error` presentation. Syntax/schema
-  diagnostics, applied normalized roots, and accepted policy provenance remain first-class project-frame facts even
-  when no app world can open. Finding policy never deletes the underlying seam or changes source admission.
+- Parse exact-root `aurelia.project.json` through the captured project-input generation before source admission. The
+  clean-slate version `1` contract owns both the strict `authoredSources.excludedRoots` boundary and projection-only
+  `findings` policy with stable semantic rule IDs and `off` / `information` / `warning` / `error` presentation.
+  Accepted version, application state, effective defaults, syntax/schema diagnostics, applied normalized roots, and
+  policy provenance remain first-class project-frame facts even when no app world can open. Finding policy never
+  deletes the underlying seam or changes source admission. See
+  [Project Configuration](../../../../docs/project-configuration.md) for the public contract.
 - Discover source files only as input admission, with conservative source roles such as `app-source`, `test-source`,
   `tooling-config`, `declaration`, `template`, `style`, and `package-manifest`.
 - Read project compiler options as host footing for later evaluation and TypeChecker epochs. This is still boot-level

@@ -9,7 +9,7 @@ export const AURELIA_MCP_ORIENTATION_RESOURCE_URI = 'aurelia://semantic-runtime/
 export const AURELIA_MCP_SERVER_INSTRUCTIONS = [
   'Use aurelia_workspace_overview first for a cheap project/app map.',
   'Every workspace response returns the normalized semantic-workspace descriptor; preserve its projectRootHints and excludedWorkspaceRoots on related calls. Matching the editor additionally requires seeding the first call with the same host inputs.',
-  'When native project configuration or authored-source exclusions matter, use aurelia_project_configurations for exact app-world-free rows; use view=diagnostics to inspect exact config errors and source spans.',
+  'When native project configuration matters, use aurelia_project_configurations for exact existing-file application state, accepted version, applied exclusions, and effective finding policy without opening an app world; use view=diagnostics to inspect exact config errors and source spans.',
   AURELIA_PATTERN_WORKFLOW_INSTRUCTION,
   'For framework docs grounding, use aurelia_docs_search and then aurelia_docs_fetch; docs are bundled and require no web requests.',
   'Open the selected app with aurelia_app_overview; pass appRetention=retain-app when several app calls will share the session, keep diagnosticPageSize/analysisLimitationPageSize small on first reads, and omit openSeamPageSize unless raw semantic audit is intended.',
@@ -28,7 +28,7 @@ export const AURELIA_MCP_ORIENTATION_RESOURCE_TEXT = [
   '',
   '## Golden Path',
   '',
-  '1. Call `aurelia_workspace_overview` first. It is cheap and deterministic, and returns discovered project frames plus the default app candidate. When native configuration or authored-source exclusions matter, call `aurelia_project_configurations`; use `view=diagnostics` for exact app-world-free config errors and source spans.',
+  '1. Call `aurelia_workspace_overview` first. It is cheap and deterministic, and returns discovered project frames plus the default app candidate. When native configuration matters, call `aurelia_project_configurations` for existing-file application state, accepted version, applied exclusions, and effective finding policy; use `view=diagnostics` for exact app-world-free config errors and source spans.',
   '   Preserve the returned `workspaceDescriptor.projectTopology.projectRootHints` (for `kind=discover`) and `workspaceDescriptor.excludedWorkspaceRoots` as the flat `projectRootHints` and `excludedWorkspaceRoots` inputs on every related workspace/app call. Those fields prevent MCP calls from drifting between source worlds. MCP matches an editor session only when the first call was seeded with that editor host\'s same hints and exclusions.',
   '2. Call `aurelia_app_overview` next. Use `appRetention=retain-app` when several follow-up app calls should share one app epoch; otherwise omit it. Keep `diagnosticPageSize` and `analysisLimitationPageSize` small on first reads. Omit `openSeamPageSize` unless the task explicitly needs raw semantic audit evidence.',
   '3. Call `aurelia_app_query_catalog` before improvising generic `aurelia_app_query` calls. Catalog rows are the authority for `queryKind`, `minimumAnalysisDepth`, paging, detail, source-file support, and continuation behavior.',

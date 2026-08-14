@@ -75,12 +75,12 @@ Palette; there is no generic Inspect or report browser.
 ### Analysis limitations — review current evidence
 
 When the **Aurelia Resources** view reports a current analysis limitation eligible for review, choose
-**Review Analysis Limitations** from the view title to inspect its exact source and reason. Version 2
+**Review Analysis Limitations** from the view title to inspect its exact source and reason. Version 1
 `aurelia.project.json` files can control the presentation of the currently admitted rule:
 
 ```json
 {
-  "version": 2,
+  "version": 1,
   "findings": {
     "aurelia.analysis.dynamic-registration-spread": "warning"
   }
@@ -89,7 +89,9 @@ When the **Aurelia Resources** view reports a current analysis limitation eligib
 
 The accepted dispositions are `off`, `information`, `warning`, and `error`. They change consumer presentation only.
 `off` can suppress the projected finding and its review row; it does not erase the underlying limitation or change
-Resource Explorer completeness.
+Resource Explorer completeness. Version 1 also owns `authoredSources.excludedRoots`; see the shared
+[Project Configuration](https://github.com/aurelia/aurelia-ls/blob/main/docs/project-configuration.md) contract for
+defaults and failure behavior.
 
 ### Completions — discover what's available
 
@@ -198,15 +200,18 @@ validity, and applying its authored-source exclusions remain semantic-runtime re
 then asks semantic-runtime for the workspace's project shape; it keeps shape-confirmed Aurelia app,
 resource-library-authoring, and package-inspection sessions, and may also retain a config-only session when
 semantic-runtime confirms the exact native configuration. Unrelated HTML and TypeScript workspaces remain inactive.
-The exact `aurelia.project.json` filename uses VS Code's built-in JSONC language mode. A syntax-only dialect schema
-allows the same comments and trailing commas as the runtime parser without defining any project properties. VS Code
-therefore owns malformed JSONC and duplicate-key parser diagnostics, while semantic-runtime remains the sole authority
-for schema, project meaning, filesystem checks, exclusions, and shared finding policy. Version `1` keeps the original
-authored-source-only contract. Version `2` additionally accepts stable semantic finding IDs with `off`, `information`,
-`warning`, or `error` presentation; those settings change consumer projection without erasing the underlying analysis
-evidence or changing Resource Explorer completeness. The language server publishes semantic configuration diagnostics
-only from an admitted session. The canonical full schema is shipped for explicit `$schema` use but is not statically
-associated with files, which avoids duplicate semantic diagnostics from VS Code and semantic-runtime.
+The exact `aurelia.project.json` filename uses VS Code's built-in JSONC language mode. The extension automatically
+associates bundled, offline annotation assistance for root fields, sections, known finding-rule IDs, and values; no
+network request or explicit `$schema` property is required. The bundled annotations guide editing without asserting
+project semantics. VS Code may present editor-local JSONC parser feedback for malformed JSONC and duplicate keys, while
+semantic-runtime remains the sole authority for semantic configuration diagnostics, format acceptance, project
+meaning, filesystem checks, normalized exclusions, effective finding policy, and application state across consumers.
+The clean-slate version `1` contract includes both
+`authoredSources.excludedRoots` and stable finding IDs with `off`, `information`, `warning`, or `error` presentation.
+There is no supported V2 and no stable public schema URL to add to `$schema`. The language server publishes semantic
+configuration diagnostics only from an admitted session. See
+[Project Configuration](https://github.com/aurelia/aurelia-ls/blob/main/docs/project-configuration.md) for the complete
+contract.
 
 Set `aurelia.activationMode` per workspace folder when automatic admission is not appropriate:
 

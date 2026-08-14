@@ -28,6 +28,27 @@ If discovery fails, use **Open Aurelia Output** from the view or the affected
 project row. The client channel is named **Aurelia LS (Client)**, and each
 active workspace folder has its own **Aurelia Language Server (...)** channel.
 
+### Optional project configuration
+
+Add `aurelia.project.json` at an exact project root only when the project needs a durable authored-source exclusion or
+semantic finding presentation policy shared by the editor and MCP. The current clean-slate format is V1:
+
+```jsonc
+{
+  "version": 1,
+  "authoredSources": {
+    "excludedRoots": ["generated"]
+  },
+  "findings": {
+    "aurelia.analysis.dynamic-registration-spread": "warning"
+  }
+}
+```
+
+The file is optional; defaults apply when it is absent. See [Project Configuration](./project-configuration.md) for
+JSONC rules, defaults, path validation, section-local failures, VS Code editing/diagnostic assistance, and MCP
+inspection.
+
 ## Using the MCP Release
 
 The `@aurelia-ls/mcp` release is a local, read-only MCP server for AI coding
@@ -137,6 +158,7 @@ The `examples/` directory has demo apps for the build-time features:
 ## Next Steps
 
 - Read the [Architecture](./architecture.md) overview
+- Read the [Project Configuration](./project-configuration.md) contract before adding `aurelia.project.json`
 - Check the [VS Code extension README](../packages/vscode/README.md)
   for the full feature list
 - Explore the example apps in `examples/`

@@ -551,7 +551,7 @@
         "Treat `activationMode: off` as a hard authored-subtree exclusion: an excluded parent dominates a nested `on`, and projectRootHints cannot reopen the excluded subtree.",
         "Treat authored membership as root minus exclusions. Dependency reads and outgoing exact locations may cross that boundary; do not reuse the incoming authored-document admission predicate for outward semantic projection.",
         "IDE, MCP, and future AOT consumers share semantic-runtime's normalized `semantic-workspace/1` source-world descriptor. Consumer adapters may supply host root hints and exclusions or choose presentation policy, but must not redefine project markers, ownership, configuration, keys, or source admission.",
-        "Use `aurelia.project.json` for durable authored-source exclusions that every consumer can read. A live IDE-only workspace-folder hint/off boundary reaches parity with MCP only when the same host inputs are handed to both descriptors; do not claim automatic cross-process parity until a shared configuration or handoff channel exists."
+        "Use `aurelia.project.json` for durable authored-source exclusions and finding presentation policy that every consumer can read. Preserve its accepted version, application state, normalized exclusions, effective default-or-project policy, diagnostics, and provenance as exact configuration facts without folding presentation-only changes into source-world topology identity. A live IDE-only workspace-folder hint/off boundary reaches parity with MCP only when the same host inputs are handed to both descriptors; do not claim automatic cross-process parity until a shared configuration or handoff channel exists."
       ],
       "anchors": [
         {

@@ -1,8 +1,52 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "vscode://aurelia/project-configuration-jsonc-dialect",
-  "title": "Aurelia Project Configuration JSONC Dialect",
-  "description": "Syntax-only JSONC dialect marker. Aurelia semantic-runtime owns project-configuration validation.",
+  "$id": "vscode://aurelia/project-configuration-jsonc-editor-assistance",
+  "title": "Aurelia Project Configuration Editor Assistance",
+  "description": "Offline, non-validating completion hints for aurelia.project.json. Semantic-runtime owns semantic project-configuration validation.",
   "allowComments": true,
-  "allowTrailingCommas": true
+  "allowTrailingCommas": true,
+  "properties": {
+    "version": {
+      "description": "Required configuration format version.",
+      "default": 1,
+      "examples": [
+        1
+      ]
+    },
+    "authoredSources": {
+      "description": "Authored-source membership settings.",
+      "properties": {
+        "excludedRoots": {
+          "description": "Project-relative descendant directory roots that remain readable as dependencies but are not authored project sources.",
+          "items": {
+            "description": "One project-relative excluded descendant root."
+          }
+        }
+      }
+    },
+    "findings": {
+      "description": "Projection-only policy for admitted semantic finding rules. It does not remove underlying analysis evidence.",
+      "properties": {
+        "aurelia.analysis.dynamic-registration-spread": {
+          "description": "Whether and at what presentation level this exact semantic finding is projected.",
+          "default": "information",
+          "examples": [
+            "off",
+            "information",
+            "warning",
+            "error"
+          ]
+        }
+      },
+      "additionalProperties": {
+        "description": "Disposition suggestions for manually entered finding IDs. Semantic-runtime determines whether an ID is known and valid.",
+        "examples": [
+          "off",
+          "information",
+          "warning",
+          "error"
+        ]
+      }
+    }
+  }
 }
