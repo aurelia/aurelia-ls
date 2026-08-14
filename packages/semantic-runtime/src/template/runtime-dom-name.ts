@@ -1,7 +1,8 @@
 import {
-  runtimeSvgAttributeName,
-  runtimeSvgElementName,
-} from '../observation/svg-analyzer-data.generated.js';
+  adjustedSvgAttributeName,
+  adjustedSvgElementName,
+} from './html-foreign-name-adjustments.js';
+import { htmlAsciiLowercase, htmlAsciiUppercase } from './html-ascii.js';
 import { HtmlNamespaceKind } from './html-ir.js';
 
 /** DOM nodeName spelling seen by Aurelia after the browser parses authored markup. */
@@ -12,11 +13,11 @@ export function runtimeNodeName(
   switch (namespace) {
     case undefined:
     case HtmlNamespaceKind.Html:
-      return tagName.toUpperCase();
+      return htmlAsciiUppercase(tagName);
     case HtmlNamespaceKind.Svg:
-      return runtimeSvgElementName(tagName);
+      return adjustedSvgElementName(tagName);
     case HtmlNamespaceKind.Math:
-      return tagName.toLowerCase();
+      return htmlAsciiLowercase(tagName);
     case HtmlNamespaceKind.Unknown:
       return tagName;
   }
@@ -30,7 +31,7 @@ export function runtimeLocalName(
   switch (namespace) {
     case HtmlNamespaceKind.Html:
     case HtmlNamespaceKind.Unknown:
-      return tagName.toLowerCase();
+      return htmlAsciiLowercase(tagName);
     case HtmlNamespaceKind.Svg:
     case HtmlNamespaceKind.Math:
       return runtimeNodeName(tagName, namespace);
@@ -45,13 +46,13 @@ export function runtimeAttributeName(
   switch (namespace) {
     case undefined:
     case HtmlNamespaceKind.Html:
-      return attributeName.toLowerCase();
+      return htmlAsciiLowercase(attributeName);
     case HtmlNamespaceKind.Svg:
-      return runtimeSvgAttributeName(attributeName);
+      return adjustedSvgAttributeName(attributeName);
     case HtmlNamespaceKind.Math:
-      return attributeName.toLowerCase() === 'definitionurl'
+      return htmlAsciiLowercase(attributeName) === 'definitionurl'
         ? 'definitionURL'
-        : attributeName.toLowerCase();
+        : htmlAsciiLowercase(attributeName);
     case HtmlNamespaceKind.Unknown:
       return attributeName;
   }

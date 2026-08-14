@@ -808,7 +808,10 @@ export interface SourceOwnershipResponse {
   readonly fingerprint: string;
   readonly sourceUri: string;
   readonly answer: RuntimeAnswerTransport;
-  /** Engine-owned template-language admission; clients must not reclassify roles. */
+  /**
+   * True only for an exact external/HTML template source retained by a converged custom-element definition.
+   * Project membership or a generic HTML source role alone is insufficient; clients must not reclassify roles.
+   */
   readonly templateOwned: boolean;
   readonly owners: readonly SourceOwnershipOwner[];
 }

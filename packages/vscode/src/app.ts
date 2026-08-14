@@ -125,12 +125,10 @@ export class ClientApp {
           sequence: ++this.#analysisSequence,
           fingerprint: payload.fingerprint,
         });
-        if (payload.changeKind === "topology") {
-          const document = ctx.vscode.window.activeTextEditor?.document;
-          const session = document == null ? undefined : ctx.languageClient.sessionForUri(document.uri);
-          if (session?.workspace.key === payload.workspace.key) {
-            void this.#queueContextTransition(ctx);
-          }
+        const document = ctx.vscode.window.activeTextEditor?.document;
+        const session = document == null ? undefined : ctx.languageClient.sessionForUri(document.uri);
+        if (session?.workspace.key === payload.workspace.key) {
+          void this.#queueContextTransition(ctx);
         }
       }));
       subscriptions.push(ctx.vscode.workspace.onDidChangeConfiguration((event) => {
@@ -181,7 +179,7 @@ export class ClientApp {
       : this.#analysisVersions.get(workspaceKey) ?? null;
     let ownership: SourceOwnershipSnapshot | null = null;
     if (uri != null && session != null) {
-      // Never carry a positive answer from a previous editor or topology while
+      // Never carry a positive answer from a previous editor or semantic generation while
       // the exact server-owned answer for this document is still in flight.
       await this.#queueContextCommit(ctx, request, uri, languageId, session.client, active, false, false);
       if (!this.#contextRequestIsCurrent(ctx, request, uri, languageId, session.client)) return;

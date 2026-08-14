@@ -139,6 +139,10 @@ describe("owned-template Extension Host contract", () => {
       new URL("../../../fixtures/hello-world/src/components/product-card.ts", import.meta.url),
       "utf8",
     );
+    const unrelatedFixtureHtml = readFileSync(
+      new URL("../../../fixtures/hello-world/src/unrelated.html", import.meta.url),
+      "utf8",
+    );
     const extensionManifest = JSON.parse(readFileSync(
       new URL("../package.json", import.meta.url),
       "utf8",
@@ -146,7 +150,11 @@ describe("owned-template Extension Host contract", () => {
 
     expect(fixtureHtml).toContain('style="width: ${state.selectionProgressPercent}%"');
     expect(componentFixtureHtml).toContain('style="width: ${selectionProgressPercent}%"');
+    expect(componentFixtureHtml).toContain('style="stroke-width: ${selectionProgressPercent}px"');
+    expect(componentFixtureHtml).toContain("<foreignObject>");
     expect(componentFixtureTypeScript).toContain("readonly selectionProgressPercent = 40;");
+    expect(componentFixtureTypeScript).toContain("import template from './product-card.html';");
+    expect(unrelatedFixtureHtml).toContain("no Aurelia template association");
     const containmentTitle = "contains native embedded diagnostics to exact owned Aurelia templates";
     const containmentStart = productSurface.indexOf(`test("${containmentTitle}"`);
     const containmentEnd = productSurface.indexOf("\n  test(", containmentStart + 1);
@@ -162,6 +170,15 @@ describe("owned-template Extension Host contract", () => {
     expect(containmentJourney).not.toContain("setTextDocumentLanguage must be observed through the replacement TextDocument");
     expect(containmentJourney).not.toContain("initialHtmlDocument.isClosed");
     expect(containmentJourney).toContain('getConfiguration("html", owned.uri).get("validate.styles")');
+    expect(containmentJourney).toContain('aureliaWorkspace, "src", "unrelated.html"');
+    expect(containmentJourney).toContain("without an authored template association must retain native HTML mode");
+    expect(containmentJourney).toContain("same-project unrelated HTML must not receive Aurelia template diagnostics");
+    expect(containmentJourney).toContain("the template after its live external association is withdrawn");
+    expect(containmentJourney).toContain("withdrawn template ownership should restore native CSS validation");
+    expect(containmentJourney).toContain("the template after its live external association is restored");
+    expect(containmentJourney).toContain("restored template ownership should recontain native CSS diagnostics");
+    expect(containmentJourney).toContain("template: '<div>temporarily inline</div>'");
+    expect(containmentJourney).not.toContain('excludedAureliaWorkspace, "src", "excluded-view.html"');
     expect(productSurface).toContain('"css-propertyvalueexpected"');
     expect(productSurface).toContain('"css-ruleorselectorexpected"');
     expect(containmentJourney).toContain("the custom mode must retain Aurelia expression completions");

@@ -141,7 +141,9 @@ export interface SemanticRuntimeLspOperation {
     resourceIdentityKey: string,
     templateResourceScopeIdentityKey: string | null,
   ): Promise<SemanticRuntimeAnswer<SemanticResourceAvailabilityExplanationResult>>;
-  appTopology(sourceFilePath: string): Promise<SemanticRuntimeAnswer<SemanticApplicationTopologyResult>>;
+  appTopology(
+    selection: { readonly projectKey: string } | { readonly sourceFilePath: string },
+  ): Promise<SemanticRuntimeAnswer<SemanticApplicationTopologyResult>>;
   templateInlayHints(document: TextDocument): Promise<SemanticRuntimeAnswer<SemanticTemplateInlayHintsResult>>;
   templateSemanticTokens(document: TextDocument): Promise<SemanticRuntimeAnswer<SemanticTemplateSemanticTokensResult>>;
   templateFoldingRanges(document: TextDocument): Promise<SemanticRuntimeAnswer<SemanticTemplateFoldingRangesResult>>;
@@ -980,7 +982,7 @@ export class SemanticRuntimeLspSession {
         templateResourceScopeIdentityKey,
         token,
       ),
-      appTopology: (sourceFilePath) => this.appTopology(sourceFilePath, token),
+      appTopology: (selection) => this.appTopology(selection, token),
       templateInlayHints: (document) => this.templateInlayHints(document, token),
       templateSemanticTokens: (document) => this.templateSemanticTokens(document, token),
       templateFoldingRanges: (document) => this.templateFoldingRanges(document, token),
@@ -1486,13 +1488,13 @@ export class SemanticRuntimeLspSession {
   }
 
   private async appTopology(
-    sourceFilePath: string,
+    selection: { readonly projectKey: string } | { readonly sourceFilePath: string },
     token: SemanticRuntimeLspRequestToken,
   ): Promise<SemanticRuntimeAnswer<SemanticApplicationTopologyResult>> {
     const runtime = this.runtimeForOperation(token);
     const answer = await runtime.answerAppQuery({
       kind: SemanticAppQueryKind.AppTopology,
-      sourceFilePath,
+      ...selection,
       inquiryProfile: "lsp-cursor",
       analysisDepth: "runtime-topology",
       includeAuthoringTemplates: true,

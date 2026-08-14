@@ -47,7 +47,7 @@ export class OwnedTemplateLanguageController implements Disposable {
     const reconcileAll = () => this.reconcileAll();
     this.#subscriptions.push(ctx.languageClient.onDidChangeSessions(reconcileAll));
     this.#subscriptions.push(ctx.lsp.onAnalysisChanged((payload) => {
-      if (payload.changeKind === "topology") reconcileAll();
+      this.#reconcileWorkspace(payload.workspace.key);
     }));
     this.#subscriptions.push(ctx.vscode.workspace.onDidOpenTextDocument((document) => {
       this.#handleOpen(document);
@@ -73,6 +73,15 @@ export class OwnedTemplateLanguageController implements Disposable {
     }
     for (const key of this.#generationByDocument.keys()) {
       if (!openKeys.has(key)) this.#invalidate(key);
+    }
+  }
+
+  #reconcileWorkspace(workspaceKey: string): void {
+    if (this.#disposed) return;
+    for (const document of this.#ctx.vscode.workspace.textDocuments) {
+      if (!isTemplateLanguageId(document.languageId)) continue;
+      const session = this.#ctx.languageClient.sessionForUri(document.uri);
+      if (session?.workspace.key === workspaceKey) this.#schedule(document);
     }
   }
 
@@ -140,8 +149,15 @@ export class OwnedTemplateLanguageController implements Disposable {
     this.#generationByDocument.set(key, request.generation);
     this.#cancellationByDocument.set(key, cancellation);
     const pending = this.#resolve(key, request)
-      .catch((error) => {
+      .catch(async (error) => {
         if (!cancellation.token.isCancellationRequested && !this.#disposed) {
+          try {
+            await this.#restoreControllerOwnedAfterOwnershipFailure(key, request);
+          } catch (restoreError) {
+            this.#ctx.logger.warn(
+              `[client] template language ownership failure restoration failed for ${request.uri}: ${errorMessage(restoreError)}`,
+            );
+          }
           this.#ctx.logger.warn(`[client] template language ownership unavailable for ${request.uri}: ${errorMessage(error)}`);
         }
       })
@@ -153,6 +169,23 @@ export class OwnedTemplateLanguageController implements Disposable {
         cancellation.dispose();
       });
     this.#pending.add(pending);
+  }
+
+  async #restoreControllerOwnedAfterOwnershipFailure(key: string, request: LanguageRequest): Promise<void> {
+    if (!this.#controllerOwnedDocuments.has(key) || !this.#isCurrent(key, request)) return;
+    if (request.document.languageId !== AURELIA_HTML_LANGUAGE_ID) return;
+    const attempted = await this.#setLanguage(
+      request.document,
+      HTML_LANGUAGE_ID,
+      () => this.#isCurrent(key, request),
+    );
+    if (!attempted) return;
+    const current = this.#ctx.vscode.workspace.textDocuments.find((document) =>
+      sameDocumentUri(this.#ctx.vscode, document.uri, request.document.uri)
+    );
+    if (!this.#disposed && current != null && !this.#isCurrentMode(key, request, HTML_LANGUAGE_ID)) {
+      this.#schedule(current);
+    }
   }
 
   async #resolve(key: string, request: LanguageRequest): Promise<void> {
@@ -169,7 +202,11 @@ export class OwnedTemplateLanguageController implements Disposable {
     const mayRestore = languageId !== HTML_LANGUAGE_ID || this.#controllerOwnedDocuments.has(key);
     if (mayRestore && request.document.languageId !== languageId) {
       try {
-        await this.#setLanguage(request.document, languageId);
+        await this.#setLanguage(
+          request.document,
+          languageId,
+          () => this.#isCurrent(key, request),
+        );
       } finally {
         const current = this.#ctx.vscode.workspace.textDocuments.find((document) =>
           sameDocumentUri(this.#ctx.vscode, document.uri, request.document.uri)
@@ -202,14 +239,23 @@ export class OwnedTemplateLanguageController implements Disposable {
       && this.#ctx.languageClient.sessionForUri(current.uri)?.client === request.sessionClient;
   }
 
-  async #setLanguage(document: TextDocument, languageId: string): Promise<void> {
+  async #setLanguage(
+    document: TextDocument,
+    languageId: string,
+    isCurrent: (() => boolean) | null = null,
+  ): Promise<boolean> {
     const key = documentUriIdentityKey(this.#ctx.vscode, document.uri);
-    if (key == null || document.languageId === languageId) return;
+    if (key == null || document.languageId === languageId) return false;
     const previous = this.#modeChangeTailByDocument.get(key) ?? Promise.resolve();
     const owner = Symbol(key);
+    let attempted = false;
     const transition = previous
       .catch(() => {})
-      .then(() => this.#setLanguageNow(key, document, languageId))
+      .then(async () => {
+        if (isCurrent != null && !isCurrent()) return;
+        attempted = true;
+        await this.#setLanguageNow(key, document, languageId);
+      })
       .finally(() => {
         if (this.#modeChangeOwnerByDocument.get(key) === owner) {
           this.#modeChangeTailByDocument.delete(key);
@@ -219,6 +265,7 @@ export class OwnedTemplateLanguageController implements Disposable {
     this.#modeChangeTailByDocument.set(key, transition);
     this.#modeChangeOwnerByDocument.set(key, owner);
     await transition;
+    return attempted;
   }
 
   async #setLanguageNow(key: string, document: TextDocument, languageId: string): Promise<void> {

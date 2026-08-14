@@ -25,6 +25,10 @@ const observedDependencies = app.ask({
   kind: 'binding-observed-dependencies',
   page: { size: 100 },
 }).value.rows;
+const targetAccesses = app.ask({
+  kind: 'binding-target-accesses',
+  page: { size: 100 },
+}).value.rows;
 const templateDiagnostics = app.ask({
   kind: 'template-diagnostics',
   diagnosticProjection: 'type-projection',
@@ -130,6 +134,16 @@ expectDataFlow(
     targetProperty: 'xlink:href',
   },
 );
+expectTargetAccess(
+  'SVG foreignObject should re-enter HTML before projecting native input targets.',
+  'HTMLInputElement',
+  'value',
+);
+expectTargetAccess(
+  'Nested SVG inside foreignObject should re-enter the SVG DOM type map.',
+  'SVGCircleElement',
+  'r',
+);
 expectBindingCommandFlow(
   'style.bind should retain the framework whole-style object channel.',
   'styleRules',
@@ -159,6 +173,11 @@ expectObservedDependency(
 expectObservedDependency(
   'Style interpolation should observe conditional branch sources inside a template-expression hole.',
   'hidden',
+);
+expectObservedDependencyCount(
+  'HTML text, SVG CDATA, and HTML re-entry should each retain their authored title dependency.',
+  'title',
+  3,
 );
 
 const openRows = [
@@ -253,12 +272,42 @@ function expectObservedDependency(summary, sourceName) {
   }
 }
 
+function expectObservedDependencyCount(summary, sourceName, count) {
+  const matches = observedDependencies.filter((candidate) =>
+    candidate.definitionName === 'class-style-interpolation-boundaries-app'
+    && candidate.occurrence.dependencyKind === 'template-expression-read'
+    && candidate.occurrence.sourceName === sourceName
+  );
+  if (matches.length !== count) {
+    failures.push(`${summary} Expected ${count}, found ${matches.length}.`);
+  }
+}
+
+function expectTargetAccess(summary, targetType, targetProperty) {
+  const row = targetAccesses.find((candidate) =>
+    candidate.definitionName === 'class-style-interpolation-boundaries-app'
+    && candidate.targetType === targetType
+    && candidate.targetProperty === targetProperty
+  );
+  if (row == null) {
+    failures.push(`${summary} Missing target-access row ${targetType}.${targetProperty}.`);
+    return;
+  }
+  if (row.openReason != null || row.frameworkErrorCode != null) {
+    failures.push(
+      `${summary} Expected a closed target access, found open=${row.openReason ?? 'none'}, `
+        + `frameworkError=${row.frameworkErrorCode ?? 'none'}.`,
+    );
+  }
+}
+
 function contractSummary() {
   return {
     fixture: 'class-style-interpolation-boundaries',
     valueChannels: valueChannels.length,
     dataFlows: dataFlows.length,
     observedDependencies: observedDependencies.length,
+    targetAccesses: targetAccesses.length,
     templateDiagnostics: templateDiagnostics.length,
     appDiagnostics: appDiagnostics.length,
     classChannelCount: valueChannels.filter((row) => row.channelKind === 'class-attribute-tokens').length,

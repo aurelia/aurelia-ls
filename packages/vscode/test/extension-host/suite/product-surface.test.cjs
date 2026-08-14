@@ -336,28 +336,86 @@ suite("extension-host product surface", () => {
       }
     }
 
-    const ordinaryUri = vscode.Uri.file(path.join(excludedAureliaWorkspace, "src", "excluded-view.html"));
+    const componentSourceUri = vscode.Uri.file(path.join(
+      aureliaWorkspace,
+      "src",
+      "components",
+      "product-card.ts",
+    ));
+    const componentSource = await vscode.workspace.openTextDocument(componentSourceUri);
+    const componentSourceBaseline = componentSource.getText();
+    const inlineTemplateSource = componentSourceBaseline.replace(
+      "  template,",
+      "  template: '<div>temporarily inline</div>',",
+    );
+    assert.notStrictEqual(
+      inlineTemplateSource,
+      componentSourceBaseline,
+      "Expected the external-template association probe edit to apply.",
+    );
+    try {
+      await replaceDocumentText(componentSource, inlineTemplateSource);
+      owned = await waitForExactDocumentLanguage(
+        vscode.workspace,
+        ownedUri,
+        "html",
+        "the template after its live external association is withdrawn",
+        waitFor,
+      );
+      await waitFor(
+        () => nativeCssDiagnostics(owned.uri).length > 0,
+        () => `withdrawn template ownership should restore native CSS validation; observed ${diagnosticSummary(vscode.languages.getDiagnostics(owned.uri))}`,
+        120_000,
+      );
+    } finally {
+      if (!componentSource.isClosed && componentSource.getText() !== componentSourceBaseline) {
+        await replaceDocumentText(componentSource, componentSourceBaseline);
+      }
+      owned = await waitForExactDocumentLanguage(
+        vscode.workspace,
+        ownedUri,
+        "aurelia-html",
+        "the template after its live external association is restored",
+        waitFor,
+      );
+      await waitFor(
+        () => nativeCssDiagnostics(owned.uri).length === 0,
+        "restored template ownership should recontain native CSS diagnostics",
+        120_000,
+      );
+    }
+
+    const ordinaryUri = vscode.Uri.file(path.join(aureliaWorkspace, "src", "unrelated.html"));
     const ordinary = await vscode.workspace.openTextDocument(ordinaryUri);
     const ordinaryBaseline = ordinary.getText();
     try {
       await replaceDocumentText(ordinary, '<p style="width: ${excludedMessage}%">${excludedMessage}</p>\n');
-      assert.strictEqual(ordinary.languageId, "html", "an unowned HTML document must retain native HTML mode");
+      assert.strictEqual(
+        ordinary.languageId,
+        "html",
+        "HTML admitted by the same project but without an authored template association must retain native HTML mode",
+      );
       assert.strictEqual(
         vscode.workspace.getConfiguration("html", ordinary.uri).get("validate.styles"),
         true,
-        "the unowned control must retain native style validation",
+        "the same-project unrelated HTML control must retain native style validation",
       );
       await vscode.window.showTextDocument(ordinary, { preview: false });
       await waitFor(
         () => hasExactNativeInterpolationDiagnostics(ordinary.uri),
-        () => `ordinary HTML should retain its deliberate native CSS diagnostic; observed ${diagnosticSummary(vscode.languages.getDiagnostics(ordinary.uri))}`,
+        () => `same-project unrelated HTML should retain its deliberate native CSS diagnostic; observed ${diagnosticSummary(vscode.languages.getDiagnostics(ordinary.uri))}`,
         60_000,
+      );
+      assert.strictEqual(
+        vscode.languages.getDiagnostics(ordinary.uri).some((diagnostic) => diagnostic.source === "aurelia"),
+        false,
+        "same-project unrelated HTML must not receive Aurelia template diagnostics",
       );
     } finally {
       await replaceDocumentText(ordinary, ordinaryBaseline);
       await waitFor(
         () => nativeCssDiagnostics(ordinary.uri).length === 0,
-        "ordinary HTML cleanup should clear its deliberate native CSS diagnostics",
+        "same-project unrelated HTML cleanup should clear its deliberate native CSS diagnostics",
         60_000,
       );
       if (owned != null && !owned.isClosed) {

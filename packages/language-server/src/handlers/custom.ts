@@ -9,6 +9,7 @@ import type { CancellationToken } from "vscode-languageserver/node";
 import {
   canonicalTypeSystemPath,
   frameworkRegistrationCapabilityFromString,
+  semanticApplicationTopologyOwnsTemplateDocument,
 } from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
 import type {
@@ -649,11 +650,17 @@ export async function handleSourceOwnership(
   }
   const generation = operation.generation;
   const answer = await operation.authoredSourceOwnership(params.uri);
+  const sourceFilePath = ctx.documentUris.authoredHostPath(params.uri);
+  // Runtime template-edit ownership intentionally includes script-side inline-template carriers. The document-language
+  // protocol is narrower: only converged external/HTML template sources may opt an HTML document into Aurelia mode.
+  const templateOwned = sourceFilePath == null
+    ? false
+    : await authoredTemplateDocumentOwned(ctx, operation, sourceFilePath, answer.value.owners);
   return {
     fingerprint: generation.fingerprint,
     sourceUri: ctx.documentUris.resolve(params.uri).uri,
     answer: mapRuntimeAnswer(answer),
-    templateOwned: answer.value.templateOwned,
+    templateOwned,
     owners: answer.value.owners.map((owner) => ({
       projectKey: owner.projectKey,
       rootUri: ctx.documentUris.uriForHostPath(owner.projectRootDir),
@@ -661,6 +668,36 @@ export async function handleSourceOwnership(
       role: owner.role,
     })),
   };
+}
+
+async function authoredTemplateDocumentOwned(
+  ctx: ServerContext,
+  operation: SemanticRuntimeLspOperation,
+  sourceFilePath: string,
+  owners: readonly { readonly projectKey: string; readonly role: string }[],
+): Promise<boolean> {
+  const templateProjectKeys = [...new Set(
+    owners
+      .filter((owner) => owner.role === "template")
+      .map((owner) => owner.projectKey),
+  )].sort();
+  if (templateProjectKeys.length === 0) {
+    return false;
+  }
+
+  const requested = canonicalTypeSystemPath(sourceFilePath);
+  for (const projectKey of templateProjectKeys) {
+    // The converged template index belongs to the project generation, not the requested document. Keeping this query
+    // project-shaped lets one retained answer serve a bounded recheck of every open HTML document in that project.
+    const topology = await operation.appTopology({ projectKey });
+    if (semanticApplicationTopologyOwnsTemplateDocument(topology.value, (source) => {
+      const candidate = semanticSourceReferenceFilePath(source, ctx.documentUris);
+      return candidate != null && canonicalTypeSystemPath(candidate) === requested;
+    })) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export async function handleResourceInventory(
@@ -961,7 +998,7 @@ export async function handleGetRelatedFiles(
   if (!uri) return [];
   const filePath = ctx.documentUris.authoredHostPath(uri);
   if (filePath == null) return [];
-  const topology = await operation.appTopology(filePath);
+  const topology = await operation.appTopology({ sourceFilePath: filePath });
   const requested = canonicalTypeSystemPath(filePath);
   const candidates: RelatedFileCandidate[] = [];
   for (const component of topology.value.components) {

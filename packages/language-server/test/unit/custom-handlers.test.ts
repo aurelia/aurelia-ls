@@ -9,6 +9,7 @@ import {
 } from "../../src/handlers/custom.js";
 import {
   createContextTestOperation,
+  createTestOperation,
   testAnalysisGeneration,
 } from "./test-request-guard.js";
 import { testWorkspaceDocumentUris } from "./test-document-uris.js";
@@ -165,7 +166,7 @@ function createMockContext(overrides: Record<string, unknown> = {}) {
 }
 
 describe("handleSourceOwnership", () => {
-  test("maps exact runtime owners without exposing host paths", async () => {
+  test("does not classify an app-source document as a template document", async () => {
     const ctx = createMockContext();
     const uri = ctx.documentUris.uriForWorkspaceRelativePath("src/app.ts")!;
 
@@ -179,7 +180,7 @@ describe("handleSourceOwnership", () => {
         selection: "exact",
         coverage: "complete",
       }),
-      templateOwned: true,
+      templateOwned: false,
       owners: [{
         projectKey: "app",
         rootUri: ctx.documentUris.uriForHostPath(defaultWorkspaceRoot),
@@ -188,6 +189,69 @@ describe("handleSourceOwnership", () => {
       }],
     });
     expect(response).not.toHaveProperty("sourceFilePath");
+  });
+
+  test.each([
+    ["src/component.html", true],
+    ["src/unrelated.html", false],
+  ] as const)("derives exact ownership for %s from project-shared converged topology", async (projectPath, expected) => {
+    const ctx = createMockContext();
+    const uri = ctx.documentUris.uriForWorkspaceRelativePath(projectPath)!;
+    const operation = createTestOperation({
+      authoredSourceOwnership: vi.fn(async () => ({
+        schemaVersion: "0.2",
+        result: "answered",
+        selection: "exact",
+        coverage: "complete",
+        summary: "one exact owner",
+        value: {
+          sourceFilePath: path.join(defaultWorkspaceRoot, projectPath),
+          templateOwned: true,
+          owners: [{
+            projectKey: "app",
+            projectRootDir: defaultWorkspaceRoot,
+            projectPath,
+            role: "template",
+          }],
+        },
+        page: null,
+      })),
+      appTopology: vi.fn(async () => ({
+        schemaVersion: "0.2",
+        result: "answered",
+        selection: "not-applicable",
+        coverage: "complete",
+        summary: "one component",
+        value: {
+          projectKey: "app",
+          rootDir: defaultWorkspaceRoot,
+          files: [{
+            path: "src/component.html",
+            roles: ["component-template"],
+            source: {
+              kind: "source-file",
+              label: "component template",
+              path: "src/component.html",
+            },
+          }],
+          appRoots: [],
+          components: [],
+          services: [],
+          injections: [],
+          serviceInteractions: [],
+          serviceInteractionBindings: [],
+          stateCompositions: [],
+          styles: [],
+          routes: [],
+        },
+        page: null,
+      })),
+    });
+
+    const response = await handleSourceOwnership(ctx as never, { uri }, operation);
+
+    expect(response.templateOwned).toBe(expected);
+    expect(operation.appTopology).toHaveBeenCalledWith({ projectKey: "app" });
   });
 });
 

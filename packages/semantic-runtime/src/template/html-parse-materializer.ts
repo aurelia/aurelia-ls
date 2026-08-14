@@ -57,6 +57,7 @@ import {
   TemplateSource,
 } from './compilation-unit.js';
 import { isHtmlVoidElement } from './html-elements.js';
+import { htmlAsciiLowercase } from './html-ascii.js';
 import {
   HtmlAttribute,
   HtmlComment,
@@ -811,13 +812,14 @@ class HtmlScanner {
   ) {}
 
   parseDocument(): ParsedHtmlDocumentDraft {
-    const root = this.parseNodes(null, HtmlNamespaceKind.Html, []);
+    const root = this.parseNodes(null, HtmlNamespaceKind.Html, [], []);
     return new ParsedHtmlDocumentDraft(root.nodes, this.recoveries);
   }
 
   private parseNodes(
     parentTag: string | null,
     namespace: HtmlNamespaceKind,
+    parentAttributes: readonly ParsedHtmlAttributeDraft[],
     pathPrefix: readonly number[],
   ): ParsedHtmlNodeSequenceDraft {
     const nodes: ParsedHtmlNodeDraft[] = [];
@@ -825,7 +827,7 @@ class HtmlScanner {
       if (this.startsWith('</')) {
         const endStart = this.pos;
         const tag = this.readEndTag();
-        if (parentTag != null && tag.name.toLowerCase() === parentTag.toLowerCase()) {
+        if (parentTag != null && htmlAsciiLowercase(tag.name) === htmlAsciiLowercase(parentTag)) {
           return new ParsedHtmlNodeSequenceDraft(nodes, tag);
         }
         this.recoveries.push(new HtmlRecoveryDraft(
@@ -845,12 +847,16 @@ class HtmlScanner {
         nodes.push(this.parseComment(path));
         continue;
       }
+      if (namespace !== HtmlNamespaceKind.Html && this.startsWith('<![CDATA[')) {
+        nodes.push(this.parseCdata(namespace, path));
+        continue;
+      }
       if (this.startsWith('<!')) {
         nodes.push(this.parseDoctype(path));
         continue;
       }
       if (this.peek() === '<') {
-        const element = this.parseElement(namespace, path);
+        const element = this.parseElement(parentTag, namespace, parentAttributes, path);
         nodes.push(element);
         continue;
       }
@@ -925,6 +931,37 @@ class HtmlScanner {
     );
   }
 
+  private parseCdata(namespace: HtmlNamespaceKind, path: readonly number[]): ParsedHtmlNodeDraft {
+    const declarationStart = this.pos;
+    this.pos += '<![CDATA['.length;
+    const contentStart = this.pos;
+    const close = this.text.indexOf(']]>', contentStart);
+    const contentEnd = close < 0 ? this.text.length : close;
+    const value = this.text.slice(contentStart, contentEnd);
+    const recoveries = close < 0
+      ? [new HtmlRecoveryDraft(
+          HtmlRecoveryKind.Open,
+          'Unterminated foreign-content CDATA section.',
+          declarationStart,
+          this.text.length,
+        )]
+      : [];
+    this.pos = close < 0 ? this.text.length : close + ']]>'.length;
+    return new ParsedHtmlNodeDraft(
+      HtmlIrNodeKind.Text,
+      contentStart,
+      contentEnd,
+      path,
+      null,
+      namespace,
+      [],
+      [],
+      false,
+      value,
+      recoveries,
+    );
+  }
+
   private parseDoctype(path: readonly number[]): ParsedHtmlNodeDraft {
     const start = this.pos;
     const close = this.text.indexOf('>', this.pos + 2);
@@ -939,7 +976,12 @@ class HtmlScanner {
     return new ParsedHtmlNodeDraft(HtmlIrNodeKind.Doctype, start, this.pos, path, null, HtmlNamespaceKind.Html, [], [], false, raw || null, []);
   }
 
-  private parseElement(parentNamespace: HtmlNamespaceKind, path: readonly number[]): ParsedHtmlNodeDraft {
+  private parseElement(
+    parentTag: string | null,
+    parentNamespace: HtmlNamespaceKind,
+    parentAttributes: readonly ParsedHtmlAttributeDraft[],
+    path: readonly number[],
+  ): ParsedHtmlNodeDraft {
     const start = this.pos;
     this.pos++;
     const tagStart = this.pos;
@@ -949,7 +991,7 @@ class HtmlScanner {
       return new ParsedHtmlNodeDraft(HtmlIrNodeKind.Text, start, this.pos, path, null, HtmlNamespaceKind.Html, [], [], false, '<', [recovery]);
     }
 
-    const namespace = namespaceForElement(tagName, parentNamespace);
+    const namespace = namespaceForElement(tagName, parentTag, parentNamespace, parentAttributes);
     const attributes: ParsedHtmlAttributeDraft[] = [];
     const recoveries: HtmlRecoveryDraft[] = [];
     const seenAttributes = new Set<string>();
@@ -966,7 +1008,8 @@ class HtmlScanner {
         break;
       }
       const attribute = this.parseAttribute();
-      if (seenAttributes.has(attribute.rawName)) {
+      const attributeKey = htmlAsciiLowercase(attribute.rawName);
+      if (seenAttributes.has(attributeKey)) {
         attributes.push(new ParsedHtmlAttributeDraft(
           attribute.rawName,
           attribute.rawValue,
@@ -982,17 +1025,18 @@ class HtmlScanner {
           ],
         ));
       } else {
-        seenAttributes.add(attribute.rawName);
+        seenAttributes.add(attributeKey);
         attributes.push(attribute);
       }
     }
 
-    const childSequence = selfClosing || isHtmlVoidElement(tagName)
+    const htmlVoidElement = namespace === HtmlNamespaceKind.Html && isHtmlVoidElement(tagName);
+    const childSequence = selfClosing || htmlVoidElement
       ? new ParsedHtmlNodeSequenceDraft([], null)
-      : this.parseNodes(tagName, namespace, path);
+      : this.parseNodes(tagName, namespace, attributes, path);
     const children = childSequence.nodes;
     const end = this.pos;
-    if (!selfClosing && !isHtmlVoidElement(tagName) && childSequence.closingTag == null) {
+    if (!selfClosing && !htmlVoidElement && childSequence.closingTag == null) {
       recoveries.push(new HtmlRecoveryDraft(HtmlRecoveryKind.MissingEndTag, `Missing closing tag </${tagName}>.`, tagStart, end));
     }
 
@@ -1114,15 +1158,88 @@ class HtmlScanner {
   }
 }
 
-function namespaceForElement(tagName: string, parentNamespace: HtmlNamespaceKind): HtmlNamespaceKind {
-  const lower = tagName.toLowerCase();
-  if (lower === 'svg') {
+function namespaceForElement(
+  tagName: string,
+  parentTag: string | null,
+  parentNamespace: HtmlNamespaceKind,
+  parentAttributes: readonly ParsedHtmlAttributeDraft[],
+): HtmlNamespaceKind {
+  // This source-shaped scanner preserves well-nested foreign-content namespace transitions. Browser recovery that
+  // reparents malformed HTML breakout tags belongs to a future tree-builder recovery layer, not namespace inference.
+  const childName = htmlAsciiLowercase(tagName);
+  if (!parsesChildInHtmlNamespace(childName, parentTag, parentNamespace, parentAttributes)) {
+    if (
+      parentNamespace === HtmlNamespaceKind.Math
+      && (parentTag == null ? null : htmlAsciiLowercase(parentTag)) === 'annotation-xml'
+      && childName === 'svg'
+    ) {
+      return HtmlNamespaceKind.Svg;
+    }
+    return parentNamespace;
+  }
+
+  if (childName === 'svg') {
     return HtmlNamespaceKind.Svg;
   }
-  if (lower === 'math') {
+  if (childName === 'math') {
     return HtmlNamespaceKind.Math;
   }
-  return parentNamespace;
+  return HtmlNamespaceKind.Html;
+}
+
+function parsesChildInHtmlNamespace(
+  childName: string,
+  parentTag: string | null,
+  parentNamespace: HtmlNamespaceKind,
+  parentAttributes: readonly ParsedHtmlAttributeDraft[],
+): boolean {
+  if (parentNamespace === HtmlNamespaceKind.Html) {
+    return true;
+  }
+
+  const parentName = parentTag == null ? '' : htmlAsciiLowercase(parentTag);
+  if (
+    parentNamespace === HtmlNamespaceKind.Svg
+    && (parentName === 'foreignobject' || parentName === 'desc' || parentName === 'title')
+  ) {
+    return true;
+  }
+
+  if (parentNamespace !== HtmlNamespaceKind.Math) {
+    return false;
+  }
+
+  if (
+    (parentName === 'mi' || parentName === 'mo' || parentName === 'mn' || parentName === 'ms' || parentName === 'mtext')
+    && childName !== 'mglyph'
+    && childName !== 'malignmark'
+  ) {
+    return true;
+  }
+
+  if (parentName !== 'annotation-xml') {
+    return false;
+  }
+  const encoding = parentAttributes.find((attribute) => htmlAsciiLowercase(attribute.rawName) === 'encoding')?.rawValue;
+  return encoding != null
+    && isHtmlIntegrationEncoding(encoding);
+}
+
+function isHtmlIntegrationEncoding(rawValue: string): boolean {
+  const decoded = rawValue.replace(
+    /&#(?:[xX]([0-9a-fA-F]+)|([0-9]+));?|&(sol|plus);/gu,
+    (reference, hexadecimal: string | undefined, decimal: string | undefined, named: string | undefined) => {
+      if (named != null) {
+        return named === 'sol' ? '/' : '+';
+      }
+      const codePoint = Number.parseInt(hexadecimal ?? decimal ?? '', hexadecimal == null ? 10 : 16);
+      return Number.isSafeInteger(codePoint) && codePoint >= 0 && codePoint <= 0x10_FFFF
+        ? String.fromCodePoint(codePoint)
+        : reference;
+    },
+  );
+  const normalized = htmlAsciiLowercase(decoded);
+  return normalized === 'text/html' || normalized === 'application/xhtml+xml';
 }
 
 function isNameCharacter(value: string): boolean {

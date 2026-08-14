@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import {
   createSemanticRuntime,
   SemanticAppQueryKind,
+  semanticApplicationTopologyOwnsTemplateDocument,
   SemanticTemplateRenameStatus,
   SemanticTemplateRenameUnavailableReason,
   type SemanticApplicationTopologyResult,
@@ -29,6 +30,7 @@ describe('authored edit boundary', () => {
   let appTemplatePath: string;
   let appTemplateText: string;
   let appSourcePath: string;
+  let unrelatedHtmlPath: string;
   let rootDocumentPath: string;
   let externalWidgetTemplatePath: string;
   let externalWidgetTemplateText: string;
@@ -44,6 +46,7 @@ describe('authored edit boundary', () => {
     excludedRoot = path.join(workspaceRoot, 'excluded');
     appTemplatePath = path.join(workspaceRoot, 'src/app.html');
     appSourcePath = path.join(workspaceRoot, 'src/app.ts');
+    unrelatedHtmlPath = path.join(workspaceRoot, 'src/unrelated.html');
     rootDocumentPath = path.join(workspaceRoot, 'index.html');
     externalWidgetTemplatePath = path.join(workspaceRoot, 'src/external-widget.html');
     externalHostTemplatePath = path.join(excludedRoot, 'external-host.html');
@@ -94,6 +97,7 @@ describe('authored edit boundary', () => {
         '}',
       ].join('\n'),
       'src/app.html': appTemplateText,
+      'src/unrelated.html': '<main>${notAnAureliaTemplate}</main>\n',
       'src/owned-widget.ts': [
         "import { customElement } from '@aurelia/runtime-html';",
         '',
@@ -189,6 +193,30 @@ describe('authored edit boundary', () => {
     });
     expect(external).toMatchObject({ templateOwned: false, owners: [] });
   });
+
+  test('distinguishes converged custom-element templates from unrelated admitted HTML', async () => {
+    const topology = await answerQuery<SemanticApplicationTopologyResult>({
+      kind: SemanticAppQueryKind.AppTopology,
+      projectKey,
+      analysisDepth: 'runtime-topology',
+      includeAuthoringTemplates: true,
+      appRetention: 'retain-app',
+    });
+
+    expect(topologyOwnsTemplateDocument(topology.value, appTemplatePath)).toBe(true);
+    expect(topologyOwnsTemplateDocument(topology.value, unrelatedHtmlPath)).toBe(false);
+
+    const diagnostics = await answerQuery<SemanticTemplateDiagnosticsResult>({
+      kind: SemanticAppQueryKind.TemplateDiagnostics,
+      projectKey,
+      sourceFilePath: unrelatedHtmlPath,
+      sourceFile: { filePath: unrelatedHtmlPath },
+      analysisDepth: 'binding-observation',
+      diagnosticProjection: 'type-projection',
+      appRetention: 'retain-app',
+    });
+    expect(diagnostics.value.rows).toEqual([]);
+  }, 30_000);
 
   test('refuses resource rename atomically when its declaration or an affected template is excluded', async () => {
     const declarationReferences = await resourceReferences(
@@ -366,6 +394,16 @@ describe('authored edit boundary', () => {
       ? source.path
       : path.join(workspaceRoot, source.path);
     return normalizedPath(sourcePath) === normalizedPath(expectedPath);
+  }
+
+  function topologyOwnsTemplateDocument(
+    topology: SemanticApplicationTopologyResult,
+    expectedPath: string,
+  ): boolean {
+    return semanticApplicationTopologyOwnsTemplateDocument(
+      topology,
+      (source) => sourceMatches(source, expectedPath),
+    );
   }
 });
 

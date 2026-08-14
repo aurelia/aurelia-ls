@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import { URI } from "vscode-uri";
 import {
   AureliaProtocolRequest,
@@ -11,7 +11,9 @@ import {
 } from "../../src/protocol.js";
 import {
   copyFixtureDirectory,
+  changeDocument,
   createAureliaAppFixture,
+  createFixture,
   fileUri,
   initialize,
   openDocument,
@@ -23,21 +25,29 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../
 const helloWorldFixture = path.join(repoRoot, "fixtures", "hello-world");
 
 const admittedSources = [
-  ["src/view.html", "html", "template"],
-  ["src/support.ts", "typescript", "app-source"],
-  ["src/support.tsx", "typescriptreact", "app-source"],
-  ["src/support.mts", "typescript", "app-source"],
-  ["src/support.cts", "typescript", "app-source"],
-  ["src/support.js", "javascript", "app-source"],
-  ["src/support.jsx", "javascriptreact", "app-source"],
-  ["src/support.mjs", "javascript", "app-source"],
-  ["src/support.cjs", "javascript", "app-source"],
+  ["src/view.html", "html", "template", true],
+  ["src/unrelated.html", "html", "template", false],
+  ["src/support.ts", "typescript", "app-source", false],
+  ["src/support.tsx", "typescriptreact", "app-source", false],
+  ["src/support.mts", "typescript", "app-source", false],
+  ["src/support.cts", "typescript", "app-source", false],
+  ["src/support.js", "javascript", "app-source", false],
+  ["src/support.jsx", "javascriptreact", "app-source", false],
+  ["src/support.mjs", "javascript", "app-source", false],
+  ["src/support.cjs", "javascript", "app-source", false],
 ] as const;
 
-test("admits and projects every supported script module form through the real server", async () => {
+test("separates authored source admission from exact template-document ownership", async () => {
   const fixture = createAureliaAppFixture({
-    "src/app.ts": "export class AppRoot {}\n",
+    "src/app.ts": [
+      "import { customElement } from 'aurelia';",
+      "import template from './view.html';",
+      "@customElement({ name: 'app-root', template })",
+      "export class AppRoot {}",
+    ].join("\n"),
+    "src/aurelia-assets.d.ts": "declare module '*.html' { const markup: string; export default markup; }\n",
     "src/view.html": "<template>${message}</template>\n",
+    "src/unrelated.html": "<main>${notAnAureliaTemplate}</main>\n",
     "src/support.ts": "export const typescriptMarker = true;\n",
     "src/support.tsx": "export const tsxMarker = true;\n",
     "src/support.mts": "export const mtsMarker = true;\n",
@@ -51,7 +61,7 @@ test("admits and projects every supported script module form through the real se
 
   try {
     await initialize(connection, child, getStderr, fixture);
-    for (const [relativePath, languageId, role] of admittedSources) {
+    for (const [relativePath, languageId, role, templateOwned] of admittedSources) {
       const sourcePath = path.join(fixture, relativePath);
       const uri = fileUri(fixture, relativePath);
       openDocument(connection, uri, languageId, fs.readFileSync(sourcePath, "utf8"));
@@ -72,7 +82,14 @@ test("admits and projects every supported script module form through the real se
         projectPath: relativePath.replaceAll("\\", "/"),
         role,
       }));
-      expect(response.templateOwned).toBe(role === "template" || role === "app-source");
+      expect(response.templateOwned).toBe(templateOwned);
+      if (relativePath === "src/unrelated.html") {
+        const diagnostics = await connection.sendRequest<{ kind: string; items: readonly unknown[] }>(
+          "textDocument/diagnostic",
+          { textDocument: { uri } },
+        );
+        expect(diagnostics).toMatchObject({ kind: "full", items: [] });
+      }
     }
   } finally {
     dispose();
@@ -81,6 +98,121 @@ test("admits and projects every supported script module form through the real se
     fs.rmSync(fixture, { recursive: true, force: true });
   }
 }, 30_000);
+
+test("owns a recognized resource-library template without requiring an app root", async () => {
+  const fixture = createFixture({
+    "package.json": JSON.stringify({
+      name: "aurelia-resource-library-fixture",
+      private: true,
+      type: "module",
+      dependencies: { aurelia: "^2.0.0-rc.2" },
+    }),
+    "tsconfig.json": JSON.stringify({
+      compilerOptions: {
+        target: "ES2022",
+        module: "ESNext",
+        moduleResolution: "Bundler",
+        strict: true,
+        allowArbitraryExtensions: true,
+        noEmit: true,
+      },
+      include: ["src"],
+    }),
+    "src/aurelia-assets.d.ts": "declare module '*.html' { const markup: string; export default markup; }\n",
+    "src/library-card.ts": [
+      "import { customElement } from 'aurelia';",
+      "import template from './library-card.html';",
+      "@customElement({ name: 'library-card', template })",
+      "export class LibraryCard {}",
+    ].join("\n"),
+    "src/library-card.html": "<strong>${label}</strong>\n",
+    "src/unrelated.html": "<article>Documentation preview</article>\n",
+  });
+  const { connection, child, dispose, getStderr } = startServer(fixture);
+
+  try {
+    await initialize(connection, child, getStderr, fixture);
+    for (const [relativePath, templateOwned] of [
+      ["src/library-card.html", true],
+      ["src/unrelated.html", false],
+    ] as const) {
+      const sourcePath = path.join(fixture, relativePath);
+      const uri = fileUri(fixture, relativePath);
+      openDocument(connection, uri, "html", fs.readFileSync(sourcePath, "utf8"));
+
+      const response = await connection.sendRequest<SourceOwnershipResponse>(
+        AureliaProtocolRequest.SourceOwnership,
+        { uri },
+      );
+
+      expect(response.owners).toContainEqual(expect.objectContaining({
+        projectPath: relativePath,
+        role: "template",
+      }));
+      expect(response.templateOwned).toBe(templateOwned);
+    }
+  } finally {
+    dispose();
+    child.kill("SIGKILL");
+    await waitForExit(child);
+    fs.rmSync(fixture, { recursive: true, force: true });
+  }
+}, 30_000);
+
+test("withdraws and restores exact external-template ownership after a live decorator edit", async () => {
+  const fixture = copyFixtureDirectory(helloWorldFixture);
+  const componentPath = path.join(fixture, "src/components/product-card.ts");
+  const componentUri = fileUri(fixture, "src/components/product-card.ts");
+  const templatePath = path.join(fixture, "src/components/product-card.html");
+  const templateUri = fileUri(fixture, "src/components/product-card.html");
+  const baselineSource = fs.readFileSync(componentPath, "utf8");
+  const externalTemplateField = "  template,";
+  const inlineTemplateField = "  template: '<div>temporarily inline</div>',";
+  expect(baselineSource).toContain(externalTemplateField);
+  const inlineSource = baselineSource.replace(externalTemplateField, inlineTemplateField);
+  expect(inlineSource).not.toBe(baselineSource);
+
+  const analysisEvents: Array<{ readonly fingerprint?: string; readonly changeKind?: string }> = [];
+  const { connection, child, dispose, getStderr } = startServer(fixture);
+
+  try {
+    await initialize(connection, child, getStderr, fixture, {
+      diagnostics: {
+        onAnalysisChanged: (params) => {
+          analysisEvents.push(params as { readonly fingerprint?: string; readonly changeKind?: string });
+        },
+      },
+    });
+    openDocument(connection, componentUri, "typescript", baselineSource, 1);
+    openDocument(connection, templateUri, "html", fs.readFileSync(templatePath, "utf8"), 1);
+
+    const baselineOwnership = await sourceOwnership(connection, templateUri);
+    expect(baselineOwnership.templateOwned).toBe(true);
+
+    const inlineChangeCursor = analysisEvents.length;
+    changeDocument(connection, componentUri, inlineSource, 2);
+    await expectNewSourceAnalysis(analysisEvents, inlineChangeCursor, baselineOwnership.fingerprint);
+
+    const inlineOwnership = await sourceOwnership(connection, templateUri);
+    expect(inlineOwnership.templateOwned).toBe(false);
+    expect(inlineOwnership.owners).toContainEqual(expect.objectContaining({
+      projectPath: "src/components/product-card.html",
+      role: "template",
+    }));
+
+    const restoreCursor = analysisEvents.length;
+    changeDocument(connection, componentUri, baselineSource, 3);
+    await expectNewSourceAnalysis(analysisEvents, restoreCursor, inlineOwnership.fingerprint);
+
+    const restoredOwnership = await sourceOwnership(connection, templateUri);
+    expect(restoredOwnership.templateOwned).toBe(true);
+  } finally {
+    dispose();
+    child.kill("SIGKILL");
+    await waitForExit(child);
+    fs.rmSync(fixture, { recursive: true, force: true });
+  }
+}, 60_000);
 
 test.runIf(process.platform !== "win32")(
   "preserves a remote-style URI namespace through real semantic projections",
@@ -168,4 +300,28 @@ function expectRemoteNamespace(uri: string, rootUri: string): void {
   expect(candidate.scheme).toBe(root.scheme);
   expect(candidate.authority).toBe(root.authority);
   expect(uri.startsWith("file:")).toBe(false);
+}
+
+async function sourceOwnership(
+  connection: ReturnType<typeof startServer>["connection"],
+  uri: string,
+): Promise<SourceOwnershipResponse> {
+  return await connection.sendRequest<SourceOwnershipResponse>(
+    AureliaProtocolRequest.SourceOwnership,
+    { uri },
+  );
+}
+
+async function expectNewSourceAnalysis(
+  events: readonly { readonly fingerprint?: string; readonly changeKind?: string }[],
+  cursor: number,
+  previousFingerprint: string,
+): Promise<void> {
+  await vi.waitFor(() => {
+    expect(events.slice(cursor).some((event) =>
+      event.changeKind === "source-text"
+      && typeof event.fingerprint === "string"
+      && event.fingerprint !== previousFingerprint
+    )).toBe(true);
+  }, { timeout: 30_000, interval: 20 });
 }

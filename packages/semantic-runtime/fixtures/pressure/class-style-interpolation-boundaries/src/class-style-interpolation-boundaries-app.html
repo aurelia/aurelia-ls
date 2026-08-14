@@ -23,7 +23,14 @@
   <div width.style="widthStyle" --accent.style="accentColor"></div>
 
   <svg viewBox="0 0 ${viewWidth} ${viewHeight}" aria-label="Progress chart ${progress}%">
+    <text><![CDATA[${title}]]></text>
     <rect x="${offset}" width="${viewWidth}" fill="${accentColor}"></rect>
     <use xlink:href="${iconHref}"></use>
+    <foreignObject x="0" y="0" width="${viewWidth}" height="${viewHeight}">
+      <input value="${title}" aria-label="Item ${itemId}">
+      <svg viewBox="0 0 ${viewWidth} ${viewHeight}">
+        <circle cx="${offset}" cy="${offset}" r="${progress}"></circle>
+      </svg>
+    </foreignObject>
   </svg>
 </section>

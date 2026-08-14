@@ -356,6 +356,25 @@ export interface SemanticApplicationTopologyResult {
   readonly routes: readonly SemanticApplicationRouteRow[];
 }
 
+/**
+ * Test one exact authored document against the external/HTML template sources retained by converged custom elements.
+ *
+ * Boot admission alone is deliberately insufficient here: an ordinary HTML file can belong to the same project
+ * without being an Aurelia template. The topology file index only assigns `component-template` after resource
+ * recognition and definition convergence retained a template source address. Callers own host/URI normalization and
+ * supply the exact source predicate so this semantic boundary remains transport-independent.
+ */
+export function semanticApplicationTopologyOwnsTemplateDocument(
+  topology: SemanticApplicationTopologyResult,
+  matchesSource: (source: SemanticSourceReference) => boolean,
+): boolean {
+  return topology.files.some((file) =>
+    file.roles.includes('component-template')
+    && file.source != null
+    && matchesSource(file.source)
+  );
+}
+
 export interface SemanticApplicationTopologySummaryResult {
   readonly counts: Record<string, number>;
   readonly scalars: Record<string, unknown>;

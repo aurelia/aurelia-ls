@@ -1,6 +1,12 @@
 <article class="product-card ${selected ? 'selected' : ''}">
   <h3>${labelText}</h3>
   <span style="width: ${selectionProgressPercent}%"></span>
+  <svg aria-label="Progress ${selectionProgressPercent}%">
+    <circle style="stroke-width: ${selectionProgressPercent}px"></circle>
+    <foreignObject>
+      <div style="width: ${selectionProgressPercent}%"></div>
+    </foreignObject>
+  </svg>
   <p if.bind="item">${item.description}</p>
   <small if.bind="item">${item.sku}</small>
   <span>${stockText}</span>

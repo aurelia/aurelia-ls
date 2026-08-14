@@ -296,7 +296,7 @@ test("treats canonical server and encoded editor URI spellings as one owned docu
   await app.deactivate();
 });
 
-test("rechecks exact ownership after topology settles and ignores an older topology answer", async () => {
+test("rechecks active context after source analysis settles and ignores an older ownership answer", async () => {
   const staleOwnership = deferred<ReturnType<typeof sourceOwnershipResponse>>();
   const { vscode: stubVscode, recorded } = createVscodeApi();
   stubVscode.window.activeTextEditor = {
@@ -304,9 +304,9 @@ test("rechecks exact ownership after topology settles and ignores an older topol
   };
   const lsp = stubProtocolClient({
     sourceOwnership: (uri, requestIndex) => {
-      if (requestIndex === 0) return sourceOwnershipResponse(uri, true, "topology-1");
+      if (requestIndex === 0) return sourceOwnershipResponse(uri, true, "source-1");
       if (requestIndex === 1) return staleOwnership.promise;
-      return sourceOwnershipResponse(uri, false, "topology-3");
+      return sourceOwnershipResponse(uri, false, "source-3");
     },
   });
   const languageClient = new StubLanguageClient(lsp);
@@ -315,13 +315,13 @@ test("rechecks exact ownership after topology settles and ignores an older topol
   await app.activate();
   expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(true);
 
-  lsp.emit("aurelia/analysisChanged", { fingerprint: "topology-2", changeKind: "topology" });
+  lsp.emit("aurelia/analysisChanged", { fingerprint: "source-2", changeKind: "source-text" });
   await vi.waitFor(() => expect(lsp.sendRequestMock).toHaveBeenCalledTimes(2));
-  lsp.emit("aurelia/analysisChanged", { fingerprint: "topology-3", changeKind: "topology" });
+  lsp.emit("aurelia/analysisChanged", { fingerprint: "source-3", changeKind: "source-text" });
   await vi.waitFor(() => expect(lsp.sendRequestMock).toHaveBeenCalledTimes(3));
   await vi.waitFor(() => expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(false));
 
-  staleOwnership.resolve(sourceOwnershipResponse("file:///workspace/src/app.ts", true, "topology-2"));
+  staleOwnership.resolve(sourceOwnershipResponse("file:///workspace/src/app.ts", true, "source-2"));
   await settleAsyncWork();
   expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(false);
 
