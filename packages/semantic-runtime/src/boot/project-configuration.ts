@@ -4,6 +4,7 @@ import ts from 'typescript';
 import type { ComputationRead } from '../kernel/computation-lifecycle.js';
 import { stableKernelLocalHash } from '../kernel/handles.js';
 import {
+  DEFAULT_SEMANTIC_PROJECT_FINDING_RULE_DISPOSITIONS,
   EMPTY_SEMANTIC_PROJECT_FINDING_POLICY,
   SEMANTIC_PROJECT_FINDING_DISPOSITIONS,
   SEMANTIC_PROJECT_FINDING_RULE_IDS,
@@ -17,9 +18,38 @@ import type {
 } from '../kernel/project-input.js';
 import { AuthoredSourceBoundary } from './source-boundary.js';
 
-export const AURELIA_PROJECT_CONFIGURATION_FILE_NAME = 'aurelia.project.json';
-export const AURELIA_PROJECT_CONFIGURATION_VERSION = 2;
-export const AURELIA_PROJECT_CONFIGURATION_SUPPORTED_VERSIONS = Object.freeze([1, 2] as const);
+const AURELIA_PROJECT_CONFIGURATION_ROOT_FIELDS = Object.freeze([
+  '$schema',
+  'version',
+  'authoredSources',
+  'findings',
+] as const);
+const AURELIA_PROJECT_CONFIGURATION_AUTHORED_SOURCE_FIELDS = Object.freeze(['excludedRoots'] as const);
+
+/**
+ * Canonical structural vocabulary shared by native parsing, schema parity tests, and downstream tooling.
+ * Finding semantics and their defaults remain owned by the finding catalog and are referenced here directly.
+ */
+export const AURELIA_PROJECT_CONFIGURATION_CATALOG = Object.freeze({
+  fileName: 'aurelia.project.json',
+  version: 1,
+  supportedVersions: Object.freeze([1] as const),
+  fields: Object.freeze({
+    root: AURELIA_PROJECT_CONFIGURATION_ROOT_FIELDS,
+    authoredSources: AURELIA_PROJECT_CONFIGURATION_AUTHORED_SOURCE_FIELDS,
+  }),
+  findings: Object.freeze({
+    knownRuleIds: SEMANTIC_PROJECT_FINDING_RULE_IDS,
+    dispositions: SEMANTIC_PROJECT_FINDING_DISPOSITIONS,
+    defaults: DEFAULT_SEMANTIC_PROJECT_FINDING_RULE_DISPOSITIONS,
+    futureRuleIdPattern: String.raw`^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*)+$`,
+  }),
+});
+
+export const AURELIA_PROJECT_CONFIGURATION_FILE_NAME = AURELIA_PROJECT_CONFIGURATION_CATALOG.fileName;
+export const AURELIA_PROJECT_CONFIGURATION_VERSION = AURELIA_PROJECT_CONFIGURATION_CATALOG.version;
+export const AURELIA_PROJECT_CONFIGURATION_SUPPORTED_VERSIONS =
+  AURELIA_PROJECT_CONFIGURATION_CATALOG.supportedVersions;
 
 export const enum SemanticProjectConfigurationDiagnosticKind {
   Syntax = 'aurelia-project-config-syntax',
@@ -34,6 +64,8 @@ export const enum SemanticProjectConfigurationDiagnosticKind {
   InvalidExcludedRoots = 'aurelia-project-config-invalid-excluded-roots',
   InvalidExcludedRoot = 'aurelia-project-config-invalid-excluded-root',
   InvalidFindings = 'aurelia-project-config-invalid-findings',
+  InvalidFindingRuleId = 'aurelia-project-config-invalid-finding-rule-id',
+  UnknownFindingRule = 'aurelia-project-config-unknown-finding-rule',
   InvalidFindingRuleDisposition = 'aurelia-project-config-invalid-finding-rule-disposition',
 }
 
@@ -56,7 +88,7 @@ export interface SemanticProjectConfigurationDiagnostic {
   readonly diagnosticKind:
     | SemanticProjectConfigurationDiagnosticKind
     | `${SemanticProjectConfigurationDiagnosticKind}`;
-  readonly severity: 'error';
+  readonly severity: 'error' | 'warning';
   readonly message: string;
   readonly source: SemanticProjectConfigurationSourceSpan;
 }
@@ -193,12 +225,12 @@ function parseProjectConfiguration(
     projectKey,
     sourceFile,
     root,
-    new Set(['$schema', 'version', 'authoredSources', 'findings']),
+    new Set(AURELIA_PROJECT_CONFIGURATION_CATALOG.fields.root),
   );
-  const shapeDiagnostics = [...rootIndex.diagnostics];
+  const rootDiagnostics = [...rootIndex.diagnostics];
   const schema = rootIndex.properties.get('$schema');
   if (schema != null && !ts.isStringLiteral(schema.initializer)) {
-    shapeDiagnostics.push(projectConfigurationDiagnosticForNode(
+    rootDiagnostics.push(projectConfigurationDiagnosticForNode(
       projectKey,
       sourceFile,
       SemanticProjectConfigurationDiagnosticKind.InvalidSchema,
@@ -208,35 +240,33 @@ function parseProjectConfiguration(
   }
 
   const version = rootIndex.properties.get('version');
-  let acceptedVersion: (typeof AURELIA_PROJECT_CONFIGURATION_SUPPORTED_VERSIONS)[number] | null = null;
   if (version == null) {
-    shapeDiagnostics.push(projectConfigurationDiagnosticForNode(
+    rootDiagnostics.push(projectConfigurationDiagnosticForNode(
       projectKey,
       sourceFile,
       SemanticProjectConfigurationDiagnosticKind.MissingVersion,
-      `Aurelia project configuration requires a supported version (${AURELIA_PROJECT_CONFIGURATION_SUPPORTED_VERSIONS.join(' or ')}).`,
+      `Aurelia project configuration requires version ${AURELIA_PROJECT_CONFIGURATION_VERSION}.`,
       root,
     ));
   } else if (
     !ts.isNumericLiteral(version.initializer)
     || !isSupportedProjectConfigurationVersion(Number(version.initializer.text))
   ) {
-    shapeDiagnostics.push(projectConfigurationDiagnosticForNode(
+    rootDiagnostics.push(projectConfigurationDiagnosticForNode(
       projectKey,
       sourceFile,
       SemanticProjectConfigurationDiagnosticKind.UnsupportedVersion,
-      `Only Aurelia project configuration versions ${AURELIA_PROJECT_CONFIGURATION_SUPPORTED_VERSIONS.join(' and ')} are supported.`,
+      `Only Aurelia project configuration version ${AURELIA_PROJECT_CONFIGURATION_VERSION} is supported.`,
       version.initializer,
     ));
-  } else {
-    acceptedVersion = Number(version.initializer.text) as (typeof AURELIA_PROJECT_CONFIGURATION_SUPPORTED_VERSIONS)[number];
   }
 
   const authoredSources = rootIndex.properties.get('authoredSources');
+  const authoredSourceDiagnostics: SemanticProjectConfigurationDiagnostic[] = [];
   let excludedRoots: ts.ArrayLiteralExpression | null = null;
   if (authoredSources != null) {
     if (!ts.isObjectLiteralExpression(authoredSources.initializer)) {
-      shapeDiagnostics.push(projectConfigurationDiagnosticForNode(
+      authoredSourceDiagnostics.push(projectConfigurationDiagnosticForNode(
         projectKey,
         sourceFile,
         SemanticProjectConfigurationDiagnosticKind.InvalidAuthoredSources,
@@ -248,20 +278,20 @@ function parseProjectConfiguration(
         projectKey,
         sourceFile,
         authoredSources.initializer,
-        new Set(['excludedRoots']),
+        new Set(AURELIA_PROJECT_CONFIGURATION_CATALOG.fields.authoredSources),
       );
-      shapeDiagnostics.push(...authoredIndex.diagnostics);
+      authoredSourceDiagnostics.push(...authoredIndex.diagnostics);
       const excludedRootsProperty = authoredIndex.properties.get('excludedRoots');
       if (excludedRootsProperty != null) {
         if (!ts.isArrayLiteralExpression(excludedRootsProperty.initializer)) {
-          shapeDiagnostics.push(projectConfigurationDiagnosticForNode(
+          authoredSourceDiagnostics.push(projectConfigurationDiagnosticForNode(
             projectKey,
             sourceFile,
             SemanticProjectConfigurationDiagnosticKind.InvalidExcludedRoots,
             "'authoredSources.excludedRoots' must be an array of relative directory roots.",
             excludedRootsProperty.initializer,
           ));
-        } else {
+        } else if (authoredSourceDiagnostics.length === 0) {
           excludedRoots = excludedRootsProperty.initializer;
         }
       }
@@ -270,18 +300,10 @@ function parseProjectConfiguration(
 
   const findings = rootIndex.properties.get('findings');
   const acceptedFindingRules: SemanticProjectFindingRuleSetting[] = [];
-  const findingEntryDiagnostics: SemanticProjectConfigurationDiagnostic[] = [];
-  if (findings != null && acceptedVersion === 1) {
-    shapeDiagnostics.push(projectConfigurationDiagnosticForNode(
-      projectKey,
-      sourceFile,
-      SemanticProjectConfigurationDiagnosticKind.UnknownProperty,
-      "Aurelia project configuration version 1 does not define property 'findings'.",
-      findings.name,
-    ));
-  } else if (findings != null && acceptedVersion === 2) {
+  const findingDiagnostics: SemanticProjectConfigurationDiagnostic[] = [];
+  if (findings != null) {
     if (!ts.isObjectLiteralExpression(findings.initializer)) {
-      shapeDiagnostics.push(projectConfigurationDiagnosticForNode(
+      findingDiagnostics.push(projectConfigurationDiagnosticForNode(
         projectKey,
         sourceFile,
         SemanticProjectConfigurationDiagnosticKind.InvalidFindings,
@@ -289,31 +311,49 @@ function parseProjectConfiguration(
         findings.initializer,
       ));
     } else {
-      const findingIndex = indexObjectProperties(
+      const findingIndex = indexFindingProperties(
         projectKey,
         sourceFile,
         findings.initializer,
-        new Set(SEMANTIC_PROJECT_FINDING_RULE_IDS),
       );
-      shapeDiagnostics.push(...findingIndex.diagnostics);
-      for (const ruleId of SEMANTIC_PROJECT_FINDING_RULE_IDS) {
-        const rule = findingIndex.properties.get(ruleId);
-        if (rule == null) {
-          continue;
+      findingDiagnostics.push(...findingIndex.diagnostics);
+      for (const [ruleId, rule] of findingIndex.properties) {
+        const isKnownRule = isSemanticProjectFindingRuleId(ruleId);
+        if (!isKnownRule) {
+          const isFutureRule = isFutureSemanticProjectFindingRuleId(ruleId);
+          findingDiagnostics.push(projectConfigurationDiagnosticForNode(
+            projectKey,
+            sourceFile,
+            isFutureRule
+              ? SemanticProjectConfigurationDiagnosticKind.UnknownFindingRule
+              : SemanticProjectConfigurationDiagnosticKind.InvalidFindingRuleId,
+            isFutureRule
+              ? `Finding rule '${ruleId}' is not known to this Aurelia tooling version and was ignored.`
+              : `Finding rule ID '${ruleId}' must be a lowercase dot-separated namespace with kebab-case segments.`,
+            rule.name,
+            isFutureRule ? 'warning' : 'error',
+          ));
         }
-        if (!ts.isStringLiteral(rule.initializer) || !isSemanticProjectFindingDisposition(rule.initializer.text)) {
-          findingEntryDiagnostics.push(projectConfigurationDiagnosticForNode(
+
+        const disposition = ts.isStringLiteral(rule.initializer)
+          && isSemanticProjectFindingDisposition(rule.initializer.text)
+          ? rule.initializer.text
+          : null;
+        if (disposition == null) {
+          findingDiagnostics.push(projectConfigurationDiagnosticForNode(
             projectKey,
             sourceFile,
             SemanticProjectConfigurationDiagnosticKind.InvalidFindingRuleDisposition,
             `Finding rule '${ruleId}' must be one of ${SEMANTIC_PROJECT_FINDING_DISPOSITIONS.map((value) => `'${value}'`).join(', ')}.`,
             rule.initializer,
           ));
+        }
+        if (!isKnownRule || disposition == null) {
           continue;
         }
         acceptedFindingRules.push(Object.freeze({
           ruleId,
-          disposition: rule.initializer.text,
+          disposition,
           authority: 'project-configuration',
           source: projectConfigurationSourceSpanForNode(sourceFile, rule.initializer),
         }));
@@ -322,10 +362,10 @@ function parseProjectConfiguration(
   }
 
   const acceptedRoots: string[] = [];
-  const entryDiagnostics: SemanticProjectConfigurationDiagnostic[] = [];
+  const excludedRootDiagnostics: SemanticProjectConfigurationDiagnostic[] = [];
   for (const element of excludedRoots?.elements ?? []) {
     if (!ts.isStringLiteral(element)) {
-      entryDiagnostics.push(projectConfigurationDiagnosticForNode(
+      excludedRootDiagnostics.push(projectConfigurationDiagnosticForNode(
         projectKey,
         sourceFile,
         SemanticProjectConfigurationDiagnosticKind.InvalidExcludedRoot,
@@ -336,7 +376,7 @@ function parseProjectConfiguration(
     }
     const validation = validateExcludedRoot(rootDir, element.text, inputReadScope);
     if (validation.problem != null || validation.normalized == null) {
-      entryDiagnostics.push(projectConfigurationDiagnosticForNode(
+      excludedRootDiagnostics.push(projectConfigurationDiagnosticForNode(
         projectKey,
         sourceFile,
         SemanticProjectConfigurationDiagnosticKind.InvalidExcludedRoot,
@@ -348,15 +388,17 @@ function parseProjectConfiguration(
     acceptedRoots.push(validation.normalized);
   }
 
-  if (shapeDiagnostics.length > 0) {
+  const diagnostics = sortProjectConfigurationDiagnostics([
+    ...rootDiagnostics,
+    ...authoredSourceDiagnostics,
+    ...excludedRootDiagnostics,
+    ...findingDiagnostics,
+  ]);
+  if (rootDiagnostics.length > 0) {
     return {
       excludedSourceRootDirs: [],
       findingPolicy: EMPTY_SEMANTIC_PROJECT_FINDING_POLICY,
-      diagnostics: sortProjectConfigurationDiagnostics([
-        ...shapeDiagnostics,
-        ...entryDiagnostics,
-        ...findingEntryDiagnostics,
-      ]),
+      diagnostics,
     };
   }
 
@@ -366,7 +408,7 @@ function parseProjectConfiguration(
     findingPolicy: Object.freeze({
       rules: Object.freeze([...acceptedFindingRules].sort((left, right) => left.ruleId.localeCompare(right.ruleId))),
     }),
-    diagnostics: sortProjectConfigurationDiagnostics([...entryDiagnostics, ...findingEntryDiagnostics]),
+    diagnostics,
   };
 }
 
@@ -377,7 +419,55 @@ function isSupportedProjectConfigurationVersion(
 }
 
 function isSemanticProjectFindingDisposition(value: string): value is SemanticProjectFindingDisposition {
-  return (SEMANTIC_PROJECT_FINDING_DISPOSITIONS as readonly string[]).includes(value);
+  return (AURELIA_PROJECT_CONFIGURATION_CATALOG.findings.dispositions as readonly string[]).includes(value);
+}
+
+function isSemanticProjectFindingRuleId(
+  value: string,
+): value is (typeof SEMANTIC_PROJECT_FINDING_RULE_IDS)[number] {
+  return (AURELIA_PROJECT_CONFIGURATION_CATALOG.findings.knownRuleIds as readonly string[]).includes(value);
+}
+
+function isFutureSemanticProjectFindingRuleId(value: string): boolean {
+  return new RegExp(AURELIA_PROJECT_CONFIGURATION_CATALOG.findings.futureRuleIdPattern, 'u').test(value);
+}
+
+function indexFindingProperties(
+  projectKey: string,
+  sourceFile: ts.JsonSourceFile,
+  object: ts.ObjectLiteralExpression,
+): ObjectPropertyIndex {
+  const properties = new Map<string, ts.PropertyAssignment>();
+  const duplicateNames = new Set<string>();
+  const diagnostics: SemanticProjectConfigurationDiagnostic[] = [];
+  for (const property of object.properties) {
+    if (!ts.isPropertyAssignment(property) || !ts.isStringLiteral(property.name)) {
+      diagnostics.push(projectConfigurationDiagnosticForNode(
+        projectKey,
+        sourceFile,
+        SemanticProjectConfigurationDiagnosticKind.RootShape,
+        "'findings' accepts JSON finding-rule property assignments only.",
+        property,
+      ));
+      continue;
+    }
+
+    const name = property.name.text;
+    if (properties.has(name) || duplicateNames.has(name)) {
+      properties.delete(name);
+      duplicateNames.add(name);
+      diagnostics.push(projectConfigurationDiagnosticForNode(
+        projectKey,
+        sourceFile,
+        SemanticProjectConfigurationDiagnosticKind.DuplicateProperty,
+        `Finding rule '${name}' is declared more than once; every declaration was ignored.`,
+        property.name,
+      ));
+      continue;
+    }
+    properties.set(name, property);
+  }
+  return { properties, diagnostics };
 }
 
 function indexObjectProperties(
@@ -646,6 +736,7 @@ function projectConfigurationDiagnosticForNode(
   diagnosticKind: SemanticProjectConfigurationDiagnosticKind,
   message: string,
   node: ts.Node,
+  severity: SemanticProjectConfigurationDiagnostic['severity'] = 'error',
 ): SemanticProjectConfigurationDiagnostic {
   return projectConfigurationDiagnostic(
     projectKey,
@@ -654,6 +745,7 @@ function projectConfigurationDiagnosticForNode(
     message,
     node.getStart(sourceFile),
     node.getEnd(),
+    severity,
   );
 }
 
@@ -664,13 +756,14 @@ function projectConfigurationDiagnostic(
   message: string,
   start: number,
   end: number,
+  severity: SemanticProjectConfigurationDiagnostic['severity'] = 'error',
 ): SemanticProjectConfigurationDiagnostic {
   const boundedStart = Math.max(0, Math.min(start, sourceFile.text.length));
   const boundedEnd = Math.max(boundedStart, Math.min(end, sourceFile.text.length));
   return {
     projectKey,
     diagnosticKind,
-    severity: 'error',
+    severity,
     message,
     source: {
       filePath: sourceFile.fileName,

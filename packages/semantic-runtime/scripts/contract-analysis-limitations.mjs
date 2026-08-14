@@ -229,7 +229,7 @@ async function withConfiguredFixture(disposition, callback) {
   try {
     fs.cpSync(fixtureRoot, tempRoot, { recursive: true });
     fs.writeFileSync(path.join(tempRoot, 'aurelia.project.json'), `${JSON.stringify({
-      version: 2,
+      version: 1,
       findings: {
         [SemanticProjectFindingRuleId.DynamicRegistrationSpread]: disposition,
       },

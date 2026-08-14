@@ -4,6 +4,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, test } from 'vitest';
 
 import {
+  AURELIA_PROJECT_CONFIGURATION_CATALOG,
   AURELIA_PROJECT_CONFIGURATION_SUPPORTED_VERSIONS,
   AURELIA_PROJECT_CONFIGURATION_VERSION,
   createSemanticRuntime,
@@ -89,10 +90,10 @@ describe('native project configuration', () => {
   );
 
   test.each(SEMANTIC_PROJECT_FINDING_DISPOSITIONS)(
-    'accepts the V2 dynamic-registration-spread disposition %s with an exact immutable config trace',
+    'accepts the V1 dynamic-registration-spread disposition %s with an exact immutable config trace',
     async (disposition) => {
       const workspaceRoot = await createProjectWorkspace();
-      const configText = `{\r\n  "version": 2,\r\n  "findings": {\r\n    "aurelia.analysis.dynamic-registration-spread": "${disposition}"\r\n  }\r\n}`;
+      const configText = `{\r\n  "version": 1,\r\n  "findings": {\r\n    "aurelia.analysis.dynamic-registration-spread": "${disposition}"\r\n  }\r\n}`;
       await writeWorkspaceFile(workspaceRoot, 'aurelia.project.json', configText);
       const runtime = await createSemanticRuntime({
         workspaceRoot,
@@ -128,7 +129,7 @@ describe('native project configuration', () => {
   ])('isolates %s to its known rule and keeps valid authored-source policy applied', async (_label, valueSource) => {
     const workspaceRoot = await createProjectWorkspace();
     await writeWorkspaceFile(workspaceRoot, 'golden/output.ts', 'export const output = true;\n');
-    const configText = `{"version":2,"authoredSources":{"excludedRoots":["golden"]},"findings":{"aurelia.analysis.dynamic-registration-spread":${valueSource}}}`;
+    const configText = `{"version":1,"authoredSources":{"excludedRoots":["golden"]},"findings":{"aurelia.analysis.dynamic-registration-spread":${valueSource}}}`;
     await writeWorkspaceFile(workspaceRoot, 'aurelia.project.json', configText);
     const runtime = await createSemanticRuntime({
       workspaceRoot,
@@ -147,28 +148,58 @@ describe('native project configuration', () => {
     ).authority).toBe('default');
   });
 
+  test('warns and ignores a future namespaced finding while applying known findings and authored sources', async () => {
+    const workspaceRoot = await createProjectWorkspace();
+    await writeWorkspaceFile(workspaceRoot, 'golden/output.ts', 'export const output = true;\n');
+    const configText = JSON.stringify({
+      version: 1,
+      authoredSources: { excludedRoots: ['golden'] },
+      findings: {
+        'vendor.analysis.future-rule': 'error',
+        'aurelia.analysis.dynamic-registration-spread': 'warning',
+      },
+    });
+    await writeWorkspaceFile(workspaceRoot, 'aurelia.project.json', configText);
+    const runtime = await createSemanticRuntime({
+      workspaceRoot,
+      projects: [{ rootDir: workspaceRoot }],
+    });
+    const project = runtime.workspace.projects[0]!;
+
+    expect(project.projectConfiguration.diagnostics).toEqual([
+      expect.objectContaining({
+        diagnosticKind: 'aurelia-project-config-unknown-finding-rule',
+        severity: 'warning',
+      }),
+    ]);
+    expect(project.sourceFiles.some((source) => source.path === 'golden/output.ts')).toBe(false);
+    expect(resolveSemanticProjectFindingRulePolicy(
+      project.projectConfiguration.findingPolicy,
+      SemanticProjectFindingRuleId.DynamicRegistrationSpread,
+    )).toMatchObject({ disposition: 'warning', authority: 'project-configuration' });
+  });
+
   test.each([
     [
-      'an unknown rule ID',
-      '{"version":2,"authoredSources":{"excludedRoots":["golden"]},"findings":{"aurelia.analysis.unknown":"warning"}}',
-      'aurelia-project-config-unknown-property',
-    ],
-    [
       'a duplicate rule ID',
-      '{"version":2,"authoredSources":{"excludedRoots":["golden"]},"findings":{"aurelia.analysis.dynamic-registration-spread":"warning","aurelia.analysis.dynamic-registration-spread":"off"}}',
+      '{"version":1,"authoredSources":{"excludedRoots":["golden"]},"findings":{"aurelia.analysis.dynamic-registration-spread":"warning","aurelia.analysis.dynamic-registration-spread":"off"}}',
       'aurelia-project-config-duplicate-property',
     ],
     [
       'a non-object findings container',
-      '{"version":2,"authoredSources":{"excludedRoots":["golden"]},"findings":[]}',
+      '{"version":1,"authoredSources":{"excludedRoots":["golden"]},"findings":[]}',
       'aurelia-project-config-invalid-findings',
     ],
     [
-      'findings on the exact V1 contract',
-      '{"version":1,"authoredSources":{"excludedRoots":["golden"]},"findings":{"aurelia.analysis.dynamic-registration-spread":"warning"}}',
-      'aurelia-project-config-unknown-property',
+      'a malformed rule ID',
+      '{"version":1,"authoredSources":{"excludedRoots":["golden"]},"findings":{"not-namespaced":"warning"}}',
+      'aurelia-project-config-invalid-finding-rule-id',
     ],
-  ])('treats %s as a strict shape failure', async (_label, configText, diagnosticKind) => {
+  ])('isolates %s to findings and keeps valid authored-source policy applied', async (
+    _label,
+    configText,
+    diagnosticKind,
+  ) => {
     const workspaceRoot = await createProjectWorkspace();
     await writeWorkspaceFile(workspaceRoot, 'golden/output.ts', 'export const output = true;\n');
     await writeWorkspaceFile(workspaceRoot, 'aurelia.project.json', configText);
@@ -181,8 +212,101 @@ describe('native project configuration', () => {
     expect(project.projectConfiguration.diagnostics.some((diagnostic) => diagnostic.diagnosticKind === diagnosticKind))
       .toBe(true);
     expect(project.projectConfiguration.findingPolicy.rules).toEqual([]);
+    expect(project.projectConfiguration.excludedSourceRootDirs.map((root) => path.relative(workspaceRoot, root)))
+      .toEqual(['golden']);
+    expect(project.sourceFiles.some((source) => source.path === 'golden/output.ts')).toBe(false);
+  });
+
+  test('validates a future finding disposition without discarding known siblings', async () => {
+    const workspaceRoot = await createProjectWorkspace();
+    await writeWorkspaceFile(workspaceRoot, 'aurelia.project.json', JSON.stringify({
+      version: 1,
+      findings: {
+        'vendor.analysis.future-rule': 'fatal',
+        'aurelia.analysis.dynamic-registration-spread': 'error',
+      },
+    }));
+    const runtime = await createSemanticRuntime({
+      workspaceRoot,
+      projects: [{ rootDir: workspaceRoot }],
+    });
+    const project = runtime.workspace.projects[0]!;
+
+    expect(project.projectConfiguration.diagnostics.map((diagnostic) => [
+      diagnostic.diagnosticKind,
+      diagnostic.severity,
+    ])).toEqual([
+      ['aurelia-project-config-unknown-finding-rule', 'warning'],
+      ['aurelia-project-config-invalid-finding-rule-disposition', 'error'],
+    ]);
+    expect(resolveSemanticProjectFindingRulePolicy(
+      project.projectConfiguration.findingPolicy,
+      SemanticProjectFindingRuleId.DynamicRegistrationSpread,
+    )).toMatchObject({ disposition: 'error', authority: 'project-configuration' });
+  });
+
+  test('ignores duplicate future finding declarations without discarding known siblings', async () => {
+    const workspaceRoot = await createProjectWorkspace();
+    const configText = '{"version":1,"findings":{"vendor.analysis.future-rule":"warning",'
+      + '"vendor.analysis.future-rule":"off","aurelia.analysis.dynamic-registration-spread":"error"}}';
+    await writeWorkspaceFile(workspaceRoot, 'aurelia.project.json', configText);
+    const runtime = await createSemanticRuntime({
+      workspaceRoot,
+      projects: [{ rootDir: workspaceRoot }],
+    });
+    const project = runtime.workspace.projects[0]!;
+
+    expect(project.projectConfiguration.diagnostics).toEqual([
+      expect.objectContaining({
+        diagnosticKind: 'aurelia-project-config-duplicate-property',
+        severity: 'error',
+      }),
+    ]);
+    expect(resolveSemanticProjectFindingRulePolicy(
+      project.projectConfiguration.findingPolicy,
+      SemanticProjectFindingRuleId.DynamicRegistrationSpread,
+    )).toMatchObject({ disposition: 'error', authority: 'project-configuration' });
+  });
+
+  test.each([
+    [
+      'a non-object authoredSources section',
+      '[]',
+      'aurelia-project-config-invalid-authored-sources',
+    ],
+    [
+      'an unknown authoredSources field',
+      '{"future":true}',
+      'aurelia-project-config-unknown-property',
+    ],
+    [
+      'duplicate excludedRoots fields',
+      '{"excludedRoots":["golden"],"excludedRoots":["other"]}',
+      'aurelia-project-config-duplicate-property',
+    ],
+    [
+      'a malformed excludedRoots field',
+      '{"excludedRoots":true}',
+      'aurelia-project-config-invalid-excluded-roots',
+    ],
+  ])('isolates %s and keeps valid finding policy applied', async (_label, authoredSources, diagnosticKind) => {
+    const workspaceRoot = await createProjectWorkspace();
+    const configText = `{"version":1,"authoredSources":${authoredSources},"findings":{"aurelia.analysis.dynamic-registration-spread":"warning"}}`;
+    await writeWorkspaceFile(workspaceRoot, 'aurelia.project.json', configText);
+    const runtime = await createSemanticRuntime({
+      workspaceRoot,
+      projects: [{ rootDir: workspaceRoot }],
+    });
+    const project = runtime.workspace.projects[0]!;
+
+    expect(project.projectConfiguration.diagnostics).toEqual([
+      expect.objectContaining({ diagnosticKind, severity: 'error' }),
+    ]);
     expect(project.projectConfiguration.excludedSourceRootDirs).toEqual([]);
-    expect(project.sourceFiles.some((source) => source.path === 'golden/output.ts')).toBe(true);
+    expect(resolveSemanticProjectFindingRulePolicy(
+      project.projectConfiguration.findingPolicy,
+      SemanticProjectFindingRuleId.DynamicRegistrationSpread,
+    )).toMatchObject({ disposition: 'warning', authority: 'project-configuration' });
   });
 
   test('keeps parser vocabulary and the canonical schema packaged for VS Code in exact parity', async () => {
@@ -190,20 +314,31 @@ describe('native project configuration', () => {
       await readFile(new URL('../schema/aurelia.project.schema.json', import.meta.url), 'utf8'),
     ) as AureliaProjectConfigurationSchema;
 
-    expect(AURELIA_PROJECT_CONFIGURATION_VERSION).toBe(2);
-    expect(schema.properties.version.enum).toEqual([...AURELIA_PROJECT_CONFIGURATION_SUPPORTED_VERSIONS]);
+    expect(AURELIA_PROJECT_CONFIGURATION_VERSION).toBe(1);
+    expect(AURELIA_PROJECT_CONFIGURATION_SUPPORTED_VERSIONS).toEqual([1]);
+    expect(schema.required).toEqual(['version']);
+    expect(schema.additionalProperties).toBe(false);
+    expect(schema.properties.version.const).toBe(AURELIA_PROJECT_CONFIGURATION_CATALOG.version);
+    expect(Object.keys(schema.properties)).toEqual([...AURELIA_PROJECT_CONFIGURATION_CATALOG.fields.root]);
+    expect(Object.keys(schema.properties.authoredSources.properties))
+      .toEqual([...AURELIA_PROJECT_CONFIGURATION_CATALOG.fields.authoredSources]);
+    expect(schema.properties.authoredSources.additionalProperties).toBe(false);
     expect(Object.keys(schema.properties.findings.properties)).toEqual([...SEMANTIC_PROJECT_FINDING_RULE_IDS]);
     expect(schema.$defs.findingDisposition.enum).toEqual([...SEMANTIC_PROJECT_FINDING_DISPOSITIONS]);
     expect(schema.properties.findings.additionalProperties).toBe(false);
-    expect(schema.allOf).toEqual([{
-      if: {
-        required: ['version'],
-        properties: { version: { const: 1 } },
-      },
-      then: { not: { required: ['findings'] } },
-    }]);
-    // VS Code packages this full schema for completion/shape help. The associated dialect schema intentionally stays
-    // syntax-only so semantic-runtime remains the sole semantic validation authority.
+    expect(Object.keys(schema.properties.findings.patternProperties))
+      .toEqual([AURELIA_PROJECT_CONFIGURATION_CATALOG.findings.futureRuleIdPattern]);
+    expect(schema.$defs.findingDisposition.type).toBe('string');
+    const futureRuleIdPattern = new RegExp(
+      AURELIA_PROJECT_CONFIGURATION_CATALOG.findings.futureRuleIdPattern,
+      'u',
+    );
+    for (const ruleId of SEMANTIC_PROJECT_FINDING_RULE_IDS) {
+      expect(futureRuleIdPattern.test(ruleId)).toBe(true);
+      expect(schema.properties.findings.properties[ruleId]?.default)
+        .toBe(AURELIA_PROJECT_CONFIGURATION_CATALOG.findings.defaults[ruleId]);
+    }
+    // This checked-in schema is the canonical byte/parity artifact. Editor association and delivery are separate.
   });
 
   test('composes JSONC exclusions into discovery and TypeScript roots while keeping dependency reads available', async () => {
@@ -399,7 +534,7 @@ describe('native project configuration', () => {
     const configFile = await writeWorkspaceFile(
       workspaceRoot,
       'aurelia.project.json',
-      '{"version":3,"authoredSources":{"excludedRoots":["golden"]}}',
+      '{"version":2,"authoredSources":{"excludedRoots":["golden"]}}',
     );
 
     let runtime = await createSemanticRuntime({
@@ -489,12 +624,12 @@ describe('native project configuration', () => {
     expect(() => rebased.forInputGeneration(changedGeneration)).toThrow(/fresh workspace boot is required/);
   });
 
-  test('rebases a V2 projection-policy change without changing authored membership', async () => {
+  test('rebases a V1 projection-policy change without changing authored membership', async () => {
     const workspaceRoot = await createProjectWorkspace();
     const configFile = await writeWorkspaceFile(
       workspaceRoot,
       'aurelia.project.json',
-      '{"version":2,"findings":{"aurelia.analysis.dynamic-registration-spread":"warning"}}',
+      '{"version":1,"findings":{"aurelia.analysis.dynamic-registration-spread":"warning"}}',
     );
     const authority = new SemanticRuntimeProjectInputAuthority();
     const runtime = await createSemanticRuntime({
@@ -506,7 +641,7 @@ describe('native project configuration', () => {
 
     await writeFile(
       configFile,
-      '{"version":2,"findings":{"aurelia.analysis.dynamic-registration-spread":"off"}}',
+      '{"version":1,"findings":{"aurelia.analysis.dynamic-registration-spread":"off"}}',
       'utf8',
     );
     const rebased = initial.forInputGeneration(authority.capture(initial));
@@ -621,16 +756,23 @@ describe('native project configuration', () => {
 });
 
 interface AureliaProjectConfigurationSchema {
-  readonly allOf: readonly unknown[];
+  readonly additionalProperties: boolean;
+  readonly required: readonly string[];
   readonly properties: {
-    readonly version: { readonly enum: readonly number[] };
+    readonly $schema: { readonly type: string };
+    readonly version: { readonly const: number };
+    readonly authoredSources: {
+      readonly additionalProperties: boolean;
+      readonly properties: Readonly<Record<string, unknown>>;
+    };
     readonly findings: {
       readonly additionalProperties: boolean;
-      readonly properties: Readonly<Record<string, { readonly $ref: string }>>;
+      readonly properties: Readonly<Record<string, { readonly $ref: string; readonly default: string }>>;
+      readonly patternProperties: Readonly<Record<string, { readonly $ref: string }>>;
     };
   };
   readonly $defs: {
-    readonly findingDisposition: { readonly enum: readonly string[] };
+    readonly findingDisposition: { readonly type: string; readonly enum: readonly string[] };
   };
 }
 
