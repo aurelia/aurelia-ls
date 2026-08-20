@@ -491,13 +491,12 @@ export class LspFacade implements Disposable {
       for (const [method, handlers] of this.#notificationHandlers) {
         if (handlers.size === 0) continue;
         this.#rawNotificationSubscriptions.push(session.client.onNotification(method, (payload: unknown) => {
-          if (
-            method === AureliaProtocolNotification.AnalysisChanged
-            && isAnalysisChangedPayload(payload)
-            && payload.changeKind === "topology"
-          ) {
-            void this.#dispatchSettledTopologyNotification(method, payload, session);
-            return;
+          if (method === AureliaProtocolNotification.AnalysisChanged) {
+            if (!isAnalysisChangedPayload(payload)) return;
+            if (payload.changeKind === "topology") {
+              void this.#dispatchSettledTopologyNotification(method, payload, session);
+              return;
+            }
           }
           const enriched = workspaceNotificationPayload(payload, session);
           for (const handler of [...(this.#notificationHandlers.get(method) ?? [])]) {
@@ -616,8 +615,11 @@ function resourceCompletenessHasIssue(completeness: {
 function isAnalysisChangedPayload(value: unknown): value is AnalysisChangedPayload {
   if (value == null || typeof value !== "object" || Array.isArray(value)) return false;
   const payload = value as Record<string, unknown>;
-  return typeof payload["fingerprint"] === "string"
-    && (payload["changeKind"] === "source-text" || payload["changeKind"] === "topology");
+  if (typeof payload["fingerprint"] !== "string") return false;
+  if (payload["changeKind"] === "topology") return true;
+  return payload["changeKind"] === "source-text"
+    && Array.isArray(payload["changedSourceUris"])
+    && payload["changedSourceUris"].every((uri): uri is string => typeof uri === "string");
 }
 
 function workspaceNotificationPayload(

@@ -2087,12 +2087,10 @@ function requireRowState(event, state, label) {
 
 export function predecessorRaceFact(value, label = "predecessor race") {
   return exactObject(value, [
-    "updatingInvalidated",
-    "updatingTarget",
-    "updatingUnrelated",
-    "updatingPublished",
-    "updatingState",
+    "pendingInvalidated",
     "blocked",
+    "pendingTreePublicationCount",
+    "pendingViewStateCount",
     "invalidated",
     "released",
     "discarded",
@@ -2105,41 +2103,13 @@ export function predecessorRaceFact(value, label = "predecessor race") {
   ], label);
 }
 
-export function resolvePredecessorUpdatingEvidence(race, context, label = "predecessor race") {
-  const updatingInvalidated = resolveLedgerReference(
-    race.updatingInvalidated,
-    `${label}.updatingInvalidated`,
+export function resolvePredecessorPendingEvidence(race, context, label = "predecessor race") {
+  const pendingInvalidated = resolveLedgerReference(
+    race.pendingInvalidated,
+    `${label}.pendingInvalidated`,
     context,
     "resource-explorer-view",
     "invalidation",
-  );
-  const updatingTarget = resolveLedgerReference(
-    race.updatingTarget,
-    `${label}.updatingTarget`,
-    context,
-    "resource-explorer",
-    "publish-node",
-  );
-  const updatingUnrelated = resolveLedgerReference(
-    race.updatingUnrelated,
-    `${label}.updatingUnrelated`,
-    context,
-    "resource-explorer",
-    "publish-node",
-  );
-  const updatingPublished = resolveLedgerReference(
-    race.updatingPublished,
-    `${label}.updatingPublished`,
-    context,
-    "resource-explorer",
-    "publish-complete",
-  );
-  const updating = resolveLedgerReference(
-    race.updatingState,
-    `${label}.updatingState`,
-    context,
-    "resource-explorer",
-    "view-state",
   );
   const blocked = resolveLedgerReference(
     race.blocked,
@@ -2155,127 +2125,41 @@ export function resolvePredecessorUpdatingEvidence(race, context, label = "prede
     "resource-explorer-view",
     "invalidation",
   );
-  const updatingWorkspaceIdentity = observedWorkspaceIdentity(blocked.event.workspaceKey);
-  requireEqual(updatingInvalidated.event.scope, "workspace", `${label}.updatingInvalidated.scope`);
+  requireEqual(pendingInvalidated.event.scope, "workspace", `${label}.pendingInvalidated.scope`);
   requireEqual(
-    updatingInvalidated.event.workspaceKey,
+    pendingInvalidated.event.workspaceKey,
     blocked.event.workspaceKey,
-    `${label}.updatingInvalidated workspace`,
+    `${label}.pendingInvalidated workspace`,
   );
   requireEqual(invalidated.event.scope, "workspace", `${label}.invalidated.scope`);
   requireEqual(invalidated.event.workspaceKey, blocked.event.workspaceKey, `${label} invalidated workspace`);
-  requireEqual(updatingPublished.event.publicationKind, "updating", `${label}.updatingPublished.kind`);
-  requireEqual(
-    updatingPublished.event.workspaceIdentity,
-    updatingWorkspaceIdentity,
-    `${label}.updatingPublished.workspaceIdentity`,
-  );
-  requireEqual(updatingPublished.event.fingerprint, null, `${label}.updatingPublished.fingerprint`);
-  requireEqual(updating.event.state, "current", `${label}.updatingState.state`);
-  requireEqual(updating.event.message, null, `${label}.updatingState.message`);
-  requireEqual(updating.event.hasIssues, true, `${label}.updatingState.hasIssues`);
-  requireEqual(updating.event.updatingAll, false, `${label}.updatingState.updatingAll`);
-  requireEqual(updating.event.updatingWorkspaceCount, 1, `${label}.updatingState.updatingWorkspaceCount`);
-  requireEqual(updating.event.staleWorkspaceCount, 0, `${label}.updatingState.staleWorkspaceCount`);
-  requireStrictOrdinalOrder(
-    [updatingInvalidated, updatingPublished, updating, blocked, invalidated],
-    label,
-  );
-  for (const [kind, record] of [["target", updatingTarget], ["unrelated", updatingUnrelated]]) {
-    requireEqual(record.event.observationId, updatingPublished.event.observationId, `${label}.${kind}.observationId`);
-    requireEqual(record.event.generation, updatingPublished.event.generation, `${label}.${kind}.generation`);
-    requireEqual(record.event.publicationKind, "updating", `${label}.${kind}.publicationKind`);
-    if (record.eventOrdinal >= updatingPublished.eventOrdinal) {
-      throw new Error(`${label}.${kind} must precede its publication receipt.`);
-    }
-  }
-  requireEqual(updating.event.observationId, updatingPublished.event.observationId, `${label}.state observationId`);
-  requireEqual(updating.event.generation, updatingPublished.event.generation, `${label}.state generation`);
-  const updatingSlice = context.ledgerRecords.filter((record) => (
-    record.eventOrdinal > updatingInvalidated.eventOrdinal
+  requireStrictOrdinalOrder([pendingInvalidated, blocked, invalidated], label);
+  const pendingSlice = context.ledgerRecords.filter((record) => (
+    record.eventOrdinal > pendingInvalidated.eventOrdinal
       && record.eventOrdinal < blocked.eventOrdinal
   ));
-  const targetWorkspaceUpdatingPublications = updatingSlice.filter((record) => (
+  const pendingTreePublications = pendingSlice.filter((record) => (
     record.event.source === "resource-explorer"
-      && record.event.phase === "publish-complete"
-      && record.event.publicationKind === "updating"
-      && record.event.workspaceIdentity === updatingWorkspaceIdentity
-      && record.event.fingerprint === null
+      && ["publish-start", "publish-node", "publish-complete"].includes(record.event.phase)
   ));
   requireEqual(
-    targetWorkspaceUpdatingPublications.length,
-    1,
-    `${label} invalidation-to-barrier target-workspace updating publication count`,
+    pendingTreePublications.length,
+    race.pendingTreePublicationCount,
+    `${label} pending tree publication count`,
   );
-  requireEqual(
-    targetWorkspaceUpdatingPublications[0].eventOrdinal,
-    updatingPublished.eventOrdinal,
-    `${label} target-workspace updating publication evidence`,
-  );
-  const e1ShapedStates = updatingSlice.filter((record) => (
+  requireEqual(race.pendingTreePublicationCount, 0, `${label}.pendingTreePublicationCount`);
+  const pendingViewStates = pendingSlice.filter((record) => (
     record.event.source === "resource-explorer"
       && record.event.phase === "view-state"
-      && record.event.state === "current"
-      && record.event.message === null
-      && record.event.hasIssues === true
-      && record.event.updatingAll === false
-      && record.event.updatingWorkspaceCount === 1
-      && record.event.staleWorkspaceCount === 0
   ));
   requireEqual(
-    e1ShapedStates.length,
-    1,
-    `${label} invalidation-to-barrier E1-shaped updating state count`,
+    pendingViewStates.length,
+    race.pendingViewStateCount,
+    `${label} pending view-state count`,
   );
-  requireEqual(
-    e1ShapedStates[0].eventOrdinal,
-    updating.eventOrdinal,
-    `${label} E1-shaped updating state evidence`,
-  );
-  const updatingNodes = publicationNodes(context, updatingPublished, `${label}.updatingPublished`);
-  requireEqual(updatingPublished.event.nodeCount, updatingNodes.length, `${label}.updatingPublished.nodeCount`);
-  const updatingNodeOrdinals = new Set(updatingNodes.map((record) => record.eventOrdinal));
-  for (const [kind, record] of [["target", updatingTarget], ["unrelated", updatingUnrelated]]) {
-    if (!updatingNodeOrdinals.has(record.eventOrdinal)) {
-      throw new Error(`${label}.${kind} is not a member of the correlated publication.`);
-    }
-  }
-  const updatingResourceNodeCount = updatingNodes.filter((record) => record.event.nodeKind === "resource").length;
-  requirePositiveInteger(updatingResourceNodeCount, `${label}.resource node count`);
-  requireEqual(updating.event.description, `${updatingResourceNodeCount} known resources`, `${label}.updatingState.description`);
-  const shiftedIdentity = context.fixture.witnesses.shiftedAndRemovedNavigation.shifted.identityKey;
-  requireEqual(updatingTarget.event.navigationResourceIdentity, shiftedIdentity, `${label}.updatingTarget.resourceIdentity`);
-  requireEqual(
-    updatingTarget.event.navigationWorkspaceIdentity,
-    updatingWorkspaceIdentity,
-    `${label}.updatingTarget.workspaceIdentity`,
-  );
-  requireRowState(updatingTarget.event, "updating", `${label}.updatingTarget`);
-  const baselineUnrelatedMatches = context.baseline.nodes.filter((record) =>
-    record.event.nodeId === updatingUnrelated.event.nodeId
-  );
-  requireEqual(baselineUnrelatedMatches.length, 1, `${label}.updatingUnrelated baseline match count`);
-  requireEqual(
-    JSON.stringify(publicationNodeDurableShape(updatingUnrelated)),
-    JSON.stringify(publicationNodeDurableShape(baselineUnrelatedMatches[0])),
-    `${label}.updatingUnrelated durable shape`,
-  );
-  for (const lane of ["navigation", "implementation"]) {
-    requireEqual(
-      updatingUnrelated.event[`${lane}Fingerprint`],
-      baselineUnrelatedMatches[0].event[`${lane}Fingerprint`],
-      `${label}.updatingUnrelated ${lane} fingerprint`,
-    );
-  }
-  if (rowStatesInclude(updatingUnrelated.event, "updating") || rowStatesInclude(updatingUnrelated.event, "out-of-date")) {
-    throw new Error(`${label}.updatingUnrelated must remain current.`);
-  }
+  requireEqual(race.pendingViewStateCount, 0, `${label}.pendingViewStateCount`);
   return Object.freeze({
-    updatingInvalidated,
-    updatingTarget,
-    updatingUnrelated,
-    updatingPublished,
-    updating,
+    pendingInvalidated,
     blocked,
     invalidated,
   });
@@ -2296,12 +2180,10 @@ function validateTreeFacts(value, context) {
   validateLifecycleTreeFacts(tree.lifecycle, context, `${label}.lifecycle`);
   const race = predecessorRaceFact(tree.predecessorRace, `${label}.predecessorRace`);
   const {
-    updatingInvalidated,
-    updatingPublished,
-    updating,
+    pendingInvalidated,
     blocked,
     invalidated,
-  } = resolvePredecessorUpdatingEvidence(race, context, `${label}.predecessorRace`);
+  } = resolvePredecessorPendingEvidence(race, context, `${label}.predecessorRace`);
   const released = resolveLedgerReference(
     race.released,
     `${label}.predecessorRace.released`,
@@ -2348,7 +2230,7 @@ function validateTreeFacts(value, context) {
   requireEqual(successor.event.fingerprint, race.successorFingerprint, `${label}.predecessorRace.successor.fingerprint`);
   requireEqual(successor.event.publicationKind, "current", `${label}.predecessorRace.successor.publicationKind`);
   requireStrictOrdinalOrder(
-    [updatingInvalidated, updatingPublished, updating, blocked, invalidated, released, discarded, successor],
+    [pendingInvalidated, blocked, invalidated, released, discarded, successor],
     `${label}.predecessorRace`,
   );
   const latePredecessorPublishes = context.ledgerRecords.filter((record) => (
@@ -2362,7 +2244,7 @@ function validateTreeFacts(value, context) {
     race.latePredecessorPublishCount,
     `${label}.predecessorRace computed late predecessor publishes`,
   );
-  context.claims.add("updating");
+  context.claims.add("stable-pending");
   context.claims.add("latest-wins");
 
   const unrelated = exactObject(tree.unrelatedStability, [
@@ -5649,7 +5531,7 @@ function validateFactConservation(context) {
     "no-cursor",
     "partial",
     "stale",
-    "updating",
+    "stable-pending",
     "latest-wins",
     "navigation",
     "scope-restart",

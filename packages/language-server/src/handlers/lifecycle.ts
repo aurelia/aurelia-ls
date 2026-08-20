@@ -36,6 +36,8 @@ const ANALYSIS_REFRESH_DEBOUNCE_MS = 300;
 
 interface LifecycleRefreshState {
   readonly tasks: Set<Promise<unknown>>;
+  readonly openDocumentEffectiveValues: Map<string, { readonly text: string | undefined }>;
+  readonly pendingAnalysisChangedSourceUris: Map<string, string>;
   pendingAnalysisRefresh: ReturnType<typeof setTimeout> | null;
   pendingAnalysisChangeKind: AnalysisChangedPayload["changeKind"] | null;
   shutdown: Promise<void> | null;
@@ -137,7 +139,12 @@ function recordSourceTextChanged(
 ): void {
   ctx.semanticRuntime.recordSourceTextChanged(filePaths);
   ctx.logger.log(`${reason}: semantic-runtime source generation advanced for ${filePaths.length} file(s)`);
-  scheduleAnalysisRefresh(ctx, reason, "source-text");
+  scheduleAnalysisRefresh(
+    ctx,
+    reason,
+    "source-text",
+    filePaths.map((filePath) => ctx.documentUris.uriForHostPath(filePath)),
+  );
 }
 
 function recordProjectConfigurationChanged(
@@ -156,9 +163,15 @@ function scheduleAnalysisRefresh(
   ctx: ServerContext,
   reason: string,
   changeKind: AnalysisChangedPayload["changeKind"],
+  changedSourceUris: readonly string[] = [],
 ): void {
   const state = lifecycleRefreshState(ctx);
   if (state.shutdown != null) return;
+  if (changeKind === "source-text") {
+    for (const uri of changedSourceUris) {
+      state.pendingAnalysisChangedSourceUris.set(ctx.documentUris.key(uri), uri);
+    }
+  }
   state.pendingAnalysisChangeKind = dominantAnalysisChangeKind(
     state.pendingAnalysisChangeKind,
     changeKind,
@@ -169,10 +182,13 @@ function scheduleAnalysisRefresh(
   state.pendingAnalysisRefresh = setTimeout(() => {
     state.pendingAnalysisRefresh = null;
     const settledChangeKind = state.pendingAnalysisChangeKind ?? changeKind;
+    const settledChangedSourceUris = [...state.pendingAnalysisChangedSourceUris.values()]
+      .sort((left, right) => left < right ? -1 : left > right ? 1 : 0);
     state.pendingAnalysisChangeKind = null;
+    state.pendingAnalysisChangedSourceUris.clear();
     ctx.logger.log(`[workspace] processing settled analysis (${reason})`);
     runLifecycleTask(ctx, "workspace analysis refresh", () =>
-      notifyAnalysisChanged(ctx, settledChangeKind));
+      notifyAnalysisChanged(ctx, settledChangeKind, settledChangedSourceUris));
   }, ANALYSIS_REFRESH_DEBOUNCE_MS);
 }
 
@@ -315,6 +331,59 @@ function initializeRootUri(ctx: ServerContext, params: InitializeParams): string
   return rootUri;
 }
 
+function tracksSynchronizedDocumentValue(uri: string, filePath: string): boolean {
+  return isProjectTopologyConfigurationPath(filePath) || isAnalyzedSourceDocumentUri(uri);
+}
+
+function editorComparableWorkspaceHostText(
+  ctx: ServerContext,
+  filePath: string,
+): string | undefined {
+  const text = ctx.readWorkspaceHostFile(filePath);
+  // VS Code consumes the UTF-8 BOM as file encoding metadata and omits it from
+  // TextDocument.getText(). Normalize only the host side: a BOM authored in the
+  // editor buffer remains a real text change instead of being erased here.
+  return text?.startsWith("\uFEFF") === true ? text.slice(1) : text;
+}
+
+function rememberOpenDocumentHostValue(
+  ctx: ServerContext,
+  uri: string,
+  filePath: string,
+): void {
+  lifecycleRefreshState(ctx).openDocumentEffectiveValues.set(
+    ctx.documentUris.key(uri),
+    { text: editorComparableWorkspaceHostText(ctx, filePath) },
+  );
+}
+
+function synchronizedDocumentValueChanged(
+  ctx: ServerContext,
+  uri: string,
+  filePath: string,
+  text: string,
+): boolean {
+  const state = lifecycleRefreshState(ctx);
+  const key = ctx.documentUris.key(uri);
+  const previous = state.openDocumentEffectiveValues.get(key)
+    ?? { text: editorComparableWorkspaceHostText(ctx, filePath) };
+  state.openDocumentEffectiveValues.set(key, { text });
+  return previous.text !== text;
+}
+
+function closedDocumentValueChanged(
+  ctx: ServerContext,
+  uri: string,
+  filePath: string,
+  synchronizedText: string,
+): boolean {
+  const state = lifecycleRefreshState(ctx);
+  const key = ctx.documentUris.key(uri);
+  const previous = state.openDocumentEffectiveValues.get(key)?.text ?? synchronizedText;
+  state.openDocumentEffectiveValues.delete(key);
+  return previous !== editorComparableWorkspaceHostText(ctx, filePath);
+}
+
 /**
  * Registers all lifecycle handlers on the connection and documents.
  */
@@ -327,9 +396,11 @@ export function registerLifecycleHandlers(ctx: ServerContext): void {
   });
 
   ctx.documents.onDidOpen((e) => {
-    if (ctx.documentUris.workspaceHostPath(e.document.uri) == null || !isAnalyzedSourceDocumentUri(e.document.uri)) return;
+    const filePath = ctx.documentUris.workspaceHostPath(e.document.uri);
+    if (filePath == null || !tracksSynchronizedDocumentValue(e.document.uri, filePath)) return;
     const state = lifecycleRefreshState(ctx);
     if (state.shutdown != null) return;
+    rememberOpenDocumentHostValue(ctx, e.document.uri, filePath);
     ctx.logger.log(`didOpen ${e.document.uri}`);
   });
 
@@ -378,11 +449,15 @@ export function registerLifecycleHandlers(ctx: ServerContext): void {
     // TextDocuments emits this event for both didOpen and didChange. It is the
     // single point where the synchronized client text becomes authoritative.
     ctx.logger.log(`document text synchronized ${uri}@${e.document.version}`);
+    if (!tracksSynchronizedDocumentValue(uri, filePath)) return;
+    if (!synchronizedDocumentValueChanged(ctx, uri, filePath, e.document.getText())) {
+      ctx.logger.log(`document text synchronization retained host value ${uri}`);
+      return;
+    }
     if (isProjectTopologyConfigurationPath(filePath)) {
       recordProjectConfigurationChanged(ctx, "project configuration text synchronization", [filePath]);
       return;
     }
-    if (!isAnalyzedSourceDocumentUri(uri)) return;
     recordSourceTextChanged(ctx, "document text synchronization", [filePath]);
   });
 
@@ -395,12 +470,17 @@ export function registerLifecycleHandlers(ctx: ServerContext): void {
     const state = lifecycleRefreshState(ctx);
     if (state.shutdown != null) return;
     // Closing returns source-text authority to the workspace host. Diagnostic
-    // pull owns editor collection cleanup; the server only invalidates meaning.
+    // pull owns editor collection cleanup; invalidate only when that authority
+    // transfer actually changes the effective file value.
+    if (!tracksSynchronizedDocumentValue(uri, filePath)) return;
+    if (!closedDocumentValueChanged(ctx, uri, filePath, e.document.getText())) {
+      ctx.logger.log(`document close retained host value ${uri}`);
+      return;
+    }
     if (isProjectTopologyConfigurationPath(filePath)) {
       recordProjectConfigurationChanged(ctx, "project configuration close", [filePath]);
       return;
     }
-    if (!isAnalyzedSourceDocumentUri(uri)) return;
     recordSourceTextChanged(ctx, "document close", [filePath]);
   });
 }
@@ -417,6 +497,7 @@ async function registerInlayHintConfigurationChanges(ctx: ServerContext): Promis
 async function notifyAnalysisChanged(
   ctx: ServerContext,
   changeKind: AnalysisChangedPayload["changeKind"],
+  changedSourceUris: readonly string[],
 ): Promise<void> {
   if (lifecycleRefreshState(ctx).shutdown != null) return;
   let generation: SemanticRuntimeLspGeneration;
@@ -435,14 +516,21 @@ async function notifyAnalysisChanged(
       ctx,
       "managed analysis currentness retry",
       retryAnalysisChangeKind(error, changeKind),
+      changedSourceUris,
     );
     return;
   }
   if (lifecycleRefreshState(ctx).shutdown != null) return;
-  const analysisChanged: AnalysisChangedPayload = {
-    fingerprint: generation.fingerprint,
-    changeKind,
-  };
+  const analysisChanged: AnalysisChangedPayload = changeKind === "source-text"
+    ? {
+        fingerprint: generation.fingerprint,
+        changeKind,
+        changedSourceUris,
+      }
+    : {
+        fingerprint: generation.fingerprint,
+        changeKind,
+      };
   await ctx.connection.sendNotification(AureliaProtocolNotification.AnalysisChanged, analysisChanged);
   if (lifecycleRefreshState(ctx).shutdown != null) return;
   // This is the single post-change diagnostic scheduler. The client deliberately
@@ -519,6 +607,8 @@ export function shutdownLifecycle(ctx: ServerContext): Promise<void> {
       state.pendingAnalysisRefresh = null;
     }
     state.pendingAnalysisChangeKind = null;
+    state.pendingAnalysisChangedSourceUris.clear();
+    state.openDocumentEffectiveValues.clear();
     ctx.semanticRuntime.invalidateRequests();
 
     // LSP shutdown retires this dedicated server process. Waiting for obsolete
@@ -578,6 +668,8 @@ function lifecycleRefreshState(ctx: ServerContext): LifecycleRefreshState {
   }
   const state: LifecycleRefreshState = {
     tasks: new Set(),
+    openDocumentEffectiveValues: new Map(),
+    pendingAnalysisChangedSourceUris: new Map(),
     pendingAnalysisRefresh: null,
     pendingAnalysisChangeKind: null,
     shutdown: null,

@@ -2156,13 +2156,33 @@ describe("LspFacade workspace routing", () => {
     const firstSubscription = facade.onAnalysisChanged(first);
     facade.onAnalysisChanged(second);
 
-    harness.clients[0]?.emit("aurelia/analysisChanged", { fingerprint: "1" });
+    harness.clients[0]?.emit("aurelia/analysisChanged", {
+      fingerprint: "invalid",
+      changeKind: "source-text",
+    });
+    expect(first).not.toHaveBeenCalled();
+    expect(second).not.toHaveBeenCalled();
+
+    harness.clients[0]?.emit("aurelia/analysisChanged", {
+      fingerprint: "1",
+      changeKind: "source-text",
+      changedSourceUris: ["file:///work/a/src/app.html"],
+    });
     expect(first).toHaveBeenCalledTimes(1);
     expect(second).toHaveBeenCalledTimes(1);
-    expect(first.mock.calls[0]?.[0].workspace.name).toBe("a");
+    expect(first.mock.calls[0]?.[0]).toMatchObject({
+      fingerprint: "1",
+      changeKind: "source-text",
+      changedSourceUris: ["file:///work/a/src/app.html"],
+      workspace: { name: "a" },
+    });
 
     firstSubscription.dispose();
-    harness.clients[0]?.emit("aurelia/analysisChanged", { fingerprint: "2" });
+    harness.clients[0]?.emit("aurelia/analysisChanged", {
+      fingerprint: "2",
+      changeKind: "source-text",
+      changedSourceUris: ["file:///work/a/src/app.ts"],
+    });
     expect(first).toHaveBeenCalledTimes(1);
     expect(second).toHaveBeenCalledTimes(2);
 
@@ -2170,8 +2190,16 @@ describe("LspFacade workspace routing", () => {
     vscode.workspace.workspaceFolders?.splice(0, 1);
     recorded.fireWorkspaceFoldersChanged();
     await vi.waitFor(() => expect(manager.sessions.map((session) => session.workspace.name)).toEqual(["b"]));
-    retired.emit("aurelia/analysisChanged", { fingerprint: "old" });
-    harness.clients[1]?.emit("aurelia/analysisChanged", { fingerprint: "new" });
+    retired.emit("aurelia/analysisChanged", {
+      fingerprint: "old",
+      changeKind: "source-text",
+      changedSourceUris: ["file:///work/a/src/app.ts"],
+    });
+    harness.clients[1]?.emit("aurelia/analysisChanged", {
+      fingerprint: "new",
+      changeKind: "source-text",
+      changedSourceUris: ["file:///work/b/src/app.ts"],
+    });
     expect(second).toHaveBeenCalledTimes(3);
 
     facade.dispose();

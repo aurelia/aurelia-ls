@@ -64,7 +64,9 @@ import type {
 import {
   readSemanticApplicationTopology,
   readSemanticApplicationTopologySummary,
+  readSemanticTemplateDocumentOwnership,
   type SemanticApplicationTopologyResult,
+  type SemanticTemplateDocumentOwnershipResult,
 } from './app-topology.js';
 import {
   readSemanticAppSummary,
@@ -4074,6 +4076,8 @@ export class SemanticApp {
         return answerCurrentQuery(() => this.resourceAvailabilityExplanation(query));
       case SemanticAppQueryKind.TemplateCompilations:
         return answerCurrentQuery(() => this.templateQueries.templateCompilations(query.page, query.detail));
+      case SemanticAppQueryKind.TemplateDocumentOwnership:
+        return answerCurrentQuery(() => this.templateDocumentOwnership());
       case SemanticAppQueryKind.AttributeInterpretationExplanation:
         return answerCurrentQuery(() => this.attributeInterpretationExplanation(query));
       case SemanticAppQueryKind.TemplateCompletions:
@@ -5161,6 +5165,22 @@ export class SemanticApp {
     return answer(
       SemanticRuntimeAnswerResult.Answered,
       `Recovered ${value.appRoots.length} app root(s), ${value.components.length} component(s), ${value.routes.length} route config(s), and ${value.files.length} roleful app file(s).`,
+      value,
+      COMPLETE_COLLECTION_ANSWER_OPTIONS,
+    );
+  }
+
+  templateDocumentOwnership(): SemanticRuntimeAnswer<SemanticTemplateDocumentOwnershipResult> {
+    const claimed = this.answerPublicQueryIfNeeded<SemanticTemplateDocumentOwnershipResult>({
+      kind: SemanticAppQueryKind.TemplateDocumentOwnership,
+    });
+    if (claimed != null) {
+      return claimed;
+    }
+    const value = readSemanticTemplateDocumentOwnership(this.runtime.workspace.store, this.emission);
+    return answer(
+      SemanticRuntimeAnswerResult.Answered,
+      `Recovered ${value.sources.length} exact component-template source(s).`,
       value,
       COMPLETE_COLLECTION_ANSWER_OPTIONS,
     );

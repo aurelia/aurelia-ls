@@ -315,9 +315,17 @@ test("rechecks active context after source analysis settles and ignores an older
   await app.activate();
   expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(true);
 
-  lsp.emit("aurelia/analysisChanged", { fingerprint: "source-2", changeKind: "source-text" });
+  lsp.emit("aurelia/analysisChanged", {
+    fingerprint: "source-2",
+    changeKind: "source-text",
+    changedSourceUris: ["file:///workspace/src/app.ts"],
+  });
   await vi.waitFor(() => expect(lsp.sendRequestMock).toHaveBeenCalledTimes(2));
-  lsp.emit("aurelia/analysisChanged", { fingerprint: "source-3", changeKind: "source-text" });
+  lsp.emit("aurelia/analysisChanged", {
+    fingerprint: "source-3",
+    changeKind: "source-text",
+    changedSourceUris: ["file:///workspace/src/app.ts"],
+  });
   await vi.waitFor(() => expect(lsp.sendRequestMock).toHaveBeenCalledTimes(3));
   await vi.waitFor(() => expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(false));
 

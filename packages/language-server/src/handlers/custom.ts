@@ -9,7 +9,7 @@ import type { CancellationToken } from "vscode-languageserver/node";
 import {
   canonicalTypeSystemPath,
   frameworkRegistrationCapabilityFromString,
-  semanticApplicationTopologyOwnsTemplateDocument,
+  semanticTemplateDocumentOwnershipOwnsSource,
 } from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
 import type {
@@ -687,10 +687,10 @@ async function authoredTemplateDocumentOwned(
 
   const requested = canonicalTypeSystemPath(sourceFilePath);
   for (const projectKey of templateProjectKeys) {
-    // The converged template index belongs to the project generation, not the requested document. Keeping this query
-    // project-shaped lets one retained answer serve a bounded recheck of every open HTML document in that project.
-    const topology = await operation.appTopology({ projectKey });
-    if (semanticApplicationTopologyOwnsTemplateDocument(topology.value, (source) => {
+    // The converged ownership set belongs to the project generation, not the requested document. One retained bounded
+    // answer can therefore recheck every open HTML document in the project without materializing application topology.
+    const ownership = await operation.templateDocumentOwnership(projectKey);
+    if (semanticTemplateDocumentOwnershipOwnsSource(ownership.value, (source) => {
       const candidate = semanticSourceReferenceFilePath(source, ctx.documentUris);
       return candidate != null && canonicalTypeSystemPath(candidate) === requested;
     })) {

@@ -95,6 +95,108 @@ describe("Completions", () => {
     }
   });
 
+  test("maps empty and partial member frontiers to cursor-local edits", async () => {
+    const fixture = createAureliaAppFixture({
+      "src/app.ts": [
+        "import { customElement } from 'aurelia';",
+        "import type { CatalogItem } from './models';",
+        "import template from './app.html';",
+        "@customElement({ name: 'product-card', template })",
+        "export class AppRoot {",
+        "  item: CatalogItem | null = null;",
+        "  labelText = 'Catalog';",
+        "}",
+      ].join("\n"),
+      "src/models.ts": [
+        "export interface CatalogItem {",
+        "  readonly sku: string;",
+        "  readonly name: string;",
+        "  readonly description: string;",
+        "  readonly quantity: number;",
+        "  readonly tone: 'fresh' | 'warning' | 'empty';",
+        "  readonly tags: readonly string[];",
+        "}",
+      ].join("\n"),
+      "src/app.html": [
+        '<p if.bind="item">${item.description} ${item.}</p>',
+        '<p if.bind="item">${item.de}</p>',
+        '<span>${lab}</span>',
+      ].join("\n"),
+    });
+
+    const htmlUri = fileUri(fixture, "src/app.html");
+    const { connection, child, dispose, getStderr } = startServer(fixture);
+
+    try {
+      await initialize(connection, child, getStderr, fixture);
+      const htmlText = fs.readFileSync(path.join(fixture, "src/app.html"), "utf8");
+      await openDocument(connection, htmlUri, "html", htmlText);
+      await waitForDiagnostics(connection, child, () => getStderr(), htmlUri, 5000);
+      const document = TextDocument.create(htmlUri, "html", 1, htmlText);
+      const completionAt = async (offset: number): Promise<CompletionListResponse> =>
+        expectCompletionList(await connection.sendRequest("textDocument/completion", {
+          textDocument: { uri: htmlUri },
+          position: positionAt(htmlText, offset),
+        }));
+      const requiredItem = (
+        response: CompletionListResponse,
+        label: string,
+      ): CompletionListItem & { textEdit: NonNullable<CompletionListItem["textEdit"]> } => {
+        const item = response.items.find((candidate) => candidate.label === label);
+        if (item?.textEdit == null) {
+          throw new Error(`Expected '${label}' completion to carry an authored text edit.`);
+        }
+        return item as CompletionListItem & { textEdit: NonNullable<CompletionListItem["textEdit"]> };
+      };
+
+      const emptyMarker = '${item.description} ${item.}</p>';
+      const emptyMarkerStart = htmlText.indexOf(emptyMarker);
+      const emptyOffset = emptyMarkerStart
+        + emptyMarker.lastIndexOf('${item.')
+        + '${item.'.length;
+      const empty = await completionAt(emptyOffset);
+      expect(empty.items.map((item) => item.label)).toEqual([
+        "description",
+        "name",
+        "quantity",
+        "sku",
+        "tags",
+        "tone",
+      ]);
+      const emptyDescription = requiredItem(empty, "description");
+      expect(emptyDescription.textEdit.range).toEqual({
+        start: positionAt(htmlText, emptyOffset),
+        end: positionAt(htmlText, emptyOffset),
+      });
+      expect(document.getText(emptyDescription.textEdit.range)).toBe("");
+
+      const partialMarker = '${item.de}</p>';
+      const partialStart = htmlText.indexOf(partialMarker);
+      const partialOffset = partialStart + '${item.de'.length;
+      const partial = await completionAt(partialOffset);
+      expect(partial.items.map((item) => item.label)).toEqual([
+        "description",
+        "name",
+        "quantity",
+        "sku",
+        "tags",
+        "tone",
+      ]);
+      const partialDescription = requiredItem(partial, "description");
+      expect(document.getText(partialDescription.textEdit.range)).toBe("de");
+      expect(partialDescription.textEdit.range.end).toEqual(positionAt(htmlText, partialOffset));
+
+      const expressionOffset = htmlText.indexOf('${lab}') + '${lab'.length;
+      const expression = requiredItem(await completionAt(expressionOffset), "labelText");
+      expect(document.getText(expression.textEdit.range)).toBe("lab");
+    } finally {
+      dispose();
+      child.kill("SIGKILL");
+      await waitForExit(child);
+      fs.rmSync(fixture, { recursive: true, force: true });
+    }
+  });
+
   test("authors composed binding commands only at safe top-level attribute-name loci", async () => {
     const fixture = createAureliaAppFixture({
       "src/app.ts": [

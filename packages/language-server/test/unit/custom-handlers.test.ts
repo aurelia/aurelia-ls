@@ -194,7 +194,7 @@ describe("handleSourceOwnership", () => {
   test.each([
     ["src/component.html", true],
     ["src/unrelated.html", false],
-  ] as const)("derives exact ownership for %s from project-shared converged topology", async (projectPath, expected) => {
+  ] as const)("derives exact ownership for %s from the bounded converged template set", async (projectPath, expected) => {
     const ctx = createMockContext();
     const uri = ctx.documentUris.uriForWorkspaceRelativePath(projectPath)!;
     const operation = createTestOperation({
@@ -216,42 +216,85 @@ describe("handleSourceOwnership", () => {
         },
         page: null,
       })),
-      appTopology: vi.fn(async () => ({
+      templateDocumentOwnership: vi.fn(async () => ({
         schemaVersion: "0.2",
         result: "answered",
         selection: "not-applicable",
         coverage: "complete",
-        summary: "one component",
+        summary: "one template document",
         value: {
           projectKey: "app",
           rootDir: defaultWorkspaceRoot,
-          files: [{
+          sources: [{
+            kind: "source-file",
+            label: "component template",
             path: "src/component.html",
-            roles: ["component-template"],
-            source: {
-              kind: "source-file",
-              label: "component template",
-              path: "src/component.html",
-            },
           }],
-          appRoots: [],
-          components: [],
-          services: [],
-          injections: [],
-          serviceInteractions: [],
-          serviceInteractionBindings: [],
-          stateCompositions: [],
-          styles: [],
-          routes: [],
         },
         page: null,
       })),
+      appTopology: vi.fn(() => {
+        throw new Error("Source ownership must not materialize application topology.");
+      }),
     });
 
     const response = await handleSourceOwnership(ctx as never, { uri }, operation);
 
     expect(response.templateOwned).toBe(expected);
-    expect(operation.appTopology).toHaveBeenCalledWith({ projectKey: "app" });
+    expect(operation.templateDocumentOwnership).toHaveBeenCalledWith("app");
+    expect(operation.appTopology).not.toHaveBeenCalled();
+  });
+
+  test("checks every exact overlapping project owner without projecting topology", async () => {
+    const ctx = createMockContext();
+    const projectPath = "src/component.html";
+    const uri = ctx.documentUris.uriForWorkspaceRelativePath(projectPath)!;
+    const sourceFilePath = path.join(defaultWorkspaceRoot, projectPath);
+    const templateDocumentOwnership = vi.fn(async (projectKey: string) => ({
+      schemaVersion: "0.2" as const,
+      result: "answered" as const,
+      selection: "not-applicable" as const,
+      coverage: "complete" as const,
+      summary: `${projectKey} template documents`,
+      value: {
+        projectKey,
+        rootDir: defaultWorkspaceRoot,
+        sources: projectKey === "second"
+          ? [{ kind: "source-file", label: "component template", path: projectPath }]
+          : [{ kind: "source-file", label: "other template", path: "src/other.html" }],
+      },
+      page: null,
+    }));
+    const operation = createTestOperation({
+      authoredSourceOwnership: vi.fn(async () => ({
+        schemaVersion: "0.2",
+        result: "answered",
+        selection: "exact",
+        coverage: "complete",
+        summary: "two exact owners",
+        value: {
+          sourceFilePath,
+          templateOwned: true,
+          owners: ["first", "first", "second"].map((projectKey) => ({
+            projectKey,
+            projectRootDir: defaultWorkspaceRoot,
+            projectPath,
+            role: "template",
+          })),
+        },
+        page: null,
+      })),
+      templateDocumentOwnership,
+      appTopology: vi.fn(() => {
+        throw new Error("Source ownership must not materialize application topology.");
+      }),
+    });
+
+    const response = await handleSourceOwnership(ctx as never, { uri }, operation);
+
+    expect(response.templateOwned).toBe(true);
+    expect(templateDocumentOwnership.mock.calls).toEqual([["first"], ["second"]]);
+    expect(operation.appTopology).not.toHaveBeenCalled();
   });
 });
 

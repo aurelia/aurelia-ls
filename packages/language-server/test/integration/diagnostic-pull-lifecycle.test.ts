@@ -58,9 +58,7 @@ test("real stdio diagnostics prove full, unchanged, edit invalidation, and uncha
       workspaceDiagnostics: false,
     });
 
-    const openCursor = settledEvents.length;
     openDocument(connection, uri, "html", initialHtml, 1);
-    await expectSettledPair(settledEvents, openCursor);
 
     const first = await pullDiagnostics(connection, uri);
     expect(first.kind).toBe("full");
@@ -90,8 +88,6 @@ test("real stdio diagnostics prove full, unchanged, edit invalidation, and uncha
     const changedReuse = await pullDiagnostics(connection, uri, changedResultId);
     expect(changedReuse).toEqual({ kind: "unchanged", resultId: changedResultId });
     expect(settledEvents.map((event) => event.kind)).toEqual([
-      "analysisChanged",
-      "diagnosticRefresh",
       "analysisChanged",
       "diagnosticRefresh",
     ]);
@@ -127,6 +123,10 @@ async function expectSettledPair(events: SettledEvent[], cursor: number): Promis
   expect(analysis.params).toMatchObject({
     fingerprint: expect.any(String),
     changeKind: "source-text",
+    changedSourceUris: [expect.any(String)],
   });
+  expect((analysis.params as { readonly changedSourceUris?: readonly string[] }).changedSourceUris).toEqual([
+    expect.stringContaining("/src/app.html"),
+  ]);
   expect(analysis.params).not.toHaveProperty("uri");
 }

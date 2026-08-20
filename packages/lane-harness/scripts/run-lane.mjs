@@ -570,13 +570,18 @@ export function settledAnalysisSequence(events) {
 }
 
 function isSettledAnalysisChangedPayload(params) {
-  return params != null
+  if (!(params != null
     && typeof params === "object"
     && !Array.isArray(params)
     && typeof params.fingerprint === "string"
     && params.fingerprint.length > 0
     && !Object.prototype.hasOwnProperty.call(params, "uri")
-    && (params.changeKind === "source-text" || params.changeKind === "topology");
+    && (params.changeKind === "source-text" || params.changeKind === "topology"))) {
+    return false;
+  }
+  return params.changeKind === "topology"
+    || (Array.isArray(params.changedSourceUris)
+      && params.changedSourceUris.every((uri) => typeof uri === "string"));
 }
 
 function languageIdForPath(file) {

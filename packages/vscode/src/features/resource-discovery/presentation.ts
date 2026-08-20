@@ -14,7 +14,22 @@ export interface ResourceKindPresentation {
   readonly order: number;
 }
 
-export type ResourceTreeRowState = "updating" | "out-of-date" | "discovery-incomplete";
+/**
+ * Stable tree-role grammar for the Resource Explorer.
+ *
+ * These icons describe what a row does in the tree. They deliberately do not
+ * project an Aurelia resource kind onto a TypeScript declaration kind or use
+ * icon color to imply health.
+ */
+export const RESOURCE_EXPLORER_ROLE_ICONS = {
+  project: "project",
+  kind: "library",
+  resource: "code",
+  alias: "link",
+  bindable: "plug",
+} as const;
+
+export type ResourceTreeRowState = "out-of-date" | "discovery-incomplete";
 
 export interface ResourcePresentationContext {
   readonly project?: ResourceProject;
@@ -248,8 +263,6 @@ export function resourceAvailabilityReasonLabel(
 
 export function resourceTreeRowStateLabel(state: ResourceTreeRowState): string {
   switch (state) {
-    case "updating":
-      return "updating";
     case "out-of-date":
       return "out of date";
     case "discovery-incomplete":

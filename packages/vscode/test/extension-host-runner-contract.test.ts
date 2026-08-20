@@ -1724,10 +1724,10 @@ describe("Extension Host support runner", () => {
           observationId: "view:shared-generation",
           phase: "publish-node",
           generation: 7,
-          publicationKind: "updating",
+          publicationKind: "out-of-date",
           ordinal: 0,
           nodeKind: "resource",
-          nodeId: "updating-node",
+          nodeId: "stale-node",
         },
       },
       {
@@ -1922,102 +1922,75 @@ describe("Extension Host support runner", () => {
 
     const predecessor = runnerPredecessorRaceFact();
     expect(() => runner.predecessorRaceFact(predecessor, "predecessor")).not.toThrow();
-    const { updatingInvalidated: _omitted, ...missingInvalidation } = predecessor;
+    const { pendingInvalidated: _omitted, ...missingInvalidation } = predecessor;
     expect(() => runner.predecessorRaceFact(missingInvalidation, "predecessor"))
       .toThrow(/fields must be exactly/u);
     expect(() => runner.predecessorRaceFact({
       ...predecessor,
-      extraUpdatingInvalidated: null,
+      extraPendingInvalidated: null,
     }, "predecessor")).toThrow(/fields must be exactly/u);
     expect(() => runner.predecessorRaceFact({ ...predecessor, forged: null }, "predecessor"))
       .toThrow(/fields must be exactly/u);
   });
 
-  test("authenticates one-use scoped predecessor updating evidence", async () => {
+  test("authenticates one-use scoped predecessor pending evidence", async () => {
     const runner = await import(pathToFileURL(runnerPath).href);
-    const evidence = runnerUpdatingEvidence();
-    expect(() => runner.resolvePredecessorUpdatingEvidence(
+    const evidence = runnerPendingEvidence();
+    expect(() => runner.resolvePredecessorPendingEvidence(
       evidence.race,
       evidence.context,
       "predecessor",
     )).not.toThrow();
 
-    const duplicate = runnerUpdatingEvidence();
-    expect(() => runner.resolvePredecessorUpdatingEvidence(
+    const duplicate = runnerPendingEvidence();
+    expect(() => runner.resolvePredecessorPendingEvidence(
       {
         ...duplicate.race,
-        updatingUnrelated: duplicate.race.updatingTarget,
+        invalidated: duplicate.race.pendingInvalidated,
       },
       duplicate.context,
       "predecessor",
     )).toThrow(/duplicates ledger eventOrdinal/u);
 
-    const swappedInvalidations = runnerUpdatingEvidence();
-    expect(() => runner.resolvePredecessorUpdatingEvidence(
+    const swappedInvalidations = runnerPendingEvidence();
+    expect(() => runner.resolvePredecessorPendingEvidence(
       {
         ...swappedInvalidations.race,
-        updatingInvalidated: swappedInvalidations.race.invalidated,
-        invalidated: swappedInvalidations.race.updatingInvalidated,
+        pendingInvalidated: swappedInvalidations.race.invalidated,
+        invalidated: swappedInvalidations.race.pendingInvalidated,
       },
       swappedInvalidations.context,
       "predecessor",
     )).toThrow(/strict event order/u);
 
     for (const field of ["scope", "workspaceKey"] as const) {
-      const forged = runnerUpdatingEvidence();
-      forged.records.updatingInvalidated.event[field] = field === "scope"
+      const forged = runnerPendingEvidence();
+      forged.records.pendingInvalidated.event[field] = field === "scope"
         ? "all"
         : "file:///workspace/forged";
-      expect(() => runner.resolvePredecessorUpdatingEvidence(
+      expect(() => runner.resolvePredecessorPendingEvidence(
         forged.race,
         forged.context,
         "predecessor",
-      )).toThrow(field === "scope" ? /updatingInvalidated\.scope/u : /updatingInvalidated workspace/u);
+      )).toThrow(field === "scope" ? /pendingInvalidated\.scope/u : /pendingInvalidated workspace/u);
     }
 
-    for (const variant of [
-      "duplicate-publication",
-      "alternate-publication",
-      "duplicate-state",
-      "alternate-state",
-      "out-of-order",
-    ] as const) {
-      const forged = runnerUpdatingEvidence(variant);
-      expect(() => runner.resolvePredecessorUpdatingEvidence(
+    for (const variant of ["tree-publication", "view-state", "out-of-order"] as const) {
+      const forged = runnerPendingEvidence(variant);
+      expect(() => runner.resolvePredecessorPendingEvidence(
         forged.race,
         forged.context,
         "predecessor",
       )).toThrow(variant === "out-of-order" ? /strict event order/u : /count/u);
     }
 
-    for (const mutate of [
-      (value: ReturnType<typeof runnerUpdatingEvidence>) => {
-        value.records.updatingState.event.message = "Updating — showing previous results";
-      },
-      (value: ReturnType<typeof runnerUpdatingEvidence>) => {
-        value.records.updatingState.event.description = "3 known resources";
-      },
-      (value: ReturnType<typeof runnerUpdatingEvidence>) => {
-        value.records.updatingPublished.event.workspaceIdentity = "workspace:forged";
-      },
-      (value: ReturnType<typeof runnerUpdatingEvidence>) => {
-        value.records.updatingUnrelated.event.navigationFingerprint = "epoch:forged";
-      },
-      (value: ReturnType<typeof runnerUpdatingEvidence>) => {
-        value.records.updatingUnrelated.event.implementationFingerprint = "epoch:forged";
-      },
-      (value: ReturnType<typeof runnerUpdatingEvidence>) => {
-        value.records.updatingTarget.event.observationId = "resource-explorer:forged";
-      },
-    ]) {
-      const forged = runnerUpdatingEvidence();
-      mutate(forged);
-      expect(() => runner.resolvePredecessorUpdatingEvidence(
-        forged.race,
-        forged.context,
-        "predecessor",
-      )).toThrow();
-    }
+    const forgedWorkspace = runnerPendingEvidence();
+    forgedWorkspace.records.blocked.event.workspaceKey = "file:///workspace/forged";
+    expect(() => runner.resolvePredecessorPendingEvidence(
+      forgedWorkspace.race,
+      forgedWorkspace.context,
+      "predecessor",
+    )).toThrow(/pendingInvalidated workspace/u);
   });
 
   test("compares durable rows across epochs while rejecting incoherent scoped tokens", async () => {
@@ -3383,12 +3356,10 @@ function runnerLedgerReference(record: MutableRunnerLedgerRecord) {
 
 function runnerPredecessorRaceFact() {
   return {
-    updatingInvalidated: null,
-    updatingTarget: null,
-    updatingUnrelated: null,
-    updatingPublished: null,
-    updatingState: null,
+    pendingInvalidated: null,
     blocked: null,
+    pendingTreePublicationCount: 0,
+    pendingViewStateCount: 0,
     invalidated: null,
     released: null,
     discarded: null,
@@ -3401,62 +3372,21 @@ function runnerPredecessorRaceFact() {
   };
 }
 
-function runnerUpdatingEvidence(
-  variant:
-    | "normal"
-    | "duplicate-publication"
-    | "alternate-publication"
-    | "duplicate-state"
-    | "alternate-state"
-    | "out-of-order" = "normal",
+function runnerPendingEvidence(
+  variant: "normal" | "tree-publication" | "view-state" | "out-of-order" = "normal",
 ) {
   const workspaceKey = "file:///workspace/routed";
-  const workspaceIdentity = `workspace:${createHash("sha256").update(workspaceKey, "utf8").digest("hex")}`;
-  const baselineUnrelated = runnerPublicationNode(100, "unrelated", "workspace:primary", "epoch:primary", null);
-  const updatingInvalidatedEvent = {
+  const pendingInvalidatedEvent = {
     source: "resource-explorer-view",
     observationId: "resource-explorer-view:e1",
     phase: "invalidation",
     scope: "workspace",
     workspaceKey,
   };
-  const updatingUnrelatedEvent = {
-    ...baselineUnrelated.event,
-    observationId: "resource-explorer:updating",
-    generation: 52,
-    publicationKind: "updating",
-  };
-  const updatingTargetEvent = {
-    ...runnerPublicationNode(2, "target", workspaceIdentity, "epoch:routed", "epoch:routed").event,
-    observationId: "resource-explorer:updating",
-    generation: 52,
-    publicationKind: "updating",
-    navigationResourceIdentity: "resource:shifted",
-    rowStates: "updating",
-  };
-  const updatingPublishedEvent = {
-    source: "resource-explorer",
-    observationId: "resource-explorer:updating",
-    phase: "publish-complete",
-    generation: 52,
-    publicationKind: "updating",
-    nodeCount: 2,
-    rootCount: 2,
-    workspaceIdentity,
-    fingerprint: null,
-  };
-  const updatingStateEvent = {
-    source: "resource-explorer",
-    observationId: "resource-explorer:updating",
-    phase: "view-state",
-    generation: 52,
-    state: "current",
-    message: null,
-    description: "2 known resources",
-    hasIssues: true,
-    updatingAll: false,
-    updatingWorkspaceCount: 1,
-    staleWorkspaceCount: 0,
+  const progressEvent = {
+    source: "resource-explorer-view",
+    observationId: "resource-explorer-view:progress",
+    phase: "progress",
   };
   const blockedEvent = {
     source: "resource-discovery-host-control",
@@ -3471,41 +3401,25 @@ function runnerUpdatingEvidence(
     scope: "workspace",
     workspaceKey,
   };
-  const updatingEntries: [string, Record<string, unknown>][] = variant === "out-of-order"
-    ? [
-      ["updatingState", updatingStateEvent],
-      ["updatingPublished", updatingPublishedEvent],
-    ]
-    : [
-      ["updatingPublished", updatingPublishedEvent],
-      ...(variant === "duplicate-publication"
-        ? [["duplicatePublication", { ...updatingPublishedEvent }] as [string, Record<string, unknown>]]
-        : []),
-      ...(variant === "alternate-publication"
-        ? [["alternatePublication", {
-            ...updatingPublishedEvent,
-            observationId: "resource-explorer:alternate-updating",
-            generation: 53,
-          }] as [string, Record<string, unknown>]]
-        : []),
-      ["updatingState", updatingStateEvent],
-      ...(variant === "duplicate-state"
-        ? [["duplicateState", { ...updatingStateEvent }] as [string, Record<string, unknown>]]
-        : []),
-      ...(variant === "alternate-state"
-        ? [["alternateState", {
-            ...updatingStateEvent,
-            observationId: "resource-explorer:alternate-updating",
-            generation: 53,
-          }] as [string, Record<string, unknown>]]
-        : []),
-    ];
+  const transient = variant === "tree-publication"
+    ? [{
+        source: "resource-explorer",
+        observationId: "resource-explorer:pending",
+        phase: "publish-complete",
+      }]
+    : variant === "view-state"
+      ? [{
+          source: "resource-explorer",
+          observationId: "resource-explorer:pending",
+          phase: "view-state",
+        }]
+      : [];
   const entries: [string, Record<string, unknown>][] = [
-    ["updatingInvalidated", updatingInvalidatedEvent],
-    ["updatingUnrelated", updatingUnrelatedEvent],
-    ["updatingTarget", updatingTargetEvent],
-    ...updatingEntries,
-    ["blocked", blockedEvent],
+    ...(variant === "out-of-order"
+      ? [["blocked", blockedEvent], ["pendingInvalidated", pendingInvalidatedEvent]] as [string, Record<string, unknown>][]
+      : [["pendingInvalidated", pendingInvalidatedEvent], ["progress", progressEvent]] as [string, Record<string, unknown>][]),
+    ...transient.map((event, index) => [`transient${index}`, event] as [string, Record<string, unknown>]),
+    ...(variant === "out-of-order" ? [] : [["blocked", blockedEvent]] as [string, Record<string, unknown>][]),
     ["invalidated", invalidatedEvent],
   ];
   const ledgerRecords = entries.map(([, event], index) => ({ eventOrdinal: index + 1, event }));
@@ -3516,21 +3430,13 @@ function runnerUpdatingEvidence(
     return value;
   };
   const records = {
-    updatingInvalidated: record("updatingInvalidated"),
-    updatingUnrelated: record("updatingUnrelated"),
-    updatingTarget: record("updatingTarget"),
-    updatingPublished: record("updatingPublished"),
-    updatingState: record("updatingState"),
+    pendingInvalidated: record("pendingInvalidated"),
     blocked: record("blocked"),
     invalidated: record("invalidated"),
   };
   const race = {
     ...runnerPredecessorRaceFact(),
-    updatingInvalidated: runnerLedgerReference(records.updatingInvalidated),
-    updatingTarget: runnerLedgerReference(records.updatingTarget),
-    updatingUnrelated: runnerLedgerReference(records.updatingUnrelated),
-    updatingPublished: runnerLedgerReference(records.updatingPublished),
-    updatingState: runnerLedgerReference(records.updatingState),
+    pendingInvalidated: runnerLedgerReference(records.pendingInvalidated),
     blocked: runnerLedgerReference(records.blocked),
     invalidated: runnerLedgerReference(records.invalidated),
   };
@@ -3541,12 +3447,8 @@ function runnerUpdatingEvidence(
     context: {
       ledgerRecords,
       referencedOrdinals: new Set<number>(),
-      baseline: { nodes: [baselineUnrelated] },
-      fixture: {
-        witnesses: {
-          shiftedAndRemovedNavigation: { shifted: { identityKey: "resource:shifted" } },
-        },
-      },
+      baseline: { nodes: [] },
+      fixture: { witnesses: {} },
     },
   };
 }

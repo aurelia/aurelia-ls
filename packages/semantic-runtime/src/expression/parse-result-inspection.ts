@@ -144,8 +144,11 @@ export class ExpressionParseResultInspector {
     result: ExpressionParseResult,
     offset: number,
   ): ExpressionAstNode | null {
-    if (this.hasCanonicalAst(result)) {
-      return memberAccessExpressionForNodeOffset(result.ast, offset, isMemberOwnerOffset)?.object ?? null;
+    for (const expression of stableExpressionRoots(result)) {
+      const access = memberAccessExpressionForNodeOffset(expression, offset, isMemberOwnerOffset);
+      if (access != null) {
+        return access.object;
+      }
     }
     const frontier = activePropertyOrInterpolationFrontier(result);
     return frontier != null && frontierExpectsMemberName(frontier)
@@ -157,9 +160,13 @@ export class ExpressionParseResultInspector {
     result: ExpressionParseResult,
     offset: number,
   ): string | null {
-    return this.hasCanonicalAst(result)
-      ? memberAccessExpressionForNodeOffset(result.ast, offset, isMemberNameOffset)?.name.name ?? null
-      : null;
+    for (const expression of stableExpressionRoots(result)) {
+      const access = memberAccessExpressionForNodeOffset(expression, offset, isMemberNameOffset);
+      if (access != null) {
+        return access.name.name;
+      }
+    }
+    return null;
   }
 
   static memberNameSpans(
@@ -193,9 +200,13 @@ export class ExpressionParseResultInspector {
     result: ExpressionParseResult,
     offset: number,
   ): ExpressionScopeAccess | null {
-    return this.hasCanonicalAst(result)
-      ? scopeAccessExpressionForNodeOffset(result.ast, offset)
-      : null;
+    for (const expression of stableExpressionRoots(result)) {
+      const access = scopeAccessExpressionForNodeOffset(expression, offset);
+      if (access != null) {
+        return access;
+      }
+    }
+    return null;
   }
 
   /** Exact authored `$this` occurrence selecting the current binding context. */
@@ -222,10 +233,13 @@ export class ExpressionParseResultInspector {
     result: ExpressionParseResult,
     offset: number,
   ): SourceSpan | null {
-    if (!this.hasCanonicalAst(result)) {
-      return null;
+    for (const expression of stableExpressionRoots(result)) {
+      const span = authoredTokenSpanForExpressionAtOffset(expression, offset);
+      if (span != null) {
+        return span;
+      }
     }
-    return authoredTokenSpanForExpressionAtOffset(result.ast, offset);
+    return null;
   }
 
   static objectLiteralKeyContextAtOffset(

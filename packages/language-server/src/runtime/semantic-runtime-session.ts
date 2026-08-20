@@ -21,6 +21,7 @@ import {
   type SemanticAttributeInterpretationExplanationResult,
   type SemanticAnalysisLimitationsResult,
   type SemanticApplicationTopologyResult,
+  type SemanticTemplateDocumentOwnershipResult,
   type SemanticBindingUncertaintyExplanationResult,
   type ManagedSemanticWorkspaceOperationContext,
   type ManagedSemanticWorkspaceOperationReceipt,
@@ -144,6 +145,9 @@ export interface SemanticRuntimeLspOperation {
   appTopology(
     selection: { readonly projectKey: string } | { readonly sourceFilePath: string },
   ): Promise<SemanticRuntimeAnswer<SemanticApplicationTopologyResult>>;
+  templateDocumentOwnership(
+    projectKey: string,
+  ): Promise<SemanticRuntimeAnswer<SemanticTemplateDocumentOwnershipResult>>;
   templateInlayHints(document: TextDocument): Promise<SemanticRuntimeAnswer<SemanticTemplateInlayHintsResult>>;
   templateSemanticTokens(document: TextDocument): Promise<SemanticRuntimeAnswer<SemanticTemplateSemanticTokensResult>>;
   templateFoldingRanges(document: TextDocument): Promise<SemanticRuntimeAnswer<SemanticTemplateFoldingRangesResult>>;
@@ -983,6 +987,7 @@ export class SemanticRuntimeLspSession {
         token,
       ),
       appTopology: (selection) => this.appTopology(selection, token),
+      templateDocumentOwnership: (projectKey) => this.templateDocumentOwnership(projectKey, token),
       templateInlayHints: (document) => this.templateInlayHints(document, token),
       templateSemanticTokens: (document) => this.templateSemanticTokens(document, token),
       templateFoldingRanges: (document) => this.templateFoldingRanges(document, token),
@@ -1500,6 +1505,26 @@ export class SemanticRuntimeLspSession {
       includeAuthoringTemplates: true,
       appRetention: "retain-app",
     }) as SemanticRuntimeAnswer<SemanticApplicationTopologyResult>;
+    this.assertRequestTokenActive(token);
+    return answer;
+  }
+
+  private async templateDocumentOwnership(
+    projectKey: string,
+    token: SemanticRuntimeLspRequestToken,
+  ): Promise<SemanticRuntimeAnswer<SemanticTemplateDocumentOwnershipResult>> {
+    const runtime = this.runtimeForOperation(token);
+    // Resource convergence remains the semantic authority, so a cold project can still open its runtime-topology app
+    // emission. The focused query avoids constructing the much larger public topology DTO, while retain-app and the
+    // project-shaped query identity let every ownership check in this generation reuse both the app and bounded answer.
+    const answer = await runtime.answerAppQuery({
+      kind: SemanticAppQueryKind.TemplateDocumentOwnership,
+      projectKey,
+      inquiryProfile: "lsp-cursor",
+      analysisDepth: "runtime-topology",
+      includeAuthoringTemplates: false,
+      appRetention: "retain-app",
+    }) as SemanticRuntimeAnswer<SemanticTemplateDocumentOwnershipResult>;
     this.assertRequestTokenActive(token);
     return answer;
   }

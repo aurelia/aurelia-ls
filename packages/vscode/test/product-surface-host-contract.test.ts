@@ -75,7 +75,7 @@ const {
   assertExactFactKeys,
   assertFinalRecoveredWorkspaceFingerprints,
   assertScopedPublicationFingerprintCoherence,
-  assertScopedUpdatingPublicationEvidence,
+  assertScopedStablePendingEvidence,
   baselineTreeFactKeys,
   closeTextDocumentWithNativeEditor,
   predecessorRaceFactKeys,
@@ -103,19 +103,14 @@ const {
     nodes: readonly HostObservation[],
     label: string,
   ): number;
-  assertScopedUpdatingPublicationEvidence(this: void, value: {
+  assertScopedStablePendingEvidence(this: void, value: {
     readonly observations: readonly HostObservation[];
     readonly invalidated: HostObservation;
-    readonly updatingTarget: HostObservation;
-    readonly updatingUnrelated: HostObservation;
-    readonly updatingPublished: HostObservation;
-    readonly updatingState: HostObservation;
     readonly blocked: HostObservation;
     readonly barrierControlId: string;
     readonly blockedWorkspaceKey: string;
-    readonly baselineUnrelated: HostObservation;
     readonly label: string;
-  }): void;
+  }): { readonly pendingTreePublicationCount: number; readonly pendingViewStateCount: number };
   baselineTreeFactKeys: readonly string[];
   closeTextDocumentWithNativeEditor(
     this: void,
@@ -227,8 +222,58 @@ describe("Extension Host product-surface contracts", () => {
     expect(source.slice(declarationStart, ambiguityStart)).toMatch(/this\.timeout\(420_000\)/u);
     const followingTestStart = source.indexOf("test(", ambiguityStart + 1);
     expect(followingTestStart).toBeGreaterThan(ambiguityStart);
-    expect(source.slice(ambiguityStart, followingTestStart))
-      .toMatch(/this\.timeout\(420_000\)/u);
+    const ambiguityJourney = source.slice(ambiguityStart, followingTestStart);
+    expect(ambiguityJourney).toMatch(/this\.timeout\(420_000\)/u);
+    expect(ambiguityJourney).toContain('"unadmitted-plugin-app.html"');
+    expect(ambiguityJourney).toContain('setTextDocumentLanguage(churnControl, "plaintext")');
+    expect(ambiguityJourney).toContain('setTextDocumentLanguage(churnControl, "html")');
+    expect(ambiguityJourney).toContain("unrelated ownership retry wave");
+    expect(ambiguityJourney).toContain("replaceDocumentText(churnControl, churnControlChanged)");
+    expect(ambiguityJourney).toContain('executeCommand("workbench.action.files.revert")');
+    expect(ambiguityJourney).toContain("assertSingleBackgroundLanguageTransition(");
+    expect(ambiguityJourney).toContain("unrelated clean HTML churn");
+  });
+
+  test("keeps disk-equal declaration disposal semantically quiet", () => {
+    const source = readFileSync(
+      new URL("./extension-host/suite/product-surface.test.cjs", import.meta.url),
+      "utf8",
+    );
+    const title = "restarts active-template availability across both stale-scope F1-to-F2 mutations";
+    const start = source.indexOf(`test("${title}"`);
+    const end = source.indexOf("\n  test(", start + 1);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    const journey = source.slice(start, end);
+
+    expect(journey).toContain("Both declarations are restored and saved above");
+    expect(journey).toContain("routedInvalidations");
+    expect(journey).toContain("treePublications");
+    expect(journey).toContain("must not invalidate routed semantics");
+    expect(journey).toContain("must not republish retained rows");
+    expect(journey).toContain("afterCleanClosePublication");
+    expect(journey).toContain("publicationNodeDurableShape");
+    expect(journey).not.toContain("should settle through a routed semantic invalidation");
+  });
+
+  test("keeps disk-equal declaration reopen semantically quiet before explicit recovery refresh", () => {
+    const source = readFileSync(
+      new URL("./extension-host/suite/product-surface.test.cjs", import.meta.url),
+      "utf8",
+    );
+    const start = source.indexOf("async function recoverTreeNavigationWithPrimaryRetry(");
+    const end = source.indexOf("\nasync function recoverAvailableNavigationWithPrimaryRetry(", start);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    const helper = source.slice(start, end);
+
+    expect(helper).toContain("reopenTrace");
+    expect(helper).toContain("reopenInvalidations");
+    expect(helper).toContain("reopenPublications");
+    expect(helper).toContain("clean reopened declaration must not invalidate routed semantics");
+    expect(helper).toContain("clean reopened declaration must not republish the recovered tree");
+    expect(helper).toContain("newest navigation clean reopen explicit recovery refresh");
+    expect(helper).not.toContain("reopened declaration should settle through its exact routed semantic invalidation");
   });
 
   test("settles on a current full receipt followed by serialized unChanged reuse", () => {
@@ -1183,13 +1228,13 @@ describe("Extension Host product-surface contracts", () => {
       baselineTreeFactKeys,
       "baseline",
     )).toThrow(/keys changed/u);
-    const { updatingPublished: _omitted, ...missingPublication } = predecessor;
+    const { pendingTreePublicationCount: _omitted, ...missingPublication } = predecessor;
     expect(() => assertExactFactKeys(
       missingPublication,
       predecessorRaceFactKeys,
       "predecessor",
     )).toThrow(/keys changed/u);
-    const { updatingInvalidated: _missingInvalidation, ...missingUpdatingInvalidation } = predecessor;
+    const { pendingInvalidated: _missingInvalidation, ...missingUpdatingInvalidation } = predecessor;
     expect(() => assertExactFactKeys(
       missingUpdatingInvalidation,
       predecessorRaceFactKeys,
@@ -1202,31 +1247,18 @@ describe("Extension Host product-surface contracts", () => {
     )).toThrow(/keys changed/u);
   });
 
-  test("authenticates the scoped multi-boundary updating publication", () => {
-    const evidence = scopedUpdatingEvidence();
-    expect(() => assertScopedUpdatingPublicationEvidence(evidence)).not.toThrow();
-
-    for (const forged of [
-      { ...evidence, updatingState: { ...evidence.updatingState, message: "Updating — showing previous results" } },
-      { ...evidence, updatingState: { ...evidence.updatingState, description: "3 known resources" } },
-      { ...evidence, updatingState: { ...evidence.updatingState, generation: 53 } },
-      { ...evidence, updatingPublished: { ...evidence.updatingPublished, workspaceIdentity: "workspace:forged" } },
-      { ...evidence, updatingUnrelated: evidence.updatingTarget },
-    ]) {
-      expect(() => assertScopedUpdatingPublicationEvidence(forged)).toThrow();
-    }
-
-    const forgedTarget = { ...evidence.updatingTarget };
-    expect(() => assertScopedUpdatingPublicationEvidence({
-      ...evidence,
-      updatingTarget: forgedTarget,
-    })).toThrow(/occur exactly once/u);
+  test("authenticates a scoped pending refresh without transient tree publication", () => {
+    const evidence = scopedStablePendingEvidence();
+    expect(assertScopedStablePendingEvidence(evidence)).toEqual({
+      pendingTreePublicationCount: 0,
+      pendingViewStateCount: 0,
+    });
 
     const invalidatedWrongWorkspace = {
       ...evidence.invalidated,
       workspaceKey: "file:///workspace/forged",
     };
-    expect(() => assertScopedUpdatingPublicationEvidence({
+    expect(() => assertScopedStablePendingEvidence({
       ...evidence,
       observations: evidence.observations.map((event) =>
         event === evidence.invalidated ? invalidatedWrongWorkspace : event),
@@ -1236,89 +1268,47 @@ describe("Extension Host product-surface contracts", () => {
       ...evidence.blocked,
       observationId: "c2-tree-forged",
     };
-    expect(() => assertScopedUpdatingPublicationEvidence({
+    expect(() => assertScopedStablePendingEvidence({
       ...evidence,
       observations: evidence.observations.map((event) =>
         event === evidence.blocked ? blockedWrongControl : event),
       blocked: blockedWrongControl,
     })).toThrow(/barrier control id/u);
-    const blockedWrongStage = {
-      ...evidence.blocked,
-      stage: "before-request",
-    };
-    expect(() => assertScopedUpdatingPublicationEvidence({
+    const blockedWrongStage = { ...evidence.blocked, stage: "before-request" };
+    expect(() => assertScopedStablePendingEvidence({
       ...evidence,
       observations: evidence.observations.map((event) =>
         event === evidence.blocked ? blockedWrongStage : event),
       blocked: blockedWrongStage,
     })).toThrow(/barrier stage/u);
 
-    const publicationIndex = evidence.observations.indexOf(evidence.updatingPublished);
-    expect(() => assertScopedUpdatingPublicationEvidence({
-      ...evidence,
-      observations: [
-        ...evidence.observations.slice(0, publicationIndex + 1),
-        { ...evidence.updatingPublished },
-        ...evidence.observations.slice(publicationIndex + 1),
-      ],
-    })).toThrow(/exactly one target-workspace updating publication/u);
-    expect(() => assertScopedUpdatingPublicationEvidence({
-      ...evidence,
-      observations: [
-        ...evidence.observations.slice(0, publicationIndex + 1),
-        {
-          ...evidence.updatingPublished,
-          observationId: "resource-explorer:alternate",
-          generation: evidence.updatingPublished.generation + 1,
-        },
-        ...evidence.observations.slice(publicationIndex + 1),
-      ],
-    })).toThrow(/exactly one target-workspace updating publication/u);
-    const stateIndex = evidence.observations.indexOf(evidence.updatingState);
-    expect(() => assertScopedUpdatingPublicationEvidence({
-      ...evidence,
-      observations: [
-        ...evidence.observations.slice(0, stateIndex + 1),
-        { ...evidence.updatingState },
-        ...evidence.observations.slice(stateIndex + 1),
-      ],
-    })).toThrow(/exactly one E1-shaped updating state/u);
-    expect(() => assertScopedUpdatingPublicationEvidence({
-      ...evidence,
-      observations: [
-        ...evidence.observations.slice(0, stateIndex + 1),
-        {
-          ...evidence.updatingState,
-          observationId: "resource-explorer:alternate",
-          generation: evidence.updatingState.generation + 1,
-        },
-        ...evidence.observations.slice(stateIndex + 1),
-      ],
-    })).toThrow(/exactly one E1-shaped updating state/u);
-    expect(() => assertScopedUpdatingPublicationEvidence({
+    for (const transient of [
+      hostObservation("resource-explorer", "resource-explorer:pending", "publish-start"),
+      hostObservation("resource-explorer", "resource-explorer:pending", "publish-node"),
+      hostObservation("resource-explorer", "resource-explorer:pending", "publish-complete"),
+    ]) {
+      expect(() => assertScopedStablePendingEvidence({
+        ...evidence,
+        observations: [evidence.invalidated, transient, evidence.progress, evidence.blocked],
+      })).toThrow(/must not republish retained tree rows/u);
+    }
+    expect(() => assertScopedStablePendingEvidence({
       ...evidence,
       observations: [
         evidence.invalidated,
+        hostObservation("resource-explorer", "resource-explorer:pending", "view-state"),
+        evidence.progress,
         evidence.blocked,
-        evidence.updatingUnrelated,
-        evidence.updatingTarget,
-        evidence.updatingPublished,
-        evidence.updatingState,
       ],
-    })).toThrow(/must order invalidation < updating publication < updating state < barrier/u);
-
-    for (const lane of ["navigation", "implementation"] as const) {
-      const forgedUnrelated = {
-        ...evidence.updatingUnrelated,
-        [`${lane}Fingerprint`]: "semantic-runtime:forged",
-      };
-      expect(() => assertScopedUpdatingPublicationEvidence({
-        ...evidence,
-        observations: evidence.observations.map((event) =>
-          event === evidence.updatingUnrelated ? forgedUnrelated : event),
-        updatingUnrelated: forgedUnrelated,
-      })).toThrow(new RegExp(`unrelated ${lane} fingerprint`, "u"));
-    }
+    })).toThrow(/must not insert transient view-state copy/u);
+    expect(() => assertScopedStablePendingEvidence({
+      ...evidence,
+      observations: [evidence.blocked, evidence.progress, evidence.invalidated],
+    })).toThrow(/must order invalidation < barrier/u);
+    expect(() => assertScopedStablePendingEvidence({
+      ...evidence,
+      invalidated: { ...evidence.invalidated },
+    })).toThrow(/occur exactly once/u);
   });
 
   test("separates durable node shape from scoped epoch-token coherence", () => {
@@ -1681,49 +1671,15 @@ function scopedPublicationNode(
   };
 }
 
-function scopedUpdatingEvidence() {
+function scopedStablePendingEvidence() {
   const workspaceKey = "file:///workspace/routed";
   const barrierControlId = "c2-tree-predecessor";
-  const workspaceIdentity = `workspace:${createHash("sha256").update(workspaceKey, "utf8").digest("hex")}`;
   const invalidated = {
     ...hostObservation("resource-explorer-view", "resource-explorer-view:invalidated", "invalidation"),
     scope: "workspace",
     workspaceKey,
   };
-  const baselineUnrelated = scopedPublicationNode("unrelated", "workspace:primary", "epoch:primary", null);
-  const updatingUnrelated = {
-    ...baselineUnrelated,
-    observationId: "resource-explorer:updating",
-    generation: 52,
-    publicationKind: "updating",
-  };
-  const updatingTarget = {
-    ...scopedPublicationNode("target", workspaceIdentity, "epoch:routed", "epoch:routed"),
-    observationId: "resource-explorer:updating",
-    generation: 52,
-    publicationKind: "updating",
-    rowStates: "updating",
-  };
-  const updatingPublished = {
-    ...hostObservation("resource-explorer", "resource-explorer:updating", "publish-complete"),
-    generation: 52,
-    publicationKind: "updating",
-    nodeCount: 2,
-    rootCount: 2,
-    workspaceIdentity,
-    fingerprint: null,
-  };
-  const updatingState = {
-    ...hostObservation("resource-explorer", "resource-explorer:updating", "view-state"),
-    generation: 52,
-    state: "current",
-    message: null,
-    description: "2 known resources",
-    hasIssues: true,
-    updatingAll: false,
-    updatingWorkspaceCount: 1,
-    staleWorkspaceCount: 0,
-  };
+  const progress = hostObservation("resource-explorer-view", "resource-explorer-view:progress", "progress");
   const blocked = {
     ...hostObservation("resource-discovery-host-control", barrierControlId, "blocked"),
     operation: "inventory",
@@ -1734,17 +1690,13 @@ function scopedUpdatingEvidence() {
     responseFingerprint: "semantic-runtime:routed-response",
   };
   return {
-    observations: [invalidated, updatingUnrelated, updatingTarget, updatingPublished, updatingState, blocked],
+    observations: [invalidated, progress, blocked],
     invalidated,
-    updatingTarget,
-    updatingUnrelated,
-    updatingPublished,
-    updatingState,
+    progress,
     blocked,
     barrierControlId,
     blockedWorkspaceKey: workspaceKey,
-    baselineUnrelated,
-    label: "scoped updating",
+    label: "scoped pending",
   };
 }
 

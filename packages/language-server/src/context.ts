@@ -50,6 +50,8 @@ export interface ServerContext {
    * through their operation-owned document facade instead of this lifecycle helper.
    */
   openWorkspaceDocument(uri: DocumentUri): SemanticRuntimeLspOpenDocumentMetadata | null;
+  /** Read the current filesystem value without applying synchronized editor overlays. */
+  readWorkspaceHostFile(filePath: string): string | undefined;
 }
 
 export interface ServerClientSupport {
@@ -73,6 +75,7 @@ export function createServerContext(init: ServerContextInit): ServerContext {
 
   const documentUris = new WorkspaceDocumentUris();
   const sourceTextOverlay = new OpenDocumentSourceTextOverlay(documents, documentUris);
+  const workspaceHost = new NodeSemanticRuntimeProjectInputHost();
   const semanticRuntime = new SemanticRuntimeLspSession({
     documentUris,
     projectInputHost: new NodeSemanticRuntimeProjectInputHost(
@@ -151,5 +154,6 @@ export function createServerContext(init: ServerContextInit): ServerContext {
 
     ownsDocument: (uri) => documentUris.ownsDocument(uri),
     openWorkspaceDocument,
+    readWorkspaceHostFile: (filePath) => workspaceHost.readFile(filePath),
   };
 }

@@ -32,6 +32,7 @@ import {
   resourceDiscoveryHostAcceptanceEnabled,
 } from "../../resource-discovery-host-control.js";
 import {
+  RESOURCE_EXPLORER_ROLE_ICONS,
   RESOURCE_KIND_ORDER,
   preferredResourceSource,
   resourceAccessibilityLabel,
@@ -49,7 +50,9 @@ import {
 } from "../resource-discovery/presentation.js";
 
 type TreeNodeKind = "project" | "kind" | "resource" | "alias" | "bindable" | "info";
-type ResourceExplorerIconId = "project" | "link" | "symbol-property" | StatusIconId;
+type ResourceExplorerRoleIconId =
+  typeof RESOURCE_EXPLORER_ROLE_ICONS[keyof typeof RESOURCE_EXPLORER_ROLE_ICONS];
+type ResourceExplorerIconId = ResourceExplorerRoleIconId | StatusIconId;
 type StatusIconId = "info" | "warning" | "error";
 type StatusIconColorId =
   | "problemsInfoIcon.foreground"
@@ -122,8 +125,6 @@ export type ResourceExplorerNavigationAction = "declaration" | "implementation" 
 function buildTree(
   response: ResourceInventorySnapshot,
   staleWorkspaceKeys: ReadonlySet<string>,
-  updatingAll: boolean,
-  updatingWorkspaceKeys: ReadonlySet<string>,
   analysisLimitations: readonly AnalysisLimitationPublication[],
 ): readonly TreeNode[] {
   const units = projectUnits(response);
@@ -149,7 +150,7 @@ function buildTree(
   if (units.length === 1) {
     return buildProjectUnit(
       units[0]!,
-      rowStatesForUnit(units[0]!, staleWorkspaceKeys, updatingAll, updatingWorkspaceKeys),
+      rowStatesForUnit(units[0]!, staleWorkspaceKeys),
       labels.get(units[0]!)!,
       collisionScents,
     );
@@ -159,8 +160,6 @@ function buildTree(
     labels.get(unit)!,
     rootContexts.get(unit)!,
     staleWorkspaceKeys,
-    updatingAll,
-    updatingWorkspaceKeys,
     collisionScents,
     limitedProjects.get(projectAnalysisIdentity(
       unit.workspace.key,
@@ -192,13 +191,11 @@ function projectRootNode(
   label: string,
   rootContext: string,
   staleWorkspaceKeys: ReadonlySet<string>,
-  updatingAll: boolean,
-  updatingWorkspaceKeys: ReadonlySet<string>,
   collisionScents: ReadonlyMap<object, string>,
   analysisLimitation: "current-limited" | "stale-limited" | null,
 ): TreeNode {
   const result = unit.result;
-  const states = rowStatesForUnit(unit, staleWorkspaceKeys, updatingAll, updatingWorkspaceKeys);
+  const states = rowStatesForUnit(unit, staleWorkspaceKeys);
   const children = buildProjectUnit(unit, states, label, collisionScents);
   const answered = result?.status === "ready" && result.answer.result === "answered";
   const resourceCount = answered ? result.resources.length : 0;
@@ -234,7 +231,7 @@ function projectRootNode(
     tooltip: failed
       ? `Aurelia project ${label}\nResources could not be loaded. Retry or open Aurelia Output for details.`
       : `Aurelia project ${label}\nRoot: ${rootContext}`,
-    iconId: "project",
+    iconId: RESOURCE_EXPLORER_ROLE_ICONS.project,
     ...(iconColorId == null ? {} : { iconColorId }),
     collapsible: true,
     defaultExpanded: true,
@@ -354,6 +351,7 @@ function buildKindGroups(input: ReadyProjectInput): readonly TreeNode[] {
       label: `${presentation.plural} (${rows.length})`,
       ...(stateText.length === 0 ? {} : { description: stateText }),
       accessibilityLabel: `${presentation.plural} group. ${formatResourceCount(rows.length)}.${stateSentence(input.states)}`,
+      iconId: RESOURCE_EXPLORER_ROLE_ICONS.kind,
       collapsible: true,
       children: rows.map((resource) => resourceNode(input, resource)),
       contextValue: "resourceKind",
@@ -410,7 +408,7 @@ function resourceNode(
       tooltip: source == null
         ? `Alias ${alias.name} for ${resource.name}\nSource location unavailable`
         : `Alias ${alias.name} for ${resource.name}\nSource: ${source}`,
-      iconId: "link",
+      iconId: RESOURCE_EXPLORER_ROLE_ICONS.alias,
       collapsible: false,
       ...(navigable ? { navigation: navigationRequest(input, resource, "alias", alias.identityKey) } : {}),
       contextValue: navigable ? "resourceAlias" : "resourceAliasUnavailable",
@@ -451,7 +449,7 @@ function resourceNode(
       tooltip: source == null
         ? `Bindable ${publicName} on ${resource.name}\nSource location unavailable`
         : `Bindable ${publicName} on ${resource.name}\nSource: ${source}`,
-      iconId: "symbol-property",
+      iconId: RESOURCE_EXPLORER_ROLE_ICONS.bindable,
       collapsible: false,
       ...(navigable ? { navigation: navigationRequest(input, resource, "bindable", bindable.identityKey) } : {}),
       contextValue: navigable ? "resourceBindable" : "resourceBindableUnavailable",
@@ -478,6 +476,7 @@ function resourceNode(
       resourceCollisionScent,
     ),
     tooltip: resourceTooltip(resource, input.result.project, input.workspace, input.states),
+    iconId: RESOURCE_EXPLORER_ROLE_ICONS.resource,
     collapsible: children.length > 0,
     children,
     availabilityExplanation: {
@@ -575,11 +574,8 @@ function projectAnswerIssueCopy(
 function rowStatesForUnit(
   unit: ProjectUnit,
   staleWorkspaceKeys: ReadonlySet<string>,
-  updatingAll: boolean,
-  updatingWorkspaceKeys: ReadonlySet<string>,
 ): readonly ResourceTreeRowState[] {
   const states: ResourceTreeRowState[] = [];
-  if (updatingAll || updatingWorkspaceKeys.has(unit.workspace.key)) states.push("updating");
   if (staleWorkspaceKeys.has(unit.workspace.key)) states.push("out-of-date");
   if (unit.result?.status === "ready" && projectResultIncomplete(unit.result)) states.push("discovery-incomplete");
   return states;
@@ -939,29 +935,19 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Dis
   }
 
   /**
-   * Publishes retained rows as updating as soon as semantic state becomes dirty.
-   * A full-snapshot marker dominates individual workspace markers until the
-   * corresponding latest full request settles.
+   * Records pending semantic currentness without mutating the retained tree.
+   * The view-title progress indicator carries transient activity; rows publish
+   * only when an exact replacement settles or a persistent failure is known.
    */
   markUpdating(workspaceKey: string | null): void {
-    const changed = this.#markUpdating(workspaceKey);
-    if (!changed || this.#response == null) return;
-    this.#analysisLimitations = markAnalysisLimitationsStale(
-      this.#analysisLimitations,
-      workspaceKey,
-    );
-    this.#publicationWorkspaceKey = workspaceKey;
-    this.#publicationFingerprint = null;
-    this.#rebuildTree();
-    this.#observeTreePublication("updating");
-    this.#changeEmitter.fire();
-    this.#publishViewState();
+    this.#markUpdating(workspaceKey);
   }
 
   /**
    * Synchronously retires an in-flight request after a newer semantic change.
    * The serial view drain owns the trailing request; this method only prevents
-   * the predecessor from publishing and keeps retained rows visibly updating.
+   * the predecessor from publishing. The retained tree stays visually stable
+   * until the drain obtains one coherent successor.
    */
   supersedeRefresh(workspaceKey: string | null): void {
     this.#refreshGeneration += 1;
@@ -1105,8 +1091,6 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Dis
       this.#tree = buildTree(
         this.#response,
         this.#staleWorkspaceKeys,
-        this.#updatingAll,
-        this.#updatingWorkspaceKeys,
         this.#analysisLimitations,
       );
     } else if (this.#phase.kind === "current") {
@@ -1158,9 +1142,6 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Dis
   }
 
   #resourceViewMessage(counts: ReturnType<typeof resourceResponseCounts>): string | undefined {
-    if (this.#updatingAll || (this.#updatingWorkspaceKeys.size > 0 && counts.boundaries <= 1)) {
-      return "Updating — showing previous results";
-    }
     switch (this.#phase.kind) {
       case "empty":
       case "current":

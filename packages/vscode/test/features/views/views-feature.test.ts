@@ -147,7 +147,10 @@ function createHarness(options: {
   const analysisChanged = createEmitter<unknown>();
   const sessionsChanged = createEmitter<unknown>();
   let visible = options.visible === true;
-  let treeDataProvider: { getChildren(element?: unknown): unknown } | null = null;
+  let treeDataProvider: {
+    getChildren(element?: unknown): unknown;
+    onDidChangeTreeData(listener: () => void): Disposable;
+  } | null = null;
   const view = {
     get visible() { return visible; },
     onDidChangeVisibility: visibility.event,
@@ -623,7 +626,7 @@ describe("ViewsFeature resource inventory lifecycle", () => {
     harness.dispose();
   });
 
-  test("deduplicates a scoped updating publication until its superseding trailing refresh settles", async () => {
+  test("keeps ordinary source edits visually stable and publishes one superseding successor", async () => {
     const observation = captureResourceDiscoveryObservations("resource-explorer", "resource-explorer-view");
     const predecessor = deferred<unknown>();
     const trailing = deferred<unknown>();
@@ -636,6 +639,9 @@ describe("ViewsFeature resource inventory lifecycle", () => {
     const harness = createHarness({ visible: true, getResourceInventory });
     try {
       await waitForRootCount(harness.treeDataProvider, 2);
+      const retainedRoots = await resourceRoots(harness.treeDataProvider);
+      const changed = vi.fn();
+      const subscription = harness.treeDataProvider!.onDidChangeTreeData(changed);
       observation.events.length = 0;
 
       harness.fireAnalysisChanged("file:///work/a");
@@ -665,35 +671,35 @@ describe("ViewsFeature resource inventory lifecycle", () => {
       expect(requeued).toHaveLength(2);
       expect(observation.events.indexOf(viewInvalidations[1]!)).toBeLessThan(observation.events.indexOf(superseded!));
       expect(observation.events.indexOf(superseded!)).toBeLessThan(observation.events.indexOf(requeued[1]!));
-      expect(observation.events.filter(isUpdatingPublication)).toHaveLength(1);
+      expect(observation.events.filter(isCurrentPublication)).toHaveLength(0);
+      expect(changed).not.toHaveBeenCalled();
+      expect(await resourceRoots(harness.treeDataProvider)).toEqual(retainedRoots);
+      expect(JSON.stringify(await resourceRoots(harness.treeDataProvider))).not.toContain("updating");
+      expect(harness.view.message).toBeUndefined();
 
       predecessor.resolve(failedInventorySnapshot("file:///work/a"));
       await vi.waitFor(() => expect(getResourceInventory).toHaveBeenCalledTimes(3));
-      expect(observation.events.filter(isUpdatingPublication)).toHaveLength(1);
+      expect(observation.events.filter(isCurrentPublication)).toHaveLength(0);
+      expect(changed).not.toHaveBeenCalled();
 
       trailing.resolve(inventorySnapshot("file:///work/a"));
       await vi.waitFor(() => expect(observation.events.filter(isCurrentPublication)).toHaveLength(1));
-      await vi.waitFor(async () => expect(
-        (await resourceRoots(harness.treeDataProvider)).every((root) => !root.accessibilityLabel.includes("updating")),
-      ).toBe(true));
+      expect(changed).toHaveBeenCalledOnce();
       await Promise.resolve();
 
-      const firstUpdating = observation.events.find(isUpdatingPublication)!;
-      const trailingCurrent = observation.events.find(isCurrentPublication)!;
+      const currentRoots = await resourceRoots(harness.treeDataProvider);
       harness.fireAnalysisChanged("file:///work/a");
       await vi.waitFor(() => expect(getResourceInventory).toHaveBeenCalledTimes(4));
 
-      const updatingPublications = observation.events.filter(isUpdatingPublication);
-      expect(updatingPublications).toHaveLength(2);
-      expect(updatingPublications[1]).toEqual(expect.objectContaining({
-        observationId: firstUpdating.observationId,
-        generation: trailingCurrent.generation,
-        publicationKind: "updating",
-        fingerprint: null,
-      }));
+      expect(observation.events.filter(isCurrentPublication)).toHaveLength(1);
+      expect(changed).toHaveBeenCalledOnce();
+      expect(await resourceRoots(harness.treeDataProvider)).toEqual(currentRoots);
+      expect(JSON.stringify(currentRoots)).not.toContain("updating");
 
       next.resolve(inventorySnapshot("file:///work/a"));
       await vi.waitFor(() => expect(observation.events.filter(isCurrentPublication)).toHaveLength(2));
+      expect(changed).toHaveBeenCalledTimes(2);
+      subscription.dispose();
     } finally {
       predecessor.resolve(failedInventorySnapshot("file:///work/a"));
       trailing.resolve(inventorySnapshot("file:///work/a"));
@@ -808,7 +814,7 @@ describe("ViewsFeature resource inventory lifecycle", () => {
     harness.dispose();
   });
 
-  test("keeps every dirty workspace visibly updating until its own latest request settles", async () => {
+  test("keeps every dirty workspace visually stable until its own latest request settles", async () => {
     const workspaceA = deferred<unknown>();
     const workspaceB = deferred<unknown>();
     const getResourceInventory = vi.fn()
@@ -817,15 +823,15 @@ describe("ViewsFeature resource inventory lifecycle", () => {
       .mockImplementationOnce(() => workspaceB.promise);
     const harness = createHarness({ visible: true, getResourceInventory });
     await waitForRootCount(harness.treeDataProvider, 2);
+    const retainedRoots = await resourceRoots(harness.treeDataProvider);
 
     harness.fireAnalysisChanged("file:///work/a");
     await vi.waitFor(() => expect(getResourceInventory).toHaveBeenCalledTimes(2));
     harness.fireAnalysisChanged("file:///work/b");
 
     let roots = await resourceRoots(harness.treeDataProvider);
-    expect(roots).toHaveLength(2);
-    expect(roots.every((root) => root.description?.includes("updating") === true)).toBe(true);
-    expect(roots.every((root) => root.accessibilityLabel.includes("updating"))).toBe(true);
+    expect(roots).toEqual(retainedRoots);
+    expect(JSON.stringify(roots)).not.toContain("updating");
 
     workspaceA.resolve(inventorySnapshot("file:///work/a"));
     await vi.waitFor(() => expect(getResourceInventory).toHaveBeenCalledTimes(3));
@@ -834,8 +840,8 @@ describe("ViewsFeature resource inventory lifecycle", () => {
     const rootB = roots.find((root) => root.label === "b");
     expect(rootA?.description).not.toContain("updating");
     expect(rootA?.accessibilityLabel).not.toContain("updating");
-    expect(rootB?.description).toContain("updating");
-    expect(rootB?.accessibilityLabel).toContain("updating");
+    expect(rootB?.description).not.toContain("updating");
+    expect(rootB?.accessibilityLabel).not.toContain("updating");
 
     workspaceB.resolve(inventorySnapshot("file:///work/b"));
     await vi.waitFor(async () => expect(
@@ -844,7 +850,7 @@ describe("ViewsFeature resource inventory lifecycle", () => {
     harness.dispose();
   });
 
-  test("preserves queued updating scopes when the active predecessor is superseded", async () => {
+  test("preserves queued scopes without exposing transient row state when a predecessor is superseded", async () => {
     const predecessorA = deferred<unknown>();
     const workspaceB = deferred<unknown>();
     const trailingA = deferred<unknown>();
@@ -864,7 +870,7 @@ describe("ViewsFeature resource inventory lifecycle", () => {
     await vi.waitFor(() => expect(getResourceInventory).toHaveBeenCalledTimes(3));
 
     const roots = await resourceRoots(harness.treeDataProvider);
-    expect(roots.every((root) => root.accessibilityLabel.includes("updating"))).toBe(true);
+    expect(JSON.stringify(roots)).not.toContain("updating");
     expect(JSON.stringify(roots)).not.toContain("out of date");
 
     workspaceB.resolve(inventorySnapshot("file:///work/b"));
@@ -874,7 +880,7 @@ describe("ViewsFeature resource inventory lifecycle", () => {
     harness.dispose();
   });
 
-  test("marks hidden invalidations immediately without querying until reveal", async () => {
+  test("retains hidden rows unchanged without querying until reveal", async () => {
     const getResourceInventory = vi.fn(async (options?: { readonly workspaceKey?: string }) =>
       options?.workspaceKey == null
         ? inventorySnapshot("file:///work/a", "file:///work/b")
@@ -888,14 +894,14 @@ describe("ViewsFeature resource inventory lifecycle", () => {
     expect(getResourceInventory).toHaveBeenCalledOnce();
     const roots = await resourceRoots(harness.treeDataProvider);
     expect(roots.find((root) => root.label === "a")?.accessibilityLabel).not.toContain("updating");
-    expect(roots.find((root) => root.label === "b")?.accessibilityLabel).toContain("updating");
+    expect(roots.find((root) => root.label === "b")?.accessibilityLabel).not.toContain("updating");
 
     harness.setVisible(true);
     await vi.waitFor(() => expect(getResourceInventory).toHaveBeenCalledTimes(2));
     harness.dispose();
   });
 
-  test("turns only a failed active scope stale while another dirty scope keeps updating", async () => {
+  test("turns only a failed active scope stale while another dirty scope stays visually stable", async () => {
     const workspaceA = deferred<unknown>();
     const workspaceB = deferred<unknown>();
     const getResourceInventory = vi.fn()
@@ -916,7 +922,7 @@ describe("ViewsFeature resource inventory lifecycle", () => {
     const rootB = roots.find((root) => root.label === "b");
     expect(rootA?.accessibilityLabel).toContain("out of date");
     expect(rootA?.accessibilityLabel).not.toContain("updating");
-    expect(rootB?.accessibilityLabel).toContain("updating");
+    expect(rootB?.accessibilityLabel).not.toContain("updating");
     expect(rootB?.accessibilityLabel).not.toContain("out of date");
 
     workspaceB.resolve(inventorySnapshot("file:///work/b"));
@@ -1094,12 +1100,6 @@ function captureResourceDiscoveryObservations(...sources: readonly string[]): {
       else process.env[acceptanceEnv] = previousAcceptance;
     },
   };
-}
-
-function isUpdatingPublication(event: ExtensionHostObservation): boolean {
-  return event.source === "resource-explorer"
-    && event.phase === "publish-complete"
-    && event.publicationKind === "updating";
 }
 
 function isCurrentPublication(event: ExtensionHostObservation): boolean {

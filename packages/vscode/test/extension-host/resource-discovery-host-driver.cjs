@@ -10,12 +10,10 @@ const baselineTreeFactKeys = Object.freeze([
 ]);
 
 const predecessorRaceFactKeys = Object.freeze([
-  "updatingInvalidated",
-  "updatingTarget",
-  "updatingUnrelated",
-  "updatingPublished",
-  "updatingState",
+  "pendingInvalidated",
   "blocked",
+  "pendingTreePublicationCount",
+  "pendingViewStateCount",
   "invalidated",
   "released",
   "discarded",
@@ -161,17 +159,12 @@ function assertFinalRecoveredWorkspaceFingerprints(nodes, recoveries, label) {
   }
 }
 
-function assertScopedUpdatingPublicationEvidence({
+function assertScopedStablePendingEvidence({
   observations,
   invalidated,
-  updatingTarget,
-  updatingUnrelated,
-  updatingPublished,
-  updatingState,
   blocked,
   barrierControlId,
   blockedWorkspaceKey,
-  baselineUnrelated,
   label,
 }) {
   assert(Array.isArray(observations), `${label} observations must be an array.`);
@@ -179,7 +172,7 @@ function assertScopedUpdatingPublicationEvidence({
     typeof barrierControlId === "string" && barrierControlId.length > 0,
     `${label} barrier control id must be nonempty.`,
   );
-  const evidence = [invalidated, updatingTarget, updatingUnrelated, updatingPublished, updatingState, blocked];
+  const evidence = [invalidated, blocked];
   assert.strictEqual(new Set(evidence).size, evidence.length, `${label} evidence records must be distinct.`);
   for (const [index, event] of evidence.entries()) {
     assert.strictEqual(
@@ -189,7 +182,6 @@ function assertScopedUpdatingPublicationEvidence({
     );
   }
 
-  const workspaceIdentity = observedWorkspaceIdentity(blockedWorkspaceKey);
   assert.strictEqual(invalidated?.source, "resource-explorer-view", `${label} invalidation source`);
   assert.strictEqual(invalidated?.phase, "invalidation", `${label} invalidation phase`);
   assert.strictEqual(invalidated?.scope, "workspace", `${label} invalidation scope`);
@@ -211,116 +203,35 @@ function assertScopedUpdatingPublicationEvidence({
     `${label} barrier response fingerprint must be nonempty.`,
   );
 
-  assert.strictEqual(updatingPublished?.source, "resource-explorer", `${label} publication source`);
-  assert.strictEqual(updatingPublished?.phase, "publish-complete", `${label} publication phase`);
-  assert.strictEqual(updatingPublished?.publicationKind, "updating", `${label} publication kind`);
-  assert.strictEqual(updatingPublished?.workspaceIdentity, workspaceIdentity, `${label} publication workspace`);
-  assert.strictEqual(updatingPublished?.fingerprint, null, `${label} publication fingerprint`);
-
-  assert.strictEqual(updatingState?.source, "resource-explorer", `${label} state source`);
-  assert.strictEqual(updatingState?.phase, "view-state", `${label} state phase`);
-  assert.strictEqual(updatingState?.state, "current", `${label} state`);
-  assert.strictEqual(updatingState?.message, null, `${label} message`);
-  assert.strictEqual(updatingState?.hasIssues, true, `${label} issue state`);
-  assert.strictEqual(updatingState?.updatingAll, false, `${label} updatingAll`);
-  assert.strictEqual(updatingState?.updatingWorkspaceCount, 1, `${label} updating workspace count`);
-  assert.strictEqual(updatingState?.staleWorkspaceCount, 0, `${label} stale workspace count`);
-
-  for (const [kind, event] of [["target", updatingTarget], ["unrelated", updatingUnrelated]]) {
-    assert.strictEqual(event?.source, "resource-explorer", `${label} ${kind} source`);
-    assert.strictEqual(event?.phase, "publish-node", `${label} ${kind} phase`);
-    assert.strictEqual(event?.publicationKind, "updating", `${label} ${kind} publication kind`);
-    assert.strictEqual(event?.observationId, updatingPublished.observationId, `${label} ${kind} observation`);
-    assert.strictEqual(event?.generation, updatingPublished.generation, `${label} ${kind} generation`);
-  }
-  assert.strictEqual(updatingState.observationId, updatingPublished.observationId, `${label} state observation`);
-  assert.strictEqual(updatingState.generation, updatingPublished.generation, `${label} state generation`);
-
   const invalidatedIndex = observations.indexOf(invalidated);
-  const updatingPublishedIndex = observations.indexOf(updatingPublished);
-  const updatingStateIndex = observations.indexOf(updatingState);
   const blockedIndex = observations.indexOf(blocked);
   assert(
-    invalidatedIndex < updatingPublishedIndex
-      && updatingPublishedIndex < updatingStateIndex
-      && updatingStateIndex < blockedIndex,
-    `${label} must order invalidation < updating publication < updating state < barrier.`,
+    invalidatedIndex < blockedIndex,
+    `${label} must order invalidation < barrier.`,
   );
   const invalidationToBarrier = observations.slice(invalidatedIndex + 1, blockedIndex);
-  const updatingPublications = invalidationToBarrier.filter((event) =>
+  const treePublications = invalidationToBarrier.filter((event) =>
     event?.source === "resource-explorer"
-      && event.phase === "publish-complete"
-      && event.publicationKind === "updating"
-      && event.workspaceIdentity === workspaceIdentity
-      && event.fingerprint === null
+      && ["publish-start", "publish-node", "publish-complete"].includes(event.phase)
   );
   assert.strictEqual(
-    updatingPublications.length,
-    1,
-    `${label} invalidation-to-barrier slice must contain exactly one target-workspace updating publication.`,
+    treePublications.length,
+    0,
+    `${label} must not republish retained tree rows before the replacement settles.`,
   );
-  assert.strictEqual(
-    updatingPublications[0],
-    updatingPublished,
-    `${label} target-workspace updating publication must be the supplied evidence record.`,
-  );
-  const updatingStates = invalidationToBarrier.filter((event) =>
+  const viewStates = invalidationToBarrier.filter((event) =>
     event?.source === "resource-explorer"
       && event.phase === "view-state"
-      && event.state === "current"
-      && event.message === null
-      && event.hasIssues === true
-      && event.updatingAll === false
-      && event.updatingWorkspaceCount === 1
-      && event.staleWorkspaceCount === 0
   );
   assert.strictEqual(
-    updatingStates.length,
-    1,
-    `${label} invalidation-to-barrier slice must contain exactly one E1-shaped updating state.`,
+    viewStates.length,
+    0,
+    `${label} must not insert transient view-state copy before the replacement settles.`,
   );
-  assert.strictEqual(
-    updatingStates[0],
-    updatingState,
-    `${label} E1-shaped updating state must be the supplied evidence record.`,
-  );
-
-  const publicationNodes = invalidationToBarrier.filter((event) =>
-    event?.source === "resource-explorer"
-      && event.phase === "publish-node"
-      && event.observationId === updatingPublished.observationId
-      && event.generation === updatingPublished.generation
-      && event.publicationKind === updatingPublished.publicationKind
-  );
-  assert.strictEqual(publicationNodes.length, updatingPublished.nodeCount, `${label} publication node count`);
-  const resourceNodeCount = publicationNodes.filter((event) => event.nodeKind === "resource").length;
-  assert(resourceNodeCount > 0, `${label} publication must contain resource rows.`);
-  assert.strictEqual(updatingState?.description, `${resourceNodeCount} known resources`, `${label} description`);
-  assert(publicationNodes.includes(updatingTarget), `${label} target must belong to the publication.`);
-  assert(publicationNodes.includes(updatingUnrelated), `${label} unrelated row must belong to the publication.`);
-
-  assert(updatingTarget.rowStates.split("|").includes("updating"), `${label} target row must be updating.`);
-  assert(
-    updatingTarget.navigationWorkspaceIdentity === workspaceIdentity
-      || updatingTarget.implementationWorkspaceIdentity === workspaceIdentity,
-    `${label} target row must route to the blocked workspace.`,
-  );
-  assert.strictEqual(updatingUnrelated.nodeId, baselineUnrelated?.nodeId, `${label} unrelated node identity`);
-  assert.deepStrictEqual(
-    publicationNodeDurableShape(updatingUnrelated),
-    publicationNodeDurableShape(baselineUnrelated),
-    `${label} unrelated durable shape`,
-  );
-  for (const lane of ["navigation", "implementation"]) {
-    assert.strictEqual(
-      updatingUnrelated[`${lane}Fingerprint`],
-      baselineUnrelated?.[`${lane}Fingerprint`],
-      `${label} unrelated ${lane} fingerprint`,
-    );
-  }
-  const unrelatedStates = updatingUnrelated.rowStates.split("|");
-  assert(!unrelatedStates.includes("updating"), `${label} unrelated row must not be updating.`);
-  assert(!unrelatedStates.includes("out-of-date"), `${label} unrelated row must not be out of date.`);
+  return {
+    pendingTreePublicationCount: treePublications.length,
+    pendingViewStateCount: viewStates.length,
+  };
 }
 
 async function closeTextDocumentWithNativeEditor(
@@ -527,7 +438,7 @@ module.exports = {
   assertExactFactKeys,
   assertFinalRecoveredWorkspaceFingerprints,
   assertScopedPublicationFingerprintCoherence,
-  assertScopedUpdatingPublicationEvidence,
+  assertScopedStablePendingEvidence,
   baselineTreeFactKeys,
   closeTextDocumentWithNativeEditor,
   durablePublicationNodeFields,

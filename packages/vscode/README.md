@@ -142,10 +142,11 @@ retains the last coherent tree as out of date. Resource rows provide exact decla
 navigation when those targets are proved. Failed or out-of-date project rows offer **Retry Resource Discovery** and
 **Open Aurelia Output**; unsupported project rows offer Output without implying that retry can change support.
 
-The tree uses a restrained visual grammar: the project keeps one stable project identity, kind groups and resource rows
-are text-led, and icons identify only real relationships such as aliases and bindables. Error, warning, and information
-colors identify actual failed, incomplete or invalid, unsupported, or out-of-date project states; legitimate pathless,
-duplicate, or open resources do not acquire problem styling.
+The tree uses a role-based visual grammar: project boundaries use the project glyph, resource-kind collections use the
+library glyph, canonical Aurelia resources use the code glyph, aliases use the link glyph, and bindables use the plug
+glyph. Resource kinds remain named in text instead of being projected onto unrelated TypeScript declaration symbols.
+Error, warning, and information colors identify actual failed, incomplete or invalid, unsupported, or out-of-date
+project states; legitimate pathless, duplicate, or open resources do not acquire problem styling.
 
 Use **Aurelia: Go to Resource...** to search navigable resources from the exact inventory across active Aurelia workspaces. Use
 **Aurelia: Go to Resource Available to Active Template...** for the exact compiler scope at the current template cursor. The

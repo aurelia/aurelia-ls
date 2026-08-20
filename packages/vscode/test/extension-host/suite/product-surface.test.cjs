@@ -32,7 +32,7 @@ const {
   assertExactFactKeys,
   assertFinalRecoveredWorkspaceFingerprints,
   assertScopedPublicationFingerprintCoherence,
-  assertScopedUpdatingPublicationEvidence,
+  assertScopedStablePendingEvidence,
   baselineTreeFactKeys,
   closeTextDocumentWithNativeEditor,
   predecessorRaceFactKeys,
@@ -456,6 +456,77 @@ suite("extension-host product surface", () => {
       origin.uri,
       [aureliaWorkspace],
     );
+  });
+
+  test("shows typed members at an empty compound-interpolation frontier", async function() {
+    this.timeout(180_000);
+    const relativePath = "src/components/product-card.html";
+    let document = await showAureliaDocument(relativePath);
+    if (document.isDirty) {
+      await vscode.commands.executeCommand("workbench.action.files.revert");
+      await waitFor(
+        () => !exactOpenDocument(vscode.workspace, document.uri, "the completion probe template").isDirty,
+        "the completion probe template should begin from a clean editor buffer",
+        60_000,
+      );
+      document = exactOpenDocument(vscode.workspace, document.uri, "the clean completion probe template");
+    }
+    const baseline = document.getText();
+    const changed = baseline.replace(
+      '  <p if.bind="item">${item.description}</p>',
+      '  <p if.bind="item">${item.description} ${item.}</p>',
+    );
+    assert.notStrictEqual(changed, baseline, "Expected the compound-interpolation completion probe to apply.");
+
+    try {
+      await replaceDocumentText(document, changed);
+      const marker = '${item.description} ${item.}</p>';
+      const markerStart = document.getText().indexOf(marker);
+      assert.notStrictEqual(markerStart, -1, "Expected the compound interpolation in the open editor buffer.");
+      const cursorOffset = markerStart + marker.lastIndexOf('${item.') + '${item.'.length;
+      const cursor = document.positionAt(cursorOffset);
+      const expectedLabels = ["description", "name", "quantity", "sku", "tags", "tone"];
+      let completions = [];
+      await waitFor(async () => {
+        const response = await vscode.commands.executeCommand(
+          "vscode.executeCompletionItemProvider",
+          document.uri,
+          cursor,
+        );
+        completions = Array.isArray(response)
+          ? response
+          : Array.isArray(response?.items) ? response.items : [];
+        const labels = new Set(completions.map(completionLabel));
+        return expectedLabels.every((label) => labels.has(label));
+      }, "the native completion provider should expose every CatalogItem member", 120_000);
+
+      const description = completions.find((item) => completionLabel(item) === "description");
+      assert(description, "Expected the description member through the native completion provider.");
+      assert.strictEqual(completionInsertText(description), "description");
+      const replacementRange = completionReplacementRange(description);
+      assert(replacementRange instanceof vscode.Range, "Expected an authored completion replacement range.");
+      assert.strictEqual(
+        replacementRange.isEqual(new vscode.Range(cursor, cursor)),
+        true,
+        "The empty member frontier must produce a zero-width edit exactly at the cursor.",
+      );
+      assert.strictEqual(document.getText(replacementRange), "");
+    } finally {
+      if (!document.isClosed) {
+        await vscode.window.showTextDocument(document, { preview: false });
+        await vscode.commands.executeCommand("workbench.action.files.revert");
+        await waitFor(
+          () => document.getText() === baseline && !document.isDirty,
+          "the compound-interpolation completion probe should revert to a clean baseline",
+          60_000,
+        );
+        await closeTextDocumentWithNativeEditor(
+          document,
+          "the compound-interpolation completion probe",
+          { workspace: vscode.workspace, window: vscode.window, wait: waitFor },
+        );
+      }
+    }
   });
 
   test("projects bounded hover cards and related facts through live editor providers", async () => {
@@ -2154,7 +2225,98 @@ suite("extension-host product surface", () => {
     for (const project of ambiguity.projects) {
       for (const scope of project.scopes) assertAmbiguityScopeModelPartition(scope);
     }
-    const ambiguityDocument = await showAureliaDocument(ambiguity.relativePath, routedAureliaWorkspace);
+    const ambiguityUri = vscode.Uri.file(path.join(
+      routedAureliaWorkspace,
+      ...ambiguity.relativePath.split("/"),
+    ));
+    const ambiguityLifecycle = observeExactDocumentLifecycle(
+      vscode.workspace,
+      ambiguityUri,
+      "the ambiguity template ownership journey",
+    );
+    const churnControlUri = vscode.Uri.file(path.join(
+      routedAureliaWorkspace,
+      "host-corpus",
+      "overlap",
+      "src",
+      "unadmitted-plugin-app.html",
+    ));
+    let churnControl = await vscode.workspace.openTextDocument(churnControlUri);
+    assert.strictEqual(
+      churnControl.languageId,
+      "html",
+      "the clean unrelated churn control should begin in native HTML mode",
+    );
+    const churnControlBaseline = churnControl.getText();
+    const churnControlChanged = `${churnControlBaseline}\n<!-- unrelated ownership retry wave -->\n`;
+    const churnLifecycle = observeExactDocumentLifecycle(
+      vscode.workspace,
+      churnControlUri,
+      "the unrelated clean HTML churn control",
+    );
+    let ambiguityDocument;
+    try {
+      const initialAmbiguityDocument = await vscode.workspace.openTextDocument(ambiguityUri);
+      assert.strictEqual(
+        initialAmbiguityDocument.languageId,
+        "html",
+        "the fresh ambiguity template should enter the host in native HTML mode",
+      );
+      await vscode.window.showTextDocument(initialAmbiguityDocument, { preview: false });
+      const ambiguitySettlement = waitForExactDocumentLanguage(
+        vscode.workspace,
+        ambiguityUri,
+        "aurelia-html",
+        "the admitted ambiguity template during unrelated clean HTML lifecycle churn",
+        waitFor,
+      );
+
+      churnControl = await vscode.languages.setTextDocumentLanguage(churnControl, "plaintext");
+      churnControl = await vscode.languages.setTextDocumentLanguage(churnControl, "html");
+      await replaceDocumentText(churnControl, churnControlChanged);
+      assert.strictEqual(
+        exactOpenDocument(vscode.workspace, churnControlUri, "the dirty unrelated HTML churn control").getText(),
+        churnControlChanged,
+        "the target ownership pull must overlap one genuine unrelated HTML source-text wave",
+      );
+      ambiguityDocument = await ambiguitySettlement;
+
+      assert.deepStrictEqual(
+        churnLifecycle.snapshot().slice(0, 4).map(({ phase, languageId }) => ({ phase, languageId })),
+        [
+          { phase: "close", languageId: "html" },
+          { phase: "open", languageId: "plaintext" },
+          { phase: "close", languageId: "plaintext" },
+          { phase: "open", languageId: "html" },
+        ],
+        "the control must force one genuine clean HTML authority close/open cycle while ownership settles",
+      );
+      assertSingleBackgroundLanguageTransition(
+        ambiguityLifecycle.snapshot(),
+        "the ambiguity template ownership journey under unrelated clean HTML churn",
+      );
+    } finally {
+      churnLifecycle.dispose();
+      ambiguityLifecycle.dispose();
+      const currentControl = vscode.workspace.textDocuments.find((document) =>
+        document.uri.toString() === churnControlUri.toString()
+      );
+      if (currentControl != null && currentControl.getText() !== churnControlBaseline) {
+        await vscode.window.showTextDocument(currentControl, { preview: false });
+        await vscode.commands.executeCommand("workbench.action.files.revert");
+        await waitFor(
+          () => {
+            const current = vscode.workspace.textDocuments.find((document) =>
+              document.uri.toString() === churnControlUri.toString()
+            );
+            return current != null && current.getText() === churnControlBaseline && !current.isDirty;
+          },
+          "the unrelated HTML ownership retry control should revert to its clean baseline",
+          60_000,
+        );
+      }
+    }
+    await vscode.window.showTextDocument(ambiguityDocument, { preview: false });
     const ambiguityPosition = new vscode.Position(
       ambiguity.source.cursor.line,
       ambiguity.source.cursor.character,
@@ -2449,41 +2611,6 @@ suite("extension-host product surface", () => {
       );
       const routedInvalidationStart = extensionHostObservations.indexOf(invalidated) + 1;
       assert(routedInvalidationStart > 0, "The exact routed E1 invalidation must belong to the observed trace.");
-      const updatingWorkspaceIdentity = observedWorkspaceIdentity(invalidated.workspaceKey);
-      const updatingPublished = await waitForResourceDiscoveryObservation(
-        routedInvalidationStart,
-        (event) => event.source === "resource-explorer"
-          && event.phase === "publish-complete"
-          && event.publicationKind === "updating"
-          && event.workspaceIdentity === updatingWorkspaceIdentity
-          && event.fingerprint === null,
-        "E1 should publish the retained scoped tree as updating",
-      );
-      const updatingNodes = observationsForPublication(updatingPublished);
-      const updatingTarget = updatingNodes.find((node) =>
-        node.nodeKind === "resource"
-          && node.navigationResourceIdentity === shifted.identityKey
-          && node.navigationWorkspaceIdentity === updatingWorkspaceIdentity
-      );
-      const updatingUnrelated = updatingNodes.find((node) => node.nodeId === unrelatedBefore.nodeId);
-      assert(updatingTarget, "E1 should mark the retained routed target row as updating.");
-      assert(updatingUnrelated, "E1 should retain the unrelated primary-workspace row.");
-      const updatingDescription = `${updatingNodes.filter((node) => node.nodeKind === "resource").length} known resources`;
-      const updatingState = await waitForResourceDiscoveryObservation(
-        routedInvalidationStart,
-        (event) => event.source === "resource-explorer"
-          && event.phase === "view-state"
-          && event.observationId === updatingPublished.observationId
-          && event.generation === updatingPublished.generation
-          && event.state === "current"
-          && event.message === null
-          && event.description === updatingDescription
-          && event.hasIssues === true
-          && event.updatingAll === false
-          && event.updatingWorkspaceCount === 1
-          && event.staleWorkspaceCount === 0,
-        "E1 should expose the retained current tree as updating",
-      );
       const blocked = await waitForResourceDiscoveryObservation(
         routedInvalidationStart,
         (event) => event.source === "resource-discovery-host-control"
@@ -2496,18 +2623,13 @@ suite("extension-host product surface", () => {
       assert.strictEqual(blocked.includeTypeSurfaces, true);
       assert.strictEqual(blocked.workspaceKey, resourceDiscoveryAcceptance.workspaceKey);
       assert(typeof blocked.responseFingerprint === "string" && blocked.responseFingerprint.length > 0);
-      assertScopedUpdatingPublicationEvidence({
+      const pendingEvidence = assertScopedStablePendingEvidence({
         observations: extensionHostObservations,
         invalidated,
-        updatingTarget,
-        updatingUnrelated,
-        updatingPublished,
-        updatingState,
         blocked,
         barrierControlId: controlId,
         blockedWorkspaceKey: resourceDiscoveryAcceptance.workspaceKey,
-        baselineUnrelated: unrelatedBefore,
-        label: "E1 scoped updating publication",
+        label: "E1 stable pending tree",
       });
 
       const secondEditStart = extensionHostObservations.length;
@@ -2584,12 +2706,9 @@ suite("extension-host product surface", () => {
       assert.strictEqual(latePredecessorPublishCount, 0);
 
       resourceDiscoveryEvidence.facts.tree.predecessorRace = {
-        updatingInvalidated: invalidated,
-        updatingTarget,
-        updatingUnrelated,
-        updatingPublished,
-        updatingState,
+        pendingInvalidated: invalidated,
         blocked,
+        ...pendingEvidence,
         invalidated: successorInvalidated,
         released,
         discarded,
@@ -2738,12 +2857,14 @@ suite("extension-host product surface", () => {
           controlId,
         });
       }
-      await refreshResourceExplorer(
+      const restoredPublication = await refreshResourceExplorer(
         "availability-race cleanup should restore both duplicate declarations",
         (_complete, nodes) => resourceDiscoveryAcceptance.fixture.witnesses.longSuffixDuplicates.rows.every((row) =>
           nodes.some((node) => node.navigationResourceIdentity === row.identityKey)
         ),
       );
+      const restoredDurableNodes = observationsForPublication(restoredPublication)
+        .map(publicationNodeDurableShape);
       for (const [side, document] of [["left", leftDocument], ["right", rightDocument]]) {
         const closeStart = extensionHostObservations.length;
         await closeTextDocumentWithNativeEditor(
@@ -2759,19 +2880,45 @@ suite("extension-host product surface", () => {
           (candidate) => candidate.uri.toString() === document.uri.toString(),
         );
         if (disposed) {
-          const closeInvalidation = await waitForResourceDiscoveryObservation(
-            closeStart,
-            (event) => event.source === "resource-explorer-view"
+          // Both declarations are restored and saved above. Closing a disk-equal
+          // editor transfers no source-text authority, so it must not invalidate
+          // or republish the retained semantic tree.
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          const closeTrace = resourceDiscoveryObservations(closeStart);
+          const routedInvalidations = closeTrace.filter((event) =>
+            event.source === "resource-explorer-view"
               && event.phase === "invalidation"
-              && event.scope === "workspace"
-              && event.workspaceKey === resourceDiscoveryAcceptance.workspaceKey,
-            `disposing the ${side} duplicate declaration should settle through a routed semantic invalidation`,
+              && event.workspaceKey === resourceDiscoveryAcceptance.workspaceKey
           );
-          await awaitRoutedSemanticReadinessAndExplorerPublication(
-            `availability-race ${side} cleanup after close invalidation ${closeInvalidation.observationId}`,
+          const treePublications = closeTrace.filter((event) =>
+            event.source === "resource-explorer"
+              && ["publish-start", "publish-node", "publish-complete", "view-state"].includes(event.phase)
+          );
+          assert.deepStrictEqual(
+            routedInvalidations,
+            [],
+            `disposing the clean ${side} duplicate declaration must not invalidate routed semantics; `
+              + `trace ${JSON.stringify(closeTrace)}`,
+          );
+          assert.deepStrictEqual(
+            treePublications,
+            [],
+            `disposing the clean ${side} duplicate declaration must not republish retained rows; `
+              + `trace ${JSON.stringify(closeTrace)}`,
           );
         }
       }
+      const afterCleanClosePublication = await refreshResourceExplorer(
+        "clean declaration disposal should preserve both duplicate rows",
+        (_complete, nodes) => resourceDiscoveryAcceptance.fixture.witnesses.longSuffixDuplicates.rows.every((row) =>
+          nodes.some((node) => node.navigationResourceIdentity === row.identityKey)
+        ),
+      );
+      assert.deepStrictEqual(
+        observationsForPublication(afterCleanClosePublication).map(publicationNodeDurableShape),
+        restoredDurableNodes,
+        "explicit refresh after clean declaration disposal must retain the exact durable semantic rows",
+      );
     }
   });
 
@@ -4846,16 +4993,32 @@ async function recoverTreeNavigationWithPrimaryRetry({ controlId, node, stableCo
   );
   const semanticStart = extensionHostObservations.length;
   await execution;
-  const reopenedInvalidation = await waitForResourceDiscoveryObservation(
-    semanticStart,
-    (event) => event.source === "resource-explorer-view"
+  // Retry reopens the restored declaration from disk without changing its
+  // effective source text. That clean open must leave the recovered tree intact;
+  // the explicit readiness/refresh below is the only ensuing publication.
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  const reopenTrace = resourceDiscoveryObservations(semanticStart);
+  const reopenInvalidations = reopenTrace.filter((event) =>
+    event.source === "resource-explorer-view"
       && event.phase === "invalidation"
-      && event.scope === "workspace"
-      && event.workspaceKey === resourceDiscoveryAcceptance.workspaceKey,
-    "the reopened declaration should settle through its exact routed semantic invalidation",
+      && event.workspaceKey === resourceDiscoveryAcceptance.workspaceKey
+  );
+  const reopenPublications = reopenTrace.filter((event) =>
+    event.source === "resource-explorer"
+      && ["publish-start", "publish-node", "publish-complete", "view-state"].includes(event.phase)
+  );
+  assert.deepStrictEqual(
+    reopenInvalidations,
+    [],
+    `the clean reopened declaration must not invalidate routed semantics; trace ${JSON.stringify(reopenTrace)}`,
+  );
+  assert.deepStrictEqual(
+    reopenPublications,
+    [],
+    `the clean reopened declaration must not republish the recovered tree; trace ${JSON.stringify(reopenTrace)}`,
   );
   await awaitRoutedSemanticReadinessAndExplorerPublication(
-    `newest navigation reopen after invalidation ${reopenedInvalidation.observationId}`,
+    "newest navigation clean reopen explicit recovery refresh",
   );
   return { presented, choice, retryInvalidated, recoveredPublication };
 }

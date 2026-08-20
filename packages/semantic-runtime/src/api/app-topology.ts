@@ -357,6 +357,62 @@ export interface SemanticApplicationTopologyResult {
 }
 
 /**
+ * Exact source paths retained as templates by converged custom-element definitions.
+ *
+ * This is the bounded ownership projection of application topology's `component-template` file-role lane. Transport
+ * callers can intersect it with boot-authored HTML ownership when deciding whether a document enters template mode.
+ */
+export interface SemanticTemplateDocumentOwnershipResult {
+  readonly projectKey: string;
+  readonly rootDir: string;
+  readonly sources: readonly SemanticSourceReference[];
+}
+
+/** Test one exact authored document against a bounded template-document ownership answer. */
+export function semanticTemplateDocumentOwnershipOwnsSource(
+  ownership: SemanticTemplateDocumentOwnershipResult,
+  matchesSource: (source: SemanticSourceReference) => boolean,
+): boolean {
+  return ownership.sources.some(matchesSource);
+}
+
+/**
+ * Read the complete converged component-template source set without projecting the rest of application topology.
+ *
+ * Keep this in exact parity with `applicationFileRows`: both consume the same converged definition template address,
+ * retain its file path, collapse the public carrier to its immediate anchor, deduplicate by stored path, and sort by
+ * that path. Unrelated admitted HTML never enters the set because no converged definition retains it as its template.
+ */
+export function readSemanticTemplateDocumentOwnership(
+  store: KernelStore,
+  emission: AureliaAppWorldProjectEmission,
+): SemanticTemplateDocumentOwnershipResult {
+  const sources = new Map<string, SemanticSourceReference>();
+  for (const definition of uniqueCustomElementDefinitions(emission)) {
+    const compilation = templateCompilationsForDefinition(emission, definition)[0] ?? null;
+    const source = describeAddress(
+      store,
+      compilation?.compilation.definition.template?.addressHandle
+        ?? definition.template?.addressHandle
+        ?? null,
+    );
+    if (source?.path == null) {
+      continue;
+    }
+    if (!sources.has(source.path)) {
+      sources.set(source.path, source.anchor ?? source);
+    }
+  }
+  return {
+    projectKey: emission.project.projectKey,
+    rootDir: emission.project.rootDir,
+    sources: [...sources.entries()]
+      .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)
+      .map(([, source]) => source),
+  };
+}
+
+/**
  * Test one exact authored document against the external/HTML template sources retained by converged custom elements.
  *
  * Boot admission alone is deliberately insufficient here: an ordinary HTML file can belong to the same project

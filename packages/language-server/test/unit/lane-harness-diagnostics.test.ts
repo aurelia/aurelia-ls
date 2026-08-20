@@ -210,7 +210,11 @@ describe("lane-harness pull diagnostics contract", () => {
       kind: "notification",
       message: {
         method: "aurelia/analysisChanged",
-        params: { fingerprint: "semantic-runtime-analysis:one", changeKind: "source-text" },
+        params: {
+          fingerprint: "semantic-runtime-analysis:one",
+          changeKind: "source-text",
+          changedSourceUris: ["file:///workspace/app.html"],
+        },
       },
     };
     const refresh = {
@@ -238,6 +242,7 @@ describe("lane-harness pull diagnostics contract", () => {
     }])).toMatchObject({ outcome: "invalid-sequence" });
     for (const params of [
       { fingerprint: "", changeKind: "source-text" },
+      { fingerprint: "semantic-runtime-analysis:one", changeKind: "source-text" },
       { fingerprint: "semantic-runtime-analysis:one", changeKind: "unknown" },
     ]) {
       expect(harness.settledAnalysisSequence([{

@@ -29,6 +29,12 @@ interface IconPresentation {
   readonly color?: { readonly id: string };
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((accept) => { resolve = accept; });
+  return { promise, resolve };
+}
+
 const completeAnswer = {
   schemaVersion: "0.2",
   result: "answered",
@@ -370,20 +376,50 @@ describe("ResourceExplorerProvider", () => {
     ]);
   });
 
-  test("retires review navigation immediately when the joined generation becomes dirty", async () => {
-    const harness = createHarness(
-      async () => response([readyProject([])], workspace(), "semantic-runtime:one"),
-      async () => limitationsResponse([
+  test("retains a coherent review without republishing until its successor settles", async () => {
+    const nextInventory = deferred<unknown>();
+    const nextLimitations = deferred<unknown>();
+    const inventory = vi.fn()
+      .mockResolvedValueOnce(response([readyProject([])], workspace(), "semantic-runtime:one"))
+      .mockImplementationOnce(() => nextInventory.promise);
+    const limitations = vi.fn()
+      .mockResolvedValueOnce(limitationsResponse([
         { projectKey: "app", rows: [limitationRow()] },
-      ], workspace(), "semantic-runtime:one"),
-    );
+      ], workspace(), "semantic-runtime:one"))
+      .mockImplementationOnce(() => nextLimitations.promise);
+    const observation = captureResourceDiscoveryObservations("resource-explorer");
+    const harness = createHarness(inventory, limitations);
     await harness.provider.refresh();
+    observation.events.length = 0;
 
-    harness.provider.markUpdating(null);
+    const retainedRows = harness.provider.analysisLimitationsForReview();
+    const retainedMessage = harness.view.message;
+    const retainedTree = await roots(harness.provider);
+    const changed = vi.fn();
+    const subscription = harness.provider.onDidChangeTreeData(changed);
+    const pending = harness.provider.refresh();
+    await Promise.resolve();
 
+    expect(harness.provider.analysisLimitationsForReview()).toEqual(retainedRows);
+    expect(harness.recorded.contextValues.get("aurelia.resourceExplorerHasAnalysisReview")).toBe(true);
+    expect(harness.view.message).toBe(retainedMessage);
+    expect(await roots(harness.provider)).toEqual(retainedTree);
+    expect(changed).not.toHaveBeenCalled();
+    expect(observation.events).toEqual([]);
+
+    nextInventory.resolve(response([readyProject([])], workspace(), "semantic-runtime:two"));
+    nextLimitations.resolve(limitationsResponse([
+      { projectKey: "app", rows: [] },
+    ], workspace(), "semantic-runtime:two"));
+    await pending;
+
+    expect(changed).toHaveBeenCalledOnce();
+    expect(observation.events.filter((event) => event.phase === "publish-complete")).toHaveLength(1);
     expect(harness.provider.analysisLimitationsForReview()).toEqual([]);
     expect(harness.recorded.contextValues.get("aurelia.resourceExplorerHasAnalysisReview")).toBe(false);
-    expect(harness.view.message).toContain("showing the previous review");
+    expect(harness.view.message).toBeUndefined();
+    subscription.dispose();
+    observation.dispose();
   });
 
   test("keeps an all-suppressed candidate visible as a limitation without advertising Review", async () => {
@@ -713,16 +749,12 @@ describe("ResourceExplorerProvider", () => {
         fingerprint: "semantic-runtime:observed",
         workspaceIdentity: null,
       }));
+      const publicationCount = observation.events.filter((event) =>
+        event.phase === "publish-complete"
+      ).length;
       harness.provider.markUpdating("file:///repo");
-      const updatingResourceRow = [...observation.events].reverse().find((event) =>
-        event.phase === "publish-node" && event.label === "observed-card"
-      );
-      expect(updatingResourceRow).toEqual(expect.objectContaining({
-        nodeId: resourceRow!.nodeId,
-        publicationKind: "updating",
-        navigationFingerprint: "semantic-runtime:observed",
-        rowStates: "updating|metadata-incomplete",
-      }));
+      expect(observation.events.filter((event) => event.phase === "publish-complete"))
+        .toHaveLength(publicationCount);
       const replacement = resource({
         identityKey: "resource:replacement:v1",
         name: "replacement-card",
@@ -903,12 +935,12 @@ describe("ResourceExplorerProvider", () => {
       role: "alias",
       childIdentityKey: "resource:product-card:v1:alias:store-card",
     });
-    expect(iconOf(harness.provider, tree[0]!)).toBeUndefined();
-    expect(iconOf(harness.provider, cardNode)).toBeUndefined();
+    expect(iconOf(harness.provider, tree[0]!)).toEqual({ id: "library", color: undefined });
+    expect(iconOf(harness.provider, cardNode)).toEqual({ id: "code", color: undefined });
     expect(iconOf(harness.provider, cardNode.children![0]!)).toEqual({ id: "link", color: undefined });
-    expect(iconOf(harness.provider, cardNode.children![1]!)).toEqual({ id: "symbol-property", color: undefined });
-    expect(iconOf(harness.provider, tree[1]!)).toBeUndefined();
-    expect(iconOf(harness.provider, tree[1]!.children![0]!)).toBeUndefined();
+    expect(iconOf(harness.provider, cardNode.children![1]!)).toEqual({ id: "plug", color: undefined });
+    expect(iconOf(harness.provider, tree[1]!)).toEqual({ id: "library", color: undefined });
+    expect(iconOf(harness.provider, tree[1]!.children![0]!)).toEqual({ id: "code", color: undefined });
     expect(harness.provider.getTreeItem(tree[0] as never).collapsibleState).toBe(
       harness.vscode.TreeItemCollapsibleState.Collapsed,
     );
@@ -935,7 +967,7 @@ describe("ResourceExplorerProvider", () => {
     const node = (await roots(harness.provider))[0]!.children![0]!;
     expect(node.description).toContain("source location unavailable");
     const item = harness.provider.getTreeItem(node as never);
-    expect(item.iconPath).toBeUndefined();
+    expect(item.iconPath).toEqual({ id: "code", color: undefined });
     expect(item.command).toBeUndefined();
     expect(item.accessibilityInformation?.label).toContain("source location unavailable");
     expect(harness.provider.navigationFor(node, "declaration")).toBeNull();
@@ -996,7 +1028,10 @@ describe("ResourceExplorerProvider", () => {
       expect.stringContaining("x/a/shared.ts"),
       expect.stringContaining("z/a/shared.ts"),
     ]);
-    expect(rows.map((node) => iconOf(harness.provider, node))).toEqual([undefined, undefined]);
+    expect(rows.map((node) => iconOf(harness.provider, node))).toEqual([
+      { id: "code", color: undefined },
+      { id: "code", color: undefined },
+    ]);
     const aliases = rows.flatMap((node) => node.children ?? []).filter((node) => node.label === "common-card");
     expect(aliases).toHaveLength(2);
     expect(new Set(aliases.map((node) => node.id)).size).toBe(2);
@@ -1164,7 +1199,7 @@ describe("ResourceExplorerProvider", () => {
       ["unsupported · unsupported-app", { id: "project", color: { id: "problemsInfoIcon.foreground" } }],
       ["failed · failed-app", { id: "project", color: { id: "problemsErrorIcon.foreground" } }],
     ]);
-    expect(iconOf(harness.provider, findNode(tree, "open-card")!)).toBeUndefined();
+    expect(iconOf(harness.provider, findNode(tree, "open-card")!)).toEqual({ id: "code", color: undefined });
     expect(findNode(tree, "open-card")?.description).toContain("discovery incomplete");
   });
 
@@ -1517,15 +1552,13 @@ describe("ResourceExplorerProvider", () => {
       expect(observation.events.some((event) =>
         event.phase === "publish-complete" && event.fingerprint === "retired-predecessor"
       )).toBe(false);
-      expect(observation.events.filter((event) => event.phase === "publish-node").every((event) =>
-        event.rowStates === "updating"
-      )).toBe(true);
+      expect(observation.events.filter((event) => event.phase === "publish-node")).toEqual([]);
     } finally {
       observation.dispose();
     }
   });
 
-  test("publishes only the latest refresh and retains the current snapshot while updating", async () => {
+  test("publishes only the latest refresh and retains the current snapshot while pending", async () => {
     let resolveFirst!: (value: unknown) => void;
     const firstResult = new Promise((resolve) => { resolveFirst = resolve; });
     const current = resource({
@@ -1573,7 +1606,7 @@ describe("ResourceExplorerProvider", () => {
     expect(harness.recorded.contextValues.get("aurelia.resourceExplorerHasIssues")).toBe(false);
   });
 
-  test("announces updating and stale state on a sole-project empty info row", async () => {
+  test("keeps a sole-project empty row stable until a failed refresh becomes stale", async () => {
     let rejectRefresh!: (error: Error) => void;
     const refreshing = new Promise<unknown>((_resolve, reject) => { rejectRefresh = reject; });
     const getResourceInventory = vi.fn()
@@ -1582,11 +1615,13 @@ describe("ResourceExplorerProvider", () => {
     const harness = createHarness(getResourceInventory);
     await harness.provider.refresh();
 
+    const retained = (await roots(harness.provider))[0]!;
     const pending = harness.provider.refresh();
     await Promise.resolve();
     let info = (await roots(harness.provider))[0]!;
-    expect(info.description).toContain("updating");
-    expect(info.accessibilityLabel).toContain("updating");
+    expect(info).toBe(retained);
+    expect(info.description ?? "").not.toContain("updating");
+    expect(info.accessibilityLabel).not.toContain("updating");
 
     rejectRefresh(new Error("refresh failed"));
     await pending;
@@ -1597,7 +1632,7 @@ describe("ResourceExplorerProvider", () => {
     expect(harness.provider.retryWorkspaceFor(info)).toBe("file:///repo");
   });
 
-  test("retains updating and stale state on an existing issue row", async () => {
+  test("keeps an existing issue row stable until a failed refresh becomes stale", async () => {
     let rejectRefresh!: (error: Error) => void;
     const refreshing = new Promise<unknown>((_resolve, reject) => { rejectRefresh = reject; });
     const getResourceInventory = vi.fn()
@@ -1606,9 +1641,11 @@ describe("ResourceExplorerProvider", () => {
     const harness = createHarness(getResourceInventory);
     await harness.provider.refresh();
 
+    const retained = (await roots(harness.provider))[0]!;
     const pending = harness.provider.refresh();
     await Promise.resolve();
-    expect((await roots(harness.provider))[0]?.accessibilityLabel).toContain("updating");
+    expect((await roots(harness.provider))[0]).toBe(retained);
+    expect((await roots(harness.provider))[0]?.accessibilityLabel).not.toContain("updating");
     rejectRefresh(new Error("refresh failed"));
     await pending;
     expect((await roots(harness.provider))[0]?.accessibilityLabel).toContain("out of date");
@@ -1666,7 +1703,7 @@ describe("ResourceExplorerProvider", () => {
     expect(harness.recorded.contextValues.get("aurelia.resourceExplorerHasIssues")).toBe(true);
   });
 
-  test("publishes updating state on retained rows before the replacement settles", async () => {
+  test("does not republish or reflow retained rows before the replacement settles", async () => {
     let settle!: (value: unknown) => void;
     const replacement = new Promise<unknown>((resolve) => { settle = resolve; });
     const current = resource({
@@ -1679,23 +1716,26 @@ describe("ResourceExplorerProvider", () => {
       .mockImplementationOnce(() => replacement);
     const harness = createHarness(getResourceInventory);
     await harness.provider.refresh();
+    const retained = findNode(await roots(harness.provider), "current-card")!;
     const changed = vi.fn();
     const subscription = harness.provider.onDidChangeTreeData(changed);
 
     const pending = harness.provider.refresh();
     await Promise.resolve();
-    const retained = findNode(await roots(harness.provider), "current-card")!;
-    expect(retained.description).toContain("updating");
-    expect(retained.accessibilityLabel).toContain("updating");
-    expect(harness.view.message).toBe("Updating — showing previous results");
-    expect(changed).toHaveBeenCalledOnce();
+    const pendingRow = findNode(await roots(harness.provider), "current-card")!;
+    expect(pendingRow).toBe(retained);
+    expect(pendingRow.description).not.toContain("updating");
+    expect(pendingRow.accessibilityLabel).not.toContain("updating");
+    expect(harness.view.message).toBeUndefined();
+    expect(changed).not.toHaveBeenCalled();
 
     settle(response([readyProject([current])], workspace(), "next"));
     await pending;
+    expect(changed).toHaveBeenCalledOnce();
     subscription.dispose();
   });
 
-  test("scopes retained updating rows and view-state counts to the pending workspace", async () => {
+  test("keeps every workspace row stable while a scoped replacement is pending", async () => {
     const observation = captureResourceDiscoveryObservations("resource-explorer");
     const workspaceA = workspace("file:///repo/a");
     const workspaceB = workspace("file:///repo/b");
@@ -1721,18 +1761,20 @@ describe("ResourceExplorerProvider", () => {
       .mockImplementationOnce(() => replacement);
     const harness = createHarness(getResourceInventory);
     await harness.provider.refresh();
+    const baselineA = findNode(await roots(harness.provider), "a-card")!;
     const baselineB = findNode(await roots(harness.provider), "b-card")!;
     observation.events.length = 0;
 
     const pending = harness.provider.refreshWorkspace(workspaceA.key);
     try {
       const tree = await roots(harness.provider);
-      const updatingA = findNode(tree, "a-card")!;
-      const updatingProject = tree.find((node) => findNode([node], "a-card") != null)!;
+      const pendingA = findNode(tree, "a-card")!;
+      const pendingProject = tree.find((node) => findNode([node], "a-card") != null)!;
       const retainedB = findNode(tree, "b-card")!;
-      expect(updatingA.description).toContain("updating");
-      expect(updatingA.accessibilityLabel).toContain("updating");
-      expect(iconOf(harness.provider, updatingProject)).toEqual({ id: "project", color: undefined });
+      expect(pendingA).toBe(baselineA);
+      expect(pendingA.description).not.toContain("updating");
+      expect(pendingA.accessibilityLabel).not.toContain("updating");
+      expect(iconOf(harness.provider, pendingProject)).toEqual({ id: "project", color: undefined });
       expect(retainedB).toEqual(expect.objectContaining({
         id: baselineB.id,
         label: baselineB.label,
@@ -1742,16 +1784,7 @@ describe("ResourceExplorerProvider", () => {
       expect(retainedB.description ?? "").not.toContain("updating");
       expect(retainedB.accessibilityLabel).not.toContain("updating");
       expect(harness.view.message).toBeUndefined();
-      expect(observation.events.find((event) =>
-        event.phase === "view-state"
-          && event.updatingWorkspaceCount === 1
-      )).toEqual(expect.objectContaining({
-        state: "current",
-        message: null,
-        updatingAll: false,
-        updatingWorkspaceCount: 1,
-        staleWorkspaceCount: 0,
-      }));
+      expect(observation.events).toEqual([]);
     } finally {
       settle(recoveredA);
       await pending;
@@ -1822,7 +1855,7 @@ describe("ResourceExplorerProvider", () => {
     const stale = findNode(await roots(harness.provider), "current-card")!;
     expect(stale.description).toContain("out of date");
     expect(stale.accessibilityLabel).toContain("out of date");
-    expect(iconOf(harness.provider, stale)).toBeUndefined();
+    expect(iconOf(harness.provider, stale)).toEqual({ id: "code", color: undefined });
     expect(harness.view.message).toBe(
       "Out of date — refresh failed. Refresh to retry; see Aurelia Output for details.",
     );

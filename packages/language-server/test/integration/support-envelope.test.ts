@@ -172,14 +172,22 @@ test("withdraws and restores exact external-template ownership after a live deco
   const inlineSource = baselineSource.replace(externalTemplateField, inlineTemplateField);
   expect(inlineSource).not.toBe(baselineSource);
 
-  const analysisEvents: Array<{ readonly fingerprint?: string; readonly changeKind?: string }> = [];
+  const analysisEvents: Array<{
+    readonly fingerprint?: string;
+    readonly changeKind?: string;
+    readonly changedSourceUris?: readonly string[];
+  }> = [];
   const { connection, child, dispose, getStderr } = startServer(fixture);
 
   try {
     await initialize(connection, child, getStderr, fixture, {
       diagnostics: {
         onAnalysisChanged: (params) => {
-          analysisEvents.push(params as { readonly fingerprint?: string; readonly changeKind?: string });
+          analysisEvents.push(params as {
+            readonly fingerprint?: string;
+            readonly changeKind?: string;
+            readonly changedSourceUris?: readonly string[];
+          });
         },
       },
     });
@@ -191,7 +199,7 @@ test("withdraws and restores exact external-template ownership after a live deco
 
     const inlineChangeCursor = analysisEvents.length;
     changeDocument(connection, componentUri, inlineSource, 2);
-    await expectNewSourceAnalysis(analysisEvents, inlineChangeCursor, baselineOwnership.fingerprint);
+    await expectNewSourceAnalysis(analysisEvents, inlineChangeCursor, baselineOwnership.fingerprint, componentUri);
 
     const inlineOwnership = await sourceOwnership(connection, templateUri);
     expect(inlineOwnership.templateOwned).toBe(false);
@@ -202,7 +210,7 @@ test("withdraws and restores exact external-template ownership after a live deco
 
     const restoreCursor = analysisEvents.length;
     changeDocument(connection, componentUri, baselineSource, 3);
-    await expectNewSourceAnalysis(analysisEvents, restoreCursor, inlineOwnership.fingerprint);
+    await expectNewSourceAnalysis(analysisEvents, restoreCursor, inlineOwnership.fingerprint, componentUri);
 
     const restoredOwnership = await sourceOwnership(connection, templateUri);
     expect(restoredOwnership.templateOwned).toBe(true);
@@ -313,15 +321,21 @@ async function sourceOwnership(
 }
 
 async function expectNewSourceAnalysis(
-  events: readonly { readonly fingerprint?: string; readonly changeKind?: string }[],
+  events: readonly {
+    readonly fingerprint?: string;
+    readonly changeKind?: string;
+    readonly changedSourceUris?: readonly string[];
+  }[],
   cursor: number,
   previousFingerprint: string,
+  changedSourceUri: string,
 ): Promise<void> {
   await vi.waitFor(() => {
     expect(events.slice(cursor).some((event) =>
       event.changeKind === "source-text"
       && typeof event.fingerprint === "string"
       && event.fingerprint !== previousFingerprint
+      && event.changedSourceUris?.includes(changedSourceUri) === true
     )).toBe(true);
   }, { timeout: 30_000, interval: 20 });
 }

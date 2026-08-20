@@ -42,6 +42,7 @@ type WatchedFilesEvent = { changes: Array<{ uri: string; type: FileChangeType }>
 function createLifecycleHarness() {
   let generation = createGeneration();
   const openDocuments = new Map<string, TextDocument>();
+  const hostFiles = new Map<string, string>();
   const documentUris = new WorkspaceDocumentUris();
   documentUris.configure(workspaceUri);
   const handlers: {
@@ -136,6 +137,7 @@ function createLifecycleHarness() {
     openWorkspaceDocument: (uri: string) => documentUris.workspaceHostPath(uri) == null
       ? null
       : openDocuments.get(documentUris.key(uri)) ?? null,
+    readWorkspaceHostFile: vi.fn((filePath: string) => hostFiles.get(path.resolve(filePath))),
     openDocument: (uri: string) => documentUris.ownsDocument(uri)
       ? openDocuments.get(documentUris.key(uri)) ?? null
       : null,
@@ -164,6 +166,15 @@ function createLifecycleHarness() {
     },
     watch(changes: WatchedFilesEvent["changes"]) {
       handlers.watchedFiles?.({ changes });
+    },
+    setHostFile(uri: string, text: string | undefined) {
+      const filePath = documentUris.workspaceHostPath(uri);
+      if (filePath == null) throw new Error(`Cannot set a host file outside the workspace: ${uri}`);
+      if (text == null) {
+        hostFiles.delete(path.resolve(filePath));
+      } else {
+        hostFiles.set(path.resolve(filePath), text);
+      }
     },
   };
 }
@@ -356,6 +367,108 @@ describe("document source authority", () => {
     expect(harness.semanticRuntime.recordSourceTextChanged).toHaveBeenCalledOnce();
   });
 
+  test.each([
+    "src/my-app.html",
+    "src/my-app.ts",
+    "aurelia.project.json",
+  ])("does not advance analysis when clean %s text opens, synchronizes, and closes", async (relativePath) => {
+    vi.useFakeTimers();
+    try {
+      const harness = createLifecycleHarness();
+      const doc = document(workspaceFileUri(relativePath), 1, "host text");
+      harness.setHostFile(doc.uri, doc.getText());
+
+      harness.emitOpen(doc);
+      harness.synchronize(doc);
+      harness.close(doc);
+      await vi.advanceTimersByTimeAsync(300);
+      await settleAsyncWork();
+
+      expect(harness.semanticRuntime.recordSourceTextChanged).not.toHaveBeenCalled();
+      expect(harness.semanticRuntime.recordProjectConfigurationChanged).not.toHaveBeenCalled();
+      expect(harness.connection.sendNotification).not.toHaveBeenCalled();
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  test("treats a filesystem UTF-8 BOM as encoding metadata for clean editor text", () => {
+    const harness = createLifecycleHarness();
+    const uri = workspaceFileUri("src/bom-template.html");
+    const clean = document(uri, 1, "<template>clean</template>");
+    harness.setHostFile(uri, `\uFEFF${clean.getText()}`);
+
+    harness.emitOpen(clean);
+    harness.synchronize(clean);
+    harness.close(clean);
+
+    expect(harness.semanticRuntime.recordSourceTextChanged).not.toHaveBeenCalled();
+    expect(harness.connection.sendNotification).not.toHaveBeenCalled();
+  });
+
+  test("does not erase a BOM authored into the synchronized editor buffer", () => {
+    const harness = createLifecycleHarness();
+    const uri = workspaceFileUri("src/authored-bom.html");
+    const clean = document(uri, 1, "<template>clean</template>");
+    const dirty = document(uri, 2, `\uFEFF${clean.getText()}`);
+    harness.setHostFile(uri, clean.getText());
+
+    harness.emitOpen(clean);
+    harness.synchronize(clean);
+    harness.synchronize(dirty);
+    expect(harness.semanticRuntime.recordSourceTextChanged).toHaveBeenCalledOnce();
+
+    harness.close(dirty);
+    expect(harness.semanticRuntime.recordSourceTextChanged).toHaveBeenCalledTimes(2);
+  });
+
+  test("advances once for a dirty overlay and again when unsaved close restores different host text", async () => {
+    vi.useFakeTimers();
+    try {
+      const harness = createLifecycleHarness();
+      const uri = workspaceFileUri("src/my-app.html");
+      const clean = document(uri, 1, "<template>host</template>");
+      const dirty = document(uri, 2, "<template>dirty</template>");
+      harness.setHostFile(uri, clean.getText());
+
+      harness.emitOpen(clean);
+      harness.synchronize(clean);
+      harness.synchronize(dirty);
+      harness.close(dirty);
+      await vi.advanceTimersByTimeAsync(300);
+      await settleAsyncWork();
+
+      expect(harness.semanticRuntime.recordSourceTextChanged).toHaveBeenCalledTimes(2);
+      expect(harness.connection.sendNotification).toHaveBeenCalledWith(
+        "aurelia/analysisChanged",
+        expect.objectContaining({
+          changeKind: "source-text",
+          changedSourceUris: [uri],
+        }),
+      );
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  test("does not advance again when save makes the dirty overlay the close-time host value", () => {
+    const harness = createLifecycleHarness();
+    const uri = workspaceFileUri("src/my-app.ts");
+    const clean = document(uri, 1, "export const value = 1;");
+    const dirty = document(uri, 2, "export const value = 2;");
+    harness.setHostFile(uri, clean.getText());
+
+    harness.emitOpen(clean);
+    harness.synchronize(clean);
+    harness.synchronize(dirty);
+    harness.setHostFile(uri, dirty.getText());
+    harness.close(dirty);
+
+    expect(harness.semanticRuntime.recordSourceTextChanged).toHaveBeenCalledOnce();
+  });
+
   test("coalesces synchronized edits into one settled analysis notification", async () => {
     vi.useFakeTimers();
     try {
@@ -380,6 +493,7 @@ describe("document source authority", () => {
         {
           fingerprint: "semantic-runtime:test:workspace-0:source-2",
           changeKind: "source-text",
+          changedSourceUris: [doc.uri],
         },
       );
       expect(harness.connection.languages.semanticTokens.refresh).toHaveBeenCalledOnce();
@@ -481,7 +595,10 @@ describe("document source authority", () => {
 
       expect(harness.connection.sendNotification).toHaveBeenCalledWith(
         "aurelia/analysisChanged",
-        expect.objectContaining({ changeKind: "source-text" }),
+        expect.objectContaining({
+          changeKind: "source-text",
+          changedSourceUris: [workspaceFileUri("src/my-app.html")],
+        }),
       );
       expect(harness.ctx.logger.error).not.toHaveBeenCalled();
     } finally {
@@ -579,12 +696,21 @@ describe("workspace source events", () => {
       harness.clientSupport.diagnosticRefresh = true;
       const doc = document();
 
-      harness.watch([{ uri: workspaceFileUri("src/configuration.cjs"), type: FileChangeType.Changed }]);
+      const closedUri = workspaceFileUri("src/configuration.cjs");
+      harness.watch([{ uri: closedUri, type: FileChangeType.Changed }]);
       harness.synchronize(doc);
+      harness.synchronize(document(doc.uri, 2, "<template>${next}</template>"));
       await vi.advanceTimersByTimeAsync(300);
       await settleAsyncWork();
 
       expect(harness.connection.sendNotification).toHaveBeenCalledOnce();
+      expect(harness.connection.sendNotification).toHaveBeenCalledWith(
+        "aurelia/analysisChanged",
+        expect.objectContaining({
+          changeKind: "source-text",
+          changedSourceUris: [closedUri, doc.uri].sort((left, right) => left < right ? -1 : left > right ? 1 : 0),
+        }),
+      );
       expect(harness.connection.languages.diagnostics.refresh).toHaveBeenCalledOnce();
     } finally {
       vi.clearAllTimers();

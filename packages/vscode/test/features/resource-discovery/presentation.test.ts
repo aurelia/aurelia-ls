@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
+  RESOURCE_EXPLORER_ROLE_ICONS,
   resourceAvailabilityReasonLabel,
   resourceKindPresentation,
   resourceMetadataStateLabel,
@@ -10,6 +11,17 @@ import {
 } from "../../../out/features/resource-discovery/presentation.js";
 
 describe("resource discovery presentation vocabulary", () => {
+  test("uses tree-role icons without projecting Aurelia kinds onto source symbols", () => {
+    expect(RESOURCE_EXPLORER_ROLE_ICONS).toEqual({
+      project: "project",
+      kind: "library",
+      resource: "code",
+      alias: "link",
+      bindable: "plug",
+    });
+    expect(Object.values(RESOURCE_EXPLORER_ROLE_ICONS).some((icon) => icon.startsWith("symbol-"))).toBe(false);
+  });
+
   test("keeps resource-kind presentation textual instead of projecting implementation symbols", () => {
     expect([
       "custom-element",
@@ -55,11 +67,9 @@ describe("resource discovery presentation vocabulary", () => {
       "declaration not resolved",
     ]);
     expect([
-      "updating",
       "out-of-date",
       "discovery-incomplete",
     ].map((state) => resourceTreeRowStateLabel(state as never))).toEqual([
-      "updating",
       "out of date",
       "discovery incomplete",
     ]);

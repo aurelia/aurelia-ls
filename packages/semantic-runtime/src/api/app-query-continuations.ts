@@ -770,6 +770,14 @@ function addTemplateContinuations(
   }
 
   switch (query.kind) {
+    case SemanticAppQueryKind.TemplateDocumentOwnership:
+      seeds.push(
+        inspect(
+          'Inspect converged resource definitions that retain these template sources.',
+          rowQuery(SemanticAppQueryKind.ResourceDefinitions, query, page),
+        ),
+      );
+      break;
     case SemanticAppQueryKind.TemplateCompilations:
       seeds.push(
         diagnose(

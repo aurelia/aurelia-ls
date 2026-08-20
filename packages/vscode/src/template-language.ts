@@ -5,7 +5,12 @@ import type {
 } from "vscode";
 import type { ClientContext } from "./core/context.js";
 import { documentUriIdentityKey, sameDocumentUri } from "./core/uri-identity.js";
-import { sourceOwnershipTemplateOwned, type SourceOwnershipSnapshot } from "./types.js";
+import {
+  sourceOwnershipTemplateOwned,
+  type AnalysisChangedPayload,
+  type SourceOwnershipSnapshot,
+  type WorkspaceNotificationPayload,
+} from "./types.js";
 
 export const HTML_LANGUAGE_ID = "html";
 export const AURELIA_HTML_LANGUAGE_ID = "aurelia-html";
@@ -35,6 +40,8 @@ export class OwnedTemplateLanguageController implements Disposable {
   readonly #cancellationByDocument = new Map<string, CancellationTokenSource>();
   readonly #pending = new Set<Promise<void>>();
   readonly #controllerOwnedDocuments = new Set<string>();
+  readonly #settledOwnershipDocuments = new Set<string>();
+  readonly #dirtyOwnershipDocuments = new Set<string>();
   readonly #modeChanges = new Set<string>();
   readonly #modeChangeTailByDocument = new Map<string, Promise<void>>();
   readonly #modeChangeOwnerByDocument = new Map<string, symbol>();
@@ -47,7 +54,7 @@ export class OwnedTemplateLanguageController implements Disposable {
     const reconcileAll = () => this.reconcileAll();
     this.#subscriptions.push(ctx.languageClient.onDidChangeSessions(reconcileAll));
     this.#subscriptions.push(ctx.lsp.onAnalysisChanged((payload) => {
-      this.#reconcileWorkspace(payload.workspace.key);
+      this.#reconcileAnalysis(payload);
     }));
     this.#subscriptions.push(ctx.vscode.workspace.onDidOpenTextDocument((document) => {
       this.#handleOpen(document);
@@ -76,13 +83,32 @@ export class OwnedTemplateLanguageController implements Disposable {
     }
   }
 
-  #reconcileWorkspace(workspaceKey: string): void {
+  #reconcileAnalysis(payload: WorkspaceNotificationPayload<AnalysisChangedPayload>): void {
     if (this.#disposed) return;
+    const reproveSettled = analysisCanChangeTemplateOwnership(this.#ctx, payload);
     for (const document of this.#ctx.vscode.workspace.textDocuments) {
       if (!isTemplateLanguageId(document.languageId)) continue;
       const session = this.#ctx.languageClient.sessionForUri(document.uri);
-      if (session?.workspace.key === workspaceKey) this.#schedule(document);
+      if (session?.workspace.key !== payload.workspace.key) continue;
+      const key = documentUriIdentityKey(this.#ctx.vscode, document.uri);
+      if (key == null) continue;
+      if (!reproveSettled && this.#settledOwnershipDocuments.has(key)) continue;
+      this.#scheduleAfterSettledNotification(key, document);
     }
+  }
+
+  #scheduleAfterSettledNotification(key: string, document: TextDocument): void {
+    const inFlight = this.#cancellationByDocument.get(key);
+    if (inFlight == null) {
+      this.#schedule(document);
+      return;
+    }
+    // A settled notification makes an older in-flight answer unusable. Cancel
+    // it once and conserve one newest retry instead of starting one request per
+    // notification while the previous transport call is still unwinding.
+    this.#settledOwnershipDocuments.delete(key);
+    this.#dirtyOwnershipDocuments.add(key);
+    inFlight.cancel();
   }
 
   dispose(): void {
@@ -113,6 +139,8 @@ export class OwnedTemplateLanguageController implements Disposable {
     const settledRestore = await Promise.allSettled(restore);
     this.#reportRejected("template language restoration", settledRestore);
     this.#controllerOwnedDocuments.clear();
+    this.#settledOwnershipDocuments.clear();
+    this.#dirtyOwnershipDocuments.clear();
   }
 
   #handleOpen(document: TextDocument): void {
@@ -130,12 +158,16 @@ export class OwnedTemplateLanguageController implements Disposable {
     // replacement; failed or displaced transitions clean the mark below.
     if (this.#modeChanges.has(key)) return;
     this.#controllerOwnedDocuments.delete(key);
+    this.#settledOwnershipDocuments.delete(key);
+    this.#dirtyOwnershipDocuments.delete(key);
     this.#invalidate(key);
   }
 
   #schedule(document: TextDocument): void {
     const key = documentUriIdentityKey(this.#ctx.vscode, document.uri);
     if (key == null) return;
+    this.#settledOwnershipDocuments.delete(key);
+    this.#dirtyOwnershipDocuments.delete(key);
     this.#invalidate(key);
     const cancellation = new this.#ctx.vscode.CancellationTokenSource();
     const request: LanguageRequest = {
@@ -149,6 +181,15 @@ export class OwnedTemplateLanguageController implements Disposable {
     this.#generationByDocument.set(key, request.generation);
     this.#cancellationByDocument.set(key, cancellation);
     const pending = this.#resolve(key, request)
+      .then((settled) => {
+        if (
+          settled
+          && this.#cancellationByDocument.get(key) === cancellation
+          && !this.#dirtyOwnershipDocuments.has(key)
+        ) {
+          this.#settledOwnershipDocuments.add(key);
+        }
+      })
       .catch(async (error) => {
         if (!cancellation.token.isCancellationRequested && !this.#disposed) {
           try {
@@ -163,10 +204,18 @@ export class OwnedTemplateLanguageController implements Disposable {
       })
       .finally(() => {
         this.#pending.delete(pending);
-        if (this.#cancellationByDocument.get(key) === cancellation) {
+        const ownsRequestSlot = this.#cancellationByDocument.get(key) === cancellation;
+        if (ownsRequestSlot) {
           this.#cancellationByDocument.delete(key);
         }
         cancellation.dispose();
+        if (!ownsRequestSlot || !this.#dirtyOwnershipDocuments.delete(key) || this.#disposed) return;
+        const current = this.#ctx.vscode.workspace.textDocuments.find((candidate) =>
+          sameDocumentUri(this.#ctx.vscode, candidate.uri, request.document.uri)
+        );
+        if (current != null && isTemplateLanguageId(current.languageId)) {
+          this.#schedule(current);
+        }
       });
     this.#pending.add(pending);
   }
@@ -188,12 +237,12 @@ export class OwnedTemplateLanguageController implements Disposable {
     }
   }
 
-  async #resolve(key: string, request: LanguageRequest): Promise<void> {
+  async #resolve(key: string, request: LanguageRequest): Promise<boolean> {
     let ownership: SourceOwnershipSnapshot | null = null;
     if (request.sessionClient != null) {
       ownership = await this.#ctx.lsp.getSourceOwnership(request.uri, request.cancellation.token);
     }
-    if (!this.#isCurrent(key, request)) return;
+    if (!this.#isCurrent(key, request)) return false;
     const templateOwned = ownership != null
       && sourceOwnershipTemplateOwned(ownership)
       && sameDocumentUri(this.#ctx.vscode, ownership.sourceUri, request.uri)
@@ -215,7 +264,9 @@ export class OwnedTemplateLanguageController implements Disposable {
           this.#schedule(current);
         }
       }
+      return this.#isCurrentMode(key, request, languageId);
     }
+    return this.#isCurrent(key, request);
   }
 
   #isCurrent(key: string, request: LanguageRequest): boolean {
@@ -312,6 +363,33 @@ export class OwnedTemplateLanguageController implements Disposable {
         this.#ctx.logger.warn(`[client] ${label} failed: ${errorMessage(result.reason)}`);
       }
     }
+  }
+}
+
+function analysisCanChangeTemplateOwnership(
+  ctx: ClientContext,
+  payload: WorkspaceNotificationPayload<AnalysisChangedPayload>,
+): boolean {
+  if (payload.changeKind === "topology") return true;
+  // An exact script edit may add, remove, or redirect an external-template
+  // association. HTML/CSS/JSON value edits cannot change that association, so
+  // settled ownership proofs remain valid. An empty future/legacy wave stays
+  // conservative rather than suppressing a necessary proof.
+  if (payload.changedSourceUris.length === 0) return true;
+  return payload.changedSourceUris.some((uri) => sourceUriCanChangeTemplateOwnership(ctx, uri));
+}
+
+function sourceUriCanChangeTemplateOwnership(ctx: ClientContext, uri: string): boolean {
+  try {
+    const source = ctx.vscode.Uri.parse(uri, true);
+    if (source.scheme !== "file") return true;
+    const sourcePath = source.path.toLowerCase();
+    // Only exact passive web/config source shapes are proven unable to redirect
+    // an external-template association. Unknown extensions and URI schemes fail
+    // conservatively into a workspace ownership reproof.
+    return !/\.(?:html?|css|jsonc?)$/.test(sourcePath);
+  } catch {
+    return true;
   }
 }
 

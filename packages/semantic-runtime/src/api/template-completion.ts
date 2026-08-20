@@ -2696,6 +2696,20 @@ function templateCompletionReplacementSource(
       carrier,
     );
   }
+  // A frontier/degraded expression has no canonical token span at the cursor.
+  // Its value-site address is the enclosing binding/interpolation carrier, not
+  // an authored completion token. Replacing that carrier makes editors filter
+  // every candidate against unrelated text and would destroy the expression
+  // if a candidate were applied. With no token to replace, insert exactly at
+  // the cursor; completed partial tokens still take the branch above.
+  if (templateCompletionSiteUsesExpressionParse(cursorContext.query.siteKind)) {
+    return sourceReferenceForParserSpan(
+      locus.cursor.filePath,
+      new SourceSpan(locus.cursor.offset, locus.cursor.offset),
+      'completion-insertion',
+      carrier,
+    );
+  }
   const activeSource = semanticExactSourceReference(
     describeAddress(store, cursorContext.activeSourceAddressHandle),
   );
@@ -2705,6 +2719,20 @@ function templateCompletionReplacementSource(
     'completion-insertion',
     carrier,
   );
+}
+
+function templateCompletionSiteUsesExpressionParse(
+  siteKind: TemplateCompletionSiteKind,
+): boolean {
+  switch (siteKind) {
+    case TemplateCompletionSiteKind.Expression:
+    case TemplateCompletionSiteKind.ExpressionMember:
+    case TemplateCompletionSiteKind.ExpressionValueConverter:
+    case TemplateCompletionSiteKind.ExpressionBindingBehavior:
+      return true;
+    default:
+      return false;
+  }
 }
 
 function missingTemplateCompletion(

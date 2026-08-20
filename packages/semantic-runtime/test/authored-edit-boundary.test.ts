@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import {
   createSemanticRuntime,
   SemanticAppQueryKind,
-  semanticApplicationTopologyOwnsTemplateDocument,
+  semanticTemplateDocumentOwnershipOwnsSource,
   SemanticTemplateRenameStatus,
   SemanticTemplateRenameUnavailableReason,
   type SemanticApplicationTopologyResult,
@@ -16,6 +16,7 @@ import {
   type SemanticTemplateCodeActionsResult,
   type SemanticTemplateCompletionResult,
   type SemanticTemplateDiagnosticsResult,
+  type SemanticTemplateDocumentOwnershipResult,
   type SemanticTemplateReferencesResult,
   type SemanticTemplateRenameResult,
 } from '../src/index.js';
@@ -195,6 +196,26 @@ describe('authored edit boundary', () => {
   });
 
   test('distinguishes converged custom-element templates from unrelated admitted HTML', async () => {
+    const lspOwnership = await answerQuery<SemanticTemplateDocumentOwnershipResult>({
+      kind: SemanticAppQueryKind.TemplateDocumentOwnership,
+      projectKey,
+      analysisDepth: 'runtime-topology',
+      includeAuthoringTemplates: false,
+      appRetention: 'retain-app',
+    });
+    const authoringOwnership = await answerQuery<SemanticTemplateDocumentOwnershipResult>({
+      kind: SemanticAppQueryKind.TemplateDocumentOwnership,
+      projectKey,
+      analysisDepth: 'runtime-topology',
+      includeAuthoringTemplates: true,
+      appRetention: 'retain-app',
+    });
+
+    expect(templateOwnershipOwnsDocument(lspOwnership.value, appTemplatePath)).toBe(true);
+    expect(templateOwnershipOwnsDocument(lspOwnership.value, externalWidgetTemplatePath)).toBe(true);
+    expect(templateOwnershipOwnsDocument(lspOwnership.value, unrelatedHtmlPath)).toBe(false);
+    expect(templateOwnershipOwnsDocument(lspOwnership.value, externalHostTemplatePath)).toBe(true);
+
     const topology = await answerQuery<SemanticApplicationTopologyResult>({
       kind: SemanticAppQueryKind.AppTopology,
       projectKey,
@@ -202,9 +223,18 @@ describe('authored edit boundary', () => {
       includeAuthoringTemplates: true,
       appRetention: 'retain-app',
     });
-
-    expect(topologyOwnsTemplateDocument(topology.value, appTemplatePath)).toBe(true);
-    expect(topologyOwnsTemplateDocument(topology.value, unrelatedHtmlPath)).toBe(false);
+    const ownershipPaths = lspOwnership.value.sources
+      .flatMap((source) => source.path == null ? [] : [normalizedPath(path.resolve(workspaceRoot, source.path))])
+      .sort();
+    const authoringOwnershipPaths = authoringOwnership.value.sources
+      .flatMap((source) => source.path == null ? [] : [normalizedPath(path.resolve(workspaceRoot, source.path))])
+      .sort();
+    const topologyPaths = topology.value.files
+      .filter((file) => file.roles.includes('component-template'))
+      .map((file) => normalizedPath(path.resolve(workspaceRoot, file.path)))
+      .sort();
+    expect(ownershipPaths).toEqual(authoringOwnershipPaths);
+    expect(ownershipPaths).toEqual(topologyPaths);
 
     const diagnostics = await answerQuery<SemanticTemplateDiagnosticsResult>({
       kind: SemanticAppQueryKind.TemplateDiagnostics,
@@ -396,12 +426,12 @@ describe('authored edit boundary', () => {
     return normalizedPath(sourcePath) === normalizedPath(expectedPath);
   }
 
-  function topologyOwnsTemplateDocument(
-    topology: SemanticApplicationTopologyResult,
+  function templateOwnershipOwnsDocument(
+    ownership: SemanticTemplateDocumentOwnershipResult,
     expectedPath: string,
   ): boolean {
-    return semanticApplicationTopologyOwnsTemplateDocument(
-      topology,
+    return semanticTemplateDocumentOwnershipOwnsSource(
+      ownership,
       (source) => sourceMatches(source, expectedPath),
     );
   }

@@ -99,10 +99,18 @@ export interface WorkspaceStatusResponse {
 }
 
 /** A newer semantic-runtime generation has settled and should replace cached client views. */
-export interface AnalysisChangedPayload {
-  readonly fingerprint: string;
-  readonly changeKind: "source-text" | "topology";
-}
+export type AnalysisChangedPayload =
+  | {
+      readonly fingerprint: string;
+      readonly changeKind: "source-text";
+      /** Exact, deduplicated source documents whose effective text changed in this settled wave. */
+      readonly changedSourceUris: readonly string[];
+    }
+  | {
+      readonly fingerprint: string;
+      /** Structural/configuration changes remain deliberately workspace-wide. */
+      readonly changeKind: "topology";
+    };
 
 export type TemplateCodeActionResolveData = {
   readonly schema: typeof AURELIA_TEMPLATE_CODE_ACTION_RESOLVE_SCHEMA;
