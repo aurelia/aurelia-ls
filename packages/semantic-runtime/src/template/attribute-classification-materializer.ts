@@ -216,7 +216,7 @@ export class AttributeClassificationMaterializer {
     const identityHandle = this.store.handles.identity(local);
     const decision = attribute == null || owner == null
       ? openDecision()
-      : classifySyntax(syntax, attribute, owner, compilerReads);
+      : classifySyntax(syntax, owner, compilerReads);
     const classification = this.createAttributeClassification(
       productHandle,
       identityHandle,
@@ -387,12 +387,11 @@ function referencedProductHandleForDecision(
 
 function classifySyntax(
   syntax: AttributeSyntax,
-  attribute: HtmlAttribute,
   owner: HtmlElementAttributeOwner,
   reads: TemplateCompilerReadView,
 ): ClassificationDecision {
-  const rawName = attribute.rawName.toLowerCase();
-  const target = syntax.target.toLowerCase();
+  const rawName = syntax.runtimeRawName;
+  const target = syntax.target;
 
   if (isTemplateSpecialAttributeName(rawName)) {
     return new ClassificationDecision(AttributeClassificationKind.CompilerControl, null, null, null, null);
@@ -401,7 +400,7 @@ function classifySyntax(
     return openDecision();
   }
 
-  const commandName = syntax.command?.toLowerCase() ?? null;
+  const commandName = syntax.command;
   const bindingCommand = commandName == null
     ? null
     : reads.bindingCommand(commandName)?.toReference() ?? null;
@@ -516,8 +515,8 @@ function classifyCapture(
       );
     }
   }
-  const target = syntax.target.toLowerCase();
-  if (hasBindingCommand && commandIgnoresAttributeName(syntax.command?.toLowerCase() ?? null, reads)) {
+  const target = syntax.target;
+  if (hasBindingCommand && commandIgnoresAttributeName(syntax.command, reads)) {
     return new ClassificationDecision(
       AttributeClassificationKind.Captured,
       ResourceDefinitionKind.CustomElement,

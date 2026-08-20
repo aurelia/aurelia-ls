@@ -7,6 +7,55 @@ export class TemplateSourceTextView {
   ) {}
 }
 
+/**
+ * Recover exact authored text for a source span from compiler-consumed template markup.
+ * Mapped spans are admitted only when every decoded boundary advances one authored code
+ * unit across the token, so escapes inside the token fail closed while mapping shifts
+ * elsewhere remain harmless.
+ */
+export function exactTemplateSourceTextForSourceSpan(
+  markup: string,
+  sourceMap: TemplateSourceOffsetMap | null,
+  templateSourceStart: number,
+  sourceStart: number,
+  sourceEnd: number,
+): string | null {
+  if (sourceStart < 0 || sourceEnd < sourceStart) {
+    return null;
+  }
+  if (sourceMap == null) {
+    const localStart = sourceStart - templateSourceStart;
+    const localEnd = sourceEnd - templateSourceStart;
+    return localStart < 0
+      || localEnd > markup.length
+      || localEnd < localStart
+      || localEnd - localStart !== sourceEnd - sourceStart
+      ? null
+      : markup.slice(localStart, localEnd);
+  }
+  // Mapped boundaries are absolute authored-file offsets; templateSourceStart is
+  // intentionally relevant only to the unmapped branch above.
+  const offsets = sourceMap.decodedToSourceOffsets;
+  if (offsets.length !== sourceMap.decodedLength + 1 || sourceMap.decodedLength !== markup.length) {
+    return null;
+  }
+  const decodedStart = offsets.indexOf(sourceStart);
+  if (decodedStart < 0) {
+    return null;
+  }
+  const decodedEnd = offsets.indexOf(sourceEnd, decodedStart);
+  if (decodedEnd < decodedStart) {
+    return null;
+  }
+  for (let index = decodedStart; index < decodedEnd; index += 1) {
+    if (offsets[index + 1] !== offsets[index]! + 1) {
+      return null;
+    }
+  }
+  const text = markup.slice(decodedStart, decodedEnd);
+  return text.length === sourceEnd - sourceStart ? text : null;
+}
+
 /** Remove source ranges while retaining an exact boundary map to the original markup. */
 export function stripTemplateSourceRanges(
   markup: string,

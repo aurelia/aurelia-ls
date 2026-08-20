@@ -80,6 +80,12 @@ import {
   taxonomyResourceKindForDefinition,
   type FullResourceDefinition,
 } from '../resources/resource-definition.js';
+import { ResourceDefinitionKind } from '../resources/resource-kind.js';
+import {
+  runtimeAsElementResourceName,
+  runtimeAttributeName,
+  runtimeElementResourceName,
+} from '../template/runtime-dom-name.js';
 import { TypeSystemHotDetails, TypeSystemProductDetails } from '../type-system/product-details.js';
 import {
   readTypeSystemOverlayDiagnostics,
@@ -206,6 +212,7 @@ import {
 import { appDiagnosticPresentation } from './diagnostic-presentation.js';
 import type { SemanticSourceReference } from './source-reference.js';
 import { normalizeTypeSystemPath } from '../type-system/source-file-path.js';
+import { exactTemplateSourceTextForSourceSpan } from '../resources/template-source-text.js';
 
 type TemplateCompilationLane = SemanticTemplateCompilationRow['compilationLane'];
 
@@ -2856,6 +2863,9 @@ function templateCursorInfoResult(
     store,
     query.selectedDefinitionProductHandle,
     cursorContext.selectedDefinitionMatchedName,
+    selection.resource,
+    cursorContext,
+    activeSource,
     includeHandles,
   );
   const selectedBindable = cursorBindableRow(
@@ -3220,7 +3230,7 @@ function cursorSelectsBindableTypeLocus(
     return true;
   }
 
-  const selectedAttribute = bindable.reference.attribute.toLowerCase();
+  const selectedAttribute = bindable.reference.attribute;
   const topLevelTarget = resource.compilation.attributeClassification.classifications.some((classification) => {
     if (!sameCursorBindableReference(classification.bindable, bindable)) {
       return false;
@@ -3228,7 +3238,7 @@ function cursorSelectsBindableTypeLocus(
     const syntax = resource.compilation.authoredAttributeSyntaxes.find((candidate) =>
       candidate.productHandle === classification.syntaxProductHandle
     ) ?? null;
-    return syntax?.target.toLowerCase() === selectedAttribute
+    return syntax?.target === selectedAttribute
       && cursorTouchesExactSourceAddress(store, syntax.targetSourceAddressHandle, locus.cursor);
   });
   if (topLevelTarget) {
@@ -3242,7 +3252,7 @@ function cursorSelectsBindableTypeLocus(
     const syntax = resource.compilation.authoredAttributeSyntaxes.find((candidate) =>
       candidate.productHandle === segment.syntaxProductHandle
     ) ?? null;
-    return syntax?.target.toLowerCase() === selectedAttribute
+    return syntax?.target === selectedAttribute
       && cursorTouchesExactSourceAddress(store, segment.targetSourceAddressHandle, locus.cursor);
   });
 }
@@ -3315,6 +3325,7 @@ function cursorHtmlRow(
   return {
     nodeKind: node?.nodeKind ?? null,
     tagName: node instanceof HtmlElement ? node.tagName : null,
+    namespace: node instanceof HtmlElement ? node.namespace : null,
     attributeName: attribute?.rawName ?? null,
     attributeValue: attribute?.rawValue ?? null,
     source: describeAddress(store, nodeSourceAddressHandle),
@@ -3367,6 +3378,9 @@ function cursorDefinitionRow(
   store: KernelStore,
   productHandle: TemplateCompletionCursorContext['query']['selectedDefinitionProductHandle'],
   matchedName: string | null,
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  cursorContext: TemplateCompletionCursorContext,
+  activeSource: SemanticSourceReference | null,
   includeHandles: boolean,
 ): SemanticTemplateCursorDefinitionRow | null {
   const definition = productHandle == null
@@ -3375,13 +3389,20 @@ function cursorDefinitionRow(
   if (definition == null) {
     return null;
   }
-  return definitionRow(store, definition, matchedName, includeHandles);
+  return definitionRow(
+    store,
+    definition,
+    matchedName,
+    cursorDefinitionAuthoredName(store, definition, resource, cursorContext, activeSource, matchedName),
+    includeHandles,
+  );
 }
 
 function definitionRow(
   store: KernelStore,
   definition: FullResourceDefinition,
   selectedName: string | null,
+  authoredSelectedName: string | null,
   includeHandles: boolean,
 ): SemanticTemplateCursorDefinitionRow {
   const matched = matchedResourceName(definition, selectedName);
@@ -3389,6 +3410,8 @@ function definitionRow(
     resourceKind: taxonomyResourceKindForDefinition(definition),
     name: 'name' in definition ? definition.name : null,
     matchedName: matched.name,
+    authoredMatchedName: authoredSelectedName,
+    runtimeMatchedName: selectedName,
     targetName: 'target' in definition ? definition.target.localName : null,
     source: describeAddress(store, definition.sourceAddressHandle),
     nameSource: describeAddress(store, definitionNameSourceAddressHandle(definition)),
@@ -3407,6 +3430,228 @@ function definitionRow(
   };
 }
 
+/** Recover the selected source spelling without confusing it with the browser/compiler lookup spelling. */
+function cursorDefinitionAuthoredName(
+  store: KernelStore,
+  definition: FullResourceDefinition,
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  cursorContext: TemplateCompletionCursorContext,
+  activeSource: SemanticSourceReference | null,
+  runtimeMatchedName: string | null,
+): string | null {
+  if (runtimeMatchedName == null) {
+    return null;
+  }
+  const node = readHtmlNode(store, cursorContext.htmlNodeProductHandle);
+  if (
+    node instanceof HtmlElement
+    && semanticTemplateCursorSourcesMatchExactly(
+      describeAddress(store, node.tagNameAddressHandle),
+      activeSource,
+    )
+    && semanticTemplateCursorSourceLength(activeSource) === node.tagName.length
+    && runtimeElementResourceName(node.tagName, node.namespace) === runtimeMatchedName
+  ) {
+    return node.tagName;
+  }
+  if (
+    node instanceof HtmlElement
+    && semanticTemplateCursorSourcesMatchExactly(
+      describeAddress(store, node.closingTagNameAddressHandle),
+      activeSource,
+    )
+  ) {
+    const closing = authoredTemplateCarrierSlice(store, resource, activeSource);
+    return closing != null
+      && runtimeElementResourceName(closing.text, node.namespace) === runtimeMatchedName
+      ? closing.text
+      : null;
+  }
+  const attribute = readHtmlAttribute(store, cursorContext.htmlAttributeProductHandle);
+  if (attribute != null) {
+    const name = authoredCarrierSlice(
+      attribute.rawName,
+      describeAddress(store, attribute.nameAddressHandle),
+      activeSource,
+    );
+    if (
+      name != null
+      && cursorDefinitionAuthoredAttributeNameMatches(
+        definition,
+        name.text,
+        name.relativeStart,
+        runtimeMatchedName,
+        attribute.rawName,
+        node instanceof HtmlElement ? node.namespace : undefined,
+        resource.compilation.authoredAttributeSyntaxes.some((syntax) =>
+          syntax.patternLiterals.some((literal) =>
+            semanticTemplateCursorSourcesMatchExactly(
+              describeAddress(store, literal.sourceAddressHandle),
+              activeSource,
+            )
+          )
+        ),
+        resource.compilation.authoredAttributeSyntaxes.some((syntax) =>
+          syntax.command === runtimeMatchedName
+          && (
+            semanticTemplateCursorSourcesMatchExactly(
+              describeAddress(store, syntax.commandSourceAddressHandle),
+              activeSource,
+            )
+            || syntax.patternLiterals.some((literal) =>
+              semanticTemplateCursorSourcesMatchExactly(
+                describeAddress(store, literal.sourceAddressHandle),
+                activeSource,
+              )
+            )
+          )
+        ),
+      )
+    ) {
+      return name.text;
+    }
+    const value = authoredCarrierSlice(
+      attribute.rawValue,
+      describeAddress(store, attribute.valueAddressHandle),
+      activeSource,
+    );
+    if (
+      value != null
+      && taxonomyResourceKindForDefinition(definition) === ResourceDefinitionKind.BindingCommand
+      && resource.compilation.bindingCommandLowering.attributeSyntaxes.some((syntax) =>
+        syntax.command === runtimeMatchedName
+        && semanticTemplateCursorSourcesMatchExactly(
+          describeAddress(store, syntax.commandSourceAddressHandle),
+          activeSource,
+        )
+      )
+    ) {
+      return value.text;
+    }
+    if (
+      value != null
+      && semanticTemplateCursorSourcesMatchExactly(
+        describeAddress(store, attribute.valueAddressHandle),
+        activeSource,
+      )
+      && definition.type === ResourceDefinitionKind.CustomElement
+      && runtimeAttributeName(attribute.rawName, node instanceof HtmlElement ? node.namespace : undefined) === 'as-element'
+      && runtimeAsElementResourceName(value.text) === runtimeMatchedName
+    ) {
+      return value.text;
+    }
+  }
+  // Only expression-resource names own an exact parser token without a kernel address.
+  const expressionOwned = cursorContext.activeExpressionSpan != null
+    && (
+      (
+        definition.type === ResourceDefinitionKind.ValueConverter
+        && cursorContext.query.siteKind === TemplateCompletionSiteKind.ExpressionValueConverter
+      )
+      || (
+        definition.type === ResourceDefinitionKind.BindingBehavior
+        && cursorContext.query.siteKind === TemplateCompletionSiteKind.ExpressionBindingBehavior
+      )
+    );
+  if (!expressionOwned) {
+    return null;
+  }
+  const expression = authoredTemplateCarrierSlice(store, resource, activeSource);
+  return expression?.text === runtimeMatchedName ? expression.text : null;
+}
+
+function cursorDefinitionAuthoredAttributeNameMatches(
+  definition: FullResourceDefinition,
+  authoredPart: string,
+  relativeStart: number,
+  runtimeMatchedName: string,
+  authoredAttributeName: string,
+  namespace: HtmlElement['namespace'] | undefined,
+  attributePatternLiteralOwned: boolean,
+  bindingCommandSyntaxOwned: boolean,
+): boolean {
+  const runtimeAttribute = runtimeAttributeName(authoredAttributeName, namespace);
+  const runtimePart = relativeStart < 0
+    ? null
+    : runtimeAttribute.slice(relativeStart, relativeStart + authoredPart.length);
+  switch (taxonomyResourceKindForDefinition(definition)) {
+    case ResourceDefinitionKind.CustomAttribute:
+    case ResourceDefinitionKind.TemplateController:
+      return runtimePart === runtimeMatchedName;
+    case ResourceDefinitionKind.BindingCommand:
+      return runtimePart === runtimeMatchedName || bindingCommandSyntaxOwned;
+    case ResourceDefinitionKind.AttributePattern:
+      return attributePatternLiteralOwned;
+    case ResourceDefinitionKind.CustomElement:
+    case ResourceDefinitionKind.ValueConverter:
+    case ResourceDefinitionKind.BindingBehavior:
+      return false;
+  }
+}
+
+function authoredCarrierSlice(
+  carrierText: string,
+  carrierSource: SemanticSourceReference | null,
+  activeSource: SemanticSourceReference | null,
+): { readonly text: string; readonly relativeStart: number } | null {
+  const carrier = semanticExactSourceReference(carrierSource);
+  const active = semanticExactSourceReference(activeSource);
+  if (
+    carrier?.path == null
+    || active?.path == null
+    || canonicalCursorSourcePath(carrier.path) !== canonicalCursorSourcePath(active.path)
+    || carrier.start == null
+    || carrier.end == null
+    || carrier.end - carrier.start !== carrierText.length
+    || active.start == null
+    || active.end == null
+    || active.start < carrier.start
+    || active.end > carrier.end
+  ) {
+    return null;
+  }
+  const relativeStart = active.start - carrier.start;
+  const relativeEnd = active.end - carrier.start;
+  return relativeEnd <= carrierText.length
+    ? { text: carrierText.slice(relativeStart, relativeEnd), relativeStart }
+    : null;
+}
+
+function semanticTemplateCursorSourceLength(source: SemanticSourceReference | null): number | null {
+  const exact = semanticExactSourceReference(source);
+  return exact?.start == null || exact.end == null ? null : exact.end - exact.start;
+}
+
+function authoredTemplateCarrierSlice(
+  store: KernelStore,
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  activeSource: SemanticSourceReference | null,
+): { readonly text: string; readonly relativeStart: number } | null {
+  const templateSource = resource.compilation.unit.templateSource;
+  const markup = templateSource.markup;
+  const carrier = semanticExactSourceReference(describeAddress(store, templateSource.sourceAddressHandle));
+  const active = semanticExactSourceReference(activeSource);
+  if (
+    markup == null
+    || carrier?.path == null
+    || active?.path == null
+    || canonicalCursorSourcePath(carrier.path) !== canonicalCursorSourcePath(active.path)
+    || carrier.start == null
+    || active.start == null
+    || active.end == null
+  ) {
+    return null;
+  }
+  const text = exactTemplateSourceTextForSourceSpan(
+    markup,
+    templateSource.sourceMap,
+    carrier.start,
+    active.start,
+    active.end,
+  );
+  return text == null ? null : { text, relativeStart: 0 };
+}
+
 function matchedResourceName(
   definition: FullResourceDefinition,
   selectedName: string | null,
@@ -3414,14 +3659,19 @@ function matchedResourceName(
   if (selectedName == null || !('name' in definition)) {
     return { name: null, sourceAddressHandle: null };
   }
-  const normalized = selectedName.toLowerCase();
-  const alias = definition.aliases.find((candidate) => candidate.name.toLowerCase() === normalized) ?? null;
+  // `selectedName` is already the runtime lookup spelling selected by the
+  // compiler/expression lane. Resource keys are exact: HTML normalization
+  // happens before custom-element/attribute lookup, while VC/BB names remain
+  // expression-case-sensitive.
+  const matches = (candidate: string): boolean => candidate === selectedName;
+  if (matches(definition.name)) {
+    return { name: definition.name, sourceAddressHandle: definitionNameSourceAddressHandle(definition) };
+  }
+  const alias = definition.aliases.find((candidate) => matches(candidate.name)) ?? null;
   if (alias != null) {
     return { name: alias.name, sourceAddressHandle: alias.addressHandle };
   }
-  return definition.name.toLowerCase() === normalized
-    ? { name: definition.name, sourceAddressHandle: definitionNameSourceAddressHandle(definition) }
-    : { name: selectedName, sourceAddressHandle: null };
+  return { name: selectedName, sourceAddressHandle: null };
 }
 
 function definitionNameSourceAddressHandle(
@@ -3705,6 +3955,7 @@ function emptyCursorHtmlRow(): SemanticTemplateCursorHtmlRow {
   return {
     nodeKind: null,
     tagName: null,
+    namespace: null,
     attributeName: null,
     attributeValue: null,
     source: null,

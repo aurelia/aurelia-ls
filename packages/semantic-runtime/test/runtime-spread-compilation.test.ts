@@ -1,9 +1,14 @@
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, test } from 'vitest';
 
 import { createSemanticRuntime } from '../src/api/runtime.js';
+import {
+  NodeSemanticRuntimeProjectInputHost,
+  SemanticRuntimeProjectInputAuthority,
+} from '../src/kernel/project-input.js';
 import { sourceSpanAddressForAddress } from '../src/kernel/source-address.js';
 import { capturedAttributeSyntaxForDynamicInstruction } from '../src/template/runtime-resource-ownership.js';
 
@@ -94,4 +99,44 @@ describe('runtime captured-attribute compilation', () => {
     expect(diagnostics.value?.rows.some((row) => row.frameworkErrorCode === 'AUR0101')).toBe(true);
     expect(diagnostics.value?.rows.some((row) => row.frameworkErrorCode === 'AUR9998')).toBe(true);
   }, 45_000);
+
+  test('models HTML shorthand case folding while explicit spread values retain TypeScript case', async () => {
+    const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
+    const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-spread-capture-semantics');
+    const templateFile = path.join(fixtureRoot, 'src/template-spread-capture-semantics-app.html');
+    const originalTemplate = readFileSync(templateFile, 'utf8');
+    const directShorthandTemplate = originalTemplate.replace(
+      "...$bindables='spreadState'",
+      '...spreadState',
+    );
+    expect(directShorthandTemplate).not.toBe(originalTemplate);
+
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: fixtureRoot,
+      storeKey: 'test:runtime-spread-shorthand-browser-case',
+      projectInputAuthority: new SemanticRuntimeProjectInputAuthority(
+        new NodeSemanticRuntimeProjectInputHost({
+          readFile(fileName) {
+            return samePath(fileName, templateFile) ? directShorthandTemplate : undefined;
+          },
+          fileExists(fileName) {
+            return samePath(fileName, templateFile) ? true : undefined;
+          },
+        }),
+      ),
+    });
+    const diagnostics = await runtime.templateDiagnostics({
+      sourceFile: { filePath: templateFile },
+    });
+    const missingMembers = diagnostics.value?.rows.filter((row) =>
+      row.diagnosticKind === 'missing-expression-member'
+    ) ?? [];
+
+    expect(missingMembers).toHaveLength(1);
+    expect(missingMembers[0]?.selectedMemberName).toBe('spreadstate');
+  }, 45_000);
 });
+
+function samePath(left: string, right: string): boolean {
+  return path.resolve(left).toLowerCase() === path.resolve(right).toLowerCase();
+}

@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
 
 interface DiagnosticPull {
@@ -17,7 +18,6 @@ interface LaneHarnessDiagnosticsModule {
   requireInitialDiagnosticPullForCycle(pull: DiagnosticPull): string;
   requireUnchangedDiagnosticPullForCycle(pull: DiagnosticPull, previousResultId: string): void;
   requireFullDiagnosticPullForCodeAction(pull: DiagnosticPull): readonly unknown[];
-  settledAnalysisSequence(events: readonly unknown[]): { readonly outcome: string; readonly reason?: string } | null;
   summarizeDiagnosticData(data: unknown): Record<string, unknown>;
 }
 
@@ -204,58 +204,29 @@ describe("lane-harness pull diagnostics contract", () => {
     expect(summarized).not.toHaveProperty("presentation.contextual.0.diagnostic.handles");
   });
 
-  test("requires a fresh ordered analysisChanged then acknowledged diagnostic refresh sequence", async () => {
-    const harness = await loadLaneHarnessDiagnostics();
-    const analysis = {
-      kind: "notification",
-      message: {
-        method: "aurelia/analysisChanged",
-        params: {
-          fingerprint: "semantic-runtime-analysis:one",
-          changeKind: "source-text",
-          changedSourceUris: ["file:///workspace/app.html"],
-        },
-      },
-    };
-    const refresh = {
-      kind: "request",
-      message: { method: "workspace/diagnostic/refresh" },
-      response: null,
-    };
+  test("uses the first same-connection lane request as the disk-equal didOpen readiness barrier", () => {
+    const source = readFileSync(new URL(
+      "../../../lane-harness/scripts/run-lane.mjs",
+      import.meta.url,
+    ), "utf8");
+    const sessionStart = source.indexOf("const client = new LspClient(SERVER_PATH);");
+    const sessionEnd = source.indexOf("const snapshot = renderSnapshot", sessionStart);
+    const session = source.slice(sessionStart, sessionEnd);
 
-    expect(harness.settledAnalysisSequence([analysis])).toBeNull();
-    expect(harness.settledAnalysisSequence([{
-      kind: "notification",
-      message: { method: "window/logMessage", params: { message: "starting" } },
-    }, analysis, refresh])).toEqual({ outcome: "settled" });
-    expect(harness.settledAnalysisSequence([analysis, refresh])).toEqual({ outcome: "settled" });
-    expect(harness.settledAnalysisSequence([refresh, analysis])).toMatchObject({
-      outcome: "invalid-sequence",
-      reason: "diagnostic refresh arrived before analysisChanged",
-    });
-    expect(harness.settledAnalysisSequence([{
-      ...analysis,
-      message: {
-        ...analysis.message,
-        params: { ...analysis.message.params, uri: "file:///workspace/app.html" },
-      },
-    }])).toMatchObject({ outcome: "invalid-sequence" });
-    for (const params of [
-      { fingerprint: "", changeKind: "source-text" },
-      { fingerprint: "semantic-runtime-analysis:one", changeKind: "source-text" },
-      { fingerprint: "semantic-runtime-analysis:one", changeKind: "unknown" },
-    ]) {
-      expect(harness.settledAnalysisSequence([{
-        ...analysis,
-        message: { ...analysis.message, params },
-      }])).toMatchObject({ outcome: "invalid-sequence" });
-    }
-    expect(harness.settledAnalysisSequence([analysis, {
-      ...refresh,
-      message: { ...refresh.message, params: {} },
-    }])).toMatchObject({
-      outcome: "invalid-sequence",
-      reason: "diagnostic refresh request must not carry params",
-    });
+    const initialize = session.indexOf("await initializeServer(");
+    const didOpen = session.indexOf("await openProbeDocuments(");
+    const firstRequest = session.indexOf("await runLaneProbe(");
+    expect(sessionStart).toBeGreaterThanOrEqual(0);
+    expect(sessionEnd).toBeGreaterThan(sessionStart);
+    expect(initialize).toBeGreaterThanOrEqual(0);
+    expect(didOpen).toBeGreaterThan(initialize);
+    expect(firstRequest).toBeGreaterThan(didOpen);
+
+    const postOpenBarrier = session.slice(didOpen, firstRequest);
+    expect(postOpenBarrier).not.toContain("analysisChanged");
+    expect(postOpenBarrier).not.toContain("diagnostic/refresh");
+    expect(source).not.toContain("waitForSettledAnalysis");
+    expect(source).not.toContain("waitForInboundState");
+    expect(source).not.toContain("inboundEventCursor");
   });
 });

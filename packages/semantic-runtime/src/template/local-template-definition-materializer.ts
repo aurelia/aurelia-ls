@@ -66,6 +66,7 @@ import {
 } from './html-parse-materializer.js';
 import { HtmlIrNodeKind } from './html-ir.js';
 import { TemplateRecoveryPolicy } from './parse-context.js';
+import { runtimeAttributeName, runtimeElementResourceName } from './runtime-dom-name.js';
 
 export class LocalTemplateDefinitionMaterialization {
   constructor(
@@ -510,7 +511,7 @@ function compilerVisibleElements(
       if (select(node)) {
         result.push(node);
       }
-      if (node.tagName?.toLowerCase() !== 'template') {
+      if (node.tagName == null || runtimeElementResourceName(node.tagName, node.namespace) !== 'template') {
         visit(node.children);
       }
     }
@@ -523,7 +524,9 @@ function containsCompilerVisibleElement(
   roots: readonly ParsedHtmlNodeDraft[],
   tagName: string,
 ): boolean {
-  return compilerVisibleElements(roots, (node) => node.tagName?.toLowerCase() === tagName).length > 0;
+  return compilerVisibleElements(roots, (node) =>
+    node.tagName != null && runtimeElementResourceName(node.tagName, node.namespace) === tagName
+  ).length > 0;
 }
 
 function directElementCount(roots: readonly ParsedHtmlNodeDraft[]): number {
@@ -538,7 +541,9 @@ function attributeForDraft(
   node: ParsedHtmlNodeDraft,
   name: string,
 ): ParsedHtmlAttributeDraft | null {
-  return node.attributes.find((attribute) => attribute.rawName.toLowerCase() === name) ?? null;
+  return node.attributes.find((attribute) =>
+    runtimeAttributeName(attribute.rawName, node.namespace) === name
+  ) ?? null;
 }
 
 function localBindableMode(mode: string | null): BindableBindingMode {

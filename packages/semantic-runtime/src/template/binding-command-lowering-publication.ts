@@ -462,7 +462,13 @@ export class BindingCommandLoweringPublisher {
     const nameSourceAddressHandle = nameSource instanceof SourceSpanAddress
       ? nameSource.handle
       : nameSource;
-    const partSources = attributeSyntaxPartSources(this.store, local, nameSource, parse);
+    const partSources = attributeSyntaxPartSources(
+      this.store,
+      local,
+      nameSource,
+      parse.execution.rawName,
+      parse,
+    );
     const syntax = this.createMultiBindingAttributeSyntax(
       this.attributeSyntaxHandles(`${local}:attribute-syntax`),
       source,
@@ -858,6 +864,7 @@ export class BindingCommandLoweringPublisher {
     const execution = parse.execution;
     return bindProductDetailEnvelope(new AttributeSyntax(
       execution.syntaxKind,
+      execution.rawName,
       execution.rawName,
       nameSourceAddressHandle,
       execution.rawValue,

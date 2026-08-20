@@ -147,7 +147,6 @@ import {
 } from '../template/runtime-binding.js';
 import { TemplateProductDetails } from '../template/product-details.js';
 import type { BindingCommandExecutable } from '../template/binding-command-execution.js';
-import { sourceSpanFromBounds } from '../expression/source-span.js';
 import { isAureliaExpressionIdentifier } from '../expression/expression-scanner.js';
 import { bindableAttributeNameForProperty } from '../resources/bindable-attribute.js';
 import type { BindableDefinitionReference } from '../resources/bindable-definition.js';
@@ -174,6 +173,8 @@ import {
   readVisibleTemplateResourceDefinition,
 } from '../template/compiler-resource-lookup.js';
 import { TemplateSpecialAttributeName } from '../template/special-attribute-source.js';
+import { runtimeAttributeName } from '../template/runtime-dom-name.js';
+import { exactTemplateSourceTextForSourceSpan } from '../resources/template-source-text.js';
 import { namedRefTargetController } from '../template/runtime-ref-target.js';
 import { runtimeAcceptedBindingExpressionAstForParse } from '../template/expression-parse-projection.js';
 import {
@@ -1236,7 +1237,7 @@ export class SemanticAppTemplateQueries {
     const matchedName = selectedDefinition?.matchedName ?? canonicalName;
     const matchedAlias = canonicalName != null
       && matchedName != null
-      && canonicalName.toLowerCase() !== matchedName.toLowerCase()
+      && canonicalName !== matchedName
       && selectedDefinition?.matchedNameSource != null;
     const selectedName = matchedAlias ? matchedName : canonicalName;
     const declarationSource = matchedAlias
@@ -3197,7 +3198,7 @@ function bindableReferenceMatchesTarget(
   if (target.surface === TemplateRenameSurface.BindableAttributeAlias) {
     const aliasSource = semanticExactSourceReference(describeAddress(store, bindable.attributeSourceAddressHandle));
     return target.aliasName != null
-      && bindable.attribute.toLowerCase() === target.aliasName.toLowerCase()
+      && bindable.attribute === target.aliasName
       && sourceReferencesMatchExactSpan(aliasSource, target.aliasTargetSource);
   }
 
@@ -3318,7 +3319,7 @@ function customElementResourceReferenceRows(
       return [];
     }
     const asElement = ownersByElement.get(element.productHandle)?.attributes.find((attribute) =>
-      attribute.rawName.toLowerCase() === TemplateSpecialAttributeName.AsElement
+      runtimeAttributeName(attribute.rawName, element.namespace) === String(TemplateSpecialAttributeName.AsElement)
       && attribute.rawValue.length > 0
     ) ?? null;
     if (asElement != null) {
@@ -3332,13 +3333,13 @@ function customElementResourceReferenceRows(
         SemanticTemplateResourceUsageKind.AsElementValue,
       )];
     }
-    return elementTagNameSources(store, resource, element).map((source) =>
+    return elementTagNameTokens(store, resource, element).map((token) =>
       resourceUsageReferenceRow(
         resource,
         target,
-        element.tagName,
-        source,
-        element.sourceAddressHandle,
+        token.text,
+        token.source,
+        token.sourceAddressHandle,
         handles,
         SemanticTemplateResourceUsageKind.ElementTag,
       )
@@ -3544,7 +3545,7 @@ function bindingCommandResourceReferenceRows(
           const command = findVisibleTemplateResource(
             resource.compilation.compilerWorld.resourceScope,
             ResourceDefinitionKind.BindingCommand,
-            syntax.command.toLowerCase(),
+            syntax.command,
           );
           return command != null && visibleResourceMatchesTarget(store, command, target);
         })()
@@ -3552,12 +3553,16 @@ function bindingCommandResourceReferenceRows(
     if (!matches) {
       return [];
     }
+    const token = attributeSyntaxCommandTokenSource(store, syntax);
+    if (token == null) {
+      return [];
+    }
     return [resourceUsageReferenceRow(
       resource,
       target,
-      syntax.command,
-      describeAddress(store, syntax.commandSourceAddressHandle),
-      syntax.commandSourceAddressHandle,
+      token.text,
+      token.source,
+      token.sourceAddressHandle,
       handles,
       SemanticTemplateResourceUsageKind.BindingCommandName,
     )];
@@ -3700,77 +3705,66 @@ function resourceIdentityMatchesTarget(
   }
   const definitionSource = semanticExactSourceReference(describeAddress(store, definitionSourceAddressHandle));
   return sourceReferencesMatchExactSpan(definitionSource, target.targetSource)
-    && names.some((name) => name.toLowerCase() === target.selectedName.toLowerCase());
+    && names.some((name) => name === target.selectedName);
 }
 
-function elementTagNameSources(
+function elementTagNameTokens(
   store: KernelStore,
   resource: TemplateResourceEmission,
   element: HtmlElement,
-): readonly SemanticSourceReference[] {
+): readonly {
+  readonly source: SemanticSourceReference;
+  readonly text: string;
+  readonly sourceAddressHandle: AddressHandle | null;
+}[] {
   return [
-    elementTagNameSource(store, resource, element, false),
-    elementTagNameSource(store, resource, element, true),
-  ].filter((source): source is SemanticSourceReference => source != null);
+    elementTagNameToken(store, resource, element, false),
+    elementTagNameToken(store, resource, element, true),
+  ].filter((token): token is NonNullable<typeof token> => token != null);
 }
 
-function elementTagNameSource(
+function elementTagNameToken(
   store: KernelStore,
   resource: TemplateResourceEmission,
   element: HtmlElement,
   closing: boolean,
-): SemanticSourceReference | null {
-  const source = semanticExactSourceReference(describeAddress(store, element.sourceAddressHandle));
+): {
+  readonly source: SemanticSourceReference;
+  readonly text: string;
+  readonly sourceAddressHandle: AddressHandle | null;
+} | null {
+  const sourceAddressHandle = closing
+    ? element.closingTagNameAddressHandle
+    : element.tagNameAddressHandle;
+  const source = semanticExactSourceReference(describeAddress(store, sourceAddressHandle));
   const templateSource = semanticExactSourceReference(describeAddress(store, resource.compilation.unit.templateSource.sourceAddressHandle));
   const markup = resource.compilation.unit.templateSource.markup;
-  if (source?.path == null || source.start == null || source.end == null || markup == null) {
+  if (
+    source?.path == null
+    || source.start == null
+    || source.end == null
+    || templateSource?.path == null
+    || templateSource.start == null
+    || templateSource.path !== source.path
+    || markup == null
+  ) {
     return null;
   }
-
-  const baseStart = templateSource?.start ?? 0;
-  const localStart = source.start - baseStart;
-  const localEnd = source.end - baseStart;
-  if (localStart < 0 || localEnd > markup.length || localStart >= localEnd) {
+  const text = exactTemplateSourceTextForSourceSpan(
+    markup,
+    resource.compilation.unit.templateSource.sourceMap,
+    templateSource.start,
+    source.start,
+    source.end,
+  );
+  if (text == null || text.length === 0) {
     return null;
   }
-
-  const nameStart = closing
-    ? closingTagNameStart(markup, element.tagName, localStart, localEnd)
-    : openingTagNameStart(markup, element.tagName, localStart, localEnd);
-  return nameStart == null
-    ? null
-    : sourceSlice(source, baseStart + nameStart, baseStart + nameStart + element.tagName.length, closing ? 'close-tag-name' : 'tag-name');
-}
-
-function openingTagNameStart(
-  markup: string,
-  tagName: string,
-  localStart: number,
-  localEnd: number,
-): number | null {
-  const open = markup.indexOf('<', localStart);
-  if (open < localStart || open >= localEnd) {
-    return null;
-  }
-  const nameStart = open + 1;
-  return markup.slice(nameStart, nameStart + tagName.length).toLowerCase() === tagName.toLowerCase()
-    ? nameStart
-    : null;
-}
-
-function closingTagNameStart(
-  markup: string,
-  tagName: string,
-  localStart: number,
-  localEnd: number,
-): number | null {
-  const lowerMarkup = markup.toLowerCase();
-  const needle = `</${tagName.toLowerCase()}`;
-  const close = lowerMarkup.lastIndexOf(needle, localEnd);
-  if (close < localStart || close >= localEnd) {
-    return null;
-  }
-  return close + 2;
+  return {
+    source,
+    text,
+    sourceAddressHandle,
+  };
 }
 
 function bindableAttributeTokenSource(
@@ -3778,7 +3772,7 @@ function bindableAttributeTokenSource(
   syntax: TemplateResourceEmission['compilation']['attributeSyntax']['syntaxes'][number],
   attributeName: string,
 ): { readonly source: SemanticSourceReference; readonly text: string; readonly sourceAddressHandle: NonNullable<SemanticTemplateReferenceRow['handles']>['sourceAddressHandle'] } | null {
-  if (syntax.target.toLowerCase() !== attributeName.toLowerCase()) {
+  if (syntax.target !== attributeName) {
     return null;
   }
   return attributeSyntaxTargetTokenSource(store, syntax);
@@ -3793,9 +3787,7 @@ function multiBindingSegmentTargetTokenSource(
   if (source == null) {
     return null;
   }
-  const rawNameLower = segment.rawName.toLowerCase();
-  const attributeLower = attributeName.toLowerCase();
-  const targetStart = rawNameLower.indexOf(attributeLower);
+  const targetStart = segment.rawName.indexOf(attributeName);
   const text = targetStart < 0
     ? attributeName
     : segment.rawName.slice(targetStart, targetStart + attributeName.length);
@@ -3815,27 +3807,61 @@ function attributeSyntaxTargetTokenSource(
   if (source == null) {
     return null;
   }
+  const text = attributeSyntaxAuthoredTokenText(store, syntax, sourceAddressHandle);
+  if (text == null) {
+    return null;
+  }
   return {
     source,
-    text: syntax.target,
+    text,
     sourceAddressHandle,
   };
 }
 
-function sourceSlice(
-  source: SemanticSourceReference,
-  start: number,
-  end: number,
-  role: string,
-): SemanticSourceReference | null {
-  if (source.path == null) {
+function attributeSyntaxCommandTokenSource(
+  store: KernelStore,
+  syntax: TemplateResourceEmission['compilation']['attributeSyntax']['syntaxes'][number],
+): { readonly source: SemanticSourceReference; readonly text: string; readonly sourceAddressHandle: AddressHandle } | null {
+  const sourceAddressHandle = syntax.commandSourceAddressHandle;
+  const source = semanticExactSourceReference(describeAddress(store, sourceAddressHandle));
+  if (sourceAddressHandle == null || source == null || syntax.command == null) {
     return null;
   }
-  return sourceReferenceForParserSpan(
-    source.path,
-    sourceSpanFromBounds(start, end),
-    role,
-  );
+  const text = attributeSyntaxAuthoredTokenText(store, syntax, sourceAddressHandle);
+  if (text == null) {
+    return null;
+  }
+  return {
+    source,
+    text,
+    sourceAddressHandle,
+  };
+}
+
+function attributeSyntaxAuthoredTokenText(
+  store: KernelStore,
+  syntax: TemplateResourceEmission['compilation']['attributeSyntax']['syntaxes'][number],
+  tokenSourceAddressHandle: AddressHandle | null,
+): string | null {
+  const nameSource = semanticExactSourceReference(describeAddress(store, syntax.nameSourceAddressHandle));
+  const tokenSource = semanticExactSourceReference(describeAddress(store, tokenSourceAddressHandle));
+  if (
+    nameSource?.path == null
+    || tokenSource?.path == null
+    || nameSource.path !== tokenSource.path
+    || nameSource.start == null
+    || nameSource.end == null
+    || nameSource.end - nameSource.start !== syntax.rawName.length
+    || tokenSource?.start == null
+    || tokenSource.end == null
+    || tokenSource.start < nameSource.start
+    || tokenSource.end > nameSource.end
+  ) {
+    return null;
+  }
+  const start = tokenSource.start - nameSource.start;
+  const end = tokenSource.end - nameSource.start;
+  return syntax.rawName.slice(start, end) || null;
 }
 
 function matchingRuntimeBindingExpressionAccessTarget(

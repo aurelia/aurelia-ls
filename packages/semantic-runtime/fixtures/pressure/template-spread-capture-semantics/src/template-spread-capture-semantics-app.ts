@@ -7,6 +7,7 @@ import {
   NoCaptureShell,
 } from './capture-shell';
 import {
+  CaseSpreadCard,
   SpreadCard,
   type SpreadCardState,
   SpreadIdentityValueConverter,
@@ -23,6 +24,7 @@ class InheritedSpreadState {
   template,
   dependencies: [
     SpreadCard,
+    CaseSpreadCard,
     CaptureShell,
     FilteredCaptureShell,
     NoCaptureShell,
@@ -62,6 +64,10 @@ export class TemplateSpreadCaptureSemanticsApp {
   aliasShaped = {
     'accent-tone': 'attribute-alias-does-not-match',
     title: 'alias-shape',
+  };
+  caseSpreadState = {
+    displayLabel: 'exact case',
+    displaylabel: 'wrong case',
   };
   nullableSpread: SpreadCardState | null = null;
   optionalSpread: { title?: string; count: number } = { count: 5 };

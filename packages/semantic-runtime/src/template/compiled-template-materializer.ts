@@ -108,6 +108,7 @@ import {
 } from './instruction-ir.js';
 import { instructionKindKeyFor } from './instruction-vocabulary.js';
 import { TemplateSpecialAttributeName } from './special-attribute-source.js';
+import { runtimeAttributeName, runtimeElementResourceName } from './runtime-dom-name.js';
 import type { BindingCommandLoweringEmission } from './binding-command-lowering-materializer.js';
 import type { TemplateValueSiteEmission } from './value-site-materializer.js';
 import {
@@ -559,7 +560,7 @@ class CompiledTemplateInstructionFactory {
     if (syntax == null || attribute == null) {
       return null;
     }
-    const target = syntax.target.toLowerCase();
+    const target = syntax.target;
     const defaultAddressHandle = attribute.valueAddressHandle ?? attribute.sourceAddressHandle;
     if (target === '...$attrs') {
       return this.assemblyState.createInstruction(
@@ -684,7 +685,7 @@ class CompiledTemplateInstructionFactory {
     node: HtmlElement,
     addressHandle: AddressHandle | null,
   ): TemplateInstruction {
-    switch (attribute.rawName.toLowerCase()) {
+    switch (syntax.runtimeRawName) {
       case 'class':
         return this.setClassAttributeInstruction(classification, syntax, attribute, node, addressHandle);
       case 'style':
@@ -981,7 +982,7 @@ class CompiledTemplateInstructionTraversal {
     node: HtmlElement,
     emitRow: CompiledTemplateRowEmitter,
   ): boolean {
-    if (node.tagName.toLowerCase() !== 'let') {
+    if (runtimeElementResourceName(node.tagName, node.namespace) !== 'let') {
       return false;
     }
     const letInstructions = this.letBindingInstructionsForElement(node);
@@ -1123,7 +1124,7 @@ class CompiledTemplateInstructionTraversal {
     emitRow(`element:${node.productHandle}`, node, directRow);
 
     if (
-      node.tagName.toLowerCase() === 'template'
+      runtimeElementResourceName(node.tagName, node.namespace) === 'template'
       && lookupName === 'template'
       && elementDefinition == null
       && parts.templateControllerInstructions.length === 0
@@ -1243,11 +1244,13 @@ class CompiledTemplateInstructionTraversal {
   }
 
   private isUnwrappedProjectionTemplate(node: HtmlElement): boolean {
-    if (node.tagName.toLowerCase() !== 'template') {
+    if (runtimeElementResourceName(node.tagName, node.namespace) !== 'template') {
       return false;
     }
     const owner = this.indexes.ownersByElement.get(node.productHandle) ?? null;
-    return owner?.attributes.every((attribute) => attribute.rawName.toLowerCase() === 'au-slot') ?? true;
+    return owner?.attributes.every((attribute) =>
+      runtimeAttributeName(attribute.rawName, node.namespace) === 'au-slot'
+    ) ?? true;
   }
 
   private knownProcessContentRemovedChildHandles(
@@ -1313,7 +1316,7 @@ class CompiledTemplateInstructionTraversal {
       const nameAttribute = this.attributeForElement(node, 'name');
       const owner = this.indexes.ownersByElement.get(node.productHandle) ?? null;
       const nameSyntax = this.input.attributeSyntax.syntaxes.find((syntax) =>
-        syntax.target.toLowerCase() === 'name'
+        syntax.target === 'name'
         && owner?.attributes.some((attribute) => attribute.productHandle === syntax.attribute.productHandle)
       ) ?? null;
       const dynamicNameInstruction = [
@@ -1326,7 +1329,7 @@ class CompiledTemplateInstructionTraversal {
           : instruction instanceof InterpolationInstruction && instruction.target === 'name'
       ) ?? null;
       const hasDynamicName = dynamicNameInstruction != null
-        || (nameSyntax != null && nameSyntax.rawName.toLowerCase() !== 'name');
+        || (nameSyntax != null && nameSyntax.runtimeRawName !== 'name');
       const dynamicNameAttributeHandle = dynamicNameInstruction?.attribute?.productHandle ?? null;
       const dynamicNameAttribute = dynamicNameAttributeHandle == null
         ? null
@@ -1385,7 +1388,9 @@ class CompiledTemplateInstructionTraversal {
         continue;
       }
       const owner = this.indexes.ownersByElement.get(child.productHandle) ?? null;
-      const auSlotAttribute = owner?.attributes.find((attribute) => attribute.rawName.toLowerCase() === 'au-slot') ?? null;
+      const auSlotAttribute = owner?.attributes.find((attribute) =>
+        runtimeAttributeName(attribute.rawName, child.namespace) === 'au-slot'
+      ) ?? null;
       if (auSlotAttribute != null) {
         attributes.push(auSlotAttribute);
       }
@@ -1575,7 +1580,9 @@ class CompiledTemplateInstructionTraversal {
 
   private attributeForElement(element: HtmlElement, attributeName: string): HtmlAttribute | null {
     const owner = this.indexes.ownersByElement.get(element.productHandle) ?? null;
-    return owner?.attributes.find((attribute) => attribute.rawName.toLowerCase() === attributeName) ?? null;
+    return owner?.attributes.find((attribute) =>
+      runtimeAttributeName(attribute.rawName, element.namespace) === attributeName
+    ) ?? null;
   }
 
   private elementInstructionPartBuckets(
@@ -1687,7 +1694,7 @@ class CompiledTemplateInstructionTraversal {
     commandBuilt: readonly TemplateInstruction[],
     parts: ElementInstructionPartBuckets,
   ): void {
-    const spreadTarget = syntax?.target.toLowerCase() ?? '';
+    const spreadTarget = syntax?.target ?? '';
     const targetInstructions = spreadTarget === '...$attrs'
       ? parts.plainInstructions
       : parts.bindableInstructions;
@@ -1768,13 +1775,13 @@ class CompiledTemplateInstructionTraversal {
     }
     const result: LetBindingInstruction[] = [];
     for (const attribute of owner.attributes) {
-      if (attribute.rawName === 'to-binding-context') {
-        continue;
-      }
       const syntax = this.input.attributeSyntax.syntaxes.find((candidate) =>
         candidate.attribute.productHandle === attribute.productHandle
       ) ?? null;
       if (syntax == null) {
+        continue;
+      }
+      if (syntax.runtimeRawName === 'to-binding-context') {
         continue;
       }
       const classification = this.input.attributeClassification.classifications.find((candidate) =>

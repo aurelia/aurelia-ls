@@ -754,6 +754,128 @@ suite("extension-host product surface", () => {
     }
   });
 
+  test("preserves authored mixed-case hover identity over browser-normalized resources", async function() {
+    this.timeout(600_000);
+    const document = await showAureliaDocument("src/my-app.html");
+    const diskBaseline = readFileSync(document.uri.fsPath, "utf8");
+    if (document.isDirty) {
+      await vscode.window.showTextDocument(document, { preview: false });
+      await vscode.commands.executeCommand("workbench.action.files.revert");
+      await waitFor(
+        () => document.getText() === diskBaseline && !document.isDirty,
+        "the mixed-case hover journey should start from a clean disk-equal template",
+        60_000,
+      );
+    }
+    const baseline = document.getText();
+    assert.strictEqual(document.isDirty, false, "the mixed-case hover journey requires a clean template baseline");
+    assert.strictEqual(baseline, diskBaseline, "the mixed-case hover journey requires a disk-equal template baseline");
+    const mixedCaseTemplate = baseline
+      .replace(
+        "        <product-card\n          item.bind=",
+        "        <PrOdUcT-CaRd\n          item.BiNd=",
+      )
+      .replace("        </product-card>", "        </pRoDuCt-CaRd>")
+      .replace("      display-hint=", "      DiSpLaY-HiNt=")
+      .replace("preview.quantity | stockLabel", "preview.quantity | StockLabel");
+    assert.notStrictEqual(mixedCaseTemplate, baseline, "Expected the mixed-case hover witnesses to be inserted.");
+    for (const witness of ["<PrOdUcT-CaRd", "item.BiNd", "DiSpLaY-HiNt", "StockLabel", "</pRoDuCt-CaRd>"]) {
+      assert(mixedCaseTemplate.includes(witness), `Expected mixed-case hover witness ${witness}.`);
+    }
+
+    try {
+      await replaceDocumentText(document, mixedCaseTemplate);
+      await waitFor(
+        async () => (await hoverMarkdown(document, "<PrOdUcT-CaRd", "PrOdUcT-CaRd"))
+          .includes("<PrOdUcT-CaRd>"),
+        "the authored mixed-case resource should reach the native hover provider",
+        120_000,
+      );
+
+      const opening = await exactHoverMatchingAt(
+        document,
+        "<PrOdUcT-CaRd",
+        "PrOdUcT-CaRd",
+        (markdown) => markdown.includes("<PrOdUcT-CaRd>") && markdown.includes("Aurelia custom element."),
+        "mixed-case custom-element opening",
+      );
+      const closing = await exactHoverMatchingAt(
+        document,
+        "</pRoDuCt-CaRd>",
+        "pRoDuCt-CaRd",
+        (markdown) => markdown.includes("<pRoDuCt-CaRd>") && markdown.includes("Aurelia custom element."),
+        "mixed-case custom-element closing",
+      );
+      const customAttribute = await exactHoverMatchingAt(
+        document,
+        "DiSpLaY-HiNt=",
+        "DiSpLaY-HiNt",
+        (markdown) => markdown.includes("(custom attribute) DiSpLaY-HiNt")
+          && markdown.includes("Implementation: `DisplayHint`."),
+        "mixed-case custom attribute",
+      );
+      const command = await exactHoverMatchingAt(
+        document,
+        "item.BiNd=",
+        "BiNd",
+        (markdown) => markdown.includes("(binding command) BiNd")
+          && markdown.includes("Aurelia binding command."),
+        "mixed-case binding command",
+      );
+      for (const [hover, label] of [
+        [opening, "mixed-case custom-element opening"],
+        [closing, "mixed-case custom-element closing"],
+        [customAttribute, "mixed-case custom attribute"],
+        [command, "mixed-case binding command"],
+      ]) {
+        assertBoundedHoverCard(hoverMarkdownText(hover), label);
+      }
+
+      let wrongCaseConverterHovers = [];
+      await waitFor(
+        async () => {
+          wrongCaseConverterHovers = await hoversAt(
+            document,
+            "preview.quantity | StockLabel",
+            "StockLabel",
+          );
+          return wrongCaseConverterHovers.every((hover) => {
+            const markdown = hoverMarkdownText(hover);
+            return !markdown.includes("(value converter) stockLabel")
+              && !markdown.includes("(value converter) StockLabel")
+              && !markdown.includes("Aurelia value converter.");
+          });
+        },
+        "wrong-case expression resources must not reuse browser-normalized identity",
+        120_000,
+      );
+      assert(
+        wrongCaseConverterHovers.every((hover) => !hoverMarkdownText(hover).includes("Aurelia value converter")),
+        `Wrong-case converter produced a resource hover: ${JSON.stringify(wrongCaseConverterHovers.map(hoverMarkdownText))}.`,
+      );
+      assert.strictEqual(
+        readFileSync(document.uri.fsPath, "utf8"),
+        diskBaseline,
+        "the in-memory mixed-case journey must not mutate the fixture on disk",
+      );
+    } finally {
+      if (!document.isClosed) {
+        await vscode.window.showTextDocument(document, { preview: false });
+        await vscode.commands.executeCommand("workbench.action.files.revert");
+      }
+      await waitFor(
+        async () => !document.isClosed
+          && document.getText() === baseline
+          && !document.isDirty
+          && (await hoverMarkdown(document, "<product-card", "product-card")) === productCardHoverMarkdown,
+        "mixed-case hover cleanup should restore the canonical resource answer",
+        120_000,
+      );
+      assert.strictEqual(document.getText(), baseline);
+      assert.strictEqual(readFileSync(document.uri.fsPath, "utf8"), diskBaseline);
+    }
+  });
+
   test("clips a long member signature and projects the bare current context", async () => {
     const templateDocument = await showAureliaDocument("src/my-app.html");
     const componentDocument = await showAureliaDocument("src/my-app.ts");
@@ -5398,6 +5520,20 @@ async function exactHoverAt(document, anchor, token, expectedMarkdown, expectedR
   assert(hover.range instanceof vscode.Range, `Expected ${token} hover to retain an authored range.`);
   assert.strictEqual(document.getText(hover.range), expectedRangeText);
   assertBoundedHoverCard(expectedMarkdown, token);
+  return hover;
+}
+
+async function exactHoverMatchingAt(document, anchor, token, predicate, label) {
+  const hovers = await hoversAt(document, anchor, token);
+  const matches = hovers.filter((hover) => predicate(hoverMarkdownText(hover)));
+  assert.strictEqual(
+    matches.length,
+    1,
+    `Expected one exact ${label} hover; observed ${JSON.stringify(hovers.map(hoverMarkdownText))}.`,
+  );
+  const hover = matches[0];
+  assert(hover.range instanceof vscode.Range, `Expected ${label} hover to retain an authored range.`);
+  assert.strictEqual(document.getText(hover.range), token);
   return hover;
 }
 

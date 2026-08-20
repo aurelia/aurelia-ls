@@ -76,6 +76,7 @@ export const enum AttributePatternTokenKind {
 
 export type AttributeSyntaxField =
   | 'rawName'
+  | 'runtimeRawName'
   | 'nameSource'
   | 'rawValue'
   | 'target'
@@ -536,6 +537,8 @@ export class AttributeSyntax {
     readonly syntaxKind: AttributeSyntaxKind,
     /** Raw authored attribute name. */
     readonly rawName: string,
+    /** Browser/runtime attribute name passed to the Aurelia attribute parser. */
+    readonly runtimeRawName: string,
     /** Exact authored source for the raw syntax name. */
     readonly nameSourceAddressHandle: AddressHandle | null,
     /** Raw authored attribute value, before expression parsing. */

@@ -13,7 +13,6 @@ const SERVER_PATH = path.resolve(REPO_ROOT, "packages/language-server/out/main.j
 const REQUEST_TIMEOUT_MS = 30000;
 const STARTUP_TIMEOUT_MS = 10000;
 const SHUTDOWN_TIMEOUT_MS = 5000;
-const ANALYSIS_SETTLE_TIMEOUT_MS = 30000;
 const DIAGNOSTICS_TIMEOUT_MS = 30000;
 const SUPPORTED_LANES = new Set(["rename", "references", "hover", "completions", "definition", "documentHighlight", "diagnostics", "codeAction"]);
 
@@ -62,8 +61,6 @@ class LspClient {
   #buffer = Buffer.alloc(0);
   #stderr = [];
   #notifications = [];
-  #inboundMethodEvents = [];
-  #inboundEventWaiters = [];
   #exit = null;
 
   constructor(serverPath) {
@@ -135,35 +132,6 @@ class LspClient {
 
   notificationCursor() {
     return this.#notifications.length;
-  }
-
-  inboundEventCursor() {
-    return this.#inboundMethodEvents.length;
-  }
-
-  async waitForInboundState(cursor, evaluate, timeoutMs) {
-    const evaluateCurrent = () => evaluate(this.#inboundMethodEvents.slice(cursor));
-    const current = evaluateCurrent();
-    if (current != null) {
-      return current;
-    }
-
-    return new Promise((resolve) => {
-      const timeout = setTimeout(() => {
-        this.#inboundEventWaiters = this.#inboundEventWaiters.filter((w) => w !== waiter);
-        resolve(null);
-      }, timeoutMs);
-      const waiter = {
-        notify: () => {
-          const state = evaluateCurrent();
-          if (state == null) return;
-          clearTimeout(timeout);
-          this.#inboundEventWaiters = this.#inboundEventWaiters.filter((w) => w !== waiter);
-          resolve(state);
-        },
-      };
-      this.#inboundEventWaiters.push(waiter);
-    });
   }
 
   notificationsSince(cursor, method, predicate = () => true) {
@@ -239,7 +207,6 @@ class LspClient {
     // client request, so the presence of `method` must win over numeric ID matching.
     if (Object.prototype.hasOwnProperty.call(message, "id") && typeof message.method === "string") {
       const result = defaultClientResponse(message);
-      this.#recordInboundMethodEvent({ kind: "request", message, response: result });
       this.#sendResponse(message.id, result);
       return;
     }
@@ -253,15 +220,7 @@ class LspClient {
     }
 
     if (typeof message.method === "string") {
-      this.#recordInboundMethodEvent({ kind: "notification", message });
       this.#notifications.push(message);
-    }
-  }
-
-  #recordInboundMethodEvent(event) {
-    this.#inboundMethodEvents.push(event);
-    for (const waiter of [...this.#inboundEventWaiters]) {
-      waiter.notify(event);
     }
   }
 }
@@ -340,9 +299,11 @@ async function main() {
   const client = new LspClient(SERVER_PATH);
   try {
     await initializeServer(client, fixtureRoot, fixtureName);
-    const settledAnalysisCursor = client.inboundEventCursor();
     await openProbeDocuments(client, fixtureRoot, probes, readFixtureText);
-    await waitForSettledAnalysis(client, settledAnalysisCursor);
+
+    // A disk-equal didOpen only establishes editor overlay authority; it deliberately does not
+    // invalidate analysis. Each following request on this same connection is the readiness barrier:
+    // the server observes the synchronized document and enforces managed-analysis currentness before replying.
 
     const results = [];
     for (const probe of probes) {
@@ -522,66 +483,6 @@ async function openProbeDocuments(client, fixtureRoot, probes, readFixtureText) 
       },
     });
   }
-}
-
-async function waitForSettledAnalysis(client, cursor) {
-  const sequence = await client.waitForInboundState(
-    cursor,
-    settledAnalysisSequence,
-    ANALYSIS_SETTLE_TIMEOUT_MS,
-  );
-  if (sequence == null) {
-    throw new HarnessError(
-      `Timed out after ${ANALYSIS_SETTLE_TIMEOUT_MS}ms waiting for a fresh ordered ` +
-        "aurelia/analysisChanged -> workspace/diagnostic/refresh sequence.\n" +
-        client.stderrText,
-    );
-  }
-  if (sequence.outcome !== "settled") {
-    throw new HarnessError(`Invalid settled-analysis sequence: ${sequence.reason}.\n${client.stderrText}`);
-  }
-}
-
-export function settledAnalysisSequence(events) {
-  let analysisIndex = -1;
-  for (let index = 0; index < events.length; index += 1) {
-    const event = events[index];
-    if (event.kind === "notification" && event.message?.method === "aurelia/analysisChanged") {
-      if (!isSettledAnalysisChangedPayload(event.message.params)) {
-        return { outcome: "invalid-sequence", reason: "analysisChanged payload is malformed or URI-scoped" };
-      }
-      if (analysisIndex < 0) analysisIndex = index;
-      continue;
-    }
-    if (event.kind === "request" && event.message?.method === "workspace/diagnostic/refresh") {
-      if (analysisIndex < 0) {
-        return { outcome: "invalid-sequence", reason: "diagnostic refresh arrived before analysisChanged" };
-      }
-      if (event.message.params != null) {
-        return { outcome: "invalid-sequence", reason: "diagnostic refresh request must not carry params" };
-      }
-      if (event.response !== null) {
-        return { outcome: "invalid-sequence", reason: "diagnostic refresh acknowledgement must be null" };
-      }
-      return { outcome: "settled" };
-    }
-  }
-  return null;
-}
-
-function isSettledAnalysisChangedPayload(params) {
-  if (!(params != null
-    && typeof params === "object"
-    && !Array.isArray(params)
-    && typeof params.fingerprint === "string"
-    && params.fingerprint.length > 0
-    && !Object.prototype.hasOwnProperty.call(params, "uri")
-    && (params.changeKind === "source-text" || params.changeKind === "topology"))) {
-    return false;
-  }
-  return params.changeKind === "topology"
-    || (Array.isArray(params.changedSourceUris)
-      && params.changedSourceUris.every((uri) => typeof uri === "string"));
 }
 
 function languageIdForPath(file) {

@@ -102,6 +102,19 @@ describe('HTML foreign-content materialization', () => {
     expect(runtimeNodeName('custom-K', HtmlNamespaceKind.Html)).toBe('CUSTOM-K');
   });
 
+  test('normalizes shorthand spread operands as HTML attribute names while explicit spread values retain authored case', () => {
+    const document = parse(
+      '<spread-card ...spreadState ...$bindables="spreadState"></spread-card>',
+    );
+    const card = rootElement(document.rootNodes, 'spread-card');
+    const shorthand = card.attributes.find((attribute) => attribute.rawName === '...spreadState');
+    const explicit = card.attributes.find((attribute) => attribute.rawName === '...$bindables');
+
+    expect(runtimeAttributeName(shorthand?.rawName ?? '', card.namespace)).toBe('...spreadstate');
+    expect(runtimeAttributeName(explicit?.rawName ?? '', card.namespace)).toBe('...$bindables');
+    expect(explicit?.rawValue).toBe('spreadState');
+  });
+
   test('does not apply HTML void-element rules inside foreign content', () => {
     const document = parse('<svg><source><circle></circle></source></svg>');
     const svg = rootElement(document.rootNodes, 'svg');

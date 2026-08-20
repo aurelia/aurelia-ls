@@ -28,6 +28,7 @@ export function attributeSyntaxPartSources(
   store: KernelStoreReadView,
   local: string,
   nameSource: AddressHandle | SourceSpanAddress | null,
+  authoredRawName: string,
   parse: AttributeParserParseResult,
 ): AttributeSyntaxPartSources {
   const nameSourceAddressHandle = nameSource instanceof SourceSpanAddress
@@ -40,6 +41,9 @@ export function attributeSyntaxPartSources(
     ? nameSource
     : sourceSpanAddressForAddress(store, nameSourceAddressHandle);
   if (nameSourceAddress == null) {
+    return new AttributeSyntaxPartSources(null, null, [], [], []);
+  }
+  if (nameSourceAddress.end - nameSourceAddress.start !== authoredRawName.length) {
     return new AttributeSyntaxPartSources(null, null, [], [], []);
   }
   const records: KernelStoreRecord[] = [];
@@ -106,7 +110,11 @@ export function attributeSyntaxPartSources(
     const source = sourceForOccurrence(`pattern-part:${occurrence.partIndex}`, occurrence.start, occurrence.end);
     return source == null
       ? []
-      : [new AttributePatternPartReference(occurrence.partIndex, occurrence.value, source.handle)];
+      : [new AttributePatternPartReference(
+          occurrence.partIndex,
+          authoredRawName.slice(occurrence.start, occurrence.end),
+          source.handle,
+        )];
   });
   const symbolSet = new Set(parse.matchedPattern?.compiledPattern.symbols ?? []);
   const patternLiterals = (parse.interpretation?.literalOccurrences ?? []).flatMap((occurrence, index) => {
@@ -117,7 +125,11 @@ export function attributeSyntaxPartSources(
     if (source == null) {
       return [];
     }
-    return [new AttributePatternLiteralReference(occurrence.tokenIndex, occurrence.value, source.handle)];
+    return [new AttributePatternLiteralReference(
+      occurrence.tokenIndex,
+      authoredRawName.slice(occurrence.start, occurrence.end),
+      source.handle,
+    )];
   });
   return new AttributeSyntaxPartSources(
     targetSource?.handle ?? null,

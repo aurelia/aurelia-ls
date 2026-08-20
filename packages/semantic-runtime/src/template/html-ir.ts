@@ -431,6 +431,7 @@ export function htmlElementLookupName(
   return templateElementLookupNameFromAttributes(
     element.tagName,
     owner?.attributes ?? [],
+    element.namespace,
   );
 }
 

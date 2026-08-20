@@ -22,6 +22,14 @@ export class SpreadCard {
   internal = 'internal';
 }
 
+@customElement({
+  name: 'case-spread-card',
+  template: '<template>${displayLabel}</template>',
+})
+export class CaseSpreadCard {
+  @bindable displayLabel = '';
+}
+
 @valueConverter('spreadIdentity')
 export class SpreadIdentityValueConverter {
   toView(value: SpreadCardState): SpreadCardState {

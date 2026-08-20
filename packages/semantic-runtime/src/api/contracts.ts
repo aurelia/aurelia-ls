@@ -193,6 +193,7 @@ import type {
   AttributeClassificationKind,
   AttributeSyntaxKind,
 } from '../template/attribute-syntax.js';
+import type { HtmlNamespaceKind } from '../template/html-ir.js';
 import type { BindingCommandLoweringState } from '../template/binding-command-execution.js';
 import type {
   TemplateBindingMode,
@@ -4735,6 +4736,8 @@ export interface SemanticTemplateCompletionResult {
 export interface SemanticTemplateCursorHtmlRow {
   readonly nodeKind: string | null;
   readonly tagName: string | null;
+  /** Browser/runtime namespace for the authored element under the cursor. */
+  readonly namespace: HtmlNamespaceKind | `${HtmlNamespaceKind}` | null;
   readonly attributeName: string | null;
   readonly attributeValue: string | null;
   readonly source: SemanticSourceReference | null;
@@ -4774,6 +4777,10 @@ export interface SemanticTemplateCursorDefinitionRow {
   readonly name: string | null;
   /** Public name selected at the cursor; differs from `name` when an alias was authored. */
   readonly matchedName: string | null;
+  /** Exact authored spelling selected at this cursor when it can be recovered from the owning HTML/expression carrier. */
+  readonly authoredMatchedName: string | null;
+  /** Browser/compiler-normalized lookup spelling for the selected authored use. */
+  readonly runtimeMatchedName: string | null;
   readonly targetName: string | null;
   readonly source: SemanticSourceReference | null;
   readonly nameSource: SemanticSourceReference | null;

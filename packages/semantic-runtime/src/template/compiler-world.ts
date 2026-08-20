@@ -639,7 +639,7 @@ export class TemplateResourceResolverService {
 
   /** Runtime `IResourceResolver.attr(container, name)` shape with the container already fixed by this world. */
   attr(name: string): TemplateVisibleResource | null {
-    const key = name.toLowerCase();
+    const key = name;
     const attributeKey = runtimeResourceKeyForKind(ResourceDefinitionKind.CustomAttribute, key);
     const controllerKey = runtimeResourceKeyForKind(ResourceDefinitionKind.TemplateController, key);
     if (this.blockedLookups.some((lookup) =>

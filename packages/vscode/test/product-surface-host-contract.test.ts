@@ -207,6 +207,55 @@ interface NativeQuickPickAcceptOptions {
 const uri = "file:///workspace/src/app.html";
 
 describe("Extension Host product-surface contracts", () => {
+  test("keeps mixed-case hover identity in the shared current/minimum product journey", () => {
+    const source = readFileSync(
+      new URL("./extension-host/suite/product-surface.test.cjs", import.meta.url),
+      "utf8",
+    );
+    const title = "preserves authored mixed-case hover identity over browser-normalized resources";
+    const start = source.indexOf(`test("${title}"`);
+    const end = source.indexOf("\n  test(", start + 1);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    const journey = source.slice(start, end);
+
+    expect(journey).toContain("async function()");
+    expect(journey).toContain("this.timeout(600_000)");
+    for (const witness of [
+      "<PrOdUcT-CaRd",
+      "</pRoDuCt-CaRd>",
+      "DiSpLaY-HiNt",
+      "item.BiNd",
+      "preview.quantity | StockLabel",
+    ]) {
+      expect(journey).toContain(witness);
+    }
+    expect(journey).toContain("exactHoverMatchingAt(");
+    expect(journey).toContain("mixed-case custom-element opening");
+    expect(journey).toContain("mixed-case custom-element closing");
+    expect(journey).toContain("mixed-case custom attribute");
+    expect(journey).toContain("mixed-case binding command");
+    expect(journey).toContain("wrong-case expression resources must not reuse browser-normalized identity");
+    expect(journey).toContain('readFileSync(document.uri.fsPath, "utf8")');
+    expect(journey).toContain('executeCommand("workbench.action.files.revert")');
+    expect(journey).toContain("!document.isDirty");
+    expect(journey).toContain("the mixed-case hover journey should start from a clean disk-equal template");
+    expect(journey).toContain("the in-memory mixed-case journey must not mutate the fixture on disk");
+    expect(journey).toContain("mixed-case hover cleanup should restore the canonical resource answer");
+    expect(journey).toContain("finally {");
+    expect(journey).not.toContain("this.skip");
+    expect(journey).not.toContain(".save(");
+
+    const helperStart = source.indexOf("async function exactHoverMatchingAt(");
+    const helperEnd = source.indexOf("\nasync function noHoverAt(", helperStart);
+    expect(helperStart).toBeGreaterThanOrEqual(0);
+    expect(helperEnd).toBeGreaterThan(helperStart);
+    const helper = source.slice(helperStart, helperEnd);
+    expect(helper).toContain("matches.length");
+    expect(helper).toContain("hover.range instanceof vscode.Range");
+    expect(helper).toContain("document.getText(hover.range), token");
+  });
+
   test("keeps declaration and ambiguity host journeys sequential but independently bounded", () => {
     const source = readFileSync(
       new URL("./extension-host/suite/product-surface.test.cjs", import.meta.url),

@@ -116,6 +116,7 @@ import {
   htmlElementLookupName,
   type HtmlAttribute,
 } from '../template/html-ir.js';
+import { runtimeAttributeName } from '../template/runtime-dom-name.js';
 import type {
   TemplateCompilationProjectEmission,
   TemplateResourceRuntimeAnalysisEmission,
@@ -756,8 +757,8 @@ class TemplateCapabilityAdmissionContext {
             admission,
           );
           return {
-            membership: configuration.membership(syntax.rawName),
-            exclusionSourceAddressHandle: configuration.exclusionSourceAddressHandle(syntax.rawName),
+            membership: configuration.membership(syntax.runtimeRawName),
+            exclusionSourceAddressHandle: configuration.exclusionSourceAddressHandle(syntax.runtimeRawName),
             openSeamHandles: configuration.openSeamHandles,
           };
         },
@@ -958,7 +959,7 @@ function syntaxCapabilityDemandSites(
     }
     const admittedPattern = compilerWorldBuiltInAttributePatternMatchForSyntax(resource, syntax);
     const admittedHandler = admittedPattern?.[0] ?? null;
-    const handler = admittedHandler ?? parseBuiltInAttributeSyntax(syntax.rawName, syntax.rawValue).handler;
+    const handler = admittedHandler ?? parseBuiltInAttributeSyntax(syntax.runtimeRawName, syntax.rawValue).handler;
     if (handler == null) {
       return [];
     }
@@ -972,7 +973,7 @@ function syntaxCapabilityDemandSites(
       demand,
       admissionContext.forSyntax(resource, syntax, demand, admittedHandler != null),
     )];
-    const knownPattern = parseBuiltInAttributeSyntax(syntax.rawName, syntax.rawValue);
+    const knownPattern = parseBuiltInAttributeSyntax(syntax.runtimeRawName, syntax.rawValue);
     if (
       admittedPattern != null
       && knownPattern.handler != null
@@ -1009,7 +1010,7 @@ function bindingCommandCapabilityDemandSites(
     ) {
       return [];
     }
-    const commandName = syntax.command?.toLowerCase() ?? null;
+    const commandName = syntax.command;
     if (commandName == null) {
       return [];
     }
@@ -1461,12 +1462,12 @@ function builtInResourceFor(
   resourceKind: ResourceDefinitionKind,
   name: string,
 ): BuiltInResource | null {
-  const normalized = name.toLowerCase();
+  const expectedResourceKind = String(resourceKind);
   return allBuiltInResources().find((resource) =>
-    resource.resourceKind === resourceKind
+    String(resource.resourceKind) === expectedResourceKind
     && (
-      resource.name.toLowerCase() === normalized
-      || resource.aliases.some((alias) => alias.toLowerCase() === normalized)
+      String(resource.name) === name
+      || resource.aliases.some((alias) => alias === name)
     )
   ) ?? null;
 }
@@ -1494,8 +1495,8 @@ function suppressBuiltInAttributeResourceDemand(
     return false;
   }
   const explicitExternal = owner?.attributes.some((candidate) =>
-    candidate.rawName.toLowerCase() === 'external'
-    || candidate.rawName.toLowerCase() === 'data-external'
+    runtimeAttributeName(candidate.rawName, owner.element.namespace) === 'external'
+    || runtimeAttributeName(candidate.rawName, owner.element.namespace) === 'data-external'
   ) ?? false;
   if (explicitExternal) {
     return true;

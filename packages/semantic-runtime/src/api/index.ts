@@ -71,6 +71,16 @@ export {
   SourceLanguage,
 } from '../kernel/address.js';
 export {
+  HtmlNamespaceKind,
+} from '../template/html-ir.js';
+export {
+  runtimeAsElementResourceName,
+  runtimeAttributeName,
+  runtimeElementResourceName,
+  runtimeLocalName,
+  runtimeNodeName,
+} from '../template/runtime-dom-name.js';
+export {
   inferSourceFileRole,
   inferSourceLanguage,
 } from '../kernel/source-classification.js';

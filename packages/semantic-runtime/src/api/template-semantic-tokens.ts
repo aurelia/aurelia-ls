@@ -16,6 +16,7 @@ import type {
   HtmlNodeReference,
 } from '../template/html-ir.js';
 import { HtmlIrNodeKind } from '../template/html-ir.js';
+import { htmlAsciiLowercase } from '../template/html-ascii.js';
 import type {
   SourceSpan,
 } from '../expression/source-span.js';
@@ -361,7 +362,7 @@ function refTargetSemanticTokenRows(
   )?.value ?? instruction.target;
   return [tokenRow(
     tokenType,
-    authoredTarget === 'view-model' ? ['deprecated'] : [],
+    htmlAsciiLowercase(authoredTarget) === 'view-model' ? ['deprecated'] : [],
     resource.compilation.definition.name,
     { ...source, role: 'ref-target' },
     instruction.productHandle,

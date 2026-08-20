@@ -1,4 +1,10 @@
 import { authoredTemplateAttributeText, type AuthoredTemplateAttributeSource } from './authored-template-source.js';
+import type { HtmlRuntimeNamespace } from './runtime-dom-name.js';
+import {
+  runtimeAsElementResourceName,
+  runtimeAttributeName,
+  runtimeElementResourceName,
+} from './runtime-dom-name.js';
 
 /** Framework-owned template attributes consumed by the compiler before ordinary binding/resource classification. */
 export enum TemplateSpecialAttributeName {
@@ -22,26 +28,35 @@ export interface TemplateSpecialAttributeLike {
 
 /** Return true when an authored attribute is consumed by compiler control flow before binding/resource lowering. */
 export function isTemplateSpecialAttributeName(rawName: string): boolean {
-  return TEMPLATE_SPECIAL_ATTRIBUTE_NAMES.includes(rawName.toLowerCase() as TemplateSpecialAttributeName);
+  return TEMPLATE_SPECIAL_ATTRIBUTE_NAMES.some((candidate) => String(candidate) === rawName);
 }
 
 /** Find the authored value of a compiler-special template attribute. */
 export function templateSpecialAttributeValue(
   attributes: readonly TemplateSpecialAttributeLike[] | null | undefined,
   name: TemplateSpecialAttributeName,
+  namespace?: HtmlRuntimeNamespace,
 ): string | null {
-  return attributes?.find((attribute) => attribute.rawName?.toLowerCase() === name)?.rawValue ?? null;
+  const runtimeName: string = name;
+  return attributes?.find((attribute) =>
+    attribute.rawName != null && runtimeAttributeName(attribute.rawName, namespace) === runtimeName
+  )?.rawValue ?? null;
 }
 
 /** Resolve the custom-element lookup name for an element after applying `as-element` when present. */
 export function templateElementLookupNameFromAttributes(
   tagName: string,
   attributes: readonly TemplateSpecialAttributeLike[] | null | undefined,
+  namespace?: HtmlRuntimeNamespace,
 ): string {
-  const asElement = templateSpecialAttributeValue(attributes, TemplateSpecialAttributeName.AsElement);
+  const asElement = templateSpecialAttributeValue(
+    attributes,
+    TemplateSpecialAttributeName.AsElement,
+    namespace,
+  );
   return asElement == null || asElement.length === 0
-    ? tagName.toLowerCase()
-    : asElement.toLowerCase();
+    ? runtimeElementResourceName(tagName, namespace)
+    : runtimeAsElementResourceName(asElement);
 }
 
 /** Serialize an `as-element` compiler-control attribute. */

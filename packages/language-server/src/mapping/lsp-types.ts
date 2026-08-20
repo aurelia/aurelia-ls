@@ -43,6 +43,9 @@ import {
   canonicalTypeSystemPath,
   diagnosticRepairAffordanceForSuggestion,
   frameworkRegistrationCapabilityFromString,
+  runtimeAsElementResourceName,
+  runtimeAttributeName,
+  runtimeElementResourceName,
   semanticExactSourceReference,
   SemanticRuntimeAnswerResult,
   SemanticRuntimeAnswerSelection,
@@ -782,6 +785,9 @@ export function mapSemanticRuntimeTemplateHover(
   if (!semanticRuntimeHoverHasPotentialCard(value)) {
     return { value: null, failures: [] };
   }
+  if (!semanticRuntimeHoverHtmlNamespaceIsValid(value.html.namespace)) {
+    return { value: null, failures: ["Hover HTML namespace has an unsupported value."] };
+  }
 
   const source = semanticExactSourceReference(value.activeSource);
   if (source == null) {
@@ -891,6 +897,22 @@ function semanticRuntimeHoverHasPotentialCard(value: SemanticTemplateCursorInfoR
     || value.selectedDefinition != null
     || value.diagnosticPresentation != null
     || value.uncertainty != null;
+}
+
+function semanticRuntimeHoverHtmlNamespaceIsValid(namespace: unknown): boolean {
+  return namespace == null
+    || namespace === "html"
+    || namespace === "svg"
+    || namespace === "math"
+    || namespace === "unknown";
+}
+
+function semanticRuntimeHoverHtmlNamespace(
+  value: SemanticTemplateCursorInfoResult,
+): Exclude<SemanticTemplateCursorInfoResult["html"]["namespace"], null> | undefined {
+  return semanticRuntimeHoverHtmlNamespaceIsValid(value.html.namespace)
+    ? value.html.namespace ?? undefined
+    : undefined;
 }
 
 function semanticRuntimeHoverCard(
@@ -1049,7 +1071,10 @@ function semanticRuntimeHoverSelection(
     value.selectedBindable != null
     && value.siteKind === "attribute-name"
     && semanticRuntimeBindableTargetName(value.html.attributeName) === activeText
-    && value.selectedBindable.attribute.toLowerCase() === activeText.toLowerCase()
+    && value.html.attributeName != null
+    && semanticRuntimeBindableTargetName(
+      runtimeAttributeName(value.html.attributeName, semanticRuntimeHoverHtmlNamespace(value)),
+    ) === value.selectedBindable.attribute
   ) {
     return semanticRuntimeBindableHoverSelection(value, activeSource, activeText, documentUris);
   }
@@ -1180,6 +1205,12 @@ function semanticRuntimeBindableHoverSelection(
   const authoredCommand = commandSeparator < 0
     ? null
     : rawAttribute.slice(commandSeparator + 1);
+  const runtimeRawAttribute = runtimeAttributeName(rawAttribute, semanticRuntimeHoverHtmlNamespace(value));
+  const runtimeCommandSeparator = runtimeRawAttribute.indexOf(".");
+  const runtimeAuthoredAttribute = semanticRuntimeBindableTargetName(runtimeRawAttribute) ?? "";
+  const runtimeAuthoredCommand = runtimeCommandSeparator < 0
+    ? null
+    : runtimeRawAttribute.slice(runtimeCommandSeparator + 1);
   const attributeSource = semanticExactSourceReference(value.html.attributeSource);
   const exactActiveSource = semanticExactSourceReference(activeSource);
   const carriedCommand = value.valueSite?.bindingCommandName ?? null;
@@ -1189,11 +1220,11 @@ function semanticRuntimeBindableHoverSelection(
     || activeText !== authoredAttribute
     || !semanticRuntimeExactSourceContains(value.html.attributeSource, activeSource, documentUris)
     || attributeSource?.start !== exactActiveSource?.start
-    || authoredAttribute.toLowerCase() !== bindable.attribute.toLowerCase()
+    || runtimeAuthoredAttribute !== bindable.attribute
     || authoredCommand === ""
     || (
       carriedCommand != null
-      && carriedCommand !== authoredCommand
+      && carriedCommand !== runtimeAuthoredCommand
     )
   ) {
     return {
@@ -1216,7 +1247,7 @@ function semanticRuntimeBindableHoverSelection(
     };
   }
   const context: HoverCardContextLine[] = [];
-  if (bindable.attribute.toLowerCase() !== bindable.name.toLowerCase()) {
+  if (bindable.attribute !== bindable.name) {
     const owner = value.selectedDefinition?.targetName;
     const ownerIsSourceBacked = owner != null
       && semanticExactSourceReference(value.selectedDefinition?.targetSource ?? null) != null;
@@ -1360,8 +1391,16 @@ function semanticRuntimeResourceHoverSelection(
   );
   if (ownsTagSource) {
     if (
-      activeText.toLowerCase() !== matchedName.toLowerCase()
-      || value.html.tagName?.toLowerCase() !== matchedName.toLowerCase()
+      !semanticRuntimeResourceAuthoredOrRuntimeNameMatches(
+        value,
+        activeSource,
+        activeText,
+        true,
+        documentUris,
+      )
+      || value.html.tagName == null
+      || runtimeElementResourceName(value.html.tagName, semanticRuntimeHoverHtmlNamespace(value))
+        !== (definition.runtimeMatchedName ?? matchedName)
     ) {
       return {
         value: null,
@@ -1369,7 +1408,13 @@ function semanticRuntimeResourceHoverSelection(
       };
     }
   } else if (
-    activeText !== matchedName
+    !semanticRuntimeResourceAuthoredOrRuntimeNameMatches(
+      value,
+      activeSource,
+      activeText,
+      false,
+      documentUris,
+    )
     || (
       isElement
       && !semanticRuntimeResourceValueLocusOwnsActiveSource(
@@ -1388,7 +1433,7 @@ function semanticRuntimeResourceHoverSelection(
 
   const canonicalName = definition.name;
   const isAlias = canonicalName != null
-    && canonicalName.toLowerCase() !== matchedName.toLowerCase();
+    && canonicalName !== matchedName;
   const implementation = definition.targetName != null
     && semanticExactSourceReference(definition.targetSource) != null
     ? { prefix: "Implementation:", value: definition.targetName, suffix: "." }
@@ -1411,6 +1456,137 @@ function semanticRuntimeResourceHoverSelection(
   };
 }
 
+function semanticRuntimeResourceAuthoredOrRuntimeNameMatches(
+  value: SemanticTemplateCursorInfoResult,
+  activeSource: SemanticSourceReference,
+  activeText: string,
+  tagLocus: boolean,
+  documentUris: WorkspaceDocumentUris,
+): boolean {
+  const definition = value.selectedDefinition;
+  if (definition == null) return false;
+  const runtimeMatchedName = definition.runtimeMatchedName ?? definition.matchedName;
+  if (runtimeMatchedName == null) return false;
+  if (
+    definition.matchedName != null
+    && runtimeMatchedName !== definition.matchedName
+  ) {
+    return false;
+  }
+  if (
+    definition.authoredMatchedName != null
+    && activeText !== definition.authoredMatchedName
+  ) {
+    return false;
+  }
+  if (tagLocus) {
+    return runtimeElementResourceName(activeText, semanticRuntimeHoverHtmlNamespace(value)) === runtimeMatchedName;
+  }
+  switch (definition.resourceKind) {
+    case "custom-attribute":
+    case "template-controller":
+      return semanticRuntimeNormalizedAttributeTargetAtActiveSource(
+        value,
+        activeSource,
+        activeText,
+        documentUris,
+      ) === runtimeMatchedName;
+    case "binding-command":
+      return semanticRuntimeNormalizedBindingCommandAtActiveSource(
+        value,
+        activeSource,
+        activeText,
+        documentUris,
+      ) === runtimeMatchedName;
+    case "attribute-pattern":
+      return false;
+    case "value-converter":
+    case "binding-behavior":
+      return activeText === runtimeMatchedName;
+    case "custom-element": {
+      if (
+        value.siteKind !== "attribute-value"
+        || value.html.attributeName == null
+        || runtimeAttributeName(value.html.attributeName, semanticRuntimeHoverHtmlNamespace(value)) !== "as-element"
+      ) {
+        return false;
+      }
+      return runtimeAsElementResourceName(activeText) === runtimeMatchedName;
+    }
+    default:
+      return false;
+  }
+}
+
+function semanticRuntimeNormalizedAttributeTargetAtActiveSource(
+  value: SemanticTemplateCursorInfoResult,
+  activeSource: SemanticSourceReference,
+  activeText: string,
+  documentUris: WorkspaceDocumentUris,
+): string | null {
+  const rawAttributeName = value.html.attributeName;
+  const attributeSource = semanticExactSourceReference(value.html.attributeSource);
+  const exactActiveSource = semanticExactSourceReference(activeSource);
+  if (
+    rawAttributeName == null
+    || attributeSource == null
+    || exactActiveSource == null
+    || attributeSource.start == null
+    || exactActiveSource.start == null
+    || exactActiveSource.end == null
+    || !semanticRuntimeExactSourceContains(value.html.attributeSource, activeSource, documentUris)
+    || attributeSource.start !== exactActiveSource.start
+    || exactActiveSource.end - exactActiveSource.start !== activeText.length
+  ) {
+    return null;
+  }
+  const runtimeRawAttributeName = runtimeAttributeName(
+    rawAttributeName,
+    semanticRuntimeHoverHtmlNamespace(value),
+  );
+  return runtimeRawAttributeName.slice(0, activeText.length);
+}
+
+function semanticRuntimeNormalizedBindingCommandAtActiveSource(
+  value: SemanticTemplateCursorInfoResult,
+  activeSource: SemanticSourceReference,
+  activeText: string,
+  documentUris: WorkspaceDocumentUris,
+): string | null {
+  const rawAttributeName = value.html.attributeName;
+  const attributeSource = semanticExactSourceReference(value.html.attributeSource);
+  const exactActiveSource = semanticExactSourceReference(activeSource);
+  if (
+    rawAttributeName == null
+    || attributeSource == null
+    || exactActiveSource == null
+    || attributeSource.start == null
+    || exactActiveSource.start == null
+    || exactActiveSource.end == null
+    || !semanticRuntimeExactSourceContains(value.html.attributeSource, activeSource, documentUris)
+  ) {
+    return null;
+  }
+  if (value.valueSite?.bindingCommandName != null) {
+    return value.valueSite.bindingCommandName;
+  }
+  const relativeStart = exactActiveSource.start - attributeSource.start;
+  const relativeEnd = exactActiveSource.end - attributeSource.start;
+  if (
+    relativeStart >= 0
+    && relativeEnd <= rawAttributeName.length
+    && relativeEnd - relativeStart === activeText.length
+  ) {
+    return runtimeAttributeName(
+      rawAttributeName,
+      semanticRuntimeHoverHtmlNamespace(value),
+    ).slice(relativeStart, relativeEnd);
+  }
+  // Multi-binding segment names live in an attribute value, which the browser
+  // does not normalize. The exact authored token is therefore the runtime key.
+  return activeText;
+}
+
 function semanticRuntimeResourceMayOwnActiveLocus(
   value: SemanticTemplateCursorInfoResult,
   activeSource: SemanticSourceReference,
@@ -1419,6 +1595,7 @@ function semanticRuntimeResourceMayOwnActiveLocus(
 ): boolean {
   const definition = value.selectedDefinition;
   if (definition == null) return false;
+  if (definition.resourceKind === "attribute-pattern") return false;
   if (definition.matchedName == null || definition.matchedName.length === 0) return true;
   switch (definition.resourceKind) {
     case "custom-element":
@@ -1432,7 +1609,6 @@ function semanticRuntimeResourceMayOwnActiveLocus(
         );
     case "custom-attribute":
     case "template-controller":
-    case "attribute-pattern":
       return semanticRuntimeResourceAttributeLocusOwnsActiveSource(
         value,
         activeSource,
@@ -1474,7 +1650,8 @@ function semanticRuntimeResourceValueLocusOwnsActiveSource(
 ): boolean {
   if (
     value.siteKind !== "attribute-value"
-    || value.html.attributeName?.toLowerCase() !== "as-element"
+    || value.html.attributeName == null
+    || runtimeAttributeName(value.html.attributeName, semanticRuntimeHoverHtmlNamespace(value)) !== "as-element"
     || value.html.attributeValue !== activeText
   ) {
     return false;
@@ -1950,7 +2127,7 @@ function semanticRuntimeDefinitionTarget(
   }
   const selectedAlias = definition.matchedName != null
     && definition.name != null
-    && definition.matchedName.toLowerCase() !== definition.name.toLowerCase();
+    && definition.matchedName !== definition.name;
   // Alias and local-template names are declarations in their own right. A primary app resource name is metadata for
   // the implementation target, so ordinary F12 follows the class while rename remains on the authored name surface.
   const selectionSource = firstSemanticRuntimeExactSourceReference(

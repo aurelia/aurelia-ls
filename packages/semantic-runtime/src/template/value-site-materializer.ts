@@ -221,7 +221,7 @@ export class TemplateValueSiteMaterializer {
     const syntax = pending.syntax;
     if (pending.siteKind !== TemplateValueSiteKind.SpreadValue
       || syntax == null
-      || syntax.target.toLowerCase() === '...$bindables') {
+      || syntax.target === '...$bindables') {
       return null;
     }
     const targetSource = sourceSpanAddressForAddress(this.store, syntax.targetSourceAddressHandle);
@@ -359,7 +359,7 @@ function siteForAttributeClassification(
         attribute,
       );
     case AttributeClassificationKind.Spread:
-      if (syntax.target.toLowerCase() === '...$attrs') {
+      if (syntax.target === '...$attrs') {
         return null;
       }
       return new PendingValueSite(
@@ -459,7 +459,7 @@ function customAttributeOrTemplateControllerSite(
 function spreadValueExpression(
   syntax: AttributeSyntax,
 ): string {
-  return syntax.target.toLowerCase() === '...$bindables'
+  return syntax.target === '...$bindables'
     ? syntax.rawValue
     : syntax.target.slice(3);
 }

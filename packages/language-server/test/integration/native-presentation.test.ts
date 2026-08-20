@@ -45,7 +45,17 @@ test("native hover and symbol responses preserve exact authored meaning", async 
   const resourcesPath = path.join(fixture, "src/resources.ts");
   const htmlUri = fileUri(fixture, "src/effective-definitions-app.html");
   const resourcesUri = fileUri(fixture, "src/resources.ts");
-  const htmlText = fs.readFileSync(htmlPath, "utf8");
+  const htmlText = fs.readFileSync(htmlPath, "utf8")
+    .replace(
+      "<decorator-effective></decorator-effective>",
+      "<DECORATOR-EFFECTIVE></DeCoRaToR-EfFeCtIvE>",
+    )
+    .replace("decorator-attribute-effective", "DECORATOR-ATTRIBUTE-EFFECTIVE")
+    .replace('value.static-cmd="message"', 'VALUE.STATIC-CMD="message"')
+    .replace(
+      "</template>",
+      '  <section PROMISE.RESOLVE="Promise.resolve(message)"></section>\n</template>',
+    );
   const resourcesText = fs.readFileSync(resourcesPath, "utf8");
   const { connection, child, dispose, getStderr } = startServer(fixture);
   const diagnostics = createDiagnosticsRecorder(connection, child, getStderr);
@@ -68,6 +78,47 @@ test("native hover and symbol responses preserve exact authored meaning", async 
       end: positionAt(htmlText, messageStart + "message".length),
     });
     expect(hover?.range == null ? null : textForRange(htmlText, hover.range)).toBe("message");
+
+    for (const [token, expectedIdentity] of [
+      ["DECORATOR-EFFECTIVE", "<DECORATOR-EFFECTIVE>"],
+      ["DeCoRaToR-EfFeCtIvE", "<DeCoRaToR-EfFeCtIvE>"],
+      ["DECORATOR-ATTRIBUTE-EFFECTIVE", "(custom attribute) DECORATOR-ATTRIBUTE-EFFECTIVE"],
+      ["STATIC-CMD", "(binding command) STATIC-CMD"],
+    ] as const) {
+      const tokenStart = htmlText.indexOf(token);
+      expect(tokenStart, `expected authored token ${token}`).toBeGreaterThanOrEqual(0);
+      const resourceHover = await connection.sendRequest<Hover | null>("textDocument/hover", {
+        textDocument: { uri: htmlUri },
+        position: positionAt(htmlText, tokenStart + 1),
+      });
+      expect(resourceHover, `expected resource hover for ${token}`).not.toBeNull();
+      expect((resourceHover?.contents as { value?: string } | undefined)?.value ?? "")
+        .toContain(expectedIdentity);
+      expect(resourceHover?.range == null ? null : textForRange(htmlText, resourceHover.range))
+        .toBe(token);
+    }
+
+    const nestedCommandMarker = "message.bind: message";
+    const nestedCommandMarkerStart = htmlText.indexOf(nestedCommandMarker);
+    expect(nestedCommandMarkerStart).toBeGreaterThanOrEqual(0);
+    const nestedCommandStart = htmlText.indexOf("bind", nestedCommandMarkerStart);
+    expect(nestedCommandStart).toBeGreaterThanOrEqual(0);
+    expect(nestedCommandStart).toBeLessThan(nestedCommandMarkerStart + nestedCommandMarker.length);
+    const nestedCommandHover = await connection.sendRequest<Hover | null>("textDocument/hover", {
+      textDocument: { uri: htmlUri },
+      position: positionAt(htmlText, nestedCommandStart + 1),
+    });
+    expect((nestedCommandHover?.contents as { value?: string } | undefined)?.value ?? "")
+      .toContain("(binding command) bind");
+    expect(nestedCommandHover?.range == null ? null : textForRange(htmlText, nestedCommandHover.range))
+      .toBe("bind");
+
+    const patternLiteralStart = htmlText.indexOf("PROMISE.RESOLVE");
+    expect(patternLiteralStart).toBeGreaterThanOrEqual(0);
+    expect(await connection.sendRequest<Hover | null>("textDocument/hover", {
+      textDocument: { uri: htmlUri },
+      position: positionAt(htmlText, patternLiteralStart + 1),
+    })).toBeNull();
 
     const documentSymbols = await connection.sendRequest<DocumentSymbol[] | null>(
       "textDocument/documentSymbol",

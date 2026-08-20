@@ -42,9 +42,14 @@ import {
 import type { TemplateCompilerWorldEmission } from './compiler-world-materializer.js';
 import type { TemplateCompilerReadView } from './compiler-read-view.js';
 import type { TemplateCompilationUnit } from './compilation-unit.js';
-import type { HtmlAttribute } from './html-ir.js';
+import {
+  htmlElementAttributeOwnersByAttributeProduct,
+  type HtmlAttribute,
+  type HtmlNamespaceKind,
+} from './html-ir.js';
 import type { HtmlParseEmission } from './html-parse-materializer.js';
 import { TemplateProductDetails } from './product-details.js';
+import { runtimeAttributeName } from './runtime-dom-name.js';
 
 export interface AttributeSyntaxParseRequest {
   /** Store-local key for this attribute-syntax parse pass. */
@@ -102,12 +107,18 @@ export class AttributeSyntaxMaterializer {
     const records: KernelStoreRecord[] = [...source.records];
     const syntaxes: AttributeSyntax[] = [];
     const claims: SemanticClaim[] = [];
+    const ownersByAttribute = htmlElementAttributeOwnersByAttributeProduct(
+      input.html.nodes,
+      input.html.attributes,
+    );
     input.html.attributes.forEach((attribute, index) => {
+      const namespace = ownersByAttribute.get(attribute.productHandle)?.namespace;
       const publication = this.publishAttributeSyntax(
         `attribute-syntax:${input.localKey}:${index}`,
         source,
         input,
         attribute,
+        namespace,
       );
       syntaxes.push(publication.syntax);
       records.push(...publication.records);
@@ -132,9 +143,22 @@ export class AttributeSyntaxMaterializer {
     source: AttributeSyntaxSourceSet,
     input: AttributeSyntaxParseRequest,
     attribute: HtmlAttribute,
+    namespace: HtmlNamespaceKind | undefined,
   ): AttributeSyntaxPublication {
-    const parse = input.compilerReads.parseAttribute(attribute.rawName, attribute.rawValue);
-    const partSources = attributeSyntaxPartSources(this.store, local, attribute.nameAddressHandle, parse);
+    // TemplateCompiler receives DOM Attr.name after template.innerHTML parsing, not the
+    // source spelling. Keep the authored HtmlAttribute as source authority while feeding
+    // the runtime-shaped parser the browser-normalized name it actually observes.
+    const parse = input.compilerReads.parseAttribute(
+      runtimeAttributeName(attribute.rawName, namespace),
+      attribute.rawValue,
+    );
+    const partSources = attributeSyntaxPartSources(
+      this.store,
+      local,
+      attribute.nameAddressHandle,
+      attribute.rawName,
+      parse,
+    );
     const syntax = this.createAttributeSyntax(local, source, attribute, parse, partSources);
     const claims = this.claimsForAttributeSyntax(local, source, attribute, syntax, parse.executableProductHandle);
     return new AttributeSyntaxPublication(
@@ -155,9 +179,10 @@ export class AttributeSyntaxMaterializer {
     const identityHandle = this.store.handles.identity(local);
     return bindProductDetailEnvelope(new AttributeSyntax(
       parse.execution.syntaxKind,
+      attribute.rawName,
       parse.execution.rawName,
       attribute.nameAddressHandle,
-      parse.execution.rawValue,
+      attribute.rawValue,
       parse.execution.target,
       partSources.targetSourceAddressHandle,
       parse.execution.command,

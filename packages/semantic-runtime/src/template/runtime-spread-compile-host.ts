@@ -150,7 +150,7 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
     targetNode: HtmlElement,
     targetDefinition: CustomElementDefinition | null,
   ): SpreadCompileInstructionSet | TemplateCompilerSpreadCompileResult {
-    const target = syntax.target.toLowerCase();
+    const target = syntax.target;
     if (target === '...$attrs') {
       const instruction = this.createInstruction(request, syntax, TemplateInstructionKind.SpreadTransferedBinding, 'spread-transfered-binding',
         (allocation) => new SpreadTransferedBindingInstruction(
@@ -659,7 +659,7 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
         ? null
         : this.publication.readProductDetail(TemplateProductDetails.HtmlAttribute, attribute.productHandle))
       .filter((attribute): attribute is NonNullable<typeof attribute> => attribute != null);
-    return templateElementLookupNameFromAttributes(targetNode.tagName, attributes);
+    return templateElementLookupNameFromAttributes(targetNode.tagName, attributes, targetNode.namespace);
   }
 
 }

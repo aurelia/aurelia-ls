@@ -6,9 +6,9 @@ verification supports all three by checking reopened pressure-corpus product fac
 (`packages/language-server/out/main.js`) over stdio against a fixture workspace, drives standard
 LSP requests (rename, references, hover, completions, definition, documentHighlight, diagnostics, codeAction), applies the results to
 in-memory copies of the fixture, and snapshots before/after. The `codeAction` lane resolves lazy actions through
-`codeAction/resolve` before validating and applying their versioned edits, matching the editor lifecycle. Every session
-requires the post-open `aurelia/analysisChanged` notification followed by the standard
-`workspace/diagnostic/refresh` request, in that order; a missing or malformed settled-analysis sequence fails the run.
+`codeAction/resolve` before validating and applying their versioned edits, matching the editor lifecycle.
+A disk-equal `didOpen` is a lifecycle no-op; each following probe request on the same connection is the
+readiness/currentness boundary for the synchronized editor overlay.
 
 The diagnostics lane uses only standard `textDocument/diagnostic` pull requests with the server's `aurelia` provider
 identifier. It requires an initial full report with a non-empty `resultId`, then proves unchanged reuse with the exact

@@ -279,7 +279,7 @@ export class TemplateCompilerReadView {
   }
 
   attribute(name: string): TemplateResolvedResource | null {
-    const canonical = name.toLowerCase();
+    const canonical = name;
     const result = resolvedVisibleResource(this.store, this.world.resourceResolver.attr(canonical));
     this.observe(
       TemplateCompilerReadKind.AttributeResource,
@@ -318,7 +318,7 @@ export class TemplateCompilerReadView {
   }
 
   bindingCommand(name: string): BindingCommandExecutable | null {
-    const canonical = name.toLowerCase();
+    const canonical = name;
     const result = this.world.bindingCommandResolver.get(canonical);
     this.observe(
       TemplateCompilerReadKind.BindingCommand,
@@ -333,7 +333,7 @@ export class TemplateCompilerReadView {
     rawName: string,
     rawValue: string,
   ): AttributeParserParseResult {
-    const canonical = revisionDigest([rawName.toLowerCase(), rawValue]);
+    const canonical = revisionDigest([rawName, rawValue]);
     const result = parseAttributeInWorld(this.world, rawName, rawValue);
     this.observe(
       TemplateCompilerReadKind.AttributePattern,

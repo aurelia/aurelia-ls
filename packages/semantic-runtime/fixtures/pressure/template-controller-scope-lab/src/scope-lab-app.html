@@ -12,9 +12,9 @@
     <h2>${task.name}</h2>
     <span class="repeat-flags">${$index}:${$first}:${$last}</span>
     <button click.trigger="selectTask(task.id, $index)">Select</button>
-    <let localTask.bind="task"></let>
+    <let local-task.bind="task"></let>
     <span class="let-local">${localTask.name}</span>
-    <let hostTitle.bind="task.name" to-binding-context></let>
+    <let host-title.bind="task.name" to-binding-context></let>
     <span class="let-binding-context">${hostTitle}</span>
     <let first-label.bind="task.name" upper-label.bind="firstLabel.toUpperCase()" to-binding-context></let>
     <span class="let-sequential-label">${upperLabel}</span>

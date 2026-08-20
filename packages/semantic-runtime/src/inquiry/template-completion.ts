@@ -165,6 +165,7 @@ import {
   HtmlElement,
   type HtmlIrNode,
 } from '../template/html-ir.js';
+import { runtimeElementResourceName } from '../template/runtime-dom-name.js';
 import {
   BuiltInTemplateControllerValueDomainKind,
   frameworkTemplateControllerSemanticsForResource,
@@ -3894,7 +3895,7 @@ function canComposeAttributeCommandAtCursor(
   }
   return topLevelSyntax?.syntaxKind === AttributeSyntaxKind.Plain
     && topLevelSyntax.command == null
-    && topLevelSyntax.rawName === topLevelSyntax.target;
+    && topLevelSyntax.runtimeRawName === topLevelSyntax.target;
 }
 
 function siteKindUsesExpressionParse(siteKind: TemplateCompletionSiteKind): boolean {
@@ -4281,7 +4282,7 @@ function selectedDefinitionForCursor(
     const command = findVisibleTemplateResource(
       resource.compilation.compilerWorld.resourceScope,
       ResourceDefinitionKind.BindingCommand,
-      syntax.command.toLowerCase(),
+      syntax.command,
     );
     if (command?.definitionProductHandle != null) {
       return { productHandle: command.definitionProductHandle, matchedName: syntax.command };
@@ -4569,8 +4570,11 @@ function definitionForElement(
   // dispatch to that definition for cursor/navigation semantics even though no exact runtime lookup row is invented.
   return owner.type === ResourceDefinitionKind.CustomElement
     && owner.productHandle != null
-    && owner.name.toLowerCase() === activeElement.tagName.toLowerCase()
-    ? { productHandle: owner.productHandle, matchedName: activeElement.tagName }
+    && owner.name === runtimeElementResourceName(activeElement.tagName, activeElement.namespace)
+    ? {
+        productHandle: owner.productHandle,
+        matchedName: runtimeElementResourceName(activeElement.tagName, activeElement.namespace),
+      }
     : familyOwnerDefinitionForElement(store, resource, activeElement);
 }
 
@@ -4584,7 +4588,7 @@ function familyOwnerDefinitionForElement(
     definition != null
     && definition.type === ResourceDefinitionKind.CustomElement
     && (definition.identityHandle === familyOwnerHandle || definition.productHandle === familyOwnerHandle)
-    && definition.name.toLowerCase() === activeElement.tagName.toLowerCase();
+    && definition.name === runtimeElementResourceName(activeElement.tagName, activeElement.namespace);
   const contextualDefinition = [
     resource.compilation.definition,
     ...resource.compilation.parentCompilerWorld.resourceScope.resources
@@ -4607,5 +4611,8 @@ function familyOwnerDefinitionForElement(
     ?? (catalogDefinitionByProduct.size === 1 ? [...catalogDefinitionByProduct.values()][0]! : null);
   return familyDefinition?.productHandle == null
     ? null
-    : { productHandle: familyDefinition.productHandle, matchedName: activeElement.tagName };
+    : {
+        productHandle: familyDefinition.productHandle,
+        matchedName: runtimeElementResourceName(activeElement.tagName, activeElement.namespace),
+      };
 }

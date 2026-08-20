@@ -1,25 +1,26 @@
 <template>
-  <spread-card ...spreadState></spread-card>
-  <spread-card ...spreadContainer.details></spread-card>
+  <spread-card ...$bindables='spreadState'></spread-card>
+  <spread-card ...$bindables='spreadContainer.details'></spread-card>
   <spread-card ...$bindables="spreadState"></spread-card>
   <spread-card ...$bindables="spreadState & missingSpreadBehavior"></spread-card>
   <spread-card $bindables.spread="spreadState"></spread-card>
   <spread-card ...$bindables="spreadState | spreadIdentity"></spread-card>
   <spread-card ...$bindables="{ title: spreadState.title, count: spreadState.count, tone: spreadState.tone }"></spread-card>
   <spread-card repeat.for="card of spreadCards" ...card></spread-card>
-  <spread-card ...aliasShaped></spread-card>
-  <spread-card ...nullableSpread></spread-card>
-  <spread-card ...optionalSpread></spread-card>
-  <spread-card ...presentUndefinedSpread></spread-card>
-  <spread-card ...unionSpread></spread-card>
-  <spread-card ...dynamicSpread></spread-card>
-  <spread-card ...callableSpread></spread-card>
-  <spread-card ...broadFunctionSpread></spread-card>
-  <spread-card ...broadObjectSpread></spread-card>
-  <spread-card ...constructableSpread></spread-card>
-  <spread-card ...inheritedSpread></spread-card>
-  <spread-card ...primitiveSpread></spread-card>
-  <no-capture-shell ...noBindableSpread></no-capture-shell>
+  <spread-card ...$bindables='aliasShaped'></spread-card>
+  <spread-card ...$bindables='nullableSpread'></spread-card>
+  <spread-card ...$bindables='optionalSpread'></spread-card>
+  <spread-card ...$bindables='presentUndefinedSpread'></spread-card>
+  <spread-card ...$bindables='unionSpread'></spread-card>
+  <spread-card ...$bindables='dynamicSpread'></spread-card>
+  <spread-card ...$bindables='callableSpread'></spread-card>
+  <spread-card ...$bindables='broadFunctionSpread'></spread-card>
+  <spread-card ...$bindables='broadObjectSpread'></spread-card>
+  <spread-card ...$bindables='constructableSpread'></spread-card>
+  <spread-card ...$bindables='inheritedSpread'></spread-card>
+  <spread-card ...$bindables='primitiveSpread'></spread-card>
+  <no-capture-shell ...$bindables='noBindableSpread'></no-capture-shell>
+  <case-spread-card ...$bindables="caseSpreadState"></case-spread-card>
 
   <spread-card ...$element="spreadState"></spread-card>
   <spread-card $element.spread="spreadState"></spread-card>

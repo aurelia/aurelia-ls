@@ -53,6 +53,7 @@ function harness(text: string, token: string, occurrence = 0) {
           html: {
             nodeKind: "text",
             tagName: null,
+            namespace: null,
             attributeName: null,
             attributeValue: null,
             source: null,
@@ -99,10 +100,15 @@ function member(name: string, scopeRole: string | null, typeDisplay = "Item") {
 }
 
 function definition(overrides: Record<string, unknown> = {}) {
+  const matchedName = typeof overrides.matchedName === "string"
+    ? overrides.matchedName
+    : "product-card";
   return {
     resourceKind: "custom-element",
     name: "product-card",
-    matchedName: "product-card",
+    matchedName,
+    authoredMatchedName: null,
+    runtimeMatchedName: matchedName,
     targetName: "ProductCard",
     source: null,
     nameSource: null,
@@ -352,6 +358,321 @@ describe("bounded semantic hover mapping", () => {
     expect(markdown(sourceBacked)).toContain(
       "Aurelia custom element. Alias for: `product-card`. Implementation: `ProductCard`.",
     );
+  });
+
+  test("preserves authored tag spelling while authenticating browser-normalized element identity", () => {
+    const text = "<template><PrOdUcT-CaRd></pRoDuCt-CaRd></template>";
+    const closing = harness(text, "pRoDuCt-CaRd");
+    const openingStart = text.indexOf("PrOdUcT-CaRd");
+    const mapped = closing.map({
+      siteKind: "tag-name",
+      html: {
+        nodeKind: "element",
+        tagName: "PrOdUcT-CaRd",
+        namespace: "html",
+        attributeName: null,
+        attributeValue: null,
+        source: null,
+        tagNameSource: source("src/hover.html", openingStart, openingStart + "PrOdUcT-CaRd".length),
+        closingTagNameSource: closing.activeSource,
+        attributeSource: null,
+      },
+      selectedDefinition: definition({
+        authoredMatchedName: null,
+        runtimeMatchedName: "product-card",
+      }),
+    });
+
+    expect(markdown(mapped)).toContain("<pRoDuCt-CaRd>");
+    expect(mapped.failures).toEqual([]);
+    expect(mapped.value?.range).toEqual({
+      start: closing.document.positionAt(closing.activeSource.start),
+      end: closing.document.positionAt(closing.activeSource.end),
+    });
+  });
+
+  test("authenticates authored HTML, SVG, command, and as-element identities on both axes", () => {
+    const htmlAttribute = harness("<template><div FOCUS></div></template>", "FOCUS");
+    const htmlMapped = htmlAttribute.map({
+      siteKind: "attribute-name",
+      html: {
+        nodeKind: "element",
+        tagName: "div",
+        namespace: "html",
+        attributeName: "FOCUS",
+        attributeValue: null,
+        source: null,
+        tagNameSource: null,
+        closingTagNameSource: null,
+        attributeSource: htmlAttribute.activeSource,
+      },
+      selectedDefinition: definition({
+        resourceKind: "custom-attribute",
+        name: "focus-ring",
+        matchedName: "focus",
+        authoredMatchedName: "FOCUS",
+        runtimeMatchedName: "focus",
+      }),
+    });
+    expect(markdown(htmlMapped)).toContain("(custom attribute) FOCUS");
+    expect(markdown(htmlMapped)).toContain("Alias for: `focus-ring`.");
+    expect(htmlMapped.failures).toEqual([]);
+
+    const svgAttribute = harness("<template><svg VIEWBOX=\"0 0 1 1\"></svg></template>", "VIEWBOX");
+    const svgMapped = svgAttribute.map({
+      siteKind: "attribute-name",
+      html: {
+        nodeKind: "element",
+        tagName: "svg",
+        namespace: "svg",
+        attributeName: "VIEWBOX",
+        attributeValue: "0 0 1 1",
+        source: null,
+        tagNameSource: null,
+        closingTagNameSource: null,
+        attributeSource: source(
+          "src/hover.html",
+          svgAttribute.activeSource.start,
+          svgAttribute.activeSource.end + '=\"0 0 1 1\"'.length,
+        ),
+      },
+      selectedDefinition: definition({
+        resourceKind: "custom-attribute",
+        name: "viewBox",
+        matchedName: "viewBox",
+        authoredMatchedName: "VIEWBOX",
+        runtimeMatchedName: "viewBox",
+      }),
+    });
+    expect(markdown(svgMapped)).toContain("(custom attribute) VIEWBOX");
+    expect(svgMapped.failures).toEqual([]);
+
+    const command = harness("<template><input VALUE.BIND=\"item\"></template>", "BIND");
+    const attributeStart = command.activeSource.start - "VALUE.".length;
+    const commandMapped = command.map({
+      siteKind: "binding-command-name",
+      html: {
+        nodeKind: "element",
+        tagName: "input",
+        namespace: "html",
+        attributeName: "VALUE.BIND",
+        attributeValue: "item",
+        source: null,
+        tagNameSource: null,
+        closingTagNameSource: null,
+        attributeSource: source(
+          "src/hover.html",
+          attributeStart,
+          command.activeSource.end + '=\"item\"'.length,
+        ),
+      },
+      valueSite: { bindingCommandName: "bind" },
+      selectedDefinition: definition({
+        resourceKind: "binding-command",
+        name: "bind",
+        matchedName: "bind",
+        authoredMatchedName: "BIND",
+        runtimeMatchedName: "bind",
+      }),
+    });
+    expect(markdown(commandMapped)).toContain("(binding command) BIND");
+    expect(commandMapped.failures).toEqual([]);
+
+    const specializedCommand = harness("<template><p T.BIND=\"key\"></p></template>", "BIND");
+    const specializedStart = specializedCommand.activeSource.start - "T.".length;
+    const specializedMapped = specializedCommand.map({
+      siteKind: "binding-command-name",
+      html: {
+        nodeKind: "element",
+        tagName: "p",
+        namespace: "html",
+        attributeName: "T.BIND",
+        attributeValue: "key",
+        source: null,
+        tagNameSource: null,
+        closingTagNameSource: null,
+        attributeSource: source(
+          "src/hover.html",
+          specializedStart,
+          specializedCommand.activeSource.end + '=\"key\"'.length,
+        ),
+      },
+      valueSite: { bindingCommandName: "t.bind" },
+      selectedDefinition: definition({
+        resourceKind: "binding-command",
+        name: "t.bind",
+        matchedName: "t.bind",
+        authoredMatchedName: "BIND",
+        runtimeMatchedName: "t.bind",
+      }),
+    });
+    expect(markdown(specializedMapped)).toContain("(binding command) BIND");
+    expect(specializedMapped.failures).toEqual([]);
+
+    const asElement = harness(
+      '<template><div AS-ELEMENT="PRODUCT-CARD"></div></template>',
+      "PRODUCT-CARD",
+    );
+    const asElementMapped = asElement.map({
+      siteKind: "attribute-value",
+      html: {
+        nodeKind: "element",
+        tagName: "div",
+        namespace: "html",
+        attributeName: "AS-ELEMENT",
+        attributeValue: "PRODUCT-CARD",
+        source: null,
+        tagNameSource: null,
+        closingTagNameSource: null,
+        attributeSource: source(
+          "src/hover.html",
+          asElement.activeSource.start - 'AS-ELEMENT="'.length,
+          asElement.activeSource.end + 1,
+        ),
+      },
+      selectedDefinition: definition({
+        authoredMatchedName: "PRODUCT-CARD",
+        runtimeMatchedName: "product-card",
+      }),
+    });
+    expect(markdown(asElementMapped)).toContain("(custom element) PRODUCT-CARD");
+    expect(asElementMapped.failures).toEqual([]);
+  });
+
+  test("rejects stale runtime identity and SVG compound-name guesses", () => {
+    const stale = harness("<template><div FOCUS></div></template>", "FOCUS");
+    const staleMapped = stale.map({
+      siteKind: "attribute-name",
+      html: {
+        nodeKind: "element",
+        tagName: "div",
+        namespace: "html",
+        attributeName: "FOCUS",
+        attributeValue: null,
+        source: null,
+        tagNameSource: null,
+        closingTagNameSource: null,
+        attributeSource: stale.activeSource,
+      },
+      selectedDefinition: definition({
+        resourceKind: "custom-attribute",
+        name: "focus",
+        matchedName: "focus",
+        authoredMatchedName: "FOCUS",
+        runtimeMatchedName: "other",
+      }),
+    });
+    expect(staleMapped.value).toBeNull();
+    expect(staleMapped.failures).toEqual([
+      "Hover selected resource does not match the exact authored token.",
+    ]);
+
+    const svgCompound = harness(
+      '<template><svg VIEWBOX.BIND="item"></svg></template>',
+      "VIEWBOX",
+    );
+    const compoundMapped = svgCompound.map({
+      siteKind: "attribute-name",
+      html: {
+        nodeKind: "element",
+        tagName: "svg",
+        namespace: "svg",
+        attributeName: "VIEWBOX.BIND",
+        attributeValue: "item",
+        source: null,
+        tagNameSource: null,
+        closingTagNameSource: null,
+        attributeSource: source(
+          "src/hover.html",
+          svgCompound.activeSource.start,
+          svgCompound.activeSource.end + '.BIND="item"'.length,
+        ),
+      },
+      selectedDefinition: definition({
+        resourceKind: "custom-attribute",
+        name: "viewBox",
+        matchedName: "viewBox",
+        authoredMatchedName: "VIEWBOX",
+        runtimeMatchedName: "viewBox",
+      }),
+    });
+    expect(compoundMapped.value).toBeNull();
+    expect(compoundMapped.failures).toEqual([
+      "Hover selected resource does not match the exact authored token.",
+    ]);
+  });
+
+  test("keeps expression resource aliases exact and case-sensitive", () => {
+    const alias = harness("<template>${item | FormatName}</template>", "FormatName");
+    const mapped = alias.map({
+      siteKind: "expression-value-converter",
+      html: { namespace: null },
+      selectedDefinition: definition({
+        resourceKind: "value-converter",
+        name: "formatName",
+        matchedName: "FormatName",
+        authoredMatchedName: "FormatName",
+        runtimeMatchedName: "FormatName",
+      }),
+    });
+    expect(markdown(mapped)).toContain("(value converter) FormatName");
+    expect(markdown(mapped)).toContain("Alias for: `formatName`.");
+    expect(mapped.failures).toEqual([]);
+  });
+
+  test("withholds attribute-pattern cards without reporting a mapping failure", () => {
+    const pattern = harness('<template><div foo.DATA="item"></div></template>', "DATA");
+    const mapped = pattern.map({
+      siteKind: "attribute-name",
+      html: {
+        nodeKind: "element",
+        tagName: "div",
+        namespace: "html",
+        attributeName: "foo.DATA",
+        attributeValue: "item",
+        source: null,
+        tagNameSource: null,
+        closingTagNameSource: null,
+        attributeSource: source(
+          "src/hover.html",
+          pattern.activeSource.start - "foo.".length,
+          pattern.activeSource.end + '=\"item\"'.length,
+        ),
+      },
+      selectedDefinition: definition({
+        resourceKind: "attribute-pattern",
+        name: null,
+        matchedName: null,
+        authoredMatchedName: "DATA",
+        runtimeMatchedName: "PART.data",
+      }),
+    });
+
+    expect(mapped).toEqual({ value: null, failures: [] });
+  });
+
+  test("fails closed on an unsupported future HTML namespace", () => {
+    const token = harness("<template><product-card></product-card></template>", "product-card");
+    const mapped = token.map({
+      siteKind: "tag-name",
+      html: {
+        nodeKind: "element",
+        tagName: "product-card",
+        namespace: "future-namespace",
+        attributeName: null,
+        attributeValue: null,
+        source: null,
+        tagNameSource: token.activeSource,
+        closingTagNameSource: null,
+        attributeSource: null,
+      },
+      selectedDefinition: definition(),
+    });
+
+    expect(mapped).toEqual({
+      value: null,
+      failures: ["Hover HTML namespace has an unsupported value."],
+    });
   });
 
   test("renders only an exact as-element value as an audible non-tag custom-element identity", () => {
