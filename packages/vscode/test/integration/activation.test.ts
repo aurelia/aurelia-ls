@@ -97,6 +97,10 @@ test("reconciles sessions only when workspace activation policy changes", async 
   await settleAsyncWork();
   expect(languageClient.reconcileCalls).toBe(0);
 
+  recorded.fireConfigurationChanged("aurelia.templateDiagnostics.suppressNative");
+  await settleAsyncWork();
+  expect(languageClient.reconcileCalls).toBe(0);
+
   recorded.fireConfigurationChanged("aurelia.activationMode");
   await settleAsyncWork();
   expect(languageClient.reconcileCalls).toBe(1);
@@ -213,9 +217,35 @@ test("keeps an owned root document out of template-only context", async () => {
   await app.deactivate();
 });
 
+test("keeps an exactly owned template in native HTML by default without a containment pull", async () => {
+  const { vscode: stubVscode, recorded } = createVscodeApi({
+    openDocuments: [{
+      uri: "file:///workspace/src/app.html",
+      languageId: "html",
+      text: "<template></template>",
+    }],
+  });
+  const document = stubVscode.workspace.textDocuments[0]!;
+  stubVscode.window.activeTextEditor = { document };
+  const lsp = stubProtocolClient({
+    sourceOwnership: (uri) => sourceOwnershipResponse(uri, true, "template-document"),
+  });
+  const app = createApp(stubVscode, new StubLanguageClient(lsp), []);
+
+  await app.activate();
+
+  expect(document.languageId).toBe("html");
+  expect(lsp.sendRequestMock).toHaveBeenCalledTimes(1);
+  expect(recorded.contextValues.get("aurelia.activeTemplateOwned")).toBe(true);
+  await app.deactivate();
+});
+
 test("rejects late template ownership and rechecks active document language-mode lifecycle", async () => {
   const firstOwnership = deferred<ReturnType<typeof sourceOwnershipResponse>>();
   const { vscode: stubVscode, recorded } = createVscodeApi({
+    configuration: {
+      "aurelia.templateDiagnostics.suppressNative": true,
+    },
     openDocuments: [{
       uri: "file:///workspace/src/app.html",
       languageId: "html",

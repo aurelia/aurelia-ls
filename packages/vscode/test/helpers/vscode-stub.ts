@@ -120,7 +120,7 @@ interface RecordedActions {
   contextValues: Map<string, unknown>;
   languageChanges: Array<{ document: StubDocument; languageId: string }>;
   fireWorkspaceFoldersChanged(): void;
-  fireConfigurationChanged(section?: string): void;
+  fireConfigurationChanged(section?: string, resource?: string): void;
   fireActiveTextEditorChanged(editor: unknown): void;
   fireDocumentOpened(document: StubDocument): void;
   fireDocumentChanged(document: StubDocument): void;
@@ -145,7 +145,9 @@ export interface StubVscodeApi {
     findFiles: (include: unknown, exclude?: unknown, maxResults?: number) => Promise<StubUri[]>;
     getConfiguration: (section: string, uri?: StubUri) => { get<T>(key: string, defaultValue: T): T };
     onDidChangeWorkspaceFolders: (listener: () => void) => Disposable;
-    onDidChangeConfiguration: (listener: (event: { affectsConfiguration: (section: string) => boolean }) => void) => Disposable;
+    onDidChangeConfiguration: (listener: (event: {
+      affectsConfiguration: (section: string, resource?: StubUri | null) => boolean;
+    }) => void) => Disposable;
     onDidOpenTextDocument: (listener: (document: StubDocument) => void) => Disposable;
     onDidChangeTextDocument: (listener: (event: { document: StubDocument }) => void) => Disposable;
     onDidSaveTextDocument: (listener: (document: StubDocument) => void) => Disposable;
@@ -500,7 +502,9 @@ export function createVscodeApi(options: CreateVscodeApiOptions = {}): { vscode:
   const contextValues = new Map<string, unknown>();
   const languageChanges: Array<{ document: StubDocument; languageId: string }> = [];
   const workspaceFoldersChanged = new EventEmitter<void>();
-  const configurationChanged = new EventEmitter<{ affectsConfiguration: (section: string) => boolean }>();
+  const configurationChanged = new EventEmitter<{
+    affectsConfiguration: (section: string, resource?: StubUri | null) => boolean;
+  }>();
   const documentOpened = new EventEmitter<StubDocument>();
   const documentChanged = new EventEmitter<{ document: StubDocument }>();
   const documentSaved = new EventEmitter<StubDocument>();
@@ -629,7 +633,9 @@ export function createVscodeApi(options: CreateVscodeApiOptions = {}): { vscode:
     }),
     onDidChangeWorkspaceFolders: (listener: () => void) => workspaceFoldersChanged.event(listener),
     onDidChangeConfiguration: (
-      listener: (event: { affectsConfiguration: (section: string) => boolean }) => void,
+      listener: (event: {
+        affectsConfiguration: (section: string, resource?: StubUri | null) => boolean;
+      }) => void,
     ) => configurationChanged.event(listener),
     onDidOpenTextDocument: (listener: (document: StubDocument) => void) => documentOpened.event(listener),
     onDidChangeTextDocument: (listener: (event: { document: StubDocument }) => void) => documentChanged.event(listener),
@@ -768,8 +774,12 @@ export function createVscodeApi(options: CreateVscodeApiOptions = {}): { vscode:
       contextValues,
       languageChanges,
       fireWorkspaceFoldersChanged: () => workspaceFoldersChanged.fire(),
-      fireConfigurationChanged: (section = "aurelia") => configurationChanged.fire({
-        affectsConfiguration: (candidate) => candidate === section || candidate.startsWith(`${section}.`),
+      fireConfigurationChanged: (section = "aurelia", resource) => configurationChanged.fire({
+        affectsConfiguration: (candidate, scope) => {
+          if (candidate !== section && !candidate.startsWith(`${section}.`)) return false;
+          if (resource == null || scope == null) return true;
+          return pathIsWithin(scope.fsPath, createUri(resource).fsPath);
+        },
       }),
       fireActiveTextEditorChanged: (editor) => {
         options.activeTextEditor = editor;

@@ -33,19 +33,17 @@ the semantic diagnosis owns the squiggle and the checker fact appears as related
 expose severity overrides, inline suppression, or a blanket strict mode in the 0.5 release line; those controls would
 need a separate, evidence-backed policy.
 
-VS Code's built-in HTML service normally sends embedded style and script text to its CSS and JavaScript validators
-without understanding Aurelia interpolation. After semantic-runtime proves that an open document is an authored
-Aurelia template, the extension moves the settled document into the filename-neutral **Aurelia HTML** language mode.
-That mode retains HTML language-service editing and completion, syntax highlighting, Emmet, the stock HTML document
-snippet, and Aurelia features, while preventing native embedded validators from treating `${...}` holes as CSS or
-JavaScript tokens. For example, `style="width: ${value}%"` is valid Aurelia interpolation and does not retain a CSS
-Problem after admission settles. Ordinary and unowned HTML remains in the native `html` mode with native validation,
-and the extension does not change global `html.validate.*` settings.
+VS Code's built-in HTML service sends embedded style and script text to its CSS and JavaScript validators without
+understanding Aurelia interpolation. Aurelia templates stay in native `html` mode with those validators by default.
+Set `aurelia.templateDiagnostics.suppressNative` to `true` for a workspace folder to move exactly proved templates into
+the filename-neutral **Aurelia HTML** language mode and suppress built-in HTML/CSS/JavaScript diagnostics. This avoids
+false Problems for interpolation such as `style="width: ${value}%"`, but also suppresses legitimate native findings.
 
-A cold first open necessarily begins in native HTML mode while exact semantic ownership is resolved. A native
-CSS/JavaScript diagnostic can therefore appear briefly during that admission window; switching to **Aurelia HTML**
-clears retained native diagnostics once ownership settles. If ownership or the project session is later withdrawn, the
-extension restores native HTML mode and validation.
+HTML language-service participation and completions remain available in Aurelia HTML mode, but full native-mode parity
+is not promised: file icons, `[html]`-scoped settings, snippets, formatter selection, and other native HTML or editor
+behavior can change. Unowned HTML remains native, and the extension does not change global `html.validate.*` settings.
+When suppression is enabled, cold ownership proof is asynchronous, so native diagnostics can appear briefly before the
+mode settles. Withdrawing ownership or disabling suppression restores native `html` mode and validation.
 
 ### Quick fixes — apply only current plans
 
@@ -155,6 +153,19 @@ which Explorer item happens to have focus. Quick Picks keep aliases, bindables, 
 location, and incomplete metadata searchable. A navigation retry repeats the current template-availability proof before opening
 anything, so a stale selection cannot be paired with a newer project snapshot.
 
+### Native Template Diagnostics
+
+Aurelia templates remain in VS Code's native `html` language mode by default. This preserves built-in HTML, CSS, and
+JavaScript diagnostics, default file icons, and ordinary language-scoped settings, but the native validators may report
+false positives for valid Aurelia interpolation.
+
+Set `aurelia.templateDiagnostics.suppressNative` to `true` for a workspace folder to suppress those native diagnostics.
+Only templates proved to belong to Aurelia move into `aurelia-html` mode; unowned HTML remains native `html`. Aurelia
+features and HTML language-service completions remain available, but this is not full native-mode parity. Enabling the
+setting suppresses legitimate native findings too, and may affect file icons, `[html]`-scoped settings, snippets,
+formatter selection, and other native HTML or editor behavior. On a cold first open, ownership proof is asynchronous,
+so a native diagnostic may appear briefly before enabled suppression settles.
+
 ### Binding Mode Hints
 
 Optional inline hints show the resolved binding mode so you can see whether `.bind` resolves to two-way or to-view for a
@@ -234,6 +245,7 @@ workspaces. Virtual workspaces are unsupported, and remote development is not ye
 |---------|---------|-------|---------|
 | `aurelia.activationMode` | `auto` | Workspace folder | Use project-shape-confirmed automatic activation, explicit `on`, or hard subtree exclusion with `off` |
 | `aurelia.inlayHints.bindingMode` | `false` | Workspace folder | Show the resolved mode of implicit `.bind` bindings |
+| `aurelia.templateDiagnostics.suppressNative` | `false` | Workspace folder | Move proved Aurelia templates into `aurelia-html` mode and suppress VS Code's built-in HTML/CSS/JavaScript diagnostics |
 
 ## Getting Started
 

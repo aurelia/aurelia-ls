@@ -230,6 +230,14 @@ describe("Extension Host product-surface contracts", () => {
     expect(ambiguityJourney).toContain("unrelated ownership retry wave");
     expect(ambiguityJourney).toContain("replaceDocumentText(churnControl, churnControlChanged)");
     expect(ambiguityJourney).toContain('executeCommand("workbench.action.files.revert")');
+    expect(ambiguityJourney).toContain('ambiguitySuppression.update("suppressNative", true');
+    expect(ambiguityJourney).toContain('ambiguitySuppression.update("suppressNative", false');
+    expect(ambiguityJourney).toContain("templateDiagnosticsSuppressNative(ambiguityUri)");
+    expect(ambiguityJourney).not.toContain('ambiguitySuppression.get("suppressNative")');
+    expect(ambiguityJourney).toContain(
+      'restoreWorkspaceFolderSettings(ambiguitySettingsSnapshot, "ambiguity suppression cleanup")',
+    );
+    expect(ambiguityJourney).toContain("ambiguity settings-byte cleanup must leave effective suppression current");
     expect(ambiguityJourney).toContain("assertSingleBackgroundLanguageTransition(");
     expect(ambiguityJourney).toContain("unrelated clean HTML churn");
   });

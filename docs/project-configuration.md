@@ -130,9 +130,16 @@ in VS Code settings:
 | `aurelia.project.json` | Authored-source membership and semantic finding presentation shared by semantic-runtime, the language server, and MCP. |
 | `aurelia.activationMode` | Whether the VS Code extension automatically admits, forcibly enables, or excludes a workspace folder. |
 | `aurelia.inlayHints.bindingMode` | VS Code presentation for binding-mode inlay hints. |
+| `aurelia.templateDiagnostics.suppressNative` | Opt-in suppression of VS Code's built-in HTML, CSS, and JavaScript diagnostics for proved Aurelia templates. |
 
 Extension activation, snippets, UI preferences, and logging do not belong in the project file. Conversely, copying
 `authoredSources` or `findings` into `.vscode/settings.json` does not configure the shared semantic runtime.
+
+Native template-diagnostic suppression is disabled by default. Enabling it moves only templates with exact Aurelia
+ownership into the extension's `aurelia-html` language mode. This suppresses VS Code's built-in HTML/CSS/JavaScript
+diagnostics, including legitimate native findings. HTML language-service participation remains available, but file icons,
+`[html]`-scoped settings, snippets, formatter selection, and other native HTML or editor behavior can change. Unowned
+HTML remains in native `html` mode.
 
 The VS Code extension associates the exact `aurelia.project.json` filename with bundled, offline annotation assistance
 for root fields, sections, known rule IDs, and values. Those suggestions are an editing aid, not a second semantic

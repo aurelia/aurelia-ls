@@ -418,6 +418,13 @@
           "scope": "resource",
           "order": 20,
           "description": "Show the resolved binding mode for implicit .bind commands."
+        },
+        "aurelia.templateDiagnostics.suppressNative": {
+          "type": "boolean",
+          "default": false,
+          "scope": "resource",
+          "order": 30,
+          "description": "Suppress VS Code's built-in HTML, CSS, and JavaScript diagnostics, including legitimate native findings, for templates proven to belong to Aurelia. When enabled, proven templates use Aurelia HTML language mode; HTML language-service participation remains available, but file icons, [html]-scoped settings, snippets, formatter selection, and other native HTML or editor behavior may change."
         }
       }
     }

@@ -49,6 +49,16 @@ The file is optional; defaults apply when it is absent. See [Project Configurati
 JSONC rules, defaults, path validation, section-local failures, VS Code editing/diagnostic assistance, and MCP
 inspection.
 
+### Optional native-diagnostic suppression
+
+Aurelia templates stay in VS Code's native `html` mode by default, including its built-in HTML, CSS, and JavaScript
+diagnostics. If those validators report false positives for valid Aurelia interpolation, enable the resource-scoped
+`aurelia.templateDiagnostics.suppressNative` setting for that workspace folder. Templates proved to belong to Aurelia
+then use `aurelia-html` mode and suppress the built-in diagnostics; unowned HTML is unchanged. Because language mode can
+influence file icons, `[html]`-scoped settings, snippets, formatter selection, and other native HTML or editor behavior,
+this behavior is opt-in. It also suppresses legitimate native findings, although HTML language-service participation
+and completions remain available.
+
 ## Using the MCP Release
 
 The `@aurelia-ls/mcp` release is a local, read-only MCP server for AI coding

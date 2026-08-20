@@ -53,6 +53,7 @@ interface ExtensionManifest {
     readonly configuration?: {
       readonly properties?: Readonly<Record<string, {
         readonly default?: unknown;
+        readonly description?: string;
         readonly enumDescriptions?: readonly string[];
         readonly scope?: string;
       }>>;
@@ -520,6 +521,7 @@ describe("VS Code product contract", () => {
     expect(Object.keys(properties).sort()).toEqual([
       "aurelia.activationMode",
       "aurelia.inlayHints.bindingMode",
+      "aurelia.templateDiagnostics.suppressNative",
     ]);
     expect(properties["aurelia.activationMode"]).toEqual(expect.objectContaining({
       default: "auto",
@@ -531,6 +533,14 @@ describe("VS Code product contract", () => {
     expect(properties["aurelia.inlayHints.bindingMode"]).toEqual(expect.objectContaining({
       default: false,
       scope: "resource",
+    }));
+    expect(properties["aurelia.templateDiagnostics.suppressNative"]).toEqual(expect.objectContaining({
+      default: false,
+      scope: "resource",
+      description: [
+        "Suppress VS Code's built-in HTML, CSS, and JavaScript diagnostics, including legitimate native findings, for templates proven to belong to Aurelia.",
+        "When enabled, proven templates use Aurelia HTML language mode; HTML language-service participation remains available, but file icons, [html]-scoped settings, snippets, formatter selection, and other native HTML or editor behavior may change.",
+      ].join(" "),
     }));
   });
 

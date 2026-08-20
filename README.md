@@ -59,11 +59,14 @@ The extension analyzes your Aurelia project and provides:
 - **Contextual explanations** — use native Quick Fixes or Resource Explorer actions to explain eligible diagnostics,
   uncertain bindings, authored attribute names, resource availability, and policy-controlled analysis limitations
 
-For semantically proved Aurelia templates, the extension settles the document into a scoped **Aurelia HTML** mode so
-VS Code's raw embedded CSS/JavaScript validators do not retain false Problems for valid interpolation such as
-`style="width: ${value}%"`. Ordinary HTML stays in native `html` mode with native validation; no global HTML validation
-setting is changed. Exact ownership is asynchronous on a cold first open, so a native diagnostic can appear briefly
-before admission settles and clears it.
+By default, Aurelia templates remain in VS Code's native `html` mode, retaining built-in HTML/CSS/JavaScript validation,
+the default file icon, and ordinary language-scoped settings. Those validators can report false Problems for valid
+interpolation such as `style="width: ${value}%"`. Set `aurelia.templateDiagnostics.suppressNative` to `true` for a
+workspace folder to move only semantically proved Aurelia templates into **Aurelia HTML** mode and suppress those native
+diagnostics, including legitimate native findings. HTML language-service participation and completions remain available,
+but this is not full native-mode parity: file icons, `[html]`-scoped settings, snippets, formatter selection, and other
+native HTML or editor behavior can change. When suppression is enabled, exact ownership is asynchronous on a cold first
+open, so a native diagnostic can appear briefly before admission settles.
 
 See the [extension README](packages/vscode/README.md) for the full feature list and exact invocation points.
 

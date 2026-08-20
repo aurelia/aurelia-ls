@@ -1,5 +1,6 @@
 import type {
   CancellationTokenSource,
+  ConfigurationChangeEvent,
   Disposable,
   TextDocument,
 } from "vscode";
@@ -14,6 +15,8 @@ import {
 
 export const HTML_LANGUAGE_ID = "html";
 export const AURELIA_HTML_LANGUAGE_ID = "aurelia-html";
+export const TEMPLATE_DIAGNOSTICS_SUPPRESS_NATIVE_CONFIGURATION =
+  "aurelia.templateDiagnostics.suppressNative";
 
 export function isTemplateLanguageId(languageId: string | null | undefined): boolean {
   return languageId === HTML_LANGUAGE_ID || languageId === AURELIA_HTML_LANGUAGE_ID;
@@ -24,6 +27,7 @@ interface LanguageRequest {
   readonly document: TextDocument;
   readonly uri: string;
   readonly languageId: string;
+  readonly suppressNativeDiagnostics: boolean;
   readonly sessionClient: unknown;
   readonly cancellation: CancellationTokenSource;
 }
@@ -62,6 +66,9 @@ export class OwnedTemplateLanguageController implements Disposable {
     this.#subscriptions.push(ctx.vscode.workspace.onDidCloseTextDocument((document) => {
       this.#handleClose(document);
     }));
+    this.#subscriptions.push(ctx.vscode.workspace.onDidChangeConfiguration((event) => {
+      this.#reconcileConfiguration(event);
+    }));
   }
 
   start(): void {
@@ -92,8 +99,26 @@ export class OwnedTemplateLanguageController implements Disposable {
       if (session?.workspace.key !== payload.workspace.key) continue;
       const key = documentUriIdentityKey(this.#ctx.vscode, document.uri);
       if (key == null) continue;
+      if (
+        !templateDiagnosticsSuppressNative(this.#ctx, document)
+        && !this.#controllerOwnedDocuments.has(key)
+      ) {
+        continue;
+      }
       if (!reproveSettled && this.#settledOwnershipDocuments.has(key)) continue;
       this.#scheduleAfterSettledNotification(key, document);
+    }
+  }
+
+  #reconcileConfiguration(event: ConfigurationChangeEvent): void {
+    if (this.#disposed) return;
+    for (const document of this.#ctx.vscode.workspace.textDocuments) {
+      if (
+        isTemplateLanguageId(document.languageId)
+        && event.affectsConfiguration(TEMPLATE_DIAGNOSTICS_SUPPRESS_NATIVE_CONFIGURATION, document.uri)
+      ) {
+        this.#schedule(document);
+      }
     }
   }
 
@@ -169,12 +194,19 @@ export class OwnedTemplateLanguageController implements Disposable {
     this.#settledOwnershipDocuments.delete(key);
     this.#dirtyOwnershipDocuments.delete(key);
     this.#invalidate(key);
+    if (this.#modeChanges.has(key)) {
+      // The host language switch cannot be cancelled and will replace this
+      // document. Its convergence check schedules one request against the
+      // replacement, so do not prove ownership against the displaced mode.
+      return;
+    }
     const cancellation = new this.#ctx.vscode.CancellationTokenSource();
     const request: LanguageRequest = {
       generation: ++this.#generation,
       document,
       uri: document.uri.toString(),
       languageId: document.languageId,
+      suppressNativeDiagnostics: templateDiagnosticsSuppressNative(this.#ctx, document),
       sessionClient: this.#ctx.languageClient.sessionForUri(document.uri)?.client,
       cancellation,
     };
@@ -232,18 +264,23 @@ export class OwnedTemplateLanguageController implements Disposable {
     const current = this.#ctx.vscode.workspace.textDocuments.find((document) =>
       sameDocumentUri(this.#ctx.vscode, document.uri, request.document.uri)
     );
-    if (!this.#disposed && current != null && !this.#isCurrentMode(key, request, HTML_LANGUAGE_ID)) {
+    if (
+      !this.#disposed
+      && current != null
+      && !this.#isCurrentMode(key, request, HTML_LANGUAGE_ID)
+    ) {
       this.#schedule(current);
     }
   }
 
   async #resolve(key: string, request: LanguageRequest): Promise<boolean> {
     let ownership: SourceOwnershipSnapshot | null = null;
-    if (request.sessionClient != null) {
+    if (request.suppressNativeDiagnostics && request.sessionClient != null) {
       ownership = await this.#ctx.lsp.getSourceOwnership(request.uri, request.cancellation.token);
     }
     if (!this.#isCurrent(key, request)) return false;
-    const templateOwned = ownership != null
+    const templateOwned = request.suppressNativeDiagnostics
+      && ownership != null
       && sourceOwnershipTemplateOwned(ownership)
       && sameDocumentUri(this.#ctx.vscode, ownership.sourceUri, request.uri)
       && ownership.workspace.key === this.#ctx.languageClient.sessionForUri(request.document.uri)?.workspace.key;
@@ -260,7 +297,11 @@ export class OwnedTemplateLanguageController implements Disposable {
         const current = this.#ctx.vscode.workspace.textDocuments.find((document) =>
           sameDocumentUri(this.#ctx.vscode, document.uri, request.document.uri)
         );
-        if (!this.#disposed && current != null && !this.#isCurrentMode(key, request, languageId)) {
+        if (
+          !this.#disposed
+          && current != null
+          && !this.#isCurrentMode(key, request, languageId)
+        ) {
           this.#schedule(current);
         }
       }
@@ -276,6 +317,7 @@ export class OwnedTemplateLanguageController implements Disposable {
       sameDocumentUri(this.#ctx.vscode, document.uri, request.document.uri)
     );
     if (current !== request.document || current.languageId !== request.languageId) return false;
+    if (templateDiagnosticsSuppressNative(this.#ctx, current) !== request.suppressNativeDiagnostics) return false;
     return this.#ctx.languageClient.sessionForUri(current.uri)?.client === request.sessionClient;
   }
 
@@ -287,6 +329,7 @@ export class OwnedTemplateLanguageController implements Disposable {
     );
     return current != null
       && current.languageId === languageId
+      && templateDiagnosticsSuppressNative(this.#ctx, current) === request.suppressNativeDiagnostics
       && this.#ctx.languageClient.sessionForUri(current.uri)?.client === request.sessionClient;
   }
 
@@ -364,6 +407,12 @@ export class OwnedTemplateLanguageController implements Disposable {
       }
     }
   }
+}
+
+function templateDiagnosticsSuppressNative(ctx: ClientContext, document: TextDocument): boolean {
+  return ctx.vscode.workspace
+    .getConfiguration("aurelia", document.uri)
+    .get<boolean>("templateDiagnostics.suppressNative", false) === true;
 }
 
 function analysisCanChangeTemplateOwnership(

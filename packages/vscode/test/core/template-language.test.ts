@@ -4,6 +4,170 @@ import { OwnedTemplateLanguageController } from "../../out/template-language.js"
 import { createVscodeApi } from "../helpers/vscode-stub.js";
 
 describe("owned template language containment", () => {
+  test("keeps default-disabled templates in native HTML without ownership pulls", async () => {
+    const harness = createHarness([
+      ["file:///workspace/src/owned.html", "html"],
+      ["file:///workspace/src/manual.html", "aurelia-html"],
+    ], (uri) => ownership(uri, true), { suppressNative: "omitted" });
+
+    harness.controller.start();
+    await settleAsyncWork();
+    harness.fireTopology();
+    harness.fireAnalysis("source-text");
+    harness.setSession(false);
+    harness.setSession(true);
+    harness.recorded.fireConfigurationChanged("editor.fontSize");
+    await settleAsyncWork();
+
+    expect(harness.requests).not.toHaveBeenCalled();
+    expect(harness.languageIds()).toEqual(["html", "aurelia-html"]);
+    expect(harness.recorded.languageChanges).toEqual([]);
+    await harness.controller.disposeAsync();
+    expect(harness.languageIds()).toEqual(["html", "aurelia-html"]);
+  });
+
+  test("toggles containment in both directions without claiming manual custom mode", async () => {
+    const harness = createHarness([
+      ["file:///workspace/src/owned.html", "html"],
+      ["file:///workspace/src/manual.html", "aurelia-html"],
+    ], (uri) => ownership(uri, uri.endsWith("/owned.html")), { suppressNative: false });
+    harness.controller.start();
+    await settleAsyncWork();
+    expect(harness.requests).not.toHaveBeenCalled();
+
+    harness.setSuppressNative(true);
+    await vi.waitFor(() => expect(harness.languageIds()).toEqual(["aurelia-html", "aurelia-html"]));
+    expect(harness.requests).toHaveBeenCalledTimes(2);
+
+    harness.setSuppressNative(false);
+    await vi.waitFor(() => expect(harness.languageIds()).toEqual(["html", "aurelia-html"]));
+    expect(harness.requests).toHaveBeenCalledTimes(2);
+
+    harness.setSuppressNative(true);
+    await vi.waitFor(() => expect(harness.languageIds()).toEqual(["aurelia-html", "aurelia-html"]));
+    expect(harness.requests).toHaveBeenCalledTimes(4);
+    expect(harness.recorded.languageChanges.map((entry) => entry.languageId)).toEqual([
+      "aurelia-html",
+      "html",
+      "aurelia-html",
+    ]);
+
+    await harness.controller.disposeAsync();
+    expect(harness.languageIds()).toEqual(["html", "aurelia-html"]);
+  });
+
+  test("rejects an enabled ownership answer after suppression is disabled", async () => {
+    const stale = deferred<ReturnType<typeof ownership>>();
+    const harness = createHarness(
+      [["file:///workspace/src/stale.html", "html"]],
+      () => stale.promise,
+    );
+    harness.controller.start();
+    await vi.waitFor(() => expect(harness.requests).toHaveBeenCalledTimes(1));
+
+    harness.setSuppressNative(false);
+    stale.resolve(ownership("file:///workspace/src/stale.html", true));
+    await settleAsyncWork();
+
+    expect(harness.requests).toHaveBeenCalledTimes(1);
+    expect(harness.languageIds()).toEqual(["html"]);
+    expect(harness.recorded.languageChanges).toEqual([]);
+    await harness.controller.disposeAsync();
+  });
+
+  test("converges to disabled after a non-cancellable enable transition", async () => {
+    const harness = createHarness(
+      [["file:///workspace/src/race.html", "html"]],
+      (uri) => ownership(uri, true),
+    );
+    const enable = deferred<void>();
+    const original = harness.vscode.languages.setTextDocumentLanguage;
+    const transitions: string[] = [];
+    harness.vscode.languages.setTextDocumentLanguage = async (document, languageId) => {
+      transitions.push(languageId);
+      if (languageId === "aurelia-html") await enable.promise;
+      return original(document, languageId);
+    };
+    harness.controller.start();
+    await vi.waitFor(() => expect(transitions).toEqual(["aurelia-html"]));
+
+    harness.setSuppressNative(false);
+    enable.resolve();
+    await vi.waitFor(() => expect(harness.languageIds()).toEqual(["html"]));
+    await settleAsyncWork();
+
+    expect(harness.requests).toHaveBeenCalledTimes(1);
+    expect(transitions).toEqual(["aurelia-html", "html"]);
+    await harness.controller.disposeAsync();
+  });
+
+  test("converges to enabled after a non-cancellable disable restoration", async () => {
+    const harness = createHarness(
+      [["file:///workspace/src/race.html", "html"]],
+      (uri) => ownership(uri, true),
+    );
+    harness.controller.start();
+    await vi.waitFor(() => expect(harness.languageIds()).toEqual(["aurelia-html"]));
+
+    const disable = deferred<void>();
+    const original = harness.vscode.languages.setTextDocumentLanguage;
+    const transitions: string[] = [];
+    harness.vscode.languages.setTextDocumentLanguage = async (document, languageId) => {
+      transitions.push(languageId);
+      if (languageId === "html") await disable.promise;
+      return original(document, languageId);
+    };
+    harness.setSuppressNative(false);
+    await vi.waitFor(() => expect(transitions).toEqual(["html"]));
+
+    harness.setSuppressNative(true);
+    disable.resolve();
+    await vi.waitFor(() => expect(harness.languageIds()).toEqual(["aurelia-html"]));
+    await settleAsyncWork();
+
+    expect(harness.requests).toHaveBeenCalledTimes(2);
+    expect(transitions).toEqual(["html", "aurelia-html"]);
+    await harness.controller.disposeAsync();
+  });
+
+  test("applies resource-scoped folder settings independently", async () => {
+    const workspaceConfiguration = {
+      "file:///workspace-a": { "aurelia.templateDiagnostics.suppressNative": true },
+      "file:///workspace-b": { "aurelia.templateDiagnostics.suppressNative": false },
+    };
+    const harness = createHarness([
+      ["file:///workspace-a/src/app.html", "html"],
+      ["file:///workspace-b/src/app.html", "html"],
+    ], (uri) => ownership(uri, true), {
+      suppressNative: false,
+      workspaceFolders: [
+        { name: "workspace-a", uri: "file:///workspace-a" },
+        { name: "workspace-b", uri: "file:///workspace-b" },
+      ],
+      workspaceConfiguration,
+    });
+    harness.controller.start();
+    await vi.waitFor(() => expect(harness.languageIds()).toEqual(["aurelia-html", "html"]));
+    expect(harness.requests).toHaveBeenCalledTimes(1);
+
+    workspaceConfiguration["file:///workspace-b"]["aurelia.templateDiagnostics.suppressNative"] = true;
+    harness.recorded.fireConfigurationChanged(
+      "aurelia.templateDiagnostics.suppressNative",
+      "file:///workspace-b",
+    );
+    await vi.waitFor(() => expect(harness.languageIds()).toEqual(["aurelia-html", "aurelia-html"]));
+    expect(harness.requests).toHaveBeenCalledTimes(2);
+
+    workspaceConfiguration["file:///workspace-a"]["aurelia.templateDiagnostics.suppressNative"] = false;
+    harness.recorded.fireConfigurationChanged(
+      "aurelia.templateDiagnostics.suppressNative",
+      "file:///workspace-a",
+    );
+    await vi.waitFor(() => expect(harness.languageIds()).toEqual(["html", "aurelia-html"]));
+    expect(harness.requests).toHaveBeenCalledTimes(2);
+    await harness.controller.disposeAsync();
+  });
+
   test("uses exact semantic template association within one admitted project", async () => {
     const harness = createHarness([
       ["file:///workspace/src/components/product-card.html", "html"],
@@ -633,9 +797,20 @@ describe("owned template language containment", () => {
 function createHarness(
   inputs: readonly (readonly [uri: string, languageId: string])[],
   answer: (uri: string) => ReturnType<typeof ownership> | Promise<ReturnType<typeof ownership>>,
+  options: {
+    readonly suppressNative?: boolean | "omitted";
+    readonly workspaceFolders?: Array<{ name: string; uri: string }>;
+    readonly workspaceConfiguration?: Record<string, Record<string, unknown>>;
+  } = {},
 ) {
+  const configuration: Record<string, unknown> = {};
+  if (options.suppressNative !== "omitted") {
+    configuration["aurelia.templateDiagnostics.suppressNative"] = options.suppressNative ?? true;
+  }
   const { vscode, recorded } = createVscodeApi({
-    workspaceFolders: [{ name: "workspace", uri: "file:///workspace" }],
+    workspaceFolders: options.workspaceFolders ?? [{ name: "workspace", uri: "file:///workspace" }],
+    configuration,
+    workspaceConfiguration: options.workspaceConfiguration,
     openDocuments: inputs.map(([uri, languageId]) => ({ uri, languageId, text: "<template></template>" })),
   });
   const requests = vi.fn(answer);
@@ -684,6 +859,10 @@ function createHarness(
     setSession(value: boolean) {
       active = value;
       for (const listener of sessionListeners) listener();
+    },
+    setSuppressNative(value: boolean) {
+      configuration["aurelia.templateDiagnostics.suppressNative"] = value;
+      recorded.fireConfigurationChanged("aurelia.templateDiagnostics.suppressNative");
     },
     fireTopology() {
       for (const listener of analysisListeners) {
