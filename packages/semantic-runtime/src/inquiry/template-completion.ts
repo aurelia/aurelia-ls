@@ -7,6 +7,10 @@ import {
 } from '../expression/parse-result-algebra.js';
 import ts from 'typescript';
 import { ExpressionParser } from '../expression/expression-parser.js';
+import {
+  isAureliaExpressionIdentifier,
+  isAureliaExpressionIdentifierName,
+} from '../expression/expression-scanner.js';
 import type { AccessThisExpression, ExpressionAstNode } from '../expression/ast.js';
 import {
   ExpressionParseResultInspector,
@@ -81,6 +85,7 @@ import {
   sameCheckerTypeReference,
 } from '../type-system/type-shape.js';
 import {
+  checkerTypeMemberIsDeprecated,
   checkerTypeMemberIsCallable,
   checkerTypeMemberVisibilityKind,
 } from '../type-system/checker-member-surface.js';
@@ -303,6 +308,8 @@ export class TemplateCompletionTypeMemberFacts {
     readonly isOptional: boolean,
     /** Whether the member is readonly on the owner type surface. */
     readonly isReadonly: boolean,
+    /** Whether all current checker declarations mark the member deprecated through JSDoc. */
+    readonly isDeprecated: boolean,
     /** Framework hook category proven from member callability and the owning Aurelia role. */
     readonly aureliaHookKind: TemplateCompletionAureliaHookKind | null = null,
   ) {}
@@ -3399,17 +3406,19 @@ function typeMemberCandidates(
   frame: TemplateCompletionAnswerFrame,
   members: readonly CheckerTypeMember[],
 ): readonly TemplateCompletionCandidate[] {
-  return members.map((member) => new TemplateCompletionCandidate(
-    TemplateCompletionCandidateKind.TypeMember,
-    member.name,
-    TemplateCompletionCandidateSourceKind.TypeSystem,
-    member.ownerType.productHandle,
-    checkerTypeMemberReachableIdentityHandle(member),
-    checkerTypeMemberSourceAddressHandle(frame.store, member),
-    `Member visible on checker-projected type.`,
-    member.valueType,
-    typeMemberFacts(frame, member),
-  ));
+  return members
+    .filter((member) => isAureliaExpressionIdentifierName(member.name))
+    .map((member) => new TemplateCompletionCandidate(
+      TemplateCompletionCandidateKind.TypeMember,
+      member.name,
+      TemplateCompletionCandidateSourceKind.TypeSystem,
+      member.ownerType.productHandle,
+      checkerTypeMemberReachableIdentityHandle(member),
+      checkerTypeMemberSourceAddressHandle(frame.store, member),
+      `Member visible on checker-projected type.`,
+      member.valueType,
+      typeMemberFacts(frame, member),
+    ));
 }
 
 function typeMemberFacts(
@@ -3422,6 +3431,7 @@ function typeMemberFacts(
     checkerTypeMemberVisibilityKind(member),
     member.isOptional,
     member.isReadonly,
+    checkerTypeMemberIsDeprecated(member),
     aureliaHookKindForMember(frame, member, scope),
   );
 }
@@ -3549,10 +3559,14 @@ function scopeCandidates(
 
   while (current != null) {
     for (const slot of current.overrideContext.slots) {
-      candidates.push(scopeSlotCandidate(frame, slot, current, depth, BindingContextKind.Override));
+      if (isAureliaExpressionIdentifier(slot.name)) {
+        candidates.push(scopeSlotCandidate(frame, slot, current, depth, BindingContextKind.Override));
+      }
     }
     for (const slot of current.bindingContext.slots) {
-      candidates.push(scopeSlotCandidate(frame, slot, current, depth, current.bindingContext.contextKind));
+      if (isAureliaExpressionIdentifier(slot.name)) {
+        candidates.push(scopeSlotCandidate(frame, slot, current, depth, current.bindingContext.contextKind));
+      }
     }
     if (current.isBoundary) {
       break;
@@ -3643,10 +3657,15 @@ function sortCandidates(
   candidates: readonly TemplateCompletionCandidate[],
 ): readonly TemplateCompletionCandidate[] {
   return [...candidates].sort((left, right) =>
-    left.name.localeCompare(right.name)
-    || left.candidateKind.localeCompare(right.candidateKind)
-    || left.key.localeCompare(right.key)
+    Number(left.typeMemberFacts?.isDeprecated === true) - Number(right.typeMemberFacts?.isDeprecated === true)
+    || ordinalStringCompare(left.name, right.name)
+    || ordinalStringCompare(left.candidateKind, right.candidateKind)
+    || ordinalStringCompare(left.key, right.key)
   );
+}
+
+function ordinalStringCompare(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 function pageCandidates(

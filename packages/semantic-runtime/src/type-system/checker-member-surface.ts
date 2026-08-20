@@ -60,6 +60,14 @@ export function checkerTypeMemberVisibilityKind(
     : checkerDeclarationsVisibilityKind(member.carrier.declarations);
 }
 
+/** Whether every current checker declaration marks this member deprecated through JSDoc. */
+export function checkerTypeMemberIsDeprecated(member: CheckerTypeMember): boolean {
+  const declarations = member.carrier?.declarations ?? [];
+  return declarations.length > 0 && declarations.every((declaration) =>
+    ts.getJSDocDeprecatedTag(declaration) != null
+  );
+}
+
 /** Whether the projected member can be invoked through Aurelia's non-nullish runtime call lane. */
 export function checkerTypeMemberIsCallable(
   member: CheckerTypeMember,

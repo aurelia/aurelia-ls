@@ -167,6 +167,7 @@ console.log(JSON.stringify({
         memberKind: candidate?.memberKind ?? null,
         memberVisibility: candidate?.memberVisibility ?? null,
         memberIsReadonly: candidate?.memberIsReadonly ?? null,
+        memberIsDeprecated: candidate?.memberIsDeprecated ?? null,
         aureliaHookKind: candidate?.aureliaHookKind ?? null,
       };
     }),
@@ -180,6 +181,7 @@ console.log(JSON.stringify({
         memberKind: candidate?.memberKind ?? null,
         memberVisibility: candidate?.memberVisibility ?? null,
         memberIsReadonly: candidate?.memberIsReadonly ?? null,
+        memberIsDeprecated: candidate?.memberIsDeprecated ?? null,
         aureliaHookKind: candidate?.aureliaHookKind ?? null,
       };
     }),
@@ -240,6 +242,11 @@ function assertThisMember(name, expected) {
 }
 
 function assertExpectedMember(candidate, name, expected) {
+  assert.equal(
+    candidate.memberIsDeprecated,
+    false,
+    `Expected ${name}.memberIsDeprecated to be false, observed ${candidate.memberIsDeprecated ?? 'null'}.`,
+  );
   for (const [key, value] of Object.entries(expected)) {
     assert.equal(
       candidate[key],

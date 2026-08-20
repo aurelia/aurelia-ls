@@ -3829,6 +3829,7 @@ function templateCompletionCandidateRow(
     memberVisibility: memberFacts?.visibilityKind ?? null,
     memberIsOptional: memberFacts?.isOptional ?? null,
     memberIsReadonly: memberFacts?.isReadonly ?? null,
+    memberIsDeprecated: memberFacts?.isDeprecated ?? null,
     aureliaHookKind: memberFacts?.aureliaHookKind ?? null,
     edit: {
       source: replacementSource,
@@ -3850,6 +3851,7 @@ function templateCompletionMemberFactDisplay(
   const parts = [
     candidate.memberVisibility == null ? null : `visibility=${candidate.memberVisibility}`,
     candidate.memberKind == null ? null : `memberKind=${candidate.memberKind}`,
+    candidate.memberIsDeprecated === true ? 'deprecated' : null,
     candidate.aureliaHookKind == null ? null : `aureliaHook=${candidate.aureliaHookKind}`,
   ].filter((part): part is string => part != null);
   return parts.length === 0 ? '' : `; ${parts.join(', ')}`;

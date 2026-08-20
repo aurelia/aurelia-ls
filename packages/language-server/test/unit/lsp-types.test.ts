@@ -3,6 +3,7 @@ import { describe, test, expect } from "vitest";
 import {
   CodeActionKind,
   CompletionItemKind,
+  CompletionItemTag,
   DiagnosticSeverity,
   LSPErrorCodes,
   ResponseError,
@@ -1291,6 +1292,21 @@ describe("mapSemanticRuntimeTemplateCompletions", () => {
     },
     newText,
   });
+  const completionCandidate = (overrides: Record<string, unknown>) => ({
+    name: "candidate",
+    candidateKind: "type-member",
+    sourceKind: "type-system",
+    summary: null,
+    typeDisplay: "string",
+    memberKind: "property",
+    memberVisibility: "public",
+    memberIsOptional: false,
+    memberIsReadonly: false,
+    memberIsDeprecated: false,
+    aureliaHookKind: null,
+    edit: edit("candidate"),
+    ...overrides,
+  });
 
   test("preserves authorable template-domain roles as specific LSP kinds", () => {
     const mapped = mapSemanticRuntimeTemplateCompletions({
@@ -1324,18 +1340,106 @@ describe("mapSemanticRuntimeTemplateCompletions", () => {
 
     expect(mapped.failures).toEqual([]);
     expect(mapped.value?.items.map((item) => [item.label, item.kind])).toEqual([
-      ["component", CompletionItemKind.Reference],
       ["click", CompletionItemKind.Event],
+      ["component", CompletionItemKind.Reference],
       ["prevent", CompletionItemKind.Keyword],
       ["twoWay", CompletionItemKind.EnumMember],
     ]);
-    expect(mapped.value?.items[0]?.textEdit).toEqual({
+    expect(mapped.value?.items.find((item) => item.label === "component")?.textEdit).toEqual({
       range: {
         start: completionDocument.positionAt(completionStart),
         end: completionDocument.positionAt(completionStart + 1),
       },
       newText: "component",
     });
+  });
+
+  test("orders both checker-backed lanes by IDE quality and marks deprecated members", () => {
+    const mapped = mapSemanticRuntimeTemplateCompletions({
+      result: "answered",
+      value: {
+        candidates: [
+          completionCandidate({
+            name: "privateText",
+            candidateKind: "binding-context-slot",
+            sourceKind: "binding-scope",
+            memberVisibility: "private",
+            edit: edit("privateText"),
+          }),
+          completionCandidate({
+            name: "legacyStockText",
+            memberIsDeprecated: true,
+            edit: edit("legacyStockText"),
+          }),
+          completionCandidate({
+            name: "binding",
+            candidateKind: "binding-context-slot",
+            sourceKind: "binding-scope",
+            aureliaHookKind: "component-lifecycle",
+            memberKind: "method",
+            edit: edit("binding"),
+          }),
+          completionCandidate({
+            name: "protectedText",
+            memberVisibility: "protected",
+            edit: edit("protectedText"),
+          }),
+          completionCandidate({
+            name: "stockText",
+            edit: edit("stockText"),
+          }),
+          completionCandidate({
+            name: "activeItem",
+            candidateKind: "binding-context-slot",
+            sourceKind: "binding-scope",
+            edit: edit("activeItem"),
+          }),
+        ],
+      },
+    } as never, completionOptions);
+
+    expect(mapped.failures).toEqual([]);
+    expect(mapped.value?.items.map((item) => item.label)).toEqual([
+      "activeItem",
+      "stockText",
+      "binding",
+      "protectedText",
+      "privateText",
+      "legacyStockText",
+    ]);
+    expect(mapped.value?.items.map((item) => item.sortText)).toEqual([
+      "0000",
+      "0001",
+      "0002",
+      "0003",
+      "0004",
+      "0005",
+    ]);
+    expect(mapped.value?.items.find((item) => item.label === "stockText")?.tags).toBeUndefined();
+    expect(mapped.value?.items.find((item) => item.label === "legacyStockText")?.tags)
+      .toEqual([CompletionItemTag.Deprecated]);
+    expect(mapped.value?.items.find((item) => item.label === "legacyStockText")?.data)
+      .toMatchObject({ semanticRuntime: { memberIsDeprecated: true } });
+  });
+
+  test("maps the remaining list when semantic admission has excluded an unauthorable checker row", () => {
+    const mapped = mapSemanticRuntimeTemplateCompletions({
+      result: "answered",
+      value: {
+        // The semantic completion boundary has already excluded the owner's `__@iterator@...` row.
+        candidates: [
+          completionCandidate({ name: "stockText", edit: edit("stockText") }),
+          completionCandidate({
+            name: "protectedText",
+            memberVisibility: "protected",
+            edit: edit("protectedText"),
+          }),
+        ],
+      },
+    } as never, completionOptions);
+
+    expect(mapped.failures).toEqual([]);
+    expect(mapped.value?.items.map((item) => item.label)).toEqual(["stockText", "protectedText"]);
   });
 
   test("does not collapse semantic coverage into the transport paging flag", () => {

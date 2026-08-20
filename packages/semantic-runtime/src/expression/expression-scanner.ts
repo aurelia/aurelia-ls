@@ -118,6 +118,9 @@ export function tokenFlags(type: TokenType): TokenFlags {
     case TokenType.BooleanLiteral:
     case TokenType.NullLiteral:
     case TokenType.UndefinedLiteral:
+      // Aurelia's runtime parser treats keyword tokens as IdentifierName after
+      // member-access punctuation while retaining literal-primary behavior.
+      return TokenFlags.Literal | TokenFlags.PrimaryStart | TokenFlags.IdentifierName;
     case TokenType.NumericLiteral:
     case TokenType.StringLiteral:
       return TokenFlags.Literal | TokenFlags.PrimaryStart;
@@ -437,7 +440,21 @@ export class Scanner {
 /** Whether a complete string is one identifier token accepted by Aurelia's expression grammar. */
 export function isAureliaExpressionIdentifier(value: string): boolean {
   const scanner = new Scanner(value);
-  return scanner.next().type === TokenType.Identifier
+  const token = scanner.next();
+  return token.type === TokenType.Identifier
+    && token.value !== 'import'
+    && token.start === 0
+    && token.end === value.length
+    && scanner.next().type === TokenType.EOF;
+}
+
+/** Whether a complete string is one IdentifierName token accepted after member-access punctuation. */
+export function isAureliaExpressionIdentifierName(value: string): boolean {
+  const scanner = new Scanner(value);
+  const token = scanner.next();
+  return hasTokenFlag(token.type, TokenFlags.IdentifierName)
+    && token.start === 0
+    && token.end === value.length
     && scanner.next().type === TokenType.EOF;
 }
 

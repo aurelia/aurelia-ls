@@ -7,6 +7,7 @@
 import {
   CodeActionKind,
   CompletionItemKind,
+  CompletionItemTag,
   DiagnosticSeverity,
   LSPErrorCodes,
   ResponseError,
@@ -614,9 +615,13 @@ export function mapSemanticRuntimeTemplateCompletions(
     };
   }
 
-  const items: CompletionItem[] = [];
+  const mappedItems: Array<{
+    readonly candidate: SemanticTemplateCompletionCandidateRow;
+    readonly item: CompletionItem;
+    readonly inputOrdinal: number;
+  }> = [];
   const failures: string[] = [];
-  for (const candidate of answer.value.candidates) {
+  for (const [inputOrdinal, candidate] of answer.value.candidates.entries()) {
     const source = semanticExactSourceReference(candidate.edit.source);
     const sourceUri = source == null
       ? null
@@ -634,13 +639,25 @@ export function mapSemanticRuntimeTemplateCompletions(
       failures.push(`Completion '${candidate.name}' has an edit span outside the current document text.`);
       continue;
     }
-    items.push(mapSemanticRuntimeTemplateCompletionCandidate(candidate, range));
+    mappedItems.push({
+      candidate,
+      item: mapSemanticRuntimeTemplateCompletionCandidate(candidate, range),
+      inputOrdinal,
+    });
   }
   // LSP's isIncomplete flag asks the client to requery an intentionally narrowed list after further typing.
   // The session drains transport pages, and semantic coverage is an independent epistemic axis.
-  return failures.length > 0
-    ? { value: null, failures }
-    : { value: { isIncomplete: false, items }, failures: [] };
+  if (failures.length > 0) {
+    return { value: null, failures };
+  }
+
+  mappedItems.sort(compareSemanticRuntimeTemplateCompletionPresentation);
+  const sortTextWidth = Math.max(4, String(Math.max(0, mappedItems.length - 1)).length);
+  const items = mappedItems.map(({ item }, ordinal) => {
+    item.sortText = String(ordinal).padStart(sortTextWidth, "0");
+    return item;
+  });
+  return { value: { isIncomplete: false, items }, failures: [] };
 }
 
 function mapSemanticRuntimeTemplateCompletionCandidate(
@@ -660,9 +677,13 @@ function mapSemanticRuntimeTemplateCompletionCandidate(
         sourceKind: candidate.sourceKind,
         memberKind: candidate.memberKind,
         aureliaHookKind: candidate.aureliaHookKind,
+        memberIsDeprecated: candidate.memberIsDeprecated,
       },
     },
   };
+  if (candidate.memberIsDeprecated === true) {
+    completion.tags = [CompletionItemTag.Deprecated];
+  }
   const detail = semanticRuntimeCompletionDetail(candidate);
   if (detail != null) {
     completion.detail = detail;
@@ -674,6 +695,39 @@ function mapSemanticRuntimeTemplateCompletionCandidate(
     ].filter((part): part is string => part != null && part.length > 0).join("\n\n");
   }
   return completion;
+}
+
+function compareSemanticRuntimeTemplateCompletionPresentation(
+  left: {
+    readonly candidate: SemanticTemplateCompletionCandidateRow;
+    readonly inputOrdinal: number;
+  },
+  right: {
+    readonly candidate: SemanticTemplateCompletionCandidateRow;
+    readonly inputOrdinal: number;
+  },
+): number {
+  return Number(left.candidate.memberIsDeprecated === true)
+    - Number(right.candidate.memberIsDeprecated === true)
+    || semanticRuntimeTemplateCompletionQualityRank(left.candidate)
+      - semanticRuntimeTemplateCompletionQualityRank(right.candidate)
+    || compareOrdinalText(left.candidate.name, right.candidate.name)
+    || compareOrdinalText(left.candidate.candidateKind, right.candidate.candidateKind)
+    || compareOrdinalText(left.candidate.edit.newText, right.candidate.edit.newText)
+    || left.inputOrdinal - right.inputOrdinal;
+}
+
+function semanticRuntimeTemplateCompletionQualityRank(
+  candidate: SemanticTemplateCompletionCandidateRow,
+): number {
+  if (candidate.memberVisibility === "private") return 3;
+  if (candidate.memberVisibility === "protected") return 2;
+  if (candidate.aureliaHookKind != null) return 1;
+  return 0;
+}
+
+function compareOrdinalText(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 function semanticRuntimeCompletionKind(

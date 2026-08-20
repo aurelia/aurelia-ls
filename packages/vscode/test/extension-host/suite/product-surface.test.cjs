@@ -472,10 +472,12 @@ suite("extension-host product surface", () => {
       document = exactOpenDocument(vscode.workspace, document.uri, "the clean completion probe template");
     }
     const baseline = document.getText();
-    const changed = baseline.replace(
-      '  <p if.bind="item">${item.description}</p>',
-      '  <p if.bind="item">${item.description} ${item.}</p>',
-    );
+    const changed = baseline
+      .replace(
+        '  <p if.bind="item">${item.description}</p>',
+        '  <p if.bind="item">${item.description} ${item.}</p>',
+      )
+      .replace('  <span>${stockText}</span>', '  <span>${stockText.}</span>');
     assert.notStrictEqual(changed, baseline, "Expected the compound-interpolation completion probe to apply.");
 
     try {
@@ -511,6 +513,49 @@ suite("extension-host product surface", () => {
         "The empty member frontier must produce a zero-width edit exactly at the cursor.",
       );
       assert.strictEqual(document.getText(replacementRange), "");
+
+      const primitiveMarker = '${stockText.}</span>';
+      const primitiveMarkerStart = document.getText().indexOf(primitiveMarker);
+      assert.notStrictEqual(primitiveMarkerStart, -1, "Expected the stockText completion probe in the open buffer.");
+      const primitiveCursor = document.positionAt(primitiveMarkerStart + '${stockText.'.length);
+      let primitiveCompletions = [];
+      await waitFor(async () => {
+        const response = await vscode.commands.executeCommand(
+          "vscode.executeCompletionItemProvider",
+          document.uri,
+          primitiveCursor,
+        );
+        primitiveCompletions = Array.isArray(response)
+          ? response
+          : Array.isArray(response?.items) ? response.items : [];
+        const primitiveLabels = new Set(primitiveCompletions.map(completionLabel));
+        return primitiveLabels.has("length")
+          && primitiveLabels.has("toUpperCase")
+          && primitiveLabels.has("anchor");
+      }, "the native completion provider should expose the stockText string surface", 120_000);
+
+      const primitiveLabels = primitiveCompletions.map(completionLabel);
+      assert.strictEqual(
+        primitiveLabels.some((label) => typeof label === "string" && label.startsWith("__@")),
+        false,
+        "the native completion provider must not expose TypeScript's escaped symbol names",
+      );
+      const length = primitiveCompletions.find((item) => completionLabel(item) === "length");
+      const anchor = primitiveCompletions.find((item) => completionLabel(item) === "anchor");
+      assert(length, "Expected the ordinary string length member through the native completion provider.");
+      assert(anchor, "Expected the deprecated string anchor member through the native completion provider.");
+      assert.deepStrictEqual(
+        [...(anchor.tags ?? [])],
+        [vscode.CompletionItemTag.Deprecated],
+        "the native completion provider must mark deprecated checker members",
+      );
+      assert.strictEqual(typeof length.sortText, "string");
+      assert.strictEqual(typeof anchor.sortText, "string");
+      assert(length.sortText < anchor.sortText, "deprecated members must sort after ordinary members");
+      assert(
+        primitiveCompletions.indexOf(length) < primitiveCompletions.indexOf(anchor),
+        "the native completion result must present deprecated members after ordinary members",
+      );
     } finally {
       if (!document.isClosed) {
         await vscode.window.showTextDocument(document, { preview: false });

@@ -189,6 +189,18 @@ describe("owned-template Extension Host contract", () => {
       'test("retires and re-admits the primary Aurelia root without disturbing the secondary root", async function() {',
       "    this.timeout(600_000);",
     ].join("\n"));
+    const completionTitle = "shows typed members at an empty compound-interpolation frontier";
+    const completionStart = productSurface.indexOf(`test("${completionTitle}"`);
+    const completionEnd = productSurface.indexOf("\n  test(", completionStart + 1);
+    expect(completionStart).toBeGreaterThanOrEqual(0);
+    expect(completionEnd).toBeGreaterThan(completionStart);
+    const completionJourney = productSurface.slice(completionStart, completionEnd);
+    expect(completionJourney).toContain("this.timeout(180_000)");
+    expect(completionJourney).toContain("'${stockText.}</span>'");
+    expect(completionJourney).toContain('label.startsWith("__@")');
+    expect(completionJourney).toContain("vscode.CompletionItemTag.Deprecated");
+    expect(completionJourney).toContain("length.sortText < anchor.sortText");
+    expect(completionJourney).toContain("primitiveCompletions.indexOf(length) < primitiveCompletions.indexOf(anchor)");
     expect(suiteIndex).toContain('"product-support": "product-surface.test.cjs"');
     expect(extensionManifest.scripts?.["test:extension-host:current-stable"])
       .toContain("test:extension-host");

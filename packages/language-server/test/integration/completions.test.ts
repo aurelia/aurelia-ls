@@ -4,6 +4,7 @@
 import { describe, expect, test } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
+import { CompletionItemTag } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import {
   createAureliaAppFixture,
@@ -21,6 +22,8 @@ type CompletionListItem = {
   label?: string;
   insertText?: string;
   detail?: string;
+  sortText?: string;
+  tags?: number[];
   textEdit?: {
     range: {
       start: { line: number; character: number };
@@ -189,6 +192,93 @@ describe("Completions", () => {
       const expressionOffset = htmlText.indexOf('${lab}') + '${lab'.length;
       const expression = requiredItem(await completionAt(expressionOffset), "labelText");
       expect(document.getText(expression.textEdit.range)).toBe("lab");
+    } finally {
+      dispose();
+      child.kill("SIGKILL");
+      await waitForExit(child);
+      fs.rmSync(fixture, { recursive: true, force: true });
+    }
+  });
+
+  test("presents authorable hostile and stockText surfaces through the real stdio server", async () => {
+    const fixture = createAureliaAppFixture({
+      "src/app.ts": [
+        "import { customElement } from 'aurelia';",
+        "import template from './app.html';",
+        "@customElement({ name: 'app-root', template })",
+        "export class AppRoot {",
+        "  stockText: string = 'In stock';",
+        "  hostElement: HTMLElement = null!;",
+        "  protected protectedStockText: string = 'Protected';",
+        "  private privateStockText: string = 'Private';",
+        "  #ecmaPrivateStockText: string = 'ECMAScript private';",
+        "  /** @deprecated Use stockText. */",
+        "  legacyStockText: string = 'Legacy';",
+        "  binding(): void {}",
+        "  [Symbol.iterator](): IterableIterator<string> {",
+        "    return [this.stockText][Symbol.iterator]();",
+        "  }",
+        "}",
+      ].join("\n"),
+      "src/app.html": [
+        "<p>${s}</p>",
+        "<p>${stockText.}</p>",
+        "<p>${hostElement.}</p>",
+      ].join("\n"),
+    });
+
+    const htmlUri = fileUri(fixture, "src/app.html");
+    const { connection, child, dispose, getStderr } = startServer(fixture);
+
+    try {
+      await initialize(connection, child, getStderr, fixture);
+      const htmlText = fs.readFileSync(path.join(fixture, "src/app.html"), "utf8");
+      await openDocument(connection, htmlUri, "html", htmlText);
+      await waitForDiagnostics(connection, child, () => getStderr(), htmlUri, 5000);
+      const completionAt = async (marker: string): Promise<CompletionListResponse> =>
+        expectCompletionList(await connection.sendRequest("textDocument/completion", {
+          textDocument: { uri: htmlUri },
+          position: positionAt(htmlText, htmlText.indexOf(marker) + marker.length),
+        }));
+
+      const root = await completionAt("${s");
+      const rootLabels = root.items.map((item) => item.label ?? "");
+      expect(rootLabels).toContain("stockText");
+      expect(rootLabels).toContain("protectedStockText");
+      expect(rootLabels).toContain("privateStockText");
+      expect(rootLabels).toContain("binding");
+      expect(rootLabels).toContain("legacyStockText");
+      expect(rootLabels.some((label) => label.startsWith("__@"))).toBe(false);
+      expect(rootLabels.some((label) => label.startsWith("__#"))).toBe(false);
+      expect(rootLabels).not.toContain("#ecmaPrivateStockText");
+      const rootOrdinal = (label: string): number => rootLabels.indexOf(label);
+      expect(rootOrdinal("stockText")).toBeLessThan(rootOrdinal("binding"));
+      expect(rootOrdinal("binding")).toBeLessThan(rootOrdinal("protectedStockText"));
+      expect(rootOrdinal("protectedStockText")).toBeLessThan(rootOrdinal("privateStockText"));
+      expect(rootOrdinal("privateStockText")).toBeLessThan(rootOrdinal("legacyStockText"));
+      const stockText = root.items.find((item) => item.label === "stockText");
+      const legacyStockText = root.items.find((item) => item.label === "legacyStockText");
+      expect(stockText?.sortText).toMatch(/^\d+$/u);
+      expect(legacyStockText?.sortText).toMatch(/^\d+$/u);
+      expect((legacyStockText?.sortText ?? "") > (stockText?.sortText ?? "")).toBe(true);
+      expect(legacyStockText?.tags).toEqual([CompletionItemTag.Deprecated]);
+
+      const primitive = await completionAt("${stockText.");
+      const primitiveLabels = primitive.items.map((item) => item.label ?? "");
+      expect(primitiveLabels.length).toBeGreaterThan(20);
+      expect(primitiveLabels).toContain("length");
+      expect(primitiveLabels).toContain("toUpperCase");
+      expect(primitiveLabels.some((label) => label.startsWith("__@"))).toBe(false);
+      const anchor = primitive.items.find((item) => item.label === "anchor");
+      expect(anchor?.tags).toEqual([CompletionItemTag.Deprecated]);
+      expect(primitiveLabels.indexOf("toUpperCase")).toBeLessThan(primitiveLabels.indexOf("anchor"));
+
+      const dom = await completionAt("${hostElement.");
+      const domLabels = dom.items.map((item) => item.label ?? "");
+      expect(domLabels.length).toBeGreaterThan(200);
+      expect(domLabels).toContain("focus");
+      expect(domLabels).toContain("title");
+      expect(domLabels.some((label) => label.startsWith("__@"))).toBe(false);
     } finally {
       dispose();
       child.kill("SIGKILL");

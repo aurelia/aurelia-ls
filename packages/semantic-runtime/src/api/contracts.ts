@@ -4686,6 +4686,8 @@ export interface SemanticTemplateCompletionCandidateRow {
   readonly memberVisibility: CheckerTypeMemberVisibilityKind | `${CheckerTypeMemberVisibilityKind}` | null;
   readonly memberIsOptional: boolean | null;
   readonly memberIsReadonly: boolean | null;
+  /** True only when every current checker declaration marks the member deprecated. */
+  readonly memberIsDeprecated: boolean | null;
   readonly aureliaHookKind: SemanticTemplateCompletionAureliaHookKind | `${SemanticTemplateCompletionAureliaHookKind}` | null;
   /** Complete authored edit plan; consumers must not substitute label insertion when this cannot be mapped. */
   readonly edit: SemanticTemplateCompletionEditRow;
