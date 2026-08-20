@@ -11,6 +11,7 @@ import {
   type SymbolInformation,
 } from "vscode-languageserver/node";
 import {
+  changeDocument,
   createDiagnosticsRecorder,
   fileUri,
   initialize,
@@ -277,6 +278,106 @@ test("native hover preserves exact bare parent ancestry without confusing a $par
     expect(memberMarkdown).toBe("```ts\nreadonly $parent: 17\n```");
     expect(memberMarkdown).not.toContain("binding context");
     expect(member?.range == null ? null : textForRange(htmlText, member.range)).toBe("$parent");
+
+    expect(fs.readFileSync(htmlPath, "utf8")).toBe(htmlBaseline);
+    expect(fs.readFileSync(componentPath, "utf8")).toBe(componentBaseline);
+  } finally {
+    diagnostics.dispose();
+    dispose();
+    child.kill("SIGKILL");
+    await waitForExit(child);
+  }
+}, 60_000);
+
+test("native hover follows unsaved member documentation and deprecation changes", async () => {
+  const htmlPath = path.join(scopeFixture, "src/my-app.html");
+  const componentPath = path.join(scopeFixture, "src/my-app.ts");
+  const htmlUri = fileUri(scopeFixture, "src/my-app.html");
+  const componentUri = fileUri(scopeFixture, "src/my-app.ts");
+  const htmlBaseline = fs.readFileSync(htmlPath, "utf8");
+  const componentBaseline = fs.readFileSync(componentPath, "utf8");
+  const htmlText = htmlBaseline.replace(
+    "  </main>",
+    "    <p data-hover-member-docs>${legacyCatalogStatus}</p>\n  </main>",
+  );
+  const legacyDeclaration = [
+    "  /**",
+    "   * Legacy catalog status shown while inventory refreshes.",
+    "   * @deprecated Use catalogStatus instead.",
+    "   */",
+    "  protected readonly legacyCatalogStatus: string = 'legacy';",
+    "",
+  ].join("\n");
+  const currentDeclaration = [
+    "  /** Current catalog status after migration. */",
+    "  private readonly legacyCatalogStatus: number = 17;",
+    "",
+  ].join("\n");
+  const legacyComponentText = componentBaseline.replace(
+    "  readonly heading = 'Aurelia IDE playground';",
+    `  readonly heading = 'Aurelia IDE playground';\n${legacyDeclaration}`,
+  );
+  const currentComponentText = componentBaseline.replace(
+    "  readonly heading = 'Aurelia IDE playground';",
+    `  readonly heading = 'Aurelia IDE playground';\n${currentDeclaration}`,
+  );
+  expect(htmlText).not.toBe(htmlBaseline);
+  expect(legacyComponentText).not.toBe(componentBaseline);
+  expect(currentComponentText).not.toBe(legacyComponentText);
+
+  const { connection, child, dispose, getStderr } = startServer(scopeFixture);
+  const diagnostics = createDiagnosticsRecorder(connection, child, getStderr);
+  try {
+    await initialize(connection, child, getStderr, scopeFixture);
+    openDocument(connection, componentUri, "typescript", legacyComponentText);
+    openDocument(connection, htmlUri, "html", htmlText);
+    await diagnostics.wait(htmlUri, 20_000);
+
+    const tokenStart = htmlText.indexOf("legacyCatalogStatus");
+    expect(tokenStart).toBeGreaterThanOrEqual(0);
+    const requestHover = async (): Promise<Hover | null> => await connection.sendRequest<Hover | null>(
+      "textDocument/hover",
+      {
+        textDocument: { uri: htmlUri },
+        position: positionAt(htmlText, tokenStart + 2),
+      },
+    );
+    const legacyMarkdown = [
+      "```ts",
+      "protected readonly legacyCatalogStatus: string",
+      "```",
+      "",
+      "Deprecated: Use catalogStatus instead.",
+      "Legacy catalog status shown while inventory refreshes.",
+    ].join("\n");
+    const legacyHover = await requestHover();
+    expect((legacyHover?.contents as { value?: string } | undefined)?.value ?? "").toBe(legacyMarkdown);
+    expect(legacyHover?.range == null ? null : textForRange(htmlText, legacyHover.range))
+      .toBe("legacyCatalogStatus");
+
+    changeDocument(connection, componentUri, currentComponentText, 2);
+    await diagnostics.wait(htmlUri, 20_000);
+    const currentMarkdown = [
+      "```ts",
+      "private readonly legacyCatalogStatus: number",
+      "```",
+      "",
+      "Current catalog status after migration.",
+    ].join("\n");
+    const deadline = Date.now() + 20_000;
+    let currentHover: Hover | null = null;
+    while (Date.now() < deadline) {
+      currentHover = await requestHover();
+      const markdown = (currentHover?.contents as { value?: string } | undefined)?.value ?? "";
+      if (markdown === currentMarkdown) break;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    const currentHoverMarkdown = (currentHover?.contents as { value?: string } | undefined)?.value ?? "";
+    expect(currentHoverMarkdown).toBe(currentMarkdown);
+    expect(currentHoverMarkdown).not.toContain("Legacy catalog status");
+    expect(currentHoverMarkdown).not.toContain("Deprecated");
+    expect(currentHover?.range == null ? null : textForRange(htmlText, currentHover.range))
+      .toBe("legacyCatalogStatus");
 
     expect(fs.readFileSync(htmlPath, "utf8")).toBe(htmlBaseline);
     expect(fs.readFileSync(componentPath, "utf8")).toBe(componentBaseline);

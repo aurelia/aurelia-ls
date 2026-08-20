@@ -108,6 +108,59 @@ name: string
 ```
 ````
 
+## documented-deprecated-member
+
+### Probe
+
+```json
+{
+  "anchor": "form.name = fallbackName",
+  "at": "fallbackName",
+  "atOccurrence": 1,
+  "displayPosition": "src/runtime-expression-access-uses-app.html:24:70",
+  "file": "src/runtime-expression-access-uses-app.html",
+  "lspPosition": {
+    "character": 69,
+    "line": 23
+  },
+  "occurrence": 1
+}
+```
+
+### hover
+
+```json
+{
+  "outcome": "result",
+  "result": {
+    "contentsKind": "markdown",
+    "markdownCodePoints": 119,
+    "range": {
+      "end": {
+        "character": 81,
+        "line": 23
+      },
+      "start": {
+        "character": 69,
+        "line": 23
+      }
+    },
+    "rangeText": "fallbackName"
+  }
+}
+```
+
+### Hover markdown
+
+````markdown
+```ts
+fallbackName: string
+```
+
+Deprecated: Use form.name instead.
+Fallback display name retained for legacy listeners.
+````
+
 ## bare-current-context
 
 ### Probe

@@ -4820,12 +4820,31 @@ export interface SemanticTemplateCursorBindableRow extends SemanticBindableDefin
 export type SemanticTemplateCursorScopeRole =
   TemplateCompletionScopeRole | `${TemplateCompletionScopeRole}`;
 
+/** Bounded source-authored plaintext carried by one exact checker member. */
+export interface SemanticTemplateCursorMemberTextRow {
+  readonly format: 'plaintext';
+  readonly text: string;
+  readonly isTruncated: boolean;
+  /** Total contributing JSDoc nodes before the bounded exact-source list. */
+  readonly sourceCount: number;
+  /** Exact available source ranges, capped upstream independently from text clipping. */
+  readonly sources: readonly SemanticSourceReference[];
+}
+
 export interface SemanticTemplateCursorMemberRow {
   readonly name: string;
   readonly memberKind: CheckerTypeMemberKind | `${CheckerTypeMemberKind}`;
   readonly typeDisplay: string | null;
   readonly isOptional: boolean;
   readonly isReadonly: boolean;
+  /** TypeScript accessibility for an ordinary checker member; null for template locals and synthetic fallbacks. */
+  readonly visibilityKind: CheckerTypeMemberVisibilityKind | `${CheckerTypeMemberVisibilityKind}` | null;
+  /** All-declarations deprecation result for an ordinary checker member; null when no checker member owns the row. */
+  readonly isDeprecated: boolean | null;
+  /** Unambiguous symbol main-comment prose; overload/accessor declaration groups deliberately remain null. */
+  readonly documentation: SemanticTemplateCursorMemberTextRow | null;
+  /** Shared nonempty `@deprecated` reason only when every current declaration agrees exactly. */
+  readonly deprecationReason: SemanticTemplateCursorMemberTextRow | null;
   /** Author-facing role proved for this exact scope slot; null for ordinary members and unproved cases. */
   readonly scopeRole: SemanticTemplateCursorScopeRole | null;
   /** Authored source that introduced this name into the active template scope. */

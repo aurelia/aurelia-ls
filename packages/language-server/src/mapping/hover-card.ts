@@ -399,6 +399,7 @@ function normalizeProse(value: string): string {
 function escapeMarkdownProse(value: string): string {
   return value
     .replace(/([\\`*_[\]<>~])/gu, "\\$1")
+    .replace(/\b([A-Za-z][A-Za-z0-9+.-]*):(?=\S)/gu, "$1\\:")
     .replace(/^([\p{Zs}\t]*)([#>+-]|\d+\.)(?=\s)/u, "$1\\$2");
 }
 

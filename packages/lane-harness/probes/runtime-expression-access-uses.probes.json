@@ -67,6 +67,14 @@
         "reason": "Hover should resolve the nested member as string while preserving its exact TypeScript declaration authority."
       },
       {
+        "id": "documented-deprecated-member",
+        "file": "src/runtime-expression-access-uses-app.html",
+        "anchor": "form.name = fallbackName",
+        "at": "fallbackName",
+        "verdict": "correct",
+        "reason": "Hover should keep the member signature primary, then show the exact source-authored deprecation reason and bounded plaintext documentation."
+      },
+      {
         "id": "bare-current-context",
         "file": "src/runtime-expression-access-uses-app.html",
         "anchor": "${$this} / ${items.map(item => $this).length}",

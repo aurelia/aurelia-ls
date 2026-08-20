@@ -34,6 +34,10 @@ export class RuntimeExpressionAccessUsesApp {
   readonly form = {
     name: 'Ada',
   };
+  /**
+   * Fallback display name retained for legacy listeners.
+   * @deprecated Use form.name instead.
+   */
   fallbackName = 'Grace';
   converterSuffix = '!';
   behaviorDelay = 25;

@@ -642,7 +642,7 @@ diff --git a/src/runtime-expression-access-uses-app.html b/src/runtime-expressio
 diff --git a/src/runtime-expression-access-uses-app.ts b/src/runtime-expression-access-uses-app.ts
 --- a/src/runtime-expression-access-uses-app.ts
 +++ b/src/runtime-expression-access-uses-app.ts
-@@ -1,49 +1,49 @@
+@@ -1,53 +1,53 @@
  import {
    customElement,
    valueConverter,
@@ -680,6 +680,10 @@ diff --git a/src/runtime-expression-access-uses-app.ts b/src/runtime-expression-
 -    name: 'Ada',
 +    displayName: 'Ada',
    };
+   /**
+    * Fallback display name retained for legacy listeners.
+    * @deprecated Use form.name instead.
+    */
    fallbackName = 'Grace';
    converterSuffix = '!';
    behaviorDelay = 25;

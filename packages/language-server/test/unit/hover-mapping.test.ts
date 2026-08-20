@@ -17,6 +17,22 @@ function source(path: string, start: number, end: number, role = "name") {
   };
 }
 
+function typescriptSource(
+  path: string,
+  start: number,
+  end: number,
+  overrides: Record<string, unknown> = {},
+) {
+  return {
+    kind: "typescript-node",
+    label: `${path}@${start}..${end}`,
+    path,
+    start,
+    end,
+    ...overrides,
+  };
+}
+
 function harness(text: string, token: string, occurrence = 0) {
   const path = "src/hover.html";
   const uri = documentUris.uriForWorkspaceRelativePath(path)!;
@@ -93,9 +109,24 @@ function member(name: string, scopeRole: string | null, typeDisplay = "Item") {
     typeDisplay,
     isOptional: false,
     isReadonly: false,
+    visibilityKind: scopeRole == null ? "public" : null,
+    isDeprecated: scopeRole == null ? false : null,
+    documentation: null,
+    deprecationReason: null,
     scopeRole,
     source: null,
     declarationSource: null,
+  };
+}
+
+function memberText(text: string, overrides: Record<string, unknown> = {}) {
+  return {
+    format: "plaintext",
+    text,
+    isTruncated: false,
+    sourceCount: 1,
+    sources: [typescriptSource("src/hover.ts", 10, 20)],
+    ...overrides,
   };
 }
 
@@ -483,6 +514,299 @@ describe("bounded semantic hover mapping", () => {
       end: property.document.positionAt(property.activeSource.end),
     });
     expect(mapped.failures).toEqual([]);
+  });
+
+  test("renders checker visibility, deprecation, and source-authored documentation as bounded plaintext", () => {
+    const documented = harness("<template>${legacyStatus}</template>", "legacyStatus");
+    const mapped = documented.map({
+      selectedMemberName: "legacyStatus",
+      selectedMember: {
+        ...member("legacyStatus", null, "string"),
+        isOptional: true,
+        isReadonly: true,
+        visibilityKind: "protected",
+        isDeprecated: true,
+        deprecationReason: memberText("Use `catalogStatus` instead."),
+        documentation: memberText(
+          "Legacy **catalog** [guide](command:aurelia.open) at https://example.test.",
+        ),
+      },
+    });
+
+    expect(markdown(mapped)).toBe([
+      "```ts",
+      "protected readonly legacyStatus?: string",
+      "```",
+      "",
+      "Deprecated: Use \\`catalogStatus\\` instead.",
+      "Legacy \\*\\*catalog\\*\\* \\[guide\\](command\\:aurelia.open) at https\\://example.test.",
+    ].join("\n"));
+    expect(markdown(mapped)).not.toMatch(/\b(?:https?|mailto|file|command):/iu);
+    expect(mapped.value?.range).toEqual({
+      start: documented.document.positionAt(documented.activeSource.start),
+      end: documented.document.positionAt(documented.activeSource.end),
+    });
+    expect(mapped.failures).toEqual([]);
+
+    for (const [visibilityKind, expectedIdentity] of [
+      ["private", "private value: number"],
+      ["public", "value: number"],
+      ["unknown", "value: number"],
+    ] as const) {
+      const visibility = harness("<template>${value}</template>", "value");
+      const visibilityMapped = visibility.map({
+        selectedMemberName: "value",
+        selectedMember: {
+          ...member("value", null, "number"),
+          visibilityKind,
+        },
+      });
+      expect(markdown(visibilityMapped)).toBe(`\`\`\`ts\n${expectedIdentity}\n\`\`\``);
+      expect(visibilityMapped.failures).toEqual([]);
+    }
+
+    const generic = harness("<template>${legacy}</template>", "legacy");
+    const cappedSources = Array.from({ length: 8 }, (_, index) =>
+      typescriptSource(`src/member-${index}.ts`, index, index + 1)
+    );
+    const genericMapped = generic.map({
+      selectedMemberName: "legacy",
+      selectedMember: {
+        ...member("legacy", null, "string"),
+        isDeprecated: true,
+        documentation: memberText("Legacy value.\n\nInternal migration details stay outside default hover.", {
+          isTruncated: true,
+          sourceCount: 9,
+          sources: cappedSources,
+        }),
+      },
+    });
+    expect(markdown(genericMapped)).toBe([
+      "```ts",
+      "legacy: string",
+      "```",
+      "",
+      "Deprecated.",
+      "Legacy value.",
+    ].join("\n"));
+    expect(markdown(genericMapped)).not.toContain("Internal migration details");
+    expect(genericMapped.failures).toEqual([]);
+
+    const spanBacked = harness("<template>${spanBacked}</template>", "spanBacked");
+    const spanBackedMapped = spanBacked.map({
+      selectedMemberName: "spanBacked",
+      selectedMember: {
+        ...member("spanBacked", null, "string"),
+        documentation: memberText("Kernel-backed documentation.", {
+          sources: [source("src/span-backed.ts", 4, 18, "documentation")],
+        }),
+      },
+    });
+    expect(markdown(spanBackedMapped)).toBe([
+      "```ts",
+      "spanBacked: string",
+      "```",
+      "",
+      "Kernel-backed documentation.",
+    ].join("\n"));
+    expect(spanBackedMapped.failures).toEqual([]);
+  });
+
+  test("discloses upstream member-text truncation and preserves the hover leaf budget", () => {
+    const documented = harness("<template>${legacyStatus}</template>", "legacyStatus");
+    const mapped = documented.map({
+      selectedMemberName: "legacyStatus",
+      selectedMember: {
+        ...member("legacyStatus", null, "string"),
+        isDeprecated: true,
+        deprecationReason: memberText("Use catalogStatus instead", { isTruncated: true }),
+        documentation: memberText("word ".repeat(100).trimEnd(), { isTruncated: true }),
+      },
+    });
+    const rendered = markdown(mapped);
+    const context = rendered.split("\n\n")[1]?.split("\n") ?? [];
+
+    expect(context[0]).toBe("Deprecated: Use catalogStatus instead…");
+    expect(context[1]?.endsWith("…")).toBe(true);
+    expect(Array.from(context[0] ?? "").length).toBeLessThanOrEqual(160);
+    expect(Array.from(context[1] ?? "").length).toBeLessThanOrEqual(160);
+    expect(Array.from(rendered).length).toBeLessThanOrEqual(640);
+    expect(mapped.failures).toEqual([]);
+  });
+
+  test("fails closed for incoherent or malformed checker member presentation metadata", () => {
+    const test = harness("<template>${value}</template>", "value");
+    const malformed: Array<{
+      readonly selectedMember: Record<string, unknown>;
+      readonly failure: string;
+    }> = [
+      {
+        selectedMember: { ...member("value", "repeat-local"), documentation: memberText("No local docs.") },
+        failure: "Hover selected template local carries unsupported checker declaration metadata.",
+      },
+      {
+        selectedMember: { ...member("value", null), visibilityKind: null },
+        failure: "Hover selected synthetic member carries unsupported checker declaration metadata.",
+      },
+      {
+        selectedMember: { ...member("value", null), visibilityKind: "package" },
+        failure: "Hover selected member has unsupported checker visibility.",
+      },
+      {
+        selectedMember: { ...member("value", null), isDeprecated: null },
+        failure: "Hover selected checker member has no exact deprecation state.",
+      },
+      {
+        selectedMember: {
+          ...member("value", null),
+          isDeprecated: false,
+          deprecationReason: memberText("Use nextValue."),
+        },
+        failure: "Hover selected member deprecation reason does not match its deprecation state.",
+      },
+      {
+        selectedMember: {
+          ...member("value", null),
+          documentation: memberText("Unsafe", { format: "markdown" }),
+        },
+        failure: "Hover selected member documentation has malformed plaintext provenance.",
+      },
+      ...[
+        "Cafe\u0301",
+        "one\r\ntwo",
+        "one\ttwo",
+        "one\u0007two",
+        "one\u0085two",
+        "one\u202etwo",
+        "\ufeffone",
+        " leading",
+        "trailing ",
+        "one \ntwo",
+        "one\n\n\ntwo",
+      ].map((text) => ({
+        selectedMember: {
+          ...member("value", null),
+          documentation: memberText(text),
+        },
+        failure: "Hover selected member documentation has malformed plaintext provenance.",
+      })),
+      {
+        selectedMember: {
+          ...member("value", null),
+          documentation: memberText("x".repeat(801)),
+        },
+        failure: "Hover selected member documentation has malformed plaintext provenance.",
+      },
+      ...[
+        { label: "src/a.ts@1..2", path: "src/a.ts", start: 1, end: 2 },
+        { kind: "typescript-node", path: "src/a.ts", start: 1, end: 2 },
+        { kind: "typescript-node", label: "src/a.ts@1..2", start: 1, end: 2 },
+        { kind: "fake-span", label: "src/a.ts@1..2", path: "src/a.ts", start: 1, end: 2 },
+        typescriptSource("src/a.ts", 1, 2, { label: "" }),
+        typescriptSource("src/a.ts", 1, 2, { path: "   " }),
+        typescriptSource("src/a.ts", 1.5, 2),
+        typescriptSource("src/a.ts", 1, 2.5),
+        typescriptSource("src/a.ts", -1, 2),
+        typescriptSource("src/a.ts", 2, 1),
+        typescriptSource("src/a.ts", 1, 1),
+        typescriptSource("src/a.ts", Number.MAX_SAFE_INTEGER + 1, Number.MAX_SAFE_INTEGER + 2),
+        typescriptSource("src/a.ts", 1, 2, { anchor: { kind: "malformed" } }),
+      ].map((sourceValue) => ({
+        selectedMember: {
+          ...member("value", null),
+          documentation: memberText("Malformed source", { sources: [sourceValue] }),
+        },
+        failure: "Hover selected member documentation has malformed plaintext provenance.",
+      })),
+      {
+        selectedMember: {
+          ...member("value", null),
+          documentation: memberText(Array.from({ length: 9 }, () => "line").join("\n")),
+        },
+        failure: "Hover selected member documentation has malformed plaintext provenance.",
+      },
+      {
+        selectedMember: {
+          ...member("value", null),
+          isDeprecated: true,
+          deprecationReason: memberText("x".repeat(241)),
+        },
+        failure: "Hover selected member deprecation reason has malformed plaintext provenance.",
+      },
+      {
+        selectedMember: {
+          ...member("value", null),
+          isDeprecated: true,
+          deprecationReason: memberText("one\ntwo"),
+        },
+        failure: "Hover selected member deprecation reason has malformed plaintext provenance.",
+      },
+      {
+        selectedMember: {
+          ...member("value", null),
+          documentation: memberText("   "),
+        },
+        failure: "Hover selected member documentation has malformed plaintext provenance.",
+      },
+      {
+        selectedMember: {
+          ...member("value", null),
+          documentation: memberText("No source", { sourceCount: 0, sources: [] }),
+        },
+        failure: "Hover selected member documentation has malformed plaintext provenance.",
+      },
+      {
+        selectedMember: {
+          ...member("value", null),
+          documentation: memberText("Too many sources", {
+            sourceCount: 1,
+            sources: [
+              typescriptSource("src/a.ts", 1, 2),
+              typescriptSource("src/b.ts", 1, 2),
+            ],
+          }),
+        },
+        failure: "Hover selected member documentation has malformed plaintext provenance.",
+      },
+      {
+        selectedMember: {
+          ...member("value", null),
+          documentation: memberText("Missing source", {
+            sourceCount: 2,
+            sources: [typescriptSource("src/a.ts", 1, 2)],
+          }),
+        },
+        failure: "Hover selected member documentation has malformed plaintext provenance.",
+      },
+      {
+        selectedMember: {
+          ...member("value", null),
+          documentation: memberText("Non-exact source", {
+            sources: [{ kind: "source-file-address", label: "src/a.ts", path: "src/a.ts" }],
+          }),
+        },
+        failure: "Hover selected member documentation has malformed plaintext provenance.",
+      },
+    ];
+
+    for (const row of malformed) {
+      const mapped = test.map({
+        selectedMemberName: "value",
+        selectedMember: row.selectedMember,
+      });
+      expect(mapped.value).toBeNull();
+      expect(mapped.failures).toEqual([row.failure]);
+    }
+
+    const privateIdentifier = harness("<template>${#private}</template>", "#private");
+    const privateIdentifierMapped = privateIdentifier.map({
+      selectedMemberName: "#private",
+      selectedMember: member("#private", null, "string"),
+    });
+    expect(privateIdentifierMapped.value).toBeNull();
+    expect(privateIdentifierMapped.failures).toEqual([
+      "Hover selected checker member name is not authorable in an Aurelia expression.",
+    ]);
   });
 
   test("requires typed member uncertainty for a missing type and rejects unknown scope roles", () => {
@@ -1518,6 +1842,49 @@ describe("bounded semantic hover mapping", () => {
     expect(markdown(mapped)).not.toContain("Checker context");
     expect(markdown(mapped)).not.toContain("co-located withheld");
     expect(markdown(mapped)).not.toContain("Type information is incomplete");
+  });
+
+  test("keeps member deprecation and documentation subordinate to one exact diagnostic status", () => {
+    const test = harness("<template>${legacyStatus}</template>", "legacyStatus");
+    const rows = [{
+      ...diagnostic("The legacy status is unavailable in this branch.", "warning"),
+      source: test.activeSource,
+    }];
+    const mapped = test.map({
+      selectedMemberName: "legacyStatus",
+      selectedMember: {
+        ...member("legacyStatus", null, "string"),
+        isDeprecated: true,
+        deprecationReason: memberText("Use catalogStatus."),
+        documentation: memberText("Legacy catalog status."),
+      },
+      diagnostics: rows,
+      diagnosticPresentation: {
+        kind: "presented",
+        rawRowCount: 1,
+        group: {
+          groupKey: "missing:legacyStatus",
+          subject: null,
+          primary: { rowId: "primary", rowIndex: 0, role: "primary", relation: null },
+          related: [],
+          rawRowCount: 1,
+          primarySeverity: "warning",
+          maxRawSeverity: "warning",
+        },
+      },
+    });
+
+    expect(markdown(mapped)).toBe([
+      "```ts",
+      "legacyStatus: string",
+      "```",
+      "",
+      "Deprecated: Use catalogStatus.",
+      "Legacy catalog status.",
+      "",
+      "Warning `missing-expression-member`: The legacy status is unavailable in this branch.",
+    ].join("\n"));
+    expect(mapped.failures).toEqual([]);
   });
 
   test("ranges a diagnostic-only card to its authenticated primary instead of the broad active expression", () => {

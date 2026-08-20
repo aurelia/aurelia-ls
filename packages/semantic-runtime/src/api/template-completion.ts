@@ -102,11 +102,20 @@ import {
 import {
   CheckerTypeMemberKind,
   CheckerTypeProjectionOrigin,
+  type CheckerTypeMember,
   type CheckerTypeReference,
   checkerIndexedAccessSupportsString,
   checkerTypeMemberReachableIdentityHandle,
 } from '../type-system/type-shape.js';
 import { checkerTypeMemberSourceAddressHandle } from '../type-system/checker-type-member-source.js';
+import {
+  checkerDeclarationsDeprecationReason,
+  checkerSymbolMemberDocumentation,
+  checkerTypeMemberIsDeprecated,
+  checkerTypeMemberVisibilityKind,
+  CHECKER_MEMBER_TEXT_MAX_SOURCES,
+  type CheckerTypeMemberTextDraft,
+} from '../type-system/checker-member-surface.js';
 import { readOrProjectCheckerTypeMembersInProjection } from '../type-system/checker-type-member-surface.js';
 import { readCheckerReferenceSurface } from '../type-system/type-surface.js';
 import type { TemplateBindableReference } from '../template/compiler-world-reference.js';
@@ -140,6 +149,7 @@ import type {
   SemanticTemplateCursorHtmlRow,
   SemanticTemplateCursorInfoResult,
   SemanticTemplateCursorMemberRow,
+  SemanticTemplateCursorMemberTextRow,
   SemanticTemplateCursorRouteTargetRow,
   SemanticTemplateCursorValueSiteRow,
   SemanticTemplateCompletionResult,
@@ -163,6 +173,7 @@ import {
   semanticExactSourceReference,
   semanticSourceReferenceContainsOffset,
   semanticSourceReferenceMatchesFilePath,
+  sourceReferenceForTsNode,
   sourceReferenceForParserSpan,
 } from './source-reference.js';
 import {
@@ -3859,6 +3870,10 @@ function cursorSelectedMemberRow(
       typeDisplay: ownerType.indexedValueType.display,
       isOptional: false,
       isReadonly: false,
+      visibilityKind: null,
+      isDeprecated: null,
+      documentation: null,
+      deprecationReason: null,
       scopeRole: null,
       source: null,
       declarationSource: null,
@@ -3873,6 +3888,7 @@ function cursorSelectedMemberRow(
     typeDisplay: member.valueType?.display ?? null,
     isOptional: member.isOptional,
     isReadonly: member.isReadonly,
+    ...cursorCheckerMemberMetadata(member),
     scopeRole: null,
     source: describeAddress(store, checkerTypeMemberSourceAddressHandle(store, member)),
     declarationSource: describeAddress(store, checkerTypeMemberSourceAddressHandle(store, member)),
@@ -3916,6 +3932,9 @@ function cursorScopeSlotMemberRow(
     isOptional: member?.isOptional ?? false,
     isReadonly: slot.assignmentAccessKind === BindingContextSlotAssignmentAccessKind.FrameworkManagedReadOnly
       || (member?.isReadonly ?? false),
+    ...cursorCheckerMemberMetadata(
+      selection.scopeRole == null && member?.name === slot.name ? member : null,
+    ),
     scopeRole: selection.scopeRole,
     source: describeAddress(store, sourceAddressHandle),
     declarationSource: describeAddress(store, declarationSourceAddressHandle),
@@ -3932,6 +3951,54 @@ function cursorScopeSlotMemberRow(
         declarationSourceAddressHandle,
       },
     } : {}),
+  };
+}
+
+function cursorCheckerMemberMetadata(
+  member: CheckerTypeMember | null,
+): Pick<
+  SemanticTemplateCursorMemberRow,
+  'visibilityKind' | 'isDeprecated' | 'documentation' | 'deprecationReason'
+> {
+  const carrier = member?.carrier ?? null;
+  if (member == null || carrier == null) {
+    return {
+      visibilityKind: null,
+      isDeprecated: null,
+      documentation: null,
+      deprecationReason: null,
+    };
+  }
+  const isDeprecated = checkerTypeMemberIsDeprecated(member);
+  return {
+    visibilityKind: checkerTypeMemberVisibilityKind(member),
+    isDeprecated,
+    documentation: cursorCheckerMemberTextRow(checkerSymbolMemberDocumentation(
+      carrier.checker,
+      carrier.symbol,
+      carrier.declarations,
+    )),
+    deprecationReason: isDeprecated
+      ? cursorCheckerMemberTextRow(checkerDeclarationsDeprecationReason(carrier.declarations))
+      : null,
+  };
+}
+
+function cursorCheckerMemberTextRow(
+  text: CheckerTypeMemberTextDraft | null,
+): SemanticTemplateCursorMemberTextRow | null {
+  if (text == null) {
+    return null;
+  }
+  const sources = text.sourceNodes
+    .slice(0, CHECKER_MEMBER_TEXT_MAX_SOURCES)
+    .map(sourceReferenceForTsNode);
+  return {
+    format: 'plaintext',
+    text: text.text,
+    isTruncated: text.isTruncated,
+    sourceCount: text.sourceCount,
+    sources,
   };
 }
 

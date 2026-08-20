@@ -295,6 +295,44 @@ describe("Extension Host product-surface contracts", () => {
     expect(source).toContain("const parentNamedMemberHoverMarkdown = [");
   });
 
+  test("keeps dirty-buffer member documentation in the shared current/minimum product journey", () => {
+    const source = readFileSync(
+      new URL("./extension-host/suite/product-surface.test.cjs", import.meta.url),
+      "utf8",
+    );
+    const title = "projects current member documentation and deprecation from the dirty buffer";
+    const start = source.indexOf(`test("${title}"`);
+    const end = source.indexOf("\n  test(", start + 1);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    const journey = source.slice(start, end);
+
+    expect(journey).toContain("async function()");
+    expect(journey).toContain("this.timeout(600_000)");
+    expect(journey).toContain("data-hover-member-docs>${legacyCatalogStatus}");
+    expect(journey).toContain("@deprecated Use catalogStatus instead.");
+    expect(journey).toContain("protected readonly legacyCatalogStatus: string");
+    expect(journey).toContain("private readonly legacyCatalogStatus: number");
+    expect(journey).toContain("https://example.test/status");
+    expect(journey).toContain("the unsaved member documentation mutation should replace the stale hover");
+    expect(journey).toContain("with no native duplication");
+    expect(journey).toContain("exactHoverAt(");
+    expect(journey).toContain("componentDocument.isDirty, true");
+    expect(journey).toContain("templateDocument.isDirty, true");
+    expect(journey).toContain('readFileSync(templateDocument.uri.fsPath, "utf8")');
+    expect(journey).toContain('readFileSync(componentDocument.uri.fsPath, "utf8")');
+    expect(journey).toContain('executeCommand("workbench.action.files.revert")');
+    expect(journey).toContain("finally {");
+    expect(journey).not.toContain("this.skip");
+    expect(journey).not.toContain(".save(");
+
+    expect(source).toContain("const legacyDocumentedMemberHoverMarkdown = [");
+    expect(source).toContain("Deprecated: Use catalogStatus instead.");
+    expect(source).toContain("https\\\\://example.test/status.");
+    expect(source).toContain("const currentDocumentedMemberHoverMarkdown = [");
+    expect(source).toContain("Current catalog status after migration.");
+  });
+
   test("keeps declaration and ambiguity host journeys sequential but independently bounded", () => {
     const source = readFileSync(
       new URL("./extension-host/suite/product-surface.test.cjs", import.meta.url),

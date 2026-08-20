@@ -89,6 +89,43 @@ describe("renderHoverCard", () => {
     expect(markdown).not.toContain("\r");
   });
 
+  test("keeps authored links and URI schemes inert inside plaintext prose", () => {
+    const markdown = renderHoverCard({
+      identity: { language: "ts", authored: "legacy" },
+      context: [{
+        prefix: "",
+        valueKind: "prose",
+        value: [
+          "[d](command:x)",
+          "https://e.test",
+          "mailto:a@b.test",
+          "file:/x",
+          "command:y",
+          "<https://e.test/a>",
+          "**b**",
+        ].join(" "),
+      }],
+    });
+
+    expect(markdown).toContain("\\[d\\](command\\:x)");
+    expect(markdown).toContain("https\\://e.test");
+    expect(markdown).toContain("mailto\\:a@b.test");
+    expect(markdown).toContain("file\\:/x");
+    expect(markdown).toContain("command\\:y");
+    expect(markdown).toContain("\\<https\\://e.test/a\\>");
+    expect(markdown).toContain("\\*\\*b\\*\\*");
+    expect(markdown).not.toMatch(/\b(?:https?|mailto|file|command):/iu);
+
+    for (const scheme of ["ftp", "vscode", "data", "javascript", "custom+safe", "x.test"]) {
+      const schemeMarkdown = renderHoverCard({
+        identity: { language: "ts", authored: "legacy" },
+        context: [{ prefix: "", valueKind: "prose", value: `${scheme}:payload` }],
+      });
+      expect(schemeMarkdown).toContain(`${scheme}\\:payload`);
+      expect(schemeMarkdown).not.toContain(`${scheme}:payload`);
+    }
+  });
+
   test("clips combining sequences and emoji only at extended grapheme boundaries", () => {
     const combining = renderHoverCard({
       identity: { language: "text", authored: "a\u0301".repeat(100) },

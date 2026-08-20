@@ -156,6 +156,21 @@ const parentNamedMemberHoverMarkdown = [
   "readonly $parent: 17",
   "```",
 ].join("\n");
+const legacyDocumentedMemberHoverMarkdown = [
+  "```ts",
+  "protected readonly legacyCatalogStatus: string",
+  "```",
+  "",
+  "Deprecated: Use catalogStatus instead.",
+  "Legacy catalog status shown at https\\://example.test/status.",
+].join("\n");
+const currentDocumentedMemberHoverMarkdown = [
+  "```ts",
+  "private readonly legacyCatalogStatus: number",
+  "```",
+  "",
+  "Current catalog status after migration.",
+].join("\n");
 const recordExtensionHostObservation = (event) => {
   if (event != null && typeof event === "object") extensionHostObservations.push(event);
 };
@@ -988,6 +1003,129 @@ suite("extension-host product surface", () => {
           && !componentDocument.isDirty
           && (await hoverMarkdown(templateDocument, "state.searchText", "searchText")) === memberHoverMarkdown,
         "the parent-hover cleanup should restore the checked-in component and template",
+        120_000,
+      );
+      assert.strictEqual(readFileSync(templateDocument.uri.fsPath, "utf8"), templateDiskBaseline);
+      assert.strictEqual(readFileSync(componentDocument.uri.fsPath, "utf8"), componentDiskBaseline);
+    }
+  });
+
+  test("projects current member documentation and deprecation from the dirty buffer", async function() {
+    this.timeout(600_000);
+    const templateDocument = await showAureliaDocument("src/my-app.html");
+    const componentDocument = await showAureliaDocument("src/my-app.ts");
+    const templateDiskBaseline = readFileSync(templateDocument.uri.fsPath, "utf8");
+    const componentDiskBaseline = readFileSync(componentDocument.uri.fsPath, "utf8");
+    const templateBaseline = templateDocument.getText();
+    const componentBaseline = componentDocument.getText();
+    assert.strictEqual(templateBaseline, templateDiskBaseline, "the documented-member journey requires a disk-equal template");
+    assert.strictEqual(componentBaseline, componentDiskBaseline, "the documented-member journey requires a disk-equal component");
+    assert.strictEqual(templateDocument.isDirty, false, "the documented-member journey requires a clean template");
+    assert.strictEqual(componentDocument.isDirty, false, "the documented-member journey requires a clean component");
+
+    const editedTemplate = templateBaseline.replace(
+      "  </main>",
+      "    <p data-hover-member-docs>${legacyCatalogStatus}</p>\n  </main>",
+    );
+    const legacyDeclaration = [
+      "  /**",
+      "   * Legacy catalog status shown at https://example.test/status.",
+      "   * @deprecated Use catalogStatus instead.",
+      "   */",
+      "  protected readonly legacyCatalogStatus: string = 'legacy';",
+      "",
+    ].join("\n");
+    const currentDeclaration = [
+      "  /** Current catalog status after migration. */",
+      "  private readonly legacyCatalogStatus: number = 17;",
+      "",
+    ].join("\n");
+    const legacyComponent = componentBaseline.replace(
+      "  readonly heading = 'Aurelia IDE playground';",
+      `  readonly heading = 'Aurelia IDE playground';\n${legacyDeclaration}`,
+    );
+    const currentComponent = componentBaseline.replace(
+      "  readonly heading = 'Aurelia IDE playground';",
+      `  readonly heading = 'Aurelia IDE playground';\n${currentDeclaration}`,
+    );
+    assert.notStrictEqual(editedTemplate, templateBaseline, "Expected the documented member usage to be inserted.");
+    assert.notStrictEqual(legacyComponent, componentBaseline, "Expected the deprecated documented member to be inserted.");
+    assert.notStrictEqual(currentComponent, legacyComponent, "Expected the dirty-buffer member documentation mutation.");
+
+    try {
+      await replaceDocumentTexts([
+        [componentDocument, legacyComponent],
+        [templateDocument, editedTemplate],
+      ]);
+      await waitFor(
+        async () => (await hoverMarkdown(templateDocument, "data-hover-member-docs>", "legacyCatalogStatus"))
+          === legacyDocumentedMemberHoverMarkdown,
+        "the deprecated documented member should reach the native hover provider",
+        120_000,
+      );
+      assert.strictEqual(componentDocument.isDirty, true, "the legacy documented member must remain unsaved");
+      assert.strictEqual(templateDocument.isDirty, true, "the documented member usage must remain unsaved");
+      let hovers = await hoversAt(templateDocument, "data-hover-member-docs>", "legacyCatalogStatus");
+      assert.strictEqual(
+        hovers.length,
+        1,
+        `Expected one documented member hover with no native duplication; observed ${JSON.stringify(hovers.map(hoverMarkdownText))}.`,
+      );
+      await exactHoverAt(
+        templateDocument,
+        "data-hover-member-docs>",
+        "legacyCatalogStatus",
+        legacyDocumentedMemberHoverMarkdown,
+      );
+      assert(legacyDocumentedMemberHoverMarkdown.includes("https\\://example.test/status"));
+      assert(!legacyDocumentedMemberHoverMarkdown.includes("https://example.test/status"));
+
+      await replaceDocumentText(componentDocument, currentComponent);
+      await waitFor(
+        async () => (await hoverMarkdown(templateDocument, "data-hover-member-docs>", "legacyCatalogStatus"))
+          === currentDocumentedMemberHoverMarkdown,
+        "the unsaved member documentation mutation should replace the stale hover",
+        120_000,
+      );
+      assert.strictEqual(componentDocument.isDirty, true, "the current documented member must remain unsaved");
+      hovers = await hoversAt(templateDocument, "data-hover-member-docs>", "legacyCatalogStatus");
+      assert.strictEqual(
+        hovers.length,
+        1,
+        `Expected one current documented member hover with no native duplication; observed ${JSON.stringify(hovers.map(hoverMarkdownText))}.`,
+      );
+      await exactHoverAt(
+        templateDocument,
+        "data-hover-member-docs>",
+        "legacyCatalogStatus",
+        currentDocumentedMemberHoverMarkdown,
+      );
+      assert(!currentDocumentedMemberHoverMarkdown.includes("Deprecated"));
+      assert(!currentDocumentedMemberHoverMarkdown.includes("Legacy catalog status"));
+      assert.strictEqual(readFileSync(templateDocument.uri.fsPath, "utf8"), templateDiskBaseline);
+      assert.strictEqual(readFileSync(componentDocument.uri.fsPath, "utf8"), componentDiskBaseline);
+    } finally {
+      for (const [document, diskBaseline, label] of [
+        [componentDocument, componentDiskBaseline, "component"],
+        [templateDocument, templateDiskBaseline, "template"],
+      ]) {
+        if (document.getText() !== diskBaseline || document.isDirty) {
+          await vscode.window.showTextDocument(document, { preview: false });
+          await vscode.commands.executeCommand("workbench.action.files.revert");
+          await waitFor(
+            () => document.getText() === diskBaseline && !document.isDirty,
+            `the documented-member ${label} should revert to its clean disk baseline`,
+            60_000,
+          );
+        }
+      }
+      await waitFor(
+        async () => templateDocument.getText() === templateBaseline
+          && componentDocument.getText() === componentBaseline
+          && !templateDocument.isDirty
+          && !componentDocument.isDirty
+          && (await hoverMarkdown(templateDocument, "state.searchText", "searchText")) === memberHoverMarkdown,
+        "the documented-member cleanup should restore the checked-in hover surface",
         120_000,
       );
       assert.strictEqual(readFileSync(templateDocument.uri.fsPath, "utf8"), templateDiskBaseline);

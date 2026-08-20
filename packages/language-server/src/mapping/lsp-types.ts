@@ -40,9 +40,16 @@ import type {
   SemanticTemplateRenameResult,
 } from "@aurelia-ls/semantic-runtime";
 import {
+  CHECKER_MEMBER_DEPRECATION_REASON_MAX_CODE_POINTS,
+  CHECKER_MEMBER_DEPRECATION_REASON_MAX_LINES,
+  CHECKER_MEMBER_DOCUMENTATION_MAX_CODE_POINTS,
+  CHECKER_MEMBER_DOCUMENTATION_MAX_LINES,
+  CHECKER_MEMBER_TEXT_MAX_SOURCES,
   canonicalTypeSystemPath,
   diagnosticRepairAffordanceForSuggestion,
   frameworkRegistrationCapabilityFromString,
+  isAureliaExpressionIdentifierName,
+  isSemanticSourceReference,
   runtimeAsElementResourceName,
   runtimeAttributeName,
   runtimeElementResourceName,
@@ -1063,6 +1070,16 @@ function semanticRuntimeHoverSelection(
     if (member.scopeRole != null && role == null) {
       return { value: null, failures: ["Hover selected member has an unsupported scope role."] };
     }
+    if (member.scopeRole == null && !isAureliaExpressionIdentifierName(member.name)) {
+      return {
+        value: null,
+        failures: ["Hover selected checker member name is not authorable in an Aurelia expression."],
+      };
+    }
+    const declarationPresentation = semanticRuntimeMemberHoverPresentation(member);
+    if (declarationPresentation.failures.length > 0) {
+      return { value: null, failures: declarationPresentation.failures };
+    }
     if (
       member.typeDisplay == null
       && !semanticRuntimeUncertaintyMatchesLocus(value, "selected-member")
@@ -1077,12 +1094,14 @@ function semanticRuntimeHoverSelection(
         locus: "selected-member",
         identity: {
           language: "ts",
-          prefix: member.isReadonly ? "readonly " : "",
+          prefix: `${declarationPresentation.value.visibilityPrefix}${member.isReadonly ? "readonly " : ""}`,
           authored: activeText,
           suffix: member.isOptional ? "?" : "",
           typeDetail: member.typeDisplay == null ? null : `: ${member.typeDisplay}`,
         },
-        context: role == null ? [] : [{ prefix: role }],
+        context: role == null
+          ? declarationPresentation.value.context
+          : [{ prefix: role }],
       },
       failures: [],
     };
@@ -1123,6 +1142,186 @@ function semanticRuntimeBindingContextLabel(authoredScopeAncestor: number): stri
   if (authoredScopeAncestor === 0) return "Current Aurelia binding context.";
   if (authoredScopeAncestor === 1) return "Parent Aurelia binding context.";
   return `Aurelia binding context ${authoredScopeAncestor} parent scopes up.`;
+}
+
+type SemanticRuntimeHoverMember = NonNullable<SemanticTemplateCursorInfoResult["selectedMember"]>;
+type SemanticRuntimeHoverMemberText = NonNullable<SemanticRuntimeHoverMember["documentation"]>;
+
+interface SemanticRuntimeHoverMemberPresentation {
+  readonly visibilityPrefix: string;
+  readonly context: readonly HoverCardContextLine[];
+}
+
+function semanticRuntimeMemberHoverPresentation(
+  member: SemanticRuntimeHoverMember,
+): SemanticRuntimeReadMapping<SemanticRuntimeHoverMemberPresentation> {
+  if (member.scopeRole != null) {
+    if (
+      member.visibilityKind != null
+      || member.isDeprecated != null
+      || member.documentation != null
+      || member.deprecationReason != null
+    ) {
+      return {
+        value: { visibilityPrefix: "", context: [] },
+        failures: ["Hover selected template local carries unsupported checker declaration metadata."],
+      };
+    }
+    return { value: { visibilityPrefix: "", context: [] }, failures: [] };
+  }
+
+  let visibilityPrefix = "";
+  switch (member.visibilityKind) {
+    case null:
+      if (
+        member.isDeprecated != null
+        || member.documentation != null
+        || member.deprecationReason != null
+      ) {
+        return {
+          value: { visibilityPrefix: "", context: [] },
+          failures: ["Hover selected synthetic member carries unsupported checker declaration metadata."],
+        };
+      }
+      return { value: { visibilityPrefix: "", context: [] }, failures: [] };
+    case "private":
+      visibilityPrefix = "private ";
+      break;
+    case "protected":
+      visibilityPrefix = "protected ";
+      break;
+    case "public":
+    case "unknown":
+      break;
+    default:
+      return {
+        value: { visibilityPrefix: "", context: [] },
+        failures: ["Hover selected member has unsupported checker visibility."],
+      };
+  }
+
+  if (typeof member.isDeprecated !== "boolean") {
+    return {
+      value: { visibilityPrefix: "", context: [] },
+      failures: ["Hover selected checker member has no exact deprecation state."],
+    };
+  }
+  if (member.isDeprecated !== true && member.deprecationReason != null) {
+    return {
+      value: { visibilityPrefix: "", context: [] },
+      failures: ["Hover selected member deprecation reason does not match its deprecation state."],
+    };
+  }
+
+  const documentation = semanticRuntimeMemberTextForHover(
+    member.documentation,
+    "documentation",
+  );
+  if (documentation.failures.length > 0) {
+    return { value: { visibilityPrefix: "", context: [] }, failures: documentation.failures };
+  }
+  const deprecationReason = semanticRuntimeMemberTextForHover(
+    member.deprecationReason,
+    "deprecation reason",
+  );
+  if (deprecationReason.failures.length > 0) {
+    return { value: { visibilityPrefix: "", context: [] }, failures: deprecationReason.failures };
+  }
+
+  const context: HoverCardContextLine[] = [];
+  // Migration urgency precedes the tertiary source summary; an exact diagnostic remains the card's sole status.
+  if (member.isDeprecated) {
+    context.push({
+      prefix: deprecationReason.value == null ? "Deprecated." : "Deprecated:",
+      value: deprecationReason.value,
+      valueKind: "prose",
+    });
+  }
+  if (documentation.value != null) {
+    context.push({
+      priority: "tertiary",
+      prefix: "",
+      value: documentation.value,
+      valueKind: "prose",
+    });
+  }
+  return { value: { visibilityPrefix, context }, failures: [] };
+}
+
+function semanticRuntimeMemberTextForHover(
+  value: SemanticRuntimeHoverMemberText | null,
+  subject: "deprecation reason" | "documentation",
+): SemanticRuntimeReadMapping<string | null> {
+  if (value == null) return { value: null, failures: [] };
+  const maximumCodePoints = subject === "documentation"
+    ? CHECKER_MEMBER_DOCUMENTATION_MAX_CODE_POINTS
+    : CHECKER_MEMBER_DEPRECATION_REASON_MAX_CODE_POINTS;
+  const maximumLines = subject === "documentation"
+    ? CHECKER_MEMBER_DOCUMENTATION_MAX_LINES
+    : CHECKER_MEMBER_DEPRECATION_REASON_MAX_LINES;
+  if (
+    value.format !== "plaintext"
+    || typeof value.text !== "string"
+    || value.text.trim().length === 0
+    || typeof value.isTruncated !== "boolean"
+    || !Number.isSafeInteger(value.sourceCount)
+    || value.sourceCount < 1
+    || !Array.isArray(value.sources)
+    || value.sources.length !== Math.min(value.sourceCount, CHECKER_MEMBER_TEXT_MAX_SOURCES)
+    || value.sources.some((source: unknown) => !semanticRuntimeMemberTextSourceIsExact(source))
+    || Array.from(value.text).length > maximumCodePoints
+    || value.text.split("\n").length > maximumLines
+    || !semanticRuntimeMemberPlaintextIsNormalized(value.text)
+  ) {
+    return {
+      value: null,
+      failures: [`Hover selected member ${subject} has malformed plaintext provenance.`],
+    };
+  }
+  const firstParagraph = value.text.split(/\n{2,}/u)
+    .find((paragraph) => paragraph.trim().length > 0)!;
+  const displayedParagraphWasTruncated = value.isTruncated && !/\n{2,}/u.test(value.text);
+  return {
+    value: displayedParagraphWasTruncated ? `${firstParagraph}…` : firstParagraph,
+    failures: [],
+  };
+}
+
+function semanticRuntimeMemberPlaintextIsNormalized(value: string): boolean {
+  return value === value.normalize("NFC")
+    && value === value.trim()
+    && !/\r|\t/u.test(value)
+    && !Array.from(value).some(semanticRuntimeMemberPlaintextCharacterIsControl)
+    && !/[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff]/u.test(value)
+    && !/\n{3,}/u.test(value)
+    && value.split("\n").every((line) => line === line.trimEnd());
+}
+
+function semanticRuntimeMemberTextSourceIsExact(value: unknown): boolean {
+  if (!isSemanticSourceReference(value)) return false;
+  const start = value.start;
+  const end = value.end;
+  return (value.kind === "typescript-node" || value.kind === "source-span-address")
+    && value.label.trim().length > 0
+    && typeof value.path === "string"
+    && value.path.trim().length > 0
+    && typeof start === "number"
+    && Number.isSafeInteger(start)
+    && typeof end === "number"
+    && Number.isSafeInteger(end)
+    && start >= 0
+    && end > start
+    && value.anchor == null
+    && semanticExactSourceReference(value) === value;
+}
+
+function semanticRuntimeMemberPlaintextCharacterIsControl(value: string): boolean {
+  const codePoint = value.codePointAt(0)!;
+  return codePoint <= 0x08
+    || codePoint === 0x0b
+    || codePoint === 0x0c
+    || (codePoint >= 0x0e && codePoint <= 0x1f)
+    || (codePoint >= 0x7f && codePoint <= 0x9f);
 }
 
 function semanticRuntimeBindableDeclarationHoverSelection(

@@ -38,6 +38,16 @@ export {
   BUILT_IN_RESOURCE_PACKAGES,
 } from '../resources/built-in-resources.js';
 export {
+  isAureliaExpressionIdentifierName,
+} from '../expression/expression-scanner.js';
+export {
+  CHECKER_MEMBER_DEPRECATION_REASON_MAX_CODE_POINTS,
+  CHECKER_MEMBER_DEPRECATION_REASON_MAX_LINES,
+  CHECKER_MEMBER_DOCUMENTATION_MAX_CODE_POINTS,
+  CHECKER_MEMBER_DOCUMENTATION_MAX_LINES,
+  CHECKER_MEMBER_TEXT_MAX_SOURCES,
+} from '../type-system/checker-member-surface.js';
+export {
   FRAMEWORK_REGISTRATION_CAPABILITIES,
   FrameworkRegistrationCapability,
   frameworkRegistrationCapabilityFromString,

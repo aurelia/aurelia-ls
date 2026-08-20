@@ -17105,6 +17105,16 @@
                 { "fields": { "operationKind": "binding-source", "phase": "source-evaluation", "tracking": "not-applicable", "role": "write-target" }, "sourceField": "nameSource", "source": { "marker": "click.trigger=\"form.name = fallbackName\"", "token": "name" }, "count": 1 },
                 { "fields": { "operationKind": "binding-source", "phase": "source-evaluation", "tracking": "untracked", "role": "read" }, "source": { "marker": "click.trigger=\"form.name = fallbackName\"", "token": "fallbackName" }, "count": 1 }
               ]
+            },
+            {
+              "name": "documented deprecated fallback member cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "click.trigger=\"form.name = fallbackName\"", "token": "fallbackName" }, "options": { "detail": "handles" } },
+              "coverage": "complete",
+              "equals": { "value.selectedMember.name": "fallbackName", "value.selectedMember.memberKind": "property", "value.selectedMember.visibilityKind": "public", "value.selectedMember.isDeprecated": true, "value.selectedMember.scopeRole": null, "value.selectedMember.documentation.format": "plaintext", "value.selectedMember.documentation.text": "Fallback display name retained for legacy listeners.", "value.selectedMember.documentation.isTruncated": false, "value.selectedMember.documentation.sourceCount": 1, "value.selectedMember.documentation.sources.length": 1, "value.selectedMember.deprecationReason.format": "plaintext", "value.selectedMember.deprecationReason.text": "Use form.name instead.", "value.selectedMember.deprecationReason.isTruncated": false, "value.selectedMember.deprecationReason.sourceCount": 1, "value.selectedMember.deprecationReason.sources.length": 1, "value.missingInputs.length": 0 },
+              "rows": [
+                { "rowPath": "value.selectedMember.documentation", "sourceField": "sources.0", "sourceText": "/**\n   * Fallback display name retained for legacy listeners.\n   * @deprecated Use form.name instead.\n   */", "count": 1 },
+                { "rowPath": "value.selectedMember.deprecationReason", "sourceField": "sources.0", "sourceText": "@deprecated Use form.name instead.\n   ", "count": 1 }
+              ]
             }
           ]
         },
