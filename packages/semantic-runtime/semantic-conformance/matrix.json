@@ -16980,7 +16980,7 @@
               "name": "root current-context expression hover",
               "query": { "kind": "template-cursor-info", "cursor": { "marker": "${$this} / ${items.map", "token": "$this" }, "options": { "detail": "handles" } },
               "coverage": "complete",
-              "equals": { "value.selectedExpression.expressionKind": "AccessThis", "value.selectedExpression.typeDisplay": "RuntimeExpressionAccessUsesApp", "value.selectedExpression.typeShapeKind": "class", "value.selectedExpression.typeOrigin": "type-checker", "value.selectedExpression.openKind": null, "value.selectedMember": null, "value.memberOwnerType": null, "value.missingInputs.length": 0 },
+              "equals": { "value.selectedExpression.expressionKind": "AccessThis", "value.selectedExpression.authoredScopeAncestor": 0, "value.selectedExpression.scopeLookupAncestor": 0, "value.selectedExpression.typeDisplay": "RuntimeExpressionAccessUsesApp", "value.selectedExpression.typeShapeKind": "class", "value.selectedExpression.typeOrigin": "type-checker", "value.selectedExpression.openKind": null, "value.selectedMember": null, "value.memberOwnerType": null, "value.missingInputs.length": 0 },
               "rows": [
                 { "rowPath": "value.selectedExpression", "sourceField": "source", "source": { "marker": "${$this} / ${items.map", "token": "$this" }, "count": 1 }
               ]
@@ -16989,7 +16989,7 @@
               "name": "callback current-context expression hover retains outer view model",
               "query": { "kind": "template-cursor-info", "cursor": { "marker": "items.map(item => $this).length", "token": "$this" }, "options": { "detail": "handles" } },
               "coverage": "complete",
-              "equals": { "value.selectedExpression.expressionKind": "AccessThis", "value.selectedExpression.typeDisplay": "RuntimeExpressionAccessUsesApp", "value.selectedExpression.typeShapeKind": "class", "value.selectedExpression.typeOrigin": "type-checker", "value.selectedExpression.openKind": null, "value.selectedMember": null, "value.memberOwnerType": null, "value.missingInputs.length": 0 },
+              "equals": { "value.selectedExpression.expressionKind": "AccessThis", "value.selectedExpression.authoredScopeAncestor": 0, "value.selectedExpression.scopeLookupAncestor": 1, "value.selectedExpression.typeDisplay": "RuntimeExpressionAccessUsesApp", "value.selectedExpression.typeShapeKind": "class", "value.selectedExpression.typeOrigin": "type-checker", "value.selectedExpression.openKind": null, "value.selectedMember": null, "value.memberOwnerType": null, "value.missingInputs.length": 0 },
               "rows": [
                 { "rowPath": "value.selectedExpression", "sourceField": "source", "source": { "marker": "items.map(item => $this).length", "token": "$this" }, "count": 1 }
               ]
@@ -16998,16 +16998,19 @@
               "name": "repeat current-context expression hover retains aggregate and pressure",
               "query": { "kind": "template-cursor-info", "cursor": { "marker": "${$this} / ${$parent}", "token": "$this" }, "options": { "detail": "handles" } },
               "coverage": "open",
-              "equals": { "value.selectedExpression.expressionKind": "AccessThis", "value.selectedExpression.typeDisplay": "{ item: AccessUseItem; }", "value.selectedExpression.typeShapeKind": "object", "value.selectedExpression.typeOrigin": "synthetic-template-type", "value.selectedExpression.openKind": "missing-context-type", "value.selectedMember": null, "value.memberOwnerType": null, "value.missingInputs.0": "selected-expression-type:missing-context-type", "value.missingInputs.length": 1 },
+              "equals": { "value.selectedExpression.expressionKind": "AccessThis", "value.selectedExpression.authoredScopeAncestor": 0, "value.selectedExpression.scopeLookupAncestor": 0, "value.selectedExpression.typeDisplay": "{ item: AccessUseItem; }", "value.selectedExpression.typeShapeKind": "object", "value.selectedExpression.typeOrigin": "synthetic-template-type", "value.selectedExpression.openKind": "missing-context-type", "value.selectedMember": null, "value.memberOwnerType": null, "value.missingInputs.0": "selected-expression-type:missing-context-type", "value.missingInputs.length": 1 },
               "rows": [
                 { "rowPath": "value.selectedExpression", "sourceField": "source", "source": { "marker": "${$this} / ${$parent}", "token": "$this" }, "count": 1 }
               ]
             },
             {
-              "name": "ancestor qualifier remains outside the current-context expression lane",
+              "name": "repeat ancestor-context expression hover resolves the outer view model",
               "query": { "kind": "template-cursor-info", "cursor": { "marker": "${$this} / ${$parent}", "token": "$parent" }, "options": { "detail": "handles" } },
               "coverage": "complete",
-              "equals": { "value.selectedExpression": null }
+              "equals": { "value.selectedExpression.expressionKind": "AccessThis", "value.selectedExpression.authoredScopeAncestor": 1, "value.selectedExpression.scopeLookupAncestor": 1, "value.selectedExpression.typeDisplay": "RuntimeExpressionAccessUsesApp", "value.selectedExpression.typeShapeKind": "class", "value.selectedExpression.typeOrigin": "type-checker", "value.selectedExpression.openKind": null, "value.selectedMemberName": null, "value.selectedMember": null, "value.memberOwnerType": null, "value.missingInputs.length": 0 },
+              "rows": [
+                { "rowPath": "value.selectedExpression", "sourceField": "source", "source": { "marker": "${$this} / ${$parent}", "token": "$parent" }, "count": 1 }
+              ]
             }
           ]
         },

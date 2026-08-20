@@ -31,6 +31,7 @@ const fixture = path.join(
   "pressure",
   "resource-registration-effective-definitions",
 );
+const scopeFixture = path.join(repoRoot, "fixtures", "hello-world");
 
 const sharedResourceSymbols = [
   ["SharedCustomElement", "custom-element: shared"],
@@ -188,6 +189,104 @@ test("native hover and symbol responses preserve exact authored meaning", async 
     await waitForExit(child);
   }
 }, 30_000);
+
+test("native hover preserves exact bare parent ancestry without confusing a $parent member", async () => {
+  const htmlPath = path.join(scopeFixture, "src/my-app.html");
+  const componentPath = path.join(scopeFixture, "src/my-app.ts");
+  const htmlUri = fileUri(scopeFixture, "src/my-app.html");
+  const componentUri = fileUri(scopeFixture, "src/my-app.ts");
+  const htmlBaseline = fs.readFileSync(htmlPath, "utf8");
+  const componentBaseline = fs.readFileSync(componentPath, "utf8");
+  const parentMarkup = [
+    "        <span data-hover-parent>${$parent}</span>",
+    "        <span data-hover-grandparent repeat.for=\"tag of item.tags\">${$parent.$parent}</span>",
+  ].join("\n");
+  const rootMarkup = [
+    "    <p data-hover-missing-parent>${$parent}</p>",
+    "    <p data-hover-parent-member>${$this.$parent}</p>",
+  ].join("\n");
+  const htmlText = htmlBaseline
+    .replace(
+      "        <product-card\n",
+      `${parentMarkup}\n        <product-card\n`,
+    )
+    .replace("  </main>", `${rootMarkup}\n  </main>`);
+  const componentText = componentBaseline.replace(
+    "  readonly heading = 'Aurelia IDE playground';",
+    "  readonly heading = 'Aurelia IDE playground';\n  readonly $parent = 17;",
+  );
+  expect(htmlText).not.toBe(htmlBaseline);
+  expect(componentText).not.toBe(componentBaseline);
+
+  const { connection, child, dispose, getStderr } = startServer(scopeFixture);
+  const diagnostics = createDiagnosticsRecorder(connection, child, getStderr);
+  try {
+    await initialize(connection, child, getStderr, scopeFixture);
+    openDocument(connection, componentUri, "typescript", componentText);
+    openDocument(connection, htmlUri, "html", htmlText);
+    await diagnostics.wait(htmlUri, 20_000);
+
+    const hoverAt = async (marker: string, occurrence = 0): Promise<Hover | null> => {
+      const markerStart = htmlText.indexOf(marker);
+      expect(markerStart, `expected parent marker ${marker}`).toBeGreaterThanOrEqual(0);
+      let tokenStart = markerStart;
+      for (let index = 0; index <= occurrence; index += 1) {
+        tokenStart = htmlText.indexOf("$parent", index === 0 ? markerStart : tokenStart + "$parent".length);
+      }
+      expect(tokenStart).toBeGreaterThanOrEqual(markerStart);
+      return await connection.sendRequest<Hover | null>("textDocument/hover", {
+        textDocument: { uri: htmlUri },
+        position: positionAt(htmlText, tokenStart + 2),
+      });
+    };
+
+    const repeatParent = await hoverAt("data-hover-parent>");
+    expect((repeatParent?.contents as { value?: string } | undefined)?.value ?? "").toBe([
+      "```ts",
+      "$parent: MyApp",
+      "```",
+      "",
+      "Parent Aurelia binding context.",
+    ].join("\n"));
+    expect(repeatParent?.range == null ? null : textForRange(htmlText, repeatParent.range)).toBe("$parent");
+
+    const grandparent = await hoverAt("data-hover-grandparent", 1);
+    expect((grandparent?.contents as { value?: string } | undefined)?.value ?? "").toBe([
+      "```ts",
+      "$parent: MyApp",
+      "```",
+      "",
+      "Aurelia binding context 2 parent scopes up.",
+    ].join("\n"));
+    expect(grandparent?.range == null ? null : textForRange(htmlText, grandparent.range)).toBe("$parent");
+
+    const missingParent = await hoverAt("data-hover-missing-parent>");
+    expect((missingParent?.contents as { value?: string } | undefined)?.value ?? "").toBe([
+      "```ts",
+      "$parent",
+      "```",
+      "",
+      "Parent Aurelia binding context.",
+      "",
+      "No parent Aurelia binding context is reachable.",
+    ].join("\n"));
+    expect(missingParent?.range == null ? null : textForRange(htmlText, missingParent.range)).toBe("$parent");
+
+    const member = await hoverAt("data-hover-parent-member>");
+    const memberMarkdown = (member?.contents as { value?: string } | undefined)?.value ?? "";
+    expect(memberMarkdown).toBe("```ts\nreadonly $parent: 17\n```");
+    expect(memberMarkdown).not.toContain("binding context");
+    expect(member?.range == null ? null : textForRange(htmlText, member.range)).toBe("$parent");
+
+    expect(fs.readFileSync(htmlPath, "utf8")).toBe(htmlBaseline);
+    expect(fs.readFileSync(componentPath, "utf8")).toBe(componentBaseline);
+  } finally {
+    diagnostics.dispose();
+    dispose();
+    child.kill("SIGKILL");
+    await waitForExit(child);
+  }
+}, 60_000);
 
 function requireDocumentSymbol(
   symbols: readonly DocumentSymbol[],

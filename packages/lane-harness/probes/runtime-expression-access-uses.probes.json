@@ -75,6 +75,15 @@
         "verdict": "correct",
         "reason": "Hover should present the exact bare `$this` token as the current Aurelia binding context with its proved component type.",
         "note": "B2 current-context witness: the card is owned by the bare AccessThis expression rather than a selected member or a generic expression fallback."
+      },
+      {
+        "id": "bare-parent-context",
+        "file": "src/runtime-expression-access-uses-app.html",
+        "anchor": "${$this} / ${$parent}",
+        "at": "$parent",
+        "verdict": "correct",
+        "reason": "Hover should present the exact bare `$parent` token as the proved parent Aurelia binding context with its exact authored range.",
+        "note": "Slice 2 parent-context witness: the card is selected from the authored binding-scope prefix and must not be confused with an ordinary component member named `$parent`."
       }
     ],
     "definition": [

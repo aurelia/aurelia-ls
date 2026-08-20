@@ -3805,6 +3805,8 @@ function cursorSelectedExpressionRow(
   const typeDeclarationSourceAddressHandle = typeShape?.declarationSourceAddressHandle ?? null;
   return {
     expressionKind: selection.expressionKind,
+    authoredScopeAncestor: selection.authoredScopeAncestor,
+    scopeLookupAncestor: selection.scopeLookupAncestor,
     typeDisplay: typeShape?.display ?? typeReference?.display ?? null,
     typeShapeKind: typeShape?.shapeKind ?? typeReference?.shapeKind ?? null,
     typeOrigin: typeShape?.origin ?? typeReference?.origin ?? null,

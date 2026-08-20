@@ -956,7 +956,7 @@ function semanticRuntimeHoverSelection(
       || value.selectedMemberName != null
       || value.memberOwnerType != null
     ) {
-      return { value: null, failures: ["Hover cannot select both a member and a bare expression."] };
+      return { value: null, failures: ["Hover cannot select both a member and a binding-context qualifier."] };
     }
     const expressionSource = semanticExactSourceReference(value.selectedExpression.source);
     if (expressionSource == null) {
@@ -980,10 +980,35 @@ function semanticRuntimeHoverSelection(
         failures: ["Hover selected expression source does not match the active authored range."],
       };
     }
-    if (value.selectedExpression.expressionKind !== "AccessThis" || activeText !== "$this") {
+    const authoredScopeAncestor = value.selectedExpression.authoredScopeAncestor;
+    const scopeLookupAncestor = value.selectedExpression.scopeLookupAncestor;
+    if (
+      value.selectedExpression.expressionKind !== "AccessThis"
+      || !Number.isSafeInteger(authoredScopeAncestor)
+      || authoredScopeAncestor < 0
+      || !Number.isSafeInteger(scopeLookupAncestor)
+      || scopeLookupAncestor < 0
+      || scopeLookupAncestor < authoredScopeAncestor
+    ) {
       return {
         value: null,
-        failures: ["Hover selected expression is not the exact authored current-context `$this` token."],
+        failures: ["Hover selected expression has unsupported binding-context ancestry."],
+      };
+    }
+    const expectedAuthoredToken = authoredScopeAncestor === 0 ? "$this" : "$parent";
+    if (activeText !== expectedAuthoredToken) {
+      return {
+        value: null,
+        failures: ["Hover selected expression does not match its exact authored binding-context token."],
+      };
+    }
+    if (
+      value.selectedExpression.openKind === "missing-ancestor"
+      && (authoredScopeAncestor === 0 || value.selectedExpression.typeDisplay != null)
+    ) {
+      return {
+        value: null,
+        failures: ["Hover selected expression has incoherent missing-ancestor evidence."],
       };
     }
     if (
@@ -1005,7 +1030,7 @@ function semanticRuntimeHoverSelection(
             ? null
             : `: ${value.selectedExpression.typeDisplay}`,
         },
-        context: [{ prefix: "Current Aurelia binding context." }],
+        context: [{ prefix: semanticRuntimeBindingContextLabel(authoredScopeAncestor) }],
       },
       failures: [],
     };
@@ -1092,6 +1117,12 @@ function semanticRuntimeHoverSelection(
   }
 
   return { value: null, failures: [] };
+}
+
+function semanticRuntimeBindingContextLabel(authoredScopeAncestor: number): string {
+  if (authoredScopeAncestor === 0) return "Current Aurelia binding context.";
+  if (authoredScopeAncestor === 1) return "Parent Aurelia binding context.";
+  return `Aurelia binding context ${authoredScopeAncestor} parent scopes up.`;
 }
 
 function semanticRuntimeBindableDeclarationHoverSelection(
@@ -1958,7 +1989,17 @@ function semanticRuntimeUncertaintyLabel(value: SemanticTemplateCursorInfoResult
   switch (uncertainty.category) {
     case "type-information-incomplete":
       if (uncertainty.affectedDomain === "binding-context") {
-        return "Current binding-context type is unavailable.";
+        const selectedExpression = value.selectedExpression;
+        const authoredScopeAncestor = selectedExpression?.authoredScopeAncestor ?? 0;
+        if (authoredScopeAncestor === 0) {
+          return "Current binding-context type is unavailable.";
+        }
+        if (selectedExpression?.openKind === "missing-ancestor") {
+          return authoredScopeAncestor === 1
+            ? "No parent Aurelia binding context is reachable."
+            : `No Aurelia binding context is reachable ${authoredScopeAncestor} parent scopes up.`;
+        }
+        return "Parent binding-context type is unavailable.";
       }
       if (uncertainty.affectedDomain === "bindable") {
         return "Type unavailable for this bindable.";

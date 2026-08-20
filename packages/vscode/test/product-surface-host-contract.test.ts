@@ -256,6 +256,45 @@ describe("Extension Host product-surface contracts", () => {
     expect(helper).toContain("document.getText(hover.range), token");
   });
 
+  test("keeps bare parent scope in the shared current/minimum product journey", () => {
+    const source = readFileSync(
+      new URL("./extension-host/suite/product-surface.test.cjs", import.meta.url),
+      "utf8",
+    );
+    const title = "projects bare parent scope without confusing a component $parent member";
+    const start = source.indexOf(`test("${title}"`);
+    const end = source.indexOf("\n  test(", start + 1);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    const journey = source.slice(start, end);
+
+    expect(journey).toContain("async function()");
+    expect(journey).toContain("this.timeout(600_000)");
+    expect(journey).toContain('repeat.for="item of visibleItems"');
+    expect(journey).toContain("data-hover-parent>${$parent}");
+    expect(journey).toContain("data-hover-missing-parent>${$parent}");
+    expect(journey).toContain("data-hover-parent-member>${$this.$parent}");
+    expect(journey).toContain("readonly $parent = 17");
+    expect(journey).toContain("hovers.length");
+    expect(journey).toContain("with no native duplication");
+    expect(journey).toContain("exactHoverAt(");
+    expect(journey).toContain("the in-memory component member named $parent should reach the native hover provider");
+    expect(journey).toContain('readFileSync(templateDocument.uri.fsPath, "utf8")');
+    expect(journey).toContain('readFileSync(componentDocument.uri.fsPath, "utf8")');
+    expect(journey).toContain('executeCommand("workbench.action.files.revert")');
+    expect(journey).toContain("!templateDocument.isDirty");
+    expect(journey).toContain("!componentDocument.isDirty");
+    expect(journey).toContain("finally {");
+    expect(journey).not.toContain("this.skip");
+    expect(journey).not.toContain(".save(");
+
+    expect(source).toContain("const parentContextHoverMarkdown = [");
+    expect(source).toContain("Parent Aurelia binding context.");
+    expect(source).toContain("const missingParentContextHoverMarkdown = [");
+    expect(source).toContain("No parent Aurelia binding context is reachable.");
+    expect(source).toContain("const parentNamedMemberHoverMarkdown = [");
+  });
+
   test("keeps declaration and ambiguity host journeys sequential but independently bounded", () => {
     const source = readFileSync(
       new URL("./extension-host/suite/product-surface.test.cjs", import.meta.url),

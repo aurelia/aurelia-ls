@@ -99,6 +99,26 @@ function member(name: string, scopeRole: string | null, typeDisplay = "Item") {
   };
 }
 
+function expression(
+  sourceReference: ReturnType<typeof source>,
+  overrides: Record<string, unknown> = {},
+) {
+  return {
+    expressionKind: "AccessThis",
+    authoredScopeAncestor: 0,
+    scopeLookupAncestor: 0,
+    typeDisplay: "HoverApp",
+    typeShapeKind: "class",
+    typeOrigin: "type-checker",
+    openKind: null,
+    openReason: null,
+    source: sourceReference,
+    typeSource: null,
+    typeDeclarationSource: null,
+    ...overrides,
+  };
+}
+
 function definition(overrides: Record<string, unknown> = {}) {
   const matchedName = typeof overrides.matchedName === "string"
     ? overrides.matchedName
@@ -199,6 +219,7 @@ describe("bounded semantic hover mapping", () => {
     expect(markdown(mapped)).not.toContain("Default mode");
     expect(markdown(mapped)).not.toContain("product-card");
     expect(mapped.failures).toEqual([]);
+
   });
 
   test("preserves an exact kebab-case let declaration while requiring its member source", () => {
@@ -251,6 +272,216 @@ describe("bounded semantic hover mapping", () => {
     });
 
     expect(markdown(mapped)).toBe("```ts\nentry: Item\n```\n\nCallback parameter.");
+    expect(mapped.failures).toEqual([]);
+  });
+
+  test("renders each exact bare binding-context qualifier from authored ancestry", () => {
+    const current = harness("<template>${$this}</template>", "$this");
+    const currentMapped = current.map({
+      selectedExpression: expression(current.activeSource),
+    });
+    expect(markdown(currentMapped)).toBe([
+      "```ts",
+      "$this: HoverApp",
+      "```",
+      "",
+      "Current Aurelia binding context.",
+    ].join("\n"));
+    expect(currentMapped.value?.range).toEqual({
+      start: current.document.positionAt(current.activeSource.start),
+      end: current.document.positionAt(current.activeSource.end),
+    });
+    expect(currentMapped.failures).toEqual([]);
+
+    const parent = harness("<template>${$parent}</template>", "$parent");
+    const parentMapped = parent.map({
+      selectedExpression: expression(parent.activeSource, {
+        authoredScopeAncestor: 1,
+        scopeLookupAncestor: 1,
+        typeDisplay: "HoverApp",
+      }),
+    });
+    expect(markdown(parentMapped)).toBe([
+      "```ts",
+      "$parent: HoverApp",
+      "```",
+      "",
+      "Parent Aurelia binding context.",
+    ].join("\n"));
+    expect(parentMapped.value?.range).toEqual({
+      start: parent.document.positionAt(parent.activeSource.start),
+      end: parent.document.positionAt(parent.activeSource.end),
+    });
+    expect(parentMapped.failures).toEqual([]);
+
+    const nested = harness("<template>${$parent.$parent}</template>", "$parent", 1);
+    const nestedMapped = nested.map({
+      selectedExpression: expression(nested.activeSource, {
+        authoredScopeAncestor: 2,
+        scopeLookupAncestor: 4,
+        typeDisplay: "RootApp",
+      }),
+    });
+    expect(markdown(nestedMapped)).toBe([
+      "```ts",
+      "$parent: RootApp",
+      "```",
+      "",
+      "Aurelia binding context 2 parent scopes up.",
+    ].join("\n"));
+    expect(nestedMapped.value?.range).toEqual({
+      start: nested.document.positionAt(nested.activeSource.start),
+      end: nested.document.positionAt(nested.activeSource.end),
+    });
+    expect(nestedMapped.failures).toEqual([]);
+  });
+
+  test("keeps missing parent ancestry typed as unavailable without fabricating a type", () => {
+    const parent = harness("<template>${$parent}</template>", "$parent");
+    const mapped = parent.map({
+      selectedExpression: expression(parent.activeSource, {
+        authoredScopeAncestor: 1,
+        scopeLookupAncestor: 1,
+        typeDisplay: null,
+        typeShapeKind: null,
+        typeOrigin: null,
+        openKind: "missing-ancestor",
+        openReason: "No parent scope exists.",
+      }),
+      uncertainty: {
+        category: "type-information-incomplete",
+        affectedDomain: "binding-context",
+        affectedLocus: "selected-expression",
+      },
+    }, { coverage: "open" });
+
+    expect(markdown(mapped)).toBe([
+      "```ts",
+      "$parent",
+      "```",
+      "",
+      "Parent Aurelia binding context.",
+      "",
+      "No parent Aurelia binding context is reachable.",
+    ].join("\n"));
+    expect(markdown(mapped)).not.toContain("No parent scope exists");
+    expect(markdown(mapped)).not.toContain("missing-ancestor");
+    expect(mapped.value?.range).toEqual({
+      start: parent.document.positionAt(parent.activeSource.start),
+      end: parent.document.positionAt(parent.activeSource.end),
+    });
+    expect(mapped.failures).toEqual([]);
+
+    const excess = harness("<template>${$parent.$parent}</template>", "$parent", 1);
+    const excessMapped = excess.map({
+      selectedExpression: expression(excess.activeSource, {
+        authoredScopeAncestor: 2,
+        scopeLookupAncestor: 2,
+        typeDisplay: null,
+        typeShapeKind: null,
+        typeOrigin: null,
+        openKind: "missing-ancestor",
+        openReason: "Only one parent scope exists.",
+      }),
+      uncertainty: {
+        category: "type-information-incomplete",
+        affectedDomain: "binding-context",
+        affectedLocus: "selected-expression",
+      },
+    }, { coverage: "open" });
+    expect(markdown(excessMapped)).toBe([
+      "```ts",
+      "$parent",
+      "```",
+      "",
+      "Aurelia binding context 2 parent scopes up.",
+      "",
+      "No Aurelia binding context is reachable 2 parent scopes up.",
+    ].join("\n"));
+    expect(excessMapped.value?.range).toEqual({
+      start: excess.document.positionAt(excess.activeSource.start),
+      end: excess.document.positionAt(excess.activeSource.end),
+    });
+    expect(excessMapped.failures).toEqual([]);
+  });
+
+  test("fails closed for incoherent binding-context ancestry and token spelling", () => {
+    const parent = harness("<template>${$parent}</template>", "$parent");
+    for (const overrides of [
+      { authoredScopeAncestor: -1 },
+      { authoredScopeAncestor: 1.5 },
+      { scopeLookupAncestor: -1 },
+      { authoredScopeAncestor: 2, scopeLookupAncestor: 1 },
+      { scopeLookupAncestor: Number.MAX_SAFE_INTEGER + 1 },
+      { expressionKind: "AccessScope" },
+    ]) {
+      expect(parent.map({
+        selectedExpression: expression(parent.activeSource, {
+          authoredScopeAncestor: 1,
+          scopeLookupAncestor: 1,
+          ...overrides,
+        }),
+      }).failures).toEqual([
+        "Hover selected expression has unsupported binding-context ancestry.",
+      ]);
+    }
+
+    expect(parent.map({
+      selectedExpression: expression(parent.activeSource, {
+        authoredScopeAncestor: 0,
+        scopeLookupAncestor: 0,
+      }),
+    }).failures).toEqual([
+      "Hover selected expression does not match its exact authored binding-context token.",
+    ]);
+
+    expect(parent.map({
+      selectedExpression: expression(parent.activeSource, {
+        authoredScopeAncestor: 1,
+        scopeLookupAncestor: 1,
+        openKind: "missing-ancestor",
+        openReason: "forged missing ancestor",
+        typeDisplay: "FabricatedParent",
+      }),
+    }).failures).toEqual([
+      "Hover selected expression has incoherent missing-ancestor evidence.",
+    ]);
+
+    const current = harness("<template>${$this}</template>", "$this");
+    expect(current.map({
+      selectedExpression: expression(current.activeSource, {
+        authoredScopeAncestor: 0,
+        scopeLookupAncestor: 0,
+        openKind: "missing-ancestor",
+        openReason: "forged missing ancestor",
+        typeDisplay: null,
+      }),
+      uncertainty: {
+        category: "type-information-incomplete",
+        affectedDomain: "binding-context",
+        affectedLocus: "selected-expression",
+      },
+    }, { coverage: "open" }).failures).toEqual([
+      "Hover selected expression has incoherent missing-ancestor evidence.",
+    ]);
+  });
+
+  test("keeps a component property named $parent as an ordinary member after $this", () => {
+    const property = harness("<template>${$this.$parent}</template>", "$parent");
+    const mapped = property.map({
+      selectedMemberName: "$parent",
+      selectedMember: {
+        ...member("$parent", null, "17"),
+        isReadonly: true,
+      },
+    });
+
+    expect(markdown(mapped)).toBe("```ts\nreadonly $parent: 17\n```");
+    expect(markdown(mapped)).not.toContain("binding context");
+    expect(mapped.value?.range).toEqual({
+      start: property.document.positionAt(property.activeSource.start),
+      end: property.document.positionAt(property.activeSource.end),
+    });
     expect(mapped.failures).toEqual([]);
   });
 

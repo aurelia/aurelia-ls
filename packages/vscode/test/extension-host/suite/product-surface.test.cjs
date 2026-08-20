@@ -135,6 +135,27 @@ const currentContextHoverMarkdown = [
   "",
   "Current Aurelia binding context.",
 ].join("\n");
+const parentContextHoverMarkdown = [
+  "```ts",
+  "$parent: MyApp",
+  "```",
+  "",
+  "Parent Aurelia binding context.",
+].join("\n");
+const missingParentContextHoverMarkdown = [
+  "```ts",
+  "$parent",
+  "```",
+  "",
+  "Parent Aurelia binding context.",
+  "",
+  "No parent Aurelia binding context is reachable.",
+].join("\n");
+const parentNamedMemberHoverMarkdown = [
+  "```ts",
+  "readonly $parent: 17",
+  "```",
+].join("\n");
 const recordExtensionHostObservation = (event) => {
   if (event != null && typeof event === "object") extensionHostObservations.push(event);
 };
@@ -873,6 +894,104 @@ suite("extension-host product surface", () => {
       );
       assert.strictEqual(document.getText(), baseline);
       assert.strictEqual(readFileSync(document.uri.fsPath, "utf8"), diskBaseline);
+    }
+  });
+
+  test("projects bare parent scope without confusing a component $parent member", async function() {
+    this.timeout(600_000);
+    const templateDocument = await showAureliaDocument("src/my-app.html");
+    const componentDocument = await showAureliaDocument("src/my-app.ts");
+    const templateDiskBaseline = readFileSync(templateDocument.uri.fsPath, "utf8");
+    const componentDiskBaseline = readFileSync(componentDocument.uri.fsPath, "utf8");
+    const templateBaseline = templateDocument.getText();
+    const componentBaseline = componentDocument.getText();
+    assert.strictEqual(templateBaseline, templateDiskBaseline, "the parent-hover journey requires a disk-equal template");
+    assert.strictEqual(componentBaseline, componentDiskBaseline, "the parent-hover journey requires a disk-equal component");
+    assert.strictEqual(templateDocument.isDirty, false, "the parent-hover journey requires a clean template");
+    assert.strictEqual(componentDocument.isDirty, false, "the parent-hover journey requires a clean component");
+    assert(
+      templateBaseline.includes('<li repeat.for="item of visibleItems">'),
+      "the parent-hover journey requires the causal outer repeat scope",
+    );
+
+    const parentMarkup = "        <span data-hover-parent>${$parent}</span>\n";
+    const rootMarkup = [
+      "    <p data-hover-missing-parent>${$parent}</p>",
+      "    <p data-hover-parent-member>${$this.$parent}</p>",
+      "",
+    ].join("\n");
+    const editedTemplate = templateBaseline
+      .replace("        <product-card\n", `${parentMarkup}        <product-card\n`)
+      .replace("  </main>", `${rootMarkup}  </main>`);
+    const editedComponent = componentBaseline.replace(
+      "  readonly heading = 'Aurelia IDE playground';",
+      "  readonly heading = 'Aurelia IDE playground';\n  readonly $parent = 17;",
+    );
+    assert.notStrictEqual(editedTemplate, templateBaseline, "Expected the parent hover witnesses to be inserted.");
+    assert.notStrictEqual(editedComponent, componentBaseline, "Expected the $parent member witness to be inserted.");
+
+    try {
+      await replaceDocumentTexts([
+        [componentDocument, editedComponent],
+        [templateDocument, editedTemplate],
+      ]);
+      await waitFor(
+        async () => (await hoverMarkdown(templateDocument, "data-hover-parent>", "$parent"))
+          === parentContextHoverMarkdown,
+        "the repeat parent binding context should reach the native hover provider",
+        120_000,
+      );
+      await waitFor(
+        async () => (await hoverMarkdown(templateDocument, "data-hover-parent-member>", "$parent"))
+          === parentNamedMemberHoverMarkdown,
+        "the in-memory component member named $parent should reach the native hover provider",
+        120_000,
+      );
+
+      for (const [anchor, expectedMarkdown, label] of [
+        ["data-hover-parent>", parentContextHoverMarkdown, "repeat parent binding context"],
+        ["data-hover-missing-parent>", missingParentContextHoverMarkdown, "unreachable root parent context"],
+        ["data-hover-parent-member>", parentNamedMemberHoverMarkdown, "component member named $parent"],
+      ]) {
+        const hovers = await hoversAt(templateDocument, anchor, "$parent");
+        assert.strictEqual(
+          hovers.length,
+          1,
+          `Expected exactly one ${label} hover with no native duplication; observed ${JSON.stringify(hovers.map(hoverMarkdownText))}.`,
+        );
+        await exactHoverAt(templateDocument, anchor, "$parent", expectedMarkdown);
+      }
+      assert(!parentNamedMemberHoverMarkdown.includes("binding context"));
+      assert.strictEqual(readFileSync(templateDocument.uri.fsPath, "utf8"), templateDiskBaseline);
+      assert.strictEqual(readFileSync(componentDocument.uri.fsPath, "utf8"), componentDiskBaseline);
+    } finally {
+      for (const [document, diskBaseline, label] of [
+        [componentDocument, componentDiskBaseline, "component"],
+        [templateDocument, templateDiskBaseline, "template"],
+      ]) {
+        if (document.getText() !== diskBaseline || document.isDirty) {
+          await vscode.window.showTextDocument(document, { preview: false });
+          await vscode.commands.executeCommand("workbench.action.files.revert");
+          await waitFor(
+            () => document.getText() === diskBaseline && !document.isDirty,
+            `the parent-hover ${label} should revert to its clean disk baseline`,
+            60_000,
+          );
+        }
+      }
+      await waitFor(
+        async () => !templateDocument.isClosed
+          && !componentDocument.isClosed
+          && templateDocument.getText() === templateBaseline
+          && componentDocument.getText() === componentBaseline
+          && !templateDocument.isDirty
+          && !componentDocument.isDirty
+          && (await hoverMarkdown(templateDocument, "state.searchText", "searchText")) === memberHoverMarkdown,
+        "the parent-hover cleanup should restore the checked-in component and template",
+        120_000,
+      );
+      assert.strictEqual(readFileSync(templateDocument.uri.fsPath, "utf8"), templateDiskBaseline);
+      assert.strictEqual(readFileSync(componentDocument.uri.fsPath, "utf8"), componentDiskBaseline);
     }
   });
 

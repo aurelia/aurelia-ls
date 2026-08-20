@@ -4845,9 +4845,13 @@ export interface SemanticTemplateCursorMemberRow {
   };
 }
 
-/** Exact bare template expression selected by the cursor and its best closed or open checker projection. */
+/** Exact authored `$this` / `$parent` qualifier selected by the cursor and its best checker projection. */
 export interface SemanticTemplateCursorExpressionRow {
   readonly expressionKind: 'AccessThis';
+  /** Authored `$parent` count through the selected qualifier, with zero for `$this`. */
+  readonly authoredScopeAncestor: number;
+  /** Runtime Scope lookup depth for this exact qualifier prefix after parser lowering. */
+  readonly scopeLookupAncestor: number;
   readonly typeDisplay: string | null;
   readonly typeShapeKind: CheckerTypeShapeKind | `${CheckerTypeShapeKind}` | null;
   readonly typeOrigin: CheckerTypeProjectionOrigin | `${CheckerTypeProjectionOrigin}` | null;
@@ -5347,7 +5351,7 @@ export interface SemanticTemplateCursorInfoResult {
   readonly selectedRouteTarget: SemanticTemplateCursorRouteTargetRow | null;
   readonly selectedMemberName: string | null;
   readonly selectedMember: SemanticTemplateCursorMemberRow | null;
-  /** Typed presentation for a selected bare expression such as standalone `$this`. */
+  /** Typed presentation for one exact authored `$this` / `$parent` binding-context qualifier. */
   readonly selectedExpression: SemanticTemplateCursorExpressionRow | null;
   /** Stable uncertainty only when exact semantic pressure materially affects a displayed cursor answer. */
   readonly uncertainty: SemanticTemplateCursorUncertainty | null;

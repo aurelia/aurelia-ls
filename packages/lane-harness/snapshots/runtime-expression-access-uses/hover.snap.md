@@ -159,3 +159,55 @@ $this: RuntimeExpressionAccessUsesApp
 
 Current Aurelia binding context.
 ````
+
+## bare-parent-context
+
+### Probe
+
+```json
+{
+  "anchor": "${$this} / ${$parent}",
+  "at": "$parent",
+  "atOccurrence": 1,
+  "displayPosition": "src/runtime-expression-access-uses-app.html:30:61",
+  "file": "src/runtime-expression-access-uses-app.html",
+  "lspPosition": {
+    "character": 60,
+    "line": 29
+  },
+  "occurrence": 1
+}
+```
+
+### hover
+
+```json
+{
+  "outcome": "result",
+  "result": {
+    "contentsKind": "markdown",
+    "markdownCodePoints": 82,
+    "range": {
+      "end": {
+        "character": 67,
+        "line": 29
+      },
+      "start": {
+        "character": 60,
+        "line": 29
+      }
+    },
+    "rangeText": "$parent"
+  }
+}
+```
+
+### Hover markdown
+
+````markdown
+```ts
+$parent: RuntimeExpressionAccessUsesApp
+```
+
+Parent Aurelia binding context.
+````

@@ -1,8 +1,6 @@
 import type {
   AccessMemberExpression,
   AccessScopeExpression,
-  AccessThisExpression,
-  AuthoredScopePath,
   BindingIdentifier,
   CallScopeExpression,
   CallMemberExpression,
@@ -10,7 +8,11 @@ import type {
   ExpressionType,
   ObjectLiteralExpression,
 } from './ast.js';
-import { AuthoredScopePathKind } from './ast.js';
+import {
+  AccessThisExpression,
+  AuthoredScopePath,
+  AuthoredScopePathKind,
+} from './ast.js';
 import {
   ExpressionCompanionFrameKind,
   ExpressionExpectedContinuationClass,
@@ -219,6 +221,16 @@ export class ExpressionParseResultInspector {
       : null;
   }
 
+  /** Exact authored `$this` / `$parent` qualifier prefix selected by the cursor. */
+  static bindingContextAccessAtOffset(
+    result: ExpressionParseResult,
+    offset: number,
+  ): ExpressionBindingContextAccess | null {
+    return this.hasCanonicalAst(result)
+      ? bindingContextAccessForNodeOffset(result.ast, offset)
+      : null;
+  }
+
   static bindingIdentifierAtOffset(
     result: ExpressionParseResult,
     offset: number,
@@ -281,6 +293,22 @@ export interface ExpressionObjectLiteralKeyContext {
   readonly keySpans: readonly SourceSpan[];
   readonly activeKey: number | string | null;
   readonly objectDepth: number;
+}
+
+/** Exact authored binding-context qualifier selected inside one parser-owned scope path. */
+export class ExpressionBindingContextAccess {
+  constructor(
+    /** AccessThis-shaped expression for the selected qualifier prefix and its exact runtime Scope depth. */
+    readonly expression: AccessThisExpression,
+    /** Canonical AST node whose authored scope path owns the selected qualifier. */
+    readonly ownerExpression: AccessThisExpression | AccessScopeExpression | CallScopeExpression,
+    /** Authored `$parent` count through this token, with zero for `$this`. */
+    readonly authoredScopeAncestor: number,
+    /** Runtime Scope ancestor argument after parser lowering for this exact qualifier prefix. */
+    readonly scopeLookupAncestor: number,
+    /** Exact individual authored `$this` or `$parent` token span. */
+    readonly qualifierSpan: SourceSpan,
+  ) {}
 }
 
 type ActivePropertyOrInterpolationFrontier =
@@ -484,6 +512,89 @@ function currentBindingContextAccessExpressionForNodeOffset(
       && scopeQualifierSpanAtOffset(candidate.authoredScopePath, offset) != null
         ? candidate
         : null;
+  });
+}
+
+function bindingContextAccessForNodeOffset(
+  expression: ExpressionAstNode,
+  offset: number,
+): ExpressionBindingContextAccess | null {
+  return findInExpressionAtOffset(expression, offset, (candidate) => {
+    if (
+      candidate.$kind !== 'AccessThis'
+      && candidate.$kind !== 'AccessScope'
+      && candidate.$kind !== 'CallScope'
+    ) {
+      return null;
+    }
+    const path = candidate.authoredScopePath;
+    if (path == null) {
+      return null;
+    }
+    const qualifierIndex = path.qualifierSpans.findIndex((span) =>
+      expressionSpanContainsOffset(span, offset)
+    );
+    if (qualifierIndex < 0) {
+      return null;
+    }
+    const qualifierSpan = path.qualifierSpans[qualifierIndex];
+    const firstQualifierSpan = path.qualifierSpans[0];
+    if (qualifierSpan == null || firstQualifierSpan == null) {
+      return null;
+    }
+
+    if (path.pathKind === AuthoredScopePathKind.CurrentBindingContext) {
+      if (qualifierIndex !== 0) {
+        return null;
+      }
+      const expressionForQualifier = candidate.$kind === 'AccessThis'
+        ? candidate
+        : new AccessThisExpression(
+            qualifierSpan,
+            candidate.ancestor,
+            new AuthoredScopePath(AuthoredScopePathKind.CurrentBindingContext, [qualifierSpan]),
+          );
+      return new ExpressionBindingContextAccess(
+        expressionForQualifier,
+        candidate,
+        0,
+        candidate.ancestor,
+        qualifierSpan,
+      );
+    }
+
+    const authoredScopeAncestor = qualifierIndex + 1;
+    // The parser stores one collapsed lookup depth for the full path: callback depth plus every authored qualifier.
+    // Ordered parser-owned qualifier spans therefore prove the exact prefix depth without reconstructing source text.
+    const callbackScopeDepth = candidate.ancestor - path.qualifierSpans.length;
+    if (callbackScopeDepth < 0) {
+      return null;
+    }
+    const scopeLookupAncestor = callbackScopeDepth + authoredScopeAncestor;
+    const selectedQualifierSpans = path.qualifierSpans.slice(0, authoredScopeAncestor);
+    const selectedPathSpan = sourceSpanFromBounds(
+      firstQualifierSpan.start,
+      qualifierSpan.end,
+      firstQualifierSpan.file ?? null,
+    );
+    const expressionForQualifier = candidate.$kind === 'AccessThis'
+      && authoredScopeAncestor === path.qualifierSpans.length
+      ? candidate
+      : new AccessThisExpression(
+          selectedPathSpan,
+          scopeLookupAncestor,
+          new AuthoredScopePath(
+            AuthoredScopePathKind.AncestorBindingContext,
+            selectedQualifierSpans,
+          ),
+        );
+    return new ExpressionBindingContextAccess(
+      expressionForQualifier,
+      candidate,
+      authoredScopeAncestor,
+      scopeLookupAncestor,
+      qualifierSpan,
+    );
   });
 }
 

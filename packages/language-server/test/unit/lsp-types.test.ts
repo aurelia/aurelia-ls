@@ -1608,6 +1608,8 @@ describe("mapSemanticRuntimeTemplateHover", () => {
         selectedMember: null,
         selectedExpression: {
           expressionKind: "AccessThis",
+          authoredScopeAncestor: 0,
+          scopeLookupAncestor: 0,
           typeDisplay: "ExpressionApp",
           typeShapeKind: "class",
           typeOrigin: "type-checker",
@@ -1784,7 +1786,7 @@ describe("mapSemanticRuntimeTemplateHover", () => {
     expect(open.failures).toEqual([]);
   });
 
-  test("fails closed when a bare expression is co-selected with member evidence", () => {
+  test("fails closed when a binding-context qualifier is co-selected with member evidence", () => {
     const conflicts: Array<Record<string, unknown>> = [{
       selectedMemberName: "value",
     }, {
@@ -1812,7 +1814,7 @@ describe("mapSemanticRuntimeTemplateHover", () => {
         expressionOptions,
       )).toEqual({
         value: null,
-        failures: ["Hover cannot select both a member and a bare expression."],
+        failures: ["Hover cannot select both a member and a binding-context qualifier."],
       });
     }
   });
@@ -1874,14 +1876,14 @@ describe("mapSemanticRuntimeTemplateHover", () => {
       expressionHoverAnswer({ source: wrongTextSource }, { activeSource: wrongTextSource }),
       { ...expressionOptions, originDocument: wrongTextDocument },
     ).failures).toEqual([
-      "Hover selected expression is not the exact authored current-context `$this` token.",
+      "Hover selected expression does not match its exact authored binding-context token.",
     ]);
 
     expect(mapSemanticRuntimeTemplateHover(
       expressionHoverAnswer({ expressionKind: "AccessBoundary" }),
       expressionOptions,
     ).failures).toEqual([
-      "Hover selected expression is not the exact authored current-context `$this` token.",
+      "Hover selected expression has unsupported binding-context ancestry.",
     ]);
 
     expect(mapSemanticRuntimeTemplateHover(

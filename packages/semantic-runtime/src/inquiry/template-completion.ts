@@ -515,7 +515,7 @@ export class TemplateCompletionCursorContext {
     readonly selectedScopeSlot: TemplateCompletionScopeSlotSelection | null,
     /** Closed member token selected by the cursor, when the cursor is on an authored member name. */
     readonly selectedMemberName: string | null,
-    /** Exact bare expression selected by the cursor and its closed or open checker projection. */
+    /** Exact binding-context qualifier selected by the cursor and its closed or open checker projection. */
     readonly selectedExpression: TemplateCompletionCursorExpressionSelection | null,
     /** Parser frontier under the cursor, when the cursor selected an expression parse. */
     readonly expressionFrontier: TemplateExpressionCompletionFrontier | null,
@@ -561,10 +561,14 @@ export class TemplateCompletionScopeSlotSelection {
   ) {}
 }
 
-/** Closed or open TypeChecker evidence for one exact bare expression token such as standalone `$this`. */
+/** Closed or open TypeChecker evidence for one exact authored `$this` / `$parent` qualifier token. */
 export class TemplateCompletionCursorExpressionSelection {
   constructor(
     readonly expressionKind: 'AccessThis',
+    /** Authored `$parent` count through the selected qualifier, with zero for `$this`. */
+    readonly authoredScopeAncestor: number,
+    /** Runtime Scope lookup depth for this exact qualifier prefix after parser lowering. */
+    readonly scopeLookupAncestor: number,
     /** Full handle-sized checker reference, including open/partial display and identity evidence. */
     readonly typeReference: CheckerTypeReference | null,
     readonly typeSourceAddressHandle: AddressHandle | null,
@@ -1302,11 +1306,11 @@ function selectedMemberNameForCursor(
   }
   if (siteKind === TemplateCompletionSiteKind.ExpressionMember) {
     return ExpressionParseResultInspector.memberNameAtOffset(expressionResult, offset)
-      ?? ExpressionParseResultInspector.scopeAccessAtOffset(expressionResult, offset)?.name.name
+      ?? scopeNameAccessAtOffset(expressionResult, offset)?.name.name
       ?? null;
   }
   return siteKind === TemplateCompletionSiteKind.Expression
-    ? ExpressionParseResultInspector.scopeAccessAtOffset(expressionResult, offset)?.name.name ?? null
+    ? scopeNameAccessAtOffset(expressionResult, offset)?.name.name ?? null
     : null;
 }
 
@@ -1319,8 +1323,18 @@ function expressionSiteSelectsMember(
     || (
       siteKind === TemplateCompletionSiteKind.Expression
       && expressionResult != null
-      && ExpressionParseResultInspector.scopeAccessAtOffset(expressionResult, offset) != null
+      && scopeNameAccessAtOffset(expressionResult, offset) != null
     );
+}
+
+function scopeNameAccessAtOffset(
+  result: ExpressionParseResult,
+  offset: number,
+) {
+  const access = ExpressionParseResultInspector.scopeAccessAtOffset(result, offset);
+  return access != null && expressionSpanContainsOffset(access.name.span, offset)
+    ? access
+    : null;
 }
 
 interface TemplateScopeSlotCursorSelectionRequest {
@@ -1371,8 +1385,8 @@ function selectedScopeSlotForCursor(
     // Cursor-focused recovery may omit a completed callback parameter while its body is active. The materialized parse
     // remains the declaration/token authority; the active parse still owns the cursor frontier and incomplete syntax.
     const stableResult = expressionParse?.result ?? expressionResult;
-    const access = ExpressionParseResultInspector.scopeAccessAtOffset(expressionResult, offset)
-      ?? ExpressionParseResultInspector.scopeAccessAtOffset(stableResult, offset);
+    const access = scopeNameAccessAtOffset(expressionResult, offset)
+      ?? scopeNameAccessAtOffset(stableResult, offset);
     const bindingIdentifier = ExpressionParseResultInspector.bindingIdentifierAtOffset(
       stableResult,
       offset,
@@ -1501,25 +1515,27 @@ function selectedBareExpressionForCursor(
   input: TemplateBareExpressionCursorSelectionRequest,
 ): TemplateCompletionCursorExpressionSelection | null {
   const expressionParse = input.expressionParse;
-  const expression = input.expressionResult == null
+  const access = input.expressionResult == null
     ? null
-    : ExpressionParseResultInspector.currentBindingContextAccessAtOffset(
+    : ExpressionParseResultInspector.bindingContextAccessAtOffset(
         input.expressionResult,
         input.offset,
       )
       ?? (expressionParse == null
         ? null
-        : ExpressionParseResultInspector.currentBindingContextAccessAtOffset(
+        : ExpressionParseResultInspector.bindingContextAccessAtOffset(
             expressionParse.result,
             input.offset,
           ));
   if (
-    expression == null
+    access == null
     || expressionParse == null
     || input.activeExpressionSpan == null
+    || !sameSourceSpan(access.qualifierSpan, input.activeExpressionSpan)
   ) {
     return null;
   }
+  const expression = access.expression;
 
   if (input.bindingEnvironment?.openReason != null) {
     input.missingInputs.push(
@@ -1527,6 +1543,8 @@ function selectedBareExpressionForCursor(
     );
     return new TemplateCompletionCursorExpressionSelection(
       expression.$kind,
+      access.authoredScopeAncestor,
+      access.scopeLookupAncestor,
       null,
       expressionParse.sourceAddressHandle,
       CheckerExpressionTypeOpenKind.MissingContext,
@@ -1539,10 +1557,12 @@ function selectedBareExpressionForCursor(
     );
     return new TemplateCompletionCursorExpressionSelection(
       expression.$kind,
+      access.authoredScopeAncestor,
+      access.scopeLookupAncestor,
       null,
       expressionParse.sourceAddressHandle,
       CheckerExpressionTypeOpenKind.MissingBindingScope,
-      'No binding scope was available for the selected bare expression.',
+      'No binding scope was available for the selected binding-context qualifier.',
     );
   }
 
@@ -1563,29 +1583,39 @@ function selectedBareExpressionForCursor(
     );
     return new TemplateCompletionCursorExpressionSelection(
       expression.$kind,
+      access.authoredScopeAncestor,
+      access.scopeLookupAncestor,
       null,
       expressionParse.sourceAddressHandle,
       CheckerExpressionTypeOpenKind.MissingContext,
-      'No checker evaluation context was available for the selected bare expression.',
+      'No checker evaluation context was available for the selected binding-context qualifier.',
     );
   }
 
   const evaluator = input.expressionWorld.evaluator(
     input.bindingEnvironment?.resourceScope ?? null,
   );
-  const selectedContext = evaluator.evaluationContextForExpression(context, expression);
-  if (selectedContext == null) {
+  const ownerContext = evaluator.evaluationContextForExpression(context, access.ownerExpression);
+  if (ownerContext == null) {
     input.missingInputs.push(
       `selected-expression-type:${CheckerExpressionTypeOpenKind.MissingContext}`,
     );
     return new TemplateCompletionCursorExpressionSelection(
       expression.$kind,
+      access.authoredScopeAncestor,
+      access.scopeLookupAncestor,
       null,
       expressionParse.sourceAddressHandle,
       CheckerExpressionTypeOpenKind.MissingContext,
-      'The exact bare expression occurrence had no derived checker evaluation context.',
+      'The exact binding-context qualifier had no derived checker evaluation context.',
     );
   }
+  const selectedContext = ownerContext.expression === expression
+    ? ownerContext
+    : ownerContext.child(
+        expression,
+        `binding-context:${access.authoredScopeAncestor}:${access.scopeLookupAncestor}`,
+      );
   const evaluation = evaluator.evaluate(selectedContext);
   const evaluatedTypeReference = evaluation.kind === CheckerExpressionTypeEvaluationResultKind.Type
     ? evaluation.typeReference
@@ -1600,6 +1630,8 @@ function selectedBareExpressionForCursor(
   }
   return new TemplateCompletionCursorExpressionSelection(
     expression.$kind,
+    access.authoredScopeAncestor,
+    access.scopeLookupAncestor,
     typeReference,
     evaluation.kind === CheckerExpressionTypeEvaluationResultKind.Type
       ? evaluation.sourceAddressHandle
@@ -1607,6 +1639,12 @@ function selectedBareExpressionForCursor(
     evaluation.kind === CheckerExpressionTypeEvaluationResultKind.Open ? evaluation.openKind : null,
     evaluation.kind === CheckerExpressionTypeEvaluationResultKind.Open ? evaluation.summary : null,
   );
+}
+
+function sameSourceSpan(left: SourceSpan, right: SourceSpan): boolean {
+  return left.start === right.start
+    && left.end === right.end
+    && left.file?.id === right.file?.id;
 }
 
 function selectedRepeatBindingContextAggregateType(
