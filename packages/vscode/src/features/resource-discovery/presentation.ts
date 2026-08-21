@@ -12,18 +12,27 @@ export interface ResourceKindPresentation {
   readonly plural: string;
   readonly singular: string;
   readonly order: number;
+  /** Native Codicon used only for this resource-kind group in the Resource Explorer. */
+  readonly groupIcon: ResourceKindGroupIconId;
 }
+
+export type ResourceKindGroupIconId =
+  | "tag"
+  | "symbol-structure"
+  | "symbol-property"
+  | "arrow-swap"
+  | "tools";
 
 /**
  * Stable tree-role grammar for the Resource Explorer.
  *
- * These icons describe what a row does in the tree. They deliberately do not
- * project an Aurelia resource kind onto a TypeScript declaration kind or use
- * icon color to imply health.
+ * These icons describe what a non-category row does in the tree. Resource-kind
+ * group icons belong to `ResourceKindPresentation` so each category has one
+ * distinct, theme-aware visual identity. Neither policy uses color to imply
+ * health.
  */
 export const RESOURCE_EXPLORER_ROLE_ICONS = {
   project: "project",
-  kind: "library",
   resource: "code",
   alias: "link",
   bindable: "plug",
@@ -68,11 +77,16 @@ export interface TemplateScopeQuickPickPresentation {
 }
 
 const RESOURCE_KIND_PRESENTATION = {
-  "custom-element": { plural: "Elements", singular: "element", order: 0 },
-  "template-controller": { plural: "Template Controllers", singular: "template controller", order: 1 },
-  "custom-attribute": { plural: "Attributes", singular: "attribute", order: 2 },
-  "value-converter": { plural: "Value Converters", singular: "value converter", order: 3 },
-  "binding-behavior": { plural: "Binding Behaviors", singular: "binding behavior", order: 4 },
+  "custom-element": { plural: "Elements", singular: "element", order: 0, groupIcon: "tag" },
+  "template-controller": {
+    plural: "Template Controllers",
+    singular: "template controller",
+    order: 1,
+    groupIcon: "symbol-structure",
+  },
+  "custom-attribute": { plural: "Attributes", singular: "attribute", order: 2, groupIcon: "symbol-property" },
+  "value-converter": { plural: "Value Converters", singular: "value converter", order: 3, groupIcon: "arrow-swap" },
+  "binding-behavior": { plural: "Binding Behaviors", singular: "binding behavior", order: 4, groupIcon: "tools" },
 } as const satisfies Record<ResourceInventoryKind, ResourceKindPresentation>;
 
 export const RESOURCE_KIND_ORDER = (Object.keys(RESOURCE_KIND_PRESENTATION) as ResourceInventoryKind[])

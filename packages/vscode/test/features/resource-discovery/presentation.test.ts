@@ -11,18 +11,16 @@ import {
 } from "../../../out/features/resource-discovery/presentation.js";
 
 describe("resource discovery presentation vocabulary", () => {
-  test("uses tree-role icons without projecting Aurelia kinds onto source symbols", () => {
+  test("keeps non-category tree-role icons stable", () => {
     expect(RESOURCE_EXPLORER_ROLE_ICONS).toEqual({
       project: "project",
-      kind: "library",
       resource: "code",
       alias: "link",
       bindable: "plug",
     });
-    expect(Object.values(RESOURCE_EXPLORER_ROLE_ICONS).some((icon) => icon.startsWith("symbol-"))).toBe(false);
   });
 
-  test("keeps resource-kind presentation textual instead of projecting implementation symbols", () => {
+  test("owns one distinct native group icon for every resource kind", () => {
     expect([
       "custom-element",
       "template-controller",
@@ -30,12 +28,24 @@ describe("resource discovery presentation vocabulary", () => {
       "value-converter",
       "binding-behavior",
     ].map((kind) => resourceKindPresentation(kind as never))).toEqual([
-      { plural: "Elements", singular: "element", order: 0 },
-      { plural: "Template Controllers", singular: "template controller", order: 1 },
-      { plural: "Attributes", singular: "attribute", order: 2 },
-      { plural: "Value Converters", singular: "value converter", order: 3 },
-      { plural: "Binding Behaviors", singular: "binding behavior", order: 4 },
+      { plural: "Elements", singular: "element", order: 0, groupIcon: "tag" },
+      {
+        plural: "Template Controllers",
+        singular: "template controller",
+        order: 1,
+        groupIcon: "symbol-structure",
+      },
+      { plural: "Attributes", singular: "attribute", order: 2, groupIcon: "symbol-property" },
+      { plural: "Value Converters", singular: "value converter", order: 3, groupIcon: "arrow-swap" },
+      { plural: "Binding Behaviors", singular: "binding behavior", order: 4, groupIcon: "tools" },
     ]);
+    expect(new Set([
+      "custom-element",
+      "template-controller",
+      "custom-attribute",
+      "value-converter",
+      "binding-behavior",
+    ].map((kind) => resourceKindPresentation(kind as never).groupIcon)).size).toBe(5);
   });
 
   test("maps every typed availability reason to closed author-facing copy", () => {

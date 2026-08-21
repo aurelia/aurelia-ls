@@ -46,13 +46,14 @@ import {
   resourceTreeRowStateLabel,
   sourceLabel,
   type ResourceCollisionScentCandidate,
+  type ResourceKindGroupIconId,
   type ResourceTreeRowState,
 } from "../resource-discovery/presentation.js";
 
 type TreeNodeKind = "project" | "kind" | "resource" | "alias" | "bindable" | "info";
 type ResourceExplorerRoleIconId =
   typeof RESOURCE_EXPLORER_ROLE_ICONS[keyof typeof RESOURCE_EXPLORER_ROLE_ICONS];
-type ResourceExplorerIconId = ResourceExplorerRoleIconId | StatusIconId;
+type ResourceExplorerIconId = ResourceExplorerRoleIconId | ResourceKindGroupIconId | StatusIconId;
 type StatusIconId = "info" | "warning" | "error";
 type StatusIconColorId =
   | "problemsInfoIcon.foreground"
@@ -351,7 +352,7 @@ function buildKindGroups(input: ReadyProjectInput): readonly TreeNode[] {
       label: `${presentation.plural} (${rows.length})`,
       ...(stateText.length === 0 ? {} : { description: stateText }),
       accessibilityLabel: `${presentation.plural} group. ${formatResourceCount(rows.length)}.${stateSentence(input.states)}`,
-      iconId: RESOURCE_EXPLORER_ROLE_ICONS.kind,
+      iconId: presentation.groupIcon,
       collapsible: true,
       children: rows.map((resource) => resourceNode(input, resource)),
       contextValue: "resourceKind",

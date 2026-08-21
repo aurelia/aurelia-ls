@@ -2,7 +2,10 @@ import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
 import { AureliaProtocolCommand } from "@aurelia-ls/language-server/protocol";
 import { AureliaCommand, AureliaContext, AureliaView } from "../out/product-contract.js";
-import { RESOURCE_EXPLORER_ROLE_ICONS } from "../out/features/resource-discovery/presentation.js";
+import {
+  RESOURCE_EXPLORER_ROLE_ICONS,
+  resourceKindPresentation,
+} from "../out/features/resource-discovery/presentation.js";
 
 interface ExtensionManifest {
   readonly api?: string;
@@ -408,7 +411,7 @@ describe("VS Code product contract", () => {
     });
   });
 
-  test("uses navigation and tree-role icons without projecting implementation kinds", () => {
+  test("uses native navigation, tree-role, and resource-kind group icons", () => {
     const icons = new Map((manifest.contributes?.commands ?? [])
       .map((command) => [command.command, command.icon] as const));
 
@@ -421,12 +424,23 @@ describe("VS Code product contract", () => {
     expect(icons.get(AureliaCommand.OpenAureliaOutput)).toBe("$(output)");
     expect(RESOURCE_EXPLORER_ROLE_ICONS).toEqual({
       project: "project",
-      kind: "library",
       resource: "code",
       alias: "link",
       bindable: "plug",
     });
-    expect(Object.values(RESOURCE_EXPLORER_ROLE_ICONS).some((icon) => icon.startsWith("symbol-"))).toBe(false);
+    expect([
+      "custom-element",
+      "template-controller",
+      "custom-attribute",
+      "value-converter",
+      "binding-behavior",
+    ].map((kind) => resourceKindPresentation(kind as never).groupIcon)).toEqual([
+      "tag",
+      "symbol-structure",
+      "symbol-property",
+      "arrow-swap",
+      "tools",
+    ]);
   });
 
   test("bounds tree context actions and hides contextual commands from the Command Palette", () => {

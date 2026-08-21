@@ -935,11 +935,11 @@ describe("ResourceExplorerProvider", () => {
       role: "alias",
       childIdentityKey: "resource:product-card:v1:alias:store-card",
     });
-    expect(iconOf(harness.provider, tree[0]!)).toEqual({ id: "library", color: undefined });
+    expect(iconOf(harness.provider, tree[0]!)).toEqual({ id: "tag", color: undefined });
     expect(iconOf(harness.provider, cardNode)).toEqual({ id: "code", color: undefined });
     expect(iconOf(harness.provider, cardNode.children![0]!)).toEqual({ id: "link", color: undefined });
     expect(iconOf(harness.provider, cardNode.children![1]!)).toEqual({ id: "plug", color: undefined });
-    expect(iconOf(harness.provider, tree[1]!)).toEqual({ id: "library", color: undefined });
+    expect(iconOf(harness.provider, tree[1]!)).toEqual({ id: "symbol-property", color: undefined });
     expect(iconOf(harness.provider, tree[1]!.children![0]!)).toEqual({ id: "code", color: undefined });
     expect(harness.provider.getTreeItem(tree[0] as never).collapsibleState).toBe(
       harness.vscode.TreeItemCollapsibleState.Collapsed,
@@ -949,6 +949,35 @@ describe("ResourceExplorerProvider", () => {
     }
     expect(harness.view.description).toBe("2 resources");
     expect(harness.view.message).toBeUndefined();
+  });
+
+  test("uses a distinct native icon for every resource-kind group only", async () => {
+    const resources = ([
+      ["custom-element", "product-card"],
+      ["template-controller", "virtual-repeat"],
+      ["custom-attribute", "focus"],
+      ["value-converter", "currency"],
+      ["binding-behavior", "debounce"],
+    ] as const).map(([kind, name]) => resource({
+      identityKey: `resource:${kind}:${name}`,
+      name,
+      kind,
+      uri: `file:///repo/src/${name}.ts`,
+    }));
+    const harness = createHarness(async () => response([readyProject(resources)]));
+
+    await harness.provider.refresh();
+
+    const groups = await roots(harness.provider);
+    expect(groups.map((group) => iconOf(harness.provider, group))).toEqual([
+      { id: "tag", color: undefined },
+      { id: "symbol-structure", color: undefined },
+      { id: "symbol-property", color: undefined },
+      { id: "arrow-swap", color: undefined },
+      { id: "tools", color: undefined },
+    ]);
+    expect(groups.map((group) => iconOf(harness.provider, group.children![0]!)))
+      .toEqual(Array.from({ length: 5 }, () => ({ id: "code", color: undefined })));
   });
 
   test("keeps pathless framework catalog resources visible and non-navigable", async () => {
