@@ -3,6 +3,8 @@ import { describe, expect, test } from "vitest";
 import { AureliaProtocolCommand } from "@aurelia-ls/language-server/protocol";
 import { AureliaCommand, AureliaContext, AureliaView } from "../out/product-contract.js";
 import {
+  RESOURCE_EXPLORER_BINDABLE_MODE_ICONS,
+  RESOURCE_EXPLORER_ORIGIN_ICONS,
   RESOURCE_EXPLORER_ROLE_ICONS,
   resourceKindPresentation,
 } from "../out/features/resource-discovery/presentation.js";
@@ -424,9 +426,24 @@ describe("VS Code product contract", () => {
     expect(icons.get(AureliaCommand.OpenAureliaOutput)).toBe("$(output)");
     expect(RESOURCE_EXPLORER_ROLE_ICONS).toEqual({
       project: "project",
-      resource: "code",
       alias: "link",
-      bindable: "plug",
+    });
+    expect(RESOURCE_EXPLORER_ORIGIN_ICONS).toEqual({
+      localTemplate: "symbol-file",
+      project: "code",
+      package: "package",
+      coreFramework: "library",
+      officialPlugin: "extensions",
+      external: "link-external",
+      unknown: "question",
+    });
+    expect(RESOURCE_EXPLORER_BINDABLE_MODE_ICONS).toEqual({
+      default: "plug",
+      oneTime: "clock",
+      toView: "arrow-right",
+      fromView: "arrow-left",
+      twoWay: "arrow-both",
+      unknown: "question",
     });
     expect([
       "custom-element",

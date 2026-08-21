@@ -131,7 +131,11 @@ test("resource discovery transports exact project inventory and cursor-selected 
       resource.kind === "template-controller" && resource.name === "repeat"
     );
     expect(repeat).toMatchObject({
-      origin: { kind: "framework", packageName: "@aurelia/runtime-html" },
+      origin: {
+        kind: "framework",
+        packageName: "@aurelia/runtime-html",
+        catalogOwnerKind: "core-framework",
+      },
       navigation: { state: "unavailable", reason: "external-catalog" },
     });
 

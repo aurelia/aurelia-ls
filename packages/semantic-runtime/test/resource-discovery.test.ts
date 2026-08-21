@@ -9,6 +9,7 @@ import {
   createSemanticRuntime,
   SEMANTIC_RESOURCE_INVENTORY_KINDS,
   SemanticAppQueryKind,
+  SemanticResourceInventoryCatalogOwnerKind,
   SemanticResourceInventoryLocalityKind,
   SemanticResourceInventoryNavigationRole,
   SemanticResourceInventoryOriginKind,
@@ -61,6 +62,7 @@ describe('resource discovery', () => {
       kind: SemanticResourceInventoryOriginKind.Project,
       projectKey: 'resource-registration-local-templates',
       moduleKey: 'src/local-templates-app.ts',
+      catalogOwnerKind: null,
     });
     expect(app.sources.publicName).toMatchObject({
       path: 'src/local-templates-app.ts',
@@ -78,6 +80,7 @@ describe('resource discovery', () => {
       kind: SemanticResourceInventoryOriginKind.Framework,
       packageName: '@aurelia/runtime-html',
       catalogGroup: 'default-resources',
+      catalogOwnerKind: SemanticResourceInventoryCatalogOwnerKind.CoreFramework,
     });
     expect(repeat.sources.publicName).toBeNull();
     expect(repeat.sources.navigationRole).toBeNull();
@@ -94,6 +97,10 @@ describe('resource discovery', () => {
     expect(new Set(localChips.map((row) => row.locality.ownerName))).toEqual(
       new Set(['local-templates-app', 'secondary-host']),
     );
+    expect(localChips.every((row) =>
+      row.origin.kind === SemanticResourceInventoryOriginKind.Project
+      && row.origin.catalogOwnerKind == null
+    )).toBe(true);
     const primaryLocalChip = localChips.find((row) => row.locality.ownerName === 'local-templates-app');
     expect(primaryLocalChip?.sources.publicName).toMatchObject({
       path: 'src/local-templates-app.html',
@@ -137,6 +144,46 @@ describe('resource discovery', () => {
       row.resourceKind === 'template-controller' && row.name === 'repeat'
     );
     expect(repeatVisibility?.handles?.resourceIdentityHandle).not.toBeNull();
+  }, 60_000);
+
+  test('classifies core framework and official plugin resource catalogs at the semantic owner', async () => {
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: pressureFixtureRoot('registered-plugin-capabilities'),
+      storeKey: 'resource-discovery-catalog-owner-kind',
+    });
+    await runtime.answerAppQuery({
+      kind: SemanticAppQueryKind.Summary,
+      includeAuthoringTemplates: true,
+      appRetention: 'retain-app',
+    });
+
+    const inventory = await resourceInventory(runtime);
+    const catalogRows = inventory.value.rows.filter((row) =>
+      row.origin.kind === SemanticResourceInventoryOriginKind.Framework
+    );
+    const runtimeHtmlRows = catalogRows.filter((row) => row.origin.packageName === '@aurelia/runtime-html');
+    const pluginRows = catalogRows.filter((row) => row.origin.packageName !== '@aurelia/runtime-html');
+
+    expect(runtimeHtmlRows.length).toBeGreaterThan(0);
+    expect(runtimeHtmlRows.every((row) =>
+      row.origin.catalogOwnerKind === SemanticResourceInventoryCatalogOwnerKind.CoreFramework
+    )).toBe(true);
+    expect(new Set(pluginRows.map((row) => row.origin.packageName))).toEqual(new Set([
+      '@aurelia/i18n',
+      '@aurelia/router',
+      '@aurelia/state',
+      '@aurelia/ui-virtualization',
+      '@aurelia/validation-html',
+    ]));
+    expect(pluginRows.every((row) =>
+      row.origin.catalogOwnerKind === SemanticResourceInventoryCatalogOwnerKind.OfficialPlugin
+    )).toBe(true);
+    expect(inventory.value.rows.every((row) =>
+      row.origin.kind === SemanticResourceInventoryOriginKind.Framework
+      || row.origin.catalogOwnerKind == null
+    )).toBe(true);
+
+    runtime.clearAnalysisCache();
   }, 60_000);
 
   test('keeps the effective TypeScript owner identity and disambiguates shadowed declaration variants', async () => {

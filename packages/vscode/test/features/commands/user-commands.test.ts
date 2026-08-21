@@ -82,7 +82,14 @@ function resource(
     }],
     declarationModes: ["decorator"],
     metadataState: "full-definition",
-    origin: { kind: "project", projectKey: project.projectKey, packageName: null, moduleKey: "src/product-card.ts", catalogGroup: null },
+    origin: {
+      kind: "project",
+      projectKey: project.projectKey,
+      packageName: null,
+      moduleKey: "src/product-card.ts",
+      catalogGroup: null,
+      catalogOwnerKind: null,
+    },
     locality: { kind: "project", ownerIdentityKey: null, ownerName: null, ownerSource: absent() },
     sources: {
       publicName: uri == null ? absent() : available(uri, "public-name", navigationLine, label),

@@ -36,24 +36,34 @@ import {
   RESOURCE_KIND_ORDER,
   preferredResourceSource,
   resourceAccessibilityLabel,
+  resourceBindableModeIcon,
+  resourceBindableModeLabel,
   resourceCollisionScentMap,
   resourceDescription,
   resourceKindPresentation,
   resourceMetadataStateLabel,
   resourceOriginLabel,
   resourceProjectRootScent,
+  resourceOriginIcon,
   resourceTooltip,
   resourceTreeRowStateLabel,
   sourceLabel,
   type ResourceCollisionScentCandidate,
+  type ResourceBindableModeIconId,
   type ResourceKindGroupIconId,
+  type ResourceOriginIconId,
   type ResourceTreeRowState,
 } from "../resource-discovery/presentation.js";
 
 type TreeNodeKind = "project" | "kind" | "resource" | "alias" | "bindable" | "info";
 type ResourceExplorerRoleIconId =
   typeof RESOURCE_EXPLORER_ROLE_ICONS[keyof typeof RESOURCE_EXPLORER_ROLE_ICONS];
-type ResourceExplorerIconId = ResourceExplorerRoleIconId | ResourceKindGroupIconId | StatusIconId;
+type ResourceExplorerIconId =
+  | ResourceExplorerRoleIconId
+  | ResourceKindGroupIconId
+  | ResourceOriginIconId
+  | ResourceBindableModeIconId
+  | StatusIconId;
 type StatusIconId = "info" | "warning" | "error";
 type StatusIconColorId =
   | "problemsInfoIcon.foreground"
@@ -422,7 +432,9 @@ function resourceNode(
       ?? sourceLabel(bindable.sources.property)
       ?? sourceLabel(bindable.sources.declaration);
     const navigable = bindable.navigation.state === "available";
+    const modeLabel = resourceBindableModeLabel(bindable.mode);
     const details = [
+      `mode ${modeLabel}`,
       bindable.valueType == null ? null : `type ${bindable.valueType}`,
       bindable.primary ? "primary" : null,
       metadataState,
@@ -442,15 +454,19 @@ function resourceNode(
         `origin ${resourceOriginLabel(resource)}`,
         `project ${owner}`,
         metadataState,
+        `${modeLabel} binding mode`,
         bindable.valueType == null ? "type unavailable" : `type ${bindable.valueType}`,
         bindable.primary ? "primary bindable" : null,
         source == null ? "source location unavailable" : `source ${source}`,
         ...input.states.map(resourceTreeRowStateLabel),
       ].filter((value): value is string => value != null).join(". ") + ".",
-      tooltip: source == null
-        ? `Bindable ${publicName} on ${resource.name}\nSource location unavailable`
-        : `Bindable ${publicName} on ${resource.name}\nSource: ${source}`,
-      iconId: RESOURCE_EXPLORER_ROLE_ICONS.bindable,
+      tooltip: [
+        `Bindable ${publicName} on ${resource.name}`,
+        `Binding mode: ${modeLabel}`,
+        bindable.primary ? "Primary bindable" : null,
+        source == null ? "Source location unavailable" : `Source: ${source}`,
+      ].filter((line): line is string => line != null).join("\n"),
+      iconId: resourceBindableModeIcon(bindable.mode),
       collapsible: false,
       ...(navigable ? { navigation: navigationRequest(input, resource, "bindable", bindable.identityKey) } : {}),
       contextValue: navigable ? "resourceBindable" : "resourceBindableUnavailable",
@@ -477,7 +493,7 @@ function resourceNode(
       resourceCollisionScent,
     ),
     tooltip: resourceTooltip(resource, input.result.project, input.workspace, input.states),
-    iconId: RESOURCE_EXPLORER_ROLE_ICONS.resource,
+    iconId: resourceOriginIcon(resource),
     collapsible: children.length > 0,
     children,
     availabilityExplanation: {

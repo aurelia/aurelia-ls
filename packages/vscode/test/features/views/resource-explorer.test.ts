@@ -81,8 +81,17 @@ function resource(input: {
   uri?: string | null;
   origin?: string;
   packageName?: string | null;
+  catalogOwnerKind?: "core-framework" | "official-plugin" | null;
+  locality?: "project" | "local-template";
+  localityOwnerName?: string | null;
   aliases?: string[];
-  bindables?: Array<{ name: string; attribute?: string; valueType?: string | null }>;
+  bindables?: Array<{
+    name: string;
+    attribute?: string;
+    valueType?: string | null;
+    mode?: string;
+    primary?: boolean;
+  }>;
   metadataState?: "full-definition" | "header-only" | "visibility-only";
   implementationLine?: number;
 }) {
@@ -106,10 +115,10 @@ function resource(input: {
       identityKey: `${input.identityKey}:bindable:${bindable.name}`,
       name: bindable.name,
       attribute: bindable.attribute ?? bindable.name,
-      mode: "default",
+      mode: bindable.mode ?? "default",
       nullable: null,
       valueType: bindable.valueType ?? null,
-      primary: false,
+      primary: bindable.primary ?? false,
       sources: {
         name: input.uri == null ? absent() : available(input.uri, `bindable ${bindable.name}`, "bindable-name"),
         attribute: absent(),
@@ -128,8 +137,18 @@ function resource(input: {
       packageName: input.packageName ?? null,
       moduleKey: input.uri == null ? null : "src/product-card.ts",
       catalogGroup: input.origin === "framework" ? "default-resources" : null,
+      catalogOwnerKind: Object.hasOwn(input, "catalogOwnerKind")
+        ? input.catalogOwnerKind ?? null
+        : input.origin === "framework"
+          ? "core-framework"
+          : null,
     },
-    locality: { kind: "project", ownerIdentityKey: null, ownerName: null, ownerSource: absent() },
+    locality: {
+      kind: input.locality ?? "project",
+      ownerIdentityKey: input.locality === "local-template" ? "resource:local-owner" : null,
+      ownerName: input.locality === "local-template" ? input.localityOwnerName ?? "local-owner" : null,
+      ownerSource: absent(),
+    },
     sources: {
       publicName: input.uri == null ? absent() : available(input.uri),
       declaration: input.uri == null ? absent() : available(input.uri, "declaration", "declaration"),
@@ -926,7 +945,7 @@ describe("ResourceExplorerProvider", () => {
     const cardNode = tree[0]!.children![0]!;
     expect(cardNode.description).toContain("project");
     expect(cardNode.children?.map((node) => node.label)).toEqual(["store-card", "labelText (display-label)"]);
-    expect(cardNode.children?.[1]?.description).toBe("type string");
+    expect(cardNode.children?.[1]?.description).toBe("mode default · type string");
     expect(harness.getResourceInventory).toHaveBeenCalledWith({ includeTypeSurfaces: true });
     expect(harness.provider.getTreeItem(cardNode as never).command).toEqual(expect.objectContaining({
       command: AureliaCommand.OpenResource,
@@ -980,6 +999,136 @@ describe("ResourceExplorerProvider", () => {
       .toEqual(Array.from({ length: 5 }, () => ({ id: "code", color: undefined })));
   });
 
+  test("uses exact locality and catalog ownership for canonical resource icons", async () => {
+    const resources = [
+      resource({
+        identityKey: "resource:project",
+        name: "project-card",
+        uri: "file:///repo/src/project-card.ts",
+      }),
+      resource({
+        identityKey: "resource:package",
+        name: "package-card",
+        uri: "file:///repo/node_modules/@acme/ui/package-card.ts",
+        origin: "package",
+        packageName: "@acme/ui",
+      }),
+      resource({
+        identityKey: "resource:framework",
+        name: "framework-card",
+        uri: null,
+        origin: "framework",
+        packageName: "@aurelia/runtime-html",
+        catalogOwnerKind: "core-framework",
+      }),
+      resource({
+        identityKey: "resource:plugin",
+        name: "plugin-card",
+        uri: null,
+        origin: "framework",
+        packageName: "@aurelia/router",
+        catalogOwnerKind: "official-plugin",
+      }),
+      resource({
+        identityKey: "resource:external",
+        name: "external-card",
+        uri: "file:///external/external-card.ts",
+        origin: "external",
+      }),
+      resource({
+        identityKey: "resource:unknown",
+        name: "unknown-card",
+        uri: null,
+        origin: "unknown",
+      }),
+      resource({
+        identityKey: "resource:local",
+        name: "local-card",
+        uri: "file:///repo/src/host.html",
+        locality: "local-template",
+        localityOwnerName: "host-card",
+      }),
+      resource({
+        identityKey: "resource:unowned-catalog",
+        name: "unowned-catalog-card",
+        uri: null,
+        origin: "framework",
+        packageName: "@aurelia/unknown",
+        catalogOwnerKind: null,
+      }),
+      resource({
+        identityKey: "resource:invalid-owner",
+        name: "invalid-owner-card",
+        uri: "file:///repo/src/invalid-owner-card.ts",
+        origin: "project",
+        catalogOwnerKind: "core-framework",
+      }),
+    ];
+    const harness = createHarness(async () => response([readyProject(resources)]));
+
+    await harness.provider.refresh();
+
+    const tree = await roots(harness.provider);
+    const expectedIcons = [
+      ["project-card", "code"],
+      ["package-card", "package"],
+      ["framework-card", "library"],
+      ["plugin-card", "extensions"],
+      ["external-card", "link-external"],
+      ["unknown-card", "question"],
+      ["local-card", "symbol-file"],
+      ["unowned-catalog-card", "question"],
+      ["invalid-owner-card", "question"],
+    ] as const;
+    expect(expectedIcons.map(([label]) => [label, iconOf(harness.provider, findNode(tree, label)!)]))
+      .toEqual(expectedIcons.map(([label, id]) => [label, { id, color: undefined }]));
+    expect(findNode(tree, "framework-card")?.description).toContain("Aurelia framework");
+    expect(findNode(tree, "plugin-card")?.description).toContain("official Aurelia plugin");
+    expect(findNode(tree, "local-card")?.description).toContain("local to host-card");
+    expect(findNode(tree, "unowned-catalog-card")?.description).toContain("Aurelia catalog · owner unknown");
+    expect(findNode(tree, "invalid-owner-card")?.description).toContain("origin classification unavailable");
+  });
+
+  test("uses declared bindable modes as icons and redundant public text", async () => {
+    const card = resource({
+      identityKey: "resource:mode-card",
+      name: "mode-card",
+      uri: "file:///repo/src/mode-card.ts",
+      bindables: [
+        { name: "defaultValue", mode: "default", valueType: "string" },
+        { name: "initialValue", mode: "oneTime", valueType: "string" },
+        { name: "inputValue", mode: "toView", valueType: "string" },
+        { name: "outputValue", mode: "fromView", valueType: "string" },
+        { name: "sharedValue", attribute: "shared-value", mode: "twoWay", valueType: "string", primary: true },
+        { name: "openValue", mode: "hostile-mode", valueType: null },
+      ],
+    });
+    const harness = createHarness(async () => response([readyProject([card])]));
+
+    await harness.provider.refresh();
+
+    const tree = await roots(harness.provider);
+    const expected = [
+      ["defaultValue", "plug", "default"],
+      ["initialValue", "clock", "one time"],
+      ["inputValue", "arrow-right", "to view"],
+      ["outputValue", "arrow-left", "from view"],
+      ["sharedValue (shared-value)", "arrow-both", "two way"],
+      ["openValue", "question", "unavailable"],
+    ] as const;
+    for (const [label, icon, mode] of expected) {
+      const node = findNode(tree, label)!;
+      expect(iconOf(harness.provider, node)).toEqual({ id: icon, color: undefined });
+      expect(node.description).toContain(`mode ${mode}`);
+      expect(node.tooltip).toContain(`Binding mode: ${mode}`);
+      expect(node.accessibilityLabel).toContain(`${mode} binding mode`);
+    }
+    const primary = findNode(tree, "sharedValue (shared-value)")!;
+    expect(primary.description).toContain("primary");
+    expect(primary.tooltip).toContain("Primary bindable");
+    expect(primary.accessibilityLabel).toContain("primary bindable");
+  });
+
   test("keeps pathless framework catalog resources visible and non-navigable", async () => {
     const repeat = resource({
       identityKey: "framework:repeat:v1",
@@ -996,7 +1145,7 @@ describe("ResourceExplorerProvider", () => {
     const node = (await roots(harness.provider))[0]!.children![0]!;
     expect(node.description).toContain("source location unavailable");
     const item = harness.provider.getTreeItem(node as never);
-    expect(item.iconPath).toEqual({ id: "code", color: undefined });
+    expect(item.iconPath).toEqual({ id: "library", color: undefined });
     expect(item.command).toBeUndefined();
     expect(item.accessibilityInformation?.label).toContain("source location unavailable");
     expect(harness.provider.navigationFor(node, "declaration")).toBeNull();

@@ -95,6 +95,7 @@ export function mapResourceInventoryItem(
     origin: {
       ...row.origin,
       kind: `${row.origin.kind}`,
+      catalogOwnerKind: row.origin.catalogOwnerKind == null ? null : `${row.origin.catalogOwnerKind}`,
     },
     locality: {
       kind: `${row.locality.kind}`,

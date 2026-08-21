@@ -12,6 +12,7 @@ import {
 import type { KernelStore } from '../kernel/store.js';
 import type { BuiltInResource, BuiltInResourceCatalog } from '../resources/built-in-resources.js';
 import {
+  BuiltInResourcePackage,
   builtInResourcePackageModuleSpecifier,
 } from '../resources/built-in-resources.js';
 import type { FullResourceDefinition } from '../resources/resource-definition.js';
@@ -39,6 +40,7 @@ import {
 } from './template-completion.js';
 import {
   SEMANTIC_RESOURCE_INVENTORY_KINDS,
+  SemanticResourceInventoryCatalogOwnerKind,
   SemanticResourceInventoryLocalityKind,
   SemanticResourceInventoryMetadataState,
   SemanticResourceInventoryNavigationRole,
@@ -1017,6 +1019,7 @@ export class ResourceInventoryBuilder {
         packageName: builtInResourcePackageModuleSpecifier(candidate.builtIn.catalog.packageId),
         moduleKey: null,
         catalogGroup: candidate.builtIn.catalog.group,
+        catalogOwnerKind: builtInResourceCatalogOwnerKind(candidate.builtIn.catalog.packageId),
       };
     }
     const declarationIdentity = this.declarationIdentityFor(candidate, targetIdentityHandle);
@@ -1039,6 +1042,7 @@ export class ResourceInventoryBuilder {
         packageName: null,
         moduleKey: declarationIdentity?.moduleKey ?? null,
         catalogGroup: null,
+        catalogOwnerKind: null,
       };
     }
     if (authoritativePackageOrigin != null) {
@@ -1048,6 +1052,7 @@ export class ResourceInventoryBuilder {
         packageName: authoritativePackageOrigin.packageInstance.name,
         moduleKey: declarationIdentity?.moduleKey ?? null,
         catalogGroup: null,
+        catalogOwnerKind: null,
       };
     }
     if (source != null) {
@@ -1057,6 +1062,7 @@ export class ResourceInventoryBuilder {
         packageName: null,
         moduleKey: declarationIdentity?.moduleKey ?? null,
         catalogGroup: null,
+        catalogOwnerKind: null,
       };
     }
     return {
@@ -1065,6 +1071,7 @@ export class ResourceInventoryBuilder {
       packageName: null,
       moduleKey: declarationIdentity?.moduleKey ?? null,
       catalogGroup: null,
+      catalogOwnerKind: null,
     };
   }
 
@@ -1445,6 +1452,21 @@ function sameNameOrdinal<T>(
     if (identity(rows[current]!) === key) ordinal += 1;
   }
   return ordinal;
+}
+
+function builtInResourceCatalogOwnerKind(
+  packageId: BuiltInResourcePackage,
+): SemanticResourceInventoryCatalogOwnerKind {
+  switch (packageId) {
+    case BuiltInResourcePackage.RuntimeHtml:
+      return SemanticResourceInventoryCatalogOwnerKind.CoreFramework;
+    case BuiltInResourcePackage.I18n:
+    case BuiltInResourcePackage.Router:
+    case BuiltInResourcePackage.UiVirtualization:
+    case BuiltInResourcePackage.State:
+    case BuiltInResourcePackage.ValidationHtml:
+      return SemanticResourceInventoryCatalogOwnerKind.OfficialPlugin;
+  }
 }
 
 function resourceInventoryCoverage(

@@ -2390,6 +2390,14 @@ export const enum SemanticResourceInventoryOriginKind {
   Unknown = 'unknown',
 }
 
+/** Closed provenance for modeled Aurelia resource catalogs. Null for resources outside a modeled catalog. */
+export const enum SemanticResourceInventoryCatalogOwnerKind {
+  /** Resources owned by Aurelia's core runtime-html catalog. */
+  CoreFramework = 'core-framework',
+  /** Resources owned by an officially modeled Aurelia plugin catalog. */
+  OfficialPlugin = 'official-plugin',
+}
+
 export const enum SemanticResourceInventoryLocalityKind {
   /** Ordinary project/package/framework resource definition. */
   Project = 'project',
@@ -2425,6 +2433,11 @@ export interface SemanticResourceInventoryOrigin {
   readonly packageName: string | null;
   readonly moduleKey: string | null;
   readonly catalogGroup: string | null;
+  /** Core/plugin ownership for modeled Aurelia catalogs; null exactly when `kind` is not `framework`. */
+  readonly catalogOwnerKind:
+    | SemanticResourceInventoryCatalogOwnerKind
+    | `${SemanticResourceInventoryCatalogOwnerKind}`
+    | null;
 }
 
 export interface SemanticResourceInventorySources {

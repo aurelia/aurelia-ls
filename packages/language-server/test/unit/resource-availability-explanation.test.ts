@@ -455,6 +455,7 @@ function resourceRow(identityKey: string, name: string, file: string) {
       packageName: null,
       moduleKey: file,
       catalogGroup: null,
+      catalogOwnerKind: null,
     },
     locality: {
       kind: "project",

@@ -17,6 +17,7 @@ import type {
   SemanticProjectAnalysisCount,
   SemanticResourceDeclarationMode,
   SemanticProjectCandidateSummary,
+  SemanticResourceInventoryCatalogOwnerKind,
   SemanticResourceInventoryCompleteness,
   SemanticResourceInventoryKind,
   SemanticResourceInventoryLocalityKind,
@@ -908,8 +909,9 @@ export interface ResourceInventoryItem {
   readonly bindables: readonly ResourceInventoryBindable[];
   readonly declarationModes: readonly SemanticResourceDeclarationMode[];
   readonly metadataState: `${SemanticResourceInventoryMetadataState}`;
-  readonly origin: Omit<SemanticResourceInventoryOrigin, "kind"> & {
+  readonly origin: Omit<SemanticResourceInventoryOrigin, "kind" | "catalogOwnerKind"> & {
     readonly kind: `${SemanticResourceInventoryOrigin["kind"]}`;
+    readonly catalogOwnerKind: `${SemanticResourceInventoryCatalogOwnerKind}` | null;
   };
   readonly locality: {
     readonly kind: `${SemanticResourceInventoryLocalityKind}`;

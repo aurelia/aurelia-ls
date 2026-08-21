@@ -1,4 +1,5 @@
 import type {
+  ResourceInventoryBindable,
   ResourceInventoryItem,
   ResourceInventoryKind,
   ResourceProject,
@@ -23,20 +24,103 @@ export type ResourceKindGroupIconId =
   | "arrow-swap"
   | "tools";
 
-/**
- * Stable tree-role grammar for the Resource Explorer.
- *
- * These icons describe what a non-category row does in the tree. Resource-kind
- * group icons belong to `ResourceKindPresentation` so each category has one
- * distinct, theme-aware visual identity. Neither policy uses color to imply
- * health.
- */
+export type ResourceOriginIconId =
+  | "symbol-file"
+  | "code"
+  | "package"
+  | "library"
+  | "extensions"
+  | "link-external"
+  | "question";
+
+export type ResourceBindableModeIconId =
+  | "plug"
+  | "clock"
+  | "arrow-right"
+  | "arrow-left"
+  | "arrow-both"
+  | "question";
+
+/** Rows without a more specific kind, provenance, or binding-mode axis keep a stable role glyph. */
 export const RESOURCE_EXPLORER_ROLE_ICONS = {
   project: "project",
-  resource: "code",
   alias: "link",
-  bindable: "plug",
 } as const;
+
+/** Canonical resource rows use provenance because their parent already owns the resource kind. */
+export const RESOURCE_EXPLORER_ORIGIN_ICONS = {
+  localTemplate: "symbol-file",
+  project: "code",
+  package: "package",
+  coreFramework: "library",
+  officialPlugin: "extensions",
+  external: "link-external",
+  unknown: "question",
+} as const satisfies Record<string, ResourceOriginIconId>;
+
+/**
+ * Bindable child rows use the exact declared value-flow mode. Arrows follow
+ * Aurelia's source-to-target axis: to-view points right, from-view points left.
+ */
+export const RESOURCE_EXPLORER_BINDABLE_MODE_ICONS = {
+  default: "plug",
+  oneTime: "clock",
+  toView: "arrow-right",
+  fromView: "arrow-left",
+  twoWay: "arrow-both",
+  unknown: "question",
+} as const satisfies Record<string, ResourceBindableModeIconId>;
+
+type ResourceCatalogOwnerKind = ResourceInventoryItem["origin"]["catalogOwnerKind"];
+type ResourceCatalogOwnerRead = ResourceCatalogOwnerKind | "invalid";
+type ResourceOriginPresentationKind = keyof typeof RESOURCE_EXPLORER_ORIGIN_ICONS
+  | "unownedCatalog"
+  | "invalid";
+
+/**
+ * Projects one authenticated locality/provenance fact onto one native icon.
+ * Invalid cross-axis combinations deliberately remain visually unknown.
+ */
+export function resourceOriginIcon(resource: Pick<ResourceInventoryItem, "origin" | "locality">): ResourceOriginIconId {
+  const kind = resourceOriginPresentationKind(resource);
+  return kind === "invalid" || kind === "unownedCatalog"
+    ? RESOURCE_EXPLORER_ORIGIN_ICONS.unknown
+    : RESOURCE_EXPLORER_ORIGIN_ICONS[kind];
+}
+
+export function resourceBindableModeIcon(mode: ResourceInventoryBindable["mode"]): ResourceBindableModeIconId {
+  switch (mode) {
+    case "oneTime":
+      return RESOURCE_EXPLORER_BINDABLE_MODE_ICONS.oneTime;
+    case "toView":
+      return RESOURCE_EXPLORER_BINDABLE_MODE_ICONS.toView;
+    case "fromView":
+      return RESOURCE_EXPLORER_BINDABLE_MODE_ICONS.fromView;
+    case "twoWay":
+      return RESOURCE_EXPLORER_BINDABLE_MODE_ICONS.twoWay;
+    case "default":
+      return RESOURCE_EXPLORER_BINDABLE_MODE_ICONS.default;
+    default:
+      return RESOURCE_EXPLORER_BINDABLE_MODE_ICONS.unknown;
+  }
+}
+
+export function resourceBindableModeLabel(mode: ResourceInventoryBindable["mode"]): string {
+  switch (mode) {
+    case "oneTime":
+      return "one time";
+    case "toView":
+      return "to view";
+    case "fromView":
+      return "from view";
+    case "twoWay":
+      return "two way";
+    case "default":
+      return "default";
+    default:
+      return "unavailable";
+  }
+}
 
 export type ResourceTreeRowState = "out-of-date" | "discovery-incomplete";
 
@@ -323,23 +407,65 @@ export function resourceDescription(
 }
 
 export function resourceOriginLabel(resource: ResourceInventoryItem): string {
-  if (resource.locality.kind === "local-template") {
-    return `local to ${resource.locality.ownerName ?? "template"}`;
-  }
-  switch (resource.origin.kind) {
+  switch (resourceOriginPresentationKind(resource)) {
+    case "localTemplate":
+      return `local to ${resource.locality.ownerName ?? "template"}`;
     case "project":
       return "project";
     case "package":
       return resource.origin.packageName ?? "package";
-    case "framework":
+    case "coreFramework":
       return resource.origin.packageName == null
         ? "Aurelia framework"
         : `Aurelia framework · ${resource.origin.packageName}`;
+    case "officialPlugin":
+      return resource.origin.packageName == null
+        ? "official Aurelia plugin"
+        : `official Aurelia plugin · ${resource.origin.packageName}`;
+    case "unownedCatalog":
+      return "Aurelia catalog · owner unknown";
     case "external":
       return "external";
     case "unknown":
       return "origin unknown";
+    case "invalid":
+      return "origin classification unavailable";
   }
+}
+
+function resourceOriginPresentationKind(
+  resource: Pick<ResourceInventoryItem, "origin" | "locality">,
+): ResourceOriginPresentationKind {
+  const catalogOwner = resourceCatalogOwnerKind(resource.origin);
+  if (catalogOwner === "invalid") return "invalid";
+  if (resource.locality.kind === "local-template") {
+    return resource.origin.kind === "project" && catalogOwner === null
+      ? "localTemplate"
+      : "invalid";
+  }
+  if (resource.locality.kind !== "project") return "invalid";
+  switch (resource.origin.kind) {
+    case "project":
+    case "package":
+    case "external":
+    case "unknown":
+      return catalogOwner === null ? resource.origin.kind : "invalid";
+    case "framework":
+      return catalogOwner === "core-framework"
+        ? "coreFramework"
+        : catalogOwner === "official-plugin"
+          ? "officialPlugin"
+          : "unownedCatalog";
+    default:
+      return "invalid";
+  }
+}
+
+function resourceCatalogOwnerKind(origin: ResourceInventoryItem["origin"]): ResourceCatalogOwnerRead {
+  const value: unknown = origin.catalogOwnerKind;
+  return value === null || value === "core-framework" || value === "official-plugin"
+    ? value
+    : "invalid";
 }
 
 export function resourceTooltip(

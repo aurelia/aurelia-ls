@@ -1,11 +1,17 @@
 import { describe, expect, test } from "vitest";
 import {
+  RESOURCE_EXPLORER_BINDABLE_MODE_ICONS,
+  RESOURCE_EXPLORER_ORIGIN_ICONS,
   RESOURCE_EXPLORER_ROLE_ICONS,
   resourceAvailabilityReasonLabel,
+  resourceBindableModeIcon,
+  resourceBindableModeLabel,
   resourceKindPresentation,
   resourceMetadataStateLabel,
   resourceProjectRootScent,
   resourceProjectRootScentMap,
+  resourceOriginIcon,
+  resourceOriginLabel,
   resourceTreeRowStateLabel,
   sourceLabel,
 } from "../../../out/features/resource-discovery/presentation.js";
@@ -14,10 +20,116 @@ describe("resource discovery presentation vocabulary", () => {
   test("keeps non-category tree-role icons stable", () => {
     expect(RESOURCE_EXPLORER_ROLE_ICONS).toEqual({
       project: "project",
-      resource: "code",
       alias: "link",
-      bindable: "plug",
     });
+  });
+
+  test("maps exact resource locality and catalog ownership without guessing", () => {
+    expect(RESOURCE_EXPLORER_ORIGIN_ICONS).toEqual({
+      localTemplate: "symbol-file",
+      project: "code",
+      package: "package",
+      coreFramework: "library",
+      officialPlugin: "extensions",
+      external: "link-external",
+      unknown: "question",
+    });
+    const icon = (
+      originKind: string,
+      catalogOwnerKind: "core-framework" | "official-plugin" | null,
+      localityKind: "project" | "local-template" = "project",
+    ) => resourceOriginIcon({
+      origin: { kind: originKind, catalogOwnerKind },
+      locality: { kind: localityKind },
+    } as never);
+
+    expect([
+      icon("project", null),
+      icon("package", null),
+      icon("framework", "core-framework"),
+      icon("framework", "official-plugin"),
+      icon("external", null),
+      icon("unknown", null),
+      icon("project", null, "local-template"),
+    ]).toEqual([
+      "code",
+      "package",
+      "library",
+      "extensions",
+      "link-external",
+      "question",
+      "symbol-file",
+    ]);
+    expect([
+      icon("framework", null),
+      icon("project", "core-framework"),
+      icon("package", "official-plugin"),
+    ]).toEqual(["question", "question", "question"]);
+    expect(resourceOriginIcon({
+      origin: { kind: "framework", catalogOwnerKind: "hostile-owner" },
+      locality: { kind: "project" },
+    } as never)).toBe("question");
+    const hostileLocality = {
+      origin: { kind: "project", catalogOwnerKind: null },
+      locality: { kind: "hostile-locality" },
+    };
+    expect(resourceOriginIcon(hostileLocality as never)).toBe("question");
+    expect(resourceOriginLabel(hostileLocality as never)).toBe("origin classification unavailable");
+    const conflictingLocalTemplate = {
+      origin: { kind: "framework", catalogOwnerKind: "official-plugin" },
+      locality: { kind: "local-template" },
+    };
+    expect(resourceOriginIcon(conflictingLocalTemplate as never)).toBe("question");
+    expect(resourceOriginLabel(conflictingLocalTemplate as never)).toBe("origin classification unavailable");
+    const omittedCatalogOwner = {
+      origin: { kind: "project" },
+      locality: { kind: "project" },
+    };
+    expect(resourceOriginIcon(omittedCatalogOwner as never)).toBe("question");
+    expect(resourceOriginLabel(omittedCatalogOwner as never)).toBe("origin classification unavailable");
+    const originLabel = (
+      originKind: string,
+      catalogOwnerKind: "core-framework" | "official-plugin" | null | "hostile-owner",
+    ) => resourceOriginLabel({
+      origin: {
+        kind: originKind,
+        catalogOwnerKind,
+        packageName: "@aurelia/example",
+      },
+      locality: { kind: "project" },
+    } as never);
+    expect(originLabel("framework", "core-framework")).toBe("Aurelia framework · @aurelia/example");
+    expect(originLabel("framework", "official-plugin")).toBe("official Aurelia plugin · @aurelia/example");
+    expect(originLabel("framework", null)).toBe("Aurelia catalog · owner unknown");
+    expect(originLabel("project", "hostile-owner")).toBe("origin classification unavailable");
+  });
+
+  test("maps every bindable mode to a native direction or lifetime glyph", () => {
+    expect(RESOURCE_EXPLORER_BINDABLE_MODE_ICONS).toEqual({
+      default: "plug",
+      oneTime: "clock",
+      toView: "arrow-right",
+      fromView: "arrow-left",
+      twoWay: "arrow-both",
+      unknown: "question",
+    });
+    const modes = ["default", "oneTime", "toView", "fromView", "twoWay"];
+    expect(modes.map((mode) => resourceBindableModeIcon(mode))).toEqual([
+      "plug",
+      "clock",
+      "arrow-right",
+      "arrow-left",
+      "arrow-both",
+    ]);
+    expect(modes.map((mode) => resourceBindableModeLabel(mode))).toEqual([
+      "default",
+      "one time",
+      "to view",
+      "from view",
+      "two way",
+    ]);
+    expect(resourceBindableModeIcon("hostile-mode")).toBe("question");
+    expect(resourceBindableModeLabel("hostile-mode")).toBe("unavailable");
   });
 
   test("owns one distinct native group icon for every resource kind", () => {

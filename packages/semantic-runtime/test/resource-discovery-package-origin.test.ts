@@ -127,6 +127,7 @@ describe('resource discovery package origin', () => {
           projectKey,
           packageName: null,
           catalogGroup: null,
+          catalogOwnerKind: null,
         });
         expect(widget?.sources.implementation?.sourceFileRole).toBe('app-source');
       }
@@ -238,12 +239,14 @@ describe('resource discovery package origin', () => {
           kind: SemanticResourceInventoryOriginKind.Project,
           projectKey: 'package-origin-app',
           packageName: null,
+          catalogOwnerKind: null,
         });
         expect(packageWidget?.origin).toMatchObject({
           kind: SemanticResourceInventoryOriginKind.Package,
           projectKey: null,
           packageName: '@acme/aurelia-resource-kit',
           catalogGroup: null,
+          catalogOwnerKind: null,
         });
         expect(packageWidget?.sources.implementation?.sourceFileRole).toBe('external-source');
         expect(runtime.authoredSourceOwnership({ sourceFilePath: packageSource }).value.owners).toEqual([]);

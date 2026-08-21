@@ -85,6 +85,36 @@ describe("resource discovery protocol boundary", () => {
     });
   });
 
+  test("preserves semantic catalog ownership without reclassifying package names", async () => {
+    const owner = project("first", workspaceRoot);
+    const row = resourceRow();
+    Object.assign(row.origin, {
+      kind: "framework",
+      projectKey: null,
+      packageName: "@aurelia/router",
+      moduleKey: null,
+      catalogGroup: "default-resources",
+      catalogOwnerKind: "official-plugin",
+    });
+    const ctx = context({
+      workspaceSummary: vi.fn(async () => answer({ appCandidates: [owner] })),
+      resourceInventory: vi.fn(async () => answer(inventoryValue(row))),
+    });
+
+    const result = await handleResourceInventory(ctx as never, {}, createContextTestOperation(ctx));
+
+    expect(result.projects[0]).toMatchObject({
+      status: "ready",
+      resources: [{
+        origin: {
+          kind: "framework",
+          packageName: "@aurelia/router",
+          catalogOwnerKind: "official-plugin",
+        },
+      }],
+    });
+  });
+
   test("returns project candidates instead of selecting the first overlapping owner", async () => {
     const owners = [project("first", workspaceRoot), project("second", path.join(workspaceRoot, "nested"))];
     const templateResourceAvailability = vi.fn();
@@ -215,6 +245,7 @@ function resourceRow() {
       packageName: null,
       moduleKey: "src/product-card.ts",
       catalogGroup: null,
+      catalogOwnerKind: null,
     },
     locality: {
       kind: "project",
