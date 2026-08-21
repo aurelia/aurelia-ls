@@ -162,12 +162,19 @@ import {
   SemanticRuntimeAnswerResult,
   SemanticRuntimeAnswerSelection,
   SemanticRuntimeDetail,
+  SemanticTemplateBindableUsageModeAuthority,
   type SemanticRuntimeAnswer,
 } from './contracts.js';
 import {
   projectBindableDefinitionSources,
   projectBindableDefinitionSurface,
 } from './bindable-projection.js';
+import {
+  bindableUsageModeMissingInputs,
+  cursorBindableUsageModeRow,
+  noBindableUsageMode,
+  type SemanticTemplateCursorBindableUsageModeFields,
+} from './template-bindable-usage-mode.js';
 import {
   describeAddress,
   semanticExactSourceReference,
@@ -395,9 +402,25 @@ function readTemplateCursorInfoValue(
     router: templateCompletionRouterContext(emission),
     i18nTranslationKeyProductHandles: emission.i18n.readTranslationKeys().map((translationKey) => translationKey.productHandle),
   });
-  const missingInputs = [...new Set(cursorContext.missingInputs)];
+  const selectedBindableUsageMode = cursorBindableUsageModeRow(
+    store,
+    readContext.selection.resource,
+    cursorContext,
+  );
+  const missingInputs = [...new Set([
+    ...cursorContext.missingInputs,
+    ...bindableUsageModeMissingInputs(selectedBindableUsageMode),
+  ])];
   const cursorOffset = readContext.locus.cursor.offset;
-  const baseValue = templateCursorInfoResult(store, readContext.selection, cursorContext, includeHandles, missingInputs);
+  const baseValue = templateCursorInfoResult(
+    store,
+    readContext.selection,
+    cursorContext,
+    includeHandles,
+    missingInputs,
+    selectedBindableUsageMode,
+    true,
+  );
   const diagnostics = cursorOffset == null
     ? []
     : readTemplateDiagnosticRows(
@@ -933,7 +956,7 @@ function semanticTemplateCursorInfoDisplayText(
     lines.push(`Selected resource: ${value.selectedDefinition.resourceKind} ${value.selectedDefinition.name ?? value.selectedDefinition.targetName ?? 'unnamed'}.`);
   }
   if (value.selectedBindable != null) {
-    lines.push(`Selected bindable: ${value.selectedBindable.attribute} (${value.selectedBindable.mode}).`);
+    lines.push(`Selected bindable: ${value.selectedBindable.attribute} (${selectedBindableModeDisplay(value.selectedBindable)}).`);
   }
   if (value.selectedRouteTarget != null) {
     lines.push(`Selected route target: ${value.selectedRouteTarget.targetKind} ${value.selectedRouteTarget.matchedName}.`);
@@ -959,6 +982,22 @@ function semanticTemplateCursorInfoDisplayText(
   }
   lines.push('Next: use aurelia_template_completions for candidate names, aurelia_template_diagnostics for file-level pressure, or binding summary queries for runtime value flow.');
   return lines.join('\n');
+}
+
+function selectedBindableModeDisplay(
+  bindable: SemanticTemplateCursorBindableRow,
+): string {
+  const declaration = `default=${bindable.mode}`;
+  if (bindable.usageModeAuthority == null) {
+    return declaration;
+  }
+  if (bindable.usageModeAuthority === SemanticTemplateBindableUsageModeAuthority.PlainLiteral) {
+    return `${declaration}; static (no binding mode)`;
+  }
+  if (bindable.usageModeAuthority === SemanticTemplateBindableUsageModeAuthority.Open) {
+    return `${declaration}; effective=open`;
+  }
+  return `${declaration}; effective=${bindable.usageEffectiveMode ?? 'unknown'} via ${bindable.usageModeAuthority}`;
 }
 
 const TEMPLATE_DISPLAY_LIST_LIMIT = 5;
@@ -1618,7 +1657,15 @@ function templateDiagnosticRowsForMemberSite(
     router: context.router,
     i18nTranslationKeyProductHandles: context.i18nTranslationKeyProductHandles,
   });
-  const cursorInfo = templateCursorInfoResult(store, selection, cursorContext, context.includeHandles, [...new Set(cursorContext.missingInputs)]);
+  const cursorInfo = templateCursorInfoResult(
+    store,
+    selection,
+    cursorContext,
+    context.includeHandles,
+    [...new Set(cursorContext.missingInputs)],
+    noBindableUsageMode(),
+    false,
+  );
   return cursorInfo.diagnostics.flatMap((diagnostic) =>
     templateDiagnosticRowForDiagnostic(store, selection, diagnostic, cursorInfo, source.sourcePath, site, context)
   );
@@ -1775,6 +1822,8 @@ function expressionRootDiagnosticRowsForSelection(
       cursorContext,
       context.includeHandles,
       [...new Set(cursorContext.missingInputs)],
+      noBindableUsageMode(),
+      false,
     );
     if (
       cursorContext.bindingSourceContextOpenReason != null
@@ -2827,11 +2876,18 @@ function templateCursorInfoResult(
   cursorContext: TemplateCompletionCursorContext,
   includeHandles: boolean,
   missingInputs: readonly string[],
+  selectedBindableUsageMode: SemanticTemplateCursorBindableUsageModeFields,
+  includePresentationMetadata: boolean,
 ): SemanticTemplateCursorInfoResult {
   const query = cursorContext.query;
   const html = cursorHtmlRow(store, cursorContext, includeHandles);
   const valueSite = cursorValueSiteRow(store, cursorContext, includeHandles);
-  const selectedMember = cursorSelectedMemberRow(store, cursorContext, includeHandles);
+  const selectedMember = cursorSelectedMemberRow(
+    store,
+    cursorContext,
+    includeHandles,
+    includePresentationMetadata,
+  );
   const memberOwnerType = cursorMemberOwnerTypeRow(
     store,
     query.memberOwnerTypeProductHandle,
@@ -2884,6 +2940,7 @@ function templateCursorInfoResult(
     selection.resource.runtimeAnalysis.expressionWorld.projector,
     cursorContext.selectedBindable,
     cursorContext.selectedBindableValueType,
+    selectedBindableUsageMode,
     includeHandles,
   );
   const selectedRouteTarget = cursorRouteTargetRow(store, cursorContext, includeHandles);
@@ -3333,6 +3390,7 @@ function cursorHtmlRow(
   const tagNameSourceAddressHandle = node instanceof HtmlElement ? node.tagNameAddressHandle : null;
   const closingTagNameSourceAddressHandle = node instanceof HtmlElement ? node.closingTagNameAddressHandle : null;
   const attributeSourceAddressHandle = attribute?.sourceAddressHandle ?? null;
+  const attributeValueSourceAddressHandle = attribute?.valueAddressHandle ?? null;
   return {
     nodeKind: node?.nodeKind ?? null,
     tagName: node instanceof HtmlElement ? node.tagName : null,
@@ -3343,6 +3401,7 @@ function cursorHtmlRow(
     tagNameSource: describeAddress(store, tagNameSourceAddressHandle),
     closingTagNameSource: describeAddress(store, closingTagNameSourceAddressHandle),
     attributeSource: describeAddress(store, attributeSourceAddressHandle),
+    attributeValueSource: describeAddress(store, attributeValueSourceAddressHandle),
     ...(includeHandles ? {
       handles: {
         nodeProductHandle: cursorContext.htmlNodeProductHandle,
@@ -3351,6 +3410,7 @@ function cursorHtmlRow(
         tagNameSourceAddressHandle,
         closingTagNameSourceAddressHandle,
         attributeSourceAddressHandle,
+        attributeValueSourceAddressHandle,
       },
     } : {}),
   };
@@ -3696,6 +3756,7 @@ function cursorBindableRow(
   projector: CheckerTypeProjector,
   bindable: TemplateBindableReference | null,
   selectedBindableValueType: CheckerTypeReference | null,
+  usageMode: SemanticTemplateCursorBindableUsageModeFields,
   includeHandles: boolean,
 ): SemanticTemplateCursorBindableRow | null {
   if (bindable == null) {
@@ -3733,6 +3794,7 @@ function cursorBindableRow(
       valueTypeIsWeak: contextualSurface.isWeak,
     }),
     ...projectBindableDefinitionSources(store, bindable.definition),
+    ...usageMode,
     ownerDefinitionProductHandle: bindable.reference.ownerDefinitionProductHandle,
     source: describeAddress(store, bindable.reference.sourceAddressHandle),
     nameSource: describeAddress(store, bindable.reference.nameSourceAddressHandle),
@@ -3841,9 +3903,15 @@ function cursorSelectedMemberRow(
   store: KernelStore,
   cursorContext: TemplateCompletionCursorContext,
   includeHandles: boolean,
+  includePresentationMetadata: boolean,
 ): SemanticTemplateCursorMemberRow | null {
   if (cursorContext.selectedScopeSlot != null) {
-    return cursorScopeSlotMemberRow(store, cursorContext.selectedScopeSlot, includeHandles);
+    return cursorScopeSlotMemberRow(
+      store,
+      cursorContext.selectedScopeSlot,
+      includeHandles,
+      includePresentationMetadata,
+    );
   }
 
   const memberName = cursorContext.selectedMemberName;
@@ -3888,7 +3956,7 @@ function cursorSelectedMemberRow(
     typeDisplay: member.valueType?.display ?? null,
     isOptional: member.isOptional,
     isReadonly: member.isReadonly,
-    ...cursorCheckerMemberMetadata(member),
+    ...cursorCheckerMemberMetadata(includePresentationMetadata ? member : null),
     scopeRole: null,
     source: describeAddress(store, checkerTypeMemberSourceAddressHandle(store, member)),
     declarationSource: describeAddress(store, checkerTypeMemberSourceAddressHandle(store, member)),
@@ -3910,6 +3978,7 @@ function cursorScopeSlotMemberRow(
   store: KernelStore,
   selection: NonNullable<TemplateCompletionCursorContext['selectedScopeSlot']>,
   includeHandles: boolean,
+  includePresentationMetadata: boolean,
 ): SemanticTemplateCursorMemberRow {
   const { scope, slot } = selection;
   const member = slot.targetTypeMemberHandle == null
@@ -3933,7 +4002,9 @@ function cursorScopeSlotMemberRow(
     isReadonly: slot.assignmentAccessKind === BindingContextSlotAssignmentAccessKind.FrameworkManagedReadOnly
       || (member?.isReadonly ?? false),
     ...cursorCheckerMemberMetadata(
-      selection.scopeRole == null && member?.name === slot.name ? member : null,
+      includePresentationMetadata && selection.scopeRole == null && member?.name === slot.name
+        ? member
+        : null,
     ),
     scopeRole: selection.scopeRole,
     source: describeAddress(store, sourceAddressHandle),
@@ -4031,6 +4102,7 @@ function emptyCursorHtmlRow(): SemanticTemplateCursorHtmlRow {
     tagNameSource: null,
     closingTagNameSource: null,
     attributeSource: null,
+    attributeValueSource: null,
   };
 }
 

@@ -18,6 +18,7 @@
   <section display-hint="message.one-time: statusMessage"></section>
   <section display-hint="message: Literal status; tone: ${accentTone}"></section>
   <section display-hint.bind="statusMessage"></section>
+  <section :two-way-state="twoWayValue"></section>
   <section display-hint.bind="statusMessage ? accentTone : aliasLabel"></section>
 
   <section active-state.bind="isActive"></section>

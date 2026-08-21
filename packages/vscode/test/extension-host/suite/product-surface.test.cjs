@@ -86,7 +86,79 @@ const productItemBindableHoverMarkdown = [
   "(bindable) item: CatalogItem | null",
   "```",
   "",
-  "Default mode: to view.",
+  "Effective mode: to view (framework fallback).",
+].join("\n");
+const productLabelBindableHoverMarkdown = [
+  "```ts",
+  "(bindable) display-label: string",
+  "```",
+  "",
+  "Effective mode: to view (framework fallback).",
+  "Maps to: `ProductCard.labelText`.",
+].join("\n");
+const productLabelExplicitHoverMarkdown = [
+  "```ts",
+  "(bindable) display-label: string",
+  "```",
+  "",
+  "Effective mode: two way (explicit command). Default mode: to view.",
+  "Maps to: `ProductCard.labelText`.",
+].join("\n");
+const productLabelDefaultTwoWayHoverMarkdown = [
+  "```ts",
+  "(bindable) display-label: string",
+  "```",
+  "",
+  "Effective mode: two way (bindable default).",
+  "Maps to: `ProductCard.labelText`.",
+].join("\n");
+const productLabelExplicitOneTimeHoverMarkdown = [
+  "```ts",
+  "(bindable) display-label: string",
+  "```",
+  "",
+  "Effective mode: one time (explicit command). Default mode: two way.",
+  "Maps to: `ProductCard.labelText`.",
+].join("\n");
+const inlineLabelBindableHoverMarkdown = [
+  "```ts",
+  "(bindable) display-label: string",
+  "```",
+  "",
+  "Effective mode: to view (framework fallback).",
+  "Maps to: `DisplayHint.labelText`.",
+].join("\n");
+const inlineLabelExplicitHoverMarkdown = [
+  "```ts",
+  "(bindable) display-label: string",
+  "```",
+  "",
+  "Effective mode: two way (explicit command). Default mode: to view.",
+  "Maps to: `DisplayHint.labelText`.",
+].join("\n");
+const inlineLabelStaticHoverMarkdown = [
+  "```ts",
+  "(bindable) display-label: string",
+  "```",
+  "",
+  "Static value; no binding mode.",
+  "Maps to: `DisplayHint.labelText`.",
+].join("\n");
+const inlineLabelInterpolationHoverMarkdown = [
+  "```ts",
+  "(bindable) display-label: string",
+  "```",
+  "",
+  "Effective mode: to view (interpolation).",
+  "Maps to: `DisplayHint.labelText`.",
+].join("\n");
+const displayHintResourceModeHoverMarkdown = [
+  "```text",
+  "(custom attribute) display-hint",
+  "```",
+  "",
+  "Effective mode: to view (framework fallback).",
+  "Aurelia custom attribute. Implementation: `DisplayHint`.",
 ].join("\n");
 const catalogCardAliasHoverMarkdown = [
   "```html",
@@ -126,6 +198,7 @@ const nativeTitleAliasHoverMarkdown = [
   "(custom attribute) title",
   "```",
   "",
+  "Static value; no binding mode.",
   "Aurelia custom attribute. Alias for: `display-hint`. Implementation: `DisplayHint`.",
 ].join("\n");
 const currentContextHoverMarkdown = [
@@ -745,8 +818,28 @@ suite("extension-host product surface", () => {
     }
 
     const productDocument = await showAureliaDocument("src/components/product-card.ts");
+    const templateDiskBaseline = readFileSync(document.uri.fsPath, "utf8");
+    const productDiskBaseline = readFileSync(productDocument.uri.fsPath, "utf8");
+    for (const [openDocument, diskBaseline, label] of [
+      [productDocument, productDiskBaseline, "component"],
+      [document, templateDiskBaseline, "template"],
+    ]) {
+      if (openDocument.getText() !== diskBaseline || openDocument.isDirty) {
+        await vscode.window.showTextDocument(openDocument, { preview: false });
+        await vscode.commands.executeCommand("workbench.action.files.revert");
+        await waitFor(
+          () => openDocument.getText() === diskBaseline && !openDocument.isDirty,
+          `the resource-alias hover ${label} should start from its clean disk baseline`,
+          60_000,
+        );
+      }
+    }
     const templateBaseline = document.getText();
     const productBaseline = productDocument.getText();
+    assert.strictEqual(templateBaseline, templateDiskBaseline, "the resource-alias hover journey requires a disk-equal template");
+    assert.strictEqual(productBaseline, productDiskBaseline, "the resource-alias hover journey requires a disk-equal component");
+    assert.strictEqual(document.isDirty, false, "the resource-alias hover journey requires a clean template");
+    assert.strictEqual(productDocument.isDirty, false, "the resource-alias hover journey requires a clean component");
     const aliasedProduct = productBaseline.replace(
       "  name: 'product-card',",
       "  name: 'product-card',\n  aliases: ['catalog-card'],",
@@ -775,18 +868,31 @@ suite("extension-host product surface", () => {
       );
       assertBoundedHoverCard(hoverMarkdownText(aliasHover), "source-backed resource alias");
     } finally {
-      if (productDocument.getText() !== productBaseline || document.getText() !== templateBaseline) {
-        await replaceDocumentTexts([
-          [productDocument, productBaseline],
-          [document, templateBaseline],
-        ]);
+      for (const [openDocument, diskBaseline, label] of [
+        [productDocument, productDiskBaseline, "component"],
+        [document, templateDiskBaseline, "template"],
+      ]) {
+        if (openDocument.getText() !== diskBaseline || openDocument.isDirty) {
+          await vscode.window.showTextDocument(openDocument, { preview: false });
+          await vscode.commands.executeCommand("workbench.action.files.revert");
+          await waitFor(
+            () => openDocument.getText() === diskBaseline && !openDocument.isDirty,
+            `the resource-alias hover ${label} should revert to its clean disk baseline`,
+            60_000,
+          );
+        }
       }
       await waitFor(
-        async () => (await hoverMarkdown(document, "<product-card", "product-card"))
-          === productCardHoverMarkdown,
+        async () => document.getText() === templateBaseline
+          && productDocument.getText() === productBaseline
+          && !document.isDirty
+          && !productDocument.isDirty
+          && (await hoverMarkdown(document, "<product-card", "product-card")) === productCardHoverMarkdown,
         "resource-alias cleanup should restore the canonical resource hover",
         60_000,
       );
+      assert.strictEqual(readFileSync(document.uri.fsPath, "utf8"), templateDiskBaseline);
+      assert.strictEqual(readFileSync(productDocument.uri.fsPath, "utf8"), productDiskBaseline);
     }
   });
 
@@ -1130,6 +1236,327 @@ suite("extension-host product surface", () => {
       );
       assert.strictEqual(readFileSync(templateDocument.uri.fsPath, "utf8"), templateDiskBaseline);
       assert.strictEqual(readFileSync(componentDocument.uri.fsPath, "utf8"), componentDiskBaseline);
+    }
+  });
+
+  test("projects current top-level and inline effective binding modes from the dirty buffer", async function() {
+    this.timeout(600_000);
+    const document = await showAureliaDocument("src/my-app.html");
+    const mainDocument = await showAureliaDocument("src/main.ts");
+    const productDocument = await showAureliaDocument("src/components/product-card.ts");
+    const displayHintDocument = await showAureliaDocument("src/attributes/display-hint.ts");
+    const diskBaseline = readFileSync(document.uri.fsPath, "utf8");
+    const mainDiskBaseline = readFileSync(mainDocument.uri.fsPath, "utf8");
+    const productDiskBaseline = readFileSync(productDocument.uri.fsPath, "utf8");
+    const displayHintDiskBaseline = readFileSync(displayHintDocument.uri.fsPath, "utf8");
+    for (const [openDocument, expectedDiskBaseline, label] of [
+      [displayHintDocument, displayHintDiskBaseline, "custom attribute"],
+      [productDocument, productDiskBaseline, "product component"],
+      [mainDocument, mainDiskBaseline, "app entry"],
+      [document, diskBaseline, "template"],
+    ]) {
+      if (openDocument.getText() !== expectedDiskBaseline || openDocument.isDirty) {
+        await vscode.window.showTextDocument(openDocument, { preview: false });
+        await vscode.commands.executeCommand("workbench.action.files.revert");
+        await waitFor(
+          () => openDocument.getText() === expectedDiskBaseline && !openDocument.isDirty,
+          `the effective-mode ${label} should start from its clean disk baseline`,
+          60_000,
+        );
+      }
+    }
+    const baseline = document.getText();
+    const mainBaseline = mainDocument.getText();
+    const productBaseline = productDocument.getText();
+    const displayHintBaseline = displayHintDocument.getText();
+    assert.strictEqual(baseline, diskBaseline, "the effective-mode journey requires a disk-equal template");
+    assert.strictEqual(document.isDirty, false, "the effective-mode journey requires a clean template");
+    assert.strictEqual(mainBaseline, mainDiskBaseline, "the effective-mode journey requires a disk-equal app entry");
+    assert.strictEqual(mainDocument.isDirty, false, "the effective-mode journey requires a clean app entry");
+    assert.strictEqual(productBaseline, productDiskBaseline, "the effective-mode journey requires a disk-equal product component");
+    assert.strictEqual(productDocument.isDirty, false, "the effective-mode journey requires a clean product component");
+    assert.strictEqual(displayHintBaseline, displayHintDiskBaseline, "the effective-mode journey requires a disk-equal custom attribute");
+    assert.strictEqual(displayHintDocument.isDirty, false, "the effective-mode journey requires a clean custom attribute");
+    const shorthandMain = mainBaseline
+      .replace(
+        "import Aurelia from 'aurelia';",
+        "import Aurelia, { ShortHandBindingSyntax } from 'aurelia';",
+      )
+      .replace("void Aurelia\n  .app({", "void Aurelia\n  .register(...ShortHandBindingSyntax)\n  .app({");
+    assert.notStrictEqual(shorthandMain, mainBaseline, "Expected dirty shorthand registration input.");
+    const twoWayProduct = productBaseline
+      .replace(
+        "import { bindable, customElement } from 'aurelia';",
+        "import { bindable, BindingMode, customElement } from 'aurelia';",
+      )
+      .replace(
+        "@bindable({ attribute: 'display-label' }) labelText = '';",
+        "@bindable({ attribute: 'display-label', mode: BindingMode.twoWay }) labelText = '';",
+      );
+    assert.notStrictEqual(twoWayProduct, productBaseline, "Expected dirty bindable-default mode input.");
+    const primaryDisplayHint = displayHintBaseline.replace(
+      "export class DisplayHint {",
+      "export class DisplayHint {\n  @bindable value = '';",
+    );
+    assert.notStrictEqual(primaryDisplayHint, displayHintBaseline, "Expected dirty custom-attribute primary bindable input.");
+
+    for (const [anchor, expected, label] of [
+      ['display-label.bind="item.name"', productLabelBindableHoverMarkdown, "top-level bindable mode"],
+      ['display-hint="display-label.bind:', inlineLabelBindableHoverMarkdown, "inline multi-binding mode"],
+    ]) {
+      await waitFor(
+        async () => (await hoverMarkdown(document, anchor, "display-label")) === expected,
+        `the baseline ${label} should reach the native hover provider`,
+        120_000,
+      );
+      const hovers = await hoversAt(document, anchor, "display-label");
+      assert.strictEqual(
+        hovers.length,
+        1,
+        `Expected one ${label} hover with no native duplication; observed ${JSON.stringify(hovers.map(hoverMarkdownText))}.`,
+      );
+      await exactHoverAt(document, anchor, "display-label", expected);
+    }
+
+    const edited = baseline
+      .replace(
+        "display-hint=\"display-label.bind: preview.name",
+        "display-hint=\"display-label.two-way: preview.name",
+      )
+      .replace('display-label.bind="item.name"', 'display-label.two-way="item.name"');
+    assert.notStrictEqual(edited, baseline, "Expected both effective-mode commands to change.");
+
+    try {
+      await replaceDocumentText(productDocument, twoWayProduct);
+      await waitFor(
+        async () => (await hoverMarkdown(
+          document,
+          'display-label.bind="item.name"',
+          "display-label",
+        )) === productLabelDefaultTwoWayHoverMarkdown,
+        "the dirty TypeScript bindable default should replace the fallback mode",
+        120_000,
+      );
+      assert.strictEqual(productDocument.isDirty, true, "the bindable-default mutation must remain unsaved");
+
+      const oneTimeTemplate = baseline.replace(
+        'display-label.bind="item.name"',
+        'display-label.one-time="item.name"',
+      );
+      await replaceDocumentText(document, oneTimeTemplate);
+      await waitFor(
+        async () => (await hoverMarkdown(
+          document,
+          'display-label.one-time="item.name"',
+          "display-label",
+        )) === productLabelExplicitOneTimeHoverMarkdown,
+        "the explicit one-time command should outrank the dirty two-way default",
+        120_000,
+      );
+      await exactHoverAt(
+        document,
+        'display-label.one-time="item.name"',
+        "display-label",
+        productLabelExplicitOneTimeHoverMarkdown,
+      );
+
+      await replaceDocumentTexts([
+        [productDocument, productBaseline],
+        [document, baseline],
+      ]);
+      await waitFor(
+        async () => (await hoverMarkdown(
+          document,
+          'display-label.bind="item.name"',
+          "display-label",
+        )) === productLabelBindableHoverMarkdown,
+        "the restored TypeScript declaration should restore the fallback mode",
+        120_000,
+      );
+
+      await replaceDocumentText(document, edited);
+      assert.strictEqual(document.isDirty, true, "the effective-mode mutation must remain unsaved");
+      for (const [anchor, expected, label] of [
+        ['display-label.two-way="item.name"', productLabelExplicitHoverMarkdown, "top-level explicit mode"],
+        ['display-hint="display-label.two-way:', inlineLabelExplicitHoverMarkdown, "inline explicit mode"],
+      ]) {
+        await waitFor(
+          async () => (await hoverMarkdown(document, anchor, "display-label")) === expected,
+          `the dirty ${label} should replace the stale effective-mode hover`,
+          120_000,
+        );
+        const hovers = await hoversAt(document, anchor, "display-label");
+        assert.strictEqual(
+          hovers.length,
+          1,
+          `Expected one dirty ${label} hover with no native duplication; observed ${JSON.stringify(hovers.map(hoverMarkdownText))}.`,
+        );
+        await exactHoverAt(document, anchor, "display-label", expected);
+      }
+
+      const inlineStatic = edited.replace(
+        "display-label.two-way: preview.name",
+        "display-label: Static label",
+      );
+      await replaceDocumentText(document, inlineStatic);
+      await waitFor(
+        async () => (await hoverMarkdown(
+          document,
+          'display-hint="display-label: Static label',
+          "display-label",
+        )) === inlineLabelStaticHoverMarkdown,
+        "the dirty inline static value should withdraw its binding-mode claim",
+        120_000,
+      );
+      let hovers = await hoversAt(
+        document,
+        'display-hint="display-label: Static label',
+        "display-label",
+      );
+      assert.strictEqual(hovers.length, 1, "Expected one inline static bindable hover.");
+      await exactHoverAt(
+        document,
+        'display-hint="display-label: Static label',
+        "display-label",
+        inlineLabelStaticHoverMarkdown,
+      );
+
+      const inlineInterpolation = edited.replace(
+        "display-label.two-way: preview.name",
+        "display-label: Hello ${preview.name}",
+      );
+      await replaceDocumentText(document, inlineInterpolation);
+      await waitFor(
+        async () => (await hoverMarkdown(
+          document,
+          'display-hint="display-label: Hello ${preview.name}',
+          "display-label",
+        )) === inlineLabelInterpolationHoverMarkdown,
+        "the dirty inline interpolation should publish its to-view effective mode",
+        120_000,
+      );
+      hovers = await hoversAt(
+        document,
+        'display-hint="display-label: Hello ${preview.name}',
+        "display-label",
+      );
+      assert.strictEqual(hovers.length, 1, "Expected one inline interpolation bindable hover.");
+      await exactHoverAt(
+        document,
+        'display-hint="display-label: Hello ${preview.name}',
+        "display-label",
+        inlineLabelInterpolationHoverMarkdown,
+      );
+
+      const resourceBind = baseline.replace(
+        "  </main>",
+        '    <section display-hint.bind="state.searchText"></section>\n  </main>',
+      );
+      await replaceDocumentTexts([
+        [displayHintDocument, primaryDisplayHint],
+        [document, resourceBind],
+      ]);
+      await waitFor(
+        async () => (await hoverMarkdown(
+          document,
+          'display-hint.bind="state.searchText"',
+          "display-hint",
+        )) === displayHintResourceModeHoverMarkdown,
+        "the dirty custom-attribute primary should retain resource identity and effective mode",
+        120_000,
+      );
+      let resourceHovers = await hoversAt(
+        document,
+        'display-hint.bind="state.searchText"',
+        "display-hint",
+      );
+      assert.strictEqual(resourceHovers.length, 1, "Expected one custom-attribute resource-mode hover.");
+      await exactHoverAt(
+        document,
+        'display-hint.bind="state.searchText"',
+        "display-hint",
+        displayHintResourceModeHoverMarkdown,
+      );
+
+      const shorthand = resourceBind
+        .replace('display-label.bind="item.name"', ':display-label="item.name"')
+        .replace('display-hint.bind="state.searchText"', ':display-hint="state.searchText"');
+      await replaceDocumentTexts([
+        [mainDocument, shorthandMain],
+        [document, shorthand],
+      ]);
+      assert.strictEqual(mainDocument.isDirty, true, "the shorthand registration must remain unsaved");
+      await waitFor(
+        async () => (await hoverMarkdown(
+          document,
+          ':display-label="item.name"',
+          "display-label",
+        )) === productLabelBindableHoverMarkdown,
+        "the dirty colon shorthand should retain the exact bind effective mode",
+        120_000,
+      );
+      hovers = await hoversAt(document, ':display-label="item.name"', "display-label");
+      assert.strictEqual(hovers.length, 1, "Expected one colon-shorthand bindable hover.");
+      await exactHoverAt(
+        document,
+        ':display-label="item.name"',
+        "display-label",
+        productLabelBindableHoverMarkdown,
+      );
+      await waitFor(
+        async () => (await hoverMarkdown(
+          document,
+          ':display-hint="state.searchText"',
+          "display-hint",
+        )) === displayHintResourceModeHoverMarkdown,
+        "the dirty colon custom attribute should retain resource identity and effective mode",
+        120_000,
+      );
+      resourceHovers = await hoversAt(
+        document,
+        ':display-hint="state.searchText"',
+        "display-hint",
+      );
+      assert.strictEqual(resourceHovers.length, 1, "Expected one colon custom-attribute resource-mode hover.");
+      await exactHoverAt(
+        document,
+        ':display-hint="state.searchText"',
+        "display-hint",
+        displayHintResourceModeHoverMarkdown,
+      );
+      assert.strictEqual(readFileSync(document.uri.fsPath, "utf8"), diskBaseline);
+      assert.strictEqual(readFileSync(mainDocument.uri.fsPath, "utf8"), mainDiskBaseline);
+      assert.strictEqual(readFileSync(productDocument.uri.fsPath, "utf8"), productDiskBaseline);
+      assert.strictEqual(readFileSync(displayHintDocument.uri.fsPath, "utf8"), displayHintDiskBaseline);
+    } finally {
+      for (const [openDocument, fileBaseline] of [
+        [displayHintDocument, displayHintDiskBaseline],
+        [productDocument, productDiskBaseline],
+        [mainDocument, mainDiskBaseline],
+        [document, diskBaseline],
+      ]) {
+        if (openDocument.getText() !== fileBaseline || openDocument.isDirty) {
+          await vscode.window.showTextDocument(openDocument, { preview: false });
+          await vscode.commands.executeCommand("workbench.action.files.revert");
+        }
+      }
+      await waitFor(
+        async () => document.getText() === baseline
+          && !document.isDirty
+          && mainDocument.getText() === mainBaseline
+          && !mainDocument.isDirty
+          && productDocument.getText() === productBaseline
+          && !productDocument.isDirty
+          && displayHintDocument.getText() === displayHintBaseline
+          && !displayHintDocument.isDirty
+          && (await hoverMarkdown(document, "<product-card", "item")) === productItemBindableHoverMarkdown,
+        "the effective-mode cleanup should restore the checked-in hover surface",
+        120_000,
+      );
+      assert.strictEqual(readFileSync(document.uri.fsPath, "utf8"), diskBaseline);
+      assert.strictEqual(readFileSync(mainDocument.uri.fsPath, "utf8"), mainDiskBaseline);
+      assert.strictEqual(readFileSync(productDocument.uri.fsPath, "utf8"), productDiskBaseline);
+      assert.strictEqual(readFileSync(displayHintDocument.uri.fsPath, "utf8"), displayHintDiskBaseline);
     }
   });
 

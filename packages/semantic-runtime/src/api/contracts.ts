@@ -4746,6 +4746,8 @@ export interface SemanticTemplateCursorHtmlRow {
   /** Exact authored closing-tag name source when a matching close tag exists. */
   readonly closingTagNameSource: SemanticSourceReference | null;
   readonly attributeSource: SemanticSourceReference | null;
+  /** Exact authored attribute value span; null for genuinely valueless syntax. */
+  readonly attributeValueSource: SemanticSourceReference | null;
   readonly handles?: {
     readonly nodeProductHandle: ProductHandle | null;
     readonly attributeProductHandle: ProductHandle | null;
@@ -4753,6 +4755,7 @@ export interface SemanticTemplateCursorHtmlRow {
     readonly tagNameSourceAddressHandle: AddressHandle | null;
     readonly closingTagNameSourceAddressHandle: AddressHandle | null;
     readonly attributeSourceAddressHandle: AddressHandle | null;
+    readonly attributeValueSourceAddressHandle: AddressHandle | null;
   };
 }
 
@@ -4796,8 +4799,45 @@ export interface SemanticTemplateCursorDefinitionRow {
   };
 }
 
+export type SemanticTemplateUsageEffectiveBindingMode =
+  | 'oneTime'
+  | 'toView'
+  | 'fromView'
+  | 'twoWay';
+
+/** Authority that proved how one exact bindable usage behaves after runtime binding-mode planning. */
+export enum SemanticTemplateBindableUsageModeAuthority {
+  ExplicitCommand = 'explicit-command',
+  BindingBehavior = 'binding-behavior',
+  BindableDefault = 'bindable-default',
+  FrameworkFallback = 'framework-fallback',
+  Interpolation = 'interpolation',
+  PlainLiteral = 'plain-literal',
+  Open = 'open',
+}
+
 export interface SemanticTemplateCursorBindableRow extends SemanticBindableDefinitionRow {
   readonly ownerDefinitionProductHandle: ProductHandle | null;
+  /** Mode this exact usage has when its binding activates after modeled mode behaviors; not proof evaluation occurred. */
+  readonly usageEffectiveMode: SemanticTemplateUsageEffectiveBindingMode | null;
+  /** Exact authority for the usage mode; null when the cursor selects only bindable declaration metadata. */
+  readonly usageModeAuthority: SemanticTemplateBindableUsageModeAuthority | `${SemanticTemplateBindableUsageModeAuthority}` | null;
+  /** Runtime-normalized binding-command name; authored spelling remains available through HTML/source carriers. */
+  readonly usageModeCommand: string | null;
+  /** Exact compiler grammar lane that owns this usage. */
+  readonly usageModeLocus: 'attribute' | 'attribute-pattern' | 'multi-binding' | null;
+  /** Compact presentation lane proved from exact resource/bindable ownership. */
+  readonly usagePresentationKind: 'bindable-attribute' | 'resource-primary' | null;
+  /** Exact binding-command executable kind selected by the compiler world. */
+  readonly usageModeCommandKind: 'built-in' | 'custom' | 'opaque' | 'open' | null;
+  /** Exact authored syntax evidence selecting the runtime command, including `:` for shorthand pattern syntax. */
+  readonly usageModeCommandSource: SemanticSourceReference | null;
+  /** Exact authored target token selecting the bindable directly or through a custom-attribute primary value. */
+  readonly usageModeTargetSource: SemanticSourceReference | null;
+  /** Exact source that selected or explains the usage mode authority. */
+  readonly usageModeSource: SemanticSourceReference | null;
+  /** Honest reason a usage mode could not be closed; non-null only with `usageModeAuthority: 'open'`. */
+  readonly usageModeOpenReason: string | null;
   readonly handles?: {
     readonly ownerDefinitionProductHandle: ProductHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;

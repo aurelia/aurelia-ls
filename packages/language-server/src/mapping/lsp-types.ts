@@ -929,7 +929,13 @@ function semanticRuntimeHoverCard(
   documentUris: WorkspaceDocumentUris,
   originDocument: TextDocument,
 ): SemanticRuntimeReadMapping<HoverCard | null> {
-  const selection = semanticRuntimeHoverSelection(value, activeSource, activeText, documentUris);
+  const selection = semanticRuntimeHoverSelection(
+    value,
+    activeSource,
+    activeText,
+    documentUris,
+    originDocument,
+  );
   if (selection.failures.length > 0) return { value: null, failures: selection.failures };
 
   const status = semanticRuntimeHoverStatus(
@@ -956,6 +962,7 @@ function semanticRuntimeHoverSelection(
   activeSource: SemanticSourceReference,
   activeText: string,
   documentUris: WorkspaceDocumentUris,
+  originDocument: TextDocument,
 ): SemanticRuntimeReadMapping<SemanticRuntimeHoverSelection | null> {
   if (value.selectedExpression != null) {
     if (
@@ -1112,15 +1119,75 @@ function semanticRuntimeHoverSelection(
   }
 
   if (
-    value.selectedBindable != null
-    && value.siteKind === "attribute-name"
-    && semanticRuntimeBindableTargetName(value.html.attributeName) === activeText
-    && value.html.attributeName != null
-    && semanticRuntimeBindableTargetName(
-      runtimeAttributeName(value.html.attributeName, semanticRuntimeHoverHtmlNamespace(value)),
-    ) === value.selectedBindable.attribute
+    value.selectedBindable?.usageModeLocus != null
+    && value.selectedBindable.usagePresentationKind != null
+    && value.selectedBindable.usagePresentationKind !== "bindable-attribute"
+    && value.selectedBindable.usagePresentationKind !== "resource-primary"
   ) {
-    return semanticRuntimeBindableHoverSelection(value, activeSource, activeText, documentUris);
+    return {
+      value: null,
+      failures: ["Hover selected bindable has an unsupported usage presentation kind."],
+    };
+  }
+  // Resource-primary is optional context on an independently authenticated resource card.
+  // A concurrent edit can retire that ownership, so withhold composition instead of failing the whole hover.
+  if (
+    value.selectedBindable != null
+    && value.selectedBindable.usagePresentationKind === "bindable-attribute"
+    && !semanticRuntimeResourceOwnsPrimaryBindableUsage(
+      value,
+      activeSource,
+      activeText,
+      documentUris,
+    )
+    && (
+      (
+        (
+          value.siteKind === "attribute-name"
+          || (
+            value.siteKind === "attribute-value"
+            && value.html.attributeValue === ""
+            && value.html.attributeValueSource == null
+          )
+        )
+        && semanticRuntimeBindableTargetName(value.html.attributeName) === activeText
+        && value.html.attributeName != null
+        && semanticRuntimeBindableTargetName(
+          runtimeAttributeName(value.html.attributeName, semanticRuntimeHoverHtmlNamespace(value)),
+        ) === value.selectedBindable.attribute
+      )
+      || (
+        value.siteKind === "attribute-name"
+        && value.selectedBindable.usageModeLocus === "multi-binding"
+        && sameExactSourceReference(
+          activeSource,
+          value.selectedBindable.usageModeTargetSource,
+          documentUris,
+        )
+      )
+      || (
+        value.siteKind === "attribute-name"
+        && value.selectedBindable.usageModeLocus === "attribute-pattern"
+        && value.html.attributeName != null
+        && runtimeAttributeName(
+          value.html.attributeName,
+          semanticRuntimeHoverHtmlNamespace(value),
+        ) === `:${value.selectedBindable.attribute}`
+        && sameExactSourceReference(
+          activeSource,
+          value.selectedBindable.usageModeTargetSource,
+          documentUris,
+        )
+      )
+    )
+  ) {
+    return semanticRuntimeBindableHoverSelection(
+      value,
+      activeSource,
+      activeText,
+      documentUris,
+      originDocument,
+    );
   }
 
   if (
@@ -1132,10 +1199,115 @@ function semanticRuntimeHoverSelection(
       documentUris,
     )
   ) {
-    return semanticRuntimeResourceHoverSelection(value, activeSource, activeText, documentUris);
+    const resource = semanticRuntimeResourceHoverSelection(
+      value,
+      activeSource,
+      activeText,
+      documentUris,
+    );
+    if (
+      resource.failures.length > 0
+      || resource.value == null
+      || !semanticRuntimeResourceOwnsPrimaryBindableUsage(
+        value,
+        activeSource,
+        activeText,
+        documentUris,
+      )
+    ) {
+      return resource;
+    }
+    const usage = semanticRuntimePrimaryResourceBindableUsageContext(
+      value,
+      documentUris,
+      originDocument,
+    );
+    // Usage-mode context is optional enrichment on an independently authenticated resource card.
+    // Any stale command/value/authority fact withholds only that enrichment, never the resource answer.
+    return usage.failures.length > 0 || usage.value == null
+      ? resource
+      : {
+          value: {
+            ...resource.value,
+            context: [usage.value, ...resource.value.context].slice(0, 2),
+          },
+          failures: [],
+        };
   }
 
   return { value: null, failures: [] };
+}
+
+function semanticRuntimeResourceOwnsPrimaryBindableUsage(
+  value: SemanticTemplateCursorInfoResult,
+  activeSource: SemanticSourceReference,
+  activeText: string,
+  documentUris: WorkspaceDocumentUris,
+): boolean {
+  const definition = value.selectedDefinition;
+  const bindable = value.selectedBindable;
+  return (
+    definition?.resourceKind === "custom-attribute"
+    || definition?.resourceKind === "template-controller"
+    )
+    && bindable != null
+    && bindable.usagePresentationKind === "resource-primary"
+    && (bindable.usageModeLocus === "attribute" || bindable.usageModeLocus === "attribute-pattern")
+    && sameExactSourceReference(activeSource, bindable.usageModeTargetSource, documentUris)
+    && semanticRuntimeResourceMayOwnActiveLocus(
+      value,
+      activeSource,
+      activeText,
+      documentUris,
+    );
+}
+
+function semanticRuntimePrimaryResourceBindableUsageContext(
+  value: SemanticTemplateCursorInfoResult,
+  documentUris: WorkspaceDocumentUris,
+  originDocument: TextDocument,
+): SemanticRuntimeReadMapping<HoverCardContextLine | null> {
+  const bindable = value.selectedBindable!;
+  const rawAttribute = value.html.attributeName;
+  if (rawAttribute == null) {
+    return { value: null, failures: ["Hover selected resource bindable usage has no authored attribute."] };
+  }
+  let runtimeAuthoredCommand: string | null;
+  if (bindable.usageModeLocus === "attribute-pattern") {
+    const runtimePattern = runtimeAttributeName(rawAttribute, semanticRuntimeHoverHtmlNamespace(value));
+    if (!runtimePattern.startsWith(":")) {
+      return { value: null, failures: ["Hover selected resource bindable usage has invalid shorthand syntax."] };
+    }
+    runtimeAuthoredCommand = "bind";
+  } else {
+    const runtimeAttribute = runtimeAttributeName(rawAttribute, semanticRuntimeHoverHtmlNamespace(value));
+    const commandSeparator = runtimeAttribute.indexOf(".");
+    runtimeAuthoredCommand = commandSeparator < 0
+      ? null
+      : runtimeAttribute.slice(commandSeparator + 1);
+  }
+  const usage = semanticRuntimeBindableUsageModePresentation(
+    value,
+    runtimeAuthoredCommand,
+    documentUris,
+    originDocument,
+  );
+  if (usage.failures.length > 0 || usage.value.context == null) {
+    return { value: null, failures: usage.failures };
+  }
+  const defaultMode = semanticRuntimeBindableModeLabel(bindable.mode);
+  if (defaultMode == null) {
+    return { value: null, failures: ["Hover selected bindable has an unsupported default mode."] };
+  }
+  const defaultDiffers = usage.value.effectiveMode != null
+    && bindable.mode !== "default"
+    && bindable.mode !== usage.value.effectiveMode;
+  return {
+    value: defaultDiffers
+      ? { ...usage.value.context, tertiary: { prefix: `Default mode: ${defaultMode}.` } }
+      : usage.value.context,
+    failures: [],
+  };
 }
 
 function semanticRuntimeBindingContextLabel(authoredScopeAncestor: number): string {
@@ -1345,6 +1517,12 @@ function semanticRuntimeBindableDeclarationHoverSelection(
     };
   }
   const declaration = matches[0]!;
+  if (!semanticRuntimeBindableUsageModeMetadataIsAbsent(bindable)) {
+    return {
+      value: null,
+      failures: ["Hover selected bindable declaration carries usage-effective mode metadata."],
+    };
+  }
   if (activeText !== declaration.authored) {
     return {
       value: null,
@@ -1403,6 +1581,21 @@ function semanticRuntimeBindableDeclarationHoverSelection(
   };
 }
 
+function semanticRuntimeBindableUsageModeMetadataIsAbsent(
+  bindable: NonNullable<SemanticTemplateCursorInfoResult["selectedBindable"]>,
+): boolean {
+  return bindable.usageEffectiveMode == null
+    && bindable.usagePresentationKind == null
+    && bindable.usageModeAuthority == null
+    && bindable.usageModeCommand == null
+    && bindable.usageModeCommandSource == null
+    && bindable.usageModeCommandKind == null
+    && bindable.usageModeLocus == null
+    && bindable.usageModeTargetSource == null
+    && bindable.usageModeSource == null
+    && bindable.usageModeOpenReason == null;
+}
+
 function semanticRuntimeScopeRoleContext(role: string | null): string | null {
   switch (role) {
     case "repeat-local": return "Repeat local.";
@@ -1420,46 +1613,100 @@ function semanticRuntimeBindableHoverSelection(
   activeSource: SemanticSourceReference,
   activeText: string,
   documentUris: WorkspaceDocumentUris,
+  originDocument: TextDocument,
 ): SemanticRuntimeReadMapping<SemanticRuntimeHoverSelection | null> {
   const bindable = value.selectedBindable;
   if (bindable == null) return { value: null, failures: [] };
-  const rawAttribute = value.html.attributeName;
-  if (rawAttribute == null) {
+  if (bindable.usagePresentationKind !== "bindable-attribute") {
     return {
       value: null,
-      failures: ["Hover selected bindable has no authored attribute spelling."],
+      failures: ["Hover selected bindable has an inconsistent usage presentation kind."],
     };
   }
-  const commandSeparator = rawAttribute.indexOf(".");
-  const authoredAttribute = semanticRuntimeBindableTargetName(rawAttribute) ?? "";
-  const authoredCommand = commandSeparator < 0
-    ? null
-    : rawAttribute.slice(commandSeparator + 1);
-  const runtimeRawAttribute = runtimeAttributeName(rawAttribute, semanticRuntimeHoverHtmlNamespace(value));
-  const runtimeCommandSeparator = runtimeRawAttribute.indexOf(".");
-  const runtimeAuthoredAttribute = semanticRuntimeBindableTargetName(runtimeRawAttribute) ?? "";
-  const runtimeAuthoredCommand = runtimeCommandSeparator < 0
-    ? null
-    : runtimeRawAttribute.slice(runtimeCommandSeparator + 1);
-  const attributeSource = semanticExactSourceReference(value.html.attributeSource);
-  const exactActiveSource = semanticExactSourceReference(activeSource);
-  const carriedCommand = value.valueSite?.bindingCommandName ?? null;
-  if (
-    value.siteKind !== "attribute-name"
-    || authoredAttribute.length === 0
-    || activeText !== authoredAttribute
-    || !semanticRuntimeExactSourceContains(value.html.attributeSource, activeSource, documentUris)
-    || attributeSource?.start !== exactActiveSource?.start
-    || runtimeAuthoredAttribute !== bindable.attribute
-    || authoredCommand === ""
-    || (
-      carriedCommand != null
-      && carriedCommand !== runtimeAuthoredCommand
-    )
-  ) {
+  const rawAttribute = value.html.attributeName;
+  const usageLocus = bindable.usageModeLocus;
+  const usageTargetSource = bindable.usageModeTargetSource;
+  if (rawAttribute == null || usageLocus == null || usageTargetSource == null) {
     return {
       value: null,
-      failures: ["Hover selected bindable metadata does not match the authored attribute spelling."],
+      failures: ["Hover selected bindable has no exact usage locus."],
+    };
+  }
+  let authoredAttribute: string;
+  let runtimeAuthoredCommand: string | null;
+  if (usageLocus === "attribute") {
+    const commandSeparator = rawAttribute.indexOf(".");
+    authoredAttribute = semanticRuntimeBindableTargetName(rawAttribute) ?? "";
+    const authoredCommand = commandSeparator < 0
+      ? null
+      : rawAttribute.slice(commandSeparator + 1);
+    const runtimeRawAttribute = runtimeAttributeName(rawAttribute, semanticRuntimeHoverHtmlNamespace(value));
+    const runtimeCommandSeparator = runtimeRawAttribute.indexOf(".");
+    const runtimeAuthoredAttribute = semanticRuntimeBindableTargetName(runtimeRawAttribute) ?? "";
+    runtimeAuthoredCommand = runtimeCommandSeparator < 0
+      ? null
+      : runtimeRawAttribute.slice(runtimeCommandSeparator + 1);
+    const attributeSource = semanticExactSourceReference(value.html.attributeSource);
+    const exactActiveSource = semanticExactSourceReference(activeSource);
+    const carriedCommand = value.valueSite?.bindingCommandName ?? null;
+    if (
+      (
+        value.siteKind !== "attribute-name"
+        && !(
+          value.siteKind === "attribute-value"
+          && value.html.attributeValue === ""
+          && value.html.attributeValueSource == null
+        )
+      )
+      || authoredAttribute.length === 0
+      || activeText !== authoredAttribute
+      || !sameExactSourceReference(activeSource, usageTargetSource, documentUris)
+      || !semanticRuntimeExactSourceContains(value.html.attributeSource, activeSource, documentUris)
+      || attributeSource?.start !== exactActiveSource?.start
+      || runtimeAuthoredAttribute !== bindable.attribute
+      || authoredCommand === ""
+      || (carriedCommand != null && carriedCommand !== runtimeAuthoredCommand)
+    ) {
+      return {
+        value: null,
+        failures: ["Hover selected bindable metadata does not match the authored attribute spelling."],
+      };
+    }
+  } else if (usageLocus === "multi-binding") {
+    authoredAttribute = activeText;
+    runtimeAuthoredCommand = bindable.usageModeCommand;
+    if (
+      value.siteKind !== "attribute-name"
+      || value.valueSite?.siteKind !== "multi-binding-value"
+      || activeText !== bindable.attribute
+      || !sameExactSourceReference(activeSource, usageTargetSource, documentUris)
+      || !semanticRuntimeExactSourceContains(value.html.attributeSource, activeSource, documentUris)
+      || runtimeAuthoredCommand === ""
+    ) {
+      return {
+        value: null,
+        failures: ["Hover selected bindable metadata does not match the exact inline multi-binding target."],
+      };
+    }
+  } else if (usageLocus === "attribute-pattern") {
+    authoredAttribute = activeText;
+    runtimeAuthoredCommand = "bind";
+    const runtimePattern = runtimeAttributeName(rawAttribute, semanticRuntimeHoverHtmlNamespace(value));
+    if (
+      value.siteKind !== "attribute-name"
+      || runtimePattern !== `:${bindable.attribute}`
+      || !sameExactSourceReference(activeSource, usageTargetSource, documentUris)
+      || !semanticRuntimeExactSourceContains(value.html.attributeSource, activeSource, documentUris)
+    ) {
+      return {
+        value: null,
+        failures: ["Hover selected bindable metadata does not match the exact binding-shorthand target."],
+      };
+    }
+  } else {
+    return {
+      value: null,
+      failures: ["Hover selected bindable has an unsupported usage locus."],
     };
   }
 
@@ -1476,18 +1723,42 @@ function semanticRuntimeBindableHoverSelection(
       failures: ["Hover selected bindable has neither a type nor typed bindable uncertainty."],
     };
   }
+  const usageMode = semanticRuntimeBindableUsageModePresentation(
+    value,
+    runtimeAuthoredCommand,
+    documentUris,
+    originDocument,
+  );
+  if (usageMode.failures.length > 0) {
+    return { value: null, failures: usageMode.failures };
+  }
   const context: HoverCardContextLine[] = [];
+  let relationship: HoverCardContextLine | null = null;
   if (bindable.attribute !== bindable.name) {
     const owner = value.selectedDefinition?.targetName;
     const ownerIsSourceBacked = owner != null
       && semanticExactSourceReference(value.selectedDefinition?.targetSource ?? null) != null;
-    context.push({
+    relationship = {
       prefix: "Maps to:",
       value: ownerIsSourceBacked ? `${owner}.${bindable.name}` : bindable.name,
       suffix: ".",
-    });
+    };
   }
-  context.push({ prefix: `Default mode: ${mode}.` });
+  const defaultDiffersFromEffective = usageMode.value.effectiveMode != null
+    && bindable.mode !== "default"
+    && bindable.mode !== usageMode.value.effectiveMode;
+  const defaultMode = defaultDiffersFromEffective
+    ? { prefix: `Default mode: ${mode}.` }
+    : null;
+  // The exact usage claim outranks declaration/navigation context when the renderer must shed detail.
+  if (usageMode.value.context != null) {
+    context.push(defaultMode == null
+      ? usageMode.value.context
+      : { ...usageMode.value.context, tertiary: defaultMode });
+  }
+  if (relationship != null) {
+    context.push(relationship);
+  }
 
   return {
     value: {
@@ -1715,11 +1986,18 @@ function semanticRuntimeResourceAuthoredOrRuntimeNameMatches(
   switch (definition.resourceKind) {
     case "custom-attribute":
     case "template-controller":
-      return semanticRuntimeNormalizedAttributeTargetAtActiveSource(
-        value,
-        activeSource,
-        activeText,
-        documentUris,
+      return (
+        semanticRuntimeNormalizedAttributeTargetAtActiveSource(
+          value,
+          activeSource,
+          activeText,
+          documentUris,
+        )
+        ?? semanticRuntimeNormalizedShorthandTargetAtActiveSource(
+          value,
+          activeSource,
+          documentUris,
+        )
       ) === runtimeMatchedName;
     case "binding-command":
       return semanticRuntimeNormalizedBindingCommandAtActiveSource(
@@ -1862,6 +2140,15 @@ function semanticRuntimeResourceAttributeLocusOwnsActiveSource(
   activeText: string,
   documentUris: WorkspaceDocumentUris,
 ): boolean {
+  if (
+    semanticRuntimeNormalizedShorthandTargetAtActiveSource(
+      value,
+      activeSource,
+      documentUris,
+    ) != null
+  ) {
+    return true;
+  }
   const authoredTarget = semanticRuntimeBindableTargetName(value.html.attributeName);
   const attributeSource = semanticExactSourceReference(value.html.attributeSource);
   const exactActiveSource = semanticExactSourceReference(activeSource);
@@ -1870,6 +2157,30 @@ function semanticRuntimeResourceAttributeLocusOwnsActiveSource(
     && activeText === authoredTarget
     && semanticRuntimeExactSourceContains(value.html.attributeSource, activeSource, documentUris)
     && attributeSource?.start === exactActiveSource?.start;
+}
+
+function semanticRuntimeNormalizedShorthandTargetAtActiveSource(
+  value: SemanticTemplateCursorInfoResult,
+  activeSource: SemanticSourceReference,
+  documentUris: WorkspaceDocumentUris,
+): string | null {
+  const bindable = value.selectedBindable;
+  const rawAttributeName = value.html.attributeName;
+  if (
+    bindable?.usageModeLocus !== "attribute-pattern"
+    || rawAttributeName == null
+    || !sameExactSourceReference(activeSource, bindable.usageModeTargetSource, documentUris)
+    || !semanticRuntimeExactSourceContains(value.html.attributeSource, activeSource, documentUris)
+  ) {
+    return null;
+  }
+  const runtimeRawAttribute = runtimeAttributeName(
+    rawAttributeName,
+    semanticRuntimeHoverHtmlNamespace(value),
+  );
+  return runtimeRawAttribute.startsWith(":") && runtimeRawAttribute.length > 1
+    ? runtimeRawAttribute.slice(1)
+    : null;
 }
 
 function semanticRuntimeResourceValueLocusOwnsActiveSource(
@@ -2220,6 +2531,416 @@ function semanticRuntimeUncertaintyLabel(value: SemanticTemplateCursorInfoResult
     default:
       return null;
   }
+}
+
+type SemanticRuntimeHoverBindable = NonNullable<SemanticTemplateCursorInfoResult["selectedBindable"]>;
+
+interface SemanticRuntimeBindableUsageModePresentation {
+  readonly effectiveMode: SemanticRuntimeHoverBindable["usageEffectiveMode"];
+  readonly context: HoverCardContextLine | null;
+}
+
+function semanticRuntimeBindableUsageModePresentation(
+  value: SemanticTemplateCursorInfoResult,
+  runtimeAuthoredCommand: string | null,
+  documentUris: WorkspaceDocumentUris,
+  originDocument: TextDocument,
+): SemanticRuntimeReadMapping<SemanticRuntimeBindableUsageModePresentation> {
+  const bindable = value.selectedBindable!;
+  const authority = bindable.usageModeAuthority;
+  if (authority == null) {
+    return semanticRuntimeInvalidBindableUsageMode();
+  }
+
+  const command = bindable.usageModeCommand;
+  const commandSource = bindable.usageModeCommandSource;
+  const commandKind = bindable.usageModeCommandKind;
+  if (
+    (command != null && (typeof command !== "string" || command.length === 0))
+    || command !== runtimeAuthoredCommand
+    || (
+      authority !== "open"
+      && (
+        (command == null) !== (commandKind == null)
+        || (command == null) !== (commandSource == null)
+      )
+    )
+    || (
+      authority === "open"
+      && command == null
+      && (commandKind != null || commandSource != null)
+    )
+    || !semanticRuntimeUsageModeCommandKindIsValid(commandKind)
+    || (
+      command != null
+      && commandSource != null
+      && !semanticRuntimeUsageModeCommandSourceIsValid(
+        commandSource,
+        command,
+        value,
+        documentUris,
+        originDocument,
+      )
+      || (
+        commandSource != null
+        && !semanticRuntimeExactSourceContains(
+          value.html.attributeSource,
+          commandSource,
+          documentUris,
+        )
+      )
+    )
+  ) {
+    return semanticRuntimeInvalidBindableUsageMode();
+  }
+
+  const effectiveMode = bindable.usageEffectiveMode;
+  const effectiveModeLabel = effectiveMode == null
+    ? null
+    : semanticRuntimeBindableModeLabel(effectiveMode);
+  const source = bindable.usageModeSource;
+  const openReason = bindable.usageModeOpenReason;
+  if (authority === "open") {
+    if (
+      effectiveMode != null
+      || typeof openReason !== "string"
+      || openReason.trim().length === 0
+      || !semanticRuntimeOpenUsageModeSourceIsValid(
+        source,
+        commandSource,
+        value,
+        documentUris,
+        originDocument,
+      )
+    ) {
+      return semanticRuntimeInvalidBindableUsageMode();
+    }
+    return { value: { effectiveMode: null, context: null }, failures: [] };
+  }
+  if (openReason != null) return semanticRuntimeInvalidBindableUsageMode();
+  if (!semanticRuntimeUsageValueIsCurrent(value, documentUris, originDocument)) {
+    return semanticRuntimeInvalidBindableUsageMode();
+  }
+
+  if (authority === "plain-literal") {
+    if (
+      effectiveMode != null
+      || command != null
+      || !semanticRuntimeUsageModeSourceIsOwnedByCurrentUsageValue(
+        source,
+        value,
+        documentUris,
+        originDocument,
+      )
+    ) {
+      return semanticRuntimeInvalidBindableUsageMode();
+    }
+    return {
+      value: {
+        effectiveMode: null,
+        context: { prefix: "Static value; no binding mode." },
+      },
+      failures: [],
+    };
+  }
+
+  if (effectiveMode == null || effectiveModeLabel == null || source == null) {
+    return semanticRuntimeInvalidBindableUsageMode();
+  }
+
+  let authorityLabel: string;
+  switch (authority) {
+    case "explicit-command":
+      if (
+        command == null
+        || commandKind !== "built-in"
+        || semanticRuntimeModeForFixedBindingCommand(command) !== effectiveMode
+        || !sameExactSourceReference(source, commandSource, documentUris)
+      ) {
+        return semanticRuntimeInvalidBindableUsageMode();
+      }
+      authorityLabel = "explicit command";
+      break;
+    case "binding-behavior":
+      if (
+        command == null
+        || commandKind !== "built-in"
+        || !semanticRuntimeUsageModeSourceMatchesCurrentToken(
+          source,
+          effectiveMode,
+          value,
+          documentUris,
+          originDocument,
+          false,
+        )
+        || !semanticRuntimeUsageModeSourceIsOwnedByCurrentUsageValue(
+          source,
+          value,
+          documentUris,
+          originDocument,
+        )
+      ) {
+        return semanticRuntimeInvalidBindableUsageMode();
+      }
+      authorityLabel = "binding behavior";
+      break;
+    case "bindable-default":
+      if (
+        command !== "bind"
+        || commandKind !== "built-in"
+        || bindable.mode === "default"
+        || bindable.mode !== effectiveMode
+        || !sameExactSourceReference(source, bindable.modeSource, documentUris)
+      ) {
+        return semanticRuntimeInvalidBindableUsageMode();
+      }
+      authorityLabel = "bindable default";
+      break;
+    case "framework-fallback":
+      if (
+        command !== "bind"
+        || commandKind !== "built-in"
+        || effectiveMode !== "toView"
+        || !sameExactSourceReference(source, commandSource, documentUris)
+      ) {
+        return semanticRuntimeInvalidBindableUsageMode();
+      }
+      authorityLabel = "framework fallback";
+      break;
+    case "interpolation":
+      if (
+        effectiveMode !== "toView"
+        || command != null
+        || commandKind != null
+        || !semanticRuntimeUsageModeSourceIsOwnedByCurrentUsageValue(
+          source,
+          value,
+          documentUris,
+          originDocument,
+        )
+      ) {
+        return semanticRuntimeInvalidBindableUsageMode();
+      }
+      authorityLabel = "interpolation";
+      break;
+    default:
+      return semanticRuntimeInvalidBindableUsageMode();
+  }
+
+  return {
+    value: {
+      effectiveMode,
+      context: { prefix: `Effective mode: ${effectiveModeLabel} (${authorityLabel}).` },
+    },
+    failures: [],
+  };
+}
+
+function semanticRuntimeUsageModeCommandKindIsValid(value: string | null): boolean {
+  return value == null
+    || value === "built-in"
+    || value === "custom"
+    || value === "opaque"
+    || value === "open";
+}
+
+function semanticRuntimeModeForFixedBindingCommand(
+  command: string,
+): SemanticRuntimeHoverBindable["usageEffectiveMode"] {
+  switch (command) {
+    case "one-time": return "oneTime";
+    case "to-view": return "toView";
+    case "from-view": return "fromView";
+    case "two-way": return "twoWay";
+    default: return null;
+  }
+}
+
+function semanticRuntimeUsageModeCommandSourceIsValid(
+  source: SemanticSourceReference,
+  command: string,
+  value: SemanticTemplateCursorInfoResult,
+  documentUris: WorkspaceDocumentUris,
+  originDocument: TextDocument,
+): boolean {
+  if (value.selectedBindable?.usageModeLocus === "attribute-pattern") {
+    return command === "bind"
+      && semanticRuntimeUsageModeSourceMatchesCurrentToken(
+        source,
+        ":",
+        value,
+        documentUris,
+        originDocument,
+        false,
+      )
+      && semanticRuntimeExactSourceContains(value.html.attributeSource, source, documentUris);
+  }
+  return semanticRuntimeUsageModeSourceMatchesCurrentToken(
+    source,
+    command,
+    value,
+    documentUris,
+    originDocument,
+    semanticRuntimeUsageCommandIsBrowserNormalized(value),
+  );
+}
+
+function semanticRuntimeUsageModeSourceMatchesCurrentToken(
+  source: SemanticSourceReference,
+  expected: string,
+  value: SemanticTemplateCursorInfoResult,
+  documentUris: WorkspaceDocumentUris,
+  originDocument: TextDocument,
+  browserNormalized: boolean,
+): boolean {
+  const exact = semanticExactSourceReference(source);
+  const sourceUri = exact == null ? null : semanticSourceReferenceUri(exact, documentUris);
+  const range = exact == null ? null : semanticSourceRangeForDocument(exact, originDocument);
+  if (
+    exact == null
+    || sourceUri == null
+    || !documentUris.sameDocument(sourceUri, originDocument.uri)
+    || range == null
+  ) {
+    return false;
+  }
+  const text = originDocument.getText(range);
+  return (browserNormalized
+    ? runtimeAttributeName(text, semanticRuntimeHoverHtmlNamespace(value))
+    : text) === expected;
+}
+
+function semanticRuntimeOpenUsageModeSourceIsValid(
+  source: SemanticSourceReference | null,
+  commandSource: SemanticSourceReference | null,
+  value: SemanticTemplateCursorInfoResult,
+  documentUris: WorkspaceDocumentUris,
+  originDocument: TextDocument,
+): boolean {
+  if (source == null) return true;
+  const exact = semanticExactSourceReference(source);
+  const sourceUri = exact == null ? null : semanticSourceReferenceUri(exact, documentUris);
+  const range = exact == null ? null : semanticSourceRangeForDocument(exact, originDocument);
+  if (
+    exact == null
+    || sourceUri == null
+    || !documentUris.sameDocument(sourceUri, originDocument.uri)
+    || range == null
+  ) {
+    return false;
+  }
+  return sameExactSourceReference(source, commandSource, documentUris)
+    || semanticRuntimeUsageModeSourceIsOwnedByCurrentUsageValue(
+      source,
+      value,
+      documentUris,
+      originDocument,
+    )
+    || semanticRuntimeExactSourceContains(value.html.attributeSource, source, documentUris);
+}
+
+function semanticRuntimeUsageModeSourceIsOwnedByCurrentUsageValue(
+  source: SemanticSourceReference | null,
+  value: SemanticTemplateCursorInfoResult,
+  documentUris: WorkspaceDocumentUris,
+  originDocument: TextDocument,
+): boolean {
+  if (value.selectedBindable?.usageModeLocus !== "multi-binding") {
+    const valueSource = semanticExactSourceReference(value.html.attributeValueSource);
+    return source != null
+      && semanticRuntimeHtmlAttributeValueIsCurrent(value, documentUris, originDocument)
+      && (
+        valueSource == null
+          ? semanticRuntimeExactSourceContains(value.html.attributeSource, source, documentUris)
+          : semanticRuntimeExactSourceContains(valueSource, source, documentUris)
+      );
+  }
+  const valueSite = value.valueSite;
+  const valueSiteSource = semanticExactSourceReference(valueSite?.source ?? null);
+  return source != null
+    && valueSite != null
+    && valueSiteSource != null
+    && semanticRuntimeUsageValueSiteIsCurrent(value, documentUris, originDocument)
+    && semanticRuntimeExactSourceContains(valueSiteSource, source, documentUris);
+}
+
+function semanticRuntimeUsageValueIsCurrent(
+  value: SemanticTemplateCursorInfoResult,
+  documentUris: WorkspaceDocumentUris,
+  originDocument: TextDocument,
+): boolean {
+  return value.selectedBindable?.usageModeLocus === "multi-binding"
+    ? semanticRuntimeUsageValueSiteIsCurrent(value, documentUris, originDocument)
+    : semanticRuntimeHtmlAttributeValueIsCurrent(value, documentUris, originDocument);
+}
+
+function semanticRuntimeUsageValueSiteIsCurrent(
+  value: SemanticTemplateCursorInfoResult,
+  documentUris: WorkspaceDocumentUris,
+  originDocument: TextDocument,
+): boolean {
+  const valueSite = value.valueSite;
+  const source = semanticExactSourceReference(valueSite?.source ?? null);
+  const sourceUri = source == null ? null : semanticSourceReferenceUri(source, documentUris);
+  const range = source == null ? null : semanticSourceRangeForDocument(source, originDocument);
+  const sourceText = range == null ? null : originDocument.getText(range);
+  return valueSite != null
+    && source != null
+    && sourceUri != null
+    && documentUris.sameDocument(sourceUri, originDocument.uri)
+    && range != null
+    && semanticRuntimeExactSourceContains(value.html.attributeSource, source, documentUris)
+    && sameExactSourceReference(valueSite.source, value.html.attributeValueSource, documentUris)
+    && valueSite.rawValue === value.html.attributeValue
+    && sourceText === valueSite.rawValue;
+}
+
+function semanticRuntimeHtmlAttributeValueIsCurrent(
+  value: SemanticTemplateCursorInfoResult,
+  documentUris: WorkspaceDocumentUris,
+  originDocument: TextDocument,
+): boolean {
+  const attributeValue = value.html.attributeValue;
+  const valueSource = semanticExactSourceReference(value.html.attributeValueSource);
+  if (valueSource != null) {
+    const sourceUri = semanticSourceReferenceUri(valueSource, documentUris);
+    const range = semanticSourceRangeForDocument(valueSource, originDocument);
+    return attributeValue != null
+      && sourceUri != null
+      && documentUris.sameDocument(sourceUri, originDocument.uri)
+      && range != null
+      && semanticRuntimeExactSourceContains(value.html.attributeSource, valueSource, documentUris)
+      && originDocument.getText(range) === attributeValue;
+  }
+  const attributeSource = semanticExactSourceReference(value.html.attributeSource);
+  const sourceUri = attributeSource == null ? null : semanticSourceReferenceUri(attributeSource, documentUris);
+  const range = attributeSource == null
+    ? null
+    : semanticSourceRangeForDocument(attributeSource, originDocument);
+  const sourceText = range == null ? null : originDocument.getText(range);
+  return value.html.attributeValueSource == null
+    && attributeValue === ""
+    && value.html.attributeName != null
+    && attributeSource != null
+    && sourceUri != null
+    && documentUris.sameDocument(sourceUri, originDocument.uri)
+    && range != null
+    && sourceText != null
+    && sourceText.startsWith(value.html.attributeName)
+    && sourceText.slice(value.html.attributeName.length).trim().length === 0;
+}
+
+function semanticRuntimeUsageCommandIsBrowserNormalized(
+  value: SemanticTemplateCursorInfoResult,
+): boolean {
+  return value.selectedBindable?.usageModeLocus === "attribute";
+}
+
+function semanticRuntimeInvalidBindableUsageMode(): SemanticRuntimeReadMapping<SemanticRuntimeBindableUsageModePresentation> {
+  return {
+    value: { effectiveMode: null, context: null },
+    failures: ["Hover selected bindable usage mode metadata is inconsistent."],
+  };
 }
 
 // ============================================================================

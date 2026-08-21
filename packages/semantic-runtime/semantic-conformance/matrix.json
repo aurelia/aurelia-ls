@@ -2015,8 +2015,21 @@
                 "value.selectedBindable.name": "title",
                 "value.selectedBindable.attribute": "title",
                 "value.selectedBindable.mode": "toView",
-                "value.selectedBindable.attributeSource": null
-              }
+                "value.selectedBindable.attributeSource": null,
+                "value.selectedBindable.usageEffectiveMode": "toView",
+                "value.selectedBindable.usageModeAuthority": "framework-fallback",
+                "value.selectedBindable.usageModeCommand": "bind",
+                "value.selectedBindable.usageModeCommandKind": "built-in",
+                "value.selectedBindable.usageModeLocus": "attribute",
+                "value.selectedBindable.usagePresentationKind": "bindable-attribute",
+                "value.selectedBindable.usageModeOpenReason": null,
+                "value.html.attributeValue": "titleText"
+              },
+              "rows": [
+                { "rowPath": "value.selectedBindable", "sourceField": "usageModeTargetSource", "source": { "marker": "title.bind=\"titleText\"", "token": "title" }, "count": 1 },
+                { "rowPath": "value.selectedBindable", "sourceField": "usageModeCommandSource", "source": { "marker": "title.bind=\"titleText\"", "token": "bind" }, "count": 1 },
+                { "rowPath": "value.html", "sourceField": "attributeValueSource", "source": { "marker": "title.bind=\"titleText\"", "token": "titleText" }, "count": 1 }
+              ]
             }
           ]
         },
@@ -2077,14 +2090,25 @@
                 "value.selectedDefinition.name": "display-hint",
                 "value.selectedBindable.name": "labelText",
                 "value.selectedBindable.attribute": "display-label",
-                "value.valueSite.siteKind": "multi-binding-value"
+                "value.valueSite.siteKind": "multi-binding-value",
+                "value.valueSite.bindingCommandName": null,
+                "value.valueSite.bindableAttribute": "message",
+                "value.selectedBindable.usageEffectiveMode": "toView",
+                "value.selectedBindable.usageModeAuthority": "framework-fallback",
+                "value.selectedBindable.usageModeCommand": "bind",
+                "value.selectedBindable.usageModeCommandKind": "built-in",
+                "value.selectedBindable.usageModeLocus": "multi-binding",
+                "value.selectedBindable.usagePresentationKind": "bindable-attribute",
+                "value.selectedBindable.usageModeOpenReason": null
               },
               "rows": [
                 {
                   "rowPath": "value.selectedBindable",
                   "sourceField": "attributeSource",
                   "source": { "sourceFile": "src/display-hint.ts", "marker": "@bindable({ attribute: 'display-label' }) labelText", "token": "display-label" }
-                }
+                },
+                { "rowPath": "value.selectedBindable", "sourceField": "usageModeTargetSource", "source": { "marker": "display-hint=\"message.bind: statusMessage; display-label.bind: aliasLabel", "token": "display-label" }, "count": 1 },
+                { "rowPath": "value.selectedBindable", "sourceField": "usageModeCommandSource", "source": { "marker": "display-label.bind: aliasLabel", "token": "bind" }, "count": 1 }
               ]
             }
           ]
@@ -2116,13 +2140,54 @@
           "expectations": [
             {
               "name": "cursor info",
-              "query": { "kind": "template-cursor-info", "options": { "detail": "handles" } },
+              "query": { "kind": "template-cursor-info" },
               "equals": {
                 "value.siteKind": "attribute-name",
                 "value.selectedDefinition.name": "display-hint",
                 "value.selectedBindable.name": "message",
-                "value.selectedBindable.attribute": "message"
-              }
+                "value.selectedBindable.attribute": "message",
+                "value.selectedBindable.usageEffectiveMode": "toView",
+                "value.selectedBindable.usageModeAuthority": "framework-fallback",
+                "value.selectedBindable.usageModeCommand": "bind",
+                "value.selectedBindable.usageModeCommandKind": "built-in",
+                "value.selectedBindable.usageModeLocus": "attribute",
+                "value.selectedBindable.usagePresentationKind": "resource-primary",
+                "value.selectedBindable.usageModeOpenReason": null
+              },
+              "rows": [
+                { "rowPath": "value.selectedBindable", "sourceField": "usageModeTargetSource", "source": { "marker": "display-hint.bind=\"statusMessage\"", "token": "display-hint" }, "count": 1 },
+                { "rowPath": "value.selectedBindable", "sourceField": "usageModeCommandSource", "source": { "marker": "display-hint.bind=\"statusMessage\"", "token": "bind" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "colon-primary-custom-attribute-bindable-cursor",
+          "domainAxis": "query-locus",
+          "capability": "template-cursor-info",
+          "cursor": { "marker": ":two-way-state=\"twoWayValue\"", "token": "two-way-state" },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info", "options": { "detail": "handles" } },
+              "equals": {
+                "value.selectedDefinition.resourceKind": "custom-attribute",
+                "value.selectedDefinition.name": "two-way-state",
+                "value.selectedBindable.name": "data",
+                "value.selectedBindable.mode": "twoWay",
+                "value.selectedBindable.usageEffectiveMode": "twoWay",
+                "value.selectedBindable.usageModeAuthority": "bindable-default",
+                "value.selectedBindable.usageModeCommand": "bind",
+                "value.selectedBindable.usageModeCommandKind": "built-in",
+                "value.selectedBindable.usageModeLocus": "attribute-pattern",
+                "value.selectedBindable.usagePresentationKind": "resource-primary",
+                "value.selectedBindable.usageModeOpenReason": null
+              },
+              "rows": [
+                { "rowPath": "value.selectedBindable", "sourceField": "usageModeTargetSource", "source": { "marker": ":two-way-state=\"twoWayValue\"", "token": "two-way-state" }, "count": 1 },
+                { "rowPath": "value.selectedBindable", "sourceField": "usageModeCommandSource", "source": { "marker": ":two-way-state=\"twoWayValue\"", "token": ":" }, "count": 1 },
+                { "rowPath": "value.html", "sourceField": "attributeValueSource", "source": { "marker": ":two-way-state=\"twoWayValue\"", "token": "twoWayValue" }, "count": 1 }
+              ]
             }
           ]
         },

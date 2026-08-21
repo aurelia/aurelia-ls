@@ -92,6 +92,30 @@
         "reason": "Hover should identify the exact `<mode-panel>` custom-element resource and must not invent TypeScript implementation or compiler-world provenance."
       },
       {
+        "id": "local-bindable-one-time-usage",
+        "file": "src/template-local-template-semantics-app.html",
+        "anchor": "one-time-value.bind=\"oneTimeValue\"",
+        "at": "one-time-value",
+        "verdict": "correct",
+        "reason": "Hover should show the exact one-time effective mode resolved from the local bindable default, then retain the generated-property mapping without repeating the equal default."
+      },
+      {
+        "id": "local-bindable-two-way-usage",
+        "file": "src/template-local-template-semantics-app.html",
+        "anchor": "two-way-value.bind=\"twoWayValue\"",
+        "at": "two-way-value",
+        "verdict": "correct",
+        "reason": "Hover should show the exact two-way effective mode resolved from the local bindable default and preserve its exact generated-property mapping."
+      },
+      {
+        "id": "local-bindable-default-sentinel-usage",
+        "file": "src/template-local-template-semantics-app.html",
+        "anchor": "default-value.bind=\"defaultValue\"",
+        "at": "default-value",
+        "verdict": "correct",
+        "reason": "Hover should show the framework-fallback to-view effective mode without repeating the declaration-only `default` sentinel as if it were a runtime direction."
+      },
+      {
         "id": "local-bindable-property-declaration",
         "file": "src/template-local-template-semantics-app.html",
         "anchor": "<bindable name=\"oneTimeValue\"",

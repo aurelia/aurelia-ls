@@ -1951,13 +1951,20 @@ describe("mapSemanticRuntimeTemplateHover", () => {
           source: null,
           attributeSource: {
             kind: "source-span-address",
-            label: `src/component.html@${start}..${start + "item.bind".length}`,
+            label: `src/component.html@${start}..${start + 'item.bind="message"'.length}`,
             path: "src/component.html",
             start,
-            end: start + "item.bind".length,
+            end: start + 'item.bind="message"'.length,
+          },
+          attributeValueSource: {
+            kind: "source-span-address",
+            label: `src/component.html@${start + 'item.bind="'.length}..${start + 'item.bind="message'.length}`,
+            path: "src/component.html",
+            start: start + 'item.bind="'.length,
+            end: start + 'item.bind="message'.length,
           },
         },
-        valueSite: { bindingCommandName: "bind" },
+        valueSite: null,
         selectedDefinition: {
           resourceKind: "custom-element",
           name: "product-card",
@@ -1977,6 +1984,34 @@ describe("mapSemanticRuntimeTemplateHover", () => {
           setterTargetName: "item",
           nullable: false,
           valueType: "CatalogItem | null",
+          usagePresentationKind: "bindable-attribute",
+          usageEffectiveMode: "toView",
+          usageModeAuthority: "framework-fallback",
+          usageModeCommand: "bind",
+          usageModeCommandSource: {
+            kind: "source-span-address",
+            label: `src/component.html@${start + "item.".length}..${start + "item.bind".length}`,
+            path: "src/component.html",
+            start: start + "item.".length,
+            end: start + "item.bind".length,
+          },
+          usageModeCommandKind: "built-in",
+          usageModeLocus: "attribute",
+          usageModeTargetSource: {
+            kind: "source-span-address",
+            label: `src/component.html@${start}..${start + "item".length}`,
+            path: "src/component.html",
+            start,
+            end: start + "item".length,
+          },
+          usageModeSource: {
+            kind: "source-span-address",
+            label: `src/component.html@${start + "item.".length}..${start + "item.bind".length}`,
+            path: "src/component.html",
+            start: start + "item.".length,
+            end: start + "item.bind".length,
+          },
+          usageModeOpenReason: null,
         },
         selectedMemberName: null,
         selectedMember: null,
@@ -2038,7 +2073,7 @@ describe("mapSemanticRuntimeTemplateHover", () => {
       end: hoverDocument.positionAt(start + "item".length),
     });
     expect(markdown).toContain("(bindable) item: CatalogItem | null");
-    expect(markdown).toContain("Default mode: to view.");
+    expect(markdown).toContain("Effective mode: to view (framework fallback).");
     expect(markdown).not.toContain("nullable");
     expect(markdown).toContain("First diagnostic.");
     expect(markdown).toContain("Error `missing-expression-member`");

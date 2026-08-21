@@ -389,6 +389,389 @@ test("native hover follows unsaved member documentation and deprecation changes"
   }
 }, 60_000);
 
+test("native hover follows unsaved top-level and inline effective binding modes", async () => {
+  const htmlPath = path.join(scopeFixture, "src/my-app.html");
+  const mainPath = path.join(scopeFixture, "src/main.ts");
+  const productPath = path.join(scopeFixture, "src/components/product-card.ts");
+  const displayHintPath = path.join(scopeFixture, "src/attributes/display-hint.ts");
+  const htmlUri = fileUri(scopeFixture, "src/my-app.html");
+  const mainUri = fileUri(scopeFixture, "src/main.ts");
+  const productUri = fileUri(scopeFixture, "src/components/product-card.ts");
+  const displayHintUri = fileUri(scopeFixture, "src/attributes/display-hint.ts");
+  const htmlBaseline = fs.readFileSync(htmlPath, "utf8");
+  const mainBaseline = fs.readFileSync(mainPath, "utf8");
+  const productBaseline = fs.readFileSync(productPath, "utf8");
+  const displayHintBaseline = fs.readFileSync(displayHintPath, "utf8");
+  const shorthandMain = mainBaseline
+    .replace(
+      "import Aurelia from 'aurelia';",
+      "import Aurelia, { ShortHandBindingSyntax } from 'aurelia';",
+    )
+    .replace("void Aurelia\n  .app({", "void Aurelia\n  .register(...ShortHandBindingSyntax)\n  .app({");
+  expect(shorthandMain).not.toBe(mainBaseline);
+  const twoWayProduct = productBaseline
+    .replace(
+      "import { bindable, customElement } from 'aurelia';",
+      "import { bindable, BindingMode, customElement } from 'aurelia';",
+    )
+    .replace(
+      "@bindable({ attribute: 'display-label' }) labelText = '';",
+      "@bindable({ attribute: 'display-label', mode: BindingMode.twoWay }) labelText = '';",
+    );
+  expect(twoWayProduct).not.toBe(productBaseline);
+  const primaryDisplayHint = displayHintBaseline.replace(
+    "export class DisplayHint {",
+    "export class DisplayHint {\n  @bindable value = '';",
+  );
+  expect(primaryDisplayHint).not.toBe(displayHintBaseline);
+  const changedText = htmlBaseline
+    .replace(
+      "display-hint=\"display-label.bind: preview.name",
+      "display-hint=\"display-label.two-way: preview.name",
+    )
+    .replace('display-label.bind="item.name"', 'display-label.two-way="item.name"');
+  expect(changedText).not.toBe(htmlBaseline);
+
+  const { connection, child, dispose, getStderr } = startServer(scopeFixture);
+  const diagnostics = createDiagnosticsRecorder(connection, child, getStderr);
+  let currentText = htmlBaseline;
+  let htmlVersion = 1;
+  try {
+    await initialize(connection, child, getStderr, scopeFixture);
+    openDocument(connection, mainUri, "typescript", mainBaseline);
+    openDocument(connection, productUri, "typescript", productBaseline);
+    openDocument(connection, displayHintUri, "typescript", displayHintBaseline);
+    openDocument(connection, htmlUri, "html", currentText);
+    await diagnostics.wait(htmlUri, 20_000);
+
+    const requestHover = async (marker: string, token = "display-label"): Promise<Hover | null> => {
+      const markerStart = currentText.indexOf(marker);
+      expect(markerStart, `expected binding-mode marker ${marker}`).toBeGreaterThanOrEqual(0);
+      const tokenStart = currentText.indexOf(token, markerStart);
+      expect(tokenStart).toBeGreaterThanOrEqual(markerStart);
+      return await connection.sendRequest<Hover | null>("textDocument/hover", {
+        textDocument: { uri: htmlUri },
+        position: positionAt(currentText, tokenStart + 2),
+      });
+    };
+    const topLevelDefault = [
+      "```ts",
+      "(bindable) display-label: string",
+      "```",
+      "",
+      "Effective mode: to view (framework fallback).",
+      "Maps to: `ProductCard.labelText`.",
+    ].join("\n");
+    const inlineDefault = [
+      "```ts",
+      "(bindable) display-label: string",
+      "```",
+      "",
+      "Effective mode: to view (framework fallback).",
+      "Maps to: `DisplayHint.labelText`.",
+    ].join("\n");
+    for (const [marker, expected] of [
+      ['display-label.bind="item.name"', topLevelDefault],
+      ['display-hint="display-label.bind:', inlineDefault],
+    ] as const) {
+      const hover = await requestHover(marker);
+      expect((hover?.contents as { value?: string } | undefined)?.value ?? "").toBe(expected);
+      expect(hover?.range == null ? null : textForRange(currentText, hover.range)).toBe("display-label");
+    }
+    const canonicalAttributeHover = await requestHover(
+      'display-hint="display-label.bind: preview.name',
+      "display-hint",
+    );
+    expect((canonicalAttributeHover?.contents as { value?: string } | undefined)?.value ?? "").toBe([
+      "```text",
+      "(custom attribute) display-hint",
+      "```",
+      "",
+      "Aurelia custom attribute. Implementation: `DisplayHint`.",
+    ].join("\n"));
+    expect(canonicalAttributeHover?.range == null
+      ? null
+      : textForRange(currentText, canonicalAttributeHover.range)).toBe("display-hint");
+
+    changeDocument(connection, productUri, twoWayProduct, 2);
+    await diagnostics.wait(htmlUri, 20_000);
+    const topLevelBindableDefault = [
+      "```ts",
+      "(bindable) display-label: string",
+      "```",
+      "",
+      "Effective mode: two way (bindable default).",
+      "Maps to: `ProductCard.labelText`.",
+    ].join("\n");
+    let crossFileHover: Hover | null = null;
+    const crossFileDeadline = Date.now() + 20_000;
+    do {
+      crossFileHover = await requestHover('display-label.bind="item.name"');
+      if (((crossFileHover?.contents as { value?: string } | undefined)?.value ?? "") === topLevelBindableDefault) break;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    } while (Date.now() < crossFileDeadline);
+    expect((crossFileHover?.contents as { value?: string } | undefined)?.value ?? "")
+      .toBe(topLevelBindableDefault);
+
+    currentText = htmlBaseline.replace(
+      'display-label.bind="item.name"',
+      'display-label.one-time="item.name"',
+    );
+    changeDocument(connection, htmlUri, currentText, ++htmlVersion);
+    await diagnostics.wait(htmlUri, 20_000);
+    const topLevelExplicitOneTime = [
+      "```ts",
+      "(bindable) display-label: string",
+      "```",
+      "",
+      "Effective mode: one time (explicit command). Default mode: two way.",
+      "Maps to: `ProductCard.labelText`.",
+    ].join("\n");
+    const oneTimeDeadline = Date.now() + 20_000;
+    do {
+      crossFileHover = await requestHover('display-label.one-time="item.name"');
+      if (((crossFileHover?.contents as { value?: string } | undefined)?.value ?? "") === topLevelExplicitOneTime) break;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    } while (Date.now() < oneTimeDeadline);
+    expect((crossFileHover?.contents as { value?: string } | undefined)?.value ?? "")
+      .toBe(topLevelExplicitOneTime);
+
+    changeDocument(connection, productUri, productBaseline, 3);
+    currentText = htmlBaseline;
+    changeDocument(connection, htmlUri, currentText, ++htmlVersion);
+    await diagnostics.wait(htmlUri, 20_000);
+
+    currentText = changedText;
+    changeDocument(connection, htmlUri, currentText, ++htmlVersion);
+    await diagnostics.wait(htmlUri, 20_000);
+    const topLevelExplicit = [
+      "```ts",
+      "(bindable) display-label: string",
+      "```",
+      "",
+      "Effective mode: two way (explicit command). Default mode: to view.",
+      "Maps to: `ProductCard.labelText`.",
+    ].join("\n");
+    const inlineExplicit = [
+      "```ts",
+      "(bindable) display-label: string",
+      "```",
+      "",
+      "Effective mode: two way (explicit command). Default mode: to view.",
+      "Maps to: `DisplayHint.labelText`.",
+    ].join("\n");
+    for (const [marker, expected] of [
+      ['display-label.two-way="item.name"', topLevelExplicit],
+      ['display-hint="display-label.two-way:', inlineExplicit],
+    ] as const) {
+      const deadline = Date.now() + 20_000;
+      let hover: Hover | null = null;
+      while (Date.now() < deadline) {
+        hover = await requestHover(marker);
+        if (((hover?.contents as { value?: string } | undefined)?.value ?? "") === expected) break;
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      expect((hover?.contents as { value?: string } | undefined)?.value ?? "").toBe(expected);
+      expect(hover?.range == null ? null : textForRange(currentText, hover.range)).toBe("display-label");
+    }
+
+    const inlinePlainText = changedText.replace(
+      "display-label.two-way: preview.name",
+      "display-label: Static label",
+    );
+    currentText = inlinePlainText;
+    changeDocument(connection, htmlUri, currentText, ++htmlVersion);
+    await diagnostics.wait(htmlUri, 20_000);
+    const inlinePlain = [
+      "```ts",
+      "(bindable) display-label: string",
+      "```",
+      "",
+      "Static value; no binding mode.",
+      "Maps to: `DisplayHint.labelText`.",
+    ].join("\n");
+    const plainDeadline = Date.now() + 20_000;
+    let hover: Hover | null = null;
+    do {
+      hover = await requestHover('display-hint="display-label: Static label');
+      if (((hover?.contents as { value?: string } | undefined)?.value ?? "") === inlinePlain) break;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    } while (Date.now() < plainDeadline);
+    expect((hover?.contents as { value?: string } | undefined)?.value ?? "").toBe(inlinePlain);
+    expect(hover?.range == null ? null : textForRange(currentText, hover.range)).toBe("display-label");
+
+    const inlineInterpolationText = changedText.replace(
+      "display-label.two-way: preview.name",
+      "display-label: Hello ${preview.name}",
+    );
+    currentText = inlineInterpolationText;
+    changeDocument(connection, htmlUri, currentText, ++htmlVersion);
+    await diagnostics.wait(htmlUri, 20_000);
+    const inlineInterpolation = [
+      "```ts",
+      "(bindable) display-label: string",
+      "```",
+      "",
+      "Effective mode: to view (interpolation).",
+      "Maps to: `DisplayHint.labelText`.",
+    ].join("\n");
+    const deadline = Date.now() + 20_000;
+    do {
+      hover = await requestHover('display-hint="display-label: Hello ${preview.name}');
+      if (((hover?.contents as { value?: string } | undefined)?.value ?? "") === inlineInterpolation) break;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    } while (Date.now() < deadline);
+    expect((hover?.contents as { value?: string } | undefined)?.value ?? "").toBe(inlineInterpolation);
+    expect(hover?.range == null ? null : textForRange(currentText, hover.range)).toBe("display-label");
+
+    const valuelessText = htmlBaseline.replace(
+      'selected.bind="item.sku === state.selectedSku"',
+      "selected",
+    );
+    currentText = valuelessText;
+    changeDocument(connection, htmlUri, currentText, ++htmlVersion);
+    await diagnostics.wait(htmlUri, 20_000);
+    const productCardStart = currentText.indexOf("<product-card");
+    const selectedStart = currentText.indexOf("selected", productCardStart);
+    expect(productCardStart).toBeGreaterThanOrEqual(0);
+    expect(selectedStart).toBeGreaterThan(productCardStart);
+    const valuelessExpected = [
+      "```ts",
+      "(bindable) selected: boolean",
+      "```",
+      "",
+      "Static value; no binding mode.",
+    ].join("\n");
+    const valuelessDeadline = Date.now() + 20_000;
+    do {
+      hover = await connection.sendRequest<Hover | null>("textDocument/hover", {
+        textDocument: { uri: htmlUri },
+        position: positionAt(currentText, selectedStart + 2),
+      });
+      if (((hover?.contents as { value?: string } | undefined)?.value ?? "") === valuelessExpected) break;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    } while (Date.now() < valuelessDeadline);
+    expect((hover?.contents as { value?: string } | undefined)?.value ?? "").toBe(valuelessExpected);
+    expect(hover?.range == null ? null : textForRange(currentText, hover.range)).toBe("selected");
+
+    changeDocument(connection, displayHintUri, primaryDisplayHint, 2);
+    const resourceBindText = htmlBaseline.replace(
+      "  </main>",
+      '    <section display-hint.bind="state.searchText"></section>\n  </main>',
+    );
+    currentText = resourceBindText;
+    changeDocument(connection, htmlUri, currentText, ++htmlVersion);
+    await diagnostics.wait(htmlUri, 20_000);
+    const resourceModeExpected = [
+      "```text",
+      "(custom attribute) display-hint",
+      "```",
+      "",
+      "Effective mode: to view (framework fallback).",
+      "Aurelia custom attribute. Implementation: `DisplayHint`.",
+    ].join("\n");
+    const resourceDeadline = Date.now() + 20_000;
+    do {
+      hover = await requestHover('display-hint.bind="state.searchText"', "display-hint");
+      if (((hover?.contents as { value?: string } | undefined)?.value ?? "") === resourceModeExpected) break;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    } while (Date.now() < resourceDeadline);
+    expect((hover?.contents as { value?: string } | undefined)?.value ?? "").toBe(resourceModeExpected);
+    expect(hover?.range == null ? null : textForRange(currentText, hover.range)).toBe("display-hint");
+
+    const shorthandText = resourceBindText
+      .replace('display-label.bind="item.name"', ':display-label="item.name"')
+      .replace('display-hint.bind="state.searchText"', ':display-hint="state.searchText"');
+    changeDocument(connection, mainUri, shorthandMain, 2);
+    currentText = shorthandText;
+    changeDocument(connection, htmlUri, currentText, ++htmlVersion);
+    await diagnostics.wait(htmlUri, 20_000);
+    const shorthandExpected = [
+      "```ts",
+      "(bindable) display-label: string",
+      "```",
+      "",
+      "Effective mode: to view (framework fallback).",
+      "Maps to: `ProductCard.labelText`.",
+    ].join("\n");
+    const shorthandDeadline = Date.now() + 20_000;
+    do {
+      hover = await requestHover(':display-label="item.name"');
+      if (((hover?.contents as { value?: string } | undefined)?.value ?? "") === shorthandExpected) break;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    } while (Date.now() < shorthandDeadline);
+    expect((hover?.contents as { value?: string } | undefined)?.value ?? "").toBe(shorthandExpected);
+    expect(hover?.range == null ? null : textForRange(currentText, hover.range)).toBe("display-label");
+    const resourceShorthandDeadline = Date.now() + 20_000;
+    do {
+      hover = await requestHover(':display-hint="state.searchText"', "display-hint");
+      if (((hover?.contents as { value?: string } | undefined)?.value ?? "") === resourceModeExpected) break;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    } while (Date.now() < resourceShorthandDeadline);
+    expect((hover?.contents as { value?: string } | undefined)?.value ?? "").toBe(resourceModeExpected);
+    expect(hover?.range == null ? null : textForRange(currentText, hover.range)).toBe("display-hint");
+    expect(fs.readFileSync(htmlPath, "utf8")).toBe(htmlBaseline);
+    expect(fs.readFileSync(mainPath, "utf8")).toBe(mainBaseline);
+    expect(fs.readFileSync(productPath, "utf8")).toBe(productBaseline);
+    expect(fs.readFileSync(displayHintPath, "utf8")).toBe(displayHintBaseline);
+  } finally {
+    diagnostics.dispose();
+    dispose();
+    child.kill("SIGKILL");
+    await waitForExit(child);
+  }
+}, 300_000);
+
+test("native hover keeps a dirty static custom-attribute alias as a resource card", async () => {
+  const htmlPath = path.join(scopeFixture, "src/my-app.html");
+  const attributePath = path.join(scopeFixture, "src/attributes/display-hint.ts");
+  const htmlUri = fileUri(scopeFixture, "src/my-app.html");
+  const attributeUri = fileUri(scopeFixture, "src/attributes/display-hint.ts");
+  const htmlBaseline = fs.readFileSync(htmlPath, "utf8");
+  const attributeBaseline = fs.readFileSync(attributePath, "utf8");
+  const htmlText = htmlBaseline.replace(
+    "  </main>",
+    '    <div title="Native and Aurelia">Provider coexistence</div>\n  </main>',
+  );
+  const attributeText = attributeBaseline.replace(
+    "  name: 'display-hint',",
+    "  name: 'display-hint',\n  aliases: ['title'],",
+  );
+  expect(htmlText).not.toBe(htmlBaseline);
+  expect(attributeText).not.toBe(attributeBaseline);
+
+  const { connection, child, dispose, getStderr } = startServer(scopeFixture);
+  const diagnostics = createDiagnosticsRecorder(connection, child, getStderr);
+  try {
+    await initialize(connection, child, getStderr, scopeFixture);
+    openDocument(connection, attributeUri, "typescript", attributeText);
+    openDocument(connection, htmlUri, "html", htmlText);
+    await diagnostics.wait(htmlUri, 20_000);
+    const titleStart = htmlText.indexOf('title="Native and Aurelia"');
+    expect(titleStart).toBeGreaterThanOrEqual(0);
+    const hover = await connection.sendRequest<Hover | null>("textDocument/hover", {
+      textDocument: { uri: htmlUri },
+      position: positionAt(htmlText, titleStart + 2),
+    });
+    expect((hover?.contents as { value?: string } | undefined)?.value ?? "").toBe([
+      "```text",
+      "(custom attribute) title",
+      "```",
+      "",
+      "Static value; no binding mode.",
+      "Aurelia custom attribute. Alias for: `display-hint`. Implementation: `DisplayHint`.",
+    ].join("\n"));
+    expect(hover?.range == null ? null : textForRange(htmlText, hover.range)).toBe("title");
+    expect(fs.readFileSync(htmlPath, "utf8")).toBe(htmlBaseline);
+    expect(fs.readFileSync(attributePath, "utf8")).toBe(attributeBaseline);
+  } finally {
+    diagnostics.dispose();
+    dispose();
+    child.kill("SIGKILL");
+    await waitForExit(child);
+  }
+}, 60_000);
+
 function requireDocumentSymbol(
   symbols: readonly DocumentSymbol[],
   name: string,

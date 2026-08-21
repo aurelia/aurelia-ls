@@ -58,6 +58,171 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 Aurelia custom element.
 ````
 
+## local-bindable-one-time-usage
+
+### Probe
+
+```json
+{
+  "anchor": "one-time-value.bind=\"oneTimeValue\"",
+  "at": "one-time-value",
+  "atOccurrence": 1,
+  "displayPosition": "src/template-local-template-semantics-app.html:3:5",
+  "file": "src/template-local-template-semantics-app.html",
+  "lspPosition": {
+    "character": 4,
+    "line": 2
+  },
+  "occurrence": 1
+}
+```
+
+### hover
+
+```json
+{
+  "outcome": "result",
+  "result": {
+    "contentsKind": "markdown",
+    "markdownCodePoints": 143,
+    "range": {
+      "end": {
+        "character": 18,
+        "line": 2
+      },
+      "start": {
+        "character": 4,
+        "line": 2
+      }
+    },
+    "rangeText": "one-time-value"
+  }
+}
+```
+
+### Hover markdown
+
+````markdown
+```ts
+(bindable) one-time-value
+```
+
+Effective mode: one time (bindable default).
+Maps to: `oneTimeValue`.
+
+Type unavailable for this bindable.
+````
+
+## local-bindable-two-way-usage
+
+### Probe
+
+```json
+{
+  "anchor": "two-way-value.bind=\"twoWayValue\"",
+  "at": "two-way-value",
+  "atOccurrence": 1,
+  "displayPosition": "src/template-local-template-semantics-app.html:6:5",
+  "file": "src/template-local-template-semantics-app.html",
+  "lspPosition": {
+    "character": 4,
+    "line": 5
+  },
+  "occurrence": 1
+}
+```
+
+### hover
+
+```json
+{
+  "outcome": "result",
+  "result": {
+    "contentsKind": "markdown",
+    "markdownCodePoints": 140,
+    "range": {
+      "end": {
+        "character": 17,
+        "line": 5
+      },
+      "start": {
+        "character": 4,
+        "line": 5
+      }
+    },
+    "rangeText": "two-way-value"
+  }
+}
+```
+
+### Hover markdown
+
+````markdown
+```ts
+(bindable) two-way-value
+```
+
+Effective mode: two way (bindable default).
+Maps to: `twoWayValue`.
+
+Type unavailable for this bindable.
+````
+
+## local-bindable-default-sentinel-usage
+
+### Probe
+
+```json
+{
+  "anchor": "default-value.bind=\"defaultValue\"",
+  "at": "default-value",
+  "atOccurrence": 1,
+  "displayPosition": "src/template-local-template-semantics-app.html:7:5",
+  "file": "src/template-local-template-semantics-app.html",
+  "lspPosition": {
+    "character": 4,
+    "line": 6
+  },
+  "occurrence": 1
+}
+```
+
+### hover
+
+```json
+{
+  "outcome": "result",
+  "result": {
+    "contentsKind": "markdown",
+    "markdownCodePoints": 143,
+    "range": {
+      "end": {
+        "character": 17,
+        "line": 6
+      },
+      "start": {
+        "character": 4,
+        "line": 6
+      }
+    },
+    "rangeText": "default-value"
+  }
+}
+```
+
+### Hover markdown
+
+````markdown
+```ts
+(bindable) default-value
+```
+
+Effective mode: to view (framework fallback).
+Maps to: `defaultValue`.
+
+Type unavailable for this bindable.
+````
+
 ## local-bindable-property-declaration
 
 ### Probe

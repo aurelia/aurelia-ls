@@ -333,6 +333,65 @@ describe("Extension Host product-surface contracts", () => {
     expect(source).toContain("Current catalog status after migration.");
   });
 
+  test("keeps effective binding modes in the shared current/minimum product journey", () => {
+    const source = readFileSync(
+      new URL("./extension-host/suite/product-surface.test.cjs", import.meta.url),
+      "utf8",
+    );
+    const title = "projects current top-level and inline effective binding modes from the dirty buffer";
+    const start = source.indexOf(`test("${title}"`);
+    const end = source.indexOf("\n  test(", start + 1);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    const journey = source.slice(start, end);
+
+    expect(journey).toContain("async function()");
+    expect(journey).toContain("this.timeout(600_000)");
+    expect(journey).toContain('display-label.bind="item.name"');
+    expect(journey).toContain('display-hint="display-label.bind:');
+    expect(journey).toContain('display-label.two-way="item.name"');
+    expect(journey).toContain('display-hint="display-label.two-way:');
+    expect(journey).toContain('display-hint="display-label: Static label');
+    expect(journey).toContain('display-hint="display-label: Hello ${preview.name}');
+    expect(journey).toContain(':display-label="item.name"');
+    expect(journey).toContain("ShortHandBindingSyntax");
+    expect(journey).toContain(".register(...ShortHandBindingSyntax)");
+    expect(journey).toContain("BindingMode.twoWay");
+    expect(journey).toContain("productDocument.isDirty, true");
+    expect(journey).toContain("productLabelDefaultTwoWayHoverMarkdown");
+    expect(journey).toContain("productLabelExplicitOneTimeHoverMarkdown");
+    expect(journey).toContain("the explicit one-time command should outrank the dirty two-way default");
+    expect(journey).toContain("display-hint.bind=\"state.searchText\"");
+    expect(journey).toContain(":display-hint=\"state.searchText\"");
+    expect(journey).toContain("displayHintResourceModeHoverMarkdown");
+    expect(journey).toContain("retain resource identity and effective mode");
+    expect(journey).toContain("displayHintDocument");
+    expect(journey).toContain("productLabelBindableHoverMarkdown");
+    expect(journey).toContain("productLabelExplicitHoverMarkdown");
+    expect(journey).toContain("inlineLabelBindableHoverMarkdown");
+    expect(journey).toContain("inlineLabelExplicitHoverMarkdown");
+    expect(journey).toContain("inlineLabelStaticHoverMarkdown");
+    expect(journey).toContain("inlineLabelInterpolationHoverMarkdown");
+    expect(journey).toContain("the dirty colon shorthand should retain the exact bind effective mode");
+    expect(journey).toContain("with no native duplication");
+    expect(journey).toContain("exactHoverAt(");
+    expect(journey).toContain("document.isDirty, true");
+    expect(journey).toContain("mainDocument.isDirty, true");
+    expect(journey).toContain('readFileSync(document.uri.fsPath, "utf8")');
+    expect(journey).toContain('readFileSync(mainDocument.uri.fsPath, "utf8")');
+    expect(journey).toContain('executeCommand("workbench.action.files.revert")');
+    expect(journey).toContain("finally {");
+    expect(journey).not.toContain("this.skip");
+    expect(journey).not.toContain(".save(");
+
+    expect(source).toContain("Effective mode: to view (framework fallback).");
+    expect(source).toContain("Effective mode: two way (explicit command). Default mode: to view.");
+    expect(source).toContain("Static value; no binding mode.");
+    expect(source).toContain("Effective mode: to view (interpolation).");
+    expect(source).toContain("Maps to: `ProductCard.labelText`.");
+    expect(source).toContain("Maps to: `DisplayHint.labelText`.");
+  });
+
   test("keeps declaration and ambiguity host journeys sequential but independently bounded", () => {
     const source = readFileSync(
       new URL("./extension-host/suite/product-surface.test.cjs", import.meta.url),

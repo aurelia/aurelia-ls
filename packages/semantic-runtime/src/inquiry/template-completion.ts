@@ -505,8 +505,12 @@ export class TemplateCompletionCursorContext {
     readonly htmlAttributeProductHandle: ProductHandle | null,
     /** Value-site product under the cursor, when expression/value parsing owns the site. */
     readonly valueSiteProductHandle: ProductHandle | null,
+    /** Exact inline multi-binding segment under the cursor, when secondary grammar owns the bindable usage. */
+    readonly selectedMultiBindingSegmentProductHandle: ProductHandle | null,
     /** Bindable selected by the cursor's classification or active value site, when one exists. */
     readonly selectedBindable: TemplateBindableReference | null,
+    /** Whether this cursor selected the bindable's declaration metadata rather than one compiled usage. */
+    readonly selectedBindableIsDeclaration: boolean,
     /** Exact converged binding-context type for the selected bindable's authored declaration, when one exists. */
     readonly selectedBindableValueType: CheckerTypeReference | null,
     /** Public resource name matched at this cursor; differs from the canonical name for alias usages. */
@@ -674,6 +678,8 @@ class TemplateCompletionCursorContextBuilder {
       null,
       null,
       null,
+      null,
+      false,
       null,
       null,
       null,
@@ -902,7 +908,9 @@ class TemplateCompletionCursorContextBuilder {
       htmlNode?.productHandle ?? null,
       htmlAttribute?.productHandle ?? null,
       valueSite?.productHandle ?? null,
+      semanticMultiBindingSegment?.productHandle ?? null,
       selectedBindable,
+      sameBindableCursorIdentity(selectedBindable, declarationBindable),
       selectedBindableValueType,
       selectedDefinition?.matchedName ?? null,
       selectedScopeSlot,
@@ -4526,6 +4534,19 @@ function selectedBindableForCursor(
     ?? valueSite?.bindable
     ?? classification?.bindable
     ?? null;
+}
+
+function sameBindableCursorIdentity(
+  selected: TemplateBindableReference | null,
+  declaration: TemplateBindableReference | null,
+): boolean {
+  return selected != null
+    && declaration != null
+    && selected.reference.ownerDefinitionProductHandle === declaration.reference.ownerDefinitionProductHandle
+    && selected.reference.name === declaration.reference.name
+    && selected.reference.attribute === declaration.reference.attribute
+    && selected.reference.sourceAddressHandle === declaration.reference.sourceAddressHandle
+    && selected.reference.nameSourceAddressHandle === declaration.reference.nameSourceAddressHandle;
 }
 
 /**

@@ -196,6 +196,16 @@ function bindable(overrides: Record<string, unknown> = {}) {
     typeSource: null,
     nullableSource: null,
     ownerDefinitionProductHandle: null,
+    usagePresentationKind: null,
+    usageEffectiveMode: null,
+    usageModeAuthority: null,
+    usageModeCommand: null,
+    usageModeCommandSource: null,
+    usageModeCommandKind: null,
+    usageModeLocus: null,
+    usageModeTargetSource: null,
+    usageModeSource: null,
+    usageModeOpenReason: null,
     ...overrides,
   };
 }
@@ -871,7 +881,7 @@ describe("bounded semantic hover mapping", () => {
         nodeKind: "element",
         tagName: "legacy-card",
         attributeName: null,
-        attributeValue: null,
+        attributeValue: "",
         source: null,
         tagNameSource: test.activeSource,
         closingTagNameSource: null,
@@ -1414,6 +1424,177 @@ describe("bounded semantic hover mapping", () => {
     expect(markdown(mapped)).not.toContain("Type unavailable");
   });
 
+  test("keeps top-level custom-attribute identity while composing exact primary-bindable mode context", () => {
+    const mapResourceUsage = (
+      rawAttribute: string,
+      attributeValue: string,
+      usageOverrides: Record<string, unknown>,
+      htmlOverrides: Record<string, unknown> = {},
+    ) => {
+      const markup = `<template><section ${rawAttribute}="${attributeValue}"></section></template>`;
+      const test = harness(markup, "two-way-state");
+      const attributeStart = rawAttribute.startsWith(":")
+        ? test.activeSource.start - 1
+        : test.activeSource.start;
+      const valueStart = markup.indexOf(`"${attributeValue}"`, attributeStart) + 1;
+      const valueSource = source("src/hover.html", valueStart, valueStart + attributeValue.length);
+      const modeSource = source("src/two-way-state.ts", 40, 47, "mode");
+      const command = rawAttribute.startsWith(":")
+        ? "bind"
+        : rawAttribute.includes(".") ? rawAttribute.slice(rawAttribute.indexOf(".") + 1) : null;
+      const commandSource = rawAttribute.startsWith(":")
+        ? source("src/hover.html", attributeStart, attributeStart + 1)
+        : command == null
+          ? null
+          : source(
+              "src/hover.html",
+              test.activeSource.end + 1,
+              test.activeSource.end + 1 + command.length,
+            );
+      return test.map({
+        siteKind: "attribute-name",
+        html: {
+          nodeKind: "element",
+          tagName: "section",
+          attributeName: rawAttribute,
+          attributeValue,
+          source: null,
+          tagNameSource: null,
+          closingTagNameSource: null,
+          attributeSource: source(
+            "src/hover.html",
+            attributeStart,
+            valueStart + attributeValue.length + 1,
+          ),
+          attributeValueSource: valueSource,
+          ...htmlOverrides,
+        },
+        valueSite: null,
+        selectedDefinition: definition({
+          resourceKind: "custom-attribute",
+          name: "two-way-state",
+          matchedName: "two-way-state",
+          authoredMatchedName: "two-way-state",
+          runtimeMatchedName: "two-way-state",
+          targetName: "TwoWayState",
+          targetSource: source("src/two-way-state.ts", 8, 19),
+        }),
+        selectedBindable: bindable({
+          name: "data",
+          attribute: "data",
+          mode: "twoWay",
+          modeSource,
+          valueType: "unknown",
+          usagePresentationKind: "resource-primary",
+          usageModeCommand: command,
+          usageModeCommandSource: commandSource,
+          usageModeCommandKind: command == null ? null : "built-in",
+          usageModeLocus: rawAttribute.startsWith(":") ? "attribute-pattern" : "attribute",
+          usageModeTargetSource: test.activeSource,
+          ...usageOverrides,
+        }),
+      });
+    };
+
+    const defaulted = mapResourceUsage("two-way-state.bind", "state", {
+      usageEffectiveMode: "twoWay",
+      usageModeAuthority: "bindable-default",
+      usageModeSource: source("src/two-way-state.ts", 40, 47, "mode"),
+    });
+    expect(markdown(defaulted)).toContain("(custom attribute) two-way-state");
+    expect(markdown(defaulted)).toContain("Effective mode: two way (bindable default).");
+    expect(markdown(defaulted)).toContain("Aurelia custom attribute. Implementation: `TwoWayState`.");
+    expect(markdown(defaulted)).not.toContain("(bindable)");
+
+    const shorthand = mapResourceUsage(":two-way-state", "state", {
+      usageEffectiveMode: "twoWay",
+      usageModeAuthority: "bindable-default",
+      usageModeSource: source("src/two-way-state.ts", 40, 47, "mode"),
+    });
+    expect(markdown(shorthand)).toContain("(custom attribute) two-way-state");
+    expect(markdown(shorthand)).toContain("Effective mode: two way (bindable default).");
+
+    const literal = mapResourceUsage("two-way-state", "static", {
+      usageEffectiveMode: null,
+      usageModeAuthority: "plain-literal",
+      usageModeSource: source(
+        "src/hover.html",
+        "<template><section two-way-state=\"".length,
+        "<template><section two-way-state=\"static".length,
+      ),
+    });
+    expect(markdown(literal)).toContain("Static value; no binding mode.");
+    expect(markdown(literal)).toContain("(custom attribute) two-way-state");
+
+    const interpolation = mapResourceUsage("two-way-state", "${state}", {
+      usageEffectiveMode: "toView",
+      usageModeAuthority: "interpolation",
+      usageModeSource: source(
+        "src/hover.html",
+        "<template><section two-way-state=\"".length,
+        "<template><section two-way-state=\"${state}".length,
+      ),
+    });
+    expect(markdown(interpolation)).toContain(
+      "Effective mode: to view (interpolation). Default mode: two way.",
+    );
+    expect(markdown(interpolation)).toContain("(custom attribute) two-way-state");
+
+    const mismatchedOwner = mapResourceUsage("two-way-state.bind", "state", {
+      usagePresentationKind: "bindable-attribute",
+      usageEffectiveMode: "twoWay",
+      usageModeAuthority: "bindable-default",
+      usageModeSource: source("src/two-way-state.ts", 40, 47, "mode"),
+    });
+    expect(markdown(mismatchedOwner)).toContain("(custom attribute) two-way-state");
+    expect(markdown(mismatchedOwner)).not.toContain("Effective mode");
+    expect(markdown(mismatchedOwner)).not.toContain("(bindable)");
+
+    const retiredPrimary = mapResourceUsage("two-way-state.bind", "state", {
+      usageModeTargetSource: source("src/hover.html", 0, 1),
+      usageEffectiveMode: "twoWay",
+      usageModeAuthority: "bindable-default",
+      usageModeSource: source("src/two-way-state.ts", 40, 47, "mode"),
+    });
+    expect(markdown(retiredPrimary)).toContain("(custom attribute) two-way-state");
+    expect(markdown(retiredPrimary)).not.toContain("Effective mode");
+    expect(retiredPrimary.failures).toEqual([]);
+
+    const staleValue = mapResourceUsage("two-way-state.bind", "state", {
+      usageEffectiveMode: "twoWay",
+      usageModeAuthority: "bindable-default",
+      usageModeSource: source("src/two-way-state.ts", 40, 47, "mode"),
+    }, { attributeValue: "other" });
+    const staleCommand = mapResourceUsage("two-way-state.bind", "state", {
+      usageEffectiveMode: "twoWay",
+      usageModeAuthority: "bindable-default",
+      usageModeCommandSource: source("src/hover.html", 0, 1),
+      usageModeSource: source("src/two-way-state.ts", 40, 47, "mode"),
+    });
+    const staleAuthority = mapResourceUsage("two-way-state.bind", "state", {
+      usageEffectiveMode: "twoWay",
+      usageModeAuthority: "invented-authority",
+      usageModeSource: source("src/two-way-state.ts", 40, 47, "mode"),
+    });
+    const openOwnership = mapResourceUsage("two-way-state.bind", "state", {
+      usagePresentationKind: null,
+      usageEffectiveMode: null,
+      usageModeAuthority: "open",
+      usageModeOpenReason: "Resource ownership is open.",
+      usageModeSource: null,
+    });
+    for (const withheld of [staleValue, staleCommand, staleAuthority, openOwnership]) {
+      expect(markdown(withheld)).toContain("(custom attribute) two-way-state");
+      expect(markdown(withheld)).not.toContain("Effective mode");
+      expect(markdown(withheld)).not.toContain("Static value");
+      expect(withheld.failures).toEqual([]);
+    }
+
+    for (const mapped of [defaulted, shorthand, literal, interpolation, mismatchedOwner]) {
+      expect(mapped.failures).toEqual([]);
+    }
+  });
+
   test("renders source-authenticated bindable name, attribute, and default-mode declarations", () => {
     const text = [
       "<template>",
@@ -1506,6 +1687,22 @@ describe("bounded semantic hover mapping", () => {
       "Hover selected bindable declaration does not match the exact authored token.",
     ]);
 
+    const usageMetadataOnDeclaration = name.map({
+      siteKind: "unknown",
+      selectedBindable: {
+        ...declarationBindable("string"),
+        usageEffectiveMode: "oneTime",
+        usageModeAuthority: "explicit-command",
+        usageModeCommand: "one-time",
+        usageModeCommandSource: name.activeSource,
+        usageModeSource: name.activeSource,
+      },
+    });
+    expect(usageMetadataOnDeclaration.value).toBeNull();
+    expect(usageMetadataOnDeclaration.failures).toEqual([
+      "Hover selected bindable declaration carries usage-effective mode metadata.",
+    ]);
+
     const unavailable = harness(
       '<template><bindable name="unusedValue"></bindable></template>',
       "unusedValue",
@@ -1537,7 +1734,7 @@ describe("bounded semantic hover mapping", () => {
     expect(unavailableMapped.failures).toEqual([]);
   });
 
-  test("labels a commanded bindable target without requiring a value-site carrier", () => {
+  test("labels a commanded bindable target with an exact current value-site carrier", () => {
     const token = "one-time-value";
     const rawAttribute = `${token}.bind`;
     const test = harness(
@@ -1545,6 +1742,16 @@ describe("bounded semantic hover mapping", () => {
       token,
     );
     const targetSource = source("src/mode-panel.ts", 10, 19);
+    const commandSource = source(
+      "src/hover.html",
+      test.activeSource.end + 1,
+      test.activeSource.end + 1 + "bind".length,
+    );
+    const valueSource = source(
+      "src/hover.html",
+      test.activeSource.end + '.bind="'.length,
+      test.activeSource.end + '.bind="item'.length,
+    );
     const mapped = test.map({
       siteKind: "attribute-name",
       html: {
@@ -1560,6 +1767,7 @@ describe("bounded semantic hover mapping", () => {
           test.activeSource.start,
           test.activeSource.start + `${rawAttribute}="item"`.length,
         ),
+        attributeValueSource: valueSource,
       },
       valueSite: null,
       selectedBindable: bindable({
@@ -1567,6 +1775,15 @@ describe("bounded semantic hover mapping", () => {
         attribute: "one-time-value",
         mode: "oneTime",
         valueType: "string",
+        usagePresentationKind: "bindable-attribute",
+        usageEffectiveMode: "toView",
+        usageModeAuthority: "framework-fallback",
+        usageModeCommand: "bind",
+        usageModeCommandSource: commandSource,
+        usageModeCommandKind: "built-in",
+        usageModeLocus: "attribute",
+        usageModeTargetSource: test.activeSource,
+        usageModeSource: commandSource,
       }),
       selectedDefinition: definition({
         name: "mode-panel",
@@ -1576,10 +1793,551 @@ describe("bounded semantic hover mapping", () => {
       }),
     });
 
-    expect(markdown(mapped)).toContain("(bindable) one-time-value: string");
-    expect(markdown(mapped)).toContain("Maps to: `ModePanel.oneTimeValue`.");
-    expect(markdown(mapped)).toContain("Default mode: one time.");
-    expect(markdown(mapped)).not.toContain("Effective mode");
+    expect(markdown(mapped)).toBe([
+      "```ts",
+      "(bindable) one-time-value: string",
+      "```",
+      "",
+      "Effective mode: to view (framework fallback). Default mode: one time.",
+      "Maps to: `ModePanel.oneTimeValue`.",
+    ].join("\n"));
+    expect(mapped.failures).toEqual([]);
+  });
+
+  test("renders exact usage-effective modes and authorities ahead of maps-to context", () => {
+    const createUsage = (rawAttribute: string, attributeValue: string) => {
+      const target = rawAttribute.split(".", 1)[0]!;
+      const command = rawAttribute.includes(".") ? rawAttribute.slice(rawAttribute.indexOf(".") + 1) : null;
+      const markup = `<template><mode-panel ${rawAttribute}="${attributeValue}"></mode-panel></template>`;
+      const test = harness(markup, target);
+      const attributeStart = test.activeSource.start;
+      const attributeSource = source(
+        "src/hover.html",
+        attributeStart,
+        attributeStart + `${rawAttribute}="${attributeValue}"`.length,
+      );
+      const valueStart = markup.indexOf(`"${attributeValue}"`, attributeStart) + 1;
+      const valueSource = source("src/hover.html", valueStart, valueStart + attributeValue.length, "value");
+      const commandSource = command == null
+        ? null
+        : source(
+            "src/hover.html",
+            test.activeSource.end + 1,
+            test.activeSource.end + 1 + command.length,
+            "command",
+          );
+      const modeSource = source("src/mode-panel.ts", 30, 37, "mode");
+      const map = (
+        bindableOverrides: Record<string, unknown>,
+        htmlOverrides: Record<string, unknown> = {},
+      ) => test.map({
+        siteKind: "attribute-name",
+        html: {
+          nodeKind: "element",
+          tagName: "mode-panel",
+          attributeName: rawAttribute,
+          attributeValue,
+          source: null,
+          tagNameSource: null,
+          closingTagNameSource: null,
+          attributeSource,
+          attributeValueSource: valueSource,
+          ...htmlOverrides,
+        },
+        valueSite: null,
+        selectedBindable: bindable({
+          name: "labelText",
+          attribute: "display-label",
+          mode: "toView",
+          modeSource,
+          valueType: "string",
+          usagePresentationKind: "bindable-attribute",
+          usageModeLocus: "attribute",
+          usageModeTargetSource: test.activeSource,
+          usageModeCommandSource: commandSource,
+          ...bindableOverrides,
+        }),
+        selectedDefinition: definition({
+          name: "mode-panel",
+          matchedName: "mode-panel",
+          targetName: "ModePanel",
+          targetSource: source("src/mode-panel.ts", 8, 17),
+        }),
+      });
+      return { test, map, valueSource, commandSource, modeSource, markup };
+    };
+
+    const defaulted = createUsage("display-label.bind", "item.name");
+    const defaultedMapped = defaulted.map({
+      mode: "oneTime",
+      modeSource: defaulted.modeSource,
+      usageEffectiveMode: "oneTime",
+      usageModeAuthority: "bindable-default",
+      usageModeCommand: "bind",
+      usageModeCommandKind: "built-in",
+      usageModeSource: defaulted.modeSource,
+    });
+    expect(markdown(defaultedMapped)).toBe([
+      "```ts",
+      "(bindable) display-label: string",
+      "```",
+      "",
+      "Effective mode: one time (bindable default).",
+      "Maps to: `ModePanel.labelText`.",
+    ].join("\n"));
+
+    const explicit = createUsage("display-label.two-way", "item.name");
+    const explicitMapped = explicit.map({
+      usageEffectiveMode: "twoWay",
+      usageModeAuthority: "explicit-command",
+      usageModeCommand: "two-way",
+      usageModeCommandKind: "built-in",
+      usageModeSource: explicit.commandSource,
+    });
+    expect(markdown(explicitMapped)).toBe([
+      "```ts",
+      "(bindable) display-label: string",
+      "```",
+      "",
+      "Effective mode: two way (explicit command). Default mode: to view.",
+      "Maps to: `ModePanel.labelText`.",
+    ].join("\n"));
+
+    const behavior = createUsage("display-label.bind", "item.name & twoWay");
+    const behaviorStart = behavior.markup.indexOf("twoWay");
+    const behaviorMapped = behavior.map({
+      usageEffectiveMode: "twoWay",
+      usageModeAuthority: "binding-behavior",
+      usageModeCommand: "bind",
+      usageModeCommandKind: "built-in",
+      usageModeSource: source("src/hover.html", behaviorStart, behaviorStart + "twoWay".length),
+    });
+    expect(markdown(behaviorMapped)).toContain(
+      "Effective mode: two way (binding behavior). Default mode: to view.",
+    );
+
+    const interpolation = createUsage("display-label", "Hello ${item.name}");
+    const interpolationMapped = interpolation.map({
+      mode: "twoWay",
+      usageEffectiveMode: "toView",
+      usageModeAuthority: "interpolation",
+      usageModeCommand: null,
+      usageModeCommandSource: null,
+      usageModeCommandKind: null,
+      usageModeSource: interpolation.valueSource,
+    });
+    expect(markdown(interpolationMapped)).toContain(
+      "Effective mode: to view (interpolation). Default mode: two way.",
+    );
+
+    const literal = createUsage("display-label", "Static label");
+    const literalMapped = literal.map({
+      usageEffectiveMode: null,
+      usageModeAuthority: "plain-literal",
+      usageModeCommand: null,
+      usageModeCommandSource: null,
+      usageModeCommandKind: null,
+      usageModeSource: literal.valueSource,
+    });
+    expect(markdown(literalMapped)).toBe([
+      "```ts",
+      "(bindable) display-label: string",
+      "```",
+      "",
+      "Static value; no binding mode.",
+      "Maps to: `ModePanel.labelText`.",
+    ].join("\n"));
+
+    const defaultSentinel = createUsage("display-label.bind", "item.name");
+    const defaultSentinelMapped = defaultSentinel.map({
+      mode: "default",
+      usageEffectiveMode: "toView",
+      usageModeAuthority: "framework-fallback",
+      usageModeCommand: "bind",
+      usageModeCommandKind: "built-in",
+      usageModeSource: defaultSentinel.commandSource,
+    });
+    expect(markdown(defaultSentinelMapped)).toContain("Effective mode: to view (framework fallback).");
+    expect(markdown(defaultSentinelMapped)).not.toContain("Default mode: default.");
+
+    const open = createUsage("display-label.custom", "item.name & customMode");
+    const customModeStart = open.markup.indexOf("customMode");
+    const openMapped = open.map({
+      usageEffectiveMode: null,
+      usageModeAuthority: "open",
+      usageModeCommand: "custom",
+      usageModeCommandSource: open.commandSource,
+      usageModeCommandKind: "custom",
+      usageModeSource: source("src/hover.html", customModeStart, customModeStart + "customMode".length),
+      usageModeOpenReason: "Custom command execution is open.",
+    });
+    expect(markdown(openMapped)).toBe([
+      "```ts",
+      "(bindable) display-label: string",
+      "```",
+      "",
+      "Maps to: `ModePanel.labelText`.",
+    ].join("\n"));
+    expect(markdown(openMapped)).not.toContain("Custom command execution");
+
+    const unknown = createUsage("display-label.unknown", "item.name");
+    const unknownMapped = unknown.map({
+      usageEffectiveMode: null,
+      usageModeAuthority: "open",
+      usageModeCommand: "unknown",
+      usageModeCommandKind: null,
+      usageModeSource: null,
+      usageModeOpenReason: "No executable command kind is available.",
+    });
+    expect(markdown(unknownMapped)).toBe([
+      "```ts",
+      "(bindable) display-label: string",
+      "```",
+      "",
+      "Maps to: `ModePanel.labelText`.",
+    ].join("\n"));
+
+    for (const mapped of [
+      defaultedMapped,
+      explicitMapped,
+      behaviorMapped,
+      interpolationMapped,
+      literalMapped,
+      defaultSentinelMapped,
+      openMapped,
+      unknownMapped,
+    ]) {
+      expect(mapped.failures).toEqual([]);
+    }
+  });
+
+  test("authenticates exact inline multi-binding target and command grammar", () => {
+    const markup = [
+      "<template>",
+      '  <section display-hint="display-label.bind: item.name; tone.bind: item.tone"></section>',
+      "</template>",
+    ].join("\n");
+    const test = harness(markup, "display-label");
+    const attributeStart = markup.indexOf("display-hint");
+    const attributeEnd = markup.indexOf('"', markup.indexOf('="', attributeStart) + 2) + 1;
+    const commandStart = test.activeSource.end + 1;
+    const outerValueStart = markup.indexOf("display-label.bind");
+    const outerRawValue = "display-label.bind: item.name; tone.bind: item.tone";
+    const outerValueSource = source(
+      "src/hover.html",
+      outerValueStart,
+      outerValueStart + outerRawValue.length,
+    );
+    const mapped = test.map({
+      siteKind: "attribute-name",
+      html: {
+        nodeKind: "element",
+        tagName: "section",
+        attributeName: "display-hint",
+        attributeValue: "display-label.bind: item.name; tone.bind: item.tone",
+        source: null,
+        tagNameSource: null,
+        closingTagNameSource: null,
+        attributeSource: source("src/hover.html", attributeStart, attributeEnd),
+        attributeValueSource: outerValueSource,
+      },
+      valueSite: {
+        siteKind: "multi-binding-value",
+        rawValue: outerRawValue,
+        bindingCommandName: null,
+        bindableAttribute: "message",
+        source: outerValueSource,
+      },
+      selectedBindable: bindable({
+        name: "labelText",
+        attribute: "display-label",
+        mode: "toView",
+        valueType: "string",
+        usagePresentationKind: "bindable-attribute",
+        usageEffectiveMode: "toView",
+        usageModeAuthority: "framework-fallback",
+        usageModeCommand: "bind",
+        usageModeCommandSource: source("src/hover.html", commandStart, commandStart + "bind".length),
+        usageModeCommandKind: "built-in",
+        usageModeLocus: "multi-binding",
+        usageModeTargetSource: test.activeSource,
+        usageModeSource: source("src/hover.html", commandStart, commandStart + "bind".length),
+      }),
+      selectedDefinition: definition({
+        resourceKind: "custom-attribute",
+        name: "display-hint",
+        matchedName: "display-hint",
+        targetName: "DisplayHint",
+        targetSource: source("src/display-hint.ts", 8, 19),
+      }),
+    });
+
+    expect(markdown(mapped)).toBe([
+      "```ts",
+      "(bindable) display-label: string",
+      "```",
+      "",
+      "Effective mode: to view (framework fallback).",
+      "Maps to: `DisplayHint.labelText`.",
+    ].join("\n"));
+    expect(mapped.failures).toEqual([]);
+  });
+
+  test("authenticates colon binding shorthand as a browser-normalized bind usage", () => {
+    const markup = '<template><mode-panel :display-label="item.name"></mode-panel></template>';
+    const test = harness(markup, "display-label");
+    const attributeStart = test.activeSource.start - 1;
+    const valueStart = markup.indexOf('"item.name"') + 1;
+    const valueSource = source("src/hover.html", valueStart, valueStart + "item.name".length);
+    const mapped = test.map({
+      siteKind: "attribute-name",
+      html: {
+        nodeKind: "element",
+        tagName: "mode-panel",
+        attributeName: ":display-label",
+        attributeValue: "item.name",
+        source: null,
+        tagNameSource: null,
+        closingTagNameSource: null,
+        attributeSource: source(
+          "src/hover.html",
+          attributeStart,
+          valueStart + "item.name".length + 1,
+        ),
+        attributeValueSource: valueSource,
+      },
+      valueSite: null,
+      selectedBindable: bindable({
+        name: "labelText",
+        attribute: "display-label",
+        mode: "toView",
+        valueType: "string",
+        usagePresentationKind: "bindable-attribute",
+        usageEffectiveMode: "toView",
+        usageModeAuthority: "framework-fallback",
+        usageModeCommand: "bind",
+        usageModeCommandSource: source("src/hover.html", attributeStart, attributeStart + 1),
+        usageModeCommandKind: "built-in",
+        usageModeLocus: "attribute-pattern",
+        usageModeTargetSource: test.activeSource,
+        usageModeSource: source("src/hover.html", attributeStart, attributeStart + 1),
+      }),
+      selectedDefinition: definition({
+        name: "mode-panel",
+        matchedName: "mode-panel",
+        targetName: "ModePanel",
+        targetSource: source("src/mode-panel.ts", 8, 17),
+      }),
+    });
+
+    expect(markdown(mapped)).toBe([
+      "```ts",
+      "(bindable) display-label: string",
+      "```",
+      "",
+      "Effective mode: to view (framework fallback).",
+      "Maps to: `ModePanel.labelText`.",
+    ].join("\n"));
+    expect(mapped.failures).toEqual([]);
+  });
+
+  test("fails closed for inconsistent usage default, effective, command, locus, and source carriers", () => {
+    const markup = [
+      '<template><mode-panel display-label.bind="item"></mode-panel>',
+      '<span data-command="bind" data-mode="twoWay" data-value="item"></span></template>',
+    ].join("");
+    const test = harness(markup, "display-label");
+    const commandStart = test.activeSource.end + 1;
+    const commandSource = source("src/hover.html", commandStart, commandStart + "bind".length);
+    const attributeSource = source(
+      "src/hover.html",
+      test.activeSource.start,
+      test.activeSource.start + 'display-label.bind="item"'.length,
+    );
+    const valueStart = markup.indexOf('"item"') + 1;
+    const valueSource = source("src/hover.html", valueStart, valueStart + "item".length);
+    const modeSource = source("src/mode-panel.ts", 20, 27);
+    const remoteCommandStart = markup.lastIndexOf("bind");
+    const remoteModeStart = markup.lastIndexOf("twoWay");
+    const remoteValueStart = markup.lastIndexOf("item");
+    const map = (
+      overrides: Record<string, unknown>,
+      htmlOverrides: Record<string, unknown> = {},
+    ) => test.map({
+      siteKind: "attribute-name",
+      html: {
+        nodeKind: "element",
+        tagName: "mode-panel",
+        attributeName: "display-label.bind",
+        attributeValue: "item",
+        source: null,
+        tagNameSource: null,
+        closingTagNameSource: null,
+        attributeSource,
+        attributeValueSource: valueSource,
+        ...htmlOverrides,
+      },
+      valueSite: null,
+      selectedBindable: bindable({
+        name: "labelText",
+        attribute: "display-label",
+        mode: "toView",
+        modeSource,
+        valueType: "string",
+        usagePresentationKind: "bindable-attribute",
+        usageEffectiveMode: "toView",
+        usageModeAuthority: "framework-fallback",
+        usageModeCommand: "bind",
+        usageModeCommandSource: commandSource,
+        usageModeCommandKind: "built-in",
+        usageModeLocus: "attribute",
+        usageModeTargetSource: test.activeSource,
+        usageModeSource: commandSource,
+        ...overrides,
+      }),
+    });
+
+    const inconsistent: readonly Record<string, unknown>[] = [
+      {
+        usageEffectiveMode: null,
+        usageModeAuthority: null,
+        usageModeCommand: null,
+        usageModeCommandSource: null,
+        usageModeCommandKind: null,
+        usageModeSource: null,
+      },
+      { usageModeAuthority: "invented-authority" },
+      { usageEffectiveMode: "default" },
+      { usageModeCommand: "to-view" },
+      { usageModeCommandSource: source("src/hover.html", commandStart + 1, commandStart + 3) },
+      {
+        usageModeCommandSource: source(
+          "src/hover.html",
+          remoteCommandStart,
+          remoteCommandStart + "bind".length,
+        ),
+      },
+      { usageModeCommandKind: "opaque" },
+      { usageModeSource: source("src/hover.html", commandStart + 1, commandStart + 3) },
+      {
+        usageModeAuthority: "binding-behavior",
+        usageEffectiveMode: "twoWay",
+        usageModeSource: source(
+          "src/hover.html",
+          remoteModeStart,
+          remoteModeStart + "twoWay".length,
+        ),
+      },
+      { usageModeAuthority: "framework-fallback", usageEffectiveMode: "twoWay" },
+      {
+        usageModeAuthority: "explicit-command",
+        usageModeCommand: "bind",
+        usageModeCommandKind: "built-in",
+        usageEffectiveMode: "twoWay",
+      },
+      {
+        usageModeAuthority: "explicit-command",
+        usageModeCommand: "bind",
+        usageModeCommandKind: "custom",
+        usageEffectiveMode: "twoWay",
+      },
+      {
+        usageModeAuthority: "bindable-default",
+        usageEffectiveMode: "toView",
+        usageModeSource: commandSource,
+      },
+      {
+        mode: "default",
+        usageModeAuthority: "bindable-default",
+        usageEffectiveMode: "toView",
+        usageModeSource: modeSource,
+      },
+      {
+        usageModeAuthority: "plain-literal",
+        usageEffectiveMode: "toView",
+        usageModeCommand: null,
+        usageModeCommandSource: null,
+        usageModeCommandKind: null,
+        usageModeSource: valueSource,
+      },
+      {
+        usageModeAuthority: "interpolation",
+        usageEffectiveMode: "fromView",
+        usageModeCommand: null,
+        usageModeCommandSource: null,
+        usageModeCommandKind: null,
+        usageModeSource: valueSource,
+      },
+      {
+        usageModeAuthority: "open",
+        usageEffectiveMode: "toView",
+        usageModeOpenReason: "Open.",
+      },
+      {
+        usageModeAuthority: "open",
+        usageEffectiveMode: null,
+        usageModeOpenReason: null,
+      },
+      {
+        usageModeAuthority: "open",
+        usageEffectiveMode: null,
+        usageModeOpenReason: "   ",
+      },
+      { usageModeOpenReason: "Not open." },
+    ];
+
+    for (const overrides of inconsistent) {
+      const mapped = map(overrides);
+      expect(mapped.value).toBeNull();
+      expect(mapped.failures).toEqual([
+        "Hover selected bindable usage mode metadata is inconsistent.",
+      ]);
+    }
+
+    const staleValueSite = map({}, { attributeValue: "xxxx" });
+    expect(staleValueSite.value).toBeNull();
+    expect(staleValueSite.failures).toEqual([
+      "Hover selected bindable usage mode metadata is inconsistent.",
+    ]);
+    const borrowedValueSite = map({}, {
+      attributeValueSource: source(
+        "src/hover.html",
+        remoteValueStart,
+        remoteValueStart + "item".length,
+      ),
+    });
+    expect(borrowedValueSite.value).toBeNull();
+    expect(borrowedValueSite.failures).toEqual([
+      "Hover selected bindable usage mode metadata is inconsistent.",
+    ]);
+
+    const wrongTarget = map({
+      usageModeTargetSource: source(
+        "src/hover.html",
+        test.activeSource.start + 1,
+        test.activeSource.end,
+      ),
+    });
+    expect(wrongTarget.value).toBeNull();
+    expect(wrongTarget.failures).toEqual([
+      "Hover selected bindable metadata does not match the authored attribute spelling.",
+    ]);
+
+    const wrongLocus = map({ usageModeLocus: "invented-locus" });
+    expect(wrongLocus.value).toBeNull();
+    expect(wrongLocus.failures).toEqual([
+      "Hover selected bindable has an unsupported usage locus.",
+    ]);
+
+    const unknownPresentation = map({ usagePresentationKind: "invented-presentation" });
+    expect(unknownPresentation.value).toBeNull();
+    expect(unknownPresentation.failures).toEqual([
+      "Hover selected bindable has an unsupported usage presentation kind.",
+    ]);
+
+    const orphanedResourcePresentation = map({ usagePresentationKind: "resource-primary" });
+    expect(orphanedResourcePresentation.value).toBeNull();
+    expect(orphanedResourcePresentation.failures).toEqual([]);
   });
 
   test("lets the exact binding-command resource own the command suffix locus", () => {
@@ -1640,11 +2398,35 @@ describe("bounded semantic hover mapping", () => {
         attributeSource: source(
           "src/hover.html",
           test.activeSource.start,
-          test.activeSource.start + rawAttribute.length,
+          test.activeSource.start + `${rawAttribute}="item"`.length,
+        ),
+        attributeValueSource: source(
+          "src/hover.html",
+          test.activeSource.end + '.bind="'.length,
+          test.activeSource.end + '.bind="item'.length,
         ),
       },
-      valueSite: { bindingCommandName: "bind" },
-      selectedBindable: bindable({ valueType: null }),
+      valueSite: null,
+      selectedBindable: bindable({
+        valueType: null,
+        usagePresentationKind: "bindable-attribute",
+        usageEffectiveMode: "toView",
+        usageModeAuthority: "framework-fallback",
+        usageModeCommand: "bind",
+        usageModeCommandSource: source(
+          "src/hover.html",
+          test.activeSource.end + 1,
+          test.activeSource.end + 1 + "bind".length,
+        ),
+        usageModeCommandKind: "built-in",
+        usageModeLocus: "attribute",
+        usageModeTargetSource: test.activeSource,
+        usageModeSource: source(
+          "src/hover.html",
+          test.activeSource.end + 1,
+          test.activeSource.end + 1 + "bind".length,
+        ),
+      }),
     };
     expect(test.map(value).failures).toEqual([
       "Hover selected bindable has neither a type nor typed bindable uncertainty.",
@@ -1659,12 +2441,17 @@ describe("bounded semantic hover mapping", () => {
       },
     });
     expect(markdown(qualified)).toContain("(bindable) item");
-    expect(markdown(qualified)).toContain("Default mode: to view.");
+    expect(markdown(qualified)).toContain("Effective mode: to view (framework fallback).");
     expect(markdown(qualified)).toContain("Type unavailable for this bindable.");
 
     const uncommanded = harness(
       '<template><product-card item="item"></product-card></template>',
       "item",
+    );
+    const uncommandedValueSource = source(
+      "src/hover.html",
+      uncommanded.activeSource.end + 2,
+      uncommanded.activeSource.end + 2 + "item".length,
     );
     const uncommandedMapped = uncommanded.map({
       siteKind: "attribute-name",
@@ -1676,12 +2463,70 @@ describe("bounded semantic hover mapping", () => {
         source: null,
         tagNameSource: null,
         closingTagNameSource: null,
-        attributeSource: uncommanded.activeSource,
+        attributeSource: source(
+          "src/hover.html",
+          uncommanded.activeSource.start,
+          uncommandedValueSource.end + 1,
+        ),
+        attributeValueSource: uncommandedValueSource,
       },
-      selectedBindable: bindable(),
+      valueSite: null,
+      selectedBindable: bindable({
+        usagePresentationKind: "bindable-attribute",
+        usageEffectiveMode: null,
+        usageModeAuthority: "plain-literal",
+        usageModeCommand: null,
+        usageModeCommandSource: null,
+        usageModeCommandKind: null,
+        usageModeLocus: "attribute",
+        usageModeTargetSource: uncommanded.activeSource,
+        usageModeSource: uncommandedValueSource,
+      }),
     });
     expect(markdown(uncommandedMapped)).toContain("(bindable) item: Item");
+    expect(markdown(uncommandedMapped)).toContain("Static value; no binding mode.");
     expect(uncommandedMapped.failures).toEqual([]);
+
+    const valueless = harness(
+      "<template><product-card selected   ></product-card></template>",
+      "selected",
+    );
+    const valuelessAttributeSource = source(
+      "src/hover.html",
+      valueless.activeSource.start,
+      valueless.activeSource.end + 3,
+    );
+    const valuelessMapped = valueless.map({
+      siteKind: "attribute-value",
+      html: {
+        nodeKind: "element",
+        tagName: "product-card",
+        attributeName: "selected",
+        attributeValue: "",
+        source: null,
+        tagNameSource: null,
+        closingTagNameSource: null,
+        attributeSource: valuelessAttributeSource,
+        attributeValueSource: null,
+      },
+      valueSite: null,
+      selectedBindable: bindable({
+        name: "selected",
+        attribute: "selected",
+        valueType: "boolean",
+        usagePresentationKind: "bindable-attribute",
+        usageEffectiveMode: null,
+        usageModeAuthority: "plain-literal",
+        usageModeCommand: null,
+        usageModeCommandSource: null,
+        usageModeCommandKind: null,
+        usageModeLocus: "attribute",
+        usageModeTargetSource: valueless.activeSource,
+        usageModeSource: valuelessAttributeSource,
+      }),
+    });
+    expect(valuelessMapped.failures).toEqual([]);
+    expect(markdown(valuelessMapped)).toContain("Static value; no binding mode.");
   });
 
   test("gives an exact route target precedence over the route bindable", () => {
