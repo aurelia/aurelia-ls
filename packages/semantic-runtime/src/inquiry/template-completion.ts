@@ -70,6 +70,7 @@ import {
 } from '../type-system/expression-type-context.js';
 import type { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
 import { checkerNullishType } from '../type-system/checker-related-types.js';
+import { CheckerTypeShapeAccess } from '../type-system/checker-type-shape-access.js';
 import type {
   CheckerIndexedAccessKeyKind,
   CheckerTypeMember,
@@ -188,6 +189,11 @@ import {
   resourceLocalTemplateInstructions,
 } from '../template/runtime-resource-ownership.js';
 import { templateScopeChain } from '../template/template-scope-replay.js';
+import {
+  runtimeScopeNamedLookup,
+  RuntimeScopeNamedLookupStatus,
+  type RuntimeScopeNamedLookupResult,
+} from '../template/runtime-scope-named-lookup.js';
 import {
   checkerContextForRuntimeBindingSourceExpressionProjection,
   type RuntimeBindingSourceExpressionContextProjection,
@@ -517,6 +523,8 @@ export class TemplateCompletionCursorContext {
     readonly selectedDefinitionMatchedName: string | null,
     /** Binding-scope slot and exact owning scope selected by a root access such as `message` or `save()`. */
     readonly selectedScopeSlot: TemplateCompletionScopeSlotSelection | null,
+    /** Presence-aware framework named lookup retained so Open nearer contexts cannot become false parent members. */
+    readonly selectedScopeLookup: RuntimeScopeNamedLookupResult | null,
     /** Closed member token selected by the cursor, when the cursor is on an authored member name. */
     readonly selectedMemberName: string | null,
     /** Exact binding-context qualifier selected by the cursor and its closed or open checker projection. */
@@ -692,6 +700,7 @@ class TemplateCompletionCursorContextBuilder {
       null,
       null,
       null,
+      null,
       false,
       ['source-offset'],
     );
@@ -792,7 +801,7 @@ class TemplateCompletionCursorContextBuilder {
       this.input.resource,
       selectedBindable,
     );
-    const selectedScopeSlot = selectedScopeSlotForCursor({
+    const selectedScopeLookup = selectedScopeSlotForCursor({
       store: this.store,
       resource: this.input.resource,
       expressionWorld: this.expressionWorld,
@@ -806,6 +815,12 @@ class TemplateCompletionCursorContextBuilder {
       contextualType,
       declarationSelection,
     });
+    const selectedScopeSlot = selectedScopeLookup.selection;
+    if (selectedScopeLookup.lookup?.status === RuntimeScopeNamedLookupStatus.Open) {
+      missingInputs.push('scope-named-lookup:open');
+    } else if (selectedScopeLookup.lookup?.status === RuntimeScopeNamedLookupStatus.MissingAncestor) {
+      missingInputs.push('scope-named-lookup:missing-ancestor');
+    }
     if (selectedScopeSlot?.slot.targetType?.origin === CheckerTypeProjectionOrigin.Open) {
       missingInputs.push('scope-slot:type-projection-open');
     }
@@ -826,6 +841,7 @@ class TemplateCompletionCursorContextBuilder {
           missingInputs,
         );
     const memberOwnerType = bindingEnvironment?.openReason == null
+      && !scopeNamedLookupPreventsMemberSelection(selectedScopeLookup.lookup)
       ? this.memberOwnerType(
           offset,
           siteKind,
@@ -837,7 +853,9 @@ class TemplateCompletionCursorContextBuilder {
           selectedScopeSlot == null ? missingInputs : [],
         )
       : missingDerivedMemberOwnerType();
-    const selectedMemberName = selectedScopeSlot?.slot.name
+    const selectedMemberName = scopeNamedLookupPreventsMemberSelection(selectedScopeLookup.lookup)
+      ? null
+      : selectedScopeSlot?.slot.name
       ?? (bindingEnvironment?.openReason == null
         ? selectedMemberNameForCursor(siteKind, semanticExpressionResult, offset)
         : null);
@@ -914,6 +932,7 @@ class TemplateCompletionCursorContextBuilder {
       selectedBindableValueType,
       selectedDefinition?.matchedName ?? null,
       selectedScopeSlot,
+      selectedScopeLookup.lookup,
       selectedMemberName,
       selectedExpression,
       expressionFrontier,
@@ -1360,9 +1379,21 @@ interface TemplateScopeSlotCursorSelectionRequest {
   readonly declarationSelection: SourceBackedScopeSlotDeclarationSelection | null;
 }
 
+interface TemplateScopeSlotCursorSelectionResult {
+  readonly selection: TemplateCompletionScopeSlotSelection | null;
+  readonly lookup: RuntimeScopeNamedLookupResult | null;
+}
+
+function scopeNamedLookupPreventsMemberSelection(
+  lookup: RuntimeScopeNamedLookupResult | null,
+): boolean {
+  return lookup?.status === RuntimeScopeNamedLookupStatus.Open
+    || lookup?.status === RuntimeScopeNamedLookupStatus.MissingAncestor;
+}
+
 function selectedScopeSlotForCursor(
   input: TemplateScopeSlotCursorSelectionRequest,
-): TemplateCompletionScopeSlotSelection | null {
+): TemplateScopeSlotCursorSelectionResult {
   const {
     declarationSelection,
     bindingScope,
@@ -1372,15 +1403,18 @@ function selectedScopeSlotForCursor(
     siteKind,
   } = input;
   if (declarationSelection != null) {
-    return new TemplateCompletionScopeSlotSelection(
-      declarationSelection.scope,
-      declarationSelection.slot,
-      declarationSelection.scopeRole,
-      declarationSelection.sourceSpan.handle,
-    );
+    return {
+      selection: new TemplateCompletionScopeSlotSelection(
+        declarationSelection.scope,
+        declarationSelection.slot,
+        declarationSelection.scopeRole,
+        declarationSelection.sourceSpan.handle,
+      ),
+      lookup: null,
+    };
   }
   if (bindingScope == null) {
-    return null;
+    return { selection: null, lookup: null };
   }
 
   if (
@@ -1421,31 +1455,53 @@ function selectedScopeSlotForCursor(
         ? null
         : evaluator.evaluationContextForExpression(rootContext, selectedExpression);
       const selectedScope = selectedContext?.scope ?? bindingScope;
-      const located = selectedScope.locate(
-        selectedExpression.name.name,
-        access?.ancestor ?? 0,
-      );
-      if (located.scope == null || located.slot == null) {
-        return null;
+      const namedLookup = access?.$kind !== 'CallScope'
+        ? null
+        : runtimeScopeNamedLookup(
+            new CheckerTypeShapeAccess(input.store, input.expressionWorld.projector),
+            selectedScope,
+            selectedExpression.name.name,
+            access.ancestor,
+          );
+      if (
+        namedLookup?.status === RuntimeScopeNamedLookupStatus.Open
+        || namedLookup?.status === RuntimeScopeNamedLookupStatus.MissingAncestor
+      ) {
+        return { selection: null, lookup: namedLookup };
+      }
+      const legacyLocated = access?.$kind !== 'CallScope'
+        ? selectedScope.locate(
+            selectedExpression.name.name,
+            access?.ancestor ?? 0,
+          )
+        : null;
+      const locatedScope = namedLookup?.scope ?? legacyLocated?.scope ?? null;
+      const locatedSlot = namedLookup == null ? legacyLocated?.slot ?? null : namedLookup.slot;
+      const locatedContext = namedLookup?.context ?? legacyLocated?.context ?? null;
+      if (locatedScope == null || locatedSlot == null) {
+        return { selection: null, lookup: namedLookup };
       }
       const lexicalAuthority = callbackLocalAuthorityForCursor(input);
-      return new TemplateCompletionScopeSlotSelection(
-        located.scope,
-        located.slot,
-        selectedScopeSlotRole(
-          input.store,
-          located.scope,
-          located.slot,
-          located.context?.contextKind ?? null,
-          lexicalAuthority != null,
+      return {
+        selection: new TemplateCompletionScopeSlotSelection(
+          locatedScope,
+          locatedSlot,
+          selectedScopeSlotRole(
+            input.store,
+            locatedScope,
+            locatedSlot,
+            locatedContext?.contextKind ?? null,
+            lexicalAuthority != null,
+          ),
+          lexicalAuthority?.declarationSourceAddressHandle ?? null,
+          lexicalAuthority?.ownerProductHandle ?? null,
         ),
-        lexicalAuthority?.declarationSourceAddressHandle ?? null,
-        lexicalAuthority?.ownerProductHandle ?? null,
-      );
+        lookup: namedLookup,
+      };
     }
   }
 
-  return null;
+  return { selection: null, lookup: null };
 }
 
 function selectedScopeSlotRole(

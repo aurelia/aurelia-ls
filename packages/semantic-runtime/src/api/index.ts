@@ -48,6 +48,11 @@ export {
   CHECKER_MEMBER_TEXT_MAX_SOURCES,
 } from '../type-system/checker-member-surface.js';
 export {
+  CHECKER_CALL_OPEN_REASON_MAX_CODE_POINTS,
+  CHECKER_CALL_SIGNATURE_MAX_CODE_POINTS,
+  isCheckerCallTextSafe,
+} from './template-call-signature.js';
+export {
   FRAMEWORK_REGISTRATION_CAPABILITIES,
   FrameworkRegistrationCapability,
   frameworkRegistrationCapabilityFromString,

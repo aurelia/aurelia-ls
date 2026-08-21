@@ -16949,6 +16949,37 @@
       ]
     },
     {
+      "id": "hover-call-signature-overload-provenance",
+      "fixture": "fixtures/pressure/hover-call-signatures",
+      "aureliaDomain": "template-expression-typing",
+      "capability": "template-cursor-info",
+      "domainAxis": "type-system",
+      "coverageIntent": "regression-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/app.html",
+      "requirement": "A compact template cursor selects one exact instantiated overload and its declaration-owned prose without merging the member group.",
+      "cases": [
+        {
+          "id": "selected-call-signature-retains-overload-and-prose-authority",
+          "expectations": [
+            {
+              "name": "compact cursor selects exact documented string overload",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "${format('call')}", "token": "format" }, "options": { "detail": "compact" } },
+              "coverage": "complete",
+              "equals": { "value.selectedCall.status": "exact", "value.selectedCall.callKind": "scope", "value.selectedCall.optionalChain": false, "value.selectedCall.presentationKind": "method", "value.selectedCall.signatureName": "format", "value.selectedCall.signatureTail": "(value: string): string", "value.selectedCall.signatureIsTruncated": false, "value.selectedCall.candidateCount": 2, "value.selectedCall.selectedCandidateIndex": 0, "value.selectedCall.genericParameterCount": 0, "value.selectedCall.signatureProvenance": "declaration", "value.selectedCall.documentation.format": "plaintext", "value.selectedCall.documentation.text": "Formats the selected string overload.", "value.selectedCall.documentation.isTruncated": false, "value.selectedCall.documentation.sourceCount": 1, "value.selectedCall.documentation.sources.length": 1, "value.selectedCall.isDeprecated": true, "value.selectedCall.deprecationReason.format": "plaintext", "value.selectedCall.deprecationReason.text": "Use display instead.", "value.selectedCall.deprecationReason.isTruncated": false, "value.selectedCall.deprecationReason.sourceCount": 1, "value.selectedCall.deprecationReason.sources.length": 1, "value.selectedCall.openReason": null, "value.selectedMember.name": "format", "value.selectedMember.documentation": null, "value.missingInputs.length": 0 },
+              "rows": [
+                { "rowPath": "value.selectedCall", "sourceField": "source", "source": { "marker": "${format('call')}", "token": "format" }, "count": 1 },
+                { "rowPath": "value.selectedCall", "sourceField": "callSource", "source": { "marker": "${format('call')}", "token": "format('call')" }, "count": 1 },
+                { "rowPath": "value.selectedCall", "sourceField": "declarationSource", "source": { "sourceFile": "src/app.ts", "marker": "format(value: string): string;", "token": "format" }, "count": 1 },
+                { "rowPath": "value.selectedCall.documentation", "sourceField": "sources.0", "sourceText": "/** Formats the selected string overload.\n   * @deprecated Use display instead.\n   */", "count": 1 },
+                { "rowPath": "value.selectedCall.deprecationReason", "sourceField": "sources.0", "sourceText": "@deprecated Use display instead.\n   ", "count": 1 }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "runtime-expression-access-use-algebra",
       "fixture": "fixtures/pressure/runtime-expression-access-uses",
       "aureliaDomain": "observation-data-flow",

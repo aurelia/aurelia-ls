@@ -392,6 +392,60 @@ describe("Extension Host product-surface contracts", () => {
     expect(source).toContain("Maps to: `DisplayHint.labelText`.");
   });
 
+  test("keeps selected overload and generic call hovers in the shared current/minimum product journey", () => {
+    const source = readFileSync(
+      new URL("./extension-host/suite/product-surface.test.cjs", import.meta.url),
+      "utf8",
+    );
+    const title = "projects selected overloads and instantiated generic calls from the dirty buffer";
+    const start = source.indexOf(`test("${title}"`);
+    const end = source.indexOf("\n  test(", start + 1);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    const journey = source.slice(start, end);
+
+    expect(journey).toContain("async function() {");
+    expect(journey).toContain("this.timeout(600_000)");
+    expect(journey).toContain("formatSelection(value: string): string;");
+    expect(journey).toContain("formatSelection(value: number): number;");
+    expect(journey).toContain("@deprecated Use formatNumericSelection.");
+    expect(journey).toContain("identity<T>(value: T): T");
+    expect(journey).toContain("${formatSelection(heading)}");
+    expect(journey).toContain("${identity(state.searchText)}");
+    expect(journey).toContain("formatSelection(state.selectionProgressPercent)");
+    expect(journey).toContain("identity(state.selectionProgressPercent)");
+    expect(journey).toContain("stringOverloadHoverMarkdown");
+    expect(journey).toContain("numberOverloadHoverMarkdown");
+    expect(journey).toContain("stringGenericCallHoverMarkdown");
+    expect(journey).toContain("numberGenericCallHoverMarkdown");
+    expect(journey).toContain("Expected one ${label} hover");
+    expect(journey).toContain("should start from its clean disk baseline");
+    expect(journey).toContain("exactHoverAt(");
+    expect(journey).toContain("componentDocument.isDirty, true");
+    expect(journey).toContain("templateDocument.isDirty, true");
+    expect(journey).toContain('readFileSync(templateDocument.uri.fsPath, "utf8")');
+    expect(journey).toContain('readFileSync(componentDocument.uri.fsPath, "utf8")');
+    expect(journey).toContain('executeCommand("workbench.action.files.revert")');
+    expect(journey).toContain("waitForCurrentDiagnosticProviderSettlement(");
+    expect(journey).toContain("call-signature cleanup should finish one current full Aurelia diagnostic pull");
+    expect(journey).toContain("Call-signature cleanup must publish a clean Aurelia receipt");
+    expect(journey).toContain("receipt.itemCount");
+    expect(journey).toContain([
+      "for (const [document, diskBaseline] of [",
+      "        [templateDocument, templateDiskBaseline],",
+      "        [componentDocument, componentDiskBaseline],",
+    ].join("\n"));
+    expect(journey).toContain("finally {");
+    expect(journey).not.toContain("this.skip");
+    expect(journey).not.toContain(".save(");
+
+    expect(source).toContain("formatSelection(value: string): string");
+    expect(source).toContain("formatSelection(value: number): number");
+    expect(source).toContain("identity<string>(value: string): string");
+    expect(source).toContain("identity<number>(value: number): number");
+    expect(source).toContain("(+1 overload)");
+  });
+
   test("keeps declaration and ambiguity host journeys sequential but independently bounded", () => {
     const source = readFileSync(
       new URL("./extension-host/suite/product-surface.test.cjs", import.meta.url),

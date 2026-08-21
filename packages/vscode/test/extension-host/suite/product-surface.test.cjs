@@ -160,6 +160,35 @@ const displayHintResourceModeHoverMarkdown = [
   "Effective mode: to view (framework fallback).",
   "Aurelia custom attribute. Implementation: `DisplayHint`.",
 ].join("\n");
+const stringOverloadHoverMarkdown = [
+  "```ts",
+  "formatSelection(value: string): string (+1 overload)",
+  "```",
+  "",
+  "Formats a text selection.",
+].join("\n");
+const numberOverloadHoverMarkdown = [
+  "```ts",
+  "formatSelection(value: number): number (+1 overload)",
+  "```",
+  "",
+  "Deprecated: Use formatNumericSelection.",
+  "Formats a numeric selection.",
+].join("\n");
+const stringGenericCallHoverMarkdown = [
+  "```ts",
+  "identity<string>(value: string): string",
+  "```",
+  "",
+  "Preserves the exact input type.",
+].join("\n");
+const numberGenericCallHoverMarkdown = [
+  "```ts",
+  "identity<number>(value: number): number",
+  "```",
+  "",
+  "Preserves the exact input type.",
+].join("\n");
 const catalogCardAliasHoverMarkdown = [
   "```html",
   "<catalog-card>",
@@ -1557,6 +1586,147 @@ suite("extension-host product surface", () => {
       assert.strictEqual(readFileSync(mainDocument.uri.fsPath, "utf8"), mainDiskBaseline);
       assert.strictEqual(readFileSync(productDocument.uri.fsPath, "utf8"), productDiskBaseline);
       assert.strictEqual(readFileSync(displayHintDocument.uri.fsPath, "utf8"), displayHintDiskBaseline);
+    }
+  });
+
+  test("projects selected overloads and instantiated generic calls from the dirty buffer", async function() {
+    this.timeout(600_000);
+    const templateDocument = await showAureliaDocument("src/my-app.html");
+    const componentDocument = await showAureliaDocument("src/my-app.ts");
+    const templateDiskBaseline = readFileSync(templateDocument.uri.fsPath, "utf8");
+    const componentDiskBaseline = readFileSync(componentDocument.uri.fsPath, "utf8");
+    for (const [openDocument, expectedDiskBaseline, label] of [
+      [componentDocument, componentDiskBaseline, "component"],
+      [templateDocument, templateDiskBaseline, "template"],
+    ]) {
+      if (openDocument.getText() !== expectedDiskBaseline || openDocument.isDirty) {
+        await vscode.window.showTextDocument(openDocument, { preview: false });
+        await vscode.commands.executeCommand("workbench.action.files.revert");
+        await waitFor(
+          () => openDocument.getText() === expectedDiskBaseline && !openDocument.isDirty,
+          `the call-signature ${label} should start from its clean disk baseline`,
+          60_000,
+        );
+      }
+    }
+    const templateBaseline = templateDocument.getText();
+    const componentBaseline = componentDocument.getText();
+    assert.strictEqual(templateBaseline, templateDiskBaseline, "the call-signature journey requires a disk-equal template");
+    assert.strictEqual(componentBaseline, componentDiskBaseline, "the call-signature journey requires a disk-equal component");
+    assert.strictEqual(templateDocument.isDirty, false, "the call-signature journey requires a clean template");
+    assert.strictEqual(componentDocument.isDirty, false, "the call-signature journey requires a clean component");
+
+    const callDeclarations = [
+      "  /** Formats a text selection. */",
+      "  formatSelection(value: string): string;",
+      "  /** Formats a numeric selection.",
+      "   * @deprecated Use formatNumericSelection.",
+      "   */",
+      "  formatSelection(value: number): number;",
+      "  formatSelection(value: string | number): string | number { return value; }",
+      "",
+      "  /** Preserves the exact input type. */",
+      "  identity<T>(value: T): T { return value; }",
+      "",
+    ].join("\n");
+    const componentText = componentBaseline.replace(
+      "  readonly heading = 'Aurelia IDE playground';",
+      `  readonly heading = 'Aurelia IDE playground';\n${callDeclarations}`,
+    );
+    const stringTemplate = templateBaseline.replace(
+      "  </main>",
+      [
+        "    <p data-hover-overload>${formatSelection(heading)}</p>",
+        "    <p data-hover-generic>${identity(state.searchText)}</p>",
+        "  </main>",
+      ].join("\n"),
+    );
+    const numberTemplate = stringTemplate
+      .replace("formatSelection(heading)", "formatSelection(state.selectionProgressPercent)")
+      .replace("identity(state.searchText)", "identity(state.selectionProgressPercent)");
+    assert.notStrictEqual(componentText, componentBaseline, "Expected overload and generic declarations.");
+    assert.notStrictEqual(stringTemplate, templateBaseline, "Expected overload and generic calls.");
+    assert.notStrictEqual(numberTemplate, stringTemplate, "Expected dirty call argument mutations.");
+
+    try {
+      await replaceDocumentTexts([
+        [componentDocument, componentText],
+        [templateDocument, stringTemplate],
+      ]);
+      for (const [anchor, token, expected, label] of [
+        ["data-hover-overload", "formatSelection", stringOverloadHoverMarkdown, "selected string overload"],
+        ["data-hover-generic", "identity", stringGenericCallHoverMarkdown, "instantiated string generic"],
+      ]) {
+        await waitFor(
+          async () => (await hoverMarkdown(templateDocument, anchor, token)) === expected,
+          `the dirty ${label} should reach the native hover provider`,
+          120_000,
+        );
+        const hovers = await hoversAt(templateDocument, anchor, token);
+        assert.strictEqual(
+          hovers.length,
+          1,
+          `Expected one ${label} hover; observed ${JSON.stringify(hovers.map(hoverMarkdownText))}.`,
+        );
+        await exactHoverAt(templateDocument, anchor, token, expected);
+      }
+      assert.strictEqual(componentDocument.isDirty, true, "the call declarations must remain unsaved");
+      assert.strictEqual(templateDocument.isDirty, true, "the call uses must remain unsaved");
+
+      await replaceDocumentText(templateDocument, numberTemplate);
+      for (const [anchor, token, expected, label] of [
+        ["data-hover-overload", "formatSelection", numberOverloadHoverMarkdown, "selected number overload"],
+        ["data-hover-generic", "identity", numberGenericCallHoverMarkdown, "instantiated number generic"],
+      ]) {
+        await waitFor(
+          async () => (await hoverMarkdown(templateDocument, anchor, token)) === expected,
+          `the dirty ${label} should replace the stale call hover`,
+          120_000,
+        );
+        const hovers = await hoversAt(templateDocument, anchor, token);
+        assert.strictEqual(hovers.length, 1, `Expected one current ${label} hover.`);
+        await exactHoverAt(templateDocument, anchor, token, expected);
+      }
+      assert.strictEqual(readFileSync(templateDocument.uri.fsPath, "utf8"), templateDiskBaseline);
+      assert.strictEqual(readFileSync(componentDocument.uri.fsPath, "utf8"), componentDiskBaseline);
+    } finally {
+      const observationStart = extensionHostObservations.length;
+      const requiresDiagnosticSettlement = componentDocument.getText() !== componentDiskBaseline
+        || componentDocument.isDirty
+        || templateDocument.getText() !== templateDiskBaseline
+        || templateDocument.isDirty;
+      for (const [document, diskBaseline] of [
+        [templateDocument, templateDiskBaseline],
+        [componentDocument, componentDiskBaseline],
+      ]) {
+        if (document.getText() !== diskBaseline || document.isDirty) {
+          await vscode.window.showTextDocument(document, { preview: false });
+          await vscode.commands.executeCommand("workbench.action.files.revert");
+        }
+      }
+      if (requiresDiagnosticSettlement) {
+        const receipt = await waitForCurrentDiagnosticProviderSettlement(
+          observationStart,
+          templateDocument,
+          "call-signature cleanup should finish one current full Aurelia diagnostic pull",
+        );
+        assert.strictEqual(
+          receipt.itemCount,
+          0,
+          `Call-signature cleanup must publish a clean Aurelia receipt; observed ${JSON.stringify(receipt)}; diagnostics ${diagnosticSummary(vscode.languages.getDiagnostics(templateDocument.uri))}`,
+        );
+      }
+      await waitFor(
+        async () => templateDocument.getText() === templateBaseline
+          && componentDocument.getText() === componentBaseline
+          && !templateDocument.isDirty
+          && !componentDocument.isDirty
+          && (await hoverMarkdown(templateDocument, "state.searchText", "searchText")) === memberHoverMarkdown,
+        "the call-signature cleanup should restore the checked-in hover surface",
+        120_000,
+      );
+      assert.strictEqual(readFileSync(templateDocument.uri.fsPath, "utf8"), templateDiskBaseline);
+      assert.strictEqual(readFileSync(componentDocument.uri.fsPath, "utf8"), componentDiskBaseline);
     }
   });
 

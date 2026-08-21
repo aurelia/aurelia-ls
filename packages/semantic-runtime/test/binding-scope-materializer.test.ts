@@ -11,9 +11,58 @@ import { MaterializedProduct } from '../src/kernel/materialization.js';
 import { KernelStore } from '../src/kernel/store.js';
 import { KernelVocabulary } from '../src/kernel/vocabulary.js';
 import { templateScopesHaveEquivalentEvaluationContext } from '../src/template/template-scope-replay.js';
+import {
+  runtimeScopeNamedLookup,
+  RuntimeScopeNamedLookupStatus,
+} from '../src/template/runtime-scope-named-lookup.js';
+import { CheckerTypeShapeAccess } from '../src/type-system/checker-type-shape-access.js';
 import { CheckerTypeProjector } from '../src/type-system/checker-projector.js';
 
 describe('binding scope materialization', () => {
+  test('stops implicit named lookup at the nearest component boundary even when its type stays open', () => {
+    const store = new KernelStore('binding-scope-boundary-named-lookup');
+    const projector = new CheckerTypeProjector(store, store);
+    const materializer = new BindingScopeMaterializer(store, projector);
+    const outer = materializer.construct(BindingScope.forCustomElementController({
+      localKey: 'outer',
+      ownerProductHandle: null,
+      ownerIdentityHandle: null,
+      parent: null,
+      viewModelType: null,
+      bindingContextSlots: [new BindingContextSlotDraft('outerOnly')],
+      sourceAddressHandle: null,
+    })).scope;
+    const innerBoundary = materializer.construct(BindingScope.forCustomElementController({
+      localKey: 'inner',
+      ownerProductHandle: null,
+      ownerIdentityHandle: null,
+      parent: outer,
+      viewModelType: null,
+      sourceAddressHandle: null,
+    })).scope;
+    const repeated = materializer.construct(BindingScope.fromRepeatedItem({
+      localKey: 'repeat',
+      ownerProductHandle: null,
+      ownerIdentityHandle: null,
+      parent: innerBoundary,
+      localSlots: [new BindingContextSlotDraft('item')],
+      overrideSlots: [],
+      sourceAddressHandle: null,
+    })).scope;
+
+    const lookup = runtimeScopeNamedLookup(
+      new CheckerTypeShapeAccess(store, projector),
+      repeated,
+      'outerOnly',
+    );
+    expect(lookup).toMatchObject({
+      status: RuntimeScopeNamedLookupStatus.Open,
+      ancestor: 1,
+      scope: innerBoundary,
+      slot: null,
+    });
+  });
+
   test('projects content through a distinct scope that reuses the declaring binding context', () => {
     const store = new KernelStore('binding-scope-content-projection');
     const materializer = new BindingScopeMaterializer(

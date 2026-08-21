@@ -16,8 +16,8 @@ import type { ProjectBootFrame } from '../boot/frames.js';
 import type { ProductDetailReadView } from '../kernel/product-details.js';
 import {
   BindingContextKind,
-  BindingContextSlotAssignmentAccessKind,
-  BindingScope,
+  type BindingContextSlotAssignmentAccessKind,
+  type BindingScope,
   BindingScopeConditionPolarity,
   BindingScopeCreatorKind,
   BindingScopeOwnerKind,
@@ -33,7 +33,10 @@ import {
   type CheckerTypeMember,
   type CheckerTypeReference,
 } from '../type-system/type-shape.js';
-import { readCheckerTypeShape } from '../type-system/checker-type-shape-access.js';
+import {
+  CheckerTypeShapeAccess,
+  readCheckerTypeShape,
+} from '../type-system/checker-type-shape-access.js';
 import {
   checkerMemberValueTypeExpression,
   checkerTypeReferenceTypeExpression,
@@ -151,6 +154,10 @@ import {
   appendTemplateTypeSystemOverlayPrelude,
   type TemplateTypeSystemOverlayPreludeViewModel,
 } from './template-type-system-overlay-prelude.js';
+import {
+  runtimeScopeNamedLookup,
+  RuntimeScopeNamedLookupStatus,
+} from './runtime-scope-named-lookup.js';
 import {
   instructionScopeLookup,
   isRuntimeExpressionBinding,
@@ -721,10 +728,11 @@ export class TemplateTypeSystemOverlayBuilder {
   private expressionProjectionContextForScope(
     context: TemplateTypeSystemOverlayExpressionProjectionContext,
     scope: BindingScope,
+    expressionWorld: CheckerExpressionTypeWorld,
   ): TemplateTypeSystemOverlayExpressionProjectionContext {
     return {
       ...context,
-      scopeAliases: this.expressionScopeAliases(scope),
+      scopeAliases: this.expressionScopeAliases(scope, expressionWorld),
     };
   }
 
@@ -732,20 +740,42 @@ export class TemplateTypeSystemOverlayBuilder {
     context: TemplateTypeSystemOverlayExpressionProjectionContext,
     scope: BindingScope,
     strictBinding: boolean | null,
+    expressionWorld: CheckerExpressionTypeWorld,
   ): TemplateTypeSystemOverlayExpressionProjectionContext {
     return {
-      ...this.expressionProjectionContextForScope(context, scope),
+      ...this.expressionProjectionContextForScope(context, scope, expressionWorld),
       strictBinding,
     };
   }
 
-  private expressionScopeAliases(scope: BindingScope): TemplateTypeSystemOverlayExpressionScopeAliases {
+  private expressionScopeAliases(
+    scope: BindingScope,
+    expressionWorld: CheckerExpressionTypeWorld | null = null,
+  ): TemplateTypeSystemOverlayExpressionScopeAliases {
+    const typeAccess = expressionWorld == null
+      ? null
+      : new CheckerTypeShapeAccess(this.store, expressionWorld.projector);
     return {
       ...templateScopeAliasSupport(scope),
       currentNamedLookupExpression: namedScopeLookupAliasExpression(
         '$this',
         scope.overrideContext.slots.map((slot) => slot.name).filter(isIdentifierName),
       ),
+      ...(typeAccess == null ? {} : {
+        implicitNamedLookupReceiver: (name: string) => {
+          const lookup = runtimeScopeNamedLookup(typeAccess, scope, name);
+          return lookup == null
+            || lookup.status === RuntimeScopeNamedLookupStatus.Open
+            || lookup.status === RuntimeScopeNamedLookupStatus.MissingAncestor
+            ? null
+            : {
+                ancestor: lookup.ancestor,
+                contextKind: lookup.context?.contextKind === BindingContextKind.Override
+                  ? 'named-lookup' as const
+                  : 'binding-context' as const,
+              };
+        },
+      }),
     };
   }
 
@@ -764,7 +794,11 @@ export class TemplateTypeSystemOverlayBuilder {
     if (bindings.length === 0) {
       return this.expressions.copyableExpression(
         expression,
-        this.expressionProjectionContextForScope(baseExpressionContext, ambientScope),
+        this.expressionProjectionContextForScope(
+          baseExpressionContext,
+          ambientScope,
+          projectors.expressionWorld,
+        ),
         expressionProductHandle,
       );
     }
@@ -804,6 +838,7 @@ export class TemplateTypeSystemOverlayBuilder {
       baseExpressionContext,
       projection.scope,
       projection.strictBinding,
+      projectors.expressionWorld,
     );
     const copied = this.expressions.copyableExpression(projection.expression, expressionContext, expressionProductHandle);
     if (
@@ -837,6 +872,7 @@ export class TemplateTypeSystemOverlayBuilder {
         baseExpressionContext,
         projection.bindScope,
         projection.strictBinding,
+        projectors.expressionWorld,
       ),
       bindingBehaviorArgumentTypeExpressions: (behavior) => {
         const references = evaluator.contextualBindingBehaviorArgumentTypes(

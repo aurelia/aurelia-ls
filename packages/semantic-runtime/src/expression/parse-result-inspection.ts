@@ -3,9 +3,13 @@ import type {
   AccessScopeExpression,
   BindingIdentifier,
   CallScopeExpression,
+  CallFunctionExpression,
+  CallGlobalExpression,
   CallMemberExpression,
   ExpressionAstNode,
   ExpressionType,
+  Identifier,
+  NewExpression,
   ObjectLiteralExpression,
 } from './ast.js';
 import {
@@ -211,6 +215,16 @@ export class ExpressionParseResultInspector {
     return null;
   }
 
+  /** Exact named call whose authored callee token contains the cursor. */
+  static namedCallAtOffset(
+    result: ExpressionParseResult,
+    offset: number,
+  ): ExpressionNamedCall | null {
+    return this.hasCanonicalAst(result)
+      ? namedCallExpressionForNodeOffset(result.ast, offset)
+      : null;
+  }
+
   /** Exact authored `$this` occurrence selecting the current binding context. */
   static currentBindingContextAccessAtOffset(
     result: ExpressionParseResult,
@@ -360,6 +374,15 @@ export interface ExpressionMemberAccessSpan {
 }
 
 export type ExpressionScopeAccess = AccessScopeExpression | CallScopeExpression;
+/** Parser-owned descriptor for one named call/construct locus under an exact authored callee token. */
+export interface ExpressionNamedCall {
+  readonly expression: CallScopeExpression | CallMemberExpression | CallGlobalExpression | CallFunctionExpression | NewExpression;
+  readonly callKind: 'scope' | 'member' | 'global' | 'function' | 'construct';
+  readonly name: Identifier;
+  readonly args: readonly ExpressionAstNode[];
+  readonly span: SourceSpan;
+  readonly optionalChain: boolean;
+}
 
 function stableExpressionRoots(result: ExpressionParseResult): readonly ExpressionAstNode[] {
   switch (result.kind) {
@@ -500,6 +523,106 @@ function scopeAccessExpressionForNodeOffset(
       ? candidate
       : null
   );
+}
+
+function namedCallExpressionForNodeOffset(
+  expression: ExpressionAstNode,
+  offset: number,
+): ExpressionNamedCall | null {
+  if (!expressionSpanContainsOffset(expression.span, offset)) {
+    return null;
+  }
+  const child = findInExpressionChildren(expression, (candidate) =>
+    namedCallExpressionForNodeOffset(candidate, offset)
+  );
+  if (child != null) {
+    return child;
+  }
+  const descriptor = namedCallDescriptor(expression);
+  return descriptor != null && expressionSpanContainsOffset(descriptor.name.span, offset)
+    ? descriptor
+    : null;
+}
+
+function namedCallDescriptor(expression: ExpressionAstNode): ExpressionNamedCall | null {
+  switch (expression.$kind) {
+    case 'CallScope':
+      return {
+        expression,
+        callKind: 'scope',
+        name: expression.name,
+        args: expression.args,
+        span: expression.span,
+        optionalChain: expression.optional || expression.optionalAccess,
+      };
+    case 'CallMember':
+      return {
+        expression,
+        callKind: 'member',
+        name: expression.name,
+        args: expression.args,
+        span: expression.span,
+        optionalChain: expression.optionalCall || expression.optionalMember,
+      };
+    case 'CallGlobal':
+      return {
+        expression,
+        callKind: 'global',
+        name: expression.name,
+        args: expression.args,
+        span: expression.span,
+        optionalChain: false,
+      };
+    case 'CallFunction': {
+      const name = terminalCalleeIdentifier(expression.func);
+      return name == null
+        ? null
+        : {
+            expression,
+            callKind: 'function',
+            name,
+            args: expression.args,
+            span: expression.span,
+            optionalChain: expression.optional,
+          };
+    }
+    case 'New': {
+      const name = terminalCalleeIdentifier(expression.func);
+      return name == null
+        ? null
+        : {
+            expression,
+            callKind: 'construct',
+            name,
+            args: expression.args,
+            span: expression.span,
+            optionalChain: false,
+          };
+    }
+    default:
+      return null;
+  }
+}
+
+function terminalCalleeIdentifier(expression: ExpressionAstNode): Identifier | null {
+  switch (expression.$kind) {
+    case 'Identifier':
+      return expression;
+    case 'AccessScope':
+    case 'AccessGlobal':
+    case 'AccessMember':
+    case 'CallScope':
+    case 'CallGlobal':
+    case 'CallMember':
+      return expression.name;
+    case 'Paren':
+      return terminalCalleeIdentifier(expression.expression);
+    case 'CallFunction':
+    case 'New':
+      return terminalCalleeIdentifier(expression.func);
+    default:
+      return null;
+  }
 }
 
 function currentBindingContextAccessExpressionForNodeOffset(

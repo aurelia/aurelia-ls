@@ -3,7 +3,7 @@ import type { KernelStoreReadView } from '../kernel/store.js';
 import {
   BindingContext,
   BindingContextKind,
-  BindingContextSlot,
+  type BindingContextSlot,
   BindingScope,
   BindingScopeOwnerKind,
   OverrideContext,
@@ -39,6 +39,7 @@ export function uncommittedScopeCreate(
     parent: null,
     bindingContextSlots: request.bindingContextSlots ?? [],
     bindingContextType: request.bindingContextType,
+    bindingContextKind: BindingContextKind.Object,
     sourceAddressHandle: request.sourceAddressHandle ?? null,
     ownerKind: BindingScopeOwnerKind.SyntheticView,
     isBoundary: false,
@@ -56,6 +57,7 @@ export function uncommittedScopeFromParent(
     parent: request.parent,
     bindingContextSlots: request.bindingContextSlots,
     bindingContextType: request.bindingContextType ?? null,
+    bindingContextKind: BindingContextKind.Synthetic,
     sourceAddressHandle: request.sourceAddressHandle ?? null,
     ownerKind: request.ownerKind ?? BindingScopeOwnerKind.SyntheticView,
     isBoundary: request.isBoundary ?? false,
@@ -70,6 +72,7 @@ function uncommittedBindingScope(
     readonly parent: BindingScope | null;
     readonly bindingContextSlots: readonly BindingContextSlot[];
     readonly bindingContextType: CheckerTypeReference | null;
+    readonly bindingContextKind: BindingContextKind.Object | BindingContextKind.Synthetic;
     readonly sourceAddressHandle: AddressHandle | null;
     readonly ownerKind: BindingScopeOwnerKind;
     readonly isBoundary: boolean;
@@ -81,7 +84,7 @@ function uncommittedBindingScope(
   const bindingContext = new BindingContext(
     store.handles.product(`${localKey}:binding-context`),
     store.handles.identity(`${localKey}:binding-context`),
-    BindingContextKind.Object,
+    request.bindingContextKind,
     null,
     request.bindingContextType,
     request.bindingContextSlots,

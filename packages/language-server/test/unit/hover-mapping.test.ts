@@ -83,6 +83,7 @@ function harness(text: string, token: string, occurrence = 0) {
           selectedRouteTarget: null,
           selectedMemberName: null,
           selectedMember: null,
+          selectedCall: null,
           selectedExpression: null,
           uncertainty: null,
           memberOwnerType: null,
@@ -96,6 +97,12 @@ function harness(text: string, token: string, occurrence = 0) {
       });
     },
   };
+}
+
+function textSource(text: string, token: string, role = "expression") {
+  const start = text.indexOf(token);
+  if (start < 0) throw new Error(`Missing test source ${token}.`);
+  return source("src/hover.html", start, start + token.length, role);
 }
 
 function markdown(mapped: ReturnType<typeof mapSemanticRuntimeTemplateHover>): string {
@@ -126,6 +133,34 @@ function memberText(text: string, overrides: Record<string, unknown> = {}) {
     isTruncated: false,
     sourceCount: 1,
     sources: [typescriptSource("src/hover.ts", 10, 20)],
+    ...overrides,
+  };
+}
+
+function selectedCall(
+  calleeSource: ReturnType<typeof source>,
+  callSource: ReturnType<typeof source>,
+  overrides: Record<string, unknown> = {},
+) {
+  return {
+    status: "exact",
+    callKind: "scope",
+    optionalChain: false,
+    presentationKind: "method",
+    signatureName: "formatSelection",
+    signatureTail: "(value: string): string",
+    signatureIsTruncated: false,
+    candidateCount: 2,
+    selectedCandidateIndex: 0,
+    genericParameterCount: 0,
+    signatureProvenance: "declaration",
+    source: calleeSource,
+    callSource,
+    declarationSource: typescriptSource("src/hover.ts", 40, 55),
+    documentation: null,
+    isDeprecated: false,
+    deprecationReason: null,
+    openReason: null,
     ...overrides,
   };
 }
@@ -620,6 +655,294 @@ describe("bounded semantic hover mapping", () => {
       "Kernel-backed documentation.",
     ].join("\n"));
     expect(spanBackedMapped.failures).toEqual([]);
+  });
+
+  test("renders only the exact selected overload with its declaration context and family badge", () => {
+    const text = "<template>${formatSelection(title)}</template>";
+    const test = harness(text, "formatSelection");
+    const mapped = test.map({
+      selectedMemberName: "formatSelection",
+      selectedMember: {
+        ...member("formatSelection", null, "{ (value: string): string; (value: number): number }"),
+        memberKind: "method",
+        visibilityKind: "protected",
+        documentation: memberText("Member-family documentation must not replace the selected signature."),
+      },
+      selectedCall: selectedCall(
+        test.activeSource,
+        textSource(text, "formatSelection(title)"),
+        {
+          documentation: memberText(
+            "Selected **string** overload at command:aurelia.open.",
+          ),
+          isDeprecated: true,
+          deprecationReason: memberText("Use formatTextSelection."),
+        },
+      ),
+    });
+
+    expect(markdown(mapped)).toBe([
+      "```ts",
+      "protected formatSelection(value: string): string (+1 overload)",
+      "```",
+      "",
+      "Deprecated: Use formatTextSelection.",
+      "Selected \\*\\*string\\*\\* overload at command\\:aurelia.open.",
+    ].join("\n"));
+    expect(markdown(mapped)).not.toContain("number");
+    expect(markdown(mapped)).not.toContain("Member-family documentation");
+    expect(mapped.value?.range).toEqual({
+      start: test.document.positionAt(test.activeSource.start),
+      end: test.document.positionAt(test.activeSource.end),
+    });
+    expect(mapped.failures).toEqual([]);
+  });
+
+  test("preserves private visibility on an exact selected call signature", () => {
+    const text = "<template>${formatSelection(title)}</template>";
+    const test = harness(text, "formatSelection");
+    const mapped = test.map({
+      selectedMemberName: "formatSelection",
+      selectedMember: {
+        ...member("formatSelection", null, "(value: string) => string"),
+        memberKind: "method",
+        visibilityKind: "private",
+      },
+      selectedCall: selectedCall(
+        test.activeSource,
+        textSource(text, "formatSelection(title)"),
+        { candidateCount: 1 },
+      ),
+    });
+
+    expect(markdown(mapped)).toBe([
+      "```ts",
+      "private formatSelection(value: string): string",
+      "```",
+    ].join("\n"));
+    expect(mapped.failures).toEqual([]);
+  });
+
+  test("keeps callable-value grammar distinct and optional-chain invocation visually quiet", () => {
+    const text = "<template>${tools.identity?. (title)}</template>";
+    const test = harness(text, "identity");
+    const mapped = test.map({
+      selectedMemberName: "identity",
+      selectedMember: {
+        ...member("identity", null, "<T>(value: T) => T"),
+        memberKind: "property",
+        isReadonly: true,
+        documentation: memberText("Callable-family documentation must be replaced by exact null."),
+      },
+      selectedCall: selectedCall(
+        test.activeSource,
+        textSource(text, "tools.identity?. (title)"),
+        {
+          callKind: "member",
+          optionalChain: true,
+          presentationKind: "callable-value",
+          signatureName: "identity",
+          signatureTail: "<string>(value: string) => string",
+          candidateCount: 1,
+          genericParameterCount: 1,
+          documentation: null,
+        },
+      ),
+    });
+
+    expect(markdown(mapped)).toBe([
+      "```ts",
+      "readonly identity: <string>(value: string) => string",
+      "```",
+    ].join("\n"));
+    expect(markdown(mapped)).not.toContain("identity?.");
+    expect(markdown(mapped)).not.toContain("Callable-family documentation");
+    expect(mapped.failures).toEqual([]);
+  });
+
+  test("discloses semantic signature truncation before the overload badge exactly once", () => {
+    const text = "<template>${formatSelection(title)}</template>";
+    const test = harness(text, "formatSelection");
+    const truncatedTail = `(${"x".repeat(599)}`;
+    expect(Array.from(truncatedTail)).toHaveLength(600);
+    const mapped = test.map({
+      selectedMemberName: "formatSelection",
+      selectedMember: { ...member("formatSelection", null, "Function"), memberKind: "method" },
+      selectedCall: selectedCall(
+        test.activeSource,
+        textSource(text, "formatSelection(title)"),
+        {
+          signatureTail: truncatedTail,
+          signatureIsTruncated: true,
+          candidateCount: 3,
+        },
+      ),
+    });
+    expect(markdown(mapped)).toMatch(/^```ts\nformatSelection\(x+…\n```$/u);
+    expect(markdown(mapped).match(/…/gu)).toHaveLength(1);
+    expect(markdown(mapped)).not.toContain("overload");
+
+    const complete = test.map({
+      selectedMemberName: "formatSelection",
+      selectedMember: { ...member("formatSelection", null, "Function"), memberKind: "method" },
+      selectedCall: selectedCall(
+        test.activeSource,
+        textSource(text, "formatSelection(title)"),
+        { candidateCount: 1 },
+      ),
+    });
+    expect(markdown(complete)).not.toContain("…");
+  });
+
+  test("keeps synthesized callable-union signatures exact without borrowing declaration metadata", () => {
+    const text = "<template>${tools.unionCallable(title)}</template>";
+    const test = harness(text, "unionCallable");
+    const mapped = test.map({
+      selectedMemberName: "unionCallable",
+      selectedMember: {
+        ...member("unionCallable", null, "((value: string) => string) | ((value: string) => number)"),
+        memberKind: "property",
+        documentation: memberText("Family documentation must not leak into a synthesized signature."),
+        isDeprecated: true,
+        deprecationReason: memberText("Family deprecation must not leak."),
+      },
+      selectedCall: selectedCall(
+        test.activeSource,
+        textSource(text, "tools.unionCallable(title)"),
+        {
+          callKind: "member",
+          presentationKind: "callable-value",
+          signatureName: "unionCallable",
+          signatureTail: "(value: string) => string | number",
+          candidateCount: 1,
+          genericParameterCount: null,
+          signatureProvenance: "synthesized",
+          declarationSource: null,
+          documentation: null,
+          isDeprecated: null,
+          deprecationReason: null,
+        },
+      ),
+    });
+
+    expect(markdown(mapped)).toBe([
+      "```ts",
+      "unionCallable: (value: string) => string | number",
+      "```",
+    ].join("\n"));
+    expect(markdown(mapped)).not.toContain("Family documentation");
+    expect(markdown(mapped)).not.toContain("Deprecated");
+    expect(mapped.failures).toEqual([]);
+  });
+
+  test("withholds open, stale, and hostile call enrichment without erasing the member hover", () => {
+    const text = "<template>${formatSelection(title)} ${otherCall(title)}</template>";
+    const test = harness(text, "formatSelection");
+    const call = selectedCall(test.activeSource, textSource(text, "formatSelection(title)"));
+    const baseMember = {
+      ...member("formatSelection", null, "(value: unknown) => unknown"),
+      memberKind: "method",
+      documentation: memberText("Authenticated member fallback."),
+    };
+    const expected = [
+      "```ts",
+      "formatSelection: (value: unknown) => unknown",
+      "```",
+      "",
+      "Authenticated member fallback.",
+    ].join("\n");
+    const hostile: readonly Record<string, unknown>[] = [
+      {
+        ...call,
+        status: "open",
+        presentationKind: null,
+        signatureTail: null,
+        signatureIsTruncated: false,
+        selectedCandidateIndex: null,
+        genericParameterCount: null,
+        signatureProvenance: null,
+        declarationSource: null,
+        documentation: null,
+        isDeprecated: null,
+        openReason: "Selection stayed open.",
+      },
+      { ...call, status: "invented" },
+      { ...call, callKind: "global" },
+      { ...call, callKind: "function" },
+      { ...call, optionalChain: "yes" },
+      { ...call, signatureName: "otherCall" },
+      { ...call, source: textSource(text, "otherCall", "active-template-token") },
+      { ...call, source: { ...test.activeSource, kind: "typescript-node" } },
+      { ...call, callSource: textSource(text, "otherCall(title)") },
+      { ...call, callSource: { ...textSource(text, "formatSelection(title)"), kind: "typescript-node" } },
+      { ...call, callSource: { ...textSource(text, "formatSelection(title)"), anchor: { kind: "bad" } } },
+      { ...call, presentationKind: "callable-value" },
+      { ...call, signatureTail: " : string" },
+      { ...call, signatureTail: "(value: string): string\nunsafe" },
+      { ...call, signatureTail: "(value: \"Cafe\u0301\"): string" },
+      { ...call, signatureTail: "(value: string): str\u202eing" },
+      { ...call, signatureTail: "(value: string): str\u2028ing" },
+      { ...call, signatureTail: "(value: string): str\u2029ing" },
+      { ...call, signatureTail: `(${"x".repeat(600)}` },
+      { ...call, signatureTail: "(value: string): string", genericParameterCount: 1 },
+      { ...call, signatureIsTruncated: "yes" },
+      { ...call, signatureIsTruncated: true },
+      { ...call, candidateCount: 0 },
+      { ...call, candidateCount: 1.5 },
+      { ...call, selectedCandidateIndex: null },
+      { ...call, selectedCandidateIndex: 2 },
+      { ...call, genericParameterCount: null },
+      { ...call, signatureProvenance: "declaration", declarationSource: null },
+      { ...call, signatureProvenance: "declaration", isDeprecated: false, deprecationReason: memberText("No.") },
+      { ...call, signatureProvenance: "declaration", documentation: memberText("Unsafe", { format: "markdown" }) },
+      {
+        ...call,
+        signatureProvenance: "synthesized",
+        declarationSource: null,
+        documentation: memberText("Borrowed."),
+        isDeprecated: null,
+      },
+      { ...call, openReason: "Exact rows cannot be open." },
+    ];
+
+    for (const selectedCallRow of hostile) {
+      const mapped = test.map({
+        selectedMemberName: "formatSelection",
+        selectedMember: baseMember,
+        selectedCall: selectedCallRow,
+      });
+      expect(markdown(mapped)).toBe(expected);
+      expect(mapped.failures).toEqual([]);
+    }
+  });
+
+  test("keeps a broad named-lookup Open call quiet without inventing a parent member", () => {
+    const text = "<template>${broadCall(value)}</template>";
+    const test = harness(text, "broadCall");
+    const mapped = test.map({
+      selectedMemberName: null,
+      selectedMember: null,
+      memberOwnerType: null,
+      selectedCall: {
+        ...selectedCall(test.activeSource, textSource(text, "broadCall(value)")),
+        status: "open",
+        signatureName: "broadCall",
+        presentationKind: null,
+        signatureTail: null,
+        signatureIsTruncated: false,
+        candidateCount: 0,
+        selectedCandidateIndex: null,
+        genericParameterCount: null,
+        signatureProvenance: null,
+        declarationSource: null,
+        documentation: null,
+        isDeprecated: null,
+        deprecationReason: null,
+        openReason: "Broad named lookup cannot authenticate one receiver member.",
+      },
+    });
+
+    expect(mapped).toEqual({ value: null, failures: [] });
   });
 
   test("discloses upstream member-text truncation and preserves the hover leaf budget", () => {

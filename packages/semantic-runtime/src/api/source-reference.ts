@@ -67,6 +67,11 @@ export function isExternalDependencySourceReference(
 export const PUBLIC_SOURCE_REFERENCE_CARRIER_KEYS = new Set<string>([
   'source',
   'sources',
+  'documentation',
+  'deprecationReason',
+  'locality',
+  'pathSources',
+  'edit',
   'accessUse',
   'occurrence',
   'owner',

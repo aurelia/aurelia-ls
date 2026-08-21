@@ -115,6 +115,71 @@ export function checkerSymbolMemberDocumentation(
   };
 }
 
+/** TypeScript-selected signature prose, with the exact declaration JSDoc retained only as source provenance. */
+export function checkerSignatureDocumentation(
+  checker: ts.TypeChecker,
+  signature: ts.Signature,
+  declaration: ts.Declaration,
+): CheckerTypeMemberTextDraft | null {
+  const sourceNodes = documentationMainCommentSources(declaration);
+  if (sourceNodes.length === 0) {
+    return null;
+  }
+  const text = boundedCheckerMemberText(
+    checkerDocumentationPlaintext(signature.getDocumentationComment(checker)),
+    CHECKER_MEMBER_DOCUMENTATION_MAX_LINES,
+    CHECKER_MEMBER_DOCUMENTATION_MAX_CODE_POINTS,
+  );
+  return text == null
+    ? null
+    : {
+        ...text,
+        sourceCount: sourceNodes.length,
+        sourceNodes,
+      };
+}
+
+/** TypeScript-selected signature deprecation boolean; declaration nodes remain the only published source provenance. */
+export function checkerSignatureIsDeprecated(signature: ts.Signature): boolean {
+  return signature.getJsDocTags().some((tag) => tag.name.toLowerCase() === 'deprecated');
+}
+
+/** Nonempty converged TypeScript-selected signature deprecation reason with exact declaration tag sources. */
+export function checkerSignatureDeprecationReason(
+  signature: ts.Signature,
+  declaration: ts.Declaration,
+): CheckerTypeMemberTextDraft | null {
+  const tags = signature.getJsDocTags().filter((tag) => tag.name.toLowerCase() === 'deprecated');
+  if (tags.length === 0) {
+    return null;
+  }
+  const reasons = tags.map((tag) => normalizeCheckerDeprecationReason(
+    checkerDocumentationPlaintext(tag.text ?? []),
+  ));
+  const reason = reasons[0] ?? '';
+  if (reason.length === 0 || reasons.some((candidate) => candidate !== reason)) {
+    return null;
+  }
+  const sourceNodes = ts.getJSDocTags(declaration).filter((tag): tag is ts.JSDocDeprecatedTag =>
+    ts.isJSDocDeprecatedTag(tag)
+  );
+  if (sourceNodes.length === 0) {
+    return null;
+  }
+  const text = boundedCheckerMemberText(
+    reason,
+    CHECKER_MEMBER_DEPRECATION_REASON_MAX_LINES,
+    CHECKER_MEMBER_DEPRECATION_REASON_MAX_CODE_POINTS,
+  );
+  return text == null
+    ? null
+    : {
+        ...text,
+        sourceCount: sourceNodes.length,
+        sourceNodes,
+      };
+}
+
 /**
  * Expose a deprecation reason only when the established all-declarations rule closes and every declaration supplies
  * the same nonempty normalized reason. Mixed/missing reasons retain only the deprecation boolean.

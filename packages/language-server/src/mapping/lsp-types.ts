@@ -40,6 +40,7 @@ import type {
   SemanticTemplateRenameResult,
 } from "@aurelia-ls/semantic-runtime";
 import {
+  CHECKER_CALL_SIGNATURE_MAX_CODE_POINTS,
   CHECKER_MEMBER_DEPRECATION_REASON_MAX_CODE_POINTS,
   CHECKER_MEMBER_DEPRECATION_REASON_MAX_LINES,
   CHECKER_MEMBER_DOCUMENTATION_MAX_CODE_POINTS,
@@ -49,6 +50,7 @@ import {
   diagnosticRepairAffordanceForSuggestion,
   frameworkRegistrationCapabilityFromString,
   isAureliaExpressionIdentifierName,
+  isCheckerCallTextSafe,
   isSemanticSourceReference,
   runtimeAsElementResourceName,
   runtimeAttributeName,
@@ -1096,22 +1098,33 @@ function semanticRuntimeHoverSelection(
         failures: ["Hover selected member has neither a type nor typed member uncertainty."],
       };
     }
-    return {
-      value: {
-        locus: "selected-member",
-        identity: {
-          language: "ts",
-          prefix: `${declarationPresentation.value.visibilityPrefix}${member.isReadonly ? "readonly " : ""}`,
-          authored: activeText,
-          suffix: member.isOptional ? "?" : "",
-          typeDetail: member.typeDisplay == null ? null : `: ${member.typeDisplay}`,
-        },
-        context: role == null
-          ? declarationPresentation.value.context
-          : [{ prefix: role }],
+    const baseSelection: SemanticRuntimeHoverSelection = {
+      locus: "selected-member",
+      identity: {
+        language: "ts",
+        prefix: `${declarationPresentation.value.visibilityPrefix}${member.isReadonly ? "readonly " : ""}`,
+        authored: activeText,
+        suffix: member.isOptional ? "?" : "",
+        typeDetail: member.typeDisplay == null ? null : `: ${member.typeDisplay}`,
       },
-      failures: [],
+      context: role == null
+        ? declarationPresentation.value.context
+        : [{ prefix: role }],
     };
+    const selectedCall = semanticRuntimeSelectedCallHoverSelection(
+      value,
+      member,
+      declarationPresentation.value.visibilityPrefix,
+      activeSource,
+      activeText,
+      documentUris,
+      originDocument,
+    );
+    // Call signatures are optional enrichment on an independently authenticated member card.
+    // Open or stale call evidence must never erase the ordinary member identity.
+    return selectedCall.failures.length > 0 || selectedCall.value == null
+      ? { value: baseSelection, failures: [] }
+      : selectedCall;
   }
 
   if (value.selectedRouteTarget != null) {
@@ -1236,6 +1249,179 @@ function semanticRuntimeHoverSelection(
   }
 
   return { value: null, failures: [] };
+}
+
+function semanticRuntimeSelectedCallHoverSelection(
+  value: SemanticTemplateCursorInfoResult,
+  member: SemanticRuntimeHoverMember,
+  visibilityPrefix: string,
+  activeSource: SemanticSourceReference,
+  activeText: string,
+  documentUris: WorkspaceDocumentUris,
+  originDocument: TextDocument,
+): SemanticRuntimeReadMapping<SemanticRuntimeHoverSelection | null> {
+  const call = value.selectedCall;
+  if (call == null || call.status !== "exact") {
+    return { value: null, failures: [] };
+  }
+  if (
+    (call.callKind !== "scope" && call.callKind !== "member")
+    || typeof call.optionalChain !== "boolean"
+    || (call.presentationKind !== "method" && call.presentationKind !== "callable-value")
+    || typeof call.signatureName !== "string"
+    || !isAureliaExpressionIdentifierName(call.signatureName)
+    || call.signatureName !== member.name
+    || call.signatureName !== value.selectedMemberName
+    || call.signatureName !== activeText
+    || member.scopeRole != null
+    || !semanticRuntimeAuthoredCallSourceIsExact(call.source)
+    || !sameExactSourceReference(activeSource, call.source, documentUris)
+    || !semanticRuntimeAuthoredCallSourceIsExact(call.callSource)
+    || !semanticRuntimeExactSourceContains(call.callSource, activeSource, documentUris)
+    || sameExactSourceReference(call.callSource, activeSource, documentUris)
+  ) {
+    return { value: null, failures: ["Hover selected call does not own the exact authored call locus."] };
+  }
+  const callRange = semanticSourceRangeForDocument(call.callSource, originDocument);
+  const callText = callRange == null ? "" : originDocument.getText(callRange);
+  const callSource = semanticExactSourceReference(call.callSource);
+  const active = semanticExactSourceReference(activeSource);
+  const callStart = callSource?.start;
+  const activeEnd = active?.end;
+  const calleeSuffix = typeof callStart !== "number" || typeof activeEnd !== "number"
+    ? ""
+    : callText.slice(activeEnd - callStart).trimStart();
+  if (
+    callRange == null
+    || callText.length === 0
+    || callText !== callText.trim()
+    || !callText.endsWith(")")
+    || !/^(?:\?\.\s*)?\(/u.test(calleeSuffix)
+  ) {
+    return { value: null, failures: ["Hover selected call source is not current in the requesting document."] };
+  }
+  if (
+    (call.presentationKind === "method" && member.memberKind !== "method")
+    || (
+      call.presentationKind === "callable-value"
+      && member.memberKind !== "property"
+      && member.memberKind !== "accessor"
+    )
+  ) {
+    return { value: null, failures: ["Hover selected call presentation does not match its member kind."] };
+  }
+  if (
+    typeof call.signatureTail !== "string"
+    || !isCheckerCallTextSafe(call.signatureTail)
+    || Array.from(call.signatureTail).length > CHECKER_CALL_SIGNATURE_MAX_CODE_POINTS
+    || (
+      call.signatureIsTruncated === true
+      && Array.from(call.signatureTail).length !== CHECKER_CALL_SIGNATURE_MAX_CODE_POINTS
+    )
+    || (call.signatureTail[0] !== "(" && call.signatureTail[0] !== "<")
+    || typeof call.signatureIsTruncated !== "boolean"
+    || !Number.isSafeInteger(call.candidateCount)
+    || call.candidateCount < 1
+    || typeof call.selectedCandidateIndex !== "number"
+    || !Number.isSafeInteger(call.selectedCandidateIndex)
+    || call.selectedCandidateIndex < 0
+    || call.selectedCandidateIndex >= call.candidateCount
+    || (
+      call.genericParameterCount == null
+        ? call.signatureProvenance !== "synthesized"
+        : !Number.isSafeInteger(call.genericParameterCount)
+          || call.genericParameterCount < 0
+          || (call.genericParameterCount === 0 && call.signatureTail[0] !== "(")
+          || (call.genericParameterCount > 0 && call.signatureTail[0] !== "<")
+    )
+    || (
+      !call.signatureIsTruncated
+      && call.presentationKind === "method"
+      && !call.signatureTail.includes("): ")
+    )
+    || (
+      !call.signatureIsTruncated
+      && call.presentationKind === "callable-value"
+      && !call.signatureTail.includes(" => ")
+    )
+    || call.openReason != null
+  ) {
+    return { value: null, failures: ["Hover selected call has malformed exact signature metadata."] };
+  }
+
+  let documentation: SemanticRuntimeReadMapping<string | null> = { value: null, failures: [] };
+  let deprecationReason: SemanticRuntimeReadMapping<string | null> = { value: null, failures: [] };
+  if (call.signatureProvenance === "declaration") {
+    if (
+      !semanticRuntimeMemberTextSourceIsExact(call.declarationSource)
+      || typeof call.isDeprecated !== "boolean"
+      || (call.isDeprecated !== true && call.deprecationReason != null)
+    ) {
+      return { value: null, failures: ["Hover selected call has incoherent declaration provenance."] };
+    }
+    documentation = semanticRuntimeMemberTextForHover(call.documentation, "documentation");
+    deprecationReason = semanticRuntimeMemberTextForHover(call.deprecationReason, "deprecation reason");
+    if (documentation.failures.length > 0 || deprecationReason.failures.length > 0) {
+      return {
+        value: null,
+        failures: [...documentation.failures, ...deprecationReason.failures],
+      };
+    }
+  } else if (call.signatureProvenance === "synthesized") {
+    if (
+      call.declarationSource != null
+      || call.documentation != null
+      || call.isDeprecated != null
+      || call.deprecationReason != null
+    ) {
+      return { value: null, failures: ["Hover selected synthesized call borrows declaration metadata."] };
+    }
+  } else {
+    return { value: null, failures: ["Hover selected call has unsupported signature provenance."] };
+  }
+
+  const context: HoverCardContextLine[] = [];
+  if (call.isDeprecated === true) {
+    context.push({
+      prefix: deprecationReason.value == null ? "Deprecated." : "Deprecated:",
+      value: deprecationReason.value,
+      valueKind: "prose",
+    });
+  }
+  if (documentation.value != null) {
+    context.push({
+      priority: "tertiary",
+      prefix: "",
+      value: documentation.value,
+      valueKind: "prose",
+    });
+  }
+  const additionalCandidates = call.candidateCount - 1;
+  const overloadBadge = additionalCandidates === 0
+    ? ""
+    : ` (+${additionalCandidates} overload${additionalCandidates === 1 ? "" : "s"})`;
+  const truncation = call.signatureIsTruncated ? "…" : "";
+  const signatureTail = `${call.signatureTail}${truncation}${overloadBadge}`;
+  return {
+    value: {
+      locus: "selected-member",
+      identity: {
+        language: "ts",
+        prefix: `${visibilityPrefix}${member.isReadonly ? "readonly " : ""}`,
+        authored: activeText,
+        suffix: member.isOptional ? "?" : "",
+        typeDetail: call.presentationKind === "method" ? signatureTail : `: ${signatureTail}`,
+      },
+      context,
+    },
+    failures: [],
+  };
+}
+
+function semanticRuntimeAuthoredCallSourceIsExact(value: unknown): boolean {
+  return isSemanticSourceReference(value)
+    && value.kind === "source-span-address"
+    && semanticRuntimeMemberTextSourceIsExact(value);
 }
 
 function semanticRuntimeResourceOwnsPrimaryBindableUsage(

@@ -99,6 +99,16 @@
         "reason": "References should honestly expose the standard-library declaration plus local TypeScript and template usages even though rename is refused.",
         "note": "NEW 2026-08-01. Read and write policy intentionally diverge: external declarations remain navigable but are not editable."
       }
+    ],
+    "hover": [
+      {
+        "id": "selected-string-overload",
+        "file": "src/app.html",
+        "anchor": "${overloaded('')}",
+        "at": "overloaded",
+        "verdict": "correct",
+        "reason": "Hover should render only the exact string overload selected by the authored call and must not dump the number overload or implementation signature."
+      }
     ]
   }
 }

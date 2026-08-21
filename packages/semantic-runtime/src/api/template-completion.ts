@@ -175,6 +175,7 @@ import {
   noBindableUsageMode,
   type SemanticTemplateCursorBindableUsageModeFields,
 } from './template-bindable-usage-mode.js';
+import { templateSelectedCallSignature } from './template-call-signature.js';
 import {
   describeAddress,
   semanticExactSourceReference,
@@ -255,8 +256,11 @@ interface TemplateOverlayDiagnosticSelection {
 }
 
 interface TemplateOverlayDiagnosticCache {
+  /** Full overlay diagnostic set retained once for exact checker consumers such as selected-call resolution. */
+  readonly allDiagnostics: readonly TypeSystemOverlayDiagnostic[];
   readonly diagnostics: readonly TypeSystemOverlayDiagnostic[];
   readonly selectionsByOriginKey: ReadonlyMap<string, TemplateOverlayDiagnosticSelection>;
+  readonly typeSystem: TypeSystemProject | null;
 }
 
 interface TemplateOverlayDiagnosticSubjectProjection {
@@ -407,9 +411,29 @@ function readTemplateCursorInfoValue(
     readContext.selection.resource,
     cursorContext,
   );
+  const selectedCall = templateSelectedCallSignature(
+    store,
+    cursorContext,
+    () => {
+      const cache = templateOverlayDiagnosticCache(store, emission);
+      const overlay = cache.selectionsByOriginKey.get(
+        templateOverlayOriginKey(readContext.selection.resource),
+      )?.emission ?? null;
+      return overlay == null
+        ? null
+        : {
+            emission: overlay,
+            typeSystem: cache.typeSystem,
+            diagnostics: cache.allDiagnostics.filter((diagnostic) =>
+              diagnostic.overlayOriginKey === overlay.overlaySource?.originKey
+            ),
+          };
+    },
+  );
   const missingInputs = [...new Set([
     ...cursorContext.missingInputs,
     ...bindableUsageModeMissingInputs(selectedBindableUsageMode),
+    ...(selectedCall?.openReason == null ? [] : ['selected-call-signature:open']),
   ])];
   const cursorOffset = readContext.locus.cursor.offset;
   const baseValue = templateCursorInfoResult(
@@ -420,6 +444,7 @@ function readTemplateCursorInfoValue(
     missingInputs,
     selectedBindableUsageMode,
     true,
+    selectedCall,
   );
   const diagnostics = cursorOffset == null
     ? []
@@ -714,9 +739,12 @@ function cursorPresentedDiagnosticCandidates(
   cursorOffset: number | null,
 ): readonly CursorPresentedDiagnosticCandidate[] {
   return groups.flatMap((group, presenterOrder) => {
-    const row = rows[group.primary.rowIndex] ?? null;
-    return semanticTemplateCursorSourcePathsMatchExactly(row?.source ?? null, activeSource)
-      && semanticSourceReferenceContainsOffset(row?.source ?? null, cursorOffset)
+    const ownsCursor = [group.primary, ...group.related].some((presentationRow) => {
+      const row = rows[presentationRow.rowIndex] ?? null;
+      return semanticTemplateCursorSourcePathsMatchExactly(row?.source ?? null, activeSource)
+        && semanticSourceReferenceContainsOffset(row?.source ?? null, cursorOffset);
+    });
+    return ownsCursor
       ? [{ presenterOrder, group }]
       : [];
   });
@@ -968,6 +996,11 @@ function semanticTemplateCursorInfoDisplayText(
   }
   if (value.selectedMember != null || value.memberOwnerType != null || value.selectedMemberName != null) {
     lines.push(`Selected member: ${value.selectedMemberName ?? value.selectedMember?.name ?? 'none'}; owner=${value.memberOwnerType?.display ?? 'unknown'}; memberType=${value.selectedMember?.typeDisplay ?? 'unknown'}.`);
+  }
+  if (value.selectedCall != null) {
+    lines.push(value.selectedCall.status === 'open' || value.selectedCall.signatureTail == null
+      ? `Selected call: ${value.selectedCall.signatureName}; effective=open.`
+      : `Selected call: ${value.selectedCall.signatureName}${value.selectedCall.signatureTail}${value.selectedCall.signatureIsTruncated ? '…' : ''}; candidate=${(value.selectedCall.selectedCandidateIndex ?? 0) + 1}/${value.selectedCall.candidateCount}.`);
   }
   if (value.expressionFrontier != null) {
     lines.push(`Expression frontier: ${value.expressionFrontier.frontierKind ?? 'none'}; continuations=${formatList(value.expressionFrontier.expectedContinuationClasses)}.`);
@@ -1255,8 +1288,10 @@ function templateOverlayDiagnosticCache(
     .filter((selection) => selection.emission.overlaySource != null);
   if (overlaySelections.length === 0) {
     const empty = {
+      allDiagnostics: [],
       diagnostics: [],
       selectionsByOriginKey: new Map(),
+      typeSystem: null,
     };
     templateOverlayDiagnosticsByEmission.set(emission, empty);
     return empty;
@@ -1276,13 +1311,16 @@ function templateOverlayDiagnosticCache(
       selectionsByOriginKey.set(overlaySource.originKey, selection);
     }
   }
+  const allDiagnostics = readTypeSystemOverlayDiagnostics(overlayTypeSystem);
   const result = {
-    diagnostics: readTypeSystemOverlayDiagnostics(overlayTypeSystem)
+    allDiagnostics,
+    diagnostics: allDiagnostics
       .filter((diagnostic) =>
         selectionsByOriginKey.has(diagnostic.overlayOriginKey)
         && templateOverlayDiagnosticIsPublic(diagnostic)
       ),
     selectionsByOriginKey,
+    typeSystem: overlayTypeSystem,
   };
   templateOverlayDiagnosticsByEmission.set(emission, result);
   return result;
@@ -1665,6 +1703,7 @@ function templateDiagnosticRowsForMemberSite(
     [...new Set(cursorContext.missingInputs)],
     noBindableUsageMode(),
     false,
+    null,
   );
   return cursorInfo.diagnostics.flatMap((diagnostic) =>
     templateDiagnosticRowForDiagnostic(store, selection, diagnostic, cursorInfo, source.sourcePath, site, context)
@@ -1824,6 +1863,7 @@ function expressionRootDiagnosticRowsForSelection(
       [...new Set(cursorContext.missingInputs)],
       noBindableUsageMode(),
       false,
+      null,
     );
     if (
       cursorContext.bindingSourceContextOpenReason != null
@@ -2855,6 +2895,7 @@ function missingTemplateCursorInfo(
     selectedRouteTarget: null,
     selectedMemberName: null,
     selectedMember: null,
+    selectedCall: null,
     selectedExpression: null,
     uncertainty: null,
     memberOwnerType: null,
@@ -2878,6 +2919,7 @@ function templateCursorInfoResult(
   missingInputs: readonly string[],
   selectedBindableUsageMode: SemanticTemplateCursorBindableUsageModeFields,
   includePresentationMetadata: boolean,
+  selectedCall: SemanticTemplateCursorInfoResult['selectedCall'],
 ): SemanticTemplateCursorInfoResult {
   const query = cursorContext.query;
   const html = cursorHtmlRow(store, cursorContext, includeHandles);
@@ -2900,13 +2942,20 @@ function templateCursorInfoResult(
     query.locus.kind === InquiryLocusKind.SourceCursor ? query.locus.cursor.offset : null,
     valueSite?.siteKind ?? null,
   );
+  const expressionSource = query.expressionParseProductHandle == null
+    ? null
+    : describeAddress(
+        store,
+        readTemplateExpressionParse(store, query.expressionParseProductHandle)?.sourceAddressHandle ?? null,
+      );
   const baseActiveSource = cursorContext.activeExpressionSpan == null
     ? describeAddress(store, cursorContext.activeSourceAddressHandle)
     : query.locus.kind === InquiryLocusKind.SourceCursor
       ? sourceReferenceForParserSpan(
-          query.locus.cursor.filePath,
+          expressionSource?.path ?? query.locus.cursor.filePath,
           cursorContext.activeExpressionSpan,
           'active-template-token',
+          expressionSource,
         )
       : null;
   const routeActiveSource = cursorRouteActiveSource(
@@ -2965,6 +3014,7 @@ function templateCursorInfoResult(
     selectedRouteTarget,
     selectedMemberName: cursorContext.selectedMemberName,
     selectedMember,
+    selectedCall,
     selectedExpression,
     uncertainty: cursorUncertainty(
       store,

@@ -105,6 +105,13 @@ export interface TemplateTypeSystemOverlayExpressionScopeAliases {
   readonly parentBindingContextDepth: number;
   /** Current Scope's override-first named-lookup expression for reserved-name collision avoidance. */
   readonly currentNamedLookupExpression?: string | null;
+  /** Exact receiver/context selected by implicit Scope.getContext lookup; null keeps the receiver open. */
+  implicitNamedLookupReceiver?(name: string): TemplateTypeSystemOverlayImplicitNamedLookupReceiver | null;
+}
+
+export interface TemplateTypeSystemOverlayImplicitNamedLookupReceiver {
+  readonly ancestor: number;
+  readonly contextKind: 'binding-context' | 'named-lookup';
 }
 
 interface ProjectedOverlayExpressionChild {
@@ -448,6 +455,26 @@ export class TemplateTypeSystemOverlayExpressionProjector {
             semanticProductHandle,
             this.shouldLowerNonStrictAccess(context),
             arrowCallbackDepth,
+            true,
+          );
+        }
+        if (arrowCallbackDepth === 0 && context?.scopeAliases == null) {
+          return this.copySourceProjection(
+            expression,
+            context,
+            semanticProductHandle,
+            expression.args,
+            null,
+            arrowCallbackDepth,
+          );
+        }
+        if (arrowCallbackDepth === 0) {
+          return this.namedCallScopeExpression(
+            expression,
+            context,
+            semanticProductHandle,
+            this.shouldLowerNonStrictAccess(context),
+            arrowCallbackDepth,
           );
         }
         if (this.shouldLowerNonStrictAccess(context)) {
@@ -785,11 +812,36 @@ export class TemplateTypeSystemOverlayExpressionProjector {
     semanticProductHandle: ProductHandle | null,
     nonStrict: boolean,
     arrowCallbackDepth: number,
+    forceAuthoredCurrentReceiver: boolean = false,
   ): TemplateTypeSystemOverlayExpressionProjection {
     const source = this.sourceSlice(expression.name.span, semanticProductHandle);
     if (source == null) {
       return TemplateTypeSystemOverlayExpressionProjection.missingSource();
     }
+    const lookup = forceAuthoredCurrentReceiver && arrowCallbackDepth > 0
+      ? context?.scopeAliases?.currentNamedLookupExpression ?? null
+      : implicitNamedCallScopeLookupExpression(expression.name.name, context?.scopeAliases ?? null);
+    // Standalone projector probes may intentionally omit Scope replay; preserve their TypeScript-shaped bare call.
+    // Product overlays always supply aliases and therefore spend the exact runtime receiver below.
+    const emitReceiver = context?.scopeAliases != null
+      && (
+        forceAuthoredCurrentReceiver
+        || arrowCallbackDepth === 0
+        || expression.ancestor > 0
+      );
+    if (emitReceiver && lookup == null) {
+      return TemplateTypeSystemOverlayExpressionProjection.unsupported(unsupported(
+        forceAuthoredCurrentReceiver
+          ? TemplateTypeSystemOverlayExpressionUnsupportedKind.CurrentBindingContext
+          : TemplateTypeSystemOverlayExpressionUnsupportedKind.AncestorScope,
+        forceAuthoredCurrentReceiver
+          ? `Call '${expression.name.name}' needs one exact authored-current named receiver in the TypeScript overlay.`
+          : `Call '${expression.name.name}' needs one exact current named-lookup receiver in the TypeScript overlay.`,
+      ));
+    }
+    const receiverText = emitReceiver && lookup != null
+      ? `(${lookup})${expression.optionalAccess ? '?.' : '.'}`
+      : null;
     const args = this.argumentParts(expression.args, context, semanticProductHandle, `call ${expression.name.name} argument`, arrowCallbackDepth);
     return args == null
       ? TemplateTypeSystemOverlayExpressionProjection.unsupported(unsupported(
@@ -797,6 +849,12 @@ export class TemplateTypeSystemOverlayExpressionProjector {
         `Call '${expression.name.name}' has an argument that is not representable in a TypeScript overlay yet.`,
       ))
       : TemplateTypeSystemOverlayExpressionProjection.generated([
+        ...(receiverText != null
+          ? [{
+              kind: 'text' as const,
+              text: receiverText,
+            }]
+          : []),
         { kind: 'source', source, label: `named scope call ${expression.name.name}` },
         { kind: 'text', text: nonStrict || expression.optional ? '?.(' : '(' },
         ...args,
@@ -938,6 +996,36 @@ function overlayBindingContextAncestor(
 
 function ancestorNamedLookupAlias(ancestor: number): string {
   return `${TEMPLATE_TYPE_SYSTEM_OVERLAY_PARENT_NAMED_LOOKUP_ALIAS}${'.$parent'.repeat(Math.max(0, ancestor - 1))}`;
+}
+
+function implicitNamedCallScopeLookupExpression(
+  name: string,
+  aliases: TemplateTypeSystemOverlayExpressionScopeAliases | null,
+): string | null {
+  const current = aliases?.currentNamedLookupExpression ?? null;
+  if (current == null) {
+    return null;
+  }
+  if (aliases?.implicitNamedLookupReceiver == null) {
+    return current;
+  }
+  const receiver = aliases.implicitNamedLookupReceiver(name);
+  if (
+    receiver == null
+    || receiver.ancestor > (aliases?.parentBindingContextDepth ?? 0)
+  ) {
+    return null;
+  }
+  if (receiver.contextKind === 'binding-context') {
+    return receiver.ancestor === 0
+      ? aliases?.currentBindingContext === true ? '$this' : null
+      : ancestorBindingContextAlias(receiver.ancestor);
+  }
+  return receiver.ancestor === 0 ? current : ancestorNamedLookupAlias(receiver.ancestor);
+}
+
+function ancestorBindingContextAlias(ancestor: number): string {
+  return ancestor <= 0 ? '$this' : `$parent${'.$parent'.repeat(ancestor - 1)}`;
 }
 
 export function appendTemplateTypeSystemOverlayExpressionProjection(

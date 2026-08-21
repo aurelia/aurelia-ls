@@ -4904,6 +4904,36 @@ export interface SemanticTemplateCursorMemberRow {
   };
 }
 
+/** Exact or explicitly open checker signature selection for one authored named call occurrence. */
+export interface SemanticTemplateCursorCallRow {
+  readonly status: 'exact' | 'open';
+  readonly callKind: 'scope' | 'member' | 'global' | 'function' | 'construct';
+  readonly optionalChain: boolean;
+  /** Whether the callee is a method member or a callable property/accessor value. */
+  readonly presentationKind: 'method' | 'callable-value' | null;
+  /** Runtime/member name kept separate so presenters never parse the checker signature tail. */
+  readonly signatureName: string;
+  /** Instantiated checker signature beginning with generic/parameter syntax; null when selection stays open. */
+  readonly signatureTail: string | null;
+  /** True when the exact checker signature exceeded the bounded transport surface. */
+  readonly signatureIsTruncated: boolean;
+  readonly candidateCount: number;
+  /** Zero-based selected checker candidate; null when selection remains open. */
+  readonly selectedCandidateIndex: number | null;
+  readonly genericParameterCount: number | null;
+  readonly signatureProvenance: 'declaration' | 'synthesized' | null;
+  /** Exact authored callee name token, not the whole call. */
+  readonly source: SemanticSourceReference;
+  /** Exact authored full call expression. */
+  readonly callSource: SemanticSourceReference;
+  /** Exact resolved signature declaration name/source when closed. */
+  readonly declarationSource: SemanticSourceReference | null;
+  readonly documentation: SemanticTemplateCursorMemberTextRow | null;
+  readonly isDeprecated: boolean | null;
+  readonly deprecationReason: SemanticTemplateCursorMemberTextRow | null;
+  readonly openReason: string | null;
+}
+
 /** Exact authored `$this` / `$parent` qualifier selected by the cursor and its best checker projection. */
 export interface SemanticTemplateCursorExpressionRow {
   readonly expressionKind: 'AccessThis';
@@ -5410,6 +5440,8 @@ export interface SemanticTemplateCursorInfoResult {
   readonly selectedRouteTarget: SemanticTemplateCursorRouteTargetRow | null;
   readonly selectedMemberName: string | null;
   readonly selectedMember: SemanticTemplateCursorMemberRow | null;
+  /** Exact selected call signature; null for member-value/property hovers and unnamed call targets. */
+  readonly selectedCall: SemanticTemplateCursorCallRow | null;
   /** Typed presentation for one exact authored `$this` / `$parent` binding-context qualifier. */
   readonly selectedExpression: SemanticTemplateCursorExpressionRow | null;
   /** Stable uncertainty only when exact semantic pressure materially affects a displayed cursor answer. */

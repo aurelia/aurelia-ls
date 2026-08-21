@@ -772,6 +772,129 @@ test("native hover keeps a dirty static custom-attribute alias as a resource car
   }
 }, 60_000);
 
+test("native hover follows selected overloads and instantiated generics in dirty buffers", async () => {
+  const htmlPath = path.join(scopeFixture, "src/my-app.html");
+  const componentPath = path.join(scopeFixture, "src/my-app.ts");
+  const htmlUri = fileUri(scopeFixture, "src/my-app.html");
+  const componentUri = fileUri(scopeFixture, "src/my-app.ts");
+  const htmlBaseline = fs.readFileSync(htmlPath, "utf8");
+  const componentBaseline = fs.readFileSync(componentPath, "utf8");
+  const callDeclarations = [
+    "  /** Formats a text selection. */",
+    "  formatSelection(value: string): string;",
+    "  /** Formats a numeric selection.",
+    "   * @deprecated Use formatNumericSelection.",
+    "   */",
+    "  formatSelection(value: number): number;",
+    "  formatSelection(value: string | number): string | number { return value; }",
+    "",
+    "  /** Preserves the exact input type. */",
+    "  identity<T>(value: T): T { return value; }",
+    "",
+  ].join("\n");
+  const componentText = componentBaseline.replace(
+    "  readonly heading = 'Aurelia IDE playground';",
+    `  readonly heading = 'Aurelia IDE playground';\n${callDeclarations}`,
+  );
+  const htmlText = htmlBaseline.replace(
+    "  </main>",
+    [
+      "    <p data-hover-overload>${formatSelection(heading)}</p>",
+      "    <p data-hover-generic>${identity(state.searchText)}</p>",
+      "  </main>",
+    ].join("\n"),
+  );
+  const numberText = htmlText
+    .replace("formatSelection(heading)", "formatSelection(state.selectionProgressPercent)")
+    .replace("identity(state.searchText)", "identity(state.selectionProgressPercent)");
+  expect(componentText).not.toBe(componentBaseline);
+  expect(htmlText).not.toBe(htmlBaseline);
+  expect(numberText).not.toBe(htmlText);
+
+  const { connection, child, dispose, getStderr } = startServer(scopeFixture);
+  const diagnostics = createDiagnosticsRecorder(connection, child, getStderr);
+  let currentText = htmlText;
+  try {
+    await initialize(connection, child, getStderr, scopeFixture);
+    openDocument(connection, componentUri, "typescript", componentText);
+    openDocument(connection, htmlUri, "html", currentText);
+    await diagnostics.wait(htmlUri, 20_000);
+
+    const requestHover = async (marker: string, token: string): Promise<Hover | null> => {
+      const markerStart = currentText.indexOf(marker);
+      expect(markerStart).toBeGreaterThanOrEqual(0);
+      const tokenStart = currentText.indexOf(token, markerStart);
+      expect(tokenStart).toBeGreaterThanOrEqual(markerStart);
+      return await connection.sendRequest<Hover | null>("textDocument/hover", {
+        textDocument: { uri: htmlUri },
+        position: positionAt(currentText, tokenStart + 2),
+      });
+    };
+    const stringOverload = [
+      "```ts",
+      "formatSelection(value: string): string (+1 overload)",
+      "```",
+      "",
+      "Formats a text selection.",
+    ].join("\n");
+    const stringGeneric = [
+      "```ts",
+      "identity<string>(value: string): string",
+      "```",
+      "",
+      "Preserves the exact input type.",
+    ].join("\n");
+    for (const [marker, token, expected] of [
+      ["data-hover-overload", "formatSelection", stringOverload],
+      ["data-hover-generic", "identity", stringGeneric],
+    ] as const) {
+      const hover = await requestHover(marker, token);
+      expect((hover?.contents as { value?: string } | undefined)?.value ?? "").toBe(expected);
+      expect(hover?.range == null ? null : textForRange(currentText, hover.range)).toBe(token);
+    }
+
+    currentText = numberText;
+    changeDocument(connection, htmlUri, currentText, 2);
+    await diagnostics.wait(htmlUri, 20_000);
+    const numberOverload = [
+      "```ts",
+      "formatSelection(value: number): number (+1 overload)",
+      "```",
+      "",
+      "Deprecated: Use formatNumericSelection.",
+      "Formats a numeric selection.",
+    ].join("\n");
+    const numberGeneric = [
+      "```ts",
+      "identity<number>(value: number): number",
+      "```",
+      "",
+      "Preserves the exact input type.",
+    ].join("\n");
+    for (const [marker, token, expected] of [
+      ["data-hover-overload", "formatSelection", numberOverload],
+      ["data-hover-generic", "identity", numberGeneric],
+    ] as const) {
+      const deadline = Date.now() + 20_000;
+      let hover: Hover | null = null;
+      do {
+        hover = await requestHover(marker, token);
+        if (((hover?.contents as { value?: string } | undefined)?.value ?? "") === expected) break;
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      } while (Date.now() < deadline);
+      expect((hover?.contents as { value?: string } | undefined)?.value ?? "").toBe(expected);
+      expect(hover?.range == null ? null : textForRange(currentText, hover.range)).toBe(token);
+    }
+    expect(fs.readFileSync(htmlPath, "utf8")).toBe(htmlBaseline);
+    expect(fs.readFileSync(componentPath, "utf8")).toBe(componentBaseline);
+  } finally {
+    diagnostics.dispose();
+    dispose();
+    child.kill("SIGKILL");
+    await waitForExit(child);
+  }
+}, 120_000);
+
 function requireDocumentSymbol(
   symbols: readonly DocumentSymbol[],
   name: string,
