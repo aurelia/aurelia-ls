@@ -191,6 +191,53 @@ test("native hover and symbol responses preserve exact authored meaning", async 
   }
 }, 30_000);
 
+test("native SVG foreignObject tags cannot inherit a colliding component declaration hover", async () => {
+  const templatePath = path.join(scopeFixture, "src/components/product-card.html");
+  const componentPath = path.join(scopeFixture, "src/components/product-card.ts");
+  const templateUri = fileUri(scopeFixture, "src/components/product-card.html");
+  const componentUri = fileUri(scopeFixture, "src/components/product-card.ts");
+  const templateText = fs.readFileSync(templatePath, "utf8");
+  const componentText = fs.readFileSync(componentPath, "utf8");
+  const nativeMarkup = '<div style="width: ${selectionProgressPercent}%"></div>';
+  const nativeMarkupStart = templateText.indexOf(nativeMarkup);
+  expect(nativeMarkupStart).toBeGreaterThanOrEqual(0);
+
+  const { connection, child, dispose, getStderr } = startServer(scopeFixture);
+  const diagnostics = createDiagnosticsRecorder(connection, child, getStderr);
+  try {
+    await initialize(connection, child, getStderr, scopeFixture);
+    openDocument(connection, componentUri, "typescript", componentText);
+    openDocument(connection, templateUri, "html", templateText);
+    await diagnostics.wait(templateUri, 20_000);
+
+    const hoverAtOffset = async (offset: number): Promise<Hover | null> =>
+      await connection.sendRequest<Hover | null>("textDocument/hover", {
+        textDocument: { uri: templateUri },
+        position: positionAt(templateText, offset),
+      });
+
+    const openingDivStart = nativeMarkupStart + nativeMarkup.indexOf("div");
+    const closingDivStart = nativeMarkupStart + nativeMarkup.lastIndexOf("div");
+    expect(await hoverAtOffset(openingDivStart + 1)).toBeNull();
+    expect(await hoverAtOffset(closingDivStart + 1)).toBeNull();
+
+    const memberStart = nativeMarkupStart + nativeMarkup.indexOf("selectionProgressPercent");
+    const memberHover = await hoverAtOffset(memberStart + 2);
+    expect((memberHover?.contents as { value?: string } | undefined)?.value ?? "")
+      .toBe("```ts\nreadonly selectionProgressPercent: 40\n```");
+    expect(memberHover?.range == null ? null : textForRange(templateText, memberHover.range))
+      .toBe("selectionProgressPercent");
+
+    expect(fs.readFileSync(templatePath, "utf8")).toBe(templateText);
+    expect(fs.readFileSync(componentPath, "utf8")).toBe(componentText);
+  } finally {
+    diagnostics.dispose();
+    dispose();
+    child.kill("SIGKILL");
+    await waitForExit(child);
+  }
+}, 60_000);
+
 test("native hover preserves exact bare parent ancestry without confusing a $parent member", async () => {
   const htmlPath = path.join(scopeFixture, "src/my-app.html");
   const componentPath = path.join(scopeFixture, "src/my-app.ts");

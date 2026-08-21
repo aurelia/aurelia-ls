@@ -8,6 +8,7 @@ import {
   SemanticAppQueryKind,
   SemanticRuntimeProjectInputAuthority,
   type SemanticAppDiagnosticRow,
+  type SemanticTemplateCompletionResult,
   type SemanticTemplateCursorInfoResult,
   type SemanticTemplateDiagnosticRow,
 } from '../src/index.js';
@@ -581,6 +582,194 @@ describe('hover cursor semantic carriers', () => {
       category: 'type-information-incomplete',
       affectedDomain: 'bindable',
       affectedLocus: 'selected-bindable',
+    });
+  }, 120_000);
+
+  test('does not select a component bindable when its TypeScript span collides with a native HTML tag offset', async () => {
+    const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-completion-member-metadata');
+    const templatePath = path.join(fixtureRoot, 'src/app.html');
+    const scriptPath = path.join(fixtureRoot, 'src/app.ts');
+    const scriptText = readFileSync(scriptPath, 'utf8')
+      .replace(
+        "import { customElement } from 'aurelia';",
+        "import { bindable, customElement } from 'aurelia';",
+      )
+      .replace(
+        'export class App {',
+        "export class App {\n  @bindable public labelText = '';\n  public selectionProgressPercent = 25;",
+      );
+    const bindableNameStart = scriptText.indexOf('labelText');
+    const templatePrefix = '<template>\n';
+    const tagMarkup = '<div style="width: ${selectionProgressPercent}%"></div>\n</template>';
+    const tagNamePrefixLength = 1;
+    const paddingLength = bindableNameStart - templatePrefix.length - tagNamePrefixLength;
+    expect(paddingLength).toBeGreaterThanOrEqual(0);
+    const templateText = `${templatePrefix}${' '.repeat(paddingLength)}${tagMarkup}`;
+    const cursor = cursorAt(templateText, 'div', 0);
+    expect(templateText.indexOf('div')).toBe(bindableNameStart);
+    expect(cursor.offset).toBe(bindableNameStart + 1);
+
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: fixtureRoot,
+      storeKey: 'hover-cursor-cross-file-bindable-offset-collision',
+      projectInputAuthority: new SemanticRuntimeProjectInputAuthority(new NodeSemanticRuntimeProjectInputHost({
+        readFile(fileName) {
+          if (samePath(fileName, templatePath)) return templateText;
+          if (samePath(fileName, scriptPath)) return scriptText;
+          return undefined;
+        },
+        fileExists(fileName) {
+          return samePath(fileName, templatePath) || samePath(fileName, scriptPath)
+            ? true
+            : undefined;
+        },
+      })),
+    });
+    const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
+    const info = app.ask({
+      kind: SemanticAppQueryKind.TemplateCursorInfo,
+      detail: 'handles',
+      cursor,
+    }).value as SemanticTemplateCursorInfoResult;
+
+    expect(info.html).toMatchObject({ tagName: 'div', namespace: 'html' });
+    expect(info.selectedBindable).toBeNull();
+    expect(info.selectedDefinition).toBeNull();
+    expect(info.activeSource).toMatchObject({
+      path: 'src/app.html',
+      start: bindableNameStart,
+      end: bindableNameStart + 'div'.length,
+    });
+  }, 120_000);
+
+  test('does not select the owner definition when its TypeScript resource-name span collides with a native HTML tag offset', async () => {
+    const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-completion-member-metadata');
+    const templatePath = path.join(fixtureRoot, 'src/app.html');
+    const scriptPath = path.join(fixtureRoot, 'src/app.ts');
+    const scriptText = readFileSync(scriptPath, 'utf8');
+    const resourceNameMarker = "name: 'app'";
+    const resourceNameStart = scriptText.indexOf(resourceNameMarker) + "name: '".length;
+    expect(resourceNameStart).toBeGreaterThanOrEqual("name: '".length);
+    const templatePrefix = '<template>\n';
+    const tagMarkup = '<nav></nav>\n</template>';
+    const paddingLength = resourceNameStart - templatePrefix.length - 1;
+    expect(paddingLength).toBeGreaterThanOrEqual(0);
+    const templateText = `${templatePrefix}${' '.repeat(paddingLength)}${tagMarkup}`;
+    const cursor = cursorAt(templateText, 'nav', 0);
+    expect(templateText.indexOf('nav')).toBe(resourceNameStart);
+
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: fixtureRoot,
+      storeKey: 'hover-cursor-cross-file-definition-name-offset-collision',
+      projectInputAuthority: new SemanticRuntimeProjectInputAuthority(new NodeSemanticRuntimeProjectInputHost({
+        readFile(fileName) {
+          if (samePath(fileName, templatePath)) return templateText;
+          if (samePath(fileName, scriptPath)) return scriptText;
+          return undefined;
+        },
+        fileExists(fileName) {
+          return samePath(fileName, templatePath) || samePath(fileName, scriptPath)
+            ? true
+            : undefined;
+        },
+      })),
+    });
+    const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
+    const info = app.ask({
+      kind: SemanticAppQueryKind.TemplateCursorInfo,
+      detail: 'handles',
+      cursor,
+    }).value as SemanticTemplateCursorInfoResult;
+
+    expect(info.html).toMatchObject({ tagName: 'nav', namespace: 'html' });
+    expect(info.selectedBindable).toBeNull();
+    expect(info.selectedDefinition).toBeNull();
+    expect(info.activeSource).toMatchObject({
+      path: 'src/app.html',
+      start: resourceNameStart,
+      end: resourceNameStart + 'nav'.length,
+    });
+  }, 120_000);
+
+  test('does not treat an external HTML bindable usage as mode metadata when its offset collides with the TypeScript mode source', async () => {
+    const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-completion-member-metadata');
+    const templatePath = path.join(fixtureRoot, 'src/app.html');
+    const scriptPath = path.join(fixtureRoot, 'src/app.ts');
+    const scriptText = readFileSync(scriptPath, 'utf8')
+      .replace(
+        "import { customElement } from 'aurelia';",
+        "import { bindable, BindingMode, customElement } from 'aurelia';",
+      )
+      .replace(
+        '@customElement({',
+        [
+          "@customElement({ name: 'mode-panel', template: '<template></template>' })",
+          "class ModePanel { @bindable({ mode: BindingMode.twoWay }) public labelText = ''; }",
+          '',
+          '@customElement({',
+        ].join('\n'),
+      )
+      .replace('  template,', '  template,\n  dependencies: [ModePanel],');
+    const modeSourceStart = scriptText.indexOf('BindingMode.twoWay');
+    expect(modeSourceStart).toBeGreaterThanOrEqual(0);
+    const templatePrefix = '<template>\n';
+    const usagePrefix = '<mode-panel ';
+    const tagMarkup = '<mode-panel label-text.bind="title"></mode-panel>\n</template>';
+    const paddingLength = modeSourceStart - templatePrefix.length - usagePrefix.length;
+    expect(paddingLength).toBeGreaterThanOrEqual(0);
+    const templateText = `${templatePrefix}${' '.repeat(paddingLength)}${tagMarkup}`;
+    const cursor = cursorAt(templateText, 'label-text', 0);
+    expect(templateText.indexOf('label-text')).toBe(modeSourceStart);
+
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: fixtureRoot,
+      storeKey: 'hover-cursor-cross-file-bindable-mode-offset-collision',
+      projectInputAuthority: new SemanticRuntimeProjectInputAuthority(new NodeSemanticRuntimeProjectInputHost({
+        readFile(fileName) {
+          if (samePath(fileName, templatePath)) return templateText;
+          if (samePath(fileName, scriptPath)) return scriptText;
+          return undefined;
+        },
+        fileExists(fileName) {
+          return samePath(fileName, templatePath) || samePath(fileName, scriptPath)
+            ? true
+            : undefined;
+        },
+      })),
+    });
+    const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
+    const info = app.ask({
+      kind: SemanticAppQueryKind.TemplateCursorInfo,
+      detail: 'handles',
+      cursor,
+    }).value as SemanticTemplateCursorInfoResult;
+    const completions = app.ask({
+      kind: SemanticAppQueryKind.TemplateCompletions,
+      cursor,
+    }).value as SemanticTemplateCompletionResult;
+
+    expect(info.siteKind).toBe('attribute-name');
+    expect(info.selectedDefinition).toMatchObject({
+      resourceKind: 'custom-element',
+      name: 'mode-panel',
+    });
+    expect(info.selectedBindable).toMatchObject({
+      name: 'labelText',
+      attribute: 'label-text',
+      mode: 'twoWay',
+    });
+    expect(info.selectedBindable?.modeSource).toMatchObject({
+      path: 'src/app.ts',
+      start: modeSourceStart,
+    });
+    expect(info.activeSource).toMatchObject({
+      path: 'src/app.html',
+      start: modeSourceStart,
+      end: modeSourceStart + 'label-text'.length,
+    });
+    expect(completions).toMatchObject({
+      siteKind: 'attribute-name',
+      domainKind: null,
     });
   }, 120_000);
 

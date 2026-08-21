@@ -24,7 +24,8 @@ import type {
   ProductHandle,
   ProvenanceHandle,
 } from '../kernel/handles.js';
-import { SourceSpanAddress, SourceSpanRole } from '../kernel/address.js';
+import { SourceFileAddress, SourceSpanAddress, SourceSpanRole } from '../kernel/address.js';
+import { sourceFilePathMatches } from '../kernel/source-address.js';
 import type { MaterializedProduct } from '../kernel/materialization.js';
 import type { KernelStore } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
@@ -776,6 +777,7 @@ class TemplateCompletionCursorContextBuilder {
     const declarationBindable = selectedBindableForDeclarationCursor(
       this.store,
       this.input.resource,
+      this.input.locus.cursor.filePath,
       offset,
     );
     const selectedDefinition = selectedDefinitionForCursor(
@@ -789,6 +791,7 @@ class TemplateCompletionCursorContextBuilder {
       effectiveExpressionParse,
       semanticValueSite,
       offset,
+      this.input.locus.cursor.filePath,
       declarationBindable,
     );
     const selectedBindable = selectedBindableForCursor(
@@ -889,6 +892,7 @@ class TemplateCompletionCursorContextBuilder {
     const activeSourceAddressHandle = activeExpressionSpan == null
       ? activeTemplateSourceAddressHandle(
           this.store,
+          this.input.locus.cursor.filePath,
           offset,
           syntax,
           htmlAttribute,
@@ -971,7 +975,12 @@ class TemplateCompletionCursorContextBuilder {
     const definitionProductHandle = selectedBindable?.reference.ownerDefinitionProductHandle ?? null;
     if (
       definitionProductHandle != null
-      && cursorTouchesSpan(sourceSpanFor(this.store, modeSourceAddressHandle), offset)
+      && cursorTouchesAuthoredAddress(
+        this.store,
+        modeSourceAddressHandle,
+        this.input.locus.cursor.filePath,
+        offset,
+      )
     ) {
       return new TemplateCompletionDomain(
         TemplateCompletionDomainKind.BindableMode,
@@ -1295,6 +1304,7 @@ class TemplateCompletionCursorContextBuilder {
 
 function activeTemplateSourceAddressHandle(
   store: KernelStore,
+  cursorFilePath: string,
   offset: number,
   syntax: AttributeSyntax | null,
   attribute: HtmlAttribute | null,
@@ -1320,7 +1330,9 @@ function activeTemplateSourceAddressHandle(
     selectedBindable?.definition.modeSourceAddressHandle ?? null,
     selectedBindable?.definition.setSourceAddressHandle ?? null,
   ];
-  return handles.find((handle) => cursorTouchesSpan(sourceSpanFor(store, handle), offset)) ?? null;
+  return handles.find((handle) =>
+    cursorTouchesAuthoredAddress(store, handle, cursorFilePath, offset)
+  ) ?? null;
 }
 
 function selectedMemberNameForCursor(
@@ -3862,6 +3874,21 @@ function cursorTouchesSpan(
   return span != null && span.start <= offset && offset <= span.end;
 }
 
+function cursorTouchesAuthoredAddress(
+  store: KernelStore,
+  addressHandle: AddressHandle | null,
+  cursorFilePath: string,
+  offset: number,
+): boolean {
+  const span = sourceSpanFor(store, addressHandle);
+  if (!cursorTouchesSpan(span, offset) || span == null) {
+    return false;
+  }
+  const sourceFile = store.readAddress(span.fileHandle);
+  return sourceFile instanceof SourceFileAddress
+    && sourceFilePathMatches(sourceFile, cursorFilePath);
+}
+
 function spanLength(span: SourceSpanAddress): number {
   return span.end - span.start;
 }
@@ -4360,6 +4387,7 @@ function selectedDefinitionForCursor(
   expressionParse: TemplateExpressionParse | null,
   valueSite: TemplateValueSite | null,
   offset: number,
+  cursorFilePath: string,
   declarationBindable: TemplateBindableReference | null,
 ): TemplateDefinitionCursorSelection | null {
   if (
@@ -4419,7 +4447,13 @@ function selectedDefinitionForCursor(
         : null;
     return { productHandle: classifiedProductHandle, matchedName };
   }
-  return elementSelection ?? definitionForDeclarationCursor(store, resource, offset, declarationBindable);
+  return elementSelection ?? definitionForDeclarationCursor(
+    store,
+    resource,
+    cursorFilePath,
+    offset,
+    declarationBindable,
+  );
 }
 
 function classificationSelectsAuthoredResource(
@@ -4515,6 +4549,7 @@ function attributePatternDefinitionForCursor(
 function definitionForDeclarationCursor(
   store: KernelStore,
   resource: TemplateResourceRuntimeAnalysisEmission,
+  cursorFilePath: string,
   offset: number,
   declarationBindable: TemplateBindableReference | null,
 ): TemplateDefinitionCursorSelection | null {
@@ -4522,7 +4557,12 @@ function definitionForDeclarationCursor(
   return definition.productHandle != null
     && (
       declarationBindable != null
-      || cursorTouchesSpan(sourceSpanFor(store, definition.nameSourceAddressHandle), offset)
+      || cursorTouchesAuthoredAddress(
+        store,
+        definition.nameSourceAddressHandle,
+        cursorFilePath,
+        offset,
+      )
     )
     ? { productHandle: definition.productHandle, matchedName: definition.name }
     : null;
@@ -4643,6 +4683,7 @@ function selectedBindableValueTypeForCursor(
 function selectedBindableForDeclarationCursor(
   store: KernelStore,
   resource: TemplateResourceRuntimeAnalysisEmission,
+  cursorFilePath: string,
   offset: number,
 ): TemplateBindableReference | null {
   const definition = resource.compilation.definition;
@@ -4657,9 +4698,9 @@ function selectedBindableForDeclarationCursor(
     bindable.definition.callbackSourceAddressHandle,
     bindable.definition.modeSourceAddressHandle,
     bindable.definition.setSourceAddressHandle,
-  ].some((addressHandle) =>
-    cursorTouchesSpan(sourceSpanFor(store, addressHandle), offset)
-  )) ?? null;
+  ].some((addressHandle) => {
+    return cursorTouchesAuthoredAddress(store, addressHandle, cursorFilePath, offset);
+  })) ?? null;
 }
 
 function definitionForElement(
