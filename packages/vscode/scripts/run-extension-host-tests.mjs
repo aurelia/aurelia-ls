@@ -338,6 +338,11 @@ function extensionHostEnvironment(plan, shard, workspace, resolvedVersion, renam
           AURELIA_LS_RESOURCE_DISCOVERY_HOST_REPORT: workspace.resourceDiscoveryReport,
         }
       : {}),
+    ...(shard === "worker-lifecycle" && plan.transport === "worker"
+      ? {
+          AURELIA_LS_WORKER_RESTART_HOST_ACCEPTANCE: "1",
+        }
+      : {}),
     AURELIA_LS_EXTENSION_HOST_SHARD: shard,
     AURELIA_LS_EXTENSION_HOST_EXPECTED_ACTUAL_VERSION: resolvedVersion,
     AURELIA_LS_EXTENSION_HOST_EXPECTED_VERSION: plan.version,
@@ -7439,6 +7444,10 @@ export function extensionHostRunnerPlanReceipt(plan) {
       return {
         shard,
         disposableRoot: shardRoot,
+        workerRestartAcceptance: {
+          enabled: shard === "worker-lifecycle" && plan.transport === "worker",
+          authoritative: shard === "worker-lifecycle" && plan.transport === "worker",
+        },
         productSupportAcceptance: shard === "product-support"
           ? {
               enabled: true,

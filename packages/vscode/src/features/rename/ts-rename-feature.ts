@@ -9,6 +9,7 @@
  * built-in provider and the command re-enters this provider through RPC.
  */
 import type { ClientFeature } from "../../core/feature.js";
+import type { ClientContext } from "../../core/context.js";
 import type {
   CancellationToken,
   DocumentSelector,
@@ -17,7 +18,10 @@ import type {
 } from "vscode";
 import type { RenameFromTsResponse } from "../../types.js";
 import { assertWorkspaceEditTransactionCurrent } from "../../workspace-edit-versions.js";
-import { AureliaSemanticSessionState } from "../../client-core.js";
+import {
+  AureliaSemanticSessionState,
+  type AureliaLanguageClientSession,
+} from "../../client-core.js";
 
 const SCRIPT_RENAME_SELECTOR: DocumentSelector = [
   { language: "typescript" },
@@ -45,6 +49,9 @@ export const TsRenameFeature: ClientFeature = {
         if (sessionState === AureliaSemanticSessionState.Transitioning) {
           throw new Error("Aurelia cross-domain rename is temporarily unavailable while workspace ownership reconciles; retry the rename.");
         }
+        const originatingSession = ctx.languageClient.sessionForUri(document.uri);
+        if (originatingSession == null) return undefined;
+        const originatingIncarnation = originatingSession.incarnation;
 
         log.debug(`[TsRename] rename: ${document.uri.fsPath}:${position.line}:${position.character} -> "${newName}"`);
 
@@ -55,6 +62,7 @@ export const TsRenameFeature: ClientFeature = {
           token,
         );
         if (isCancelled(token)) return undefined;
+        assertSessionCurrent(ctx, document, originatingSession, originatingIncarnation);
 
         if (aureliaRename.status === "blocked" || aureliaRename.status === "refused") {
           const message = renameFailureMessage(aureliaRename);
@@ -74,11 +82,12 @@ export const TsRenameFeature: ClientFeature = {
         }
 
         const edit = await ctx.lsp.convertWorkspaceEdit(
-          document.uri.toString(),
+          originatingSession,
           aureliaRename.workspaceEdit,
           token,
         );
         if (isCancelled(token)) return undefined;
+        assertSessionCurrent(ctx, document, originatingSession, originatingIncarnation);
         if (edit == null) {
           throw new Error("Aurelia cross-domain rename returned no convertible workspace edit.");
         }
@@ -87,6 +96,7 @@ export const TsRenameFeature: ClientFeature = {
           aureliaRename.workspaceEdit,
           "Aurelia cross-domain rename was blocked because target documents changed",
         );
+        assertSessionCurrent(ctx, document, originatingSession, originatingIncarnation);
 
         log.debug(`[TsRename] atomic plan: ${edit.entries().length} files`);
         return edit;
@@ -104,6 +114,9 @@ export const TsRenameFeature: ClientFeature = {
         if (sessionState === AureliaSemanticSessionState.Transitioning) {
           throw new Error("Aurelia cross-domain rename is temporarily unavailable while workspace ownership reconciles; retry the rename.");
         }
+        const originatingSession = ctx.languageClient.sessionForUri(document.uri);
+        if (originatingSession == null) return undefined;
+        const originatingIncarnation = originatingSession.incarnation;
         const response = await ctx.lsp.renameFromTs(
           document.uri.toString(),
           { line: position.line, character: position.character },
@@ -111,6 +124,7 @@ export const TsRenameFeature: ClientFeature = {
           token,
         );
         if (isCancelled(token)) return undefined;
+        assertSessionCurrent(ctx, document, originatingSession, originatingIncarnation);
         if (response.status === "blocked" || response.status === "refused") {
           throw new Error(renameFailureMessage(response));
         }
@@ -133,6 +147,21 @@ export const TsRenameFeature: ClientFeature = {
     own(vscode.languages.registerRenameProvider(SCRIPT_RENAME_SELECTOR, provider));
   },
 };
+
+function assertSessionCurrent(
+  ctx: ClientContext,
+  document: TextDocument,
+  originatingSession: AureliaLanguageClientSession,
+  originatingIncarnation: number,
+): void {
+  const current = ctx.languageClient.sessionForUri(document.uri);
+  if (
+    current?.client !== originatingSession.client
+    || current.incarnation !== originatingIncarnation
+  ) {
+    throw new Error("Aurelia cross-domain rename was blocked because the workspace session changed; retry the rename.");
+  }
+}
 
 function isScriptDocument(document: TextDocument): boolean {
   return document.languageId === "typescript"

@@ -6,7 +6,11 @@ import {
   type ServerOptions,
 } from "vscode-languageclient/node";
 import { ClientApp } from "./app.js";
-import { AureliaLanguageClient, type LanguageClientFactory } from "./client-core.js";
+import {
+  AURELIA_LANGUAGE_CLIENT_FORCE_TERMINATE,
+  AureliaLanguageClient,
+  type LanguageClientFactory,
+} from "./client-core.js";
 import { DefaultFeatures } from "./features/index.js";
 import { ClientLogger } from "./log.js";
 import {
@@ -14,8 +18,10 @@ import {
   createWorkerMessageTransports,
   shouldUseWorkerTransport,
 } from "./worker-transport.js";
+import { createWorkerRestartHostControl } from "./worker-restart-host-control.js";
 
 let app: ClientApp | undefined;
+let workerRestartHostControl: vscode.Disposable | undefined;
 
 /** VS Code composition root. The extension intentionally exports no product API. */
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
@@ -32,9 +38,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     features: DefaultFeatures,
   });
   await app.activate();
+  workerRestartHostControl = createWorkerRestartHostControl(languageClient);
 }
 
 export async function deactivate(): Promise<void> {
+  workerRestartHostControl?.dispose();
+  workerRestartHostControl = undefined;
   await app?.deactivate();
   app = undefined;
 }
@@ -47,39 +56,47 @@ const createLanguageClient = (logger: ClientLogger): LanguageClientFactory => (
 ): LanguageClient => {
   const transportLogger = logger.child("client", { id, name });
   if (shouldUseWorkerTransport()) {
-    return new LanguageClient(
+    let activeTransport: ReturnType<typeof createWorkerMessageTransports> | null = null;
+    const client = new LanguageClient(
       id,
       name,
-      () => Promise.resolve(createWorkerMessageTransports(serverModule, {
-        onEvent: (event) => {
-          switch (event.type) {
-            case "online":
-              transportLogger.debug("Worker transport is online");
-              break;
-            case "stdout":
-              transportLogger.debug("Worker stdout", { text: event.text.trimEnd() });
-              break;
-            case "stderr":
-              transportLogger.warn("Worker stderr", { text: event.text.trimEnd() });
-              break;
-            case "error":
-              transportLogger.error("Worker transport failed", undefined, event.error);
-              break;
-            case "exit":
-              if (event.code === 0) {
-                transportLogger.debug("Worker transport exited", { code: event.code });
-              } else {
-                transportLogger.warn("Worker transport exited abnormally", { code: event.code });
-              }
-              break;
-            case "force-terminate":
-              transportLogger.warn("Worker transport exceeded its shutdown grace", {
-                graceMilliseconds: event.graceMilliseconds,
-              });
-              break;
-          }
-        },
-      })),
+      () => {
+        const transport = createWorkerMessageTransports(serverModule, {
+          onEvent: (event) => {
+            switch (event.type) {
+              case "online":
+                transportLogger.debug("Worker transport is online");
+                break;
+              case "stdout":
+                transportLogger.debug("Worker stdout", { text: event.text.trimEnd() });
+                break;
+              case "stderr":
+                transportLogger.warn("Worker stderr", { text: event.text.trimEnd() });
+                break;
+              case "error":
+                transportLogger.error("Worker transport failed", undefined, event.error);
+                break;
+              case "exit":
+                if (event.code === 0) {
+                  transportLogger.debug("Worker transport exited", { code: event.code });
+                } else {
+                  transportLogger.warn("Worker transport exited abnormally", { code: event.code });
+                }
+                break;
+              case "force-terminate":
+                transportLogger.warn("Worker transport exceeded its shutdown grace", {
+                  graceMilliseconds: event.graceMilliseconds,
+                });
+                break;
+            }
+          },
+        });
+        activeTransport = transport;
+        void transport.exited.finally(() => {
+          if (activeTransport === transport) activeTransport = null;
+        });
+        return Promise.resolve(transport);
+      },
       {
         ...clientOptions,
         connectionOptions: {
@@ -88,6 +105,13 @@ const createLanguageClient = (logger: ClientLogger): LanguageClientFactory => (
         },
       },
     );
+    Object.defineProperty(client, AURELIA_LANGUAGE_CLIENT_FORCE_TERMINATE, {
+      configurable: false,
+      enumerable: false,
+      value: async () => activeTransport?.terminate(),
+      writable: false,
+    });
+    return client;
   }
 
   const serverOptions: ServerOptions = {

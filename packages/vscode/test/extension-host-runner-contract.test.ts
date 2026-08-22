@@ -32,6 +32,10 @@ interface RunnerPlan {
   readonly launches: readonly {
     readonly shard: string;
     readonly disposableRoot: string;
+    readonly workerRestartAcceptance: {
+      readonly enabled: boolean;
+      readonly authoritative: boolean;
+    };
     readonly productSupportAcceptance: {
       readonly enabled: boolean;
       readonly authoritative?: boolean;
@@ -57,6 +61,7 @@ interface ExecutionProbe {
     readonly routedWorkspace: string | null;
     readonly tailObservation: string | null;
     readonly acceptance: string | null;
+    readonly workerRestartAcceptance: string | null;
     readonly descriptor: string | null;
     readonly fixtureManifest: string | null;
     readonly ledger: string | null;
@@ -560,6 +565,12 @@ describe("Extension Host support runner", () => {
     ]);
     expect(plan.launches.map((launch) => launch.productSupportAcceptance.enabled))
       .toEqual([false, false, true]);
+    expect(plan.launches.map((launch) => launch.workerRestartAcceptance))
+      .toEqual([
+        { enabled: true, authoritative: true },
+        { enabled: false, authoritative: false },
+        { enabled: false, authoritative: false },
+      ]);
     expect(plan.launches[2]?.productSupportAcceptance).toMatchObject({
       authoritative: true,
       requiresBuiltStaticContract: true,
@@ -643,6 +654,11 @@ describe("Extension Host support runner", () => {
       ["worker-lifecycle", null],
       ["rename-reliability", null],
       ["product-support", "1"],
+    ]);
+    expect(probe.launches.map((launch) => [launch.shard, launch.workerRestartAcceptance])).toEqual([
+      ["worker-lifecycle", "1"],
+      ["rename-reliability", null],
+      ["product-support", null],
     ]);
     expect(probe.launches.map((launch) => [launch.shard, launch.renameUiPort])).toEqual([
       ["worker-lifecycle", null],
@@ -2741,6 +2757,8 @@ function readExecutionProbe(): ExecutionProbe {
               options.extensionTestsEnv.AURELIA_LS_EXTENSION_HOST_TAIL_OBSERVATION ?? null,
             acceptance:
               options.extensionTestsEnv.AURELIA_LS_RESOURCE_DISCOVERY_HOST_ACCEPTANCE ?? null,
+            workerRestartAcceptance:
+              options.extensionTestsEnv.AURELIA_LS_WORKER_RESTART_HOST_ACCEPTANCE ?? null,
             descriptor:
               options.extensionTestsEnv.AURELIA_LS_RESOURCE_DISCOVERY_HOST_DESCRIPTOR ?? null,
             fixtureManifest:

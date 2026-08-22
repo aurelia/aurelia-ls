@@ -17,7 +17,10 @@ import {
   type SemanticRuntimeLspDiagnosticRequest,
   type SemanticRuntimeLspOperation,
 } from "../runtime/semantic-runtime-session.js";
-import { runServerOperation } from "./lifecycle.js";
+import {
+  runServerOperation,
+  scheduleAnalysisRefreshForRequestCurrentness,
+} from "./lifecycle.js";
 
 export type SemanticRuntimeDocumentAdmissionFailure =
   | "outside-workspace"
@@ -41,6 +44,7 @@ export async function runSemanticRuntimeRequest<T>(
     return await runServerOperation(ctx, () =>
       ctx.semanticRuntime.runRequest(semanticRuntimeCancellationProbe(token), request));
   } catch (error) {
+    scheduleAnalysisRefreshForRequestCurrentness(ctx, error);
     throw requestFailure(ctx, feature, cancellationPrecedence(error, token), uri);
   }
 }
@@ -89,6 +93,7 @@ export async function runSemanticRuntimeDocumentRequest<T>(
         },
       ));
   } catch (error) {
+    scheduleAnalysisRefreshForRequestCurrentness(ctx, error);
     throw requestFailure(ctx, feature, cancellationPrecedence(error, token), uri);
   }
 }
@@ -114,6 +119,7 @@ export async function runSemanticRuntimeDiagnosticRequest<TItem>(
         render,
       ));
   } catch (error) {
+    scheduleAnalysisRefreshForRequestCurrentness(ctx, error);
     const failure = cancellationPrecedence(error, token);
     if (isSemanticRuntimeRequestStale(failure)) {
       ctx.logger.log(

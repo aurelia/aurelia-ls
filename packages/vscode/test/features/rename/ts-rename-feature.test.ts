@@ -160,6 +160,10 @@ function createContext(options: {
     createDocument(),
     createDocument("html", "file:///app.html", 7, templateText),
   ];
+  const languageSession = {
+    client: {},
+    incarnation: 1,
+  };
   const ctx = {
     vscode: {
       Position: StubPosition,
@@ -184,7 +188,7 @@ function createContext(options: {
     },
     lsp: { renameFromTs, convertWorkspaceEdit },
     languageClient: {
-      sessionForUri: () => options.ownsDocument === false ? undefined : {},
+      sessionForUri: () => options.ownsDocument === false ? undefined : languageSession,
       semanticSessionStateForUri: () => options.sessionState
         ?? (options.ownsDocument === false ? "unowned" : "active"),
     },
@@ -198,6 +202,7 @@ function createContext(options: {
     registrations,
     renameFromTs,
     convertWorkspaceEdit,
+    languageSession,
     infoMessages,
   };
 }
@@ -434,6 +439,22 @@ describe("TsRenameFeature", () => {
       new StubPosition(2, 11),
       "heading",
     )).rejects.toThrow("target documents changed");
+  });
+
+  test("blocks instead of converting or falling through when the originating session incarnation changes", async () => {
+    const harness = createContext({ renameResponse: successResponse() });
+    await activateFeature(harness.ctx);
+    harness.renameFromTs.mockImplementationOnce(async () => {
+      harness.languageSession.incarnation += 1;
+      return successResponse();
+    });
+
+    await expect(harness.providers[0]?.provideRenameEdits(
+      createDocument(),
+      new StubPosition(2, 11),
+      "heading",
+    )).rejects.toThrow(/workspace session changed/iu);
+    expect(harness.convertWorkspaceEdit).not.toHaveBeenCalled();
   });
 
   test("honors cancellation before, after, and during cross-domain requests", async () => {

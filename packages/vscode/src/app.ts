@@ -18,6 +18,7 @@ import {
   isTemplateLanguageId,
   OwnedTemplateLanguageController,
 } from "./template-language.js";
+import { emitWorkerRestartContextObservation } from "./worker-restart-host-control.js";
 
 export interface ClientAppServices {
   readonly vscode: VscodeApi;
@@ -114,7 +115,15 @@ export class ClientApp {
     };
     const subscriptions: Disposable[] = [];
     try {
-      subscriptions.push(ctx.languageClient.onDidChangeSessions(synchronizeContext));
+      subscriptions.push(ctx.languageClient.onDidChangeSessions(() => {
+        const activeWorkspaceKeys = new Set(
+          ctx.languageClient.sessions.map((session) => session.workspace.key),
+        );
+        for (const workspaceKey of this.#analysisVersions.keys()) {
+          if (!activeWorkspaceKeys.has(workspaceKey)) this.#analysisVersions.delete(workspaceKey);
+        }
+        synchronizeContext();
+      }));
       subscriptions.push(ctx.vscode.window.onDidChangeActiveTextEditor(synchronizeContext));
       // VS Code closes and reopens a document when its language mode changes.
       // Re-prove the durable template context for that active document.
@@ -181,8 +190,26 @@ export class ClientApp {
     if (uri != null && session != null) {
       // Never carry a positive answer from a previous editor or semantic generation while
       // the exact server-owned answer for this document is still in flight.
-      await this.#queueContextCommit(ctx, request, uri, languageId, session.client, active, false, false);
-      if (!this.#contextRequestIsCurrent(ctx, request, uri, languageId, session.client)) return;
+      await this.#queueContextCommit(
+        ctx,
+        request,
+        uri,
+        languageId,
+        session.client,
+        session.workspace.key,
+        session.incarnation,
+        active,
+        false,
+        false,
+      );
+      if (!this.#contextRequestIsCurrent(
+        ctx,
+        request,
+        uri,
+        languageId,
+        session.client,
+        session.incarnation,
+      )) return;
       try {
         ownership = await ctx.lsp.getSourceOwnership(uri, cancellation.token);
       } catch (error) {
@@ -192,7 +219,14 @@ export class ClientApp {
       }
     }
 
-    if (!this.#contextRequestIsCurrent(ctx, request, uri, languageId, session?.client)) return;
+    if (!this.#contextRequestIsCurrent(
+      ctx,
+      request,
+      uri,
+      languageId,
+      session?.client,
+      session?.incarnation ?? null,
+    )) return;
     const latestAnalysis = workspaceKey == null
       ? null
       : this.#analysisVersions.get(workspaceKey) ?? null;
@@ -221,6 +255,8 @@ export class ClientApp {
       uri,
       languageId,
       session?.client,
+      session?.workspace.key ?? null,
+      session?.incarnation ?? null,
       active,
       documentOwned,
       templateOwned,
@@ -233,13 +269,34 @@ export class ClientApp {
     uri: string | null,
     languageId: string | null,
     sessionClient: unknown,
+    workspaceKey: string | null,
+    incarnation: number | null,
     active: boolean,
     documentOwned: boolean,
     templateOwned: boolean,
   ): Promise<void> {
     const commit = this.#contextCommit.then(async () => {
-      if (!this.#contextRequestIsCurrent(ctx, request, uri, languageId, sessionClient)) return;
+      if (!this.#contextRequestIsCurrent(ctx, request, uri, languageId, sessionClient, incarnation)) return;
       await setClientContextKeys(ctx.vscode, active, documentOwned, templateOwned, languageId);
+      if (!this.#contextRequestIsCurrent(ctx, request, uri, languageId, sessionClient, incarnation)) {
+        const currentLanguageId = ctx.vscode.window.activeTextEditor?.document.languageId ?? null;
+        await setClientContextKeys(
+          ctx.vscode,
+          ctx.languageClient.hasSessions,
+          false,
+          false,
+          currentLanguageId,
+        );
+        return;
+      }
+      emitWorkerRestartContextObservation({
+        active,
+        documentOwned,
+        templateOwned,
+        languageId,
+        workspaceKey,
+        incarnation,
+      });
     });
     this.#contextCommit = commit.catch((error) => {
       ctx.logger.warn(`[client] context commit failed: ${errorMessage(error)}`);
@@ -253,6 +310,7 @@ export class ClientApp {
     uri: string | null,
     languageId: string | null,
     sessionClient: unknown,
+    incarnation: number | null,
   ): boolean {
     if (request !== this.#contextRequest || this.#ctx !== ctx) return false;
     const document = ctx.vscode.window.activeTextEditor?.document;
@@ -260,7 +318,8 @@ export class ClientApp {
     if (currentUri !== uri) return false;
     if ((document?.languageId ?? null) !== languageId) return false;
     const currentSession = document == null ? undefined : ctx.languageClient.sessionForUri(document.uri);
-    return currentSession?.client === sessionClient;
+    return currentSession?.client === sessionClient
+      && (currentSession?.incarnation ?? null) === incarnation;
   }
 
   #cancelContextRequest(): void {

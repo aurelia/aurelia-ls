@@ -22,8 +22,7 @@ import {
   assertWorkspaceEditTransactionCurrent,
 } from "./workspace-edit-versions.js";
 
-type MiddlewareLanguageClient = {
-  readonly client: {
+type MiddlewareRawClient = {
     sendRequest<T>(method: string, params?: unknown, token?: CancellationToken): Promise<T>;
     code2ProtocolConverter: {
       asCodeActionSync(action: CodeAction): LanguageClientProtocol.CodeAction;
@@ -32,7 +31,12 @@ type MiddlewareLanguageClient = {
       asCodeAction(action: LanguageClientProtocol.CodeAction, token: CancellationToken): Promise<CodeAction | undefined>;
       asWorkspaceEdit(edit: ProtocolWorkspaceEdit, token: CancellationToken): Promise<WorkspaceEdit | undefined>;
     };
-  } | undefined;
+};
+
+type MiddlewareLanguageClient = {
+  readonly client: MiddlewareRawClient | undefined;
+  /** Exact active server-process incarnation for this client and optional source URI. */
+  currentIncarnation(client: MiddlewareRawClient, uri?: string): number | null;
 };
 
 export function createMiddleware(
@@ -60,6 +64,12 @@ export function createMiddleware(
       if (!rawClient) {
         return next(action, token);
       }
+      const sourceUri = templateCodeActionSourceUri(action);
+      const originatingIncarnation = client.currentIncarnation(rawClient, sourceUri ?? undefined);
+      if (originatingIncarnation == null) {
+        refuseCodeAction(vscode, logger, action.title, "the Aurelia workspace session changed");
+        return action;
+      }
       // VS Code resolves a lazy action immediately before applying it. Own the
       // raw request so document versions remain available until after the final
       // asynchronous protocol conversion.
@@ -71,8 +81,16 @@ export function createMiddleware(
       if (token.isCancellationRequested) {
         return action;
       }
+      if (client.currentIncarnation(rawClient, sourceUri ?? undefined) !== originatingIncarnation) {
+        refuseCodeAction(vscode, logger, action.title, "the Aurelia workspace session changed");
+        return action;
+      }
       const converted = await rawClient.protocol2CodeConverter.asCodeAction(resolved, token);
       if (token.isCancellationRequested) {
+        return action;
+      }
+      if (client.currentIncarnation(rawClient, sourceUri ?? undefined) !== originatingIncarnation) {
+        refuseCodeAction(vscode, logger, action.title, "the Aurelia workspace session changed");
         return action;
       }
       const refusal = templateCodeActionResolveRefusalFromData(resolved.data);
@@ -113,6 +131,10 @@ export function createMiddleware(
       if (token.isCancellationRequested) {
         return action;
       }
+      if (client.currentIncarnation(rawClient, sourceUri ?? undefined) !== originatingIncarnation) {
+        refuseCodeAction(vscode, logger, action.title, "the Aurelia workspace session changed");
+        return action;
+      }
       return converted;
     },
     provideRenameEdits: async (document, position, newName, token, next) => {
@@ -122,6 +144,11 @@ export function createMiddleware(
       const rawClient = client.client;
       if (!rawClient) {
         return next(document, position, newName, token);
+      }
+      const sourceUri = document.uri.toString();
+      const originatingIncarnation = client.currentIncarnation(rawClient, sourceUri);
+      if (originatingIncarnation == null) {
+        throw new Error("Aurelia rename was blocked because the workspace session changed; retry the rename.");
       }
       const protocolEdit = await rawClient.sendRequest<ProtocolWorkspaceEdit | null>(
         "textDocument/rename",
@@ -135,6 +162,7 @@ export function createMiddleware(
       if (token.isCancellationRequested || protocolEdit == null) {
         return undefined;
       }
+      assertMiddlewareIncarnationCurrent(client, rawClient, sourceUri, originatingIncarnation, "Aurelia rename");
       const converted = await rawClient.protocol2CodeConverter.asWorkspaceEdit(protocolEdit, token);
       if (token.isCancellationRequested) {
         return undefined;
@@ -142,15 +170,29 @@ export function createMiddleware(
       if (converted == null) {
         throw new Error("Aurelia rename returned no convertible workspace edit.");
       }
+      assertMiddlewareIncarnationCurrent(client, rawClient, sourceUri, originatingIncarnation, "Aurelia rename");
       await assertWorkspaceEditTransactionCurrent(
         vscode,
         protocolEdit,
         "Aurelia rename was blocked because target documents changed",
       );
+      assertMiddlewareIncarnationCurrent(client, rawClient, sourceUri, originatingIncarnation, "Aurelia rename");
       logger.debug?.(`[Rename] validated atomic transaction for ${converted.entries().length} files`);
       return converted;
     },
   };
+}
+
+function assertMiddlewareIncarnationCurrent(
+  client: MiddlewareLanguageClient,
+  rawClient: MiddlewareRawClient,
+  uri: string,
+  incarnation: number,
+  operation: string,
+): void {
+  if (client.currentIncarnation(rawClient, uri) !== incarnation) {
+    throw new Error(`${operation} was blocked because the workspace session changed; retry the operation.`);
+  }
 }
 
 function isAureliaTemplateDocument(document: TextDocument): boolean {
@@ -292,6 +334,19 @@ function isAureliaTemplateCodeAction(action: CodeAction): boolean {
     && typeof resolve === "object"
     && !Array.isArray(resolve)
     && (resolve as Record<string, unknown>)["schema"] === AURELIA_TEMPLATE_CODE_ACTION_RESOLVE_SCHEMA;
+}
+
+function templateCodeActionSourceUri(action: CodeAction): string | null {
+  const data = (action as CodeAction & { readonly data?: unknown }).data;
+  if (data == null || typeof data !== "object" || Array.isArray(data)) return null;
+  const semanticRuntime = (data as Record<string, unknown>)["semanticRuntime"];
+  if (semanticRuntime == null || typeof semanticRuntime !== "object" || Array.isArray(semanticRuntime)) return null;
+  const resolve = (semanticRuntime as Record<string, unknown>)["resolve"];
+  if (resolve == null || typeof resolve !== "object" || Array.isArray(resolve)) return null;
+  const textDocument = (resolve as Record<string, unknown>)["textDocument"];
+  if (textDocument == null || typeof textDocument !== "object" || Array.isArray(textDocument)) return null;
+  const uri = (textDocument as Record<string, unknown>)["uri"];
+  return typeof uri === "string" ? uri : null;
 }
 
 function refuseCodeAction(

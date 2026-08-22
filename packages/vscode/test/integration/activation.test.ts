@@ -60,6 +60,11 @@ class StubLanguageClient {
     this.sessions = active ? [workspaceSession(this.#lsp)] : [];
     for (const listener of this.#listeners) listener();
   }
+
+  replaceIncarnationWithoutEvent() {
+    const current = this.sessions[0] as ReturnType<typeof workspaceSession> | undefined;
+    if (current != null) this.sessions = [{ ...current, incarnation: current.incarnation + 1 }];
+  }
 }
 
 test("activates the language client and product contributions once", async () => {
@@ -189,6 +194,42 @@ test("scopes editor context to the active document's owning session", async () =
   languageClient.setActive(false);
   await settleAsyncWork();
   expect(recorded.contextValues.get("aurelia.active")).toBe(false);
+  expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(false);
+  expect(recorded.contextValues.get("aurelia.activeTemplateOwned")).toBe(false);
+  await app.deactivate();
+});
+
+test("withdraws context keys when the session incarnation changes while setContext is awaiting", async () => {
+  const { vscode: stubVscode, recorded } = createVscodeApi();
+  stubVscode.window.activeTextEditor = {
+    document: { uri: stubVscode.Uri.parse("file:///workspace/src/app.html"), languageId: "html" },
+  };
+  const originalExecuteCommand = stubVscode.commands.executeCommand.bind(stubVscode.commands);
+  const positiveContextGate = deferred<void>();
+  let positiveContextBlocked = false;
+  stubVscode.commands.executeCommand = vi.fn(async (command: string, ...args: unknown[]) => {
+    const result = await originalExecuteCommand(command, ...args);
+    if (
+      !positiveContextBlocked
+      && command === "setContext"
+      && args[0] === "aurelia.documentOwned"
+      && args[1] === true
+    ) {
+      positiveContextBlocked = true;
+      await positiveContextGate.promise;
+    }
+    return result;
+  });
+  const languageClient = new StubLanguageClient(stubProtocolClient());
+  const app = createApp(stubVscode, languageClient, []);
+
+  const activation = app.activate();
+  await vi.waitFor(() => expect(positiveContextBlocked).toBe(true));
+  expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(true);
+  languageClient.replaceIncarnationWithoutEvent();
+  positiveContextGate.resolve(undefined);
+  await activation;
+
   expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(false);
   expect(recorded.contextValues.get("aurelia.activeTemplateOwned")).toBe(false);
   await app.deactivate();
@@ -515,6 +556,7 @@ function workspaceSession(client: LanguageClient) {
   return {
     workspace: { key: "file:///workspace", name: "workspace", uri: "file:///workspace" },
     client,
+    incarnation: 1,
   };
 }
 

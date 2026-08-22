@@ -5,9 +5,11 @@ import type {
   TemplateResourceAvailabilityItem,
   TemplateResourceScopeCandidate,
 } from "@aurelia-ls/language-server/protocol";
-import type { QuickPickItem, QuickPickItemKind, TextEditor } from "vscode";
+import type { QuickPickItem, QuickPickItemKind, TextDocument, TextEditor } from "vscode";
 import { createHash } from "node:crypto";
 import type { ClientFeature } from "../../core/feature.js";
+import type { ClientContext } from "../../core/context.js";
+import type { AureliaLanguageClientSession } from "../../client-core.js";
 import {
   type ExtensionHostObservationValue,
 } from "../../extension-host-observation.js";
@@ -506,8 +508,12 @@ export const UserCommandsFeature: ClientFeature = {
           vscode.window.showInformationMessage("No active editor");
           return;
         }
-        const uri = editor.document.uri.toString();
+        const originDocument = editor.document;
+        const uri = originDocument.uri.toString();
+        const originVersion = originDocument.version;
+        const originSession = ctx.languageClient.sessionForUri(originDocument.uri);
         const candidates = await lsp.getRelatedFiles(uri);
+        if (!relatedFileInvocationIsCurrent(ctx, originDocument, uri, originVersion, originSession)) return;
         if (candidates.length === 0) {
           vscode.window.showInformationMessage("No related Aurelia file found");
           return;
@@ -518,11 +524,55 @@ export const UserCommandsFeature: ClientFeature = {
           : await pickRelatedFile(vscode, candidates);
         if (related == null) return;
 
-        const doc = await vscode.workspace.openTextDocument(vscode.Uri.parse(related.uri));
+        if (!relatedFileInvocationIsCurrent(ctx, originDocument, uri, originVersion, originSession)) {
+          vscode.window.showInformationMessage("The active Aurelia source changed; run Open Related File again");
+          return;
+        }
+        const currentCandidates = await lsp.getRelatedFiles(uri);
+        if (!relatedFileInvocationIsCurrent(ctx, originDocument, uri, originVersion, originSession)) return;
+        const currentRelated = currentCandidates.find((candidate) => sameRelatedFileCandidate(candidate, related));
+        if (currentRelated == null) {
+          vscode.window.showInformationMessage("The related Aurelia file changed; run Open Related File again");
+          return;
+        }
+
+        const doc = await vscode.workspace.openTextDocument(vscode.Uri.parse(currentRelated.uri));
+        if (!relatedFileInvocationIsCurrent(ctx, originDocument, uri, originVersion, originSession)) {
+          return;
+        }
         await vscode.window.showTextDocument(doc);
       })));
   },
 };
+
+function relatedFileInvocationIsCurrent(
+  ctx: ClientContext,
+  originDocument: TextDocument,
+  uri: string,
+  version: number,
+  originSession: AureliaLanguageClientSession | undefined,
+): boolean {
+  if (originSession == null) return false;
+  const editor = activeEditor(ctx.vscode);
+  if (
+    editor == null
+    || editor.document !== originDocument
+    || editor.document.uri.toString() !== uri
+    || editor.document.version !== version
+  ) {
+    return false;
+  }
+  const currentSession = ctx.languageClient.sessionForUri(editor.document.uri);
+  return currentSession?.client === originSession?.client
+    && currentSession?.incarnation === originSession?.incarnation;
+}
+
+function sameRelatedFileCandidate(left: RelatedFileCandidate, right: RelatedFileCandidate): boolean {
+  return left.uri === right.uri
+    && left.role === right.role
+    && left.elementName === right.elementName
+    && left.className === right.className;
+}
 
 function inventoryQuickPickModel(
   response: ResourceInventorySnapshot | null,

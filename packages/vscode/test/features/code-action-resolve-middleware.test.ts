@@ -42,8 +42,10 @@ function createHarness(options: {
   resolvedEdit?: unknown;
   resolvedRefusal?: unknown;
   cancelAfterResolve?: boolean;
+  retireAfterResolve?: boolean;
   workspaceUri?: string;
 } = {}) {
+  let currentIncarnation: number | null = 1;
   const uri = "file:///app.ts";
   const document = {
     languageId: "typescript",
@@ -116,6 +118,7 @@ function createHarness(options: {
       if (options.cancelAfterResolve && token != null) {
         token.isCancellationRequested = true;
       }
+      if (options.retireAfterResolve) currentIncarnation = null;
       return protocolResolvedAction;
     }),
     code2ProtocolConverter: {
@@ -149,7 +152,10 @@ function createHarness(options: {
   const middleware = createMiddleware(
     vscode as never,
     logger as never,
-    { client: rawClient } as never,
+    {
+      client: rawClient,
+      currentIncarnation: () => currentIncarnation,
+    } as never,
   );
   return { action, convertedAction, logger, middleware, rawClient, showWarningMessage };
 }
@@ -192,6 +198,19 @@ describe("code-action resolve middleware", () => {
     );
     expect(harness.rawClient.protocol2CodeConverter.asCodeAction).toHaveBeenCalled();
     expect(harness.showWarningMessage).not.toHaveBeenCalled();
+  });
+
+  test("leaves an action unapplied when its originating client retires before egress", async () => {
+    const harness = createHarness({ retireAfterResolve: true });
+    const action = await harness.middleware.resolveCodeAction?.(
+      harness.action as never,
+      { isCancellationRequested: false } as never,
+      vi.fn(),
+    );
+
+    expect(action).toBe(harness.action);
+    expect(harness.rawClient.protocol2CodeConverter.asCodeAction).not.toHaveBeenCalled();
+    expect(harness.showWarningMessage).toHaveBeenCalledWith(expect.stringContaining("workspace session changed"));
   });
 
   test("refuses a resolved edit whose open target changed while the action was prepared", async () => {

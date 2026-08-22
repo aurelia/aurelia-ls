@@ -376,12 +376,14 @@ function createHarness(input: {
     input.availability?.(...args) ?? exactAvailability()
   );
   const getRelatedFiles = vi.fn(async () => input.related ?? []);
+  const languageSession = { client: {}, incarnation: 1 };
   const ctx = {
     extension: stubExtensionContext(stubVscode),
     vscode,
     logger,
     errors,
     lsp: { getResourceInventory, getTemplateResourceAvailability, getRelatedFiles },
+    languageClient: { sessionForUri: () => languageSession },
   };
   UserCommandsFeature.activate(ctx as never, (contribution) => contribution);
 
@@ -390,7 +392,14 @@ function createHarness(input: {
     document: { uri, version: 7 },
     selection: { active: { line: 8, character: 5 } },
   };
-  return { recorded, getResourceInventory, getTemplateResourceAvailability, getRelatedFiles, vscode: stubVscode };
+  return {
+    recorded,
+    getResourceInventory,
+    getTemplateResourceAvailability,
+    getRelatedFiles,
+    languageSession,
+    vscode: stubVscode,
+  };
 }
 
 describe("UserCommandsFeature", () => {
@@ -2277,7 +2286,74 @@ describe("UserCommandsFeature", () => {
     await harness.recorded.commandHandlers.get(AureliaCommand.OpenRelatedFile)?.();
 
     expect(harness.getRelatedFiles).toHaveBeenCalledWith("file:///repo/src/my-app.html");
+    expect(harness.getRelatedFiles).toHaveBeenCalledTimes(2);
     expect(harness.recorded.openedDocuments.at(-1)?.uri.toString()).toBe("file:///secondary.html");
+  });
+
+  test("refuses a related-file choice that disappears while the picker is open", async () => {
+    const primary = {
+      uri: "file:///primary.html",
+      role: "component-template",
+      elementName: "primary-card",
+      className: "PrimaryCard",
+    };
+    const secondary = {
+      uri: "file:///secondary.html",
+      role: "component-template",
+      elementName: "secondary-card",
+      className: "SecondaryCard",
+    };
+    const replacement = {
+      uri: "file:///replacement.html",
+      role: "component-template",
+      elementName: "replacement-card",
+      className: "ReplacementCard",
+    };
+    const harness = createHarness({ related: [primary, secondary], relatedPickIndex: 0 });
+    harness.getRelatedFiles
+      .mockResolvedValueOnce([primary, secondary])
+      .mockResolvedValueOnce([replacement]);
+
+    await harness.recorded.commandHandlers.get(AureliaCommand.OpenRelatedFile)?.();
+
+    expect(harness.getRelatedFiles).toHaveBeenCalledTimes(2);
+    expect(harness.recorded.openedDocuments).toEqual([]);
+    expect(harness.recorded.infoMessages).toContain(
+      "The related Aurelia file changed; run Open Related File again",
+    );
+  });
+
+  test("does not focus a related target when the invoking editor changes while the document opens", async () => {
+    const related = {
+      uri: "file:///primary.html",
+      role: "component-template",
+      elementName: "primary-card",
+      className: "PrimaryCard",
+    };
+    const harness = createHarness({ related: [related] });
+    const opened = deferred<void>();
+    const releaseOpen = deferred<void>();
+    const openTextDocument = harness.vscode.workspace.openTextDocument.bind(harness.vscode.workspace);
+    harness.vscode.workspace.openTextDocument = vi.fn(async (uri) => {
+      const document = await openTextDocument(uri);
+      opened.resolve(undefined);
+      await releaseOpen.promise;
+      return document;
+    });
+
+    const command = harness.recorded.commandHandlers.get(AureliaCommand.OpenRelatedFile)?.();
+    await opened.promise;
+    harness.vscode.window.activeTextEditor = {
+      document: {
+        uri: harness.vscode.Uri.parse("file:///repo/src/other.html"),
+        version: 1,
+      },
+    } as never;
+    releaseOpen.resolve(undefined);
+    await command;
+
+    expect(harness.getRelatedFiles).toHaveBeenCalledTimes(2);
+    expect(harness.recorded.shownDocuments).toEqual([]);
   });
 });
 

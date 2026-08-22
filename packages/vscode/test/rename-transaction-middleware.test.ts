@@ -121,6 +121,21 @@ describe("rename transaction middleware", () => {
     )).rejects.toThrow(/target documents changed.*expected version 1.*editor has 2/iu);
   });
 
+  test("refuses the whole rename when its originating client retires during conversion", async () => {
+    const harness = renameHarness({ retireDuringConversion: true });
+
+    await expect(harness.middleware.provideRenameEdits?.(
+      harness.originDocument as never,
+      { line: 0, character: 3 } as never,
+      "heading",
+      { isCancellationRequested: false } as never,
+      vi.fn(),
+    )).rejects.toThrow(/workspace session changed/iu);
+
+    expect(harness.originDocument.getText()).toBe("<p>title</p>\n");
+    expect(readFileSync(harness.targetPath, "utf8")).toBe(harness.targetText);
+  });
+
   test("leaves a resolved quick fix unapplied when its closed target mutates", async () => {
     const harness = renameHarness();
     const action = {
@@ -180,7 +195,9 @@ function renameHarness(options: {
   openTarget?: boolean;
   afterConversion?: (paths: { targetPath: string }) => void;
   targetText?: string;
+  retireDuringConversion?: boolean;
 } = {}) {
+  let currentIncarnation: number | null = 1;
   const root = mkdtempSync(path.join(process.cwd(), ".rename-transaction-"));
   temporaryRoots.push(root);
   const sourceRoot = path.join(root, "src");
@@ -229,6 +246,7 @@ function renameHarness(options: {
       asCodeAction: vi.fn(),
       asWorkspaceEdit: vi.fn(async () => {
         harness.afterConversion({ targetPath });
+        if (options.retireDuringConversion) currentIncarnation = null;
         return convertedEdit;
       }),
     },
@@ -253,7 +271,10 @@ function renameHarness(options: {
     middleware: createMiddleware(
       vscode as never,
       logger as never,
-      { client: rawClient } as never,
+      {
+        client: rawClient,
+        currentIncarnation: () => currentIncarnation,
+      } as never,
     ),
   };
 }

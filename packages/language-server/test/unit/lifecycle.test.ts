@@ -15,8 +15,10 @@ import {
   handleInitialize,
   registerLifecycleHandlers,
   runServerOperation,
+  scheduleAnalysisRefreshForRequestCurrentness,
 } from "../../src/handlers/lifecycle.js";
 import { SemanticRuntimeLspRequestAbortedError } from "../../src/runtime/semantic-runtime-session.js";
+import { runSemanticRuntimeRequest } from "../../src/handlers/request-guard.js";
 import { WorkspaceDocumentUris } from "../../src/utils/document-uri.js";
 
 const workspaceRoot = path.resolve("test-workspace");
@@ -571,6 +573,100 @@ describe("document source authority", () => {
         expect.objectContaining({ changeKind: "topology" }),
       );
       expect(harness.connection.languages.diagnostics.refresh).toHaveBeenCalledOnce();
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  test("publishes one settled wave when a request discovers managed currentness outside the event stream", async () => {
+    vi.useFakeTimers();
+    try {
+      const harness = createLifecycleHarness();
+      harness.clientSupport.diagnosticRefresh = true;
+      harness.clientSupport.inlayHintRefresh = true;
+      harness.clientSupport.semanticTokensRefresh = true;
+
+      expect(scheduleAnalysisRefreshForRequestCurrentness(
+        harness.ctx as never,
+        managedStaleError(),
+      )).toBe(true);
+      expect(scheduleAnalysisRefreshForRequestCurrentness(
+        harness.ctx as never,
+        managedStaleError(),
+      )).toBe(true);
+
+      await vi.advanceTimersByTimeAsync(299);
+      expect(harness.connection.sendNotification).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      await settleAsyncWork();
+
+      expect(harness.connection.sendNotification).toHaveBeenCalledOnce();
+      expect(harness.connection.sendNotification).toHaveBeenCalledWith(
+        "aurelia/analysisChanged",
+        expect.objectContaining({
+          changeKind: "source-text",
+          changedSourceUris: [],
+        }),
+      );
+      expect(harness.connection.languages.diagnostics.refresh).toHaveBeenCalledOnce();
+      expect(harness.connection.languages.inlayHint.refresh).toHaveBeenCalledOnce();
+      expect(harness.connection.languages.semanticTokens.refresh).toHaveBeenCalledOnce();
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  test("hands request-discovered managed staleness to the registered lifecycle owner", async () => {
+    vi.useFakeTimers();
+    try {
+      const harness = createLifecycleHarness();
+      harness.semanticRuntime.runRequest.mockRejectedValueOnce(managedStaleError());
+
+      await expect(runSemanticRuntimeRequest(
+        harness.ctx as never,
+        "sourceOwnership",
+        { isCancellationRequested: false } as never,
+        () => null,
+      )).rejects.toMatchObject({ code: -32801 });
+
+      expect(harness.connection.sendNotification).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(300);
+      await settleAsyncWork();
+      expect(harness.connection.sendNotification).toHaveBeenCalledWith(
+        "aurelia/analysisChanged",
+        expect.objectContaining({
+          changeKind: "source-text",
+          changedSourceUris: [],
+        }),
+      );
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  test("escalates request-discovered source-world replacement without duplicating request-epoch events", async () => {
+    vi.useFakeTimers();
+    try {
+      const harness = createLifecycleHarness();
+
+      expect(scheduleAnalysisRefreshForRequestCurrentness(
+        harness.ctx as never,
+        new SemanticRuntimeLspRequestAbortedError("stale"),
+      )).toBe(false);
+      expect(scheduleAnalysisRefreshForRequestCurrentness(
+        harness.ctx as never,
+        lspStaleError(managedStaleError(SemanticSourceWorldCurrentnessKind.FreshBootRequired)),
+      )).toBe(true);
+
+      await vi.advanceTimersByTimeAsync(300);
+      await settleAsyncWork();
+      expect(harness.connection.sendNotification).toHaveBeenCalledWith(
+        "aurelia/analysisChanged",
+        expect.objectContaining({ changeKind: "topology" }),
+      );
     } finally {
       vi.clearAllTimers();
       vi.useRealTimers();

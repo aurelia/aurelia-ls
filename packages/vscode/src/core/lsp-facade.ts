@@ -1,4 +1,5 @@
 import type { CancellationToken, Disposable, WorkspaceEdit } from "vscode";
+import { LSPErrorCodes } from "vscode-languageserver-protocol";
 import {
   AureliaProtocolNotification,
   AureliaProtocolRequest,
@@ -41,6 +42,9 @@ import type {
 } from "../types.js";
 
 type NotificationHandler = (payload: unknown) => void;
+type RequestRetryPolicy = "none" | "read-currentness";
+
+const READ_CURRENTNESS_RETRY_LIMIT = 2;
 
 export interface ResourceInventoryOptions {
   readonly workspaceKey?: string;
@@ -124,6 +128,7 @@ export class LspFacade implements Disposable {
     const controlOrdinal = beforeControl == null
       ? 0
       : await beforeControl.beforeDispatch(controlRequest, token);
+    this.#assertSessionCohortCurrent(sessions, options.workspaceKey);
     const params: ResourceInventoryParams = options.includeTypeSurfaces === true
       ? { includeTypeSurfaces: true }
       : {};
@@ -134,12 +139,15 @@ export class LspFacade implements Disposable {
           AureliaProtocolRequest.ResourceInventory,
           params,
           token,
+          "read-currentness",
         );
         return { ...session.workspace, status: "ready" as const, response };
       } catch (err) {
+        if (err instanceof StaleLanguageClientSessionError) throw err;
         return { ...session.workspace, status: "error" as const, error: errorMessage(err) };
       }
     }));
+    this.#assertSessionCohortCurrent(sessions, options.workspaceKey);
     let snapshot: ResourceInventorySnapshot = { workspaces: rows };
     const afterControl = this.#resourceDiscoveryHostControl;
     if (afterControl != null) {
@@ -152,6 +160,7 @@ export class LspFacade implements Disposable {
         applyResourceInventoryHostFault,
         token,
       );
+      this.#assertSessionCohortCurrent(sessions, options.workspaceKey);
     }
     this.#logResourceInventoryIssues(snapshot.workspaces);
     return snapshot;
@@ -172,12 +181,15 @@ export class LspFacade implements Disposable {
           AureliaProtocolRequest.AnalysisLimitations,
           undefined,
           token,
+          "read-currentness",
         );
         return { ...session.workspace, status: "ready" as const, response };
       } catch (error) {
+        if (error instanceof StaleLanguageClientSessionError) throw error;
         return { ...session.workspace, status: "error" as const, error: errorMessage(error) };
       }
     }));
+    this.#assertSessionCohortCurrent(sessions, options.workspaceKey);
     const snapshot: AnalysisLimitationsSnapshot = { workspaces };
     this.#logAnalysisLimitationIssues(snapshot);
     return snapshot;
@@ -201,6 +213,7 @@ export class LspFacade implements Disposable {
     const controlOrdinal = beforeControl == null
       ? 0
       : await beforeControl.beforeDispatch(controlRequest, token);
+    this.#assertSessionCurrent(session);
     let response = await this.#sendRequest<TemplateResourceAvailabilityResponse>(
       session,
       AureliaProtocolRequest.TemplateResourceAvailability,
@@ -223,6 +236,7 @@ export class LspFacade implements Disposable {
         (value) => ({ applied: false, value }),
         token,
       );
+      this.#assertSessionCurrent(session);
     }
     this.#logTemplateAvailabilityIssues(response, session.workspace.key);
     return { ...response, workspace: session.workspace };
@@ -239,6 +253,7 @@ export class LspFacade implements Disposable {
       AureliaProtocolRequest.FrameworkCapabilityExplanation,
       params,
       token,
+      "read-currentness",
     );
     return { ...response, workspace: session.workspace };
   }
@@ -254,6 +269,7 @@ export class LspFacade implements Disposable {
       AureliaProtocolRequest.AttributeInterpretationExplanation,
       params,
       token,
+      "read-currentness",
     );
     return { ...response, workspace: session.workspace };
   }
@@ -269,6 +285,7 @@ export class LspFacade implements Disposable {
       AureliaProtocolRequest.BindingUncertaintyExplanation,
       params,
       token,
+      "read-currentness",
     );
     return { ...response, workspace: session.workspace };
   }
@@ -286,6 +303,7 @@ export class LspFacade implements Disposable {
       AureliaProtocolRequest.ResourceAvailabilityExplanation,
       params,
       token,
+      "read-currentness",
     );
     return { ...response, workspace: session.workspace };
   }
@@ -293,7 +311,13 @@ export class LspFacade implements Disposable {
   async getRelatedFiles(uri: string): Promise<RelatedFilesResponse> {
     const session = this.#sessionForUri(uri);
     if (session == null) return [];
-    return this.#sendRequest<RelatedFilesResponse>(session, AureliaProtocolRequest.RelatedFiles, { uri });
+    return this.#sendRequest<RelatedFilesResponse>(
+      session,
+      AureliaProtocolRequest.RelatedFiles,
+      { uri },
+      undefined,
+      "read-currentness",
+    );
   }
 
   async getSourceOwnership(
@@ -307,6 +331,7 @@ export class LspFacade implements Disposable {
       AureliaProtocolRequest.SourceOwnership,
       { uri },
       token,
+      "read-currentness",
     );
     const normalized: SourceOwnershipSnapshot = {
       ...response,
@@ -354,15 +379,14 @@ export class LspFacade implements Disposable {
   }
 
   async convertWorkspaceEdit(
-    uri: string,
+    session: AureliaLanguageClientSession,
     workspaceEdit: ProtocolWorkspaceEdit,
     token: CancellationToken,
   ): Promise<WorkspaceEdit | undefined> {
-    const client = this.#clients.clientForUri(uri);
-    if (client == null) {
-      throw new Error("No active Aurelia workspace owns the workspace edit origin.");
-    }
-    return client.protocol2CodeConverter.asWorkspaceEdit(workspaceEdit, token);
+    this.#assertSessionCurrent(session);
+    const edit = await session.client.protocol2CodeConverter.asWorkspaceEdit(workspaceEdit, token);
+    this.#assertSessionCurrent(session);
+    return edit;
   }
 
   onAnalysisChanged(
@@ -463,24 +487,86 @@ export class LspFacade implements Disposable {
     method: string,
     params?: unknown,
     token?: CancellationToken,
+    retryPolicy: RequestRetryPolicy = "none",
   ): Promise<T> {
-    const started = performance.now();
-    this.#logger.debug("request", { method, workspace: session.workspace.uri, hasParams: params != null });
-    try {
-      const result = await session.client.sendRequest<T>(method, params, token);
-      this.#logger.debug("response", {
+    for (let attempt = 0; ; attempt += 1) {
+      this.#assertSessionCurrent(session);
+      const started = performance.now();
+      this.#logger.debug("request", {
         method,
         workspace: session.workspace.uri,
-        durationMs: Math.round((performance.now() - started) * 10) / 10,
+        hasParams: params != null,
+        attempt: attempt + 1,
       });
-      return result;
-    } catch (error) {
-      this.#logger.warn("request.failed", {
-        method,
-        workspace: session.workspace.uri,
-        durationMs: Math.round((performance.now() - started) * 10) / 10,
-      }, error);
-      throw error;
+      try {
+        const result = await session.client.sendRequest<T>(method, params, token);
+        this.#assertSessionCurrent(session);
+        this.#logger.debug("response", {
+          method,
+          workspace: session.workspace.uri,
+          durationMs: Math.round((performance.now() - started) * 10) / 10,
+          attempt: attempt + 1,
+        });
+        return result;
+      } catch (error) {
+        if (!this.#sessionIsCurrent(session)) {
+          throw new StaleLanguageClientSessionError(session, method);
+        }
+        if (
+          retryPolicy === "read-currentness"
+          && attempt < READ_CURRENTNESS_RETRY_LIMIT
+          && !token?.isCancellationRequested
+          && isContentModifiedError(error)
+        ) {
+          this.#logger.debug("request.retry", {
+            method,
+            workspace: session.workspace.uri,
+            attempt: attempt + 2,
+            reason: "content-modified",
+          });
+          continue;
+        }
+        this.#logger.warn("request.failed", {
+          method,
+          workspace: session.workspace.uri,
+          durationMs: Math.round((performance.now() - started) * 10) / 10,
+          attempt: attempt + 1,
+        }, error);
+        throw error;
+      }
+    }
+  }
+
+  #sessionIsCurrent(session: AureliaLanguageClientSession): boolean {
+    return this.#clients.sessions.some((candidate) =>
+      candidate.workspace.key === session.workspace.key
+      && candidate.client === session.client
+      && candidate.incarnation === session.incarnation
+    );
+  }
+
+  #assertSessionCurrent(session: AureliaLanguageClientSession): void {
+    if (!this.#sessionIsCurrent(session)) {
+      throw new StaleLanguageClientSessionError(session);
+    }
+  }
+
+  #assertSessionCohortCurrent(
+    expected: readonly AureliaLanguageClientSession[],
+    workspaceKey: string | undefined,
+  ): void {
+    const current = workspaceKey == null
+      ? this.#clients.sessions
+      : this.#clients.sessions.filter((session) => session.workspace.key === workspaceKey);
+    if (
+      current.length !== expected.length
+      || expected.some((session) => !current.some((candidate) =>
+        candidate.workspace.key === session.workspace.key
+        && candidate.client === session.client
+        && candidate.incarnation === session.incarnation
+      ))
+    ) {
+      throw new StaleLanguageClientSessionError(expected[0]);
     }
   }
 
@@ -491,6 +577,7 @@ export class LspFacade implements Disposable {
       for (const [method, handlers] of this.#notificationHandlers) {
         if (handlers.size === 0) continue;
         this.#rawNotificationSubscriptions.push(session.client.onNotification(method, (payload: unknown) => {
+          if (!this.#sessionIsCurrent(session)) return;
           if (method === AureliaProtocolNotification.AnalysisChanged) {
             if (!isAnalysisChangedPayload(payload)) return;
             if (payload.changeKind === "topology") {
@@ -630,6 +717,27 @@ function workspaceNotificationPayload(
     return { ...(payload as Record<string, unknown>), workspace: session.workspace };
   }
   return { value: payload, workspace: session.workspace };
+}
+
+class StaleLanguageClientSessionError extends Error {
+  constructor(session?: AureliaLanguageClientSession, method?: string) {
+    super(
+      `Aurelia workspace session changed${method == null ? "" : ` during ${method}`}`
+      + `${session == null ? "" : ` for ${session.workspace.uri}`}; retry the operation.`,
+    );
+    this.name = "StaleLanguageClientSessionError";
+  }
+}
+
+function isContentModifiedError(error: unknown): boolean {
+  try {
+    return error != null
+      && typeof error === "object"
+      && "code" in error
+      && error.code === LSPErrorCodes.ContentModified;
+  } catch {
+    return false;
+  }
 }
 
 function errorMessage(error: unknown): string {

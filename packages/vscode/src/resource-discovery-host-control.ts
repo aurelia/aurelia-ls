@@ -4,6 +4,7 @@ import {
   nextExtensionHostObservationId,
   type ExtensionHostObservationValue,
 } from "./extension-host-observation.js";
+import { workerRestartHostAcceptanceEnabled } from "./worker-restart-host-acceptance.js";
 
 const EXTENSION_HOST_OBSERVATION_ENV = "AURELIA_LS_EXTENSION_HOST_OBSERVATION";
 const RESOURCE_DISCOVERY_ACCEPTANCE_ENV = "AURELIA_LS_RESOURCE_DISCOVERY_HOST_ACCEPTANCE";
@@ -144,14 +145,19 @@ export function emitResourceDiscoveryHostObservation(
     [key: string]: ExtensionHostObservationValue;
   }>,
 ): void {
-  if (!resourceDiscoveryHostAcceptanceEnabled()) return;
+  if (!resourceDiscoveryHostObservationEnabled()) return;
   emitExtensionHostObservation(event);
 }
 
 export function nextResourceDiscoveryHostObservationId(prefix: string): string | undefined {
-  return resourceDiscoveryHostAcceptanceEnabled()
+  return resourceDiscoveryHostObservationEnabled()
     ? nextExtensionHostObservationId(prefix)
     : undefined;
+}
+
+function resourceDiscoveryHostObservationEnabled(): boolean {
+  return resourceDiscoveryHostAcceptanceEnabled()
+    || workerRestartHostAcceptanceEnabled();
 }
 
 export class ResourceDiscoveryHostControl implements Disposable {

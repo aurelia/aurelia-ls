@@ -2,6 +2,7 @@
  * LSP lifecycle handlers: initialize, document events, configuration changes
  */
 import {
+  isSemanticRuntimeAnalysisCurrentnessError,
   ManagedSemanticWorkspaceOperationStaleError,
   SemanticSourceWorldCurrentnessKind,
 } from "@aurelia-ls/semantic-runtime";
@@ -38,6 +39,7 @@ interface LifecycleRefreshState {
   readonly tasks: Set<Promise<unknown>>;
   readonly openDocumentEffectiveValues: Map<string, { readonly text: string | undefined }>;
   readonly pendingAnalysisChangedSourceUris: Map<string, string>;
+  lifecycleRegistered: boolean;
   pendingAnalysisRefresh: ReturnType<typeof setTimeout> | null;
   pendingAnalysisChangeKind: AnalysisChangedPayload["changeKind"] | null;
   shutdown: Promise<void> | null;
@@ -190,6 +192,35 @@ function scheduleAnalysisRefresh(
     runLifecycleTask(ctx, "workspace analysis refresh", () =>
       notifyAnalysisChanged(ctx, settledChangeKind, settledChangedSourceUris));
   }, ANALYSIS_REFRESH_DEBOUNCE_MS);
+}
+
+/**
+ * Converge every client-owned semantic view when an ordinary request is the
+ * first observer of source-world movement outside the synchronized event set.
+ *
+ * Request-generation staleness is already owned by an editor/watcher event and
+ * must not create a duplicate wave. Managed source-world and answer-proof
+ * currentness failures are different: without this handoff the individual
+ * request fails safely, but no AnalysisChanged notification tells the other
+ * providers and custom host caches to re-prove their state.
+ */
+export function scheduleAnalysisRefreshForRequestCurrentness(
+  ctx: ServerContext,
+  error: unknown,
+): boolean {
+  if (!lifecycleRefreshState(ctx).lifecycleRegistered) return false;
+  const managedStale = managedOperationStaleCause(error);
+  const analysisCurrentness = isSemanticRuntimeLspRequestAborted(error)
+    && isSemanticRuntimeAnalysisCurrentnessError(error.cause);
+  if (managedStale == null && !analysisCurrentness) return false;
+  scheduleAnalysisRefresh(
+    ctx,
+    "request-discovered semantic currentness",
+    managedStale?.currentnessKind === SemanticSourceWorldCurrentnessKind.FreshBootRequired
+      ? "topology"
+      : "source-text",
+  );
+  return true;
 }
 
 function dominantAnalysisChangeKind(
@@ -388,6 +419,7 @@ function closedDocumentValueChanged(
  * Registers all lifecycle handlers on the connection and documents.
  */
 export function registerLifecycleHandlers(ctx: ServerContext): void {
+  lifecycleRefreshState(ctx).lifecycleRegistered = true;
   ctx.connection.onInitialize((params) => handleInitialize(ctx, params));
   ctx.connection.onShutdown(() => shutdownLifecycle(ctx));
 
@@ -670,6 +702,7 @@ function lifecycleRefreshState(ctx: ServerContext): LifecycleRefreshState {
     tasks: new Set(),
     openDocumentEffectiveValues: new Map(),
     pendingAnalysisChangedSourceUris: new Map(),
+    lifecycleRegistered: false,
     pendingAnalysisRefresh: null,
     pendingAnalysisChangeKind: null,
     shutdown: null,
