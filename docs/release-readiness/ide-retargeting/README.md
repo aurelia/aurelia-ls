@@ -34,9 +34,9 @@ Do not repeat the broad audit unless the branch base or declared product envelop
 | Audit baseline | `00e81ae472d7d43b9beee55922e2e3ad28a4762e` |
 | Branch/base | `ide-retargeting`, 252 commits ahead of `main` at audit time |
 | Current checkpoint | CP1 — Semantic foundation |
-| Active workstreams | WS06 assurance is active; WS02, WS03, and WS04 are ready |
+| Active workstreams | WS06 assurance is active; WS03 and WS04 are ready |
 | Release authority | `not-accepted` |
-| Release posture | WS01 is verified at `e507dabc8`; CP1 automation admission and the exact rename/diagnostic journeys remain open |
+| Release posture | WS01 and WS02 are verified at `e507dabc8` / `d38a3a0e0`; CP1 automation admission and diagnostic policy/lifecycle remain open |
 | Last tracker review | 2026-08-22 |
 
 Update this table whenever the checkpoint, active stream set, candidate SHA, or release authority changes. Do not create
@@ -57,14 +57,14 @@ checkpoint gate pass on a commit that remains valid.
 | Id | Workstream | Status | Depends on | Packet | Primary checkpoint |
 |---|---|---|---|---|---|
 | WS01 | Semantic identity, provenance, and compiler-world invariants | complete | CP0 | [packet](workstreams/WS01-semantic-foundations.md) | CP1 |
-| WS02 | Rename and edit-transaction correctness | ready | WS01; WS04 support | [packet](workstreams/WS02-rename-edit-transactions.md) | CP2 |
+| WS02 | Rename and edit-transaction correctness | complete | WS01; WS04 support | [packet](workstreams/WS02-rename-edit-transactions.md) | CP2 |
 | WS03 | Diagnostics, recovery, and Problems policy | ready | WS01; WS04 support | [packet](workstreams/WS03-diagnostics-recovery.md) | CP3 |
 | WS04 | Incremental lifecycle, cancellation, performance, and retention | ready | WS01 | [packet](workstreams/WS04-lifecycle-performance.md) | CP3–CP4 |
 | WS05 | Provider composition, multi-root, platform, and compatibility | queued | WS02–WS04 stable | [packet](workstreams/WS05-host-provider-integration.md) | CP4 |
 | WS06 | Assurance admission, documentation, and exact release evidence | active | transverse; closes last | [packet](workstreams/WS06-assurance-release.md) | CP1–CP5 |
 
-WS02 and WS03 may proceed in parallel after WS01 closes the shared source-identity canaries. WS04 supplies lifecycle
-proofs to both, then completes its full soak at CP4. WS06 starts now and continues throughout.
+WS02 is complete. WS03 and the feature-critical WS04 slices may proceed from the shared source/edit foundations; WS04
+then completes its full soak at CP4. WS06 continues throughout.
 
 ## Checkpoint Plan
 
@@ -72,7 +72,7 @@ proofs to both, then completes its full soak at CP4. WS06 starts now and continu
 |---|---|---|
 | CP0 — Audit authority | complete | Scope, baseline, workstreams, known reds, recovery path, and evidence are durable and queryable. |
 | CP1 — Semantic foundation | verification | WS01 exits; full semantic tests and conformance are green; identity fails closed on ambiguity; affected lane baselines are current. |
-| CP2 — Mutating IDE correctness | queued | WS02 exits; supported rename/edit surfaces are complete and atomic through the real host, including exact undo/redo and session churn. |
+| CP2 — Mutating IDE correctness | verification | WS02 exits; supported rename/edit surfaces are complete and atomic through the real host, including exact undo/redo and session churn. |
 | CP3 — Diagnostic settlement | queued | WS03 exits and feature-critical WS04 slices are green; Problems settle through malformed edits and file/config/session transitions. |
 | CP4 — Integrated resilience | queued | WS04 and WS05 exit; provider composition, multi-root/platform behavior, cancellation, latency, and retention meet the support envelope. |
 | CP5 — Exact release candidate | queued | WS06 exits; every admitted gate is green from one clean SHA, docs match behavior, and that SHA's exact VSIX is verified and installed once. |
@@ -144,6 +144,6 @@ At checkpoint review:
 ## Next Actions
 
 1. WS06 admits the 84-file semantic suite and 684-assertion conformance runner, plus publication parity, to close CP1.
-2. Start WS02 with the exact `state -> state2` real-host rename/undo journey and atomic edit transaction contract.
-3. Start WS03 diagnostic policy/lifecycle work in parallel, using the now-fixed source identity boundary.
-4. Run the feature-critical WS04 currentness/performance slices needed by WS02 and WS03 before their checkpoints close.
+2. Start WS03 diagnostic policy/lifecycle work using the now-fixed source and edit-transaction boundaries.
+3. Run the feature-critical WS04 currentness/performance slices needed by WS03, then complete the authoritative soak.
+4. Preserve the WS02 native-F2 receipts and bounded VS Code transaction semantics through later host/package changes.

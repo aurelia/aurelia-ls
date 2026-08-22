@@ -21,6 +21,10 @@ material, and reproduction commands. An ignored artifact cannot be the sole evid
 | R-011 | 2026-08-22 | `e507dabc8` package tree | affected semantic contracts | pass | Template references/TS rename, observer locator/setup/customization, router dynamic/active-link, TypeSystem overlays, source carriers | All affected contracts passed; template references 33 rows and TS-origin rename 9 edits. |
 | R-012 | 2026-08-22 | `e507dabc8` package tree | IDE types and LSP source boundary | pass | `pnpm run build:ide:types`; source/session/completion/native-presentation shards | Build passed; LSP 55/55 unit/source rows and 14/14 integration rows passed. |
 | R-013 | 2026-08-22 | `e507dabc8` package tree | product-architecture pressure | pass | `pnpm --filter @aurelia-ls/atlas pressure:product-architecture` | Pressure completed; field-provenance construction sites reduced to 33; known DI static false positives remain F-AUT-005. |
+| R-014 | 2026-08-22 | `d38a3a0e0` clean package tree | WS02 rename/edit implementation | pass | Candidate refusal, semantic transaction snapshots, session-transition ownership, client validation, host/UI canaries | F-REN-001 through F-REN-003 fixed; F-REN-004 and F-REN-005 bounded explicitly. |
+| R-015 | 2026-08-22 | `d38a3a0e0` clean package tree | semantic and conformance regression | pass | Full semantic suite and semantic conformance after final WS02 change | 85 files / 904 tests; 684/684 active assertions; zero known gaps. |
+| R-016 | 2026-08-22 | `d38a3a0e0` clean package tree | LSP, VS Code, and rename lanes | pass | LSP unit/integration shards; full VS Code tests; all rename lane snapshots in detection mode | LSP 516 passed / 1 intentional skip; VS Code 604/604; 47/47 rename probes matched reviewed snapshots. |
+| R-017 | 2026-08-22 | `d38a3a0e0` clean package tree | real F2 and host mutation | pass | Full Worker rename-reliability shards on VS Code current and minimum | 11/11 on 1.134.0 and 11/11 on exact 1.91.0; closed/open literal-F2 receipts retained below. |
 
 ## Checkpoint Receipts
 
@@ -60,6 +64,41 @@ material, and reproduction commands. An ignored artifact cannot be the sole evid
   workspace-relative, unadmitted external carriers are exact absolute/workspace identities, ambiguous aliases fail closed,
   and field provenance is singular with aggregate multi-cause witnesses
 - Next checkpoint and admitted workstreams: CP1 remains in verification under WS06; WS02, WS03, and WS04 are ready
+
+### CP2 — Mutating IDE Correctness
+
+- Status: `verification`
+- Candidate implementation commit: `d38a3a0e0b34dd2c9f79b97ecb6b0fff30dec1d1`
+- Worktree during final code evidence: package tree clean at `d38a3a0e0`; tracker-only documentation was dirty
+- Workstreams/findings: WS02 complete; F-REN-001 through F-REN-003 fixed; F-REN-004 and F-REN-005 accepted-bounded
+- Validity paths: semantic rename contracts/API, language-server rename/edit mapping and protocol, VS Code client/session/edit
+  validation, lane-harness rename probes/snapshots, and extension-host rename-reliability runner
+- Automated commands and exact counts:
+  - `pnpm run build:ide:types`; VS Code source/test typechecks; scoped changed-source lint — pass
+  - `node scripts/run-vitest.mjs packages/semantic-runtime/test` — 85 files / 904 tests passed
+  - `node packages/semantic-runtime/scripts/contract-semantic-conformance.mjs` — 684/684 passed, zero known gaps
+  - template rename / TS-origin rename / references contracts — 22 edits / 9 edits / 33 rows, all pass
+  - LSP unit suite — 467/467 passed
+  - LSP integration files run in stable-sized shards — 49 passed / 1 intentional skip
+  - VS Code suite — 604/604 passed
+  - 12 rename lane fixtures in detection mode — 47/47 probes matched reviewed snapshots and verdicts
+  - current/minimum full rename-reliability shards — 11/11 on each lane
+- Host journeys and versions:
+  - literal keyboard F2 through the native rename widget on VS Code 1.134.0 and exact 1.91.0
+  - `state -> state2`, exactly 11 sites, `my-app.ts` closed and open, one undo/save/redo, whole-workspace census
+  - provider plus explicit `workspace.applyEdit` remains a distinct no-refactoring-auto-save control path
+- Retained artifacts:
+  - `.temp/vscode-extension-host/current-stable/worker/rename-reliability/state-rename-real-f2-closed.json` — SHA-256 `0be03c0c5935d17045059adcdc0fcfa77e631f2291b01d503e81a8f4fdfd2b4b`
+  - `.temp/vscode-extension-host/current-stable/worker/rename-reliability/state-rename-real-f2-open.json` — SHA-256 `5aeec35205bf6fdce29e9a85fe0903d4c3cdc6208e561a61e7feaa69e3b79355`
+  - `.temp/vscode-extension-host/minimum/worker/rename-reliability/state-rename-real-f2-closed.json` — SHA-256 `d233024c71420f611f3933a03a63ce26b975029809041dacd2a66b2aed6c36f6`
+  - `.temp/vscode-extension-host/minimum/worker/rename-reliability/state-rename-real-f2-open.json` — SHA-256 `f2ffb784d50ceed2892180333acb61fda1c7fdbaf9b7d204e3de564d4a83a408`
+- Bounded platform semantics:
+  - bundled VS Code validates edit target version, SHA-256 content, URI identity, and canonical real path immediately
+    before returning the edit; VS Code exposes no closed-file compare-and-swap for the remaining tiny apply window
+  - one `WorkspaceEdit` is the strongest host application unit; filesystem failure is not guaranteed rollback-atomic
+  - generic LSP clients ignore the optional Aurelia transaction metadata and do not receive strict closed-file enforcement
+  - native F2 follows `files.refactoring.autoSave`; one undo restores effective content, then one save persists that undo
+- Next checkpoint and admitted workstreams: formal CP2 closure remains sequenced behind CP1/WS06; WS03 and WS04 are ready
 
 ## Receipt Template
 
