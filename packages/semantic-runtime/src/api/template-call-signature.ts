@@ -25,7 +25,8 @@ import type { SemanticTemplateCursorMemberTextRow } from './contracts.js';
 import {
   describeAddress,
   sourceReferenceForParserSpan,
-  sourceReferenceForTsNode,
+  sourceReferenceForProjectTsNode,
+  sourceReferenceForUnqualifiedTypeScriptNode,
   type SemanticSourceReference,
 } from './source-reference.js';
 
@@ -300,7 +301,7 @@ function selectedSignatureForOverlayCall(
     source,
     callSource,
     declarationSource: signatureProvenance === 'declaration' && declaration != null
-      ? sourceReferenceForTsNode(declarationNameNode(declaration) ?? declaration)
+      ? sourceReferenceForProjectTsNode(typeSystem.project, declarationNameNode(declaration) ?? declaration)
       : null,
     documentation: memberTextRow(documentation),
     isDeprecated: deprecated,
@@ -567,6 +568,7 @@ function memberTextRow(
         text: text.text,
         isTruncated: text.isTruncated,
         sourceCount: text.sourceCount,
-        sources: text.sourceNodes.slice(0, CHECKER_MEMBER_TEXT_MAX_SOURCES).map(sourceReferenceForTsNode),
+        sources: text.sourceNodes.slice(0, CHECKER_MEMBER_TEXT_MAX_SOURCES)
+          .map(sourceReferenceForUnqualifiedTypeScriptNode),
       };
 }

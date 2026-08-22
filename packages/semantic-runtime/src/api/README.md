@@ -337,15 +337,16 @@ Query-claim records distinguish the exact answer locus from invalidation epoch k
 cursor-shaped locus for reuse/history but also depends on its source-file epoch; adapters that keep a runtime session
 open across edits should call `runtime.disposeQueryClaims({ sourceFilePath })` after a source change when they only need
 to clear retained answer storage, or `runtime.clearAnalysisCache()` when the edit makes retained app-world products
-stale. The runtime canonicalizes source-file loci to project-relative paths before assigning query keys and epoch keys,
-so absolute host paths and project-relative paths converge on the same source-epoch claim. App-local
+stale. The runtime resolves absolute, workspace-relative, and project-relative inputs through exact project ownership,
+refuses cross-domain ambiguity, and publishes admitted loci in the workspace-relative source-address domain before
+assigning host-case-aware query and epoch keys. App-local
 `disposeQueryClaimsForSourceEpoch(...)` remains available for callers that already own a `SemanticApp`, but transport
 adapters should prefer the runtime method so runtime-level routed claims and app-owned claims are invalidated together.
 The disposal answer includes per-profile `profileDisposals` rows. Use those rows to confirm whether a source edit or
 manual cleanup hit runtime-level routed claims, cached-app claims, or both; the flat disposed counts are only the rollup.
 It also echoes the selected `invalidationKind` and `epochKeys`. Treat those as the public trace of the disposal
 strategy: `manual` has no epoch filter, `project-epoch` prunes project-scoped outcomes, and `source-epoch` prunes both
-the canonical project-relative source epoch and the containing project epoch because project-wide answers can depend on
+the canonical workspace source epoch and the containing project epoch because project-wide answers can depend on
 one changed source. New adapters should extend that strategy layer rather than constructing graph disposal policies
 locally.
 Use `includeQueryClaimRows` with a small `rowLimit` when aggregate query-claim counters are not enough and a caller

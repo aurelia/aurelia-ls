@@ -1,9 +1,7 @@
-import {
-  sourcePathMatchesFileName,
-} from '../kernel/source-address.js';
 import { SourceFileRole } from '../kernel/address.js';
 import { externalizeSourceFileRole } from '../kernel/source-classification.js';
-import type { SourceFileAdmission } from '../boot/frames.js';
+import type { ProjectBootFrame } from '../boot/frames.js';
+import { semanticSourceReferenceHostPath } from '../boot/source-ownership.js';
 import { DiIssueSubjectKind } from '../di/di-issue.js';
 import type {
   SemanticAppDiagnosticPhase,
@@ -32,8 +30,7 @@ import {
 } from './source-reference.js';
 
 export function appDiagnosticRows(
-  sources: readonly SourceFileAdmission[],
-  projectKey: string,
+  project: ProjectBootFrame,
   query: SemanticAppQuery,
   typeScriptRows: readonly SemanticTypeScriptDiagnosticRow[],
   evaluationRows: readonly SemanticEvaluationIssueRow[],
@@ -51,6 +48,7 @@ export function appDiagnosticRows(
   routeRows: readonly SemanticRouteRecognizerIssueRow[],
   analysisLimitationRows: readonly SemanticAnalysisLimitationRow[],
 ): readonly SemanticAppDiagnosticRow[] {
+  const projectKey = project.projectKey;
   const sourceFilePath = query.sourceFile?.filePath ?? null;
   return [
     ...typeScriptRows
@@ -58,51 +56,50 @@ export function appDiagnosticRows(
       .map((row) => typeScriptAppDiagnosticRow(row)),
     ...evaluationRows
       .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
-      .map((row) => appDiagnosticRowWithSourceRole(evaluationAppDiagnosticRow(row), projectKey, sources)),
+      .map((row) => appDiagnosticRowWithSourceRole(evaluationAppDiagnosticRow(row), project)),
     ...configurationRows
       .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
-      .map((row) => appDiagnosticRowWithSourceRole(configurationAppDiagnosticRow(row), projectKey, sources)),
+      .map((row) => appDiagnosticRowWithSourceRole(configurationAppDiagnosticRow(row), project)),
     ...diRows
       .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
-      .map((row) => appDiagnosticRowWithSourceRole(diAppDiagnosticRow(row), projectKey, sources)),
+      .map((row) => appDiagnosticRowWithSourceRole(diAppDiagnosticRow(row), project)),
     ...observationRows
       .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
-      .map((row) => appDiagnosticRowWithSourceRole(observationAppDiagnosticRow(row), projectKey, sources)),
+      .map((row) => appDiagnosticRowWithSourceRole(observationAppDiagnosticRow(row), project)),
     ...templateRows
       .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
       .filter(templateDiagnosticContributesToAppDiagnostics)
-      .map((row) => appDiagnosticRowWithSourceRole(templateAppDiagnosticRow(projectKey, row), projectKey, sources)),
+      .map((row) => appDiagnosticRowWithSourceRole(templateAppDiagnosticRow(projectKey, row), project)),
     ...frameworkRows
       .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
-      .map((row) => appDiagnosticRowWithSourceRole(row, projectKey, sources)),
+      .map((row) => appDiagnosticRowWithSourceRole(row, project)),
     ...resourceRows
       .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
-      .map((row) => appDiagnosticRowWithSourceRole(resourceAppDiagnosticRow(row), projectKey, sources)),
+      .map((row) => appDiagnosticRowWithSourceRole(resourceAppDiagnosticRow(row), project)),
     ...stateRows
       .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
-      .map((row) => appDiagnosticRowWithSourceRole(stateAppDiagnosticRow(row), projectKey, sources)),
+      .map((row) => appDiagnosticRowWithSourceRole(stateAppDiagnosticRow(row), project)),
     ...validationRows
       .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
-      .map((row) => appDiagnosticRowWithSourceRole(validationAppDiagnosticRow(row), projectKey, sources)),
+      .map((row) => appDiagnosticRowWithSourceRole(validationAppDiagnosticRow(row), project)),
     ...fetchClientRows
       .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
-      .map((row) => appDiagnosticRowWithSourceRole(fetchClientAppDiagnosticRow(row), projectKey, sources)),
+      .map((row) => appDiagnosticRowWithSourceRole(fetchClientAppDiagnosticRow(row), project)),
     ...dialogRows
       .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
-      .map((row) => appDiagnosticRowWithSourceRole(dialogAppDiagnosticRow(row), projectKey, sources)),
+      .map((row) => appDiagnosticRowWithSourceRole(dialogAppDiagnosticRow(row), project)),
     ...routerRows
       .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
-      .map((row) => appDiagnosticRowWithSourceRole(routerAppDiagnosticRow(row), projectKey, sources)),
+      .map((row) => appDiagnosticRowWithSourceRole(routerAppDiagnosticRow(row), project)),
     ...routeRows
       .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
-      .map((row) => appDiagnosticRowWithSourceRole(routeAppDiagnosticRow(row), projectKey, sources)),
+      .map((row) => appDiagnosticRowWithSourceRole(routeAppDiagnosticRow(row), project)),
     ...analysisLimitationRows
       .filter((row) => row.effectivePolicy.disposition !== 'off')
       .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
       .map((row) => appDiagnosticRowWithSourceRole(
         analysisLimitationAppDiagnosticRow(projectKey, row),
-        projectKey,
-        sources,
+        project,
       )),
   ].sort((left, right) =>
     `${left.source?.path ?? ''}:${left.source?.start ?? 0}:${left.diagnosticDomain}:${left.diagnosticKind}`
@@ -269,25 +266,23 @@ function appDiagnosticSourceRoleCounts(
 
 function appDiagnosticRowWithSourceRole(
   row: SemanticAppDiagnosticRow,
-  projectKey: string,
-  sources: readonly SourceFileAdmission[],
+  project: ProjectBootFrame,
 ): SemanticAppDiagnosticRow {
   if (row.sourceRole != null) {
     return row;
   }
-  const sourceRole = sourceRoleForDiagnosticReference(projectKey, sources, row.source);
+  const sourceRole = sourceRoleForDiagnosticReference(project, row.source);
   return sourceRole == null ? row : { ...row, sourceRole };
 }
 
 function sourceRoleForDiagnosticReference(
-  projectKey: string,
-  sources: readonly SourceFileAdmission[],
+  project: ProjectBootFrame,
   source: SemanticSourceReference | null,
 ): SemanticAppDiagnosticRow['sourceRole'] {
   if (source == null) {
     return null;
   }
-  if (source.sourceWorkspaceKey != null && source.sourceWorkspaceKey !== projectKey) {
+  if (source.sourceWorkspaceKey != null && source.sourceWorkspaceKey !== project.projectKey) {
     return externalizeSourceFileRole(source.sourceFileRole ?? SourceFileRole.Unknown);
   }
   if (
@@ -296,17 +291,15 @@ function sourceRoleForDiagnosticReference(
   ) {
     return source.sourceFileRole;
   }
-  if (source.path != null) {
-    const path = source.path;
-    const admission = sources.find((candidate) => sourcePathMatchesFileName(candidate.path, path)) ?? null;
-    if (admission != null) {
-      return admission.role;
-    }
+  const hostPath = semanticSourceReferenceHostPath(project.workspaceRootDir, source);
+  if (hostPath != null) {
+    const admission = project.sourceOwnership.admissionForHostPath(hostPath);
+    if (admission != null) return admission.role;
   }
   if (source.sourceFileRole != null) {
     return source.sourceFileRole;
   }
-  return sourceRoleForDiagnosticReference(projectKey, sources, source.anchor ?? null);
+  return sourceRoleForDiagnosticReference(project, source.anchor ?? null);
 }
 
 type AppDiagnosticHandles = NonNullable<SemanticAppDiagnosticRow['handles']>;

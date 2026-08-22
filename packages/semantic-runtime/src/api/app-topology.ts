@@ -4,7 +4,8 @@ import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-
 import type { ConfigurationKernelEmission } from '../configuration/configuration-kernel-emitter.js';
 import type { ConfigurationStep } from '../configuration/configuration-sequence.js';
 import { ConfigurationProductDetails } from '../configuration/product-details.js';
-import type { SourceFileAdmission } from '../boot/frames.js';
+import type { ProjectBootFrame, SourceFileAdmission } from '../boot/frames.js';
+import { semanticSourceReferenceHostPath } from '../boot/source-ownership.js';
 import type { AddressHandle, IdentityHandle, ProductHandle } from '../kernel/handles.js';
 import type { KernelStore } from '../kernel/store.js';
 import {
@@ -22,7 +23,7 @@ import {
   type ApplicationStyleSourceKind,
   type ApplicationSupportSourceRole,
 } from '../application/index.js';
-import { BindableBindingMode } from '../resources/bindable-definition.js';
+import type { BindableBindingMode } from '../resources/bindable-definition.js';
 import { CustomElementDefinition } from '../resources/custom-element-definition.js';
 import type { ResourceDependencyReferenceKind } from '../resources/resource-reference.js';
 import {
@@ -1138,14 +1139,10 @@ function projectSourcePathForAddress(
   if (source?.path == null) {
     return null;
   }
-  const normalizedPath = normalizeApplicationPath(source.path);
-  for (const admission of emission.project.sourceFiles) {
-    const candidate = normalizeApplicationPath(admission.path);
-    if (normalizedPath === candidate || normalizedPath.endsWith(`/${candidate}`)) {
-      return admission.path;
-    }
-  }
-  return null;
+  const hostPath = semanticSourceReferenceHostPath(emission.project.workspaceRootDir, source);
+  if (hostPath == null) return null;
+  const resolution = emission.project.sourceOwnership.resolvePath(hostPath);
+  return resolution.kind === 'resolved' ? resolution.source.projectPath : null;
 }
 
 function applicationComponentReference(
@@ -1501,7 +1498,8 @@ function applicationServiceInteractionRows(
     return {
       operationKind: site.operationKind,
       consumerPath: site.sourcePath,
-      consumerRole: applicationInteractionConsumerRole(sourceRoleByPath, site.sourcePath) ?? supportSourceRoleForPath(site.sourcePath),
+      consumerRole: applicationInteractionConsumerRole(sourceRoleByPath, emission.project, site.sourcePath)
+        ?? supportSourceRoleForPath(site.sourcePath),
       consumerClassName: site.consumerClassName,
       consumerMemberName: site.consumerMemberName,
       targetSourcePath: site.targetSourcePath,
@@ -1757,7 +1755,10 @@ function dataFlowRootSlotMatchesSourcePath(
   const scope = store.productDetails.read(ConfigurationProductDetails.BindingScope, scopeProductHandle);
   const slot = scope?.locate(sourceRootName).slot ?? null;
   const slotSourcePath = projectSourcePathForAddress(store, emission, slot?.sourceAddressHandle ?? null);
-  return slotSourcePath != null && applicationPathsReferToSameSource(slotSourcePath, sourcePath);
+  const sourceResolution = emission.project.sourceOwnership.resolveProjectPath(sourcePath);
+  return slotSourcePath != null
+    && sourceResolution.kind === 'resolved'
+    && slotSourcePath === sourceResolution.source.projectPath;
 }
 
 function applicationServiceInteractionBindingRowsForDataFlow(
@@ -1944,20 +1945,13 @@ export function semanticApplicationComponentMemberKey(className: string, memberN
 
 function applicationInteractionConsumerRole(
   roleByPath: ReadonlyMap<string, ApplicationFileRole>,
+  project: ProjectBootFrame,
   sourcePath: string,
 ): ApplicationFileRole | null {
-  const normalizedSource = normalizeApplicationPath(sourcePath);
-  const exact = roleByPath.get(normalizedSource) ?? null;
-  if (exact != null) {
-    return exact;
-  }
-  const sourceSuffix = `/${normalizedSource}`;
-  for (const [candidate, role] of roleByPath) {
-    if (candidate.endsWith(sourceSuffix)) {
-      return role;
-    }
-  }
-  return null;
+  const resolution = project.sourceOwnership.resolveProjectPath(sourcePath);
+  return resolution.kind === 'resolved'
+    ? roleByPath.get(resolution.source.projectPath) ?? null
+    : null;
 }
 
 function applicationInteractionConsumerRoleByPath(
@@ -1967,35 +1961,11 @@ function applicationInteractionConsumerRoleByPath(
   const roleByPath = new Map<string, ApplicationFileRole>();
   for (const component of components) {
     if (component.source?.path != null) {
-      for (const path of applicationSourceLookupPaths(component.source.path, emission.project.rootDir)) {
-        roleByPath.set(path, 'component-source');
-      }
+      const resolution = emission.project.sourceOwnership.resolveWorkspacePath(component.source.path);
+      if (resolution.kind === 'resolved') roleByPath.set(resolution.source.projectPath, 'component-source');
     }
   }
   return roleByPath;
-}
-
-function applicationSourceLookupPaths(
-  sourcePath: string,
-  projectRoot: string,
-): readonly string[] {
-  const normalizedSource = normalizeApplicationPath(sourcePath);
-  const normalizedRoot = normalizeApplicationPath(projectRoot);
-  const rootPrefix = `${normalizedRoot}/`;
-  if (normalizedSource.startsWith(rootPrefix)) {
-    return [normalizedSource, normalizedSource.slice(rootPrefix.length)];
-  }
-  return [normalizedSource];
-}
-
-function normalizeApplicationPath(path: string): string {
-  return path.replaceAll('\\', '/').replace(/^\.\//u, '');
-}
-
-function applicationPathsReferToSameSource(leftPath: string, rightPath: string): boolean {
-  const left = normalizeApplicationPath(leftPath);
-  const right = normalizeApplicationPath(rightPath);
-  return left === right || left.endsWith(`/${right}`) || right.endsWith(`/${left}`);
 }
 
 function applicationStateCompositionRows(

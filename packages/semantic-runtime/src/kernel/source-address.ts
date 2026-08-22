@@ -21,6 +21,7 @@ import type {
   KernelStoreReadView,
   KernelStoreRecord,
 } from './store.js';
+import { canonicalTypeSystemSourcePath } from '../type-system/source-file-path.js';
 
 export type SourceAnchorHandle = AddressHandle | IdentityHandle;
 export type SourceAnchorRecord = SemanticAddress | SemanticIdentity;
@@ -177,15 +178,15 @@ export function isSemanticIdentityRecord(record: KernelStoreRecord): record is S
   }
 }
 
-/** Match a host-facing file path against a source-file address path. */
-export function sourceFilePathMatches(address: SourceFileAddress, filePath: string): boolean {
-  return sourcePathMatchesFileName(address.path, filePath);
+/** Candidate-only path-tail relation for staged address enumeration; never authorizes source identity. */
+export function sourceFilePathMayMatchFileName(address: SourceFileAddress, filePath: string): boolean {
+  return sourcePathMayMatchFileName(address.path, filePath);
 }
 
-/** Match two host/source path spellings after normalizing path separators. */
-export function sourcePathMatchesFileName(sourcePath: string, fileName: string): boolean {
-  const normalizedSourcePath = normalizeHostPath(sourcePath);
-  const normalizedFileName = normalizeHostPath(fileName);
+/** Candidate-only path-tail relation after separator normalization; callers must resolve ambiguity separately. */
+export function sourcePathMayMatchFileName(sourcePath: string, fileName: string): boolean {
+  const normalizedSourcePath = canonicalTypeSystemSourcePath(sourcePath);
+  const normalizedFileName = canonicalTypeSystemSourcePath(fileName);
   return normalizedSourcePath === normalizedFileName
     || normalizedSourcePath.endsWith(`/${normalizedFileName}`)
     || normalizedFileName.endsWith(`/${normalizedSourcePath}`);

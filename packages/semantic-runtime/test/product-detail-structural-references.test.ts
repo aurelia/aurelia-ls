@@ -28,6 +28,7 @@ import { KernelPublicationSurface } from '../src/kernel/publication-surface.js';
 import type { ProductDetailDescriptor } from '../src/kernel/detail-descriptors.js';
 import {
   KernelProductDetailReference,
+  kernelProductDetailReferences,
   type KernelDetailReference,
 } from '../src/kernel/detail-references.js';
 import { FieldProvenance } from '../src/kernel/provenance.js';
@@ -84,7 +85,14 @@ import { StateProductDetails } from '../src/state/product-details.js';
 import { FrameworkRegistrationCapability } from '../src/registration/framework-registration-manifest.js';
 import { FrameworkRegistrationKind } from '../src/registration/registration-reference.js';
 import { ResourceDetailDescriptors } from '../src/resources/detail-descriptors.js';
+import {
+  resourceDefinitionNameNavigationAddressHandle,
+  resourceDefinitionNameSourceAddressHandle,
+  type FullResourceDefinition,
+} from '../src/resources/resource-definition.js';
 import { ResourceDefinitionKind } from '../src/resources/resource-kind.js';
+import { ResourceTargetReference } from '../src/resources/resource-reference.js';
+import { resourceTargetReferenceKernelReferences } from '../src/resources/structural-references.js';
 import {
   AttributeClassification,
   AttributeClassificationKind,
@@ -117,8 +125,80 @@ import {
 } from '../src/template/structural-references.js';
 import { RuntimeValueConverterApplicationReference } from '../src/template/runtime-value-converter.js';
 import { RuntimeWatcherKind, RuntimeWatcherReference } from '../src/template/runtime-watcher.js';
+import { TypeSystemDetailDescriptors } from '../src/type-system/detail-descriptors.js';
+import {
+  CheckerTypeProjectionOrigin,
+  CheckerTypeReference,
+  CheckerTypeShapeKind,
+} from '../src/type-system/type-shape.js';
 
 describe('product-detail structural references', () => {
+  test('centralizes product-detail, resource-target, and definition-name derivations without losing witnesses', () => {
+    const handles = new KernelHandleFactory('owned-structural-reference-helpers');
+    const detailProduct = handles.product('detail');
+    const detailReferences = kernelProductDetailReferences(
+      ResourceDetailDescriptors.Definition,
+      detailProduct,
+      null,
+    );
+    expectRecordReference(detailReferences, detailProduct);
+    expectExactProductDetailReferences(detailReferences, [[ResourceDetailDescriptors.Definition, detailProduct]]);
+
+    const targetIdentity = handles.identity('target');
+    const targetAddress = handles.address('target');
+    const declarationAddress = handles.address('target-declaration');
+    const typeProduct = handles.product('target-type');
+    const typeSource = handles.address('target-type-source');
+    const target = new ResourceTargetReference(
+      targetIdentity,
+      targetAddress,
+      'Target',
+      new CheckerTypeReference(
+        typeProduct,
+        handles.identity('target-type'),
+        'target-type',
+        'Target',
+        CheckerTypeShapeKind.Class,
+        CheckerTypeProjectionOrigin.TypeChecker,
+        typeSource,
+      ),
+      'src/target',
+      declarationAddress,
+    );
+    const targetReferences = resourceTargetReferenceKernelReferences(target);
+    for (const handle of [targetIdentity, targetAddress, declarationAddress, typeSource]) {
+      expectRecordReference(targetReferences, handle);
+    }
+    expectExactProductDetailReferences(targetReferences, [[TypeSystemDetailDescriptors.TypeShape, typeProduct]]);
+    expect(resourceTargetReferenceKernelReferences(null)).toEqual([]);
+
+    const nameAddress = handles.address('resource-name');
+    const definitionAddress = handles.address('resource-definition');
+    const namedTargetAddress = handles.address('resource-target');
+    const named = {
+      nameSourceAddressHandle: nameAddress,
+      target: { addressHandle: namedTargetAddress },
+      sourceAddressHandle: definitionAddress,
+    } as unknown as FullResourceDefinition;
+    expect(resourceDefinitionNameSourceAddressHandle(named)).toBe(nameAddress);
+    expect(resourceDefinitionNameNavigationAddressHandle(named)).toBe(nameAddress);
+
+    const namedWithoutExactSource = {
+      nameSourceAddressHandle: null,
+      target: { addressHandle: namedTargetAddress },
+      sourceAddressHandle: definitionAddress,
+    } as unknown as FullResourceDefinition;
+    expect(resourceDefinitionNameSourceAddressHandle(namedWithoutExactSource)).toBeNull();
+    expect(resourceDefinitionNameNavigationAddressHandle(namedWithoutExactSource)).toBe(namedTargetAddress);
+
+    const syntaxDefinition = {
+      target: { addressHandle: namedTargetAddress },
+      sourceAddressHandle: definitionAddress,
+    } as unknown as FullResourceDefinition;
+    expect(resourceDefinitionNameSourceAddressHandle(syntaxDefinition)).toBeNull();
+    expect(resourceDefinitionNameNavigationAddressHandle(syntaxDefinition)).toBe(definitionAddress);
+  });
+
   test('projects every compact runtime reference to its exact rich-detail occupancy', () => {
     const handles = new KernelHandleFactory('compact-runtime-structural-references');
     const address = handles.address('source');

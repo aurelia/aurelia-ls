@@ -41,7 +41,7 @@ import {
 import {
   isSemanticAddressRecord,
   isSemanticIdentityRecord,
-  sourceFilePathMatches,
+  sourceFilePathMayMatchFileName,
 } from './source-address.js';
 import {
   countSemanticRuntimeRowsBy,
@@ -1020,7 +1020,7 @@ export class StagedKernelPublicationContext implements KernelPublicationContext,
         .map((address) => [address.handle, address]),
     );
     for (const record of this.records.values()) {
-      if (record instanceof SourceFileAddress && sourceFilePathMatches(record, fileName)) {
+      if (record instanceof SourceFileAddress && sourceFilePathMayMatchFileName(record, fileName)) {
         addresses.set(record.handle, record);
       }
     }

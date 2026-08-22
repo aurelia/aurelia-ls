@@ -1257,7 +1257,7 @@ export interface SemanticRuntimePageCursorProblem {
 }
 
 export interface SemanticRuntimeSourceCursorInput {
-  /** Host-facing source path, absolute or relative to the opened project root. */
+  /** Host-facing source path: absolute, workspace-relative, or project-relative; ambiguous relative aliases are refused. */
   readonly filePath: string;
   /** Zero-based source line. */
   readonly line: number;
@@ -1268,7 +1268,7 @@ export interface SemanticRuntimeSourceCursorInput {
 }
 
 export interface SemanticRuntimeSourceFileInput {
-  /** Host-facing source path, absolute or relative to the opened project root. */
+  /** Host-facing source path: absolute, workspace-relative, or project-relative; ambiguous relative aliases are refused. */
   readonly filePath: string;
 }
 
@@ -1487,7 +1487,7 @@ export interface SemanticRuntimeQueryClaimDisposeRequest {
   readonly scope?: SemanticQueryClaimDisposalScope | null;
   /** Optional project filter; omitted means every retained query-claim graph in the selected scope. */
   readonly projectKey?: string | null;
-  /** Optional source-file epoch filter, absolute or relative to the owning project root. */
+  /** Optional source-file epoch filter using exact absolute, workspace-relative, or project-relative identity. */
   readonly sourceFilePath?: string | null;
   /** Optional source-file epoch filter using the same shape as source-scoped app queries. */
   readonly sourceFile?: SemanticRuntimeSourceFileInput | null;

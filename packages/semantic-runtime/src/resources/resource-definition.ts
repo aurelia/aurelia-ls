@@ -1,4 +1,5 @@
 import type ts from 'typescript';
+import type { AddressHandle } from '../kernel/handles.js';
 import type {
   AttributePatternObservation,
   ResourceAliasObservation,
@@ -136,6 +137,29 @@ export type FullResourceDefinition =
 export type TemplateCompilableResourceDefinition =
   | CustomElementDefinition
   | CustomAttributeDefinition;
+
+/** Exact authored public-name token for a named resource definition, without declaration fallback. */
+export function resourceDefinitionNameSourceAddressHandle(
+  definition: FullResourceDefinition,
+): AddressHandle | null {
+  return 'nameSourceAddressHandle' in definition ? definition.nameSourceAddressHandle : null;
+}
+
+/**
+ * Best navigation/identity witness for a resource's primary runtime name.
+ *
+ * Named definitions prefer their exact name token, then target token, then broad definition carrier. Syntax resources
+ * without a public-name field preserve their historical broad definition-source fallback.
+ */
+export function resourceDefinitionNameNavigationAddressHandle(
+  definition: FullResourceDefinition,
+): AddressHandle | null {
+  return 'nameSourceAddressHandle' in definition
+    ? definition.nameSourceAddressHandle
+      ?? definition.target.addressHandle
+      ?? definition.sourceAddressHandle
+    : definition.sourceAddressHandle;
+}
 
 export function taxonomyResourceKindForDefinition(
   definition: FullResourceDefinition,

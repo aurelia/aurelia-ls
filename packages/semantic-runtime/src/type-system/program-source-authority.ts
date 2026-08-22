@@ -23,9 +23,12 @@ import {
 } from '../kernel/publication.js';
 import { ProvenanceRecord } from '../kernel/provenance.js';
 import {
+  externalizeSourceFileRole,
   inferSourceLanguage,
 } from '../kernel/source-classification.js';
+import { workspaceSourcePathForHostPath } from '../boot/source-ownership.js';
 import { normalizeHostPath } from '../kernel/source-address.js';
+import { canonicalTypeSystemSourcePath } from './source-file-path.js';
 import {
   KernelStoreBatch,
   type KernelStore,
@@ -67,6 +70,7 @@ export class TypeSystemProgramSourceAuthority implements TypeSystemProgramSource
     private readonly store: KernelStore,
     private readonly lifecycle: ComputationLifecycleRegistry,
     private readonly workspaceKey: string,
+    private readonly workspaceRootDir: string | null = null,
   ) {}
 
   sourceFile(
@@ -75,15 +79,25 @@ export class TypeSystemProgramSourceAuthority implements TypeSystemProgramSource
     fileName: string,
     role: SourceFileRole,
   ): TypeSystemProgramSourcePublication {
-    const path = normalizeHostPath(fileName);
-    const existing = this.entriesByPath.get(path) ?? null;
+    const sourceRole = externalizeSourceFileRole(role);
+    const path = this.workspaceRootDir == null
+      ? normalizeHostPath(fileName)
+      : workspaceSourcePathForHostPath(this.workspaceRootDir, fileName);
+    const identityPath = canonicalTypeSystemSourcePath(path);
+    const existing = this.entriesByPath.get(identityPath) ?? null;
     if (existing?.authority.isCurrent() === true) {
+      if (existing.address.role !== sourceRole) {
+        throw new Error(
+          `Checker-only source '${path}' was requested with conflicting project-independent roles `
+          + `'${existing.address.role}' and '${sourceRole}'.`,
+        );
+      }
       return { address: existing.address, records: [] };
     }
 
-    const local = typeSystemProgramSourceLocal(this.workspaceKey, path);
-    const address = typeSystemProgramSourceAddress(this.store, local, this.workspaceKey, path, role);
-    const run = this.lifecycle.begin(typeSystemProgramSourceLocus(this.workspaceKey, path));
+    const local = typeSystemProgramSourceLocal(this.workspaceKey, identityPath);
+    const address = typeSystemProgramSourceAddress(this.store, local, this.workspaceKey, path, sourceRole);
+    const run = this.lifecycle.begin(typeSystemProgramSourceLocus(this.workspaceKey, identityPath));
     run.publish(new KernelPublicationPlan(new KernelStoreBatch(
       typeSystemProgramSourceRecords(this.store, local, address),
       `type-system-program-source:${path}`,
@@ -100,7 +114,7 @@ export class TypeSystemProgramSourceAuthority implements TypeSystemProgramSource
       run.runSequence,
       'type-system-program-source',
     );
-    this.entriesByPath.set(path, new TypeSystemProgramSourceEntry(address, authority));
+    this.entriesByPath.set(identityPath, new TypeSystemProgramSourceEntry(address, authority));
     return { address, records: [] };
   }
 }
@@ -109,8 +123,9 @@ export class TypeSystemProgramSourceAuthority implements TypeSystemProgramSource
 export const projectTypeSystemProgramSources: TypeSystemProgramSourceCatalog = {
   sourceFile(publication, projectKey, fileName, role) {
     const path = normalizeHostPath(fileName);
+    const sourceRole = externalizeSourceFileRole(role);
     const local = typeSystemProgramSourceLocal(projectKey, path);
-    const address = typeSystemProgramSourceAddress(publication, local, projectKey, path, role);
+    const address = typeSystemProgramSourceAddress(publication, local, projectKey, path, sourceRole);
     const existing = publication.read(address.handle);
     return existing instanceof SourceFileAddress
       ? { address: existing, records: [] }

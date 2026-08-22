@@ -1,8 +1,7 @@
 import {
-  EvidenceKind,
   EvidenceRecord,
-  EvidenceRole,
 } from '../kernel/evidence.js';
+import type { EvidenceKind, EvidenceRole } from '../kernel/evidence.js';
 import type {
   AddressHandle,
   EvidenceHandle,
@@ -46,6 +45,8 @@ export interface RouterProductRecordSpec extends RouterIdentityProductRecordSpec
   readonly evidenceKind: EvidenceKind;
   readonly evidenceRoles: readonly EvidenceRole[];
   readonly evidenceSummary: string;
+  /** Evidence already owned by exact causal input products and aggregated into this product provenance. */
+  readonly additionalProvenanceEvidenceHandles?: readonly EvidenceHandle[];
 }
 
 export interface RouterOpenSeamRecordSpec {
@@ -99,7 +100,12 @@ function evidenceBackedProductRecords(
       spec.evidenceSummary,
       spec.sourceAddressHandle,
     ),
-    new ProvenanceRecord(spec.provenanceHandle, [spec.evidenceHandle]),
+    new ProvenanceRecord(spec.provenanceHandle, [
+      ...new Set([
+        spec.evidenceHandle,
+        ...(spec.additionalProvenanceEvidenceHandles ?? []),
+      ]),
+    ]),
     ...productEnvelopeRecords(store, spec, identity),
   ];
 }

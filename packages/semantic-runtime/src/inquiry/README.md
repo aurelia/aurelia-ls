@@ -163,8 +163,9 @@ project-wide answers and sibling-file answers can depend on a changed resource, 
 This keeps file/cursor invalidation policy behind the claim graph instead of making every transport adapter scan
 retained answer history or understand public query keys.
 Runtime-level routed answers now use the same source-epoch discipline. `SemanticRuntime.answerAppQuery(...)` and
-`answerAppQueries(...)` canonicalize source-file loci to project-relative paths before they compute query keys, locus
-keys, and epoch keys, then `SemanticRuntime.disposeQueryClaims(...)` can prune both runtime-level routed claims and
+`answerAppQueries(...)` resolve exact source aliases, refuse ambiguity or mixed-project batches, and canonicalize
+admitted source-file loci to workspace-relative paths before they compute query keys, locus keys, and epoch keys. Then
+`SemanticRuntime.disposeQueryClaims(...)` can prune both runtime-level routed claims and
 cached-app claims for a project or source file. That method intentionally disposes only query outcomes; retained app
 products remain an app-generation concern. Source/config events advance `SemanticRuntimeProjectInputAuthority`, which
 revokes the old app generation and causes the next request to replace it; `clearAnalysisCache()` is an explicit

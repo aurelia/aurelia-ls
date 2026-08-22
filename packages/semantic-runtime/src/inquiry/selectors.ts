@@ -105,17 +105,17 @@ function resolveSourceFileSelector(
   store: KernelStore,
   selector: SourceFileSelector,
 ): InquiryAnswer<InquiryLocus, InquirySelector> {
-  const matches = store.readSourceFileAddressesByFileName(selector.filePath);
+  const resolution = store.resolveSourceFileAddressByFileName(selector.filePath);
 
-  if (matches.length === 0) {
+  if (resolution.kind === 'absent') {
     return miss(
       new SourceFileInquiryLocus(selector.filePath),
       selector,
       'No admitted source file matched the selected path.',
     );
   }
-  if (matches.length > 1) {
-    const continuations = matches.map((match) =>
+  if (resolution.kind === 'ambiguous') {
+    const continuations = resolution.candidates.map((match) =>
       new InquiryContinuation(
         InquiryContinuationKind.SelectSourceFile,
         `Narrow to admitted source file ${match.path}.`,
@@ -135,15 +135,7 @@ function resolveSourceFileSelector(
     });
   }
 
-  const match = matches[0];
-  if (match === undefined) {
-    return miss(
-      new SourceFileInquiryLocus(selector.filePath),
-      selector,
-      'No admitted source file matched the selected path.',
-    );
-  }
-  return hit(new SourceFileInquiryLocus(match.path, match.handle), selector);
+  return hit(new SourceFileInquiryLocus(resolution.source.path, resolution.source.handle), selector);
 }
 
 function resolveSourceCursorSelector(

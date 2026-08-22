@@ -17,7 +17,6 @@ import type { KernelPublicationContext } from '../kernel/publication.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import {
   sourceFileAddressForAddress,
-  sourcePathMatchesFileName,
 } from '../kernel/source-address.js';
 import { TypeSystemProductDetails } from '../type-system/product-details.js';
 import type { CustomAttributeDefinition } from '../resources/custom-attribute-definition.js';
@@ -73,7 +72,6 @@ export function readControllerActivationViewFactoryResolveSites(
   }
   return shape.carrier.declarations.flatMap((declaration) =>
     ts.isClassDeclaration(declaration)
-      && sourcePathMatchesFileName(definitionSourceFile.path, declaration.getSourceFile().fileName)
       ? readClassActivationViewFactoryResolveSites(
         publication,
         definitionSourceFile.handle,

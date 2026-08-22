@@ -409,6 +409,43 @@ describe("computation lifecycle", () => {
     expect(store.read(ownedHandle)).toBe(owned1);
   });
 
+  test("keeps suffixes candidate-only and resolves only exact source-address identity", () => {
+    const store = new KernelStore("source-address-resolution-tiers");
+    const root = new SourceFileAddress(
+      store.handles.address("source:root"),
+      "root",
+      "src/shared.ts",
+      SourceLanguage.TypeScript,
+    );
+    const first = new SourceFileAddress(
+      store.handles.address("source:first"),
+      "first",
+      "packages/first/src/shared.ts",
+      SourceLanguage.TypeScript,
+    );
+    const second = new SourceFileAddress(
+      store.handles.address("source:second"),
+      "second",
+      "packages/second/src/shared.ts",
+      SourceLanguage.TypeScript,
+    );
+    store.commit(new KernelStoreBatch([root, first, second], "source-resolution-tiers"));
+
+    expect(store.resolveSourceFileAddressByFileName("src/shared.ts")).toEqual({
+      kind: "resolved",
+      source: root,
+    });
+    expect(new Set(store.readSourceFileAddressesByFileName("shared.ts").map((candidate) => candidate.handle)))
+      .toEqual(new Set([
+      root.handle,
+      first.handle,
+      second.handle,
+    ]));
+    expect(store.resolveSourceFileAddressByFileName("shared.ts")).toEqual({ kind: "absent" });
+    expect(store.resolveSourceFileAddressByFileName("invented/src/shared.ts")).toEqual({ kind: "absent" });
+    expect(store.readBestSourceFileAddressForFileName("shared.ts")).toBeNull();
+  });
+
   test("detaches durable domain reads from finished computation candidates", () => {
     const store = new KernelStore("computation-durable-domain-read-projection");
     const lifecycle = new ComputationLifecycleRegistry(store);

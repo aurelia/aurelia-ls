@@ -80,8 +80,9 @@ export class FrameworkSupportAuthority implements SemanticRuntimeSupport {
     private readonly store: KernelStore,
     private readonly lifecycle: ComputationLifecycleRegistry,
     workspaceKey: string,
+    workspaceRootDir: string | null = null,
   ) {
-    this.programSources = new TypeSystemProgramSourceAuthority(store, lifecycle, workspaceKey);
+    this.programSources = new TypeSystemProgramSourceAuthority(store, lifecycle, workspaceKey, workspaceRootDir);
   }
 
   sourceFile(

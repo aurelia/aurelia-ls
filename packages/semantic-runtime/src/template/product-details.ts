@@ -7,6 +7,7 @@ import type { KernelRecordHandle, ProductHandle } from '../kernel/handles.js';
 import {
   kernelFieldProvenanceReferences,
   kernelProductDetailReference,
+  kernelProductDetailReferences as detailReferences,
   kernelRecordReferences,
   mergeKernelDetailReferences,
   type KernelDetailReferenceClosure,
@@ -26,8 +27,10 @@ import type {
   BindableDefinitionReference,
 } from '../resources/bindable-definition.js';
 import { ResourceDetailDescriptors } from '../resources/detail-descriptors.js';
-import type { ResourceTargetReference } from '../resources/resource-reference.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
+import {
+  resourceTargetReferenceKernelReferences as resourceTargetReferenceReferences,
+} from '../resources/structural-references.js';
 import type {
   WatchCallbackDefinition,
   WatchExpressionDefinition,
@@ -243,21 +246,11 @@ export const TemplateProductDetails = {
   RuntimeBindingSourceOperation: defineProductDetailSlot(TemplateDetailDescriptors.RuntimeBindingSourceOperation, referencesForRuntimeBindingSourceOperation),
 } as const;
 
-function detailReferences(
-  slot: ProductDetailDescriptor<unknown>,
-  handle: ProductHandle | null | undefined,
-): KernelDetailReferenceClosure {
-  return mergeKernelDetailReferences(
-    kernelRecordReferences(handle),
-    [kernelProductDetailReference(slot, handle)],
-  );
-}
-
 function detailsReferences(
   slot: ProductDetailDescriptor<unknown>,
   handles: readonly (ProductHandle | null | undefined)[],
 ): KernelDetailReferenceClosure {
-  return mergeKernelDetailReferences(...handles.map((handle) => detailReferences(slot, handle)));
+  return detailReferences(slot, ...handles);
 }
 
 function productIdentityAddressReferences(
@@ -300,21 +293,6 @@ function controllerReferenceReferences(
         controller.identityHandle,
         controller.addressHandle,
         ConfigurationDetailDescriptors.Controller,
-      );
-}
-
-function resourceTargetReferenceReferences(
-  target: ResourceTargetReference | null,
-): KernelDetailReferenceClosure {
-  return target == null
-    ? mergeKernelDetailReferences()
-    : mergeKernelDetailReferences(
-        kernelRecordReferences(
-          target.identityHandle,
-          target.addressHandle,
-          target.declarationSourceAddressHandle,
-        ),
-        checkerTypeReferenceKernelReferences(target.targetType),
       );
 }
 
@@ -1543,6 +1521,19 @@ function referencesForRuntimeBindingTargetAccess(
     runtimeBindingReferenceReferences(access.binding),
     htmlNodeReferenceReferences(access.targetNode),
     runtimeControllerReferences(access.targetControllerProductHandle),
+    detailReferences(
+      ObservationDetailDescriptors.ComputedObserverSource,
+      access.observerSourceProductHandle,
+    ),
+    kernelRecordReferences(
+      access.observerSourceIdentityHandle,
+      access.observerSourceAddressHandle,
+      ...access.objectObservationAdapters.flatMap((adapter) => [
+        adapter.sourceAddressHandle,
+        adapter.provenanceHandle,
+      ]),
+      ...access.selectionProvenance.allHandles(),
+    ),
     checkerTypeReferenceKernelReferences(access.targetType),
     checkerTypeReferenceKernelReferences(access.propertyType),
     kernelFieldProvenanceReferences(access.fieldProvenance),

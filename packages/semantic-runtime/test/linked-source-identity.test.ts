@@ -5,7 +5,10 @@ import { fileURLToPath } from 'node:url';
 
 import { afterEach, describe, expect, test } from 'vitest';
 
-import { semanticSourceFacetsForReference } from '../src/api/source-reference.js';
+import {
+  semanticSourceFacetsForReference,
+  sourceReferenceForProjectTypeScriptSpan,
+} from '../src/api/source-reference.js';
 import {
   SemanticAppQueryKind,
   type SemanticResourceDefinitionsResult,
@@ -17,6 +20,7 @@ import {
   ProjectSourceOwnershipIndex,
   projectOwnsSourceReference,
 } from '../src/boot/source-ownership.js';
+import { admitSourceFile } from '../src/boot/boot-workspace.js';
 import { aureliaAppProjectEvaluationProfile } from '../src/configuration/aurelia-project-evaluation.js';
 import { InquirySourceFacet } from '../src/inquiry/continuation-intent.js';
 import {
@@ -25,6 +29,7 @@ import {
 } from '../src/kernel/address.js';
 import { externalizeSourceFileRole } from '../src/kernel/source-classification.js';
 import { createSemanticRuntime } from '../src/api/runtime.js';
+import { KernelStore } from '../src/kernel/store.js';
 import { ensureSourceFileAddressForCheckerNode } from '../src/type-system/declaration-source.js';
 import { isDefaultLibrarySourceFile } from '../src/type-system/source-file-path.js';
 
@@ -472,7 +477,7 @@ describe('linked source identity and ownership', () => {
     const project = {
       workspaceRootDir,
       rootDir,
-      sourceOwnership: new ProjectSourceOwnershipIndex(rootDir, sourceFiles as never),
+      sourceOwnership: new ProjectSourceOwnershipIndex(workspaceRootDir, rootDir, sourceFiles as never),
     };
 
     expect(projectOwnsSourceReference(project, {
@@ -487,5 +492,31 @@ describe('linked source identity and ownership', () => {
     })).toBe(false);
     expect(() => project.sourceOwnership.admissionForHostPath('src/main.ts'))
       .toThrow(/absolute host path/);
+  });
+
+  test('uses one absolute public identity for admitted sources outside the workspace', () => {
+    const workspaceRootDir = path.resolve(tmpdir(), 'semantic-workspace');
+    const rootDir = path.join(workspaceRootDir, 'packages/app');
+    const externalFile = path.resolve(workspaceRootDir, '../linked-kit/src/index.ts');
+    const store = new KernelStore('outside-workspace-source-identity');
+    const admission = admitSourceFile(
+      store,
+      workspaceRootDir,
+      rootDir,
+      'app',
+      { path: externalFile, role: SourceFileRole.ExternalSource },
+    );
+    const address = store.readAddress(admission.addressHandle);
+    expect(address).toBeInstanceOf(SourceFileAddress);
+    if (!(address instanceof SourceFileAddress)) throw new Error('Expected admitted source-file address.');
+    expect(path.isAbsolute(address.path)).toBe(true);
+
+    const project = {
+      workspaceRootDir,
+      rootDir,
+      sourceOwnership: new ProjectSourceOwnershipIndex(workspaceRootDir, rootDir, [admission]),
+    };
+    const checkerSource = sourceReferenceForProjectTypeScriptSpan(project, externalFile, 0, 1);
+    expect(checkerSource.path).toBe(address.path);
   });
 });

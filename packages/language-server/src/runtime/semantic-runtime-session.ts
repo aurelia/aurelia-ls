@@ -2,7 +2,6 @@ import { MessageType, type Position } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
-import path from "node:path";
 import {
   isSemanticRuntimeAnalysisCurrentnessError,
   type FrameworkRegistrationCapability,
@@ -12,7 +11,6 @@ import {
   semanticWorkspaceDescriptorForRuntimeOptions,
   semanticWorkspaceDescriptorKey,
   appDiagnosticPresentation,
-  canonicalTypeSystemPath,
   InquiryContinuationKind,
   SemanticRuntimeProjectInputAuthority,
   SemanticRuntimeProjectInputChange,
@@ -43,7 +41,6 @@ import {
   type SemanticAuthoredSourceOwnershipResult,
   type SemanticProjectCandidateSummary,
   type SemanticProjectConfigurationDiagnosticsResult,
-  type SemanticSourceFilesResult,
   type SemanticTemplateResourceAvailabilityResult,
   type SemanticTemplateInlayHintsResult,
   type SemanticTemplateCompletionResult,
@@ -1422,25 +1419,9 @@ export class SemanticRuntimeLspSession {
     projects: readonly SemanticProjectCandidateSummary[],
     token: SemanticRuntimeLspRequestToken,
   ): Promise<readonly SemanticProjectCandidateSummary[]> {
-    const runtime = this.runtimeForOperation(token);
-    const requested = canonicalTypeSystemPath(this.documentHostPath(document));
-    const owners: SemanticProjectCandidateSummary[] = [];
-    for (const project of projects) {
-      const sourceFiles = await this.collectRows<SemanticSourceFilesResult>(
-        runtime,
-        SemanticAppQueryKind.SourceFiles,
-        500,
-        { projectKey: project.projectKey },
-        token,
-      );
-      if (sourceFiles.value.rows.some((row) => {
-        const sourcePath = path.isAbsolute(row.path) ? row.path : path.join(project.rootDir, row.path);
-        return canonicalTypeSystemPath(sourcePath) === requested;
-      })) {
-        owners.push(project);
-      }
-    }
-    return owners;
+    const ownership = await this.authoredSourceOwnership(document.uri, token);
+    const ownerKeys = new Set(ownership.value.owners.map((owner) => owner.projectKey));
+    return projects.filter((project) => ownerKeys.has(project.projectKey));
   }
 
   private async templateResourceAvailability(

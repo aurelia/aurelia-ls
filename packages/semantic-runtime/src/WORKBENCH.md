@@ -268,9 +268,9 @@ source-file selection keeps the authoring compiler world tied to the file being 
 remains a pressure/fallback budget, not the durable API shape. This split exists because external monorepo sampling
 showed hundreds of recognized custom-element templates with no app-root compiler world, while compiling all of them at
 once can exhaust the Node heap. The durable direction is file/locus-budgeted authoring opens, not pretending every
-recognized component is part of the hydrated app topology. Source-file address lookup now indexes suffixes of admitted
-source paths, so project-relative editor paths can resolve to the same source-file addresses as workspace-relative or
-absolute host paths. `openApp({ sourceFilePath, includeAuthoringTemplates: true })` now uses the source file to select
+recognized component is part of the hydrated app topology. `ProjectSourceOwnershipIndex` joins each admission's exact
+absolute, workspace-relative, and project-relative aliases; conflicting relative domains remain ambiguous rather than
+choosing a longer suffix. `openApp({ sourceFilePath, includeAuthoringTemplates: true })` now uses the source file to select
 the owning project when the caller does not already know a monorepo project key, and uses that file as the default
 authoring template selection.
 Direct cursor-locus API calls (`templateCompletions(...)` / `templateCursorInfo(...)`) have a slightly different
@@ -566,10 +566,10 @@ shared message model.
 
 Resource-recognition performance pressure can be a proxy for lower-level TypeChecker provenance cost. A large-root
 profile showed `kernel-emission` dominating while named/syntax recognition and convergence were cheap; the root cause
-was checker type projection scanning all store addresses for every projected member declaration. `KernelStore` now owns
-a source-file-address suffix index via `readBestSourceFileAddressForFileName(...)`, so declaration provenance lookup is
-indexed and shared by every checker projection lane. If this pressure returns, profile below the resource-recognition
-label before tuning recognizers or weakening source provenance.
+was checker type projection scanning all store addresses for every projected member declaration. Boot ownership now
+provides the exact admitted address handle directly; the kernel suffix index remains candidate enumeration only and
+cannot authorize declaration provenance or inquiry selection. If this pressure returns, profile below the
+resource-recognition label before tuning recognizers or weakening source provenance.
 Checker-backed declaration provenance also needs to handle Program files that were not boot-admitted as app sources.
 `type-system/declaration-source.ts` owns that boundary: it first reuses admitted source-file addresses and otherwise
 materializes a Program-source file address for declaration navigation. Keep this path source/provenance-oriented only;

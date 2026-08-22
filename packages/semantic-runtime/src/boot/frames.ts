@@ -144,7 +144,7 @@ export class ProjectBootFrame {
   readonly compilerOptions: ProjectCompilerOptionsResult;
   /** Authored project membership; dependency resolution may still read sources outside this boundary. */
   readonly authoredSources: AuthoredSourceBoundary;
-  /** Exact boot admissions indexed once by canonical physical source identity. */
+  /** Exact boot admissions indexed once by canonical logical host and declared relative aliases. */
   readonly sourceOwnership: ProjectSourceOwnershipIndex;
   readonly observedRevision: string;
 
@@ -176,7 +176,7 @@ export class ProjectBootFrame {
       ...this.baseExcludedSourceRootDirs,
       ...this.projectConfiguration.excludedSourceRootDirs,
     ]);
-    this.sourceOwnership = new ProjectSourceOwnershipIndex(rootDir, sourceFiles);
+    this.sourceOwnership = new ProjectSourceOwnershipIndex(workspaceRootDir, rootDir, sourceFiles);
     this.compilerOptions = buildProjectCompilerOptionsResult(
       inputGeneration,
       rootDir,

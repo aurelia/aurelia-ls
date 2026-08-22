@@ -3,6 +3,7 @@ import type {
   AddressHandle,
   IdentityHandle,
   ProductHandle,
+  ProvenanceHandle,
 } from '../kernel/handles.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
 import type { ContainerReference } from '../di/container-reference.js';
@@ -103,6 +104,12 @@ export const enum RouteConfigFieldStateKind {
   Closed = 'closed',
   Referential = 'referential',
   Open = 'open',
+}
+
+/** Whether one effective RouterOptions value came from the framework default or an accepted authored contribution. */
+export const enum RouterOptionsFieldStateKind {
+  Defaulted = 'defaulted',
+  Configured = 'configured',
 }
 
 /** How far a router topology product has progressed toward live navigation state. */
@@ -254,6 +261,22 @@ export type RouterOptionsField =
   | 'treatQueryAsParameters'
   | 'useEagerLoading'
   | 'source';
+
+export type RouterOptionsValueField = Exclude<
+  RouterOptionsField,
+  'appRoot' | 'container' | 'registration' | 'configurationValue' | 'source'
+>;
+
+/** Exact winning contribution, or explicit framework-default state, for one effective RouterOptions value. */
+export class RouterOptionsFieldState {
+  constructor(
+    readonly field: RouterOptionsValueField,
+    readonly stateKind: RouterOptionsFieldStateKind,
+    readonly winningContributionProductHandle: ProductHandle | null,
+    readonly winningContributionIdentityHandle: IdentityHandle | null,
+    readonly sourceAddressHandle: AddressHandle | null,
+  ) {}
+}
 
 export type RouterServiceTokenField =
   | 'friendlyName'
@@ -435,6 +458,12 @@ export class ViewportFieldState {
     readonly sourceAddressHandle: AddressHandle | null,
     readonly openReason: string | null = null,
     readonly openReasonKinds: readonly OpenSeamReasonKind[] = [],
+    /** Generated instruction whose retained attribute reference supplied this field. */
+    readonly sourceInstructionProductHandle: ProductHandle | null = null,
+    /** Readable authored HtmlAttribute product that supplied the exact value witness. */
+    readonly sourceAttributeProductHandle: ProductHandle | null = null,
+    /** Exact authored attribute-value provenance, absent when the lineage is only a carrier. */
+    readonly sourceProvenanceHandle: ProvenanceHandle | null = null,
   ) {}
 }
 
@@ -705,7 +734,11 @@ export class RouterOptionsModel {
     readonly appRoot: AppRootReference,
     readonly container: ContainerReference,
     readonly registrationProductHandle: ProductHandle,
+    readonly registrationIdentityHandle: IdentityHandle,
     readonly registrationSourceAddressHandle: AddressHandle | null,
+    /** Runtime configuration/registry value spent by this registration, when materialized. */
+    readonly configurationValueProductHandle: ProductHandle | null,
+    readonly configurationValueIdentityHandle: IdentityHandle | null,
     readonly configurationValueSourceAddressHandle: AddressHandle | null,
     readonly basePath: string | null,
     readonly useUrlFragmentHash: boolean | null,
@@ -716,6 +749,9 @@ export class RouterOptionsModel {
     readonly restorePreviousRouteTreeOnError: boolean | null,
     readonly treatQueryAsParameters: boolean | null,
     readonly useEagerLoading: boolean | null,
+    /** Complete configured/defaulted state with exact winning contribution identity for every option field. */
+    readonly fieldStates: readonly RouterOptionsFieldState[],
+    /** Legacy contribution representative for row navigation; never used as field-level causal authority. */
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<RouterOptionsField>[] = [],
   ) {}

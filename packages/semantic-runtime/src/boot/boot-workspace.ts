@@ -43,6 +43,7 @@ import {
   type ResolvedSemanticSourceWorld,
   type ResolvedSemanticSourceWorldProject,
 } from './source-world.js';
+import { workspaceSourcePathForHostPath } from './source-path.js';
 
 function normalizePathForProject(rootDir: string, path: string): string {
   const normalized = isAbsolute(path)
@@ -323,9 +324,10 @@ function sourceFileAdmissionPaths(
   const projectPath = normalizePathForProject(projectRootDir, source.path);
   const language = source.language ?? inferSourceLanguage(projectPath);
   const role = source.role ?? inferSourceFileRole(projectPath);
-  const workspacePath = normalizePathForProject(workspaceRootDir, isAbsolute(source.path)
+  const sourceHostPath = isAbsolute(source.path)
     ? source.path
-    : join(projectRootDir, projectPath));
+    : join(projectRootDir, projectPath);
+  const workspacePath = workspaceSourcePathForHostPath(workspaceRootDir, sourceHostPath);
   return new SourceFileAdmissionPaths(projectPath, workspacePath, language, role);
 }
 

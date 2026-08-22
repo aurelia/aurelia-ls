@@ -1,5 +1,6 @@
 import path from 'node:path';
 import ts from 'typescript';
+import type { ProjectBootFrame } from '../boot/frames.js';
 import {
   projectSourceAdmissionForHostPath,
   semanticSourceReferenceHostPath,
@@ -8,7 +9,6 @@ import type { KernelStore } from '../kernel/store.js';
 import { SourceFileRole } from '../kernel/address.js';
 import {
   AuthoredSourceTextCache,
-  authoredSourceHostPathCandidates,
 } from '../kernel/authored-source-text.js';
 import type {
   AddressHandle,
@@ -30,6 +30,7 @@ import {
   FrameworkCapabilityAvailabilityState,
   type FrameworkCapabilityDemand,
 } from '../framework/capability-demand.js';
+import { isFrameworkRegistrationCapability } from '../registration/framework-registration-manifest.js';
 import {
   aureliaEntrypointRegistrationExpressionText,
 } from '../source-plan/aurelia-entrypoint-source-plan.js';
@@ -56,8 +57,8 @@ import {
   semanticSourceReferenceMatchesFilePath,
   semanticSourceReferenceContainsFileOffset,
   sourceReferenceForParserSpan,
-  sourceReferenceForTypeScriptSpan,
-  sourceReferenceForTsNode,
+  sourceReferenceForProjectTsNode,
+  sourceReferenceForProjectTypeScriptSpan,
 } from './source-reference.js';
 import {
   answer,
@@ -156,6 +157,8 @@ import {
   resourceKindsShareRegistrationIdentity,
 } from '../resources/resource-kind.js';
 import {
+  resourceDefinitionNameNavigationAddressHandle,
+  resourceDefinitionNameSourceAddressHandle,
   taxonomyResourceKindForDefinition,
   type FullResourceDefinition,
 } from '../resources/resource-definition.js';
@@ -296,7 +299,8 @@ export class SemanticAppTemplateQueries {
     const tsUsageRows = relatedMemberRead?.family == null
       ? []
       : typeScriptRelatedMemberReferenceRows(
-          relatedMemberRead.family,
+        this.emission.project,
+        relatedMemberRead.family,
           context.selectedMemberName,
           context.targetSource,
         );
@@ -356,7 +360,7 @@ export class SemanticAppTemplateQueries {
         null,
       );
     }
-    const { context, activeRow, activeSource } = selected;
+    const { context, activeSource } = selected;
 
     if (context.renameSurface === TemplateRenameSurface.UnsupportedResource) {
       return templateRenameUnavailable(
@@ -477,10 +481,10 @@ export class SemanticAppTemplateQueries {
 
     const provenTypeScriptEdits = relatedMemberRead?.family == null
       ? []
-      : typeScriptRelatedMemberRenameEdits(relatedMemberRead.family, newName);
+      : typeScriptRelatedMemberRenameEdits(this.emission.project, relatedMemberRead.family, newName);
     const bindableConventionCallbackEdits = uniqueTemplateRenameEditRows(
       callbackFamilyReads.flatMap((read) =>
-        typeScriptRelatedMemberRenameEdits(read.family!, `${newName}Changed`)
+        typeScriptRelatedMemberRenameEdits(this.emission.project, read.family!, `${newName}Changed`)
       ),
     );
     // Reference rows carry authored token sources, so each edit replaces exactly the token.
@@ -534,23 +538,19 @@ export class SemanticAppTemplateQueries {
     if (exact?.path == null || exact.start == null || exact.end == null) {
       return null;
     }
-    const authored = this.sourceTextCache.readFirst(authoredSourceHostPathCandidates(
-      this.workspaceRootDir,
-      this.projectRootDir,
-      exact.path,
-    ));
+    const hostPath = semanticSourceReferenceHostPath(this.workspaceRootDir, exact);
+    const authored = hostPath == null ? null : this.sourceTextCache.read(hostPath);
     return authored == null || exact.start < 0 || exact.end < exact.start || exact.end > authored.text.length
       ? null
       : authored.text.slice(exact.start, exact.end);
   }
 
   private queryWithResolvedCursor(query: SemanticAppQuery): SemanticAppQuery {
-    if (query.cursor == null || query.cursor.offset != null) {
+    if (query.cursor == null) {
       return query;
     }
     const resolution = resolveSemanticSourceCursor(
-      this.workspaceRootDir,
-      this.projectRootDir,
+      this.emission.project,
       query.cursor,
       this.emission.project.inputGeneration.host,
     );
@@ -677,9 +677,9 @@ export class SemanticAppTemplateQueries {
           templateRenameFromTypeScriptNewText(row, newName),
         )
       );
-    const typeScriptEdits = typeScriptRelatedMemberRenameEdits(relatedMemberRead.family!, newName);
+    const typeScriptEdits = typeScriptRelatedMemberRenameEdits(this.emission.project, relatedMemberRead.family!, newName);
     const callbackEdits = uniqueTemplateRenameEditRows(callbackFamilyReads.flatMap((read) =>
-      typeScriptRelatedMemberRenameEdits(read.family!, `${newName}Changed`)
+      typeScriptRelatedMemberRenameEdits(this.emission.project, read.family!, `${newName}Changed`)
     ));
     const typeScriptLikeEdits = uniqueTemplateRenameEditRows([...typeScriptEdits, ...callbackEdits]);
     const uniqueEdits = [...uniqueTemplateRenameEditRows([...typeScriptLikeEdits, ...aureliaEdits])]
@@ -1647,7 +1647,7 @@ export class SemanticAppTemplateQueries {
       return null;
     }
     const { activeIdentifier, activeSource, targetSymbol } = symbolCursor;
-    const targetSources = declarationSourcesForSymbol(targetSymbol);
+    const targetSources = declarationSourcesForSymbol(this.emission.project, targetSymbol);
     const effectiveTargetSources = targetSources.length === 0 && activeSource != null
       ? [activeSource]
       : targetSources;
@@ -1704,11 +1704,13 @@ export class SemanticAppTemplateQueries {
     if (cursor == null) {
       return null;
     }
-    const sourceFile = this.emission.typeSystem.readProgramSourceFileByHostPath(
-      path.isAbsolute(cursor.filePath)
+    const pathResolution = this.emission.project.sourceOwnership.resolveWorkspacePath(cursor.filePath);
+    const hostPath = pathResolution.kind === 'resolved'
+      ? pathResolution.source.hostPath
+      : path.isAbsolute(cursor.filePath)
         ? path.resolve(cursor.filePath)
-        : path.resolve(this.emission.project.rootDir, cursor.filePath),
-    );
+        : path.resolve(this.emission.project.workspaceRootDir, cursor.filePath);
+    const sourceFile = this.emission.typeSystem.readProgramSourceFileByHostPath(hostPath);
     if (sourceFile == null) {
       return null;
     }
@@ -1721,7 +1723,9 @@ export class SemanticAppTemplateQueries {
     if (targetSymbol == null) {
       return null;
     }
-    const activeSource = semanticExactSourceReference(sourceReferenceForTsNode(activeIdentifier));
+    const activeSource = semanticExactSourceReference(
+      sourceReferenceForProjectTsNode(this.emission.project, activeIdentifier),
+    );
     return activeSource == null ? null : { activeIdentifier, activeSource, targetSymbol };
   }
 }
@@ -1946,13 +1950,14 @@ function authoredResourceReferenceDeclarations(
     }
     return declarations.sort(resourceReferenceDeclarationOrder);
   }
-  if (definition.nameSourceAddressHandle != null) {
-    const source = semanticExactSourceReference(describeAddress(store, definition.nameSourceAddressHandle));
+  const definitionNameSourceAddressHandle = resourceDefinitionNameSourceAddressHandle(definition);
+  if (definitionNameSourceAddressHandle != null) {
+    const source = semanticExactSourceReference(describeAddress(store, definitionNameSourceAddressHandle));
     if (source != null) {
       declarations.push({
         name: definition.name,
         source,
-        sourceAddressHandle: definition.nameSourceAddressHandle,
+        sourceAddressHandle: definitionNameSourceAddressHandle,
         declarationKind: SemanticTemplateResourceDeclarationKind.PrimaryName,
       });
     }
@@ -2173,10 +2178,11 @@ function frameworkCapabilityDemandForDiagnostic(
   diagnostic: SemanticTemplateDiagnosticRow,
   actionSource: SemanticSourceReference | null,
 ): FrameworkCapabilityDemand | null {
-  const requiredCapability = diagnostic.suggestion?.targetMemberName ?? diagnostic.missingInput;
-  if (requiredCapability == null) {
+  const requiredCapabilityValue = diagnostic.suggestion?.targetMemberName ?? diagnostic.missingInput;
+  if (!isFrameworkRegistrationCapability(requiredCapabilityValue)) {
     return null;
   }
+  const requiredCapability = requiredCapabilityValue;
   const demands = emission.capabilityDemands.readDemands();
   const identified = diagnostic.diagnosticIdentityHandle == null
     ? null
@@ -2785,13 +2791,14 @@ function typeScriptRelatedMemberFamilyRead(
 }
 
 function typeScriptRelatedMemberReferenceRows(
+  project: ProjectBootFrame,
   family: TypeSystemRelatedMemberFamily,
   selectedMemberName: string,
   targetSource: SemanticSourceReference,
 ): readonly SemanticTemplateReferenceRow[] {
   return family.references
     .filter((site) => !sourceReferencesMatchExactSpan(
-      sourceReferenceForTypeScriptSpan(site.fileName, site.start, site.end, site.sourceFileRole),
+      sourceReferenceForProjectTypeScriptSpan(project, site.fileName, site.start, site.end, site.sourceFileRole),
       targetSource,
     ))
     .map((site) => ({
@@ -2802,18 +2809,19 @@ function typeScriptRelatedMemberReferenceRows(
       definitionName: null,
       bindingKind: null,
       dependencyKinds: [],
-      source: sourceReferenceForTypeScriptSpan(site.fileName, site.start, site.end, site.sourceFileRole),
+      source: sourceReferenceForProjectTypeScriptSpan(project, site.fileName, site.start, site.end, site.sourceFileRole),
       targetSource,
     }));
 }
 
 function typeScriptRelatedMemberRenameEdits(
+  project: ProjectBootFrame,
   family: TypeSystemRelatedMemberFamily,
   newName: string,
 ): readonly SemanticTemplateRenameEditRow[] {
   return uniqueTemplateRenameEditRows(family.rename.sites.map((site) => templateRenameEditRow(
     SemanticTemplateRenameEditKind.TypeScriptReference,
-    sourceReferenceForTypeScriptSpan(site.fileName, site.start, site.end, site.sourceFileRole),
+    sourceReferenceForProjectTypeScriptSpan(project, site.fileName, site.start, site.end, site.sourceFileRole),
     site.text,
     `${site.prefixText ?? ''}${newName}${site.suffixText ?? ''}`,
   )));
@@ -2879,11 +2887,12 @@ function templateRenameSurfaceForResourceKind(
 }
 
 function declarationSourcesForSymbol(
+  project: ProjectBootFrame,
   symbol: ts.Symbol,
 ): readonly SemanticSourceReference[] {
   return (symbol.declarations ?? [])
     .map((declaration) => declarationNameNode(declaration) ?? declaration)
-    .map((node) => semanticExactSourceReference(sourceReferenceForTsNode(node)))
+    .map((node) => semanticExactSourceReference(sourceReferenceForProjectTsNode(project, node)))
     .filter((source): source is SemanticSourceReference => source != null);
 }
 
@@ -3579,11 +3588,7 @@ function bindingCommandExecutableMatchesTarget(
     : store.productDetails.read(ResourceProductDetails.Definition, command.definitionProductHandle);
   const definitionSourceAddressHandle = definition == null
     ? command.sourceAddressHandle
-    : 'nameSourceAddressHandle' in definition
-      ? definition.nameSourceAddressHandle
-        ?? definition.target.addressHandle
-        ?? definition.sourceAddressHandle
-      : definition.sourceAddressHandle;
+    : resourceDefinitionNameNavigationAddressHandle(definition);
   return resourceIdentityMatchesTarget(
     store,
     ResourceDefinitionKind.BindingCommand,
@@ -3674,11 +3679,7 @@ function visibleResourceMatchesTarget(
   const definition = readVisibleTemplateResourceDefinition(store, resource);
   const definitionSourceAddressHandle = definition == null
     ? null
-    : 'nameSourceAddressHandle' in definition
-      ? definition.nameSourceAddressHandle
-        ?? definition.target.addressHandle
-        ?? definition.sourceAddressHandle
-      : definition.sourceAddressHandle;
+    : resourceDefinitionNameNavigationAddressHandle(definition);
   return resourceIdentityMatchesTarget(
     store,
     resource.resourceKind,

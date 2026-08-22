@@ -104,7 +104,11 @@ assert.deepEqual(
   ],
 );
 const tsUsageRow = withoutDeclaration.value.rows.find((row) => row.referenceKind === 'typescript-usage');
-assert.ok(samePath(tsUsageRow.source?.path ?? '', viewModelPath), 'TS usage row should point at the view-model file.');
+assert.equal(
+  tsUsageRow.source?.path?.replace(/\\/g, '/'),
+  'src/app.ts',
+  'Owned TS usage rows should use the workspace-relative public source authority.',
+);
 assert.equal(tsUsageRow.source?.start, tsUsageStart);
 assert.equal(tsUsageRow.source?.end, tsUsageStart + 'title'.length);
 

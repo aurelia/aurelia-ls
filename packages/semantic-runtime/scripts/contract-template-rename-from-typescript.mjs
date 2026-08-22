@@ -62,9 +62,10 @@ assert.equal(prepare.value.status, 'available');
 assert.equal(prepare.value.placeholder, 'title');
 assert.equal(prepare.value.templateReferenceCount, 2);
 assert.equal(prepare.value.typeScriptReferenceCount, 0, 'Prepare rename should not emit edits before a new name is supplied.');
-assert.ok(
-  samePath(prepare.value.activeSource?.path ?? '', viewModelPath),
-  `Expected active TS source to point at app.ts, observed ${prepare.value.activeSource?.path ?? 'missing'}.`,
+assert.equal(
+  prepare.value.activeSource?.path?.replace(/\\/g, '/'),
+  'src/app.ts',
+  `Expected active TS source to use the workspace-relative app.ts authority, observed ${prepare.value.activeSource?.path ?? 'missing'}.`,
 );
 assert.equal(prepare.value.activeSource?.start, declarationStart);
 assert.equal(prepare.value.edits.length, 0, 'Prepare rename should not emit template edits before a new name is supplied.');

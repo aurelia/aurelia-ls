@@ -123,6 +123,72 @@ export class RuntimeObjectObservationAdapterReference {
   ) {}
 }
 
+/** Distinct witness lanes that contributed to one final target-access selection. */
+export class RuntimeBindingTargetAccessProvenance {
+  static readonly none = new RuntimeBindingTargetAccessProvenance();
+
+  readonly observerSource: readonly ProvenanceHandle[];
+  readonly objectObservationAdapters: readonly ProvenanceHandle[];
+  readonly controllerObserverSetup: readonly ProvenanceHandle[];
+  readonly targetObserverOverride: readonly ProvenanceHandle[];
+
+  constructor(
+    observerSource: readonly ProvenanceHandle[] = [],
+    objectObservationAdapters: readonly ProvenanceHandle[] = [],
+    controllerObserverSetup: readonly ProvenanceHandle[] = [],
+    targetObserverOverride: readonly ProvenanceHandle[] = [],
+  ) {
+    this.observerSource = uniqueProvenanceHandles(observerSource);
+    this.objectObservationAdapters = uniqueProvenanceHandles(objectObservationAdapters);
+    this.controllerObserverSetup = uniqueProvenanceHandles(controllerObserverSetup);
+    this.targetObserverOverride = uniqueProvenanceHandles(targetObserverOverride);
+  }
+
+  /** Preserve ordinary selection causes while recording the controller-setup decision separately. */
+  withControllerObserverSetup(
+    provenanceHandles: readonly ProvenanceHandle[],
+  ): RuntimeBindingTargetAccessProvenance {
+    return new RuntimeBindingTargetAccessProvenance(
+      this.observerSource,
+      this.objectObservationAdapters,
+      provenanceHandles,
+      this.targetObserverOverride,
+    );
+  }
+
+  /** A renderer or binding behavior replaces the ordinary observer-selection authority. */
+  replacedByTargetObserver(
+    provenanceHandles: readonly ProvenanceHandle[] = [],
+  ): RuntimeBindingTargetAccessProvenance {
+    return new RuntimeBindingTargetAccessProvenance([], [], [], provenanceHandles);
+  }
+
+  /** Causes that choose strategy/fallback/cache; controller setup only explains its own outcome field. */
+  selectionDecisionHandles(): readonly ProvenanceHandle[] {
+    return uniqueProvenanceHandles([
+      ...this.observerSource,
+      ...this.objectObservationAdapters,
+      ...this.targetObserverOverride,
+    ]);
+  }
+
+  /** Complete causal set retained by the final target-access product. */
+  allHandles(): readonly ProvenanceHandle[] {
+    return uniqueProvenanceHandles([
+      ...this.observerSource,
+      ...this.objectObservationAdapters,
+      ...this.controllerObserverSetup,
+      ...this.targetObserverOverride,
+    ]);
+  }
+}
+
+function uniqueProvenanceHandles(
+  handles: readonly ProvenanceHandle[],
+): readonly ProvenanceHandle[] {
+  return [...new Set(handles)].sort();
+}
+
 /** Observer constructor selected by one framework NodeObserverLocator configuration. */
 export const enum RuntimeNodeObserverKind {
   /** Framework default observer used when a node config omits `type`. */
@@ -704,6 +770,8 @@ export class RuntimeBindingTargetAccess {
     readonly frameworkErrorCode: string | null,
     readonly diagnosticReason: string | null,
     readonly sourceAddressHandle: AddressHandle | null,
+    /** Typed causal witnesses retained independently from field-specific explanations. */
+    readonly selectionProvenance: RuntimeBindingTargetAccessProvenance = RuntimeBindingTargetAccessProvenance.none,
     readonly fieldProvenance: readonly FieldProvenance<RuntimeBindingTargetAccessField>[] = [],
   ) {}
 

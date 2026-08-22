@@ -1,18 +1,18 @@
 import { defineProductDetailSlot } from '../kernel/product-details.js';
-import type { ProductDetailDescriptor } from '../kernel/detail-descriptors.js';
 import {
   kernelHotDetailReference,
   kernelFieldProvenanceReferences,
-  kernelProductDetailReference,
+  kernelProductDetailReferences as productDetailReferences,
   kernelRecordReferences,
   mergeKernelDetailReferences,
   noKernelDetailReferences,
   type KernelDetailReferenceClosure,
 } from '../kernel/detail-references.js';
-import type { ProductHandle } from '../kernel/handles.js';
 import type { ContainerReference } from '../di/container-reference.js';
 import { ResourceDetailDescriptors } from '../resources/detail-descriptors.js';
-import type { ResourceTargetReference } from '../resources/resource-reference.js';
+import {
+  resourceTargetReferenceKernelReferences as resourceTargetReferenceReferences,
+} from '../resources/structural-references.js';
 import { TemplateDetailDescriptors } from '../template/detail-descriptors.js';
 import { TypeSystemHotDetailDescriptors } from '../type-system/detail-descriptors.js';
 import { checkerTypeReferenceKernelReferences } from '../type-system/structural-references.js';
@@ -28,23 +28,13 @@ import {
   type AuSlotsInfo,
   CustomElementController,
   SyntheticViewController,
-  ControllerReference,
+  type ControllerReference,
   type ControllerProduct,
   type RuntimeHydrationContext,
   type ViewFactory,
 } from './controller.js';
 import { ConfigurationDetailDescriptors } from './detail-descriptors.js';
 import { bindingScopeReferenceKernelReferences } from './structural-references.js';
-
-function productDetailReferences(
-  descriptor: ProductDetailDescriptor<unknown>,
-  ...handles: readonly (ProductHandle | null | undefined)[]
-): KernelDetailReferenceClosure {
-  return mergeKernelDetailReferences(
-    kernelRecordReferences(...handles),
-    handles.map((handle) => kernelProductDetailReference(descriptor, handle)),
-  );
-}
 
 function containerReferenceReferences(
   reference: ContainerReference,
@@ -56,21 +46,6 @@ function containerReferenceReferences(
       reference.addressHandle,
     ),
   );
-}
-
-function resourceTargetReferenceReferences(
-  reference: ResourceTargetReference | null,
-): KernelDetailReferenceClosure {
-  return reference == null
-    ? mergeKernelDetailReferences()
-    : mergeKernelDetailReferences(
-        kernelRecordReferences(
-          reference.identityHandle,
-          reference.addressHandle,
-          reference.declarationSourceAddressHandle,
-        ),
-        checkerTypeReferenceKernelReferences(reference.targetType),
-      );
 }
 
 function controllerReferenceReferences(

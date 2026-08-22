@@ -17,8 +17,19 @@ import {
 } from '../kernel/project-input.js';
 import { SourceFileRole } from '../kernel/address.js';
 import { externalizeSourceFileRole } from '../kernel/source-classification.js';
-import { projectOwnsTemplateEditSourceFile } from '../boot/source-ownership.js';
-import { canonicalTypeSystemPath } from '../type-system/source-file-path.js';
+import {
+  projectOwnsTemplateEditSourceFile,
+  readableUnownedProjectSourceIdentities,
+  semanticSourceReferenceHostPath,
+  workspaceSourcePathForHostPath,
+  type ProjectReadableSourceIdentity,
+  type ProjectSourceIdentity,
+  type ProjectSourcePathResolution,
+} from '../boot/source-ownership.js';
+import {
+  canonicalTypeSystemPath,
+  sameTypeSystemSourcePath,
+} from '../type-system/source-file-path.js';
 import { normalizeSemanticRuntimeOptions } from './workspace-descriptor.js';
 import {
   KernelStore,
@@ -143,8 +154,10 @@ import {
   appQueryBatchAuthoringTemplateSourceFiles,
   appQueryBatchNeedsAuthoringTemplates,
   appQueryBatchSourceFilePath,
+  appQueryBatchSourceFilePaths,
   appQueryNeedsAuthoringTemplates,
   appQuerySourceFilePath,
+  appQuerySourceFilePaths,
   defaultInquiryProfileForRoutedAppQuery,
   defaultInquiryProfileForRoutedAppQueryBatch,
   isAppWorldFreeAppQuery,
@@ -190,7 +203,6 @@ import {
 } from '../telemetry/memory.js';
 import {
   AuthoredSourceTextCache,
-  authoredSourceHostPathCandidates,
   authoredSourcePositionForOffset,
 } from '../kernel/authored-source-text.js';
 import {
@@ -312,10 +324,6 @@ import {
   semanticSourceReferenceMatchesFilePath,
   type SemanticSourceReference,
 } from './source-reference.js';
-import {
-  sourceFileAddressForAddress,
-  sourcePathMatchesFileName,
-} from '../kernel/source-address.js';
 import {
   SemanticAppQueryKind,
   SemanticRuntimeAnswerResult,
@@ -602,6 +610,7 @@ export class SemanticRuntime {
       workspace.store,
       this.computationLifecycle,
       workspace.semanticWorkspaceKey,
+      workspace.rootDir,
     );
     this.frameworkSupport.initializeKnownSupport();
     this.projectEvaluations = new StaticProjectEvaluationComputationService(
@@ -1372,7 +1381,7 @@ export class SemanticRuntime {
         ...(request.telemetry ?? {}),
         inquiryProfile,
       },
-    });
+    }, undefined, appQuerySourceFilePaths(request));
     const canonicalRequest = bindProjectQueryPage(
       plan.project,
       canonicalizeRuntimeAppQueryRequest(plan.project, request),
@@ -1455,7 +1464,7 @@ export class SemanticRuntime {
         ...(request.telemetry ?? {}),
         inquiryProfile,
       },
-    }, cachePreflightValidationScope);
+    }, cachePreflightValidationScope, appQuerySourceFilePaths(request));
     const cachePreflight = this.readAppCachePreflight(plan, cachePreflightValidationScope);
     const cachedBefore = cachePreflight.cachedApp;
     const canonicalRequest = bindProjectQueryPage(
@@ -1560,7 +1569,7 @@ export class SemanticRuntime {
         ...(request.telemetry ?? {}),
         inquiryProfile,
       },
-    }, cachePreflightValidationScope);
+    }, cachePreflightValidationScope, appQueryBatchSourceFilePaths(request));
     const canonicalQueries = queries.map((query) =>
       bindProjectQueryPage(
         plan.project,
@@ -2315,6 +2324,7 @@ export class SemanticRuntime {
   private planOpenApp(
     options: OpenSemanticAppOptions,
     validationScope?: ComputationReadValidationScope,
+    sourceFilePaths: readonly string[] = [],
   ): SemanticAppOpenPlan {
     const planningReads = new Map<string, SemanticRuntimeProjectInputRead>();
     this.activePlanningReadCollectors.push(planningReads);
@@ -2328,6 +2338,13 @@ export class SemanticRuntime {
         : sourceFilePath == null
           ? this.selectDefaultProject(validationScope)
           : this.captureProject(this.selectProjectForSourceFile(sourceFilePath), validationScope);
+      for (const requestedSourcePath of new Set([
+        ...(sourceFilePath == null ? [] : [sourceFilePath]),
+        ...requestedAuthoringSourceFiles,
+        ...sourceFilePaths,
+      ])) {
+        this.assertSourcePathCompatibleWithProject(project, requestedSourcePath);
+      }
       const projectSourceFilePath = sourceFilePath == null
         ? null
         : canonicalProjectSourceFilePath(project, sourceFilePath);
@@ -2760,15 +2777,56 @@ export class SemanticRuntime {
   }
 
   private selectProjectForSourceFile(sourceFilePath: string): ProjectBootFrame {
-    for (const address of this.workspace.store.readSourceFileAddressesByFileName(sourceFilePath)) {
-      const project = this.workspace.projects.find((candidate) =>
-        candidate.sourceFiles.some((source) => source.addressHandle === address.handle)
-      );
-      if (project != null) {
-        return project;
+    const matches: { readonly project: ProjectBootFrame; readonly source: ProjectSourceIdentity }[] = [];
+    for (const project of this.workspace.projects) {
+      const resolution = project.sourceOwnership.resolvePath(sourceFilePath);
+      if (resolution.kind === 'ambiguous') {
+        throw ambiguousProjectSourcePathError(project, sourceFilePath, resolution);
+      }
+      if (resolution.kind === 'resolved') {
+        matches.push({ project, source: resolution.source });
       }
     }
+    if (matches.length === 1) {
+      return matches[0]!.project;
+    }
+    if (matches.length > 1) {
+      throw new Error(
+        `Cannot open semantic app: source file '${sourceFilePath}' is admitted by multiple projects: `
+        + matches.map(({ project, source }) => `${project.projectKey}:${source.workspacePath}`).join(', ')
+        + '. Pass projectKey or a unique workspace-relative path.',
+      );
+    }
     throw new Error(`Cannot open semantic app: source file '${sourceFilePath}' was not admitted into any project.`);
+  }
+
+  /** Refuse a selected-project request that would reinterpret another project's admitted source as an external file. */
+  private assertSourcePathCompatibleWithProject(
+    project: ProjectBootFrame,
+    sourceFilePath: string,
+  ): void {
+    const readable = readableUnownedProjectSourceIdentities(
+      project,
+      sourceFilePath,
+      project.inputGeneration.host,
+    );
+    if (projectClaimsSourcePath(project, sourceFilePath, readable)) {
+      return;
+    }
+    const foreignOwners = this.workspace.projects.flatMap((candidate) => {
+      if (candidate.projectKey === project.projectKey) {
+        return [];
+      }
+      return projectClaimsSourcePath(candidate, sourceFilePath, readable)
+        ? [`${candidate.projectKey}:${sourceFilePath}`]
+        : [];
+    });
+    if (foreignOwners.length > 0) {
+      throw new Error(
+        `Source file '${sourceFilePath}' is not owned by selected project '${project.projectKey}' but is admitted by `
+        + `${[...new Set(foreignOwners)].sort().join(', ')}. Split the batch or select the owning project.`,
+      );
+    }
   }
 
   private captureProject(
@@ -2781,6 +2839,18 @@ export class SemanticRuntime {
 
 function projectShapeGenerationKey(project: ProjectBootFrame): string {
   return `${project.projectKey}\0${project.inputGeneration.revision}`;
+}
+
+/** Static project claim used only to prevent one selected project from reinterpreting another project's source. */
+function projectClaimsSourcePath(
+  project: ProjectBootFrame,
+  sourceFilePath: string,
+  readable: readonly ProjectReadableSourceIdentity[],
+): boolean {
+  if (project.sourceOwnership.resolvePath(sourceFilePath).kind !== 'absent') {
+    return true;
+  }
+  return readable.some((source) => project.authoredSources.contains(source.hostPath));
 }
 
 function normalizeExactWorkspacePaths(
@@ -3315,14 +3385,13 @@ function semanticOpenSeamRowMatchesSourceFile(
 }
 
 function sourceRoleForAppSourceReference(
-  projectKey: string,
-  sources: readonly ProjectBootFrame['sourceFiles'][number][],
+  project: ProjectBootFrame,
   source: SemanticSourceReference | null,
 ): SemanticOpenSeamRow['sourceRole'] {
   if (source == null) {
     return null;
   }
-  if (source.sourceWorkspaceKey != null && source.sourceWorkspaceKey !== projectKey) {
+  if (source.sourceWorkspaceKey != null && source.sourceWorkspaceKey !== project.projectKey) {
     return externalizeSourceFileRole(source.sourceFileRole ?? SourceFileRole.Unknown);
   }
   if (
@@ -3331,26 +3400,33 @@ function sourceRoleForAppSourceReference(
   ) {
     return source.sourceFileRole;
   }
-  const sourcePath = source.path;
-  if (sourcePath != null) {
-    const admission = sources.find((candidate) => sourcePathMatchesFileName(candidate.path, sourcePath)) ?? null;
-    if (admission != null) {
-      return admission.role;
-    }
+  const hostPath = semanticSourceReferenceHostPath(project.workspaceRootDir, source);
+  if (hostPath != null) {
+    const admission = project.sourceOwnership.admissionForHostPath(hostPath);
+    if (admission != null) return admission.role;
   }
   if (source.sourceFileRole != null) {
     return source.sourceFileRole;
   }
-  return sourceRoleForAppSourceReference(projectKey, sources, source.anchor ?? null);
+  return sourceRoleForAppSourceReference(project, source.anchor ?? null);
 }
 
 function staticEvaluationSourceLookupPaths(
+  project: ProjectBootFrame,
   source: StaticProjectEvaluationResult['sources'][number],
 ): readonly string[] {
-  return [...new Set([
-    source.admission.path,
-    source.sourceFile?.fileName ?? null,
-  ].filter((value): value is string => value != null && value.length > 0))];
+  const resolution = source.sourceFile?.fileName == null
+    ? project.sourceOwnership.resolveProjectPath(source.admission.path)
+    : project.sourceOwnership.resolvePath(source.sourceFile.fileName);
+  if (resolution.kind === 'resolved') {
+    return [resolution.source.workspacePath];
+  }
+  const hostPath = source.sourceFile?.fileName == null
+    ? path.resolve(project.rootDir, source.admission.path)
+    : path.isAbsolute(source.sourceFile.fileName)
+      ? path.resolve(source.sourceFile.fileName)
+      : path.resolve(project.rootDir, source.sourceFile.fileName);
+  return [workspaceSourcePathForHostPath(project.workspaceRootDir, hostPath)];
 }
 
 function runtimeCountSemanticRoleRows(
@@ -3849,9 +3925,12 @@ export class SemanticApp {
     query: SemanticAppQuery,
     pagePolicy: SemanticRuntimePagePolicy | null = this.activePagePolicyStack[this.activePagePolicyStack.length - 1] ?? null,
   ): SemanticRuntimeAnswer<unknown> {
+    // An already-open app consumes the workspace-domain source spellings it returns. Unknown project-relative aliases
+    // remain available only as a fallback; the runtime facade is the ambiguity-preserving entry for unbound aliases.
+    const canonicalQuery = canonicalizeOpenAppQueryForProject(this.project, query);
     return projectSemanticAppQueryContinuations(
-      query,
-      this.answerRoutedQuery(query, pagePolicy),
+      canonicalQuery,
+      this.answerRoutedQuery(canonicalQuery, pagePolicy),
     );
   }
 
@@ -4673,7 +4752,7 @@ export class SemanticApp {
   }
 
   private openSeamSourceRole(source: SemanticSourceReference | null): SemanticOpenSeamRow['sourceRole'] {
-    return sourceRoleForAppSourceReference(this.project.projectKey, this.project.sourceFiles, source);
+    return sourceRoleForAppSourceReference(this.project, source);
   }
 
   private applicationFileRolesForSourceReference(
@@ -4685,7 +4764,7 @@ export class SemanticApp {
     }
     const rolesByPath = this.applicationFileRolesByPath();
     for (const [path, roles] of rolesByPath) {
-      if (sourcePathMatchesFileName(path, exact.path) || sourcePathMatchesFileName(exact.path, path)) {
+      if (sameTypeSystemSourcePath(path, exact.path)) {
         return roles;
       }
     }
@@ -4697,7 +4776,10 @@ export class SemanticApp {
       return this.applicationFileRolesByPathCache;
     }
     const topology = readSemanticApplicationTopology(this.runtime.workspace.store, this.emission, false);
-    this.applicationFileRolesByPathCache = new Map(topology.files.map((file) => [file.path, file.roles]));
+    this.applicationFileRolesByPathCache = new Map(topology.files.map((file) => {
+      const resolution = this.project.sourceOwnership.resolveProjectPath(file.path);
+      return [resolution.kind === 'resolved' ? resolution.source.workspacePath : file.path, file.roles] as const;
+    }));
     return this.applicationFileRolesByPathCache;
   }
 
@@ -4710,7 +4792,7 @@ export class SemanticApp {
     }
     const originsByPath = this.staticEvaluationOriginsByPath();
     for (const [path, origins] of originsByPath) {
-      if (sourcePathMatchesFileName(path, exact.path) || sourcePathMatchesFileName(exact.path, path)) {
+      if (sameTypeSystemSourcePath(path, exact.path)) {
         return origins;
       }
     }
@@ -4728,7 +4810,7 @@ export class SemanticApp {
         entryModuleKey: origin.entryModuleKey,
         entrySourcePath: origin.entrySourcePath,
       }));
-      for (const path of staticEvaluationSourceLookupPaths(source)) {
+      for (const path of staticEvaluationSourceLookupPaths(this.project, source)) {
         originsByPath.set(path, origins);
       }
     }
@@ -4744,11 +4826,8 @@ export class SemanticApp {
     if (exact?.path == null || exact.start == null || exact.end == null) {
       return null;
     }
-    const authoredSource = sourceTextCache.readFirst(authoredSourceHostPathCandidates(
-      this.runtime.workspace.rootDir,
-      this.project.rootDir,
-      exact.path,
-    ));
+    const hostPath = semanticSourceReferenceHostPath(this.runtime.workspace.rootDir, exact);
+    const authoredSource = hostPath == null ? null : sourceTextCache.read(hostPath);
     if (authoredSource == null) {
       return null;
     }
@@ -4891,8 +4970,7 @@ export class SemanticApp {
     const routeRows = this.routeQueries.routeRecognizerIssueRows(detail);
     const analysisLimitationRows = this.projectAnalysisLimitations(query.sourceFile).rows;
     return appDiagnosticRows(
-      this.project.sourceFiles,
-      this.project.projectKey,
+      this.project,
       query,
       typeScriptRows,
       evaluationRows,
@@ -7108,13 +7186,76 @@ function canonicalizeAppQueryForProject(
   };
 }
 
+function canonicalizeOpenAppQueryForProject(
+  project: ProjectBootFrame,
+  query: SemanticAppQuery,
+): SemanticAppQuery {
+  const canonicalize = (value: string): string => canonicalOpenAppSourceFilePath(project, value);
+  return {
+    ...query,
+    ...(query.cursor == null
+      ? {}
+      : { cursor: { ...query.cursor, filePath: canonicalize(query.cursor.filePath) } }),
+    ...(query.sourceFile == null
+      ? {}
+      : { sourceFile: { ...query.sourceFile, filePath: canonicalize(query.sourceFile.filePath) } }),
+    ...(query.observedDependencyLocus?.kind !== 'source-file'
+      ? {}
+      : {
+          observedDependencyLocus: {
+            ...query.observedDependencyLocus,
+            sourceFile: {
+              ...query.observedDependencyLocus.sourceFile,
+              filePath: canonicalize(query.observedDependencyLocus.sourceFile.filePath),
+            },
+          },
+        }),
+  };
+}
+
+function canonicalOpenAppSourceFilePath(
+  project: ProjectBootFrame,
+  value: string,
+): string {
+  if (path.isAbsolute(value)) {
+    return canonicalProjectSourceFilePath(project, value);
+  }
+  const workspaceAdmission = project.sourceOwnership.resolveWorkspacePath(value);
+  if (workspaceAdmission.kind === 'resolved') {
+    return workspaceAdmission.source.workspacePath;
+  }
+  const workspaceHostPath = path.resolve(project.workspaceRootDir, value);
+  if (project.inputGeneration.host.readFile(workspaceHostPath) != null) {
+    return workspaceSourcePathForHostPath(project.workspaceRootDir, workspaceHostPath);
+  }
+  const projectAdmission = project.sourceOwnership.resolveProjectPath(value);
+  if (projectAdmission.kind === 'resolved') {
+    return projectAdmission.source.workspacePath;
+  }
+  const projectHostPath = path.resolve(project.rootDir, value);
+  if (project.inputGeneration.host.readFile(projectHostPath) != null) {
+    return workspaceSourcePathForHostPath(project.workspaceRootDir, projectHostPath);
+  }
+  throw new Error(
+    `Source file '${value}' is neither an exact workspace source nor an exact project source for open app '${project.projectKey}'.`,
+  );
+}
+
 function canonicalizeAppQuerySourceFields(
   project: ProjectBootFrame,
-  query: Pick<SemanticAppQuery, 'cursor' | 'sourceFile'>,
-): Pick<SemanticAppQuery, 'cursor' | 'sourceFile'> {
+  query: Pick<SemanticAppQuery, 'cursor' | 'sourceFile' | 'observedDependencyLocus'>,
+): Pick<SemanticAppQuery, 'cursor' | 'sourceFile' | 'observedDependencyLocus'> {
   return {
     ...(query.cursor == null ? {} : { cursor: canonicalizeSourceCursorInput(project, query.cursor) }),
     ...(query.sourceFile == null ? {} : { sourceFile: canonicalizeSourceFileInput(project, query.sourceFile) }),
+    ...(query.observedDependencyLocus?.kind !== 'source-file'
+      ? {}
+      : {
+          observedDependencyLocus: {
+            ...query.observedDependencyLocus,
+            sourceFile: canonicalizeSourceFileInput(project, query.observedDependencyLocus.sourceFile),
+          },
+        }),
   };
 }
 
@@ -7143,11 +7284,9 @@ function sourceFileIsProjectTemplate(
   sourceFile: SemanticRuntimeSourceFileInput | null | undefined,
 ): boolean {
   const filePath = sourceFile?.filePath;
-  return filePath != null
-    && project.sourceFiles.some((source) =>
-      source.role === SourceFileRole.Template
-      && sourcePathMatchesFileName(source.path, filePath)
-    );
+  if (filePath == null) return false;
+  const resolution = project.sourceOwnership.resolveWorkspacePath(filePath);
+  return resolution.kind === 'resolved' && resolution.source.admission.role === SourceFileRole.Template;
 }
 
 function canonicalProjectSourceFilePaths(
@@ -7168,36 +7307,45 @@ function canonicalProjectSourceFilePath(
   project: ProjectBootFrame,
   value: string,
 ): string {
-  return admittedProjectSourceFilePath(project, value)
-    ?? projectRelativePath(project.rootDir, value)
-    ?? projectRelativePath(project.rootDir, path.resolve(project.workspaceRootDir, value))
-    ?? value;
+  const resolution = project.sourceOwnership.resolvePath(value);
+  if (resolution.kind === 'resolved') {
+    return resolution.source.workspacePath;
+  }
+  if (resolution.kind === 'ambiguous') {
+    throw ambiguousProjectSourcePathError(project, value, resolution);
+  }
+  // Boot admissions remain the sole edit authority, but evaluator-linked templates and checker-only sources are
+  // still valid read/query loci. Relative public paths have one domain here (workspace-relative); an absent
+  // project-relative interpretation is intentionally not guessed. Requiring an exact readable host path keeps this
+  // fallback navigable without silently promoting it into project ownership.
+  const readable = readableUnownedProjectSourceIdentities(project, value, project.inputGeneration.host);
+  if (readable.length === 1) {
+    return readable[0]!.workspacePath;
+  }
+  if (readable.length > 1) {
+    throw new Error(
+      `Source file '${value}' has multiple exact readable interpretations in project '${project.projectKey}': `
+      + readable.map((candidate) => `${candidate.workspacePath} (${candidate.bases.join('+')})`).join(', ')
+      + '. Pass an absolute path.',
+    );
+  }
+  throw new Error(
+    `Source file '${value}' is neither an exact project admission nor an exact readable workspace source for project '${project.projectKey}'.`,
+  );
 }
 
-function admittedProjectSourceFilePath(
+function ambiguousProjectSourcePathError(
   project: ProjectBootFrame,
   value: string,
-): string | null {
-  const normalized = value.replace(/\\/g, '/');
-  return project.sourceFiles
-    .map((source) => source.path)
-    .filter((sourcePath) => sourcePathMatchesFileName(sourcePath, normalized))
-    .sort((left, right) => right.length - left.length)[0]
-    ?? null;
-}
-
-function projectRelativePath(
-  projectRootDir: string,
-  value: string,
-): string | null {
-  if (!path.isAbsolute(value)) {
-    return null;
-  }
-  const relativePath = path.relative(projectRootDir, value);
-  if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
-    return null;
-  }
-  return relativePath.replace(/\\/g, '/');
+  resolution: Extract<ProjectSourcePathResolution, { readonly kind: 'ambiguous' }>,
+): Error {
+  return new Error(
+    `Source file '${value}' is ambiguous in project '${project.projectKey}': `
+    + resolution.candidates.map((candidate) =>
+      `${candidate.workspacePath} (project path ${candidate.projectPath})`
+    ).join(', ')
+    + '. Pass an absolute path or a unique workspace-relative path.',
+  );
 }
 
 function authoringTemplateSourceFilesForOpen(
@@ -7236,22 +7384,6 @@ function authoringTemplateLimitSatisfied(
     return false;
   }
   return existingTemplateLimit >= requestedTemplateLimit;
-}
-
-function appContainsTemplateSourceFile(
-  app: SemanticApp,
-  filePath: string,
-): boolean {
-  return [
-    ...app.emission.templates.resources,
-    ...app.emission.templates.authoringResources,
-  ].some((resource) => {
-    const source = sourceFileAddressForAddress(
-      app.runtime.workspace.store,
-      resource.compilation.unit.templateSource.sourceAddressHandle,
-    );
-    return source != null && sourcePathMatchesFileName(source.path, filePath);
-  });
 }
 
 function selectProject(

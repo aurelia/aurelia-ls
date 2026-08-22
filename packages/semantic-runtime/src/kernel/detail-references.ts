@@ -4,7 +4,10 @@ import type {
   ProductHandle,
 } from './handles.js';
 import { KernelPublicationSurface } from './publication-surface.js';
-import type { FieldProvenance } from './provenance.js';
+import {
+  assertSingularFieldProvenance,
+  type FieldProvenance,
+} from './provenance.js';
 import type {
   HotDetailDescriptor,
   ProductDetailDescriptor,
@@ -99,6 +102,7 @@ export function kernelRecordReferences(
 export function kernelFieldProvenanceReferences<TField extends string>(
   provenance: readonly FieldProvenance<TField>[],
 ): readonly KernelDetailReference[] {
+  assertSingularFieldProvenance(provenance);
   return kernelRecordReferences(...provenance.map((entry) => entry.provenanceHandle));
 }
 
@@ -110,6 +114,17 @@ export function kernelProductDetailReference(
   return handle == null
     ? null
     : new KernelProductDetailReference(handle, descriptor.detailKind);
+}
+
+/** Project product envelopes together with their exact typed rich-detail occupancies. */
+export function kernelProductDetailReferences(
+  descriptor: ProductDetailDescriptor<unknown>,
+  ...handles: readonly (ProductHandle | null | undefined)[]
+): KernelDetailReferenceClosure {
+  return mergeKernelDetailReferences(
+    kernelRecordReferences(...handles),
+    handles.map((handle) => kernelProductDetailReference(descriptor, handle)),
+  );
 }
 
 /** Project one typed hot-detail occupancy required by a parent or sibling payload. */

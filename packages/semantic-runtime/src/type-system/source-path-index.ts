@@ -5,6 +5,7 @@ import type { StaticProjectEvaluationResult } from '../evaluation/project-evalua
 import { normalizeHostPath } from '../kernel/source-address.js';
 import type { TypeSystemProject } from './project.js';
 import { canonicalTypeSystemPath } from './source-file-path.js';
+import { canonicalTypeSystemRelativePath } from './source-file-path.js';
 
 /** Index exact boot admissions by their canonical project-relative host identity. */
 export function typeSystemBootSourceAdmissionIndex(
@@ -58,5 +59,8 @@ export function typeSystemSourcePathIndex(
 
 /** Normalize a TypeScript source-file name for checker-epoch path maps. */
 export function normalizeTypeSystemSourceFileName(fileName: string): string {
-  return normalizeHostPath(fileName).toLowerCase();
+  const normalized = normalizeHostPath(fileName);
+  return path.isAbsolute(normalized)
+    ? canonicalTypeSystemPath(normalized)
+    : canonicalTypeSystemRelativePath(normalized);
 }

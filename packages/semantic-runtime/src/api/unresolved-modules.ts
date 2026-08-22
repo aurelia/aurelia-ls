@@ -11,9 +11,7 @@ import {
   COMPLETE_COLLECTION_ANSWER_OPTIONS,
   pageRows,
 } from './answer-helpers.js';
-import {
-  sourceReferenceForTsNode,
-} from './source-reference.js';
+import { sourceReferenceForProjectTsNode } from './source-reference.js';
 
 export function readSemanticUnresolvedModules(
   evaluation: StaticProjectEvaluationResult,
@@ -23,7 +21,7 @@ export function readSemanticUnresolvedModules(
     .map((edge): SemanticUnresolvedModuleRow => ({
       fromModuleKey: edge.fromModuleKey,
       moduleSpecifier: edge.moduleSpecifier,
-      source: sourceReferenceForTsNode(edge.node),
+      source: sourceReferenceForProjectTsNode(evaluation.project, edge.node),
     }))
     .sort((left, right) =>
       `${left.fromModuleKey}:${left.moduleSpecifier}`.localeCompare(`${right.fromModuleKey}:${right.moduleSpecifier}`)

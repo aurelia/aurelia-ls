@@ -257,8 +257,7 @@ export function readSemanticTemplateResourceAvailability(
     );
   }
   const resolution = resolveSemanticSourceCursor(
-    workspaceRootDir,
-    emission.project.rootDir,
+    emission.project,
     cursor,
     emission.project.inputGeneration.host,
   );

@@ -2,6 +2,7 @@ import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-
 import type { KernelStore } from '../kernel/store.js';
 import type { BindableDefinition } from '../resources/bindable-definition.js';
 import {
+  resourceDefinitionNameSourceAddressHandle,
   taxonomyResourceKindForDefinition,
   type FullResourceDefinition,
 } from '../resources/resource-definition.js';
@@ -166,7 +167,7 @@ function resourceDefinitionRow(
         identityHandle: definition.identityHandle,
         targetIdentityHandle: definition.target.identityHandle,
         sourceAddressHandle: definition.sourceAddressHandle,
-        nameSourceAddressHandle: readDefinitionNameSourceAddressHandle(definition),
+        nameSourceAddressHandle: resourceDefinitionNameSourceAddressHandle(definition),
         targetAddressHandle: definition.target.addressHandle,
         targetDeclarationSourceAddressHandle: definition.target.declarationSourceAddressHandle,
       },
@@ -233,7 +234,7 @@ export function readResourceDefinitionSourceProjection(
 ): ResourceDefinitionSourceProjection {
   return {
     source: describeAddress(store, definition.sourceAddressHandle),
-    nameSource: describeAddress(store, readDefinitionNameSourceAddressHandle(definition)),
+    nameSource: describeAddress(store, resourceDefinitionNameSourceAddressHandle(definition)),
     targetSource: describeAddress(store, definition.target.addressHandle),
     targetDeclarationSource: describeAddress(store, definition.target.declarationSourceAddressHandle),
   };
@@ -333,10 +334,6 @@ function declarationModeForContributionKind(kind: string): SemanticResourceDecla
 
 function readDefinitionName(definition: FullResourceDefinition): string | null {
   return 'name' in definition ? definition.name : null;
-}
-
-function readDefinitionNameSourceAddressHandle(definition: FullResourceDefinition) {
-  return 'nameSourceAddressHandle' in definition ? definition.nameSourceAddressHandle : null;
 }
 
 function readDefinitionAliases(

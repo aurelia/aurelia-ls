@@ -11,6 +11,7 @@ import type {
 import { SemanticDiagnosticRelationKind } from './contracts.js';
 import { ResourceFrameworkErrorCode } from '../resources/framework-error-code.js';
 import { ResourceIssueKind } from '../resources/resource-issue.js';
+import { sameTypeSystemSourcePath } from '../type-system/source-file-path.js';
 
 interface PresentationInputRow {
   readonly index: number;
@@ -387,17 +388,13 @@ function resourceDecoratorCheckerSourceMatches(
   const checkerSource = checkerRow.source;
   return semanticSource?.path != null
     && checkerSource?.path != null
-    && normalizedDiagnosticSourcePath(semanticSource.path) === normalizedDiagnosticSourcePath(checkerSource.path)
+    && sameTypeSystemSourcePath(semanticSource.path, checkerSource.path)
     && semanticSource.start != null
     && semanticSource.end != null
     && checkerSource.start != null
     && checkerSource.end != null
     && semanticSource.start <= checkerSource.start
     && semanticSource.end >= checkerSource.end;
-}
-
-function normalizedDiagnosticSourcePath(value: string): string {
-  return value.replace(/\\/gu, '/');
 }
 
 function sameDiagnosticSource(
@@ -412,7 +409,8 @@ function sameSourceReference(
   right: SemanticAppDiagnosticRow['source'],
 ): boolean {
   return left?.path != null
-    && left.path === right?.path
+    && right?.path != null
+    && sameTypeSystemSourcePath(left.path, right.path)
     && left.start === right?.start
     && left.end === right?.end;
 }

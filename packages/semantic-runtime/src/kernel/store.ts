@@ -61,7 +61,7 @@ import {
 import {
   readSemanticRuntimeDetailDensityRows,
 } from '../telemetry/detail-density.js';
-import { normalizeHostPath } from './source-address.js';
+import { canonicalTypeSystemSourcePath } from '../type-system/source-file-path.js';
 import {
   emptyGenerationCurrentnessWitness,
   type GenerationCurrentnessWitness,
@@ -292,8 +292,15 @@ export interface KernelStoreReadView {
 
 /** Candidate-aware source-file lookup shared by committed stores and staged publications. */
 export interface KernelSourceFileReadView extends KernelStoreReadView {
+  /** Candidate-only suffix enumeration; callers needing identity must use an exact/domain-aware resolver. */
   readSourceFileAddressesByFileName(fileName: string): readonly SourceFileAddress[];
 }
+
+/** Best-tier source-address resolution; equal-strength candidates remain explicitly ambiguous. */
+export type KernelSourceFilePathResolution =
+  | { readonly kind: 'resolved'; readonly source: SourceFileAddress }
+  | { readonly kind: 'ambiguous'; readonly candidates: readonly SourceFileAddress[] }
+  | { readonly kind: 'absent' };
 
 /** Candidate-aware enumeration of the complete normalized kernel record set. */
 export interface KernelRecordCollectionReadView extends KernelStoreReadView {
@@ -2388,7 +2395,7 @@ export class KernelStore {
   }
 
   readSourceFileAddressesByFileName(fileName: string): readonly SourceFileAddress[] {
-    const normalizedFileName = normalizeHostPath(fileName);
+    const normalizedFileName = canonicalTypeSystemSourcePath(fileName);
     const matches = new Map<AddressHandle, SourceFileAddress>();
     for (const candidate of sourcePathSuffixes(fileName)) {
       for (const handle of this.sourceFileAddressesByPath.get(candidate) ?? []) {
@@ -2405,7 +2412,20 @@ export class KernelStore {
   }
 
   readBestSourceFileAddressForFileName(fileName: string): SourceFileAddress | null {
-    return this.readSourceFileAddressesByFileName(fileName)[0] ?? null;
+    const resolution = this.resolveSourceFileAddressByFileName(fileName);
+    return resolution.kind === 'resolved' ? resolution.source : null;
+  }
+
+  resolveSourceFileAddressByFileName(fileName: string): KernelSourceFilePathResolution {
+    const normalizedFileName = canonicalTypeSystemSourcePath(fileName);
+    const candidates = this.readSourceFileAddressesByFileName(fileName)
+      .filter((candidate) => canonicalTypeSystemSourcePath(candidate.path) === normalizedFileName);
+    if (candidates.length === 0) {
+      return { kind: 'absent' };
+    }
+    return candidates.length === 1
+      ? { kind: 'resolved', source: candidates[0]! }
+      : { kind: 'ambiguous', candidates };
   }
 
   readIdentities(): readonly SemanticIdentity[] {
@@ -3184,7 +3204,7 @@ function sourcePathMatchScore(
   addressPath: string,
   normalizedFileName: string,
 ): number {
-  const normalizedAddressPath = normalizeHostPath(addressPath);
+  const normalizedAddressPath = canonicalTypeSystemSourcePath(addressPath);
   if (normalizedAddressPath === normalizedFileName) {
     return 1_000_000 + normalizedAddressPath.length;
   }
@@ -3215,7 +3235,7 @@ function commonPathSuffixLength(
 }
 
 function sourcePathSuffixes(fileName: string): readonly string[] {
-  const normalized = normalizeHostPath(fileName);
+  const normalized = canonicalTypeSystemSourcePath(fileName);
   const parts = normalized.split('/').filter((part) => part.length > 0);
   const suffixes = new Set<string>([normalized]);
   for (let index = 0; index < parts.length; index++) {

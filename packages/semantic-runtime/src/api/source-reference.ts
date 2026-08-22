@@ -1,4 +1,7 @@
+import path from 'node:path';
 import type ts from 'typescript';
+import type { ProjectBootFrame } from '../boot/frames.js';
+import { workspaceSourcePathForHostPath } from '../boot/source-ownership.js';
 import {
   InquirySourceFacet,
   type InquirySourceFacetValue,
@@ -13,9 +16,9 @@ import {
   authoredSourceAddressForAnchorHandle,
   isSemanticAddressRecord,
   readSourceAnchorRecord,
-  sourcePathMatchesFileName,
   type SourceAnchorHandle,
 } from '../kernel/source-address.js';
+import { sameTypeSystemSourcePath } from '../type-system/source-file-path.js';
 import type { SourceSpan } from '../expression/source-span.js';
 import type {
   ExternalAddress,
@@ -237,7 +240,7 @@ export function semanticSourceReferenceMatchesFilePath(
   if (source == null) {
     return false;
   }
-  return (source.path != null && sourcePathMatchesFileName(source.path, filePath))
+  return (source.path != null && sameTypeSystemSourcePath(source.path, filePath))
     || semanticSourceReferenceMatchesFilePath(source.anchor ?? null, filePath);
 }
 
@@ -411,11 +414,54 @@ export function sourceReferenceForParserSpan(
   };
 }
 
-export function sourceReferenceForTsNode(node: ts.Node): SemanticSourceReference {
+/** Project-aware TypeScript node source using the workspace-relative public source-address domain when admitted. */
+export function sourceReferenceForProjectTsNode(
+  project: Pick<ProjectBootFrame, 'workspaceRootDir' | 'rootDir' | 'sourceOwnership'>,
+  node: ts.Node,
+): SemanticSourceReference {
   const sourceFile = node.getSourceFile();
-  const start = node.getStart(sourceFile);
-  const end = node.getEnd();
-  return sourceReferenceForTypeScriptSpan(sourceFile.fileName, start, end);
+  return sourceReferenceForProjectTypeScriptSpan(
+    project,
+    sourceFile.fileName,
+    node.getStart(sourceFile),
+    node.getEnd(),
+  );
+}
+
+/** Raw checker-path source for presentation-only nodes when no semantic project context is available. */
+export function sourceReferenceForUnqualifiedTypeScriptNode(node: ts.Node): SemanticSourceReference {
+  const sourceFile = node.getSourceFile();
+  return sourceReferenceForTypeScriptSpan(
+    sourceFile.fileName,
+    node.getStart(sourceFile),
+    node.getEnd(),
+  );
+}
+
+/** Project-aware TypeScript span source; non-admitted Program sources retain their absolute checker path. */
+export function sourceReferenceForProjectTypeScriptSpan(
+  project: Pick<ProjectBootFrame, 'workspaceRootDir' | 'rootDir' | 'sourceOwnership'>,
+  fileName: string,
+  start: number,
+  end: number,
+  sourceFileRole: SourceFileRole | null = null,
+): SemanticSourceReference {
+  const hostPath = path.isAbsolute(fileName) ? path.resolve(fileName) : path.resolve(project.rootDir, fileName);
+  const resolution = project.sourceOwnership.resolvePath(hostPath);
+  return resolution.kind === 'resolved'
+    ? sourceReferenceForTypeScriptSpan(
+      resolution.source.workspacePath,
+      start,
+      end,
+      sourceFileRole ?? resolution.source.admission.role,
+      resolution.source.projectKey,
+    )
+    : sourceReferenceForTypeScriptSpan(
+      workspaceSourcePathForHostPath(project.workspaceRootDir, hostPath),
+      start,
+      end,
+      sourceFileRole,
+    );
 }
 
 export function sourceReferenceForTypeScriptSpan(
@@ -423,6 +469,7 @@ export function sourceReferenceForTypeScriptSpan(
   start: number,
   end: number,
   sourceFileRole: SourceFileRole | null = null,
+  sourceWorkspaceKey: string | null = null,
 ): SemanticSourceReference {
   return {
     kind: 'typescript-node',
@@ -430,6 +477,7 @@ export function sourceReferenceForTypeScriptSpan(
     path: fileName,
     start,
     end,
+    ...(sourceWorkspaceKey == null ? {} : { sourceWorkspaceKey }),
     ...(sourceFileRole == null ? {} : { sourceFileRole }),
   };
 }

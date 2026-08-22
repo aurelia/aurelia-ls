@@ -31,6 +31,7 @@ import {
   OpenSeamReasonKind,
 } from '../kernel/open-seam.js';
 import {
+  aggregateFieldProvenance,
   compactFieldProvenance,
   FieldProvenance,
   ProvenanceRecord,
@@ -250,7 +251,7 @@ interface RegistrationRegistryParameterEmissionSet {
   readonly records: readonly KernelStoreRecord[];
   readonly references: readonly RegistrationValueReference[];
   readonly claimTargets: readonly RegistrationClaimTarget[];
-  readonly provenanceHandles: readonly ProvenanceHandle[];
+  readonly fieldProvenance: FieldProvenance<RegistrationAdmissionField> | null;
 }
 
 interface RegistrationObservationSupportSet {
@@ -550,12 +551,38 @@ class RegistrationAdmissionSupportMaterializer {
       if (value.reference != null) {
         references.push(value.reference);
       }
-      if (value.claimTargetHandle != null && value.provenanceHandle != null) {
-        claimTargets.push(new RegistrationClaimTarget(value.claimTargetHandle, value.provenanceHandle));
+      if (value.provenanceHandle != null) {
         provenanceHandles.push(value.provenanceHandle);
       }
+      if (value.claimTargetHandle != null && value.provenanceHandle != null) {
+        claimTargets.push(new RegistrationClaimTarget(value.claimTargetHandle, value.provenanceHandle));
+      }
     });
-    return { records, references, claimTargets, provenanceHandles };
+    const provenanceByHandle = new Map<ProvenanceHandle, ProvenanceRecord>(
+      records.flatMap((record) => record instanceof ProvenanceRecord
+        ? [[record.handle, record] as const]
+        : []),
+    );
+    const aggregate = aggregateFieldProvenance<RegistrationAdmissionField>(
+      'registryParameters',
+      provenanceHandles,
+      this.store.handles.provenance(`registration-registry-parameters:${local}`),
+      (handle) => {
+        const localRecord = provenanceByHandle.get(handle);
+        if (localRecord != null) {
+          return localRecord;
+        }
+        const published = this.publication.read(handle);
+        return published instanceof ProvenanceRecord ? published : null;
+      },
+    );
+    records.push(...aggregate.records);
+    return {
+      records,
+      references,
+      claimTargets,
+      fieldProvenance: aggregate.fieldProvenance,
+    };
   }
 
   private recordsForOpenSeams(
@@ -1088,13 +1115,12 @@ function registrationOpenSeamReasonKinds(
 function registrationAdmissionFieldProvenance(
   key: { readonly provenanceHandle: ProvenanceHandle | null },
   value: { readonly provenanceHandle: ProvenanceHandle | null },
-  registryParameters: { readonly provenanceHandles: readonly ProvenanceHandle[] },
+  registryParameters: { readonly fieldProvenance: FieldProvenance<RegistrationAdmissionField> | null },
 ): readonly FieldProvenance<RegistrationAdmissionField>[] {
-  const registryParametersProvenanceHandle = registryParameters.provenanceHandles[0] ?? null;
   return compactFieldProvenance<RegistrationAdmissionField>([
     key.provenanceHandle == null ? null : new FieldProvenance('targetKey', key.provenanceHandle),
     value.provenanceHandle == null ? null : new FieldProvenance('registeredValue', value.provenanceHandle),
-    registryParametersProvenanceHandle == null ? null : new FieldProvenance('registryParameters', registryParametersProvenanceHandle),
+    registryParameters.fieldProvenance,
   ]);
 }
 

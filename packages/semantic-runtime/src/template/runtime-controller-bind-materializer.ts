@@ -1,6 +1,7 @@
 import type { SemanticClaim } from '../kernel/claim.js';
 import type {
   ProductHandle,
+  ProvenanceHandle,
 } from '../kernel/handles.js';
 import {
   OpenSeam,
@@ -276,7 +277,7 @@ export class RuntimeControllerBindMaterializer {
     readonly store: KernelStore,
     readonly publication: KernelPublicationContext,
   ) {
-    this.publisher = new RuntimeControllerBindPublisher(store);
+    this.publisher = new RuntimeControllerBindPublisher(publication);
     this.bindingIssuePublisher = new RuntimeBindingIssuePublisher(store);
   }
 
@@ -434,6 +435,7 @@ export class RuntimeControllerBindMaterializer {
         request.binding.rendererTargetObserverStrategy,
         [],
         RuntimeBindingTargetAccessAuthority.RuntimeRendererImplementation,
+        this.productProvenanceHandles(request.binding.renderer.productHandle),
       )
       : setupLookup;
     const targetObserver = input.expressionResourcePlan.readTargetObserverOverride(request.binding.productHandle);
@@ -443,6 +445,7 @@ export class RuntimeControllerBindMaterializer {
         targetObserver.strategy,
         targetObserver.eventNames,
         RuntimeBindingTargetAccessAuthority.BindingBehavior,
+        targetObserver.provenanceHandles,
       );
     const local = `${request.localKey}:target-access`;
     const setupOpenSeamHandles = setup?.openSeamHandles ?? [];
@@ -473,6 +476,16 @@ export class RuntimeControllerBindMaterializer {
     );
     publication.appendTo(records, claims, targetAccesses);
     return publication.product;
+  }
+
+  private productProvenanceHandles(
+    productHandle: ProductHandle | null,
+  ): readonly ProvenanceHandle[] {
+    if (productHandle == null) {
+      return [];
+    }
+    const product = this.publication.read(productHandle);
+    return product?.kind === 'materialized-product' ? [product.provenanceHandle] : [];
   }
 
   materializeTargetOperation(

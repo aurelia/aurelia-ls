@@ -1,8 +1,8 @@
 import {
-  SemanticAppAnalysisDepth,
   semanticAppAnalysisDepthMax,
   normalizeSemanticAppAnalysisDepth,
 } from '../configuration/app-analysis.js';
+import type { SemanticAppAnalysisDepth } from '../configuration/app-analysis.js';
 import {
   readSemanticRuntimeInquiryProfileDefinition,
   type SemanticRuntimeInquiryProfile,
@@ -19,6 +19,7 @@ import type {
 } from './contracts.js';
 import {
   SemanticAppQueryKind,
+  SemanticObservedDependencyLocusKind,
   SemanticRuntimeDetail,
 } from './contracts.js';
 import {
@@ -127,12 +128,23 @@ export function isRuntimeStaticAppQuery(query: SemanticAppQuery): boolean {
 }
 
 export function appQuerySourceFilePath(
-  request: SemanticRuntimeAppQueryRequest,
+  request: SemanticAppQuery | SemanticRuntimeAppQueryRequest,
 ): string | null {
-  return request.cursor?.filePath
-    ?? request.sourceFile?.filePath
-    ?? request.sourceFilePath
-    ?? null;
+  return appQuerySourceFilePaths(request)[0] ?? null;
+}
+
+/** Every exact source locus carried by one query, without silently selecting only the first field. */
+export function appQuerySourceFilePaths(
+  request: SemanticAppQuery | SemanticRuntimeAppQueryRequest,
+): readonly string[] {
+  return [...new Set([
+    request.cursor?.filePath ?? null,
+    request.sourceFile?.filePath ?? null,
+    'sourceFilePath' in request ? request.sourceFilePath ?? null : null,
+    request.observedDependencyLocus?.kind === SemanticObservedDependencyLocusKind.SourceFile
+      ? request.observedDependencyLocus.sourceFile.filePath
+      : null,
+  ].filter((filePath): filePath is string => filePath != null && filePath.trim().length > 0))];
 }
 
 export function appQueryNeedsAuthoringTemplates(
@@ -145,11 +157,17 @@ export function appQueryNeedsAuthoringTemplates(
 export function appQueryBatchSourceFilePath(
   request: SemanticRuntimeAppQueryBatchRequest,
 ): string | null {
-  return request.sourceFilePath
-    ?? request.queries
-      .map((query) => query.cursor?.filePath ?? query.sourceFile?.filePath ?? null)
-      .find((filePath): filePath is string => filePath != null && filePath.trim().length > 0)
-    ?? null;
+  return appQueryBatchSourceFilePaths(request)[0] ?? null;
+}
+
+/** Every exact source locus carried by a batch and its children. */
+export function appQueryBatchSourceFilePaths(
+  request: SemanticRuntimeAppQueryBatchRequest,
+): readonly string[] {
+  return [...new Set([
+    request.sourceFilePath ?? null,
+    ...request.queries.flatMap(appQuerySourceFilePaths),
+  ].filter((filePath): filePath is string => filePath != null && filePath.trim().length > 0))];
 }
 
 export function appQueryBatchAuthoringTemplateSourceFiles(

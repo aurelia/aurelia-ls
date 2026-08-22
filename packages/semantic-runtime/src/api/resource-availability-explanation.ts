@@ -137,8 +137,7 @@ export function readSemanticResourceAvailabilityExplanation(
   const registrationKey = resource.registrationKey;
 
   const cursorResolution = resolveSemanticSourceCursor(
-    workspaceRootDir,
-    emission.project.rootDir,
+    emission.project,
     cursor,
     emission.project.inputGeneration.host,
   );

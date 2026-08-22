@@ -22,11 +22,12 @@ import {
   type OpenSeamReasonKind,
 } from '../kernel/open-seam.js';
 import {
+  aggregateFieldProvenance,
   FieldProvenance,
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import type {
-  KernelStore,
+  KernelStoreReadView,
   KernelStoreRecord,
 } from '../kernel/store.js';
 import {
@@ -45,13 +46,15 @@ import {
   RuntimeBindingSourceOperation,
   RuntimeBindingSourceOperationAuthority,
   type RuntimeBindingSourceOperationRequest,
-  RuntimeBindingTarget,
+  type RuntimeBindingTarget,
   RuntimeBindingTargetAccess,
+  type RuntimeBindingTargetAccessField,
+  type RuntimeBindingTargetAccessProvenance,
   type RuntimeBindingTargetAccessRequest,
   RuntimeBindingTargetKind,
   RuntimeBindingTargetOperation,
   RuntimeBindingTargetOperationAuthority,
-  RuntimeBindingTargetOperationKind,
+  type RuntimeBindingTargetOperationKind,
   type RuntimeBindingTargetOperationRequest,
   RuntimeTargetOperationOwnerKind,
 } from './runtime-binding.js';
@@ -91,6 +94,13 @@ export class RuntimeControllerBindProductPublication<TProduct> {
   }
 }
 
+class RuntimeBindingTargetAccessProvenancePublication {
+  constructor(
+    readonly fieldProvenance: readonly FieldProvenance<RuntimeBindingTargetAccessField>[],
+    readonly records: readonly ProvenanceRecord[],
+  ) {}
+}
+
 export class RuntimeBindingSourceOperationTarget {
   constructor(
     readonly targetKind: RuntimeBindingTargetKind,
@@ -113,7 +123,7 @@ export class RuntimeBindingSourceOperationTarget {
 
 export class RuntimeControllerBindPublisher {
   constructor(
-    private readonly store: KernelStore,
+    private readonly store: KernelStoreReadView,
   ) {}
 
   recordsForSource(local: string): RuntimeControllerBindSourceSet {
@@ -171,7 +181,15 @@ export class RuntimeControllerBindPublisher {
     openSeamHandles: readonly OpenSeamHandle[],
   ): RuntimeControllerBindProductPublication<RuntimeBindingTargetAccess> {
     const handles = this.productHandles(local);
-    const access = this.targetAccessProduct(handles, request, target, lookup, bindReachability);
+    const provenance = this.targetAccessProvenancePublication(handles.local, lookup.selectionProvenance);
+    const access = this.targetAccessProduct(
+      handles,
+      request,
+      target,
+      lookup,
+      bindReachability,
+      provenance.fieldProvenance,
+    );
     const claim = this.runtimeBindingProductClaim(
       `${handles.local}:runtime-binding-uses-target-access`,
       request.binding.productHandle,
@@ -179,17 +197,20 @@ export class RuntimeControllerBindPublisher {
       handles.productHandle,
       source,
     );
-    const records = this.runtimeBindingProductRecords(
-      handles,
-      KernelVocabulary.Binding.TargetAccess.key,
-      request.binding.identityHandle,
-      request.sourceAddressHandle,
-      source,
-      `${request.lookup}:${target.targetKind}:${request.targetProperty}`,
-      'target-access',
-      claim,
-      openSeamHandles,
-    );
+    const records = [
+      ...provenance.records,
+      ...this.runtimeBindingProductRecords(
+        handles,
+        KernelVocabulary.Binding.TargetAccess.key,
+        request.binding.identityHandle,
+        request.sourceAddressHandle,
+        source,
+        `${request.lookup}:${target.targetKind}:${request.targetProperty}`,
+        'target-access',
+        claim,
+        openSeamHandles,
+      ),
+    ];
     return new RuntimeControllerBindProductPublication(handles.local, access, claim, records);
   }
 
@@ -287,6 +308,7 @@ export class RuntimeControllerBindPublisher {
     target: RuntimeBindingTarget,
     lookup: ObserverLocatorLookupResult,
     bindReachability: RuntimeOperationReachability,
+    fieldProvenance: readonly FieldProvenance<RuntimeBindingTargetAccessField>[],
   ): RuntimeBindingTargetAccess {
     return new RuntimeBindingTargetAccess(
       handles.productHandle,
@@ -320,15 +342,59 @@ export class RuntimeControllerBindPublisher {
       lookup.frameworkErrorCode,
       lookup.diagnosticReason,
       request.sourceAddressHandle,
-      lookup.selectionProvenanceHandles.flatMap((provenanceHandle) => [
-        new FieldProvenance('strategy', provenanceHandle),
-        new FieldProvenance('fallbackStrategy', provenanceHandle),
-        new FieldProvenance('observerCacheDisposition', provenanceHandle),
-        new FieldProvenance('observerSource', provenanceHandle),
-        new FieldProvenance('objectObservationAdapters', provenanceHandle),
-        new FieldProvenance('controllerObserverSetup', provenanceHandle),
-      ]),
+      lookup.selectionProvenance,
+      fieldProvenance,
     );
+  }
+
+  private targetAccessProvenancePublication(
+    local: string,
+    provenance: RuntimeBindingTargetAccessProvenance,
+  ): RuntimeBindingTargetAccessProvenancePublication {
+    const fieldProvenance: FieldProvenance<RuntimeBindingTargetAccessField>[] = [];
+    const records: ProvenanceRecord[] = [];
+
+    const attach = (
+      fields: readonly RuntimeBindingTargetAccessField[],
+      causes: readonly ProvenanceHandle[],
+      lane: string,
+    ): void => {
+      const firstField = fields[0];
+      if (firstField == null) {
+        return;
+      }
+      const aggregation = aggregateFieldProvenance(
+        firstField,
+        causes,
+        this.store.handles.provenance(`${local}:selection:${lane}`),
+        (handle) => {
+          const record = this.store.read(handle);
+          return record instanceof ProvenanceRecord ? record : null;
+        },
+      );
+      if (aggregation.fieldProvenance == null) {
+        return;
+      }
+      fieldProvenance.push(aggregation.fieldProvenance);
+      for (const field of fields.slice(1)) {
+        fieldProvenance.push(new FieldProvenance(
+          field,
+          aggregation.fieldProvenance.provenanceHandle,
+        ));
+      }
+      records.push(...aggregation.records);
+    };
+
+    attach(
+      ['strategy', 'fallbackStrategy', 'observerCacheDisposition'],
+      provenance.selectionDecisionHandles(),
+      'decision',
+    );
+    attach(['observerSource'], provenance.observerSource, 'observer-source');
+    attach(['objectObservationAdapters'], provenance.objectObservationAdapters, 'object-adapters');
+    attach(['controllerObserverSetup'], provenance.controllerObserverSetup, 'controller-setup');
+
+    return new RuntimeBindingTargetAccessProvenancePublication(fieldProvenance, records);
   }
 
   private targetOperationProduct(

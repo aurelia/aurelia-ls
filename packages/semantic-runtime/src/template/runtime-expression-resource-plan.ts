@@ -1,5 +1,5 @@
-import type { ProductHandle } from '../kernel/handles.js';
-import type { KernelStore } from '../kernel/store.js';
+import type { ProductHandle, ProvenanceHandle } from '../kernel/handles.js';
+import type { KernelStore, KernelStoreReadView } from '../kernel/store.js';
 import type { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
 import type {
   BindingBehaviorExpression,
@@ -109,6 +109,8 @@ export class RuntimeBindingTargetObserverOverride {
     readonly strategy: RuntimeBindingTargetAccessStrategy | null,
     /** Exact replacement event names; null when authored arguments are runtime-dependent. */
     readonly eventNames: readonly string[] | null,
+    /** Authored expression-product provenance for the behavior that selected this override. */
+    readonly provenanceHandles: readonly ProvenanceHandle[] = [],
   ) {}
 }
 
@@ -594,6 +596,10 @@ export class RuntimeExpressionResourcePlanner {
           continue;
         }
         const initialMode = runtimeBindingInitialMode(binding);
+        const expressionProvenanceHandles = productProvenanceHandles(
+          input.expressionWorld.projector.publication,
+          expressionProductHandle,
+        );
         const chainStates = new Map<number, BindingBehaviorChainState>();
         let previousChainState: BindingBehaviorChainState | null = null;
         let currentChainIndex: number | null = null;
@@ -639,6 +645,7 @@ export class RuntimeExpressionResourcePlanner {
                   resourceBindEffects,
                   resource,
                   builtInResource,
+                  expressionProvenanceHandles,
                 )
               : null;
             entries.push(new RuntimeBindingBehaviorPlanEntry(
@@ -790,6 +797,7 @@ export class RuntimeExpressionResourcePlanner {
     effects: RuntimeBindingBehaviorBindEffects,
     resource: TemplateVisibleResource | null,
     builtInResource: BuiltInBindingBehaviorResource | null,
+    provenanceHandles: readonly ProvenanceHandle[],
   ): BuiltInBindingBehaviorBindIssue | null {
     const behavior = occurrence.expression;
     if (resource == null) {
@@ -824,6 +832,7 @@ export class RuntimeExpressionResourcePlanner {
           bindState.setTargetObserverOverride(new RuntimeBindingTargetObserverOverride(
             RuntimeBindingTargetAccessStrategy.DataAttributeAccessor,
             [],
+            provenanceHandles,
           ));
         }
         return issue;
@@ -867,6 +876,7 @@ export class RuntimeExpressionResourcePlanner {
           bindState.setTargetObserverOverride(new RuntimeBindingTargetObserverOverride(
             null,
             staticStringArguments(behavior.args),
+            provenanceHandles,
           ));
         }
         return issue;
@@ -964,6 +974,14 @@ function expressionChainKey(
   chainIndex: number,
 ): string {
   return `${bindingProductHandle}:${expressionProductHandle}:${chainIndex}`;
+}
+
+function productProvenanceHandles(
+  store: KernelStoreReadView,
+  productHandle: ProductHandle,
+): readonly ProvenanceHandle[] {
+  const product = store.read(productHandle);
+  return product?.kind === 'materialized-product' ? [product.provenanceHandle] : [];
 }
 
 function chainIndexForPlanEntry(entry: RuntimeExpressionResourcePlanEntry): number {

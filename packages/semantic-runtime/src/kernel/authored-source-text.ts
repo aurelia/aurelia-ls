@@ -67,20 +67,6 @@ export function authoredSourceHostPath(
     : path.resolve(rootDir, sourcePath);
 }
 
-export function authoredSourceHostPathCandidates(
-  workspaceRootDir: string,
-  projectRootDir: string,
-  sourcePath: string,
-): readonly string[] {
-  if (path.isAbsolute(sourcePath)) {
-    return [sourcePath];
-  }
-  return [...new Set([
-    path.resolve(projectRootDir, sourcePath),
-    path.resolve(workspaceRootDir, sourcePath),
-  ])];
-}
-
 export function authoredSourcePositionForOffset(
   source: AuthoredSourceText,
   offset: number,

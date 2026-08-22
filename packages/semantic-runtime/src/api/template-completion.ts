@@ -20,8 +20,6 @@ import {
 import {
   isSourceFileAddress,
   sourceSpanAddressForAddress,
-  sourceFilePathMatches,
-  sourcePathMatchesFileName,
 } from '../kernel/source-address.js';
 import type { SourceSpanAddress } from '../kernel/address.js';
 import {
@@ -77,6 +75,7 @@ import type {
 import { HtmlElement } from '../template/html-ir.js';
 import { ResourceProductDetails } from '../resources/product-details.js';
 import {
+  resourceDefinitionNameSourceAddressHandle,
   taxonomyResourceKindForDefinition,
   type FullResourceDefinition,
 } from '../resources/resource-definition.js';
@@ -181,7 +180,7 @@ import {
   semanticExactSourceReference,
   semanticSourceReferenceContainsOffset,
   semanticSourceReferenceMatchesFilePath,
-  sourceReferenceForTsNode,
+  sourceReferenceForUnqualifiedTypeScriptNode,
   sourceReferenceForParserSpan,
 } from './source-reference.js';
 import {
@@ -230,7 +229,7 @@ import {
 } from './app-diagnostics.js';
 import { appDiagnosticPresentation } from './diagnostic-presentation.js';
 import type { SemanticSourceReference } from './source-reference.js';
-import { normalizeTypeSystemPath } from '../type-system/source-file-path.js';
+import { sameTypeSystemSourcePath } from '../type-system/source-file-path.js';
 import { exactTemplateSourceTextForSourceSpan } from '../resources/template-source-text.js';
 
 type TemplateCompilationLane = SemanticTemplateCompilationRow['compilationLane'];
@@ -788,7 +787,7 @@ export function semanticTemplateCursorSourcesMatchExactly(
   const exactRight = semanticExactSourceReference(right);
   return exactLeft?.path != null
     && exactRight?.path != null
-    && canonicalCursorSourcePath(exactLeft.path) === canonicalCursorSourcePath(exactRight.path)
+    && sameTypeSystemSourcePath(exactLeft.path, exactRight.path)
     && exactLeft.start === exactRight.start
     && exactLeft.end === exactRight.end;
 }
@@ -801,12 +800,7 @@ function semanticTemplateCursorSourcePathsMatchExactly(
   const exactRight = semanticExactSourceReference(right);
   return exactLeft?.path != null
     && exactRight?.path != null
-    && canonicalCursorSourcePath(exactLeft.path) === canonicalCursorSourcePath(exactRight.path);
-}
-
-function canonicalCursorSourcePath(value: string): string {
-  const normalized = normalizeTypeSystemPath(value);
-  return ts.sys.useCaseSensitiveFileNames ? normalized : normalized.toLowerCase();
+    && sameTypeSystemSourcePath(exactLeft.path, exactRight.path);
 }
 
 function sourceReferenceSpanLength(source: SemanticSourceReference | null): number {
@@ -1135,8 +1129,7 @@ function readContextForCursor(
   }
 
   const resolution = resolveSemanticSourceCursor(
-    workspaceRootDir,
-    projectRootDir,
+    emission.project,
     cursor,
     emission.project.inputGeneration.host,
   );
@@ -2620,7 +2613,7 @@ function sourceReferenceWithinTemplateSpan(
   return file != null
     && isSourceFileAddress(file)
     && source.path != null
-    && sourcePathMatchesFileName(file.path, source.path)
+    && sameTypeSystemSourcePath(file.path, source.path)
     && typeof source.start === 'number'
     && typeof source.end === 'number'
     && templateSpan.start <= source.start
@@ -3103,7 +3096,7 @@ function cursorRouteActiveSource(
   const exactValueSource = semanticExactSourceReference(valueSite.source);
   if (
     exactValueSource?.path == null
-    || canonicalCursorSourcePath(exactValueSource.path) !== canonicalCursorSourcePath(locus.cursor.filePath)
+    || !sameTypeSystemSourcePath(exactValueSource.path, locus.cursor.filePath)
     || !semanticSourceReferenceContainsOffset(exactValueSource, locus.cursor.offset)
   ) {
     return activeSource;
@@ -3163,7 +3156,6 @@ function cursorSelectedMemberActiveSource(
   if (selectedMember == null || cursor == null) {
     return activeSource;
   }
-  const cursorPath = canonicalCursorSourcePath(cursor.filePath);
   const candidates = [selectedMember.source, selectedMember.declarationSource]
     .map((source, sourceOrder) => ({
       source: semanticExactSourceReference(source),
@@ -3172,7 +3164,7 @@ function cursorSelectedMemberActiveSource(
     .filter((candidate): candidate is { source: SemanticSourceReference; sourceOrder: number } =>
       candidate.source?.path != null
       && candidate.source.role === 'name'
-      && canonicalCursorSourcePath(candidate.source.path) === cursorPath
+      && sameTypeSystemSourcePath(candidate.source.path, cursor.filePath)
       && semanticSourceReferenceContainsOffset(candidate.source, cursor.offset)
     )
     .sort((left, right) =>
@@ -3187,7 +3179,7 @@ function cursorSelectedMemberActiveSource(
 
   const exactActiveSource = semanticExactSourceReference(activeSource);
   const activeSourceAuthenticatesCursor = exactActiveSource?.path != null
-    && canonicalCursorSourcePath(exactActiveSource.path) === cursorPath
+    && sameTypeSystemSourcePath(exactActiveSource.path, cursor.filePath)
     && semanticSourceReferenceContainsOffset(exactActiveSource, cursor.offset);
   if (
     activeSourceAuthenticatesCursor
@@ -3396,7 +3388,7 @@ function cursorTouchesExactSourceAddress(
   const source = semanticExactSourceReference(describeAddress(store, addressHandle));
   return source?.path != null
     && cursor.offset != null
-    && canonicalCursorSourcePath(source.path) === canonicalCursorSourcePath(cursor.filePath)
+    && sameTypeSystemSourcePath(source.path, cursor.filePath)
     && semanticSourceReferenceContainsOffset(source, cursor.offset);
 }
 
@@ -3535,7 +3527,7 @@ function definitionRow(
     runtimeMatchedName: selectedName,
     targetName: 'target' in definition ? definition.target.localName : null,
     source: describeAddress(store, definition.sourceAddressHandle),
-    nameSource: describeAddress(store, definitionNameSourceAddressHandle(definition)),
+    nameSource: describeAddress(store, resourceDefinitionNameSourceAddressHandle(definition)),
     matchedNameSource: describeAddress(store, matched.sourceAddressHandle),
     targetSource: describeAddress(store, definition.target.addressHandle),
     ...(includeHandles ? {
@@ -3543,7 +3535,7 @@ function definitionRow(
         definitionProductHandle: definition.productHandle,
         identityHandle: definition.identityHandle,
         sourceAddressHandle: definition.sourceAddressHandle,
-        nameSourceAddressHandle: definitionNameSourceAddressHandle(definition),
+        nameSourceAddressHandle: resourceDefinitionNameSourceAddressHandle(definition),
         matchedNameSourceAddressHandle: matched.sourceAddressHandle,
         targetAddressHandle: definition.target.addressHandle,
       },
@@ -3720,7 +3712,7 @@ function authoredCarrierSlice(
   if (
     carrier?.path == null
     || active?.path == null
-    || canonicalCursorSourcePath(carrier.path) !== canonicalCursorSourcePath(active.path)
+    || !sameTypeSystemSourcePath(carrier.path, active.path)
     || carrier.start == null
     || carrier.end == null
     || carrier.end - carrier.start !== carrierText.length
@@ -3756,7 +3748,7 @@ function authoredTemplateCarrierSlice(
     markup == null
     || carrier?.path == null
     || active?.path == null
-    || canonicalCursorSourcePath(carrier.path) !== canonicalCursorSourcePath(active.path)
+    || !sameTypeSystemSourcePath(carrier.path, active.path)
     || carrier.start == null
     || active.start == null
     || active.end == null
@@ -3786,19 +3778,13 @@ function matchedResourceName(
   // expression-case-sensitive.
   const matches = (candidate: string): boolean => candidate === selectedName;
   if (matches(definition.name)) {
-    return { name: definition.name, sourceAddressHandle: definitionNameSourceAddressHandle(definition) };
+    return { name: definition.name, sourceAddressHandle: resourceDefinitionNameSourceAddressHandle(definition) };
   }
   const alias = definition.aliases.find((candidate) => matches(candidate.name)) ?? null;
   if (alias != null) {
     return { name: alias.name, sourceAddressHandle: alias.addressHandle };
   }
   return { name: selectedName, sourceAddressHandle: null };
-}
-
-function definitionNameSourceAddressHandle(
-  definition: FullResourceDefinition,
-): AddressHandle | null {
-  return 'nameSourceAddressHandle' in definition ? definition.nameSourceAddressHandle : null;
 }
 
 function cursorBindableRow(
@@ -4113,7 +4099,7 @@ function cursorCheckerMemberTextRow(
   }
   const sources = text.sourceNodes
     .slice(0, CHECKER_MEMBER_TEXT_MAX_SOURCES)
-    .map(sourceReferenceForTsNode);
+    .map(sourceReferenceForUnqualifiedTypeScriptNode);
   return {
     format: 'plaintext',
     text: text.text,
@@ -4228,7 +4214,7 @@ function sourceSpanFileMatches(
   filePath: string,
 ): boolean {
   const file = store.readAddress(span.fileHandle);
-  return file != null && isSourceFileAddress(file) && sourceFilePathMatches(file, filePath);
+  return file != null && isSourceFileAddress(file) && sameTypeSystemSourcePath(file.path, filePath);
 }
 
 function sourceSpanForHandle(

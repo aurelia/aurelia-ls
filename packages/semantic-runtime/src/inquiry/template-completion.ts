@@ -25,12 +25,15 @@ import type {
   ProvenanceHandle,
 } from '../kernel/handles.js';
 import { SourceFileAddress, SourceSpanAddress, SourceSpanRole } from '../kernel/address.js';
-import { sourceFilePathMatches } from '../kernel/source-address.js';
+import { sameTypeSystemSourcePath } from '../type-system/source-file-path.js';
 import type { MaterializedProduct } from '../kernel/materialization.js';
 import type { KernelStore } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import { ResourceProductDetails } from '../resources/product-details.js';
-import type { FullResourceDefinition } from '../resources/resource-definition.js';
+import {
+  resourceDefinitionNameSourceAddressHandle,
+  type FullResourceDefinition,
+} from '../resources/resource-definition.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import {
   BINDABLE_BINDING_MODES,
@@ -2057,9 +2060,7 @@ function collectRefTargetCandidates(
         : TemplateCompletionCandidateSourceKind.ResourceDefinition,
       definition?.productHandle ?? instruction.productHandle,
       definition?.identityHandle ?? instruction.identityHandle,
-      definition == null || !('nameSourceAddressHandle' in definition)
-        ? null
-        : definition.nameSourceAddressHandle,
+      definition == null ? null : resourceDefinitionNameSourceAddressHandle(definition),
       definition == null
         ? `Aurelia ref target '${name}'.`
         : `Same-node resource ref target '${name}'.`,
@@ -3886,7 +3887,7 @@ function cursorTouchesAuthoredAddress(
   }
   const sourceFile = store.readAddress(span.fileHandle);
   return sourceFile instanceof SourceFileAddress
-    && sourceFilePathMatches(sourceFile, cursorFilePath);
+    && sameTypeSystemSourcePath(sourceFile.path, cursorFilePath);
 }
 
 function spanLength(span: SourceSpanAddress): number {

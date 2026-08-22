@@ -1,14 +1,14 @@
-import type { ProductDetailDescriptor } from '../kernel/detail-descriptors.js';
 import { defineProductDetailSlot } from '../kernel/product-details.js';
+import { ConfigurationDetailDescriptors } from '../configuration/detail-descriptors.js';
 import {
   kernelFieldProvenanceReferences,
-  kernelProductDetailReference,
+  kernelProductDetailReferences as productDetailReferences,
   kernelRecordReferences,
   mergeKernelDetailReferences,
   type KernelDetailReferenceClosure,
 } from '../kernel/detail-references.js';
-import type { ProductHandle } from '../kernel/handles.js';
 import { ResourceDetailDescriptors } from '../resources/detail-descriptors.js';
+import { TemplateDetailDescriptors } from '../template/detail-descriptors.js';
 import { RouterDetailDescriptors } from './detail-descriptors.js';
 import type {
   EndpointModel,
@@ -19,18 +19,10 @@ import type {
   RouteConfigModel,
   RouteConfigReference,
   RouteRecognizerReference,
+  RouterOptionsModel,
+  ViewportCustomElementModel,
 } from './model.js';
 import { RouteRecognizerModelKind } from './model.js';
-
-function productDetailReferences(
-  descriptor: ProductDetailDescriptor<unknown>,
-  ...handles: readonly (ProductHandle | null | undefined)[]
-): KernelDetailReferenceClosure {
-  return mergeKernelDetailReferences(
-    kernelRecordReferences(...handles),
-    handles.map((handle) => kernelProductDetailReference(descriptor, handle)),
-  );
-}
 
 function routeableComponentReferences(
   component: RouteableComponentReference | null,
@@ -136,8 +128,76 @@ function routeContextParameterReadReferences(
   );
 }
 
+function routerOptionsReferences(
+  options: RouterOptionsModel,
+): KernelDetailReferenceClosure {
+  return mergeKernelDetailReferences(
+    kernelRecordReferences(
+      options.appRoot.productHandle,
+      options.appRoot.identityHandle,
+      options.appRoot.addressHandle,
+      options.container.productHandle,
+      options.container.identityHandle,
+      options.container.addressHandle,
+      options.registrationProductHandle,
+      options.registrationIdentityHandle,
+      options.registrationSourceAddressHandle,
+      options.configurationValueProductHandle,
+      options.configurationValueIdentityHandle,
+      options.configurationValueSourceAddressHandle,
+      options.sourceAddressHandle,
+    ),
+    options.fieldStates.flatMap((state) => kernelRecordReferences(
+      state.winningContributionProductHandle,
+      state.winningContributionIdentityHandle,
+      state.sourceAddressHandle,
+    )),
+    kernelFieldProvenanceReferences(options.fieldProvenance),
+  );
+}
+
+function viewportReferences(
+  viewport: ViewportCustomElementModel,
+): KernelDetailReferenceClosure {
+  return mergeKernelDetailReferences(
+    kernelRecordReferences(
+      viewport.routeContext?.productHandle,
+      viewport.routeContext?.identityHandle,
+      viewport.routeContext?.sourceAddressHandle,
+      viewport.sourceAddressHandle,
+    ),
+    productDetailReferences(
+      ConfigurationDetailDescriptors.Controller,
+      viewport.controllerProductHandle,
+    ),
+    ...viewport.fieldStates.map((state) => mergeKernelDetailReferences(
+      productDetailReferences(
+        TemplateDetailDescriptors.Instruction,
+        state.sourceInstructionProductHandle,
+      ),
+      productDetailReferences(
+        TemplateDetailDescriptors.HtmlAttribute,
+        state.sourceAttributeProductHandle,
+      ),
+      kernelRecordReferences(
+        state.sourceAddressHandle,
+        state.sourceProvenanceHandle,
+      ),
+    )),
+    kernelFieldProvenanceReferences(viewport.fieldProvenance),
+  );
+}
+
 /** Typed detail slots for router products consumed by inquiry and API layers. */
 export const RouterProductDetails = {
+  RouterOptions: defineProductDetailSlot(
+    RouterDetailDescriptors.RouterOptions,
+    routerOptionsReferences,
+  ),
+  Viewport: defineProductDetailSlot(
+    RouterDetailDescriptors.Viewport,
+    viewportReferences,
+  ),
   RouteConfigContribution: defineProductDetailSlot(
     RouterDetailDescriptors.RouteConfigContribution,
     routeConfigContributionReferences,

@@ -13,6 +13,7 @@ import {
   semanticAppQueryCatalogShape,
   unsupportedSemanticAppQuerySelectorFields,
 } from './app-query-catalog.js';
+import { canonicalTypeSystemSourcePath } from '../type-system/source-file-path.js';
 
 export interface SemanticRuntimeRoutedAppQueryKeyPlan {
   readonly analysisDepth: SemanticAppAnalysisDepth;
@@ -358,7 +359,7 @@ export function semanticAppProjectInputEpochKey(projectKey: string, revision: st
 }
 
 function normalizeQuerySourceFileKey(filePath: string): string {
-  return filePath.trim().replace(/\\/g, '/');
+  return canonicalTypeSystemSourcePath(filePath.trim());
 }
 
 function semanticObservedDependencyLocusKey(

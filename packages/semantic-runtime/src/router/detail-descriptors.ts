@@ -5,10 +5,22 @@ import type {
   RouteConfigContributionModel,
   RouteConfigModel,
   RouteContextParameterReadModel,
+  RouterOptionsModel,
+  ViewportCustomElementModel,
 } from './model.js';
 
 /** Inert identities for rich router occupancies, safe to import without projector execution. */
 export const RouterDetailDescriptors = {
+  RouterOptions: defineProductDetailDescriptor<RouterOptionsModel>(
+    KernelVocabulary.Router.Options.key,
+    'router.router-options',
+    'Effective RouterOptions with explicit default/configured field state, exact winning contributions, and rooted registration ownership.',
+  ),
+  Viewport: defineProductDetailDescriptor<ViewportCustomElementModel>(
+    KernelVocabulary.Router.Viewport.key,
+    'router.viewport',
+    'Potential au-viewport with exact authored bindable-value lineage and static field closure.',
+  ),
   RouteConfigContribution: defineProductDetailDescriptor<RouteConfigContributionModel>(
     KernelVocabulary.Router.RouteConfigContribution.key,
     'router.route-config-contribution',

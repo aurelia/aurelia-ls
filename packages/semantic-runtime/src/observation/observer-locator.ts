@@ -43,6 +43,7 @@ import {
 import {
   RuntimeBindingTargetAccessAuthority,
   RuntimeBindingTargetAccessLookup,
+  RuntimeBindingTargetAccessProvenance,
   RuntimeBindingTargetAccessStrategy,
   RuntimeBindingTargetObserverCacheDisposition,
   RuntimeControllerObserverSetupOutcome,
@@ -153,7 +154,7 @@ export class ObserverLocatorLookupResult {
       null,
       null,
       null,
-      [],
+      RuntimeBindingTargetAccessProvenance.none,
     );
   }
 
@@ -182,7 +183,7 @@ export class ObserverLocatorLookupResult {
     readonly frameworkErrorCode: RuntimeHtmlObservationFrameworkErrorCode | null = null,
     readonly diagnosticReason: string | null = null,
     readonly controllerObserverSetupOutcome: RuntimeControllerObserverSetupOutcome | null = null,
-    readonly selectionProvenanceHandles: readonly ProvenanceHandle[] = [],
+    readonly selectionProvenance: RuntimeBindingTargetAccessProvenance = RuntimeBindingTargetAccessProvenance.none,
   ) {}
 
   /** Apply a renderer- or binding-behavior-supplied target observer over ordinary ObserverLocator selection. */
@@ -190,6 +191,7 @@ export class ObserverLocatorLookupResult {
     strategy: RuntimeBindingTargetAccessStrategy | null,
     eventNames: readonly string[] | null,
     authority: RuntimeBindingTargetAccessAuthority,
+    provenanceHandles: readonly ProvenanceHandle[] = [],
   ): ObserverLocatorLookupResult {
     const selectedStrategy = strategy ?? this.strategy;
     const nodeObserverConfig = strategy != null
@@ -230,7 +232,7 @@ export class ObserverLocatorLookupResult {
       null,
       null,
       null,
-      this.selectionProvenanceHandles,
+      this.selectionProvenance.replacedByTargetObserver(provenanceHandles),
     );
   }
 
@@ -269,7 +271,7 @@ export class ObserverLocatorLookupResult {
       this.frameworkErrorCode,
       this.diagnosticReason,
       outcome,
-      [...new Set([...this.selectionProvenanceHandles, ...setupProvenanceHandles])],
+      this.selectionProvenance.withControllerObserverSetup(setupProvenanceHandles),
     );
   }
 }
@@ -301,7 +303,7 @@ interface ObjectAccessSelection {
   readonly observerSource: ComputedObserverSource | null;
   readonly objectAdapters: readonly ObjectObservationAdapterRegistration[];
   readonly openReason: string | null;
-  readonly provenanceHandles: readonly ProvenanceHandle[];
+  readonly provenance: RuntimeBindingTargetAccessProvenance;
 }
 
 export class NodeObserverLocatorNodeConfig {
@@ -783,7 +785,7 @@ export class ObserverLocator {
       frameworkErrorCode,
       diagnosticReason,
       null,
-      [],
+      RuntimeBindingTargetAccessProvenance.none,
     );
   }
 
@@ -823,7 +825,7 @@ export class ObserverLocator {
       null,
       null,
       null,
-      selection.provenanceHandles,
+      selection.provenance,
     );
   }
 
@@ -922,9 +924,9 @@ export class ObserverLocator {
         openReason: observerSource.dependencyMode === ComputedObservationDependencyMode.DependencyFunction
           ? `Computed dependency functions for '${input.targetProperty}' are source-proved, but the current framework runtime contract does not close their observer construction.`
           : `Computed dependencies for '${input.targetProperty}' are not statically closed enough to select an observer.`,
-        provenanceHandles: observerSource.provenanceHandle == null
-          ? []
-          : [observerSource.provenanceHandle],
+        provenance: new RuntimeBindingTargetAccessProvenance(
+          observerSource.provenanceHandle == null ? [] : [observerSource.provenanceHandle],
+        ),
       };
     }
     return closedObjectAccessSelection(
@@ -1327,9 +1329,9 @@ function closedObjectAccessSelection(
     observerSource,
     objectAdapters: [],
     openReason: null,
-    provenanceHandles: observerSource?.provenanceHandle == null
-      ? []
-      : [observerSource.provenanceHandle],
+    provenance: new RuntimeBindingTargetAccessProvenance(
+      observerSource?.provenanceHandle == null ? [] : [observerSource.provenanceHandle],
+    ),
   };
 }
 
@@ -1348,12 +1350,14 @@ function openObjectAccessSelection(
     observerSource: fallback.observerSource,
     objectAdapters,
     openReason,
-    provenanceHandles: [
-      ...fallback.provenanceHandles,
-      ...objectAdapters.flatMap((adapter) =>
+    provenance: new RuntimeBindingTargetAccessProvenance(
+      fallback.provenance.observerSource,
+      objectAdapters.flatMap((adapter) =>
         adapter.provenanceHandle == null ? [] : [adapter.provenanceHandle]
       ),
-    ],
+      fallback.provenance.controllerObserverSetup,
+      fallback.provenance.targetObserverOverride,
+    ),
   };
 }
 

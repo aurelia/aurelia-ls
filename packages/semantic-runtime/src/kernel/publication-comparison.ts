@@ -1,5 +1,8 @@
 import type { KernelRecordHandle } from './handles.js';
-import type { FieldProvenance } from './provenance.js';
+import {
+  assertSingularFieldProvenance,
+  type FieldProvenance,
+} from './provenance.js';
 
 /** Observable decision made while replacing one computation-owned publication. */
 export const enum KernelPublicationDecisionKind {
@@ -47,17 +50,19 @@ export function sameKernelRecordWitness(
     && context.compareRecordHandles(previousHandle, nextHandle) === KernelPublicationDecisionKind.Retain;
 }
 
-/** Whether field-level provenance retains the same ordered field witnesses. */
+/** Whether field-level provenance retains the same singular field witnesses, independent of entry order. */
 export function sameKernelFieldProvenance<TField extends string>(
   previous: readonly FieldProvenance<TField>[],
   next: readonly FieldProvenance<TField>[],
   context: KernelPublicationComparisonContext,
 ): boolean {
+  assertSingularFieldProvenance(previous);
+  assertSingularFieldProvenance(next);
+  const nextByField = new Map(next.map((entry) => [entry.field, entry]));
   return previous.length === next.length
-    && previous.every((entry, index) => {
-      const candidate = next[index];
+    && previous.every((entry) => {
+      const candidate = nextByField.get(entry.field);
       return candidate != null
-        && entry.field === candidate.field
         && sameKernelRecordWitness(entry.provenanceHandle, candidate.provenanceHandle, context);
     });
 }

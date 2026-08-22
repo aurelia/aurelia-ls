@@ -3,9 +3,7 @@ import ts from 'typescript';
 import type { TypeSystemProject } from './project.js';
 import type { TypeSystemOverlaySourceSegment } from './overlay.js';
 import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
-import {
-  sourcePathMatchesFileName,
-} from '../kernel/source-address.js';
+import { sameTypeSystemSourcePath } from './source-file-path.js';
 
 export type TypeSystemDiagnosticPhase =
   | 'config'
@@ -378,7 +376,7 @@ function typeSystemDiagnosticMatchesSource(
   fileName: string,
 ): boolean {
   return diagnostic.source?.fileName != null
-    && sourcePathMatchesFileName(diagnostic.source.fileName, fileName);
+    && sameTypeSystemSourcePath(diagnostic.source.fileName, fileName);
 }
 
 function typeSystemDiagnosticSourceCacheKey(
@@ -391,7 +389,7 @@ function typeSystemDiagnosticSourceCacheKey(
   }
   if (
     typeSystem.configFilePath != null
-    && sourcePathMatchesFileName(typeSystem.configFilePath, fileName)
+    && sameTypeSystemSourcePath(typeSystem.configFilePath, fileName)
   ) {
     return typeSystem.configFilePath.replace(/\\/g, '/');
   }

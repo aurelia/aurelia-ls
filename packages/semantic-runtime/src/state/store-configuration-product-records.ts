@@ -57,6 +57,7 @@ export interface StateStoreConfigurationProductSeed {
   readonly optionsOrHandlerSourceAddressHandle: AddressHandle | null;
   readonly actionHandlerSourceAddressHandles: readonly AddressHandle[];
   readonly fieldProvenance: readonly FieldProvenance<StateStoreConfigurationField>[];
+  readonly fieldProvenanceRecords: readonly ProvenanceRecord[];
 }
 
 export interface StateStoreConfigurationProductEmission {
@@ -139,6 +140,7 @@ function stateStoreConfigurationRecords(
   handles: StateStoreConfigurationProductHandles,
 ): readonly KernelStoreRecord[] {
   return [
+    ...seed.fieldProvenanceRecords,
     stateStoreConfigurationEvidence(seed, handles),
     new ProvenanceRecord(handles.provenanceHandle, [handles.evidenceHandle]),
     stateStoreConfigurationIdentity(seed, handles),

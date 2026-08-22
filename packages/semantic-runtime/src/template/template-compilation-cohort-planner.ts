@@ -2,8 +2,8 @@ import type { AureliaAppWorldEmission } from '../configuration/app-world-compose
 import type { IdentityHandle, ProductHandle } from '../kernel/handles.js';
 import {
   sourceFileAddressForAddress,
-  sourcePathMatchesFileName,
 } from '../kernel/source-address.js';
+import { sameTypeSystemSourcePath } from '../type-system/source-file-path.js';
 import type { KernelPublicationContext } from '../kernel/publication.js';
 import type { KernelStore } from '../kernel/store.js';
 import { CustomElementDefinition } from '../resources/custom-element-definition.js';
@@ -402,7 +402,7 @@ function definitionBelongsToAuthoringSourceFile(
   ].some((handle) => {
     const sourceFile = sourceFileAddressForAddress(publication, handle);
     return sourceFile != null
-      && sourceFileNames.some((fileName) => sourcePathMatchesFileName(sourceFile.path, fileName));
+      && sourceFileNames.some((fileName) => sameTypeSystemSourcePath(sourceFile.path, fileName));
   });
 }
 

@@ -1,8 +1,7 @@
-import type { ProductDetailDescriptor } from '../kernel/detail-descriptors.js';
 import { defineProductDetailSlot } from '../kernel/product-details.js';
 import {
   kernelFieldProvenanceReferences,
-  kernelProductDetailReference,
+  kernelProductDetailReferences as productDetailReferences,
   kernelRecordReferences,
   mergeKernelDetailReferences,
   sameKernelDetailReferences,
@@ -14,9 +13,7 @@ import {
   type KernelPublicationComparisonContext,
 } from '../kernel/publication-comparison.js';
 import { KernelPublicationSurface } from '../kernel/publication-surface.js';
-import type { ProductHandle } from '../kernel/handles.js';
 import { TemplateDetailDescriptors } from '../template/detail-descriptors.js';
-import { checkerTypeReferenceKernelReferences } from '../type-system/structural-references.js';
 import {
   BindableDefinition,
   type BindableDefinitionContribution,
@@ -59,33 +56,11 @@ import type {
   WatchExpressionDefinition,
   WatchPropertyKeyDefinition,
 } from './watch-definition.js';
+import {
+  resourceTargetReferenceKernelReferences as resourceTargetReferenceReferences,
+} from './structural-references.js';
 
 export type { ResourceDefinitionHeaderDetail } from './detail-descriptors.js';
-
-function productDetailReferences(
-  descriptor: ProductDetailDescriptor<unknown>,
-  ...handles: readonly (ProductHandle | null | undefined)[]
-): KernelDetailReferenceClosure {
-  return mergeKernelDetailReferences(
-    kernelRecordReferences(...handles),
-    handles.map((handle) => kernelProductDetailReference(descriptor, handle)),
-  );
-}
-
-function resourceTargetReferenceReferences(
-  target: ResourceTargetReference | null,
-): KernelDetailReferenceClosure {
-  return target == null
-    ? mergeKernelDetailReferences()
-    : mergeKernelDetailReferences(
-        kernelRecordReferences(
-          target.identityHandle,
-          target.addressHandle,
-          target.declarationSourceAddressHandle,
-        ),
-        checkerTypeReferenceKernelReferences(target.targetType),
-      );
-}
 
 function resourceAliasReferences(
   alias: ResourceAliasDefinition,

@@ -22,11 +22,11 @@ import type {
 import {
   FieldProvenance,
   ProvenanceRecord,
-  readFieldProvenance,
 } from '../kernel/provenance.js';
 import {
   KernelPublicationPlan,
   KernelStoreBatch,
+  publishProductDetails,
   type KernelPublicationContext,
 } from '../kernel/publication.js';
 import type {
@@ -41,6 +41,10 @@ import {
   PropertyBindingInstruction,
   SetPropertyInstruction,
 } from '../template/instruction-ir.js';
+import {
+  templateInstructionAuthoredValueSource,
+  type TemplateInstructionAuthoredValueSource,
+} from '../template/instruction-authored-value-source.js';
 import { TemplateProductDetails } from '../template/product-details.js';
 import type {
   TemplateCompilationProjectEmission,
@@ -87,6 +91,7 @@ import {
   routerProductRecords,
   type RouterOpenSeamRecordEmission,
 } from './router-product-records.js';
+import { RouterProductDetails } from './product-details.js';
 
 const DEFAULT_VIEWPORT_NAME = 'default';
 
@@ -303,6 +308,10 @@ export class RouteRuntimeTopologyProjectPass {
     const records = state.readRecords();
     this.publication.publish(new KernelPublicationPlan(
       new KernelStoreBatch(records, `router-runtime-topology:${project.projectKey}`),
+      publishProductDetails(
+        RouterProductDetails.Viewport,
+        state.viewports.map((emission) => emission.viewport),
+      ),
     ));
     return new RouteRuntimeTopologyProjectResult(
       state.routeContexts.map((emission) => emission.routeContext),
@@ -966,10 +975,38 @@ function viewportPropertiesFromController(
     }
   }
   const fields = [
-    viewportStringField(controller, 'name', DEFAULT_VIEWPORT_NAME, bindableInstructions.get('name') ?? null, sourceValueEvaluator),
-    viewportStringField(controller, 'usedBy', '', bindableInstructions.get('usedBy') ?? null, sourceValueEvaluator),
-    viewportStringField(controller, 'default', '', bindableInstructions.get('default') ?? null, sourceValueEvaluator),
-    viewportStringField(controller, 'fallback', '', bindableInstructions.get('fallback') ?? null, sourceValueEvaluator),
+    viewportStringField(
+      publication,
+      controller,
+      'name',
+      DEFAULT_VIEWPORT_NAME,
+      bindableInstructions.get('name') ?? null,
+      sourceValueEvaluator,
+    ),
+    viewportStringField(
+      publication,
+      controller,
+      'usedBy',
+      '',
+      bindableInstructions.get('usedBy') ?? null,
+      sourceValueEvaluator,
+    ),
+    viewportStringField(
+      publication,
+      controller,
+      'default',
+      '',
+      bindableInstructions.get('default') ?? null,
+      sourceValueEvaluator,
+    ),
+    viewportStringField(
+      publication,
+      controller,
+      'fallback',
+      '',
+      bindableInstructions.get('fallback') ?? null,
+      sourceValueEvaluator,
+    ),
   ] as const;
   const [name, usedBy, defaultComponent, fallback] = fields;
   return {
@@ -979,9 +1016,12 @@ function viewportPropertiesFromController(
     fallback: nonEmpty(fallback.value),
     fieldStates: fields.map((field) => field.state),
     fieldProvenance: fields.flatMap((field) =>
-      field.provenanceHandle == null
+      field.state.sourceProvenanceHandle == null
         ? []
-        : [new FieldProvenance<ViewportField>(field.state.field, field.provenanceHandle)]
+        : [new FieldProvenance<ViewportField>(
+            field.state.field,
+            field.state.sourceProvenanceHandle,
+          )]
     ),
   };
 }
@@ -989,16 +1029,19 @@ function viewportPropertiesFromController(
 interface ViewportStringField {
   readonly value: string | null;
   readonly state: ViewportFieldState;
-  readonly provenanceHandle: ProvenanceHandle | null;
 }
 
 function viewportStringField(
+  publication: KernelPublicationContext,
   controller: RuntimeControllerFrame,
   field: ViewportValueField,
   defaultValue: string,
   instruction: SetPropertyInstruction | PropertyBindingInstruction | InterpolationInstruction | null,
   sourceValueEvaluator: RuntimeBindingSourceValueEvaluator,
 ): ViewportStringField {
+  const authoredSource = instruction == null
+    ? null
+    : templateInstructionAuthoredValueSource(publication, instruction);
   const boundRead = sourceValueEvaluator.evaluateInitialBoundControllerPropertyValue(
     controller.productHandle,
     field,
@@ -1006,25 +1049,35 @@ function viewportStringField(
   if (boundRead != null) {
     const bound = boundRead.source;
     const evaluated = boundRead.evaluation;
-    const sourceAddressHandle = bound?.sourceAddressHandle ?? instruction?.sourceAddressHandle ?? null;
-    const provenanceHandle = bound?.sourceProvenanceHandle
-      ?? (instruction == null
-        ? null
-        : readFieldProvenance(instruction.fieldProvenance, 'expression')
-          ?? readFieldProvenance(instruction.fieldProvenance, 'source'));
+    const sourceWitness = viewportFieldSourceWitness(
+      authoredSource,
+      bound?.sourceAddressHandle ?? null,
+      bound?.sourceProvenanceHandle ?? null,
+      instruction?.sourceAddressHandle ?? null,
+    );
+    const sourceAddressHandle = sourceWitness.sourceAddressHandle;
+    const provenanceHandle = sourceWitness.provenanceHandle;
     if (evaluated.value?.kind === EvaluationValueKind.String) {
       return {
         value: evaluated.value.value,
         state: evaluated.closure === RuntimeBindingSourceValueEvaluationClosure.Value
-          ? new ViewportFieldState(field, ViewportFieldStateKind.Closed, sourceAddressHandle)
+          ? createViewportFieldState(
+              field,
+              ViewportFieldStateKind.Closed,
+              sourceAddressHandle,
+              authoredSource,
+              provenanceHandle,
+            )
           : new ViewportFieldState(
               field,
               ViewportFieldStateKind.Open,
               sourceAddressHandle,
               evaluated.openReason,
               evaluated.openReasonKinds,
+              authoredSource?.instructionProductHandle ?? null,
+              authoredSource?.attributeProductHandle ?? null,
+              provenanceHandle,
             ),
-        provenanceHandle,
       };
     }
     if (
@@ -1038,8 +1091,11 @@ function viewportStringField(
           ViewportFieldStateKind.Referential,
           sourceAddressHandle,
           `au-viewport ${field} binding closed to '${evaluated.value.kind}', not a concrete string.`,
+          [],
+          authoredSource?.instructionProductHandle ?? null,
+          authoredSource?.attributeProductHandle ?? null,
+          provenanceHandle,
         ),
-        provenanceHandle,
       };
     }
     return {
@@ -1050,16 +1106,22 @@ function viewportStringField(
         sourceAddressHandle,
         evaluated.openReason,
         evaluated.openReasonKinds,
+        authoredSource?.instructionProductHandle ?? null,
+        authoredSource?.attributeProductHandle ?? null,
+        provenanceHandle,
       ),
-      provenanceHandle,
     };
   }
   if (instruction instanceof SetPropertyInstruction) {
     return {
       value: instruction.value,
-      state: new ViewportFieldState(field, ViewportFieldStateKind.Closed, instruction.sourceAddressHandle),
-      provenanceHandle: readFieldProvenance(instruction.fieldProvenance, 'value')
-        ?? readFieldProvenance(instruction.fieldProvenance, 'source'),
+      state: createViewportFieldState(
+        field,
+        ViewportFieldStateKind.Closed,
+        authoredSource?.sourceAddressHandle ?? instruction.sourceAddressHandle,
+        authoredSource,
+        authoredSource?.provenanceHandle ?? null,
+      ),
     };
   }
   if (instruction != null) {
@@ -1068,19 +1130,67 @@ function viewportStringField(
       state: new ViewportFieldState(
         field,
         ViewportFieldStateKind.Open,
-        instruction.sourceAddressHandle,
+        authoredSource?.sourceAddressHandle ?? instruction.sourceAddressHandle,
         `au-viewport ${field} has an authored binding without a retained bound-controller source value.`,
         [OpenSeamReasonKind.BindingSourceNeedsRuntimeValue],
+        authoredSource?.instructionProductHandle ?? null,
+        authoredSource?.attributeProductHandle ?? null,
+        authoredSource?.provenanceHandle ?? null,
       ),
-      provenanceHandle: readFieldProvenance(instruction.fieldProvenance, 'expression')
-        ?? readFieldProvenance(instruction.fieldProvenance, 'source'),
     };
   }
   return {
     value: defaultValue,
     state: new ViewportFieldState(field, ViewportFieldStateKind.Defaulted, null),
+  };
+}
+
+function viewportFieldSourceWitness(
+  authoredSource: TemplateInstructionAuthoredValueSource | null,
+  boundSourceAddressHandle: ViewportFieldState['sourceAddressHandle'],
+  boundSourceProvenanceHandle: ProvenanceHandle | null,
+  instructionSourceAddressHandle: ViewportFieldState['sourceAddressHandle'],
+): {
+  readonly sourceAddressHandle: ViewportFieldState['sourceAddressHandle'];
+  readonly provenanceHandle: ProvenanceHandle | null;
+} {
+  if (authoredSource?.sourceAddressHandle != null && authoredSource.provenanceHandle != null) {
+    return {
+      sourceAddressHandle: authoredSource.sourceAddressHandle,
+      provenanceHandle: authoredSource.provenanceHandle,
+    };
+  }
+  if (boundSourceAddressHandle != null && boundSourceProvenanceHandle != null) {
+    return {
+      sourceAddressHandle: boundSourceAddressHandle,
+      provenanceHandle: boundSourceProvenanceHandle,
+    };
+  }
+  return {
+    sourceAddressHandle: authoredSource?.sourceAddressHandle
+      ?? boundSourceAddressHandle
+      ?? instructionSourceAddressHandle,
     provenanceHandle: null,
   };
+}
+
+function createViewportFieldState(
+  field: ViewportValueField,
+  stateKind: ViewportFieldStateKind,
+  sourceAddressHandle: ViewportFieldState['sourceAddressHandle'],
+  authoredSource: TemplateInstructionAuthoredValueSource | null,
+  provenanceHandle: ProvenanceHandle | null,
+): ViewportFieldState {
+  return new ViewportFieldState(
+    field,
+    stateKind,
+    sourceAddressHandle,
+    null,
+    [],
+    authoredSource?.instructionProductHandle ?? null,
+    authoredSource?.attributeProductHandle ?? null,
+    provenanceHandle,
+  );
 }
 
 function viewportBindableInstructionTarget(

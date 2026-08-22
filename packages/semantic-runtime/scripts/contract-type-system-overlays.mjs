@@ -1129,7 +1129,10 @@ async function readTemplateOverlayProbe() {
   });
   const htmlFileName = path.join(templateFixtureRoot, 'src/implicit-binding-expression-inference-app.html');
   const viewModelFileName = path.join(templateFixtureRoot, 'src/implicit-binding-expression-inference-app.ts');
-  const templateSourceAddress = runtime.workspace.store.readBestSourceFileAddressForFileName(htmlFileName);
+  const templateSourceIdentity = app.project.sourceOwnership.resolvePath(htmlFileName);
+  const templateSourceAddress = templateSourceIdentity.kind === 'resolved'
+    ? runtime.workspace.store.readAddress(templateSourceIdentity.source.admission.addressHandle)
+    : null;
   const htmlText = fs.readFileSync(htmlFileName, 'utf8');
   const sourceStart = htmlText.indexOf('value.bind');
   const overlayFileName = path.join(templateFixtureRoot, '.semantic-runtime', 'overlays', 'template-binding-probe.ts');
@@ -1205,7 +1208,10 @@ async function readRepeatScopeOverlayProbe() {
   });
   const htmlFileName = path.join(repeatFixtureRoot, 'src/repeat-keyed-iterables-app.html');
   const viewModelFileName = path.join(repeatFixtureRoot, 'src/repeat-keyed-iterables-app.ts');
-  const templateSourceAddress = runtime.workspace.store.readBestSourceFileAddressForFileName(htmlFileName);
+  const templateSourceIdentity = app.project.sourceOwnership.resolvePath(htmlFileName);
+  const templateSourceAddress = templateSourceIdentity.kind === 'resolved'
+    ? runtime.workspace.store.readAddress(templateSourceIdentity.source.admission.addressHandle)
+    : null;
   const htmlText = fs.readFileSync(htmlFileName, 'utf8');
   const crumbPathStart = htmlText.indexOf('crumb.path');
   const alertTitleStart = htmlText.indexOf('alert.title');
