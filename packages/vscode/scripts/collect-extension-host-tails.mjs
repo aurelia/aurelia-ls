@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 
 import { createHash } from "node:crypto";
+import { spawn } from "node:child_process";
 import {
   cpSync,
   existsSync,
   lstatSync,
   mkdirSync,
   readFileSync,
+  readlinkSync,
   realpathSync,
   readdirSync,
   symlinkSync,
@@ -20,11 +22,38 @@ import process from "node:process";
 import { Writable } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { minimumVSCodeVersion } from "./run-extension-host-tests.mjs";
+import {
+  invocationSchemaVersion as electronInvocationSchemaVersion,
+  resultSchemaVersion as electronResultSchemaVersion,
+} from "./run-extension-host-tail-sample.mjs";
 
 export const sampleSchemaVersion = "aurelia-ls/extension-host-tail-sample/v4";
-export const processSchemaVersion = "aurelia-ls/extension-host-tail-process/v5";
-export const cohortSchemaVersion = "aurelia-ls/extension-host-tail-cohort/v5";
+export const processSchemaVersion = "aurelia-ls/extension-host-tail-process/v6";
+export const cohortSchemaVersion = "aurelia-ls/extension-host-tail-cohort/v6";
 export const windowsClientLogPathCharacterBudget = 259;
+export const outerElectronProcessPolicy = Object.freeze({
+  timeoutMilliseconds: 60_000,
+  cleanupGraceMilliseconds: 10_000,
+  strategy: "isolated Node helper with exact-PID process-tree termination",
+  windowsCleanup: "taskkill /PID <exact child pid> /T /F",
+  posixCleanup: "SIGKILL to detached child process group",
+});
+export const bundleAuthenticationPolicy = Object.freeze({
+  authoritativeSource: "clean tracked HEAD",
+  buildCommands: Object.freeze([
+    "pnpm exec tsc -b --force packages/semantic-runtime packages/language-server packages/vscode",
+    "pnpm --filter aurelia-2 run bundle",
+  ]),
+  buildTimeoutMilliseconds: 600_000,
+  freezeBoundary: "post-build pre-acquisition through post-acquisition",
+  frozenInputs: Object.freeze([
+    "tracked HEAD/tree/status/submodules",
+    "complete VS Code dist output",
+    "pressure fixture",
+    "collector, Electron helper, permanent runner, and tail suite",
+    "resolved aurelia and @aurelia/router workspace dependency package roots",
+  ]),
+});
 export const diagnosticReschedulePolicy = Object.freeze({
   suiteTriggerCount: 1,
   suiteRetryCount: 0,
@@ -121,6 +150,8 @@ const requiredWorkspaceModules = Object.freeze(["aurelia", "@aurelia/router"]);
 const evidenceParent = path.join(repoRoot, ".temp", "stage4-extension-host-tails");
 const collectorPath = fileURLToPath(import.meta.url);
 const permanentRunnerPath = path.join(__dirname, "run-extension-host-tests.mjs");
+const electronHelperPath = path.join(__dirname, "run-extension-host-tail-sample.mjs");
+const extensionDistPath = path.join(extensionDevelopmentPath, "dist");
 const usage = [
   "Usage: node scripts/collect-extension-host-tails.mjs",
   "[--lane=all|current-stable|minimum]",
@@ -227,7 +258,7 @@ export function buildAcquisitionRows(selectedLanes, smoke) {
 
 export function publicPlan(plan) {
   return {
-    schemaVersion: "aurelia-ls/extension-host-tail-plan/v3",
+    schemaVersion: "aurelia-ls/extension-host-tail-plan/v4",
     lanes: plan.lanes.map((lane) => ({
       lane,
       requestedVersion: laneDefinitions[lane].requestedVersion,
@@ -244,6 +275,8 @@ export function publicPlan(plan) {
     effectiveCohort: plan.effectiveCohort,
     cliArguments: plan.cliArguments,
     diagnosticReschedulePolicy,
+    outerElectronProcessPolicy,
+    bundleAuthenticationPolicy,
     latencyGuardScope,
     hostLocalReviewGuards: hostLocalReviewGuards.filter((entry) => plan.lanes.includes(entry.lane)),
     rows: plan.rows,
@@ -258,68 +291,115 @@ export async function collectExtensionHostTails(plan, dependencies = {}) {
     outputRoot,
     dependencies.platform ?? process.platform,
   );
-  const electron = dependencies.electron ?? await import("@vscode/test-electron");
+  const injectedElectron = dependencies.electron ?? null;
+  const electron = injectedElectron ?? await import("@vscode/test-electron");
   const prepareWorkspace = dependencies.prepareWorkspace ?? prepareSampleWorkspace;
   const captureEnvironment = dependencies.captureEnvironment ?? captureEnvironmentSnapshot;
   const assertReady = dependencies.assertReady ?? assertMeasurementReady;
+  const authenticateInputs = dependencies.authenticateInputs ?? authenticateHeadBundles;
+  const captureFrozenInputs = dependencies.captureFrozenInputs ?? captureFrozenMeasurementInputs;
+  const launchElectron = dependencies.launchElectron
+    ?? (injectedElectron == null
+      ? runElectronSampleBounded
+      : (input) => runElectronSampleInProcess(input, electron));
 
   await assertReady(outputRoot, plan);
+  const buildAuthenticationRaw = await authenticateInputs({ plan, outputRoot });
+  const frozenBefore = await captureFrozenInputs();
+  if (
+    buildAuthenticationRaw?.outputs != null
+    && stableJson(buildAuthenticationRaw.outputs) !== stableJson(frozenBefore?.outputs?.extensionDist)
+  ) {
+    throw new Error("IDE build outputs changed before the host-tail acquisition freeze boundary.");
+  }
+  if (plan.authoritative && buildAuthenticationRaw?.headAuthenticated !== true) {
+    throw new Error("Authoritative host-tail acquisition did not authenticate its bundles to clean HEAD.");
+  }
   mkdirSync(outputRoot, { recursive: true });
   const startedAt = new Date().toISOString();
-  const environment = await captureEnvironment(outputRoot);
   const resolutions = new Map();
   const captures = [];
+  let buildAuthentication = null;
+  let environment = null;
+  let finalizationPromise = null;
 
-  for (const lane of plan.lanes) {
-    const resolution = await resolveVSCode(lane, electron);
-    resolutions.set(lane, resolution);
-    for (const row of plan.rows.filter((candidate) => candidate.lane === lane)) {
-      process.stdout.write(
-        `[aurelia-host-tail] ${lane} pair ${row.pair}/${row.samplesPerJourney} `
-          + `position ${row.pairPosition} ${row.journey}\n`,
-      );
-      const workspace = prepareWorkspace(row, outputRoot);
-      const capture = await runSample({
-        row,
-        resolution,
-        workspace,
-        electron,
+  const finalize = (requestedStatus) => {
+    finalizationPromise ??= (async () => {
+      const frozenAfter = await captureFrozenInputs();
+      const inputIntegrity = compareFrozenMeasurementInputs(frozenBefore, frozenAfter);
+      const status = inputIntegrity.status === "passed"
+        ? requestedStatus
+        : plan.smoke ? "discarded-smoke-invalid" : "invalid";
+      const summary = buildCohortSummary({
+        plan,
+        outputRoot,
+        startedAt,
+        completedAt: new Date().toISOString(),
+        environment,
+        pathBudget,
+        resolutions,
+        captures,
+        status,
+        buildAuthentication,
+        inputIntegrity,
       });
-      captures.push(capture);
-      persistCapture(capture);
-      if (capture.validationIssues.length > 0) {
-        const summary = buildCohortSummary({
-          plan,
-          outputRoot,
-          startedAt,
-          completedAt: new Date().toISOString(),
-          environment,
-          pathBudget,
-          resolutions,
-          captures,
-          status: plan.smoke ? "discarded-smoke-invalid" : "invalid",
-        });
-        writeJson(path.join(outputRoot, "summary.json"), summary);
-        throw new Error(
-          `Host-tail cohort is invalid at ${row.artifactName}; retained without replacement: `
-            + capture.validationIssues.join("; "),
+      writeJson(path.join(outputRoot, "summary.json"), summary);
+      return summary;
+    })();
+    return finalizationPromise;
+  };
+
+  try {
+    buildAuthentication = persistBuildAuthentication(outputRoot, buildAuthenticationRaw);
+    environment = await captureEnvironment(outputRoot);
+    for (const lane of plan.lanes) {
+      const resolution = await resolveVSCode(lane, electron);
+      resolutions.set(lane, resolution);
+      for (const row of plan.rows.filter((candidate) => candidate.lane === lane)) {
+        process.stdout.write(
+          `[aurelia-host-tail] ${lane} pair ${row.pair}/${row.samplesPerJourney} `
+            + `position ${row.pairPosition} ${row.journey}\n`,
         );
+        const workspace = prepareWorkspace(row, outputRoot);
+        const capture = await runSample({
+          row,
+          resolution,
+          workspace,
+          electron,
+          launchElectron,
+        });
+        captures.push(capture);
+        persistCapture(capture);
+        if (capture.validationIssues.length > 0) {
+          throw new Error(
+            `Host-tail cohort is invalid at ${row.artifactName}; retained without replacement: `
+              + capture.validationIssues.join("; "),
+          );
+        }
       }
     }
+  } catch (error) {
+    try {
+      await finalize(plan.smoke ? "discarded-smoke-invalid" : "invalid");
+    } catch (finalizationError) {
+      throw new AggregateError(
+        [error, finalizationError],
+        `${error instanceof Error ? error.message : String(error)}; `
+          + `host-tail invalid-evidence finalization also failed: `
+          + `${finalizationError instanceof Error ? finalizationError.message : String(finalizationError)}`,
+        { cause: error },
+      );
+    }
+    throw error;
   }
 
-  const summary = buildCohortSummary({
-    plan,
-    outputRoot,
-    startedAt,
-    completedAt: new Date().toISOString(),
-    environment,
-    pathBudget,
-    resolutions,
-    captures,
-    status: plan.smoke ? "discarded-smoke" : "valid",
-  });
-  writeJson(path.join(outputRoot, "summary.json"), summary);
+  const summary = await finalize(plan.smoke ? "discarded-smoke" : "valid");
+  if (summary.inputIntegrity.status !== "passed") {
+    throw new Error(
+      `Host-tail acquisition inputs drifted; retained invalid cohort: `
+        + summary.inputIntegrity.validationIssues.join("; "),
+    );
+  }
   return summary;
 }
 
@@ -367,16 +447,10 @@ function assertResolvedVersion(lane, version) {
   }
 }
 
-async function runSample({ row, resolution, workspace, electron }) {
-  const stdoutCapture = captureWritable();
-  const stderrCapture = captureWritable();
+async function runSample({ row, resolution, workspace, launchElectron }) {
   const launchEpochMilliseconds = Date.now();
   const startedAt = new Date(launchEpochMilliseconds).toISOString();
   const started = performance.now();
-  let runTestsReturn = null;
-  let exitCode = null;
-  let signal = null;
-  let runTestsError = null;
   const extensionTestsEnv = sampleEnvironment({
     row,
     resolution,
@@ -400,27 +474,37 @@ async function runSample({ row, resolution, workspace, electron }) {
     extensionTestsEnv,
   };
 
+  let execution;
   try {
-    runTestsReturn = await electron.runTests({
-      ...invocation,
-      stdout: stdoutCapture.stream,
-      stderr: stderrCapture.stream,
-    });
-    exitCode = runTestsReturn;
+    execution = await launchElectron({ invocation, workspace });
   } catch (error) {
-    exitCode = typeof error?.code === "number" ? error.code : null;
-    signal = typeof error?.signal === "string" ? error.signal : null;
-    runTestsError = {
-      name: error instanceof Error ? error.name : "UnknownError",
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack ?? null : null,
+    execution = {
+      runTestsReturn: null,
+      exitCode: typeof error?.code === "number" ? error.code : null,
+      signal: typeof error?.signal === "string" ? error.signal : null,
+      runTestsError: errorEvidence(error),
+      stdout: "",
+      stderr: "",
+      outerProcess: {
+        mode: "launch-failed-before-process-evidence",
+        timeoutMilliseconds: outerElectronProcessPolicy.timeoutMilliseconds,
+        timedOut: false,
+        cleanup: null,
+      },
     };
   }
 
   const completedAt = new Date().toISOString();
   const wallMilliseconds = performance.now() - started;
-  const stdout = stdoutCapture.text();
-  const stderr = stderrCapture.text();
+  const {
+    runTestsReturn,
+    exitCode,
+    signal,
+    runTestsError,
+    stdout,
+    stderr,
+    outerProcess,
+  } = execution;
   const parsed = readSampleReport(workspace.reportPath);
   const clientLog = readClientLogEvidence(workspace);
   const extensionHostLog = readExtensionHostLogEvidence(workspace);
@@ -451,6 +535,7 @@ async function runSample({ row, resolution, workspace, electron }) {
       signal,
       runTestsError,
       invocation,
+      outerProcess,
     },
     stdout,
     stderr,
@@ -460,6 +545,314 @@ async function runSample({ row, resolution, workspace, electron }) {
     report: parsed.report,
     reportParseIssue: parsed.issue,
     validationIssues,
+  };
+}
+
+async function runElectronSampleInProcess({ invocation }, electron) {
+  const stdoutCapture = captureWritable();
+  const stderrCapture = captureWritable();
+  let runTestsReturn = null;
+  let exitCode = null;
+  let signal = null;
+  let runTestsError = null;
+  try {
+    runTestsReturn = await electron.runTests({
+      ...invocation,
+      stdout: stdoutCapture.stream,
+      stderr: stderrCapture.stream,
+    });
+    exitCode = runTestsReturn;
+  } catch (error) {
+    exitCode = typeof error?.code === "number" ? error.code : null;
+    signal = typeof error?.signal === "string" ? error.signal : null;
+    runTestsError = errorEvidence(error);
+  }
+  return {
+    runTestsReturn,
+    exitCode,
+    signal,
+    runTestsError,
+    stdout: stdoutCapture.text(),
+    stderr: stderrCapture.text(),
+    outerProcess: {
+      mode: "injected-in-process-test-seam",
+      timeoutMilliseconds: outerElectronProcessPolicy.timeoutMilliseconds,
+      timedOut: false,
+      cleanup: null,
+    },
+  };
+}
+
+export async function runElectronSampleBounded({ invocation, workspace }, options = {}) {
+  const invocationPath = workspace.electronInvocationPath
+    ?? path.join(workspace.sampleRoot, "electron.invocation.json");
+  const resultPath = workspace.electronResultPath
+    ?? path.join(workspace.sampleRoot, "electron.result.json");
+  assertInside(workspace.sampleRoot, invocationPath);
+  assertInside(workspace.sampleRoot, resultPath);
+  writeFileSync(invocationPath, `${JSON.stringify({
+    schemaVersion: electronInvocationSchemaVersion,
+    resultPath,
+    invocation,
+  }, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
+
+  const bounded = await runBoundedChildProcess({
+    command: process.execPath,
+    args: [electronHelperPath, invocationPath],
+    cwd: repoRoot,
+    env: process.env,
+    timeoutMilliseconds: options.timeoutMilliseconds
+      ?? outerElectronProcessPolicy.timeoutMilliseconds,
+    cleanupGraceMilliseconds: options.cleanupGraceMilliseconds
+      ?? outerElectronProcessPolicy.cleanupGraceMilliseconds,
+    platform: options.platform ?? process.platform,
+    spawnProcess: options.spawnProcess,
+    killTree: options.killTree,
+  });
+  const helper = readElectronHelperResult(resultPath);
+  let runTestsError = helper.result?.runTestsError ?? null;
+  if (bounded.timedOut) {
+    runTestsError = {
+      name: "ExtensionHostTailOuterTimeoutError",
+      message: `Extension Host Electron process tree exceeded ${bounded.timeoutMilliseconds}ms.`,
+      stack: null,
+    };
+  } else if (bounded.interruptedSignal != null) {
+    runTestsError = {
+      name: "ExtensionHostTailInterruptedError",
+      message: `Extension Host Electron process tree was interrupted by ${bounded.interruptedSignal}.`,
+      stack: null,
+    };
+  } else if (bounded.spawnError != null) {
+    runTestsError = bounded.spawnError;
+  } else if (bounded.exitCode !== 0) {
+    runTestsError = {
+      name: "ExtensionHostTailHelperProcessError",
+      message: `Extension Host Electron helper exited with ${String(bounded.exitCode ?? bounded.signal)}.`,
+      stack: null,
+    };
+  } else if (helper.issue != null) {
+    runTestsError = {
+      name: "ExtensionHostTailHelperEvidenceError",
+      message: helper.issue,
+      stack: null,
+    };
+  }
+
+  return {
+    runTestsReturn: helper.result?.runTestsReturn ?? null,
+    exitCode: helper.result?.exitCode ?? bounded.exitCode,
+    signal: helper.result?.signal ?? bounded.signal,
+    runTestsError,
+    stdout: bounded.stdout,
+    stderr: bounded.stderr,
+    outerProcess: {
+      mode: "bounded-isolated-node-helper",
+      helperPath: electronHelperPath,
+      helperInvocationPath: invocationPath,
+      helperInvocationSha256: await fileSha256(invocationPath),
+      helperResultPath: helper.result == null ? null : resultPath,
+      helperResultSha256: helper.result == null ? null : await fileSha256(resultPath),
+      helperResultIssue: helper.issue,
+      pid: bounded.pid,
+      wallMilliseconds: bounded.wallMilliseconds,
+      timeoutMilliseconds: bounded.timeoutMilliseconds,
+      timedOut: bounded.timedOut,
+      interruptedSignal: bounded.interruptedSignal,
+      helperExitCode: bounded.exitCode,
+      helperSignal: bounded.signal,
+      cleanup: bounded.cleanup,
+    },
+  };
+}
+
+export async function runBoundedChildProcess(options) {
+  const timeoutMilliseconds = options.timeoutMilliseconds;
+  const cleanupGraceMilliseconds = options.cleanupGraceMilliseconds ?? 10_000;
+  if (!Number.isSafeInteger(timeoutMilliseconds) || timeoutMilliseconds <= 0) {
+    throw new Error("Bounded child timeout must be a positive safe integer.");
+  }
+  if (!Number.isSafeInteger(cleanupGraceMilliseconds) || cleanupGraceMilliseconds <= 0) {
+    throw new Error("Bounded child cleanup grace must be a positive safe integer.");
+  }
+  const platform = options.platform ?? process.platform;
+  const spawnProcess = options.spawnProcess ?? spawn;
+  const killTree = options.killTree ?? terminateProcessTree;
+  const started = performance.now();
+  const stdoutChunks = [];
+  const stderrChunks = [];
+  const child = spawnProcess(options.command, options.args ?? [], {
+    cwd: options.cwd,
+    env: options.env,
+    detached: platform !== "win32",
+    stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
+  });
+  child.stdout?.on("data", (chunk) => stdoutChunks.push(Buffer.from(chunk)));
+  child.stderr?.on("data", (chunk) => stderrChunks.push(Buffer.from(chunk)));
+
+  const processOutcome = new Promise((resolve) => {
+    child.once("error", (error) => resolve({ kind: "spawn-error", error }));
+    child.once("close", (exitCode, signal) => resolve({ kind: "closed", exitCode, signal }));
+  });
+  let timeoutHandle;
+  const timeoutOutcome = new Promise((resolve) => {
+    timeoutHandle = setTimeout(() => resolve({ kind: "timeout" }), timeoutMilliseconds);
+  });
+  let interruptResolve;
+  const interruptOutcome = new Promise((resolve) => {
+    interruptResolve = resolve;
+  });
+  const signalHandlers = new Map();
+  for (const signal of ["SIGINT", "SIGTERM"]) {
+    const handler = () => interruptResolve({ kind: "interrupted", signal });
+    signalHandlers.set(signal, handler);
+    process.once(signal, handler);
+  }
+
+  let first;
+  let cleanup = null;
+  let final;
+  try {
+    first = await Promise.race([processOutcome, timeoutOutcome, interruptOutcome]);
+    final = first;
+    if (first.kind === "timeout" || first.kind === "interrupted") {
+      const cleanupStarted = performance.now();
+      let killTreeTimeoutHandle;
+      const killTreeOutcome = Promise.resolve()
+        .then(() => killTree(child.pid, platform, cleanupGraceMilliseconds))
+        .then(
+          (value) => ({ kind: "tree-termination-completed", value }),
+          (error) => ({ kind: "tree-termination-failed", error }),
+        );
+      const killTreeTimeout = new Promise((resolve) => {
+        killTreeTimeoutHandle = setTimeout(
+          () => resolve({ kind: "tree-termination-timeout" }),
+          cleanupGraceMilliseconds,
+        );
+        killTreeTimeoutHandle.unref?.();
+      });
+      const killTreeResult = await Promise.race([killTreeOutcome, killTreeTimeout]);
+      clearTimeout(killTreeTimeoutHandle);
+      if (killTreeResult.kind === "tree-termination-completed") {
+        cleanup = killTreeResult.value;
+      } else if (killTreeResult.kind === "tree-termination-failed") {
+        cleanup = {
+          status: "failed",
+          strategy: "process-tree-termination",
+          pid: child.pid ?? null,
+          issue: errorEvidence(killTreeResult.error).message,
+        };
+      } else {
+        cleanup = {
+          status: "failed",
+          strategy: "process-tree-termination",
+          pid: child.pid ?? null,
+          issue: `Process-tree termination did not settle within ${cleanupGraceMilliseconds}ms.`,
+        };
+      }
+      const remainingCleanupGrace = Math.max(
+        0,
+        cleanupGraceMilliseconds - (performance.now() - cleanupStarted),
+      );
+      let cleanupGraceHandle;
+      const cleanupGraceOutcome = new Promise((resolve) => {
+        cleanupGraceHandle = setTimeout(
+          () => resolve({ kind: "cleanup-grace-expired" }),
+          remainingCleanupGrace,
+        );
+        cleanupGraceHandle.unref?.();
+      });
+      const cleanupWait = await Promise.race([
+        processOutcome,
+        cleanupGraceOutcome,
+      ]);
+      clearTimeout(cleanupGraceHandle);
+      final = cleanupWait;
+      if (cleanupWait.kind === "cleanup-grace-expired") {
+        cleanup = {
+          ...cleanup,
+          status: "failed",
+          issue: [
+            cleanup?.issue,
+            `Child process did not close within ${cleanupGraceMilliseconds}ms after tree termination.`,
+          ].filter((value) => value != null && value !== "").join(" "),
+        };
+      }
+    }
+  } finally {
+    clearTimeout(timeoutHandle);
+    for (const [signal, handler] of signalHandlers) process.removeListener(signal, handler);
+  }
+
+  const spawnError = final.kind === "spawn-error" ? errorEvidence(final.error) : null;
+  return {
+    pid: child.pid ?? null,
+    wallMilliseconds: performance.now() - started,
+    timeoutMilliseconds,
+    timedOut: first.kind === "timeout",
+    interruptedSignal: first.kind === "interrupted" ? first.signal : null,
+    exitCode: final.kind === "closed" ? final.exitCode : null,
+    signal: final.kind === "closed" ? final.signal : null,
+    spawnError,
+    cleanup,
+    stdout: Buffer.concat(stdoutChunks).toString("utf8"),
+    stderr: Buffer.concat(stderrChunks).toString("utf8"),
+  };
+}
+
+async function terminateProcessTree(pid, platform, timeoutMilliseconds = 10_000) {
+  if (!Number.isSafeInteger(pid) || pid <= 0) {
+    return { status: "failed", strategy: "none", issue: "Child process had no valid PID." };
+  }
+  try {
+    if (platform === "win32") {
+      const { execFile } = await import("node:child_process");
+      await new Promise((resolve, reject) => {
+        execFile(
+          "taskkill.exe",
+          ["/PID", String(pid), "/T", "/F"],
+          { windowsHide: true, timeout: timeoutMilliseconds, killSignal: "SIGKILL" },
+          (error) => error == null ? resolve() : reject(error),
+        );
+      });
+      return { status: "passed", strategy: "windows-taskkill-tree", pid };
+    }
+    process.kill(-pid, "SIGKILL");
+    return { status: "passed", strategy: "posix-process-group-sigkill", pid };
+  } catch (error) {
+    return {
+      status: "failed",
+      strategy: platform === "win32" ? "windows-taskkill-tree" : "posix-process-group-sigkill",
+      pid,
+      issue: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+function readElectronHelperResult(resultPath) {
+  if (!existsSync(resultPath)) {
+    return { result: null, issue: "Extension Host Electron helper produced no result evidence." };
+  }
+  try {
+    const result = JSON.parse(readFileSync(resultPath, "utf8"));
+    if (!isRecord(result) || result.schemaVersion !== electronResultSchemaVersion) {
+      return { result: null, issue: "Extension Host Electron helper result schema drifted." };
+    }
+    return { result, issue: null };
+  } catch (error) {
+    return {
+      result: null,
+      issue: `Extension Host Electron helper result was not exact JSON: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+}
+
+function errorEvidence(error) {
+  return {
+    name: error instanceof Error ? error.name : "UnknownError",
+    message: error instanceof Error ? error.message : String(error),
+    stack: error instanceof Error ? error.stack ?? null : null,
   };
 }
 
@@ -1107,6 +1500,8 @@ export function buildCohortSummary(input) {
     startedAt: input.startedAt,
     completedAt: input.completedAt,
     environment: input.environment,
+    buildAuthentication: input.buildAuthentication ?? null,
+    inputIntegrity: input.inputIntegrity ?? null,
     method: {
       fixture: fixtureName,
       journeys,
@@ -1125,6 +1520,8 @@ export function buildCohortSummary(input) {
       readiness: "already-active-api-readiness-check",
       providerObservationScope: "test-entry-through-receipt",
       diagnosticReschedulePolicy,
+      outerElectronProcessPolicy,
+      bundleAuthenticationPolicy,
       pairOrder: "odd=diagnostics/completion; even=completion/diagnostics",
       exclusionsPermitted: false,
       excludedSamples: 0,
@@ -1160,6 +1557,7 @@ export function buildCohortSummary(input) {
       passingCaptures: validCaptures.length,
       invalidCaptures: input.captures.length - validCaptures.length,
       complete,
+      inputIntegrityPassed: input.inputIntegrity?.status === "passed",
       captures: input.captures.map((capture) => ({
         artifactName: capture.row.artifactName,
         sampleId: capture.workspace.sampleId,
@@ -1301,6 +1699,8 @@ export function sampleWorkspacePaths(row, outputRoot) {
     stdoutPath: path.join(sampleRoot, "sample.stdout.txt"),
     stderrPath: path.join(sampleRoot, "sample.stderr.txt"),
     processPath: path.join(sampleRoot, "sample.process.json"),
+    electronInvocationPath: path.join(sampleRoot, "electron.invocation.json"),
+    electronResultPath: path.join(sampleRoot, "electron.result.json"),
   });
 }
 
@@ -1555,12 +1955,20 @@ function persistCapture(capture) {
     extensionHostLog: capture.extensionHostLog.path == null
       ? null
       : relativeRepoPath(capture.extensionHostLog.path),
+    electronInvocation: capture.process.outerProcess?.helperInvocationPath == null
+      ? null
+      : relativeRepoPath(capture.process.outerProcess.helperInvocationPath),
+    electronResult: capture.process.outerProcess?.helperResultPath == null
+      ? null
+      : relativeRepoPath(capture.process.outerProcess.helperResultPath),
     reportSha256,
     stdoutSha256: processEvidence.stdoutSha256,
     stderrSha256: processEvidence.stderrSha256,
     processSha256,
     clientLogSha256: capture.clientLog.sha256,
     extensionHostLogSha256: capture.extensionHostLog.sha256,
+    electronInvocationSha256: capture.process.outerProcess?.helperInvocationSha256 ?? null,
+    electronResultSha256: capture.process.outerProcess?.helperResultSha256 ?? null,
   };
 }
 
@@ -1804,7 +2212,12 @@ function captureWritable() {
 }
 
 async function assertMeasurementReady(outputRoot, plan) {
-  const trackedStatus = await gitText(["status", "--porcelain=v1", "--untracked-files=no"]);
+  const trackedStatus = await gitText([
+    "status",
+    "--porcelain=v1",
+    "--untracked-files=no",
+    "--ignore-submodules=none",
+  ]);
   if (!plan.smoke && trackedStatus.length > 0) {
     throw new Error(`Tracked worktree must be clean before host-tail measurement:\n${trackedStatus}`);
   }
@@ -1812,13 +2225,231 @@ async function assertMeasurementReady(outputRoot, plan) {
     ["measurement suite", extensionTestsPath],
     ["pressure fixture", sourceWorkspace],
     ["semantic-runtime dependency target", semanticRuntimeNodeModules],
-    ["extension bundle", path.join(extensionDevelopmentPath, "dist", "extension.cjs")],
-    ["server bundle", path.join(extensionDevelopmentPath, "dist", "server", "main.cjs")],
+    ["Electron helper", electronHelperPath],
   ]) {
     if (!existsSync(target)) throw new Error(`Missing ${label}: ${target}`);
   }
   assertInside(evidenceParent, outputRoot);
   if (existsSync(outputRoot)) throw new Error(`Refusing to overwrite cohort evidence: ${outputRoot}`);
+}
+
+export async function authenticateHeadBundles({ plan }, dependencies = {}) {
+  const readState = dependencies.readRepositoryState ?? repositoryState;
+  const before = await readState();
+  if (plan.authoritative && before.trackedStatusPorcelain !== "") {
+    throw new Error(
+      `Authoritative bundle authentication requires a clean tracked HEAD:\n${before.trackedStatusPorcelain}`,
+    );
+  }
+  const pnpm = dependencies.pnpmEntrypoint ?? resolvePnpmEntrypoint();
+  const runBuild = dependencies.runBuild ?? ((input) => runBoundedChildProcess(input));
+  const buildCommands = [
+    {
+      label: "forced-ide-types",
+      argv: [
+        "exec",
+        "tsc",
+        "-b",
+        "--force",
+        "packages/semantic-runtime",
+        "packages/language-server",
+        "packages/vscode",
+      ],
+    },
+    {
+      label: "vscode-bundles",
+      argv: ["--filter", "aurelia-2", "run", "bundle"],
+    },
+  ];
+  const buildResults = [];
+  for (const command of buildCommands) {
+    const result = await runBuild({
+      command: process.execPath,
+      args: [pnpm, ...command.argv],
+      cwd: repoRoot,
+      env: process.env,
+      timeoutMilliseconds: bundleAuthenticationPolicy.buildTimeoutMilliseconds,
+      cleanupGraceMilliseconds: outerElectronProcessPolicy.cleanupGraceMilliseconds,
+    });
+    buildResults.push({ command, result });
+    if (
+      result.timedOut
+      || result.interruptedSignal != null
+      || result.spawnError != null
+      || result.exitCode !== 0
+    ) {
+      throw new Error(
+        `IDE build authentication step ${command.label} failed before host-tail acquisition `
+          + `(exit=${String(result.exitCode)}, signal=${String(result.signal)}, timedOut=${String(result.timedOut)}).\n`
+          + `${result.stderr ?? ""}`,
+      );
+    }
+  }
+  const after = await readState();
+  const repositoryIssues = compareRepositoryState(before, after);
+  if (repositoryIssues.length > 0) {
+    throw new Error(`Repository changed while authenticating IDE bundles: ${repositoryIssues.join("; ")}`);
+  }
+  for (const [label, target] of [
+    ["extension bundle", path.join(extensionDistPath, "extension.cjs")],
+    ["server bundle", path.join(extensionDistPath, "server", "main.cjs")],
+  ]) {
+    if (!existsSync(target)) throw new Error(`IDE build produced no ${label}: ${target}`);
+  }
+  const outputs = await directoryEvidence(extensionDistPath);
+  return {
+    status: plan.authoritative ? "authenticated-clean-head-build" : "discarded-smoke-working-tree-build",
+    headAuthenticated: plan.authoritative,
+    policy: bundleAuthenticationPolicy,
+    commands: buildCommands.map((command) => ({
+      label: command.label,
+      executable: process.execPath,
+      pnpmEntrypoint: pnpm,
+      argv: command.argv,
+      cwd: repoRoot,
+    })),
+    repositoryBefore: before,
+    repositoryAfter: after,
+    outputs,
+    processes: buildResults.map(({ command, result }) => ({
+      label: command.label,
+      pid: result.pid,
+      wallMilliseconds: result.wallMilliseconds,
+      timeoutMilliseconds: result.timeoutMilliseconds,
+      exitCode: result.exitCode,
+      signal: result.signal,
+      timedOut: result.timedOut,
+      interruptedSignal: result.interruptedSignal,
+      cleanup: result.cleanup,
+    })),
+    stdout: buildResults.map(({ command, result }) => (
+      `[${command.label}]\n${result.stdout ?? ""}`
+    )).join("\n"),
+    stderr: buildResults.map(({ command, result }) => (
+      `[${command.label}]\n${result.stderr ?? ""}`
+    )).join("\n"),
+  };
+}
+
+function persistBuildAuthentication(outputRoot, authentication) {
+  const stdout = authentication?.stdout ?? "";
+  const stderr = authentication?.stderr ?? "";
+  const stdoutPath = path.join(outputRoot, "build.stdout.txt");
+  const stderrPath = path.join(outputRoot, "build.stderr.txt");
+  writeFileSync(stdoutPath, stdout, { encoding: "utf8", flag: "wx" });
+  writeFileSync(stderrPath, stderr, { encoding: "utf8", flag: "wx" });
+  const evidence = Object.fromEntries(
+    Object.entries(authentication ?? {}).filter(([key]) => key !== "stdout" && key !== "stderr"),
+  );
+  return {
+    ...evidence,
+    stdout: {
+      path: relativeRepoPath(stdoutPath),
+      bytes: Buffer.byteLength(stdout),
+      sha256: sha256(stdout),
+    },
+    stderr: {
+      path: relativeRepoPath(stderrPath),
+      bytes: Buffer.byteLength(stderr),
+      sha256: sha256(stderr),
+    },
+  };
+}
+
+export async function captureFrozenMeasurementInputs() {
+  const workspaceDependencyPackages = [];
+  for (const specifier of requiredWorkspaceModules) {
+    const packagePath = path.join(semanticRuntimeNodeModules, ...specifier.split("/"));
+    const packageRoot = resolveExistingPath(packagePath, `workspace dependency package ${specifier}`);
+    workspaceDependencyPackages.push({
+      specifier,
+      packageRoot,
+      evidence: await directoryEvidence(packageRoot),
+    });
+  }
+  return {
+    schemaVersion: "aurelia-ls/extension-host-tail-frozen-inputs/v1",
+    repository: await repositoryState(),
+    outputs: {
+      extensionDist: await directoryEvidence(extensionDistPath),
+    },
+    fixture: {
+      path: sourceWorkspace,
+      evidence: await directoryEvidence(sourceWorkspace),
+    },
+    harness: {
+      collectorSha256: await fileSha256(collectorPath),
+      electronHelperSha256: await fileSha256(electronHelperPath),
+      permanentRunnerSha256: await fileSha256(permanentRunnerPath),
+      suiteSha256: await fileSha256(extensionTestsPath),
+      pnpmLockSha256: await fileSha256(path.join(repoRoot, "pnpm-lock.yaml")),
+    },
+    workspaceDependencies: {
+      linkRoot: resolveExistingPath(semanticRuntimeNodeModules, "semantic-runtime dependency target"),
+      packages: workspaceDependencyPackages,
+    },
+  };
+}
+
+export function compareFrozenMeasurementInputs(before, after) {
+  const validationIssues = [];
+  for (const section of [
+    "schemaVersion",
+    "repository",
+    "outputs",
+    "fixture",
+    "harness",
+    "workspaceDependencies",
+  ]) {
+    if (stableJson(before?.[section]) !== stableJson(after?.[section])) {
+      validationIssues.push(`${section} changed across the host-tail acquisition boundary`);
+    }
+  }
+  return {
+    schemaVersion: "aurelia-ls/extension-host-tail-input-integrity/v1",
+    status: validationIssues.length === 0 ? "passed" : "failed",
+    policy: bundleAuthenticationPolicy,
+    validationIssues,
+    before,
+    after,
+  };
+}
+
+async function repositoryState() {
+  return {
+    head: await gitText(["rev-parse", "HEAD"]),
+    tree: await gitText(["rev-parse", "HEAD^{tree}"]),
+    trackedStatusPorcelain: await gitText([
+      "status",
+      "--porcelain=v1",
+      "--untracked-files=no",
+      "--ignore-submodules=none",
+    ]),
+    submodules: await gitText(["submodule", "status", "--recursive"]),
+  };
+}
+
+function compareRepositoryState(before, after) {
+  const issues = [];
+  for (const key of ["head", "tree", "trackedStatusPorcelain", "submodules"]) {
+    if (before?.[key] !== after?.[key]) issues.push(`${key} changed`);
+  }
+  return issues;
+}
+
+function resolvePnpmEntrypoint() {
+  const candidate = process.env.npm_execpath;
+  if (candidate == null || candidate === "") {
+    throw new Error(
+      "Host-tail bundle authentication requires the pnpm lifecycle; run pnpm measure:ide:host-tails.",
+    );
+  }
+  const resolved = resolveExistingPath(candidate, "pnpm lifecycle entrypoint");
+  const info = lstatSync(resolved);
+  if (!info.isFile() || !/^pnpm\.(?:c?js|mjs)$/iu.test(path.basename(resolved))) {
+    throw new Error(`Unsupported pnpm lifecycle entrypoint: ${resolved}`);
+  }
+  return resolved;
 }
 
 async function captureEnvironmentSnapshot(outputRoot) {
@@ -1845,6 +2476,7 @@ async function captureEnvironmentSnapshot(outputRoot) {
     inputHashes: {
       collectorSha256: await fileSha256(collectorPath),
       permanentRunnerSha256: await fileSha256(permanentRunnerPath),
+      electronHelperSha256: await fileSha256(electronHelperPath),
       suiteSha256: await fileSha256(extensionTestsPath),
       extensionBundleSha256: await fileSha256(extensionBundle),
       serverBundleSha256: await fileSha256(serverBundle),
@@ -1855,15 +2487,65 @@ async function captureEnvironmentSnapshot(outputRoot) {
 }
 
 async function directorySha256(root) {
+  return (await directoryEvidence(root)).sha256;
+}
+
+async function directoryEvidence(root) {
+  const resolvedRoot = resolveExistingPath(root, "directory evidence root");
   const hash = createHash("sha256");
-  for (const filePath of recursiveFiles(root)) {
-    const relative = path.relative(root, filePath).replace(/\\/gu, "/");
-    hash.update(relative);
-    hash.update("\0");
-    hash.update(await fs.readFile(filePath));
-    hash.update("\0");
-  }
-  return hash.digest("hex");
+  let fileCount = 0;
+  let directoryCount = 0;
+  let symbolicLinkCount = 0;
+  let bytes = 0;
+  const visit = async (directory) => {
+    directoryCount += 1;
+    for (const entry of readdirSync(directory, { withFileTypes: true })
+      .sort((left, right) => left.name.localeCompare(right.name))) {
+      const target = path.join(directory, entry.name);
+      const relative = path.relative(resolvedRoot, target).replace(/\\/gu, "/");
+      if (entry.isDirectory()) {
+        hash.update(`directory\0${relative}\0`);
+        await visit(target);
+      } else if (entry.isFile()) {
+        const content = await fs.readFile(target);
+        fileCount += 1;
+        bytes += content.byteLength;
+        hash.update(`file\0${relative}\0`);
+        hash.update(content);
+        hash.update("\0");
+      } else if (entry.isSymbolicLink()) {
+        symbolicLinkCount += 1;
+        hash.update(`symlink\0${relative}\0${readlinkSync(target)}\0`);
+      } else {
+        hash.update(`other\0${relative}\0`);
+      }
+    }
+  };
+  await visit(resolvedRoot);
+  return {
+    path: resolvedRoot,
+    sha256: hash.digest("hex"),
+    fileCount,
+    directoryCount,
+    symbolicLinkCount,
+    bytes,
+    policy: "sorted relative paths, regular-file bytes, and symbolic-link targets",
+  };
+}
+
+function stableJson(value) {
+  const normalize = (candidate) => {
+    if (Array.isArray(candidate)) return candidate.map(normalize);
+    if (isRecord(candidate)) {
+      return Object.fromEntries(
+        Object.keys(candidate)
+          .sort((left, right) => left.localeCompare(right))
+          .map((key) => [key, normalize(candidate[key])]),
+      );
+    }
+    return candidate;
+  };
+  return JSON.stringify(normalize(value));
 }
 
 function recursiveFiles(root) {

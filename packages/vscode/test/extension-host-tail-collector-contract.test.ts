@@ -1,4 +1,5 @@
 import {
+  existsSync,
   lstatSync,
   mkdtempSync,
   mkdirSync,
@@ -38,6 +39,8 @@ interface CollectorModule {
   readonly diagnosticReschedulePolicy: Readonly<Record<string, unknown>>;
   readonly processSchemaVersion: string;
   readonly sampleSchemaVersion: string;
+  readonly outerElectronProcessPolicy: Readonly<Record<string, any>>;
+  readonly bundleAuthenticationPolicy: Readonly<Record<string, any>>;
   readonly hostLocalReviewGuards: readonly Record<string, any>[];
   readonly windowsClientLogPathCharacterBudget: number;
   readonly parseCollectorArguments: (args: readonly string[]) => CollectorPlan;
@@ -67,6 +70,11 @@ interface CollectorModule {
   readonly validateSampleReport: (input: Record<string, any>) => readonly string[];
   readonly assertAuthoritativeLatencyAccepted: (summary: Record<string, any>) => void;
   readonly summarize: (values: readonly number[], includeP95: boolean) => Record<string, any>;
+  readonly compareFrozenMeasurementInputs: (
+    before: Record<string, any>,
+    after: Record<string, any>,
+  ) => Record<string, any>;
+  readonly runBoundedChildProcess: (options: Record<string, any>) => Promise<Record<string, any>>;
 }
 
 interface LaunchRecord {
@@ -90,10 +98,10 @@ describe("Extension Host tail collector", () => {
     const plan = collector.parseCollectorArguments(["--cohort=contract"]);
 
     expect(collector.sampleSchemaVersion).toBe("aurelia-ls/extension-host-tail-sample/v4");
-    expect(collector.processSchemaVersion).toBe("aurelia-ls/extension-host-tail-process/v5");
-    expect(collector.cohortSchemaVersion).toBe("aurelia-ls/extension-host-tail-cohort/v5");
+    expect(collector.processSchemaVersion).toBe("aurelia-ls/extension-host-tail-process/v6");
+    expect(collector.cohortSchemaVersion).toBe("aurelia-ls/extension-host-tail-cohort/v6");
     expect(collector.publicPlan(plan).schemaVersion)
-      .toBe("aurelia-ls/extension-host-tail-plan/v3");
+      .toBe("aurelia-ls/extension-host-tail-plan/v4");
     expect(collector.publicPlan(plan).diagnosticReschedulePolicy)
       .toEqual(collector.diagnosticReschedulePolicy);
     expect(collector.diagnosticReschedulePolicy).toEqual({
@@ -106,6 +114,23 @@ describe("Extension Host tail collector", () => {
       sequence: "[request, authenticated Canceled failure]* then [request, full response]",
       timing: "first request through final response",
       cancellationCountAcceptanceThreshold: null,
+    });
+    expect(collector.outerElectronProcessPolicy).toMatchObject({
+      timeoutMilliseconds: 60_000,
+      cleanupGraceMilliseconds: 10_000,
+      strategy: expect.stringContaining("process-tree"),
+    });
+    expect(collector.bundleAuthenticationPolicy).toMatchObject({
+      authoritativeSource: "clean tracked HEAD",
+      buildCommands: [
+        expect.stringContaining("tsc -b --force"),
+        "pnpm --filter aurelia-2 run bundle",
+      ],
+      freezeBoundary: "post-build pre-acquisition through post-acquisition",
+    });
+    expect(collector.publicPlan(plan)).toMatchObject({
+      outerElectronProcessPolicy: collector.outerElectronProcessPolicy,
+      bundleAuthenticationPolicy: collector.bundleAuthenticationPolicy,
     });
     expect(plan.versionResolutionCount).toBe(2);
     expect(plan.launchCount).toBe(50);
@@ -189,6 +214,155 @@ describe("Extension Host tail collector", () => {
     })).rejects.toThrow(/Projected Windows own Client\.log path is \d+ characters/u);
     expect(readinessChecked).toBe(false);
     expect(resolutionAttempted).toBe(false);
+  });
+
+  test("fails the retained cohort when a frozen tracked, output, fixture, harness, or dependency input drifts", async () => {
+    const collector = await loadCollector();
+    const plan = collector.parseCollectorArguments([
+      "--lane=current-stable",
+      "--cohort=input-drift",
+      "--smoke",
+    ]);
+    const outputRoot = temporaryRoot("aurelia-host-tail-input-drift-");
+    const harness = fakeHarness(collector, outputRoot);
+    let captures = 0;
+    (harness.dependencies as Record<string, any>).captureFrozenInputs = async () => {
+      captures += 1;
+      const value = frozenInputContract();
+      if (captures > 1) value.fixture.evidence.sha256 = "f".repeat(64);
+      return value;
+    };
+
+    await expect(collector.collectExtensionHostTails(plan, harness.dependencies))
+      .rejects.toThrow("acquisition inputs drifted");
+
+    const summary = JSON.parse(readFileSync(path.join(outputRoot, "summary.json"), "utf8"));
+    expect(summary).toMatchObject({
+      status: "discarded-smoke-invalid",
+      inputIntegrity: {
+        status: "failed",
+        validationIssues: ["fixture changed across the host-tail acquisition boundary"],
+      },
+    });
+  });
+
+  test("finalizes one invalid integrity summary when workspace preparation fails after a valid capture", async () => {
+    const collector = await loadCollector();
+    const plan = collector.parseCollectorArguments([
+      "--lane=current-stable",
+      "--cohort=post-capture-preparation-failure",
+      "--smoke",
+    ]);
+    const outputRoot = temporaryRoot("aurelia-host-tail-post-capture-failure-");
+    const harness = fakeHarness(collector, outputRoot);
+    const dependencies = harness.dependencies as Record<string, any>;
+    const prepareWorkspace = dependencies.prepareWorkspace as (row: AcquisitionRow) => Record<string, any>;
+    let preparations = 0;
+    dependencies.prepareWorkspace = (row: AcquisitionRow) => {
+      preparations += 1;
+      if (preparations === 2) throw new Error("forced second workspace preparation failure");
+      return prepareWorkspace(row);
+    };
+    let frozenCaptures = 0;
+    dependencies.captureFrozenInputs = async () => {
+      frozenCaptures += 1;
+      if (frozenCaptures > 2) throw new Error("finalization was invoked more than once");
+      return frozenInputContract();
+    };
+
+    await expect(collector.collectExtensionHostTails(plan, dependencies))
+      .rejects.toThrow("forced second workspace preparation failure");
+
+    expect(frozenCaptures).toBe(2);
+    const summary = JSON.parse(readFileSync(path.join(outputRoot, "summary.json"), "utf8"));
+    expect(summary).toMatchObject({
+      status: "discarded-smoke-invalid",
+      inputIntegrity: { status: "passed", validationIssues: [] },
+      integrity: {
+        plannedCaptures: 2,
+        retainedCaptures: 1,
+        passingCaptures: 1,
+        invalidCaptures: 0,
+        complete: false,
+      },
+    });
+    expect(summary.integrity.captures).toHaveLength(1);
+    expect(existsSync(path.join(outputRoot, "s01", "sample.process.json"))).toBe(true);
+  });
+
+  test("bounds a child and removes its descendant process tree on timeout", async () => {
+    const collector = await loadCollector();
+    const root = temporaryRoot("aurelia-host-tail-process-tree-");
+    const descendantMarker = path.join(root, "descendant-survived.txt");
+    const descendant = [
+      `const fs = require("node:fs")`,
+      `setTimeout(() => fs.writeFileSync(${JSON.stringify(descendantMarker)}, "survived"), 450)`,
+      `setInterval(() => {}, 1000)`,
+    ].join(";");
+    const parent = [
+      `const { spawn } = require("node:child_process")`,
+      `spawn(process.execPath, ["-e", ${JSON.stringify(descendant)}], { stdio: "ignore" })`,
+      `setInterval(() => {}, 1000)`,
+    ].join(";");
+
+    const result = await collector.runBoundedChildProcess({
+      command: process.execPath,
+      args: ["-e", parent],
+      cwd: process.cwd(),
+      env: process.env,
+      timeoutMilliseconds: 75,
+      cleanupGraceMilliseconds: 2_000,
+    });
+
+    expect(result).toMatchObject({
+      timedOut: true,
+      timeoutMilliseconds: 75,
+      cleanup: { status: "passed", pid: expect.any(Number) },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 650));
+    expect(existsSync(descendantMarker)).toBe(false);
+  });
+
+  test("keeps the cleanup boundary bounded when process-tree termination never settles", async () => {
+    const collector = await loadCollector();
+    const root = temporaryRoot("aurelia-host-tail-wedged-cleanup-");
+    const started = performance.now();
+    const result = await collector.runBoundedChildProcess({
+      command: process.execPath,
+      args: ["-e", "setInterval(() => {}, 1000)"],
+      cwd: process.cwd(),
+      env: process.env,
+      timeoutMilliseconds: 25,
+      cleanupGraceMilliseconds: 75,
+      killTree: () => new Promise(() => {}),
+    });
+    try {
+      expect(performance.now() - started).toBeLessThan(1_000);
+      expect(result).toMatchObject({
+        timedOut: true,
+        cleanup: {
+          status: "failed",
+          issue: expect.stringContaining("Process-tree termination did not settle within 75ms."),
+        },
+      });
+    } finally {
+      if (typeof result.pid === "number") {
+        try {
+          process.kill(result.pid, "SIGKILL");
+        } catch {
+          // The child may exit between the bounded result and test cleanup.
+        }
+        const deadline = Date.now() + 2_000;
+        while (Date.now() < deadline) {
+          try {
+            process.kill(result.pid, 0);
+            await new Promise((resolve) => setTimeout(resolve, 25));
+          } catch {
+            break;
+          }
+        }
+      }
+    }
   });
 
   test("links the copied workspace to the exact dependency target and resolves required modules", async () => {
@@ -332,6 +506,18 @@ describe("Extension Host tail collector", () => {
 
     expect(summary.status).toBe("valid");
     expect(summary.authoritative).toBe(true);
+    expect(summary.buildAuthentication).toMatchObject({
+      status: "authenticated-clean-head-build",
+      headAuthenticated: true,
+      stdout: { path: expect.stringMatching(/build\.stdout\.txt$/u), sha256: expect.any(String) },
+      stderr: { path: expect.stringMatching(/build\.stderr\.txt$/u), sha256: expect.any(String) },
+    });
+    expect(summary.inputIntegrity).toMatchObject({
+      status: "passed",
+      validationIssues: [],
+      before: frozenInputContract(),
+      after: frozenInputContract(),
+    });
     expect(summary.latencyAcceptance).toMatchObject({
       status: "passed",
       universalProductSlo: false,
@@ -435,7 +621,7 @@ describe("Extension Host tail collector", () => {
       }),
     });
     expect(processEvidence).toMatchObject({
-      schemaVersion: "aurelia-ls/extension-host-tail-process/v5",
+      schemaVersion: "aurelia-ls/extension-host-tail-process/v6",
       artifactName: "current-stable-pair-01-position-1-cold-full-diagnostics",
       sampleId: "s01",
       workspaceDependencies: {
@@ -1125,6 +1311,17 @@ function temporaryRoot(prefix: string): string {
   return root;
 }
 
+function frozenInputContract(): Record<string, any> {
+  return {
+    schemaVersion: "aurelia-ls/extension-host-tail-frozen-inputs/v1",
+    repository: { head: "a".repeat(40), tree: "b".repeat(40), trackedStatusPorcelain: "", submodules: "" },
+    outputs: { extensionDist: { sha256: "c".repeat(64) } },
+    fixture: { evidence: { sha256: "d".repeat(64) } },
+    harness: { collectorSha256: "e".repeat(64) },
+    workspaceDependencies: { packages: [] },
+  };
+}
+
 function fakeHarness(
   collector: CollectorModule,
   outputRoot: string,
@@ -1142,9 +1339,17 @@ function fakeHarness(
   const launches: LaunchRecord[] = [];
   let activeLaunches = 0;
   let maximumConcurrentLaunches = 0;
+  const frozenInputs = frozenInputContract();
   const dependencies = {
     outputRoot,
     assertReady: async () => {},
+    authenticateInputs: async () => ({
+      status: "authenticated-clean-head-build",
+      headAuthenticated: true,
+      stdout: "fake authenticated build stdout\n",
+      stderr: "",
+    }),
+    captureFrozenInputs: async () => structuredClone(frozenInputs),
     captureEnvironment: async () => ({ fixture: "contract" }),
     prepareWorkspace: (row: AcquisitionRow) => prepareFakeWorkspace(collector, row, outputRoot),
     electron: {

@@ -35,6 +35,10 @@ interface IncrementalityMeasurementModule {
     readonly p95: number;
     readonly max: number;
   }[];
+  sessionDisposalInvariants(disposal: Record<string, any>): readonly {
+    readonly name: string;
+    readonly status: "pass" | "fail";
+  }[];
 }
 
 interface DocumentEvidence {
@@ -72,7 +76,7 @@ describe("incrementality measurement", () => {
       parseIncrementalityArgs,
     } = await loadMeasurementModule();
 
-    expect(incrementalityMeasurementSchemaVersion).toBe("aurelia-ls/incrementality/v1");
+    expect(incrementalityMeasurementSchemaVersion).toBe("aurelia-ls/incrementality/v2");
     expect(parseIncrementalityArgs([])).toEqual({
       fixture: null,
       workspace: null,
@@ -221,6 +225,40 @@ describe("incrementality measurement", () => {
         max: 50,
       },
     ]);
+  });
+
+  test("requires settled idempotent disposal, closed request admission, and forced-GC reclamation when sampled", async () => {
+    const { sessionDisposalInvariants } = await loadMeasurementModule();
+    const disposal = {
+      status: "completed",
+      repeatedDisposeReturnedSamePromise: true,
+      useAfterDispose: {
+        status: "rejected",
+        errorMessage: "Cannot use a semantic-runtime LSP session after disposal has begun.",
+      },
+      retention: {
+        forceGc: true,
+        sessionObjectStatus: "collected",
+        processMemoryAfter: { v8DetachedContextCount: 0 },
+      },
+    };
+
+    expect(sessionDisposalInvariants(disposal)).toEqual([
+      { name: "session disposal settles once and remains idempotent", status: "pass" },
+      { name: "disposed session rejects subsequent request admission", status: "pass" },
+      { name: "post-dispose process retains no detached V8 contexts", status: "pass" },
+      { name: "forced-GC post-dispose boundary reclaims the LSP session object graph", status: "pass" },
+    ]);
+    expect(sessionDisposalInvariants({
+      ...disposal,
+      repeatedDisposeReturnedSamePromise: false,
+      useAfterDispose: { status: "unexpected-success", errorMessage: null },
+      retention: {
+        forceGc: true,
+        sessionObjectStatus: "retained",
+        processMemoryAfter: { v8DetachedContextCount: 1 },
+      },
+    }).every((invariant) => invariant.status === "fail")).toBe(true);
   });
 });
 

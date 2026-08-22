@@ -31,7 +31,7 @@ const sourceExtensions = new Set([".ts", ".js", ".html"]);
 const fixtureStatExtensions = new Set([".ts", ".js", ".html", ".json", ".css"]);
 const incrementalityJourneys = new Set(["completion-first", "diagnostics-first"]);
 
-export const incrementalityMeasurementSchemaVersion = "aurelia-ls/incrementality/v1";
+export const incrementalityMeasurementSchemaVersion = "aurelia-ls/incrementality/v2";
 
 class MeasurementDocumentStore {
   documents = new Map();
@@ -234,7 +234,7 @@ async function main() {
     ),
   );
   const measurement = new MeasurementProbe(projectInputHost, documents);
-  const session = new SemanticRuntimeLspSession({
+  let session = new SemanticRuntimeLspSession({
     documentUris,
     projectInputHost,
     projectInputCurrentnessPolicy: sourceTextOverlay,
@@ -266,6 +266,7 @@ async function main() {
     cache: [],
     editJourneys: [],
     abortPressure: [],
+    disposal: null,
     invariants: [],
     measurement: {
       editCycles,
@@ -377,6 +378,14 @@ async function main() {
 
   const cancelledPressure = await cancelledAbortPressure(session, targetHtml, cursorPositions.member, requestCount);
   report.abortPressure.push(cancelledPressure);
+
+  const disposed = await disposeMeasuredSession(session);
+  session = null;
+  report.disposal = {
+    ...disposed.evidence,
+    retention: await observePostDisposeRetention(disposed.sessionReference, forceGc),
+  };
+  writeMeasurementHeapSnapshot(heapSnapshotDirectory, "post-dispose");
 
   addInvariants(report);
 
@@ -806,6 +815,119 @@ async function cacheStructureSnapshot(label, session) {
   };
 }
 
+async function disposeMeasuredSession(session) {
+  const before = await cacheStructureSnapshot("immediately before session disposal", session);
+  const processTypeSystemBefore = processTypeSystemCacheSnapshot();
+  const sessionReference = new WeakRef(session);
+  const started = performance.now();
+  const disposal = session.dispose();
+  const repeatedDisposal = session.dispose();
+  await disposal;
+  const elapsedMilliseconds = performance.now() - started;
+  let useAfterDispose;
+  try {
+    await session.runRequest(null, () => "unexpected-success");
+    useAfterDispose = {
+      status: "unexpected-success",
+      errorName: null,
+      errorMessage: null,
+    };
+  } catch (error) {
+    useAfterDispose = {
+      status: "rejected",
+      errorName: error instanceof Error ? error.name : "UnknownError",
+      errorMessage: error instanceof Error ? error.message : String(error),
+    };
+  }
+  return {
+    sessionReference,
+    evidence: {
+      status: "completed",
+      elapsedMilliseconds,
+      repeatedDisposeReturnedSamePromise: disposal === repeatedDisposal,
+      useAfterDispose,
+      before,
+      processTypeSystemBefore,
+      processTypeSystemImmediatelyAfter: processTypeSystemCacheSnapshot(),
+      processMemoryImmediatelyAfter: memorySnapshot(),
+    },
+  };
+}
+
+async function observePostDisposeRetention(sessionReference, forceGc) {
+  const maximumCollectionCycles = forceGc ? 12 : 0;
+  let collectionCycles = 0;
+  let sessionObjectStatus = "not-sampled";
+  if (forceGc) {
+    sessionObjectStatus = "retained";
+    for (let cycle = 1; cycle <= maximumCollectionCycles; cycle += 1) {
+      await new Promise((resolve) => setImmediate(resolve));
+      globalThis.gc();
+      await new Promise((resolve) => setImmediate(resolve));
+      collectionCycles = cycle;
+      if (sessionReference.deref() == null) {
+        sessionObjectStatus = "collected";
+        break;
+      }
+    }
+    globalThis.gc();
+  }
+  return {
+    boundary: forceGc
+      ? "dispose promise settled, all harness strong references dropped, bounded forced-GC weak-reference observation"
+      : "dispose promise settled; weak-reference collection not sampled without --force-gc",
+    forceGc,
+    maximumCollectionCycles,
+    collectionCycles,
+    sessionObjectStatus,
+    processTypeSystemAfter: processTypeSystemCacheSnapshot(),
+    processMemoryAfter: memorySnapshot(),
+  };
+}
+
+function processTypeSystemCacheSnapshot() {
+  const cache = semanticRuntimeProcessTypeSystemCacheOverview({ rowLimit: 0 });
+  return {
+    entries: cache.entries,
+    hits: cache.hits,
+    misses: cache.misses,
+    writes: cache.writes,
+    clearOperations: cache.clearOperations,
+  };
+}
+
+export function sessionDisposalInvariants(disposal) {
+  const invariants = [
+    {
+      name: "session disposal settles once and remains idempotent",
+      status: disposal?.status === "completed"
+        && disposal?.repeatedDisposeReturnedSamePromise === true
+        ? "pass"
+        : "fail",
+    },
+    {
+      name: "disposed session rejects subsequent request admission",
+      status: disposal?.useAfterDispose?.status === "rejected"
+        && /after disposal has begun/u.test(disposal?.useAfterDispose?.errorMessage ?? "")
+        ? "pass"
+        : "fail",
+    },
+    {
+      name: "post-dispose process retains no detached V8 contexts",
+      status: disposal?.retention?.processMemoryAfter?.v8DetachedContextCount === 0
+        ? "pass"
+        : "fail",
+    },
+  ];
+  if (disposal?.retention?.forceGc === true) {
+    invariants.push({
+      name: "forced-GC post-dispose boundary reclaims the LSP session object graph",
+      status: disposal.retention.sessionObjectStatus === "collected" ? "pass" : "fail",
+    });
+  }
+  return invariants;
+}
+
 function queryClaimSummary(profiles) {
   return profiles.reduce((summary, profile) => {
     summary.profiles += 1;
@@ -890,6 +1012,7 @@ function addInvariants(report) {
       ? "pass"
       : "fail",
   });
+  report.invariants.push(...sessionDisposalInvariants(report.disposal));
 }
 
 function cacheByLabel(report, label) {
@@ -1263,6 +1386,21 @@ function markdownReport(report) {
         row.averageMilliseconds.toFixed(3),
         Object.entries(row.outcomes).map(([key, value]) => `${key}=${value}`).join(", "),
       ]),
+    ),
+    "",
+    "## Session Disposal",
+    "",
+    table(
+      ["boundary", "value"],
+      [
+        ["dispose", `${report.disposal.status} in ${report.disposal.elapsedMilliseconds.toFixed(2)}ms`],
+        ["idempotent", String(report.disposal.repeatedDisposeReturnedSamePromise)],
+        ["use after dispose", report.disposal.useAfterDispose.status],
+        ["forced GC", String(report.disposal.retention.forceGc)],
+        ["session object", report.disposal.retention.sessionObjectStatus],
+        ["post-dispose TS dependency entries", String(report.disposal.retention.processTypeSystemAfter.entries)],
+        ["post-dispose heap", formatAbsoluteBytes(report.disposal.retention.processMemoryAfter.heapUsedBytes)],
+      ],
     ),
     "",
     "## Invariants",
