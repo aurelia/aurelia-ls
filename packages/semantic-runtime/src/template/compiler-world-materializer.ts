@@ -106,7 +106,7 @@ export class TemplateCompilerWorldConstructionRequest {
     readonly container: Container,
     /** AppRoot that owns this compiler world, if known. */
     readonly appRoot: AppRootReference | null,
-    /** Non-syntax resources already selected as visible to this compiler world. */
+    /** Compiler-context resource membership; exact runtime availability is carried separately by resourceLookups. */
     readonly resources: readonly TemplateVisibleResource[],
     /** Attribute-pattern executables selected as visible to this compiler world. */
     readonly attributePatterns: readonly CompilerAttributePatternResource[],
@@ -147,6 +147,8 @@ export class TemplateCompilerWorldDerivationRequest {
     readonly preferredResources: readonly TemplateVisibleResource[],
     readonly syntaxVisibilityKind: TemplateResourceVisibilityKind,
     readonly sourceAddressHandle: AddressHandle | null,
+    /** Additional compiler-context members retained without becoming lookup-key contenders. Parent members persist. */
+    readonly retainedContextResources: readonly TemplateVisibleResource[] | null = null,
   ) {}
 }
 
@@ -406,6 +408,7 @@ export class TemplateCompilerWorldMaterializer {
       parent.resourceScope.exclusions,
       parent.resourceScope.lookups,
       parent.resourceScope.blockedLookups,
+      input.retainedContextResources,
     );
     const hasNewExclusions = resolution.exclusions.length !== parent.resourceScope.exclusions.length
       || resolution.exclusions.some((exclusion, index) =>

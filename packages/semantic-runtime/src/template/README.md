@@ -43,7 +43,9 @@ classification, expression parsing, and instruction lowering converge on the sam
   `App` and `Authoring` are the compiler-cohort kinds; app visibility, route components and fallbacks, declared resource
   dependencies, and authoring policy are retained admission origins rather than competing cohort identities. The
   planner partitions routeables by their owning app root, computes dependency closure before compilation, and gives
-  every owner a deterministic retained parent world containing that owner plus its own declared dependencies. Stable
+  every owner a deterministic retained parent world containing that owner plus its own declared dependencies. Owner
+  membership supplies direct compiler metadata/currentness but owns no runtime lookup key unless the same definition is
+  independently registered; declared dependencies participate in exact `TemplateResourceScopeLookup` precedence. Stable
   project/app-root/owner keys and exact resource-scope comparison prevent queue order, array position, aliases, or
   source-witness changes from silently selecting a different world. The resulting project plan is immutable candidate
   data consumed directly by the production app computation; cohort currentness and replacement belong to that

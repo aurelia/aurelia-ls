@@ -75,8 +75,18 @@ export function mergeVisibleResourceScopeResolution(
     TemplateResourceScopeLane.Inherited,
   ),
   inheritedBlockedLookups: readonly TemplateResourceScopeBlockedLookup[] = [],
+  /** Additional compiler-context membership that owns no lookup key; inherited context members always persist. */
+  retainedContextResources: readonly TemplateVisibleResource[] | null = null,
 ): TemplateResourceScopeResolution {
-  if (preferred.length === 0) {
+  if (
+    preferred.length === 0
+    && (
+      retainedContextResources == null
+      || retainedContextResources.every((retained) =>
+        inherited.some((resource) => sameTemplateVisibleResource(resource, retained))
+      )
+    )
+  ) {
     return new TemplateResourceScopeResolution(
       inherited,
       inheritedExclusions,
@@ -84,6 +94,13 @@ export function mergeVisibleResourceScopeResolution(
       inheritedBlockedLookups,
     );
   }
+  const inheritedContextResources = inherited.filter((resource) =>
+    !inheritedLookups.some((lookup) => sameTemplateVisibleResource(lookup.winner, resource))
+  );
+  const contextResources = distinctVisibleResources([
+    ...inheritedContextResources,
+    ...(retainedContextResources ?? []),
+  ]);
   const localLookups = new Map<string, TemplateResourceScopeLookup>();
   const localBlockedLookups = new Map<string, TemplateResourceScopeBlockedLookup>();
   // Every parent row becomes inherited relative to this derived compiler scope, irrespective of the lane it had in
@@ -190,10 +207,14 @@ export function mergeVisibleResourceScopeResolution(
     effectiveLookups.delete(lookupKey);
     effectiveBlockedLookups.set(lookupKey, blocked);
   }
-  const effectiveResources = distinctLookupWinners([
+  const lookupResources = distinctLookupWinners([
     ...localResources,
     ...inherited,
   ], effectiveLookups.values());
+  const effectiveResources = distinctVisibleResources([
+    ...contextResources,
+    ...lookupResources,
+  ]);
   const winnerByLookupKey = new Map([...effectiveLookups].map(([key, lookup]) => [
     key,
     new ResourceScopeWinner(lookup.winner, lookup.lane, lookup.sourceAddressHandle),
@@ -204,6 +225,18 @@ export function mergeVisibleResourceScopeResolution(
     [...effectiveLookups.values()],
     [...effectiveBlockedLookups.values()],
   );
+}
+
+function distinctVisibleResources(
+  resources: readonly TemplateVisibleResource[],
+): readonly TemplateVisibleResource[] {
+  const distinct: TemplateVisibleResource[] = [];
+  for (const resource of resources) {
+    if (!distinct.some((candidate) => sameTemplateVisibleResource(candidate, resource))) {
+      distinct.push(resource);
+    }
+  }
+  return distinct;
 }
 
 function isAttributeRegistrationResource(resource: TemplateVisibleResource): boolean {

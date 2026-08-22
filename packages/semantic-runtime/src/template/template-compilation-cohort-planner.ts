@@ -266,6 +266,7 @@ export class TemplateCompilationCohortPlanner {
       dependencies,
       TemplateResourceVisibilityKind.Configured,
       admission.definition.sourceAddressHandle,
+      [admission.visibleResource],
     ));
   }
 }

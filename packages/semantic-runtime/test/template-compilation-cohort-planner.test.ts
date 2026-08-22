@@ -88,16 +88,35 @@ describe('template compilation cohort planning', () => {
 
     for (const ownerPlan of plan.ownerPlans) {
       for (const cohort of ownerPlan.cohorts) {
-        expect(cohort.parentCompilerWorld.resourceScope.resources.some((resource) =>
+        const ownerResource = cohort.parentCompilerWorld.resourceScope.resources.find((resource) =>
           resource.definitionProductHandle === ownerPlan.definition.productHandle
-        )).toBe(true);
+        ) ?? null;
+        expect(ownerResource).not.toBeNull();
         const readView = new TemplateCompilerReadView(
           runtime.workspace.store,
           TemplateCompilerWorldAuthority.fixed(cohort.parentCompilerWorld),
         );
-        expect(readView.templateOwnerResource(ownerPlan.definition)).not.toBeNull();
+        expect(readView.templateOwnerResource(ownerPlan.definition)).toBe(ownerResource);
       }
     }
+
+    const firstChildPlan = owner(plan, 'first-child');
+    expect(firstChildPlan.cohorts).toHaveLength(1);
+    const firstChildWorld = firstChildPlan.cohorts[0]!.parentCompilerWorld;
+    const firstChildOwner = firstChildWorld.resourceScope.resources.find((resource) =>
+      resource.definitionProductHandle === firstChildPlan.definition.productHandle
+    ) ?? null;
+    expect(firstChildOwner).not.toBeNull();
+    expect(firstChildWorld.resourceScope.lookups.some((lookup) =>
+      lookup.winner.definitionProductHandle === firstChildPlan.definition.productHandle
+    )).toBe(false);
+    const firstChildCompilation = app.emission.templates.resources.find((resource) =>
+      resource.compilation.definition.productHandle === firstChildPlan.definition.productHandle
+    ) ?? null;
+    expect(firstChildCompilation).not.toBeNull();
+    expect(firstChildCompilation?.compilation.compiledTemplate.issues.some((issue) =>
+      issue.frameworkErrorCode === 'AUR0717'
+    )).toBe(false);
 
     expect(originKinds(plan, 'first-router-root')).toEqual(expect.arrayContaining([
       TemplateCompilationAdmissionOriginKind.AppVisibility,

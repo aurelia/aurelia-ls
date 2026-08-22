@@ -558,9 +558,10 @@ export class TemplateResourceScopeBlockedLookup {
   ) {}
 }
 
-/** Effective resources plus the losing contenders retained while composing them. */
+/** Compiler-context resource membership plus exact lookup winners and losing contenders. */
 export class TemplateResourceScopeResolution {
   constructor(
+    /** Membership superset: context-only owners plus exact lookup winners. */
     readonly resources: readonly TemplateVisibleResource[],
     readonly exclusions: readonly TemplateResourceScopeExclusion[],
     /** Exact lookup-key ownership; resource name/alias metadata must not be used to reconstruct it. */
@@ -570,7 +571,7 @@ export class TemplateResourceScopeResolution {
   ) {}
 }
 
-/** Resource and syntax-resource scope visible to a template compiler world. */
+/** Resource membership and syntax scope visible to one template compiler context. */
 export class TemplateResourceScope {
   constructor(
     /** Product handle for the materialized-product envelope that represents this scope. */
@@ -579,7 +580,7 @@ export class TemplateResourceScope {
     readonly identityHandle: IdentityHandle,
     /** Container whose resource/factory/resolver state produced the scope. */
     readonly container: ContainerReference,
-    /** Custom elements, custom attributes, template controllers, value converters, binding behaviors, and commands. */
+    /** Context-only template owners plus resources that win at least one exact runtime lookup key. */
     readonly resources: readonly TemplateVisibleResource[],
     /** Attribute patterns and other parser syntax resources available to the compiler. */
     readonly syntaxResources: readonly TemplateVisibleResource[],
@@ -617,7 +618,7 @@ export class TemplateResourceResolverService {
     readonly identityHandle: IdentityHandle,
     /** Container used by resolver lookups. */
     readonly container: ContainerReference,
-    /** Resource rows visible to this resolver through the current compiler world. */
+    /** Compiler-context members used for owner metadata/currentness; lookups alone authorize runtime resolution. */
     readonly resources: readonly TemplateVisibleResource[],
     /** Exact runtime lookup-key ownership for resolver selection. */
     readonly lookups: readonly TemplateResourceScopeLookup[],

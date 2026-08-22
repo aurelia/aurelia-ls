@@ -11,7 +11,8 @@ import {
 
 @customElement({
   name: 'first-child',
-  template: '<template>First child</template>',
+  template: '<template><slot></slot></template>',
+  shadowOptions: { mode: 'open' },
 })
 class FirstChild {}
 

@@ -71,14 +71,14 @@ export class TemplateVisibleResourceReference {
   ) {}
 }
 
-/** Resource catalog entry visible to template compilation through DI/container lookup. */
+/** Resource member retained by a compiler context; exact DI/container availability belongs to scope lookup rows. */
 export class TemplateVisibleResource {
   constructor(
     /** Resource kind visible to the compiler. */
     readonly resourceKind: ResourceDefinitionKind,
-    /** Runtime lookup name such as element name, attribute name, converter name, or binding-command name. */
+    /** Canonical resource name; it is lookup-active only when a TemplateResourceScopeLookup names this member. */
     readonly name: string,
-    /** Other lookup names that resolve to the same resource product. */
+    /** Declared aliases; exact active alias ownership remains a TemplateResourceScopeLookup fact. */
     readonly aliases: readonly string[],
     /** Product handle for the visible resource model, which may be a header, full definition, or syntax executable. */
     readonly resourceProductHandle: ProductHandle | null,

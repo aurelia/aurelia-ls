@@ -4,6 +4,7 @@ import type { IdentityHandle, ProductHandle } from '../src/kernel/handles.js';
 import { ResourceDefinitionKind } from '../src/resources/resource-kind.js';
 import {
   TemplateResourceScopeExclusionReason,
+  TemplateResourceScopeLookup,
   TemplateResourceScopeLane,
 } from '../src/template/compiler-world.js';
 import {
@@ -45,6 +46,44 @@ describe('template resource-scope merging', () => {
         winner: preferred,
       }),
     ]);
+  });
+
+  test('keeps context-only owner membership separate from exact lookup winners', () => {
+    const rootOwner = visibleResource('root-owner', 'product:root-owner');
+    const globalCollision = visibleResource('shared-card', 'product:global-collision');
+    const routeOwner = visibleResource('shared-card', 'product:route-owner');
+    const globalLookup = new TemplateResourceScopeLookup(
+      'au:resource:custom-element:shared-card',
+      globalCollision,
+      TemplateResourceScopeLane.Local,
+      null,
+    );
+
+    const resolution = mergeVisibleResourceScopeResolution(
+      [],
+      [rootOwner, globalCollision],
+      [],
+      [globalLookup],
+      [],
+      [routeOwner],
+    );
+
+    expect(resolution.resources.map((resource) => resource.resourceProductHandle)).toEqual([
+      'product:root-owner',
+      'product:route-owner',
+      'product:global-collision',
+    ]);
+    expect(resolution.lookups).toEqual([
+      expect.objectContaining({
+        lookupKey: globalLookup.lookupKey,
+        lane: TemplateResourceScopeLane.Inherited,
+        winner: globalCollision,
+      }),
+    ]);
+    expect(resolution.lookups.some((lookup) =>
+      lookup.winner.resourceProductHandle === routeOwner.resourceProductHandle
+    )).toBe(false);
+    expect(resolution.exclusions).toEqual([]);
   });
 
   test('retains the exact local winner and inherited loser for a shadowed runtime key', () => {
