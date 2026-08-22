@@ -60,6 +60,27 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "newText": "valueNext",
             "range": {
               "end": {
+                "character": 12,
+                "line": 1
+              },
+              "start": {
+                "character": 7,
+                "line": 1
+              }
+            }
+          }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/typescript-related-member-closure/src/app.html",
+          "version": 1
+        }
+      },
+      {
+        "edits": [
+          {
+            "newText": "valueNext",
+            "range": {
+              "end": {
                 "character": 7,
                 "line": 11
               },
@@ -198,27 +219,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "textDocument": {
           "uri": "fixtures://pressure/typescript-related-member-closure/src/contracts.ts",
           "version": null
-        }
-      },
-      {
-        "edits": [
-          {
-            "newText": "valueNext",
-            "range": {
-              "end": {
-                "character": 12,
-                "line": 1
-              },
-              "start": {
-                "character": 7,
-                "line": 1
-              }
-            }
-          }
-        ],
-        "textDocument": {
-          "uri": "fixtures://pressure/typescript-related-member-closure/src/app.html",
-          "version": 1
         }
       }
     ]
@@ -670,6 +670,27 @@ diff --git a/src/contracts.ts b/src/contracts.ts
             "newText": "replacement",
             "range": {
               "end": {
+                "character": 17,
+                "line": 3
+              },
+              "start": {
+                "character": 7,
+                "line": 3
+              }
+            }
+          }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/typescript-related-member-closure/src/app.html",
+          "version": 1
+        }
+      },
+      {
+        "edits": [
+          {
+            "newText": "replacement",
+            "range": {
+              "end": {
                 "character": 21,
                 "line": 32
               },
@@ -717,27 +738,6 @@ diff --git a/src/contracts.ts b/src/contracts.ts
         "textDocument": {
           "uri": "fixtures://pressure/typescript-related-member-closure/src/contracts.ts",
           "version": null
-        }
-      },
-      {
-        "edits": [
-          {
-            "newText": "replacement",
-            "range": {
-              "end": {
-                "character": 17,
-                "line": 3
-              },
-              "start": {
-                "character": 7,
-                "line": 3
-              }
-            }
-          }
-        ],
-        "textDocument": {
-          "uri": "fixtures://pressure/typescript-related-member-closure/src/app.html",
-          "version": 1
         }
       }
     ]
@@ -1063,6 +1063,27 @@ diff --git a/src/contracts.ts b/src/contracts.ts
             "newText": "displayValue",
             "range": {
               "end": {
+                "character": 20,
+                "line": 5
+              },
+              "start": {
+                "character": 7,
+                "line": 5
+              }
+            }
+          }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/typescript-related-member-closure/src/app.html",
+          "version": 1
+        }
+      },
+      {
+        "edits": [
+          {
+            "newText": "displayValue",
+            "range": {
+              "end": {
                 "character": 19,
                 "line": 22
               },
@@ -1123,27 +1144,6 @@ diff --git a/src/contracts.ts b/src/contracts.ts
         "textDocument": {
           "uri": "fixtures://pressure/typescript-related-member-closure/src/contracts.ts",
           "version": null
-        }
-      },
-      {
-        "edits": [
-          {
-            "newText": "displayValue",
-            "range": {
-              "end": {
-                "character": 20,
-                "line": 5
-              },
-              "start": {
-                "character": 7,
-                "line": 5
-              }
-            }
-          }
-        ],
-        "textDocument": {
-          "uri": "fixtures://pressure/typescript-related-member-closure/src/app.html",
-          "version": 1
         }
       }
     ]
@@ -1487,6 +1487,27 @@ diff --git a/src/contracts.ts b/src/contracts.ts
             "newText": "invoke",
             "range": {
               "end": {
+                "character": 17,
+                "line": 10
+              },
+              "start": {
+                "character": 7,
+                "line": 10
+              }
+            }
+          }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/typescript-related-member-closure/src/app.html",
+          "version": 1
+        }
+      },
+      {
+        "edits": [
+          {
+            "newText": "invoke",
+            "range": {
+              "end": {
                 "character": 12,
                 "line": 36
               },
@@ -1560,27 +1581,6 @@ diff --git a/src/contracts.ts b/src/contracts.ts
         "textDocument": {
           "uri": "fixtures://pressure/typescript-related-member-closure/src/contracts.ts",
           "version": null
-        }
-      },
-      {
-        "edits": [
-          {
-            "newText": "invoke",
-            "range": {
-              "end": {
-                "character": 17,
-                "line": 10
-              },
-              "start": {
-                "character": 7,
-                "line": 10
-              }
-            }
-          }
-        ],
-        "textDocument": {
-          "uri": "fixtures://pressure/typescript-related-member-closure/src/app.html",
-          "version": 1
         }
       }
     ]
@@ -1922,7 +1922,12 @@ diff --git a/src/contracts.ts b/src/contracts.ts
 ```json
 {
   "error": {
-    "code": 0,
+    "code": -32803,
+    "data": {
+      "candidates": [],
+      "mappingFailures": [],
+      "reason": "typescript-rename-not-allowed"
+    },
     "message": "TypeScript does not allow length to be renamed. You cannot rename elements that are defined in the standard TypeScript library."
   },
   "outcome": "error"

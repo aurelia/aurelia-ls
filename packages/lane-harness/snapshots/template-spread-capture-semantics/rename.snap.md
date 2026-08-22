@@ -12,13 +12,13 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "anchor": "<spread-card ...spreadState>",
+  "anchor": "<spread-card ...$bindables='spreadState'>",
   "at": "spreadState",
   "atOccurrence": 1,
-  "displayPosition": "src/template-spread-capture-semantics-app.html:2:19",
+  "displayPosition": "src/template-spread-capture-semantics-app.html:2:31",
   "file": "src/template-spread-capture-semantics-app.html",
   "lspPosition": {
-    "character": 18,
+    "character": 30,
     "line": 1
   },
   "newName": "spreadModel",
@@ -35,11 +35,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     "placeholder": "spreadState",
     "range": {
       "end": {
-        "character": 29,
+        "character": 41,
         "line": 1
       },
       "start": {
-        "character": 18,
+        "character": 30,
         "line": 1
       }
     }
@@ -60,32 +60,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "newText": "spreadModel",
             "range": {
               "end": {
-                "character": 13,
-                "line": 27
-              },
-              "start": {
-                "character": 2,
-                "line": 27
-              }
-            }
-          }
-        ],
-        "textDocument": {
-          "uri": "fixtures://pressure/template-spread-capture-semantics/src/template-spread-capture-semantics-app.ts",
-          "version": null
-        }
-      },
-      {
-        "edits": [
-          {
-            "newText": "spreadModel",
-            "range": {
-              "end": {
-                "character": 29,
+                "character": 41,
                 "line": 1
               },
               "start": {
-                "character": 18,
+                "character": 30,
                 "line": 1
               }
             }
@@ -100,6 +79,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "start": {
                 "character": 30,
                 "line": 3
+              }
+            }
+          },
+          {
+            "newText": "spreadModel",
+            "range": {
+              "end": {
+                "character": 41,
+                "line": 4
+              },
+              "start": {
+                "character": 30,
+                "line": 4
               }
             }
           },
@@ -108,11 +100,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "range": {
               "end": {
                 "character": 45,
-                "line": 4
+                "line": 5
               },
               "start": {
                 "character": 34,
-                "line": 4
+                "line": 5
               }
             }
           },
@@ -121,11 +113,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "range": {
               "end": {
                 "character": 41,
-                "line": 5
+                "line": 6
               },
               "start": {
                 "character": 30,
-                "line": 5
+                "line": 6
               }
             }
           },
@@ -134,11 +126,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "range": {
               "end": {
                 "character": 50,
-                "line": 6
+                "line": 7
               },
               "start": {
                 "character": 39,
-                "line": 6
+                "line": 7
               }
             }
           },
@@ -147,11 +139,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "range": {
               "end": {
                 "character": 76,
-                "line": 6
+                "line": 7
               },
               "start": {
                 "character": 65,
-                "line": 6
+                "line": 7
               }
             }
           },
@@ -160,24 +152,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "range": {
               "end": {
                 "character": 101,
-                "line": 6
+                "line": 7
               },
               "start": {
                 "character": 90,
-                "line": 6
-              }
-            }
-          },
-          {
-            "newText": "spreadModel",
-            "range": {
-              "end": {
-                "character": 43,
-                "line": 13
-              },
-              "start": {
-                "character": 32,
-                "line": 13
+                "line": 7
               }
             }
           }
@@ -185,6 +164,27 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "textDocument": {
           "uri": "fixtures://pressure/template-spread-capture-semantics/src/template-spread-capture-semantics-app.html",
           "version": 1
+        }
+      },
+      {
+        "edits": [
+          {
+            "newText": "spreadModel",
+            "range": {
+              "end": {
+                "character": 13,
+                "line": 35
+              },
+              "start": {
+                "character": 2,
+                "line": 35
+              }
+            }
+          }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/template-spread-capture-semantics/src/template-spread-capture-semantics-app.ts",
+          "version": null
         }
       }
     ]
@@ -222,11 +222,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "oldText": "spreadState",
       "range": {
         "end": {
-          "character": 29,
+          "character": 41,
           "line": 1
         },
         "start": {
-          "character": 18,
+          "character": 30,
           "line": 1
         }
       },
@@ -245,6 +245,23 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "start": {
           "character": 30,
           "line": 3
+        }
+      },
+      "source": "documentChanges",
+      "status": "ok"
+    },
+    {
+      "file": "src/template-spread-capture-semantics-app.html",
+      "newText": "spreadModel",
+      "oldText": "spreadState",
+      "range": {
+        "end": {
+          "character": 41,
+          "line": 4
+        },
+        "start": {
+          "character": 30,
+          "line": 4
         }
       },
       "source": "documentChanges",
@@ -257,11 +274,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 45,
-          "line": 4
+          "line": 5
         },
         "start": {
           "character": 34,
-          "line": 4
+          "line": 5
         }
       },
       "source": "documentChanges",
@@ -274,11 +291,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 41,
-          "line": 5
+          "line": 6
         },
         "start": {
           "character": 30,
-          "line": 5
+          "line": 6
         }
       },
       "source": "documentChanges",
@@ -291,11 +308,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 50,
-          "line": 6
+          "line": 7
         },
         "start": {
           "character": 39,
-          "line": 6
+          "line": 7
         }
       },
       "source": "documentChanges",
@@ -308,11 +325,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 76,
-          "line": 6
+          "line": 7
         },
         "start": {
           "character": 65,
-          "line": 6
+          "line": 7
         }
       },
       "source": "documentChanges",
@@ -325,28 +342,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 101,
-          "line": 6
+          "line": 7
         },
         "start": {
           "character": 90,
-          "line": 6
-        }
-      },
-      "source": "documentChanges",
-      "status": "ok"
-    },
-    {
-      "file": "src/template-spread-capture-semantics-app.html",
-      "newText": "spreadModel",
-      "oldText": "spreadState",
-      "range": {
-        "end": {
-          "character": 43,
-          "line": 13
-        },
-        "start": {
-          "character": 32,
-          "line": 13
+          "line": 7
         }
       },
       "source": "documentChanges",
@@ -359,11 +359,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 13,
-          "line": 27
+          "line": 35
         },
         "start": {
           "character": 2,
-          "line": 27
+          "line": 35
         }
       },
       "source": "documentChanges",
@@ -379,27 +379,39 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 diff --git a/src/template-spread-capture-semantics-app.html b/src/template-spread-capture-semantics-app.html
 --- a/src/template-spread-capture-semantics-app.html
 +++ b/src/template-spread-capture-semantics-app.html
-@@ -1,43 +1,43 @@
+@@ -1,55 +1,55 @@
  <template>
--  <spread-card ...spreadState></spread-card>
-+  <spread-card ...spreadModel></spread-card>
-   <spread-card ...spreadContainer.details></spread-card>
+-  <spread-card ...$bindables='spreadState'></spread-card>
++  <spread-card ...$bindables='spreadModel'></spread-card>
+   <spread-card ...$bindables='spreadContainer.details'></spread-card>
 -  <spread-card ...$bindables="spreadState"></spread-card>
+-  <spread-card ...$bindables="spreadState & missingSpreadBehavior"></spread-card>
 -  <spread-card $bindables.spread="spreadState"></spread-card>
 -  <spread-card ...$bindables="spreadState | spreadIdentity"></spread-card>
 -  <spread-card ...$bindables="{ title: spreadState.title, count: spreadState.count, tone: spreadState.tone }"></spread-card>
 +  <spread-card ...$bindables="spreadModel"></spread-card>
++  <spread-card ...$bindables="spreadModel & missingSpreadBehavior"></spread-card>
 +  <spread-card $bindables.spread="spreadModel"></spread-card>
 +  <spread-card ...$bindables="spreadModel | spreadIdentity"></spread-card>
 +  <spread-card ...$bindables="{ title: spreadModel.title, count: spreadModel.count, tone: spreadModel.tone }"></spread-card>
    <spread-card repeat.for="card of spreadCards" ...card></spread-card>
-   <spread-card ...aliasShaped></spread-card>
-   <spread-card ...nullableSpread></spread-card>
-   <spread-card ...primitiveSpread></spread-card>
+   <spread-card ...$bindables='aliasShaped'></spread-card>
+   <spread-card ...$bindables='nullableSpread'></spread-card>
+   <spread-card ...$bindables='optionalSpread'></spread-card>
+   <spread-card ...$bindables='presentUndefinedSpread'></spread-card>
+   <spread-card ...$bindables='unionSpread'></spread-card>
+   <spread-card ...$bindables='dynamicSpread'></spread-card>
+   <spread-card ...$bindables='callableSpread'></spread-card>
+   <spread-card ...$bindables='broadFunctionSpread'></spread-card>
+   <spread-card ...$bindables='broadObjectSpread'></spread-card>
+   <spread-card ...$bindables='constructableSpread'></spread-card>
+   <spread-card ...$bindables='inheritedSpread'></spread-card>
+   <spread-card ...$bindables='primitiveSpread'></spread-card>
+   <no-capture-shell ...$bindables='noBindableSpread'></no-capture-shell>
+   <case-spread-card ...$bindables="caseSpreadState"></case-spread-card>
 
    <spread-card ...$element="spreadState"></spread-card>
--  <spread-card $element.spread="spreadState"></spread-card>
-+  <spread-card $element.spread="spreadModel"></spread-card>
+   <spread-card $element.spread="spreadState"></spread-card>
    <div ...$bindables="spreadState"></div>
    <div ...$attrs></div>
 
@@ -427,12 +439,12 @@ diff --git a/src/template-spread-capture-semantics-app.html b/src/template-sprea
 
    <no-capture-shell value.bind="capturedValue"></no-capture-shell>
    <filtered-capture-shell class="host-class" data-note="filtered-note"></filtered-capture-shell>
-   <nested-capture-shell value.bind="capturedValue" input-mark="nested-mark"></nested-capture-shell>
+   <nested-capture-shell value.bind="capturedValue | nestedIdentity" input-mark="nested-mark"></nested-capture-shell>
  </template>
 diff --git a/src/template-spread-capture-semantics-app.ts b/src/template-spread-capture-semantics-app.ts
 --- a/src/template-spread-capture-semantics-app.ts
 +++ b/src/template-spread-capture-semantics-app.ts
-@@ -1,75 +1,75 @@
+@@ -1,97 +1,97 @@
  import { customElement } from '@aurelia/runtime-html';
  import template from './template-spread-capture-semantics-app.html';
  import {
@@ -442,16 +454,24 @@ diff --git a/src/template-spread-capture-semantics-app.ts b/src/template-spread-
    NoCaptureShell,
  } from './capture-shell';
  import {
+   CaseSpreadCard,
    SpreadCard,
    type SpreadCardState,
    SpreadIdentityValueConverter,
  } from './spread-card';
+
+ class InheritedSpreadState {
+   get title(): string {
+     return 'inherited';
+   }
+ }
 
  @customElement({
    name: 'template-spread-capture-semantics-app',
    template,
    dependencies: [
      SpreadCard,
+     CaseSpreadCard,
      CaptureShell,
      FilteredCaptureShell,
      NoCaptureShell,
@@ -493,8 +513,22 @@ diff --git a/src/template-spread-capture-semantics-app.ts b/src/template-spread-
      'accent-tone': 'attribute-alias-does-not-match',
      title: 'alias-shape',
    };
+   caseSpreadState = {
+     displayLabel: 'exact case',
+     displaylabel: 'wrong case',
+   };
    nullableSpread: SpreadCardState | null = null;
+   optionalSpread: { title?: string; count: number } = { count: 5 };
+   presentUndefinedSpread: { title: string | undefined } = { title: undefined };
+   unionSpread: { title: string } | { count: number } = { title: 'union' };
+   dynamicSpread: unknown = { tone: 'dynamic' };
+   callableSpread = Object.assign(() => undefined, { title: 'not-an-object' });
+   broadFunctionSpread: Function = () => undefined;
+   broadObjectSpread: Object = { title: 'broad-object' };
+   constructableSpread = InheritedSpreadState;
+   inheritedSpread = new InheritedSpreadState();
    primitiveSpread = 1;
+   noBindableSpread = { title: 'source-only' };
    shellLabel = 'shell';
    capturedValue = 'captured';
    isActive = true;
@@ -517,13 +551,13 @@ diff --git a/src/template-spread-capture-semantics-app.ts b/src/template-spread-
 
 ```json
 {
-  "anchor": "...spreadContainer.details",
+  "anchor": "...$bindables='spreadContainer.details'",
   "at": "details",
   "atOccurrence": 1,
-  "displayPosition": "src/template-spread-capture-semantics-app.html:3:35",
+  "displayPosition": "src/template-spread-capture-semantics-app.html:3:47",
   "file": "src/template-spread-capture-semantics-app.html",
   "lspPosition": {
-    "character": 34,
+    "character": 46,
     "line": 2
   },
   "newName": "payload",
@@ -540,11 +574,11 @@ diff --git a/src/template-spread-capture-semantics-app.ts b/src/template-spread-
     "placeholder": "details",
     "range": {
       "end": {
-        "character": 41,
+        "character": 53,
         "line": 2
       },
       "start": {
-        "character": 34,
+        "character": 46,
         "line": 2
       }
     }
@@ -565,32 +599,11 @@ diff --git a/src/template-spread-capture-semantics-app.ts b/src/template-spread-
             "newText": "payload",
             "range": {
               "end": {
-                "character": 11,
-                "line": 34
-              },
-              "start": {
-                "character": 4,
-                "line": 34
-              }
-            }
-          }
-        ],
-        "textDocument": {
-          "uri": "fixtures://pressure/template-spread-capture-semantics/src/template-spread-capture-semantics-app.ts",
-          "version": null
-        }
-      },
-      {
-        "edits": [
-          {
-            "newText": "payload",
-            "range": {
-              "end": {
-                "character": 41,
+                "character": 53,
                 "line": 2
               },
               "start": {
-                "character": 34,
+                "character": 46,
                 "line": 2
               }
             }
@@ -599,6 +612,27 @@ diff --git a/src/template-spread-capture-semantics-app.ts b/src/template-spread-
         "textDocument": {
           "uri": "fixtures://pressure/template-spread-capture-semantics/src/template-spread-capture-semantics-app.html",
           "version": 1
+        }
+      },
+      {
+        "edits": [
+          {
+            "newText": "payload",
+            "range": {
+              "end": {
+                "character": 11,
+                "line": 42
+              },
+              "start": {
+                "character": 4,
+                "line": 42
+              }
+            }
+          }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/template-spread-capture-semantics/src/template-spread-capture-semantics-app.ts",
+          "version": null
         }
       }
     ]
@@ -636,11 +670,11 @@ diff --git a/src/template-spread-capture-semantics-app.ts b/src/template-spread-
       "oldText": "details",
       "range": {
         "end": {
-          "character": 41,
+          "character": 53,
           "line": 2
         },
         "start": {
-          "character": 34,
+          "character": 46,
           "line": 2
         }
       },
@@ -654,11 +688,11 @@ diff --git a/src/template-spread-capture-semantics-app.ts b/src/template-spread-
       "range": {
         "end": {
           "character": 11,
-          "line": 34
+          "line": 42
         },
         "start": {
           "character": 4,
-          "line": 34
+          "line": 42
         }
       },
       "source": "documentChanges",
@@ -674,19 +708,31 @@ diff --git a/src/template-spread-capture-semantics-app.ts b/src/template-spread-
 diff --git a/src/template-spread-capture-semantics-app.html b/src/template-spread-capture-semantics-app.html
 --- a/src/template-spread-capture-semantics-app.html
 +++ b/src/template-spread-capture-semantics-app.html
-@@ -1,43 +1,43 @@
+@@ -1,55 +1,55 @@
  <template>
-   <spread-card ...spreadState></spread-card>
--  <spread-card ...spreadContainer.details></spread-card>
-+  <spread-card ...spreadContainer.payload></spread-card>
+   <spread-card ...$bindables='spreadState'></spread-card>
+-  <spread-card ...$bindables='spreadContainer.details'></spread-card>
++  <spread-card ...$bindables='spreadContainer.payload'></spread-card>
    <spread-card ...$bindables="spreadState"></spread-card>
+   <spread-card ...$bindables="spreadState & missingSpreadBehavior"></spread-card>
    <spread-card $bindables.spread="spreadState"></spread-card>
    <spread-card ...$bindables="spreadState | spreadIdentity"></spread-card>
    <spread-card ...$bindables="{ title: spreadState.title, count: spreadState.count, tone: spreadState.tone }"></spread-card>
    <spread-card repeat.for="card of spreadCards" ...card></spread-card>
-   <spread-card ...aliasShaped></spread-card>
-   <spread-card ...nullableSpread></spread-card>
-   <spread-card ...primitiveSpread></spread-card>
+   <spread-card ...$bindables='aliasShaped'></spread-card>
+   <spread-card ...$bindables='nullableSpread'></spread-card>
+   <spread-card ...$bindables='optionalSpread'></spread-card>
+   <spread-card ...$bindables='presentUndefinedSpread'></spread-card>
+   <spread-card ...$bindables='unionSpread'></spread-card>
+   <spread-card ...$bindables='dynamicSpread'></spread-card>
+   <spread-card ...$bindables='callableSpread'></spread-card>
+   <spread-card ...$bindables='broadFunctionSpread'></spread-card>
+   <spread-card ...$bindables='broadObjectSpread'></spread-card>
+   <spread-card ...$bindables='constructableSpread'></spread-card>
+   <spread-card ...$bindables='inheritedSpread'></spread-card>
+   <spread-card ...$bindables='primitiveSpread'></spread-card>
+   <no-capture-shell ...$bindables='noBindableSpread'></no-capture-shell>
+   <case-spread-card ...$bindables="caseSpreadState"></case-spread-card>
 
    <spread-card ...$element="spreadState"></spread-card>
    <spread-card $element.spread="spreadState"></spread-card>
@@ -717,12 +763,12 @@ diff --git a/src/template-spread-capture-semantics-app.html b/src/template-sprea
 
    <no-capture-shell value.bind="capturedValue"></no-capture-shell>
    <filtered-capture-shell class="host-class" data-note="filtered-note"></filtered-capture-shell>
-   <nested-capture-shell value.bind="capturedValue" input-mark="nested-mark"></nested-capture-shell>
+   <nested-capture-shell value.bind="capturedValue | nestedIdentity" input-mark="nested-mark"></nested-capture-shell>
  </template>
 diff --git a/src/template-spread-capture-semantics-app.ts b/src/template-spread-capture-semantics-app.ts
 --- a/src/template-spread-capture-semantics-app.ts
 +++ b/src/template-spread-capture-semantics-app.ts
-@@ -1,75 +1,75 @@
+@@ -1,97 +1,97 @@
  import { customElement } from '@aurelia/runtime-html';
  import template from './template-spread-capture-semantics-app.html';
  import {
@@ -732,16 +778,24 @@ diff --git a/src/template-spread-capture-semantics-app.ts b/src/template-spread-
    NoCaptureShell,
  } from './capture-shell';
  import {
+   CaseSpreadCard,
    SpreadCard,
    type SpreadCardState,
    SpreadIdentityValueConverter,
  } from './spread-card';
+
+ class InheritedSpreadState {
+   get title(): string {
+     return 'inherited';
+   }
+ }
 
  @customElement({
    name: 'template-spread-capture-semantics-app',
    template,
    dependencies: [
      SpreadCard,
+     CaseSpreadCard,
      CaptureShell,
      FilteredCaptureShell,
      NoCaptureShell,
@@ -783,8 +837,22 @@ diff --git a/src/template-spread-capture-semantics-app.ts b/src/template-spread-
      'accent-tone': 'attribute-alias-does-not-match',
      title: 'alias-shape',
    };
+   caseSpreadState = {
+     displayLabel: 'exact case',
+     displaylabel: 'wrong case',
+   };
    nullableSpread: SpreadCardState | null = null;
+   optionalSpread: { title?: string; count: number } = { count: 5 };
+   presentUndefinedSpread: { title: string | undefined } = { title: undefined };
+   unionSpread: { title: string } | { count: number } = { title: 'union' };
+   dynamicSpread: unknown = { tone: 'dynamic' };
+   callableSpread = Object.assign(() => undefined, { title: 'not-an-object' });
+   broadFunctionSpread: Function = () => undefined;
+   broadObjectSpread: Object = { title: 'broad-object' };
+   constructableSpread = InheritedSpreadState;
+   inheritedSpread = new InheritedSpreadState();
    primitiveSpread = 1;
+   noBindableSpread = { title: 'source-only' };
    shellLabel = 'shell';
    capturedValue = 'captured';
    isActive = true;
@@ -810,11 +878,11 @@ diff --git a/src/template-spread-capture-semantics-app.ts b/src/template-spread-
   "anchor": "repeat.for=\"card of spreadCards\" ...card",
   "at": "card",
   "atOccurrence": 2,
-  "displayPosition": "src/template-spread-capture-semantics-app.html:8:52",
+  "displayPosition": "src/template-spread-capture-semantics-app.html:9:52",
   "file": "src/template-spread-capture-semantics-app.html",
   "lspPosition": {
     "character": 51,
-    "line": 7
+    "line": 8
   },
   "newName": "entry",
   "occurrence": 1
@@ -831,11 +899,11 @@ diff --git a/src/template-spread-capture-semantics-app.ts b/src/template-spread-
     "range": {
       "end": {
         "character": 55,
-        "line": 7
+        "line": 8
       },
       "start": {
         "character": 51,
-        "line": 7
+        "line": 8
       }
     }
   }
@@ -856,11 +924,11 @@ diff --git a/src/template-spread-capture-semantics-app.ts b/src/template-spread-
             "range": {
               "end": {
                 "character": 31,
-                "line": 7
+                "line": 8
               },
               "start": {
                 "character": 27,
-                "line": 7
+                "line": 8
               }
             }
           },
@@ -869,11 +937,11 @@ diff --git a/src/template-spread-capture-semantics-app.ts b/src/template-spread-
             "range": {
               "end": {
                 "character": 55,
-                "line": 7
+                "line": 8
               },
               "start": {
                 "character": 51,
-                "line": 7
+                "line": 8
               }
             }
           }
@@ -918,11 +986,11 @@ diff --git a/src/template-spread-capture-semantics-app.ts b/src/template-spread-
       "range": {
         "end": {
           "character": 31,
-          "line": 7
+          "line": 8
         },
         "start": {
           "character": 27,
-          "line": 7
+          "line": 8
         }
       },
       "source": "documentChanges",
@@ -935,11 +1003,11 @@ diff --git a/src/template-spread-capture-semantics-app.ts b/src/template-spread-
       "range": {
         "end": {
           "character": 55,
-          "line": 7
+          "line": 8
         },
         "start": {
           "character": 51,
-          "line": 7
+          "line": 8
         }
       },
       "source": "documentChanges",
@@ -955,19 +1023,31 @@ diff --git a/src/template-spread-capture-semantics-app.ts b/src/template-spread-
 diff --git a/src/template-spread-capture-semantics-app.html b/src/template-spread-capture-semantics-app.html
 --- a/src/template-spread-capture-semantics-app.html
 +++ b/src/template-spread-capture-semantics-app.html
-@@ -1,43 +1,43 @@
+@@ -1,55 +1,55 @@
  <template>
-   <spread-card ...spreadState></spread-card>
-   <spread-card ...spreadContainer.details></spread-card>
+   <spread-card ...$bindables='spreadState'></spread-card>
+   <spread-card ...$bindables='spreadContainer.details'></spread-card>
    <spread-card ...$bindables="spreadState"></spread-card>
+   <spread-card ...$bindables="spreadState & missingSpreadBehavior"></spread-card>
    <spread-card $bindables.spread="spreadState"></spread-card>
    <spread-card ...$bindables="spreadState | spreadIdentity"></spread-card>
    <spread-card ...$bindables="{ title: spreadState.title, count: spreadState.count, tone: spreadState.tone }"></spread-card>
 -  <spread-card repeat.for="card of spreadCards" ...card></spread-card>
 +  <spread-card repeat.for="entry of spreadCards" ...entry></spread-card>
-   <spread-card ...aliasShaped></spread-card>
-   <spread-card ...nullableSpread></spread-card>
-   <spread-card ...primitiveSpread></spread-card>
+   <spread-card ...$bindables='aliasShaped'></spread-card>
+   <spread-card ...$bindables='nullableSpread'></spread-card>
+   <spread-card ...$bindables='optionalSpread'></spread-card>
+   <spread-card ...$bindables='presentUndefinedSpread'></spread-card>
+   <spread-card ...$bindables='unionSpread'></spread-card>
+   <spread-card ...$bindables='dynamicSpread'></spread-card>
+   <spread-card ...$bindables='callableSpread'></spread-card>
+   <spread-card ...$bindables='broadFunctionSpread'></spread-card>
+   <spread-card ...$bindables='broadObjectSpread'></spread-card>
+   <spread-card ...$bindables='constructableSpread'></spread-card>
+   <spread-card ...$bindables='inheritedSpread'></spread-card>
+   <spread-card ...$bindables='primitiveSpread'></spread-card>
+   <no-capture-shell ...$bindables='noBindableSpread'></no-capture-shell>
+   <case-spread-card ...$bindables="caseSpreadState"></case-spread-card>
 
    <spread-card ...$element="spreadState"></spread-card>
    <spread-card $element.spread="spreadState"></spread-card>
@@ -998,7 +1078,7 @@ diff --git a/src/template-spread-capture-semantics-app.html b/src/template-sprea
 
    <no-capture-shell value.bind="capturedValue"></no-capture-shell>
    <filtered-capture-shell class="host-class" data-note="filtered-note"></filtered-capture-shell>
-   <nested-capture-shell value.bind="capturedValue" input-mark="nested-mark"></nested-capture-shell>
+   <nested-capture-shell value.bind="capturedValue | nestedIdentity" input-mark="nested-mark"></nested-capture-shell>
  </template>
 ```
 
@@ -1011,11 +1091,11 @@ diff --git a/src/template-spread-capture-semantics-app.html b/src/template-sprea
   "anchor": "spreadState | spreadIdentity",
   "at": "spreadIdentity",
   "atOccurrence": 1,
-  "displayPosition": "src/template-spread-capture-semantics-app.html:6:45",
+  "displayPosition": "src/template-spread-capture-semantics-app.html:7:45",
   "file": "src/template-spread-capture-semantics-app.html",
   "lspPosition": {
     "character": 44,
-    "line": 5
+    "line": 6
   },
   "newName": "spreadCopy",
   "occurrence": 1
@@ -1032,11 +1112,11 @@ diff --git a/src/template-spread-capture-semantics-app.html b/src/template-sprea
     "range": {
       "end": {
         "character": 58,
-        "line": 5
+        "line": 6
       },
       "start": {
         "character": 44,
-        "line": 5
+        "line": 6
       }
     }
   }
@@ -1057,11 +1137,11 @@ diff --git a/src/template-spread-capture-semantics-app.html b/src/template-sprea
             "range": {
               "end": {
                 "character": 31,
-                "line": 24
+                "line": 32
               },
               "start": {
                 "character": 17,
-                "line": 24
+                "line": 32
               }
             }
           }
@@ -1078,11 +1158,11 @@ diff --git a/src/template-spread-capture-semantics-app.html b/src/template-sprea
             "range": {
               "end": {
                 "character": 58,
-                "line": 5
+                "line": 6
               },
               "start": {
                 "character": 44,
-                "line": 5
+                "line": 6
               }
             }
           }
@@ -1128,11 +1208,11 @@ diff --git a/src/template-spread-capture-semantics-app.html b/src/template-sprea
       "range": {
         "end": {
           "character": 31,
-          "line": 24
+          "line": 32
         },
         "start": {
           "character": 17,
-          "line": 24
+          "line": 32
         }
       },
       "source": "documentChanges",
@@ -1145,11 +1225,11 @@ diff --git a/src/template-spread-capture-semantics-app.html b/src/template-sprea
       "range": {
         "end": {
           "character": 58,
-          "line": 5
+          "line": 6
         },
         "start": {
           "character": 44,
-          "line": 5
+          "line": 6
         }
       },
       "source": "documentChanges",
@@ -1165,7 +1245,7 @@ diff --git a/src/template-spread-capture-semantics-app.html b/src/template-sprea
 diff --git a/src/spread-card.ts b/src/spread-card.ts
 --- a/src/spread-card.ts
 +++ b/src/spread-card.ts
-@@ -1,30 +1,30 @@
+@@ -1,38 +1,38 @@
  import {
    bindable,
    customElement,
@@ -1190,6 +1270,14 @@ diff --git a/src/spread-card.ts b/src/spread-card.ts
    internal = 'internal';
  }
 
+ @customElement({
+   name: 'case-spread-card',
+   template: '<template>${displayLabel}</template>',
+ })
+ export class CaseSpreadCard {
+   @bindable displayLabel = '';
+ }
+
 -@valueConverter('spreadIdentity')
 +@valueConverter('spreadCopy')
  export class SpreadIdentityValueConverter {
@@ -1200,19 +1288,31 @@ diff --git a/src/spread-card.ts b/src/spread-card.ts
 diff --git a/src/template-spread-capture-semantics-app.html b/src/template-spread-capture-semantics-app.html
 --- a/src/template-spread-capture-semantics-app.html
 +++ b/src/template-spread-capture-semantics-app.html
-@@ -1,43 +1,43 @@
+@@ -1,55 +1,55 @@
  <template>
-   <spread-card ...spreadState></spread-card>
-   <spread-card ...spreadContainer.details></spread-card>
+   <spread-card ...$bindables='spreadState'></spread-card>
+   <spread-card ...$bindables='spreadContainer.details'></spread-card>
    <spread-card ...$bindables="spreadState"></spread-card>
+   <spread-card ...$bindables="spreadState & missingSpreadBehavior"></spread-card>
    <spread-card $bindables.spread="spreadState"></spread-card>
 -  <spread-card ...$bindables="spreadState | spreadIdentity"></spread-card>
 +  <spread-card ...$bindables="spreadState | spreadCopy"></spread-card>
    <spread-card ...$bindables="{ title: spreadState.title, count: spreadState.count, tone: spreadState.tone }"></spread-card>
    <spread-card repeat.for="card of spreadCards" ...card></spread-card>
-   <spread-card ...aliasShaped></spread-card>
-   <spread-card ...nullableSpread></spread-card>
-   <spread-card ...primitiveSpread></spread-card>
+   <spread-card ...$bindables='aliasShaped'></spread-card>
+   <spread-card ...$bindables='nullableSpread'></spread-card>
+   <spread-card ...$bindables='optionalSpread'></spread-card>
+   <spread-card ...$bindables='presentUndefinedSpread'></spread-card>
+   <spread-card ...$bindables='unionSpread'></spread-card>
+   <spread-card ...$bindables='dynamicSpread'></spread-card>
+   <spread-card ...$bindables='callableSpread'></spread-card>
+   <spread-card ...$bindables='broadFunctionSpread'></spread-card>
+   <spread-card ...$bindables='broadObjectSpread'></spread-card>
+   <spread-card ...$bindables='constructableSpread'></spread-card>
+   <spread-card ...$bindables='inheritedSpread'></spread-card>
+   <spread-card ...$bindables='primitiveSpread'></spread-card>
+   <no-capture-shell ...$bindables='noBindableSpread'></no-capture-shell>
+   <case-spread-card ...$bindables="caseSpreadState"></case-spread-card>
 
    <spread-card ...$element="spreadState"></spread-card>
    <spread-card $element.spread="spreadState"></spread-card>
@@ -1243,7 +1343,7 @@ diff --git a/src/template-spread-capture-semantics-app.html b/src/template-sprea
 
    <no-capture-shell value.bind="capturedValue"></no-capture-shell>
    <filtered-capture-shell class="host-class" data-note="filtered-note"></filtered-capture-shell>
-   <nested-capture-shell value.bind="capturedValue" input-mark="nested-mark"></nested-capture-shell>
+   <nested-capture-shell value.bind="capturedValue | nestedIdentity" input-mark="nested-mark"></nested-capture-shell>
  </template>
 ```
 
@@ -1256,11 +1356,11 @@ diff --git a/src/template-spread-capture-semantics-app.html b/src/template-sprea
   "anchor": "value.bind=\"capturedValue\"",
   "at": "capturedValue",
   "atOccurrence": 1,
-  "displayPosition": "src/template-spread-capture-semantics-app.html:19:17",
+  "displayPosition": "src/template-spread-capture-semantics-app.html:31:17",
   "file": "src/template-spread-capture-semantics-app.html",
   "lspPosition": {
     "character": 16,
-    "line": 18
+    "line": 30
   },
   "newName": "forwardedValue",
   "occurrence": 1
@@ -1277,11 +1377,11 @@ diff --git a/src/template-spread-capture-semantics-app.html b/src/template-sprea
     "range": {
       "end": {
         "character": 29,
-        "line": 18
+        "line": 30
       },
       "start": {
         "character": 16,
-        "line": 18
+        "line": 30
       }
     }
   }
@@ -1301,33 +1401,12 @@ diff --git a/src/template-spread-capture-semantics-app.html b/src/template-sprea
             "newText": "forwardedValue",
             "range": {
               "end": {
-                "character": 15,
-                "line": 62
-              },
-              "start": {
-                "character": 2,
-                "line": 62
-              }
-            }
-          }
-        ],
-        "textDocument": {
-          "uri": "fixtures://pressure/template-spread-capture-semantics/src/template-spread-capture-semantics-app.ts",
-          "version": null
-        }
-      },
-      {
-        "edits": [
-          {
-            "newText": "forwardedValue",
-            "range": {
-              "end": {
                 "character": 29,
-                "line": 18
+                "line": 30
               },
               "start": {
                 "character": 16,
-                "line": 18
+                "line": 30
               }
             }
           },
@@ -1336,11 +1415,11 @@ diff --git a/src/template-spread-capture-semantics-app.html b/src/template-sprea
             "range": {
               "end": {
                 "character": 45,
-                "line": 39
+                "line": 51
               },
               "start": {
                 "character": 32,
-                "line": 39
+                "line": 51
               }
             }
           },
@@ -1349,11 +1428,11 @@ diff --git a/src/template-spread-capture-semantics-app.html b/src/template-sprea
             "range": {
               "end": {
                 "character": 49,
-                "line": 41
+                "line": 53
               },
               "start": {
                 "character": 36,
-                "line": 41
+                "line": 53
               }
             }
           }
@@ -1361,6 +1440,27 @@ diff --git a/src/template-spread-capture-semantics-app.html b/src/template-sprea
         "textDocument": {
           "uri": "fixtures://pressure/template-spread-capture-semantics/src/template-spread-capture-semantics-app.html",
           "version": 1
+        }
+      },
+      {
+        "edits": [
+          {
+            "newText": "forwardedValue",
+            "range": {
+              "end": {
+                "character": 15,
+                "line": 84
+              },
+              "start": {
+                "character": 2,
+                "line": 84
+              }
+            }
+          }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/template-spread-capture-semantics/src/template-spread-capture-semantics-app.ts",
+          "version": null
         }
       }
     ]
@@ -1399,11 +1499,11 @@ diff --git a/src/template-spread-capture-semantics-app.html b/src/template-sprea
       "range": {
         "end": {
           "character": 29,
-          "line": 18
+          "line": 30
         },
         "start": {
           "character": 16,
-          "line": 18
+          "line": 30
         }
       },
       "source": "documentChanges",
@@ -1416,11 +1516,11 @@ diff --git a/src/template-spread-capture-semantics-app.html b/src/template-sprea
       "range": {
         "end": {
           "character": 45,
-          "line": 39
+          "line": 51
         },
         "start": {
           "character": 32,
-          "line": 39
+          "line": 51
         }
       },
       "source": "documentChanges",
@@ -1433,11 +1533,11 @@ diff --git a/src/template-spread-capture-semantics-app.html b/src/template-sprea
       "range": {
         "end": {
           "character": 49,
-          "line": 41
+          "line": 53
         },
         "start": {
           "character": 36,
-          "line": 41
+          "line": 53
         }
       },
       "source": "documentChanges",
@@ -1450,11 +1550,11 @@ diff --git a/src/template-spread-capture-semantics-app.html b/src/template-sprea
       "range": {
         "end": {
           "character": 15,
-          "line": 62
+          "line": 84
         },
         "start": {
           "character": 2,
-          "line": 62
+          "line": 84
         }
       },
       "source": "documentChanges",
@@ -1470,18 +1570,30 @@ diff --git a/src/template-spread-capture-semantics-app.html b/src/template-sprea
 diff --git a/src/template-spread-capture-semantics-app.html b/src/template-spread-capture-semantics-app.html
 --- a/src/template-spread-capture-semantics-app.html
 +++ b/src/template-spread-capture-semantics-app.html
-@@ -1,43 +1,43 @@
+@@ -1,55 +1,55 @@
  <template>
-   <spread-card ...spreadState></spread-card>
-   <spread-card ...spreadContainer.details></spread-card>
+   <spread-card ...$bindables='spreadState'></spread-card>
+   <spread-card ...$bindables='spreadContainer.details'></spread-card>
    <spread-card ...$bindables="spreadState"></spread-card>
+   <spread-card ...$bindables="spreadState & missingSpreadBehavior"></spread-card>
    <spread-card $bindables.spread="spreadState"></spread-card>
    <spread-card ...$bindables="spreadState | spreadIdentity"></spread-card>
    <spread-card ...$bindables="{ title: spreadState.title, count: spreadState.count, tone: spreadState.tone }"></spread-card>
    <spread-card repeat.for="card of spreadCards" ...card></spread-card>
-   <spread-card ...aliasShaped></spread-card>
-   <spread-card ...nullableSpread></spread-card>
-   <spread-card ...primitiveSpread></spread-card>
+   <spread-card ...$bindables='aliasShaped'></spread-card>
+   <spread-card ...$bindables='nullableSpread'></spread-card>
+   <spread-card ...$bindables='optionalSpread'></spread-card>
+   <spread-card ...$bindables='presentUndefinedSpread'></spread-card>
+   <spread-card ...$bindables='unionSpread'></spread-card>
+   <spread-card ...$bindables='dynamicSpread'></spread-card>
+   <spread-card ...$bindables='callableSpread'></spread-card>
+   <spread-card ...$bindables='broadFunctionSpread'></spread-card>
+   <spread-card ...$bindables='broadObjectSpread'></spread-card>
+   <spread-card ...$bindables='constructableSpread'></spread-card>
+   <spread-card ...$bindables='inheritedSpread'></spread-card>
+   <spread-card ...$bindables='primitiveSpread'></spread-card>
+   <no-capture-shell ...$bindables='noBindableSpread'></no-capture-shell>
+   <case-spread-card ...$bindables="caseSpreadState"></case-spread-card>
 
    <spread-card ...$element="spreadState"></spread-card>
    <spread-card $element.spread="spreadState"></spread-card>
@@ -1514,13 +1626,13 @@ diff --git a/src/template-spread-capture-semantics-app.html b/src/template-sprea
 -  <no-capture-shell value.bind="capturedValue"></no-capture-shell>
 +  <no-capture-shell value.bind="forwardedValue"></no-capture-shell>
    <filtered-capture-shell class="host-class" data-note="filtered-note"></filtered-capture-shell>
--  <nested-capture-shell value.bind="capturedValue" input-mark="nested-mark"></nested-capture-shell>
-+  <nested-capture-shell value.bind="forwardedValue" input-mark="nested-mark"></nested-capture-shell>
+-  <nested-capture-shell value.bind="capturedValue | nestedIdentity" input-mark="nested-mark"></nested-capture-shell>
++  <nested-capture-shell value.bind="forwardedValue | nestedIdentity" input-mark="nested-mark"></nested-capture-shell>
  </template>
 diff --git a/src/template-spread-capture-semantics-app.ts b/src/template-spread-capture-semantics-app.ts
 --- a/src/template-spread-capture-semantics-app.ts
 +++ b/src/template-spread-capture-semantics-app.ts
-@@ -1,75 +1,75 @@
+@@ -1,97 +1,97 @@
  import { customElement } from '@aurelia/runtime-html';
  import template from './template-spread-capture-semantics-app.html';
  import {
@@ -1530,16 +1642,24 @@ diff --git a/src/template-spread-capture-semantics-app.ts b/src/template-spread-
    NoCaptureShell,
  } from './capture-shell';
  import {
+   CaseSpreadCard,
    SpreadCard,
    type SpreadCardState,
    SpreadIdentityValueConverter,
  } from './spread-card';
+
+ class InheritedSpreadState {
+   get title(): string {
+     return 'inherited';
+   }
+ }
 
  @customElement({
    name: 'template-spread-capture-semantics-app',
    template,
    dependencies: [
      SpreadCard,
+     CaseSpreadCard,
      CaptureShell,
      FilteredCaptureShell,
      NoCaptureShell,
@@ -1580,8 +1700,22 @@ diff --git a/src/template-spread-capture-semantics-app.ts b/src/template-spread-
      'accent-tone': 'attribute-alias-does-not-match',
      title: 'alias-shape',
    };
+   caseSpreadState = {
+     displayLabel: 'exact case',
+     displaylabel: 'wrong case',
+   };
    nullableSpread: SpreadCardState | null = null;
+   optionalSpread: { title?: string; count: number } = { count: 5 };
+   presentUndefinedSpread: { title: string | undefined } = { title: undefined };
+   unionSpread: { title: string } | { count: number } = { title: 'union' };
+   dynamicSpread: unknown = { tone: 'dynamic' };
+   callableSpread = Object.assign(() => undefined, { title: 'not-an-object' });
+   broadFunctionSpread: Function = () => undefined;
+   broadObjectSpread: Object = { title: 'broad-object' };
+   constructableSpread = InheritedSpreadState;
+   inheritedSpread = new InheritedSpreadState();
    primitiveSpread = 1;
+   noBindableSpread = { title: 'source-only' };
    shellLabel = 'shell';
 -  capturedValue = 'captured';
 +  forwardedValue = 'captured';
@@ -1608,11 +1742,11 @@ diff --git a/src/template-spread-capture-semantics-app.ts b/src/template-spread-
   "anchor": "input-mark=\"receiver-local-mark\"",
   "at": "input-mark",
   "atOccurrence": 1,
-  "displayPosition": "src/template-spread-capture-semantics-app.html:24:5",
+  "displayPosition": "src/template-spread-capture-semantics-app.html:36:5",
   "file": "src/template-spread-capture-semantics-app.html",
   "lspPosition": {
     "character": 4,
-    "line": 23
+    "line": 35
   },
   "newName": "input-stamp",
   "occurrence": 1
@@ -1629,11 +1763,11 @@ diff --git a/src/template-spread-capture-semantics-app.ts b/src/template-spread-
     "range": {
       "end": {
         "character": 14,
-        "line": 23
+        "line": 35
       },
       "start": {
         "character": 4,
-        "line": 23
+        "line": 35
       }
     }
   }
@@ -1696,11 +1830,11 @@ diff --git a/src/template-spread-capture-semantics-app.ts b/src/template-spread-
             "range": {
               "end": {
                 "character": 14,
-                "line": 23
+                "line": 35
               },
               "start": {
                 "character": 4,
-                "line": 23
+                "line": 35
               }
             }
           }
@@ -1782,11 +1916,11 @@ diff --git a/src/template-spread-capture-semantics-app.ts b/src/template-spread-
       "range": {
         "end": {
           "character": 14,
-          "line": 23
+          "line": 35
         },
         "start": {
           "character": 4,
-          "line": 23
+          "line": 35
         }
       },
       "source": "documentChanges",
@@ -1833,18 +1967,30 @@ diff --git a/src/capture-shell.html b/src/capture-shell.html
 diff --git a/src/template-spread-capture-semantics-app.html b/src/template-spread-capture-semantics-app.html
 --- a/src/template-spread-capture-semantics-app.html
 +++ b/src/template-spread-capture-semantics-app.html
-@@ -1,43 +1,43 @@
+@@ -1,55 +1,55 @@
  <template>
-   <spread-card ...spreadState></spread-card>
-   <spread-card ...spreadContainer.details></spread-card>
+   <spread-card ...$bindables='spreadState'></spread-card>
+   <spread-card ...$bindables='spreadContainer.details'></spread-card>
    <spread-card ...$bindables="spreadState"></spread-card>
+   <spread-card ...$bindables="spreadState & missingSpreadBehavior"></spread-card>
    <spread-card $bindables.spread="spreadState"></spread-card>
    <spread-card ...$bindables="spreadState | spreadIdentity"></spread-card>
    <spread-card ...$bindables="{ title: spreadState.title, count: spreadState.count, tone: spreadState.tone }"></spread-card>
    <spread-card repeat.for="card of spreadCards" ...card></spread-card>
-   <spread-card ...aliasShaped></spread-card>
-   <spread-card ...nullableSpread></spread-card>
-   <spread-card ...primitiveSpread></spread-card>
+   <spread-card ...$bindables='aliasShaped'></spread-card>
+   <spread-card ...$bindables='nullableSpread'></spread-card>
+   <spread-card ...$bindables='optionalSpread'></spread-card>
+   <spread-card ...$bindables='presentUndefinedSpread'></spread-card>
+   <spread-card ...$bindables='unionSpread'></spread-card>
+   <spread-card ...$bindables='dynamicSpread'></spread-card>
+   <spread-card ...$bindables='callableSpread'></spread-card>
+   <spread-card ...$bindables='broadFunctionSpread'></spread-card>
+   <spread-card ...$bindables='broadObjectSpread'></spread-card>
+   <spread-card ...$bindables='constructableSpread'></spread-card>
+   <spread-card ...$bindables='inheritedSpread'></spread-card>
+   <spread-card ...$bindables='primitiveSpread'></spread-card>
+   <no-capture-shell ...$bindables='noBindableSpread'></no-capture-shell>
+   <case-spread-card ...$bindables="caseSpreadState"></case-spread-card>
 
    <spread-card ...$element="spreadState"></spread-card>
    <spread-card $element.spread="spreadState"></spread-card>
@@ -1876,6 +2022,6 @@ diff --git a/src/template-spread-capture-semantics-app.html b/src/template-sprea
 
    <no-capture-shell value.bind="capturedValue"></no-capture-shell>
    <filtered-capture-shell class="host-class" data-note="filtered-note"></filtered-capture-shell>
-   <nested-capture-shell value.bind="capturedValue" input-mark="nested-mark"></nested-capture-shell>
+   <nested-capture-shell value.bind="capturedValue | nestedIdentity" input-mark="nested-mark"></nested-capture-shell>
  </template>
 ```

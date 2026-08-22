@@ -854,7 +854,12 @@ diff --git a/src/template-local-template-semantics-app.html b/src/template-local
 ```json
 {
   "error": {
-    "code": 0,
+    "code": -32803,
+    "data": {
+      "candidates": [],
+      "mappingFailures": [],
+      "reason": "cursor-not-on-renameable-reference"
+    },
     "message": "The cursor is not on a renameable template reference for the selected member."
   },
   "outcome": "error"

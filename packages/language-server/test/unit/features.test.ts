@@ -836,6 +836,62 @@ describe("handleRename", () => {
       expect.objectContaining({ newText: "heading" }),
     ]);
   });
+
+  test("refuses partial rename and preserves candidate locations in error data", async () => {
+    const ctx = createMockRenameContext({
+      displayText: "Rename for 'title' has one unresolved target.",
+      status: "not-available",
+      reason: "unresolved-candidates",
+      selectedMemberName: "title",
+      placeholder: "title",
+      targetSource: null,
+      activeSource: {
+        kind: "source-span-address",
+        label: `src/my-app.html@${renameStart}..${renameStart + "title".length}`,
+        path: templateUri,
+        start: renameStart,
+        end: renameStart + "title".length,
+      },
+      edits: [],
+      candidateRows: [{
+        referenceKind: "template-usage",
+        name: "title",
+        definitionName: "my-app",
+        bindingKind: "property",
+        dependencyKinds: [],
+        candidateReason: "target-open",
+        source: {
+          kind: "source-span-address",
+          label: `src/my-app.html@${renameStart}..${renameStart + "title".length}`,
+          path: templateUri,
+          start: renameStart,
+          end: renameStart + "title".length,
+        },
+        targetSource: null,
+      }],
+      templateReferenceCount: 1,
+      typeScriptReferenceCount: 0,
+    });
+
+    await expect(
+      handleRename(ctx as never, params, createContextTestOperation(ctx)),
+    ).rejects.toMatchObject({
+      message: "Rename for 'title' has one unresolved target.",
+      data: {
+        reason: "unresolved-candidates",
+        candidates: [{
+          uri: templateUri,
+          range: {
+            start: { line: 0, character: renameStart },
+            end: { line: 0, character: renameStart + "title".length },
+          },
+          name: "title",
+          reason: "target-open",
+        }],
+        mappingFailures: [],
+      },
+    });
+  });
 });
 
 describe("inlay-hint request admission", () => {

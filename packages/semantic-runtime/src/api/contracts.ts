@@ -5152,6 +5152,14 @@ export enum SemanticTemplateBindableDeclarationKind {
   AttributeAlias = 'attribute-alias',
 }
 
+/** Why a same-spelled authored occurrence cannot yet join a proven reference/rename family. */
+export enum SemanticTemplateReferenceCandidateReason {
+  /** Available scope/type facts do not close the occurrence target. */
+  TargetOpen = 'target-open',
+  /** The occurrence is governed only by an index signature, not one property identity. */
+  IndexSignatureTarget = 'index-signature-target',
+}
+
 export interface SemanticTemplateReferenceRow {
   readonly referenceKind: SemanticTemplateReferenceKind | `${SemanticTemplateReferenceKind}`;
   readonly name: string;
@@ -5166,6 +5174,8 @@ export interface SemanticTemplateReferenceRow {
   /** Bindable metadata form, present when a declaration row is not the TypeScript property itself. */
   readonly bindableDeclarationKind?: SemanticTemplateBindableDeclarationKind | `${SemanticTemplateBindableDeclarationKind}` | null;
   readonly bindableAttributeSourceKind?: SemanticTemplateBindableAttributeSourceKind | `${SemanticTemplateBindableAttributeSourceKind}` | null;
+  /** Present only for an unproven same-name candidate row. */
+  readonly candidateReason?: SemanticTemplateReferenceCandidateReason | `${SemanticTemplateReferenceCandidateReason}` | null;
   /** Exact source span for the returned reference/declaration. */
   readonly source: SemanticSourceReference | null;
   /** Declaration/member source that all returned template usages resolve to. */
@@ -5216,6 +5226,8 @@ export enum SemanticTemplateRenameUnavailableReason {
   InvalidNewName = 'invalid-new-name',
   ResourceNameHasNoAuthoredSource = 'resource-name-has-no-authored-source',
   UnsupportedResourceKind = 'unsupported-resource-kind',
+  /** Exact same-name authored locations remain, but their target identity cannot be proven. */
+  UnresolvedCandidates = 'unresolved-candidates',
 }
 
 export enum SemanticTemplateRenameEditKind {
@@ -5254,9 +5266,9 @@ export interface SemanticTemplateRenameResult {
   readonly activeSource: SemanticSourceReference | null;
   readonly edits: readonly SemanticTemplateRenameEditRow[];
   /**
-   * Same-name template usages that could not be proven to reference the renamed symbol and are
-   * therefore deliberately NOT edited. A non-empty list makes the answer closure `open`; clients
-   * can surface these sites for manual review, matching TypeScript's behavior for dynamic access.
+   * Same-name template usages that could not be proven to reference the renamed symbol. A non-empty
+   * list makes rename unavailable with `unresolved-candidates`; no partial edit plan is returned.
+   * Every row retains its exact authored location and semantic refusal reason.
    */
   readonly candidateRows: readonly SemanticTemplateReferenceRow[];
   readonly templateReferenceCount: number;

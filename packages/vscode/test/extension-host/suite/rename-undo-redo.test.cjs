@@ -1,6 +1,8 @@
 const assert = require("assert");
+const { createHash } = require("crypto");
 const fs = require("fs");
 const path = require("path");
+const { chromium } = require("playwright");
 const vscode = require("vscode");
 
 const workspaceRoot = process.env.AURELIA_LS_EXTENSION_HOST_WORKSPACE;
@@ -13,6 +15,7 @@ const CODE_ACTION_RELIABILITY_TIMEOUT_MS = 180_000;
 // gate, so a slow semantic rebuild should produce timing evidence rather than a
 // false state-machine failure in this suite.
 const DIAGNOSTIC_RELIABILITY_TIMEOUT_MS = 120_000;
+const REAL_F2_RELIABILITY_TIMEOUT_MS = 180_000;
 const trackedFiles = [
   "src/my-app.html",
   "src/my-app.ts",
@@ -30,12 +33,16 @@ if (!workspaceRoot) {
 const baseline = new Map(
   trackedFiles.map((rel) => [rel, fs.readFileSync(filePath(rel), "utf8")]),
 );
+const workspaceBaseline = new Map(
+  authoredWorkspaceFiles().map((rel) => [rel, fs.readFileSync(filePath(rel), "utf8")]),
+);
 let changeLog = [];
 let diagnosticsChangeLog = [];
 
 suite("extension-host IDE reliability", () => {
   let subscription;
   let diagnosticsSubscription;
+  let renameUiPage;
 
   suiteSetup(async () => {
     subscription = vscode.workspace.onDidChangeTextDocument((event) => {
@@ -73,6 +80,7 @@ suite("extension-host IDE reliability", () => {
       }
     });
     await activateAureliaExtension();
+    renameUiPage = await connectRenameUiPage();
   });
 
   suiteTeardown(() => {
@@ -87,6 +95,12 @@ suite("extension-host IDE reliability", () => {
     changeLog = [];
     diagnosticsChangeLog = [];
   });
+
+  for (const targetMode of ["closed", "open"]) {
+    test(`real F2 state rename is one undo unit with my-app.ts ${targetMode}`, async () => {
+      await runStateF2Journey(renameUiPage, targetMode);
+    }).timeout(REAL_F2_RELIABILITY_TIMEOUT_MS);
+  }
 
   test("HTML-origin bindable rename survives one-step undo, redo, and a subsequent rename", async () => {
     await openTrackedDocuments();
@@ -105,6 +119,11 @@ suite("extension-host IDE reliability", () => {
     });
     await waitForDiagnosticsClean(affected, "after first rename");
     assertDirty(affected, true, "after first rename");
+    assertDiskFilesEqual(
+      affected,
+      baseline,
+      "provider plus workspace.applyEdit should not invoke native refactoring auto-save",
+    );
 
     const renamedSnapshot = await readDocuments(affected);
     changeLog = [];
@@ -491,6 +510,306 @@ function relativeWorkspacePath(uri) {
   return rel && !rel.startsWith("..") ? rel : null;
 }
 
+function authoredWorkspaceFiles() {
+  const files = [];
+  const generatedDirectories = new Set([
+    ".aurelia",
+    ".git",
+    "dist",
+    "node_modules",
+    "out",
+  ]);
+  const visit = (directory, prefix) => {
+    const entries = fs.readdirSync(directory, { withFileTypes: true })
+      .sort((left, right) => left.name.localeCompare(right.name));
+    for (const entry of entries) {
+      if (entry.isSymbolicLink()) {
+        continue;
+      }
+      const rel = prefix === "" ? entry.name : `${prefix}/${entry.name}`;
+      const absolute = filePath(rel);
+      if (entry.isDirectory()) {
+        if (!generatedDirectories.has(entry.name)) {
+          visit(absolute, rel);
+        }
+        continue;
+      }
+      if (entry.isFile()) {
+        files.push(rel);
+      }
+    }
+  };
+  visit(workspaceRoot, "");
+  return files;
+}
+
+function captureWorkspaceStage(label) {
+  const authoredFiles = authoredWorkspaceFiles();
+  assert.deepStrictEqual(
+    authoredFiles,
+    [...workspaceBaseline.keys()],
+    `${label}: authored workspace file set changed`,
+  );
+
+  const files = {};
+  const exactTokenTotals = { state: 0, state2: 0 };
+  for (const rel of authoredFiles) {
+    const diskBytes = fs.readFileSync(filePath(rel));
+    const document = openDocumentFor(rel);
+    const textual = isAuthoredTextFile(rel);
+    const diskText = textual ? diskBytes.toString("utf8") : null;
+    const bufferText = document?.getText() ?? null;
+    const effectiveText = bufferText ?? diskText;
+    const exactTokens = {
+      state: effectiveText == null ? 0 : exactTokenCount(effectiveText, "state"),
+      state2: effectiveText == null ? 0 : exactTokenCount(effectiveText, "state2"),
+    };
+    exactTokenTotals.state += exactTokens.state;
+    exactTokenTotals.state2 += exactTokens.state2;
+    files[rel] = {
+      diskSha256: sha256(diskBytes),
+      bufferSha256: bufferText == null ? null : sha256(bufferText),
+      effectiveSha256: effectiveText == null ? sha256(diskBytes) : sha256(effectiveText),
+      isOpen: document != null,
+      isVisible: vscode.window.visibleTextEditors.some((editor) => editor.document.uri.toString() === uriFor(rel).toString()),
+      isDirty: document?.isDirty ?? false,
+      version: document?.version ?? null,
+      exactTokens,
+    };
+  }
+
+  return {
+    label,
+    exactTokenTotals,
+    files,
+  };
+}
+
+function isAuthoredTextFile(rel) {
+  return /(?:^|\/)(?:[^/]+\.)?(?:css|html|js|json|jsonc|jsx|less|md|scss|ts|tsx|txt|yaml|yml)$/iu.test(rel);
+}
+
+function exactTokenCount(text, token) {
+  let count = 0;
+  let from = 0;
+  while (from <= text.length - token.length) {
+    const offset = text.indexOf(token, from);
+    if (offset === -1) break;
+    const before = offset === 0 ? "" : text[offset - 1];
+    const after = offset + token.length === text.length ? "" : text[offset + token.length];
+    if (!isIdentifierPart(before) && !isIdentifierPart(after)) {
+      count += 1;
+    }
+    from = offset + token.length;
+  }
+  return count;
+}
+
+function isIdentifierPart(value) {
+  return value !== "" && /[A-Za-z0-9_$]/u.test(value);
+}
+
+function sha256(value) {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+function assertStateTokenContract(snapshot, expectedToken, expectedCount, oppositeCount, affected, label) {
+  const oppositeToken = expectedToken === "state" ? "state2" : "state";
+  assert.strictEqual(
+    snapshot.exactTokenTotals[expectedToken],
+    expectedCount,
+    `${label}: whole workspace should contain ${expectedCount} exact ${expectedToken} tokens`,
+  );
+  assert.strictEqual(
+    snapshot.exactTokenTotals[oppositeToken],
+    oppositeCount,
+    `${label}: whole workspace should contain ${oppositeCount} exact ${oppositeToken} tokens`,
+  );
+
+  const affectedSet = new Set(affected);
+  let affectedExpectedCount = 0;
+  let outsideExpectedCount = 0;
+  let affectedOppositeCount = 0;
+  let outsideOppositeCount = 0;
+  for (const [rel, file] of Object.entries(snapshot.files)) {
+    if (affectedSet.has(rel)) {
+      affectedExpectedCount += file.exactTokens[expectedToken];
+      affectedOppositeCount += file.exactTokens[oppositeToken];
+    } else {
+      outsideExpectedCount += file.exactTokens[expectedToken];
+      outsideOppositeCount += file.exactTokens[oppositeToken];
+    }
+  }
+  assert.strictEqual(affectedExpectedCount, expectedCount,
+    `${label}: all exact ${expectedToken} tokens should be confined to the expected rename files`);
+  assert.strictEqual(affectedOppositeCount, oppositeCount,
+    `${label}: expected rename files contain residual exact ${oppositeToken} tokens`);
+  assert.strictEqual(outsideExpectedCount, 0,
+    `${label}: exact ${expectedToken} residue escaped the expected rename files`);
+  assert.strictEqual(outsideOppositeCount, 0,
+    `${label}: exact ${oppositeToken} residue escaped the expected rename files`);
+
+  for (const rel of affected) {
+    const authoredStateCount = exactTokenCount(workspaceBaseline.get(rel), "state");
+    assert.strictEqual(
+      snapshot.files[rel].exactTokens[expectedToken],
+      authoredStateCount,
+      `${label}: ${rel} should contain ${authoredStateCount} exact ${expectedToken} tokens`,
+    );
+    assert.strictEqual(
+      snapshot.files[rel].exactTokens[oppositeToken],
+      0,
+      `${label}: ${rel} should contain no exact ${oppositeToken} residue`,
+    );
+  }
+}
+
+function assertOnlyExpectedWorkspaceChanges(before, after, expectedChanges, label) {
+  assert.deepStrictEqual(
+    Object.keys(after.files),
+    Object.keys(before.files),
+    `${label}: authored workspace file set changed`,
+  );
+  for (const rel of Object.keys(before.files)) {
+    const beforeFile = before.files[rel];
+    const afterFile = after.files[rel];
+    if (expectedChanges.has(rel)) {
+      assert.notStrictEqual(afterFile.effectiveSha256, beforeFile.effectiveSha256,
+        `${label}: expected ${rel} effective content to change`);
+      continue;
+    }
+    assert.strictEqual(afterFile.diskSha256, beforeFile.diskSha256,
+      `${label}: unexpected disk change in ${rel}`);
+    assert.strictEqual(afterFile.effectiveSha256, beforeFile.effectiveSha256,
+      `${label}: unexpected buffer or disk change in ${rel}`);
+  }
+}
+
+function assertRenamePersistencePolicy(before, renamed, targetMode, label) {
+  const refactoringAutoSave = vscode.workspace.getConfiguration("files").get("refactoring.autoSave");
+  for (const rel of ["src/my-app.html", "src/my-app.ts"]) {
+    const beforeFile = before.files[rel];
+    const renamedFile = renamed.files[rel];
+    assert.notStrictEqual(renamedFile.effectiveSha256, beforeFile.effectiveSha256,
+      `${label}: ${rel} should expose renamed effective content`);
+    if (refactoringAutoSave === true) {
+      assert.notStrictEqual(renamedFile.diskSha256, beforeFile.diskSha256,
+        `${label}: VS Code files.refactoring.autoSave should persist ${rel}`);
+      assert.strictEqual(renamedFile.diskSha256, renamedFile.effectiveSha256,
+        `${label}: ${rel} renamed disk and effective content should agree`);
+    } else {
+      assert.strictEqual(renamedFile.diskSha256, beforeFile.diskSha256,
+        `${label}: disabled files.refactoring.autoSave should leave ${rel} disk unchanged`);
+      assert.notStrictEqual(renamedFile.bufferSha256, beforeFile.effectiveSha256,
+        `${label}: ${rel} should carry the rename in a buffer while disk remains unchanged`);
+      assert.strictEqual(renamedFile.isDirty, true,
+        `${label}: ${rel} should be dirty while its rename is only buffered`);
+    }
+  }
+  if (targetMode === "closed" && renamed.files["src/my-app.ts"].isOpen) {
+    assert.strictEqual(renamed.files["src/my-app.ts"].isVisible, false,
+      `${label}: materialized closed-target my-app.ts should remain hidden`);
+  }
+  if (targetMode === "closed" && refactoringAutoSave !== true) {
+    assert.strictEqual(renamed.files["src/my-app.ts"].isOpen, true,
+      `${label}: a buffered closed-target rename must materialize my-app.ts as a TextDocument`);
+  }
+}
+
+function assertOneUndoPersistencePolicy(before, renamed, undone, label) {
+  const refactoringAutoSave = vscode.workspace.getConfiguration("files").get("refactoring.autoSave");
+  for (const rel of ["src/my-app.html", "src/my-app.ts"]) {
+    const beforeFile = before.files[rel];
+    const renamedFile = renamed.files[rel];
+    const undoneFile = undone.files[rel];
+    if (refactoringAutoSave === true) {
+      assert.strictEqual(undoneFile.diskSha256, renamedFile.diskSha256,
+        `${label}: one undo should leave the auto-saved rename on disk until the restored buffer is saved`);
+      assert.strictEqual(undoneFile.isDirty, true,
+        `${label}: ${rel} restored buffer should be dirty over the auto-saved rename`);
+      continue;
+    }
+    assert.strictEqual(undoneFile.diskSha256, beforeFile.diskSha256,
+      `${label}: ${rel} disk should remain at the pre-rename hash`);
+  }
+}
+
+function assertRedoPersistencePolicy(before, redone, label) {
+  assert.strictEqual(vscode.workspace.getConfiguration("files").get("autoSave"), "off",
+    `${label}: fresh Extension Host profile should keep ordinary auto-save disabled`);
+  for (const rel of ["src/my-app.html", "src/my-app.ts"]) {
+    const beforeFile = before.files[rel];
+    const redoneFile = redone.files[rel];
+    assert.strictEqual(redoneFile.diskSha256, beforeFile.diskSha256,
+      `${label}: redo should remain buffered after the persisted undo baseline`);
+    assert.notStrictEqual(redoneFile.bufferSha256, beforeFile.effectiveSha256,
+      `${label}: ${rel} redo should restore renamed buffer content`);
+    assert.strictEqual(redoneFile.isDirty, true,
+      `${label}: ${rel} redo should be dirty while ordinary auto-save is off`);
+  }
+}
+
+function assertWorkspaceSnapshotsEqual(actual, expected, label) {
+  assert.deepStrictEqual(
+    Object.keys(actual.files),
+    Object.keys(expected.files),
+    `${label}: authored workspace file set differs`,
+  );
+  for (const rel of Object.keys(expected.files)) {
+    assert.strictEqual(actual.files[rel].diskSha256, expected.files[rel].diskSha256,
+      `${label}: ${rel} disk hash differs`);
+    assert.strictEqual(actual.files[rel].effectiveSha256, expected.files[rel].effectiveSha256,
+      `${label}: ${rel} effective buffer/disk hash differs`);
+  }
+}
+
+function assertEffectiveWorkspaceSnapshotsEqual(actual, expected, label) {
+  assert.deepStrictEqual(
+    Object.keys(actual.files),
+    Object.keys(expected.files),
+    `${label}: authored workspace file set differs`,
+  );
+  for (const rel of Object.keys(expected.files)) {
+    assert.strictEqual(actual.files[rel].effectiveSha256, expected.files[rel].effectiveSha256,
+      `${label}: ${rel} effective buffer/disk hash differs`);
+  }
+}
+
+async function waitForStateTokenContract(expectedToken, expectedCount, oppositeCount, affected, label) {
+  await waitFor(() => {
+    assertStateTokenContract(
+      captureWorkspaceStage(label),
+      expectedToken,
+      expectedCount,
+      oppositeCount,
+      affected,
+      label,
+    );
+    return true;
+  }, `${label}: exact token contract should settle`, DIAGNOSTIC_RELIABILITY_TIMEOUT_MS);
+}
+
+async function waitForWorkspaceSnapshot(expected, label) {
+  await waitFor(() => {
+    assertWorkspaceSnapshotsEqual(captureWorkspaceStage(label), expected, label);
+    return true;
+  }, `${label}: workspace hashes should settle`, DIAGNOSTIC_RELIABILITY_TIMEOUT_MS);
+}
+
+async function waitForEffectiveWorkspaceSnapshot(expected, label) {
+  await waitFor(() => {
+    assertEffectiveWorkspaceSnapshotsEqual(captureWorkspaceStage(label), expected, label);
+    return true;
+  }, `${label}: effective workspace hashes should settle`, DIAGNOSTIC_RELIABILITY_TIMEOUT_MS);
+}
+
+async function waitForRenamePersistencePolicy(before, targetMode, label) {
+  await waitFor(() => {
+    assertRenamePersistencePolicy(before, captureWorkspaceStage(label), targetMode, label);
+    return true;
+  }, `${label}: native refactor persistence policy should settle`, DIAGNOSTIC_RELIABILITY_TIMEOUT_MS);
+}
+
 async function activateAureliaExtension() {
   const extension = vscode.extensions.getExtension(extensionId);
   assert(extension, `Expected extension ${extensionId} to be installed in the Extension Development Host.`);
@@ -510,8 +829,14 @@ async function resetWorkspaceToBaseline() {
   const edit = new vscode.WorkspaceEdit();
   let hasChanges = false;
   for (const rel of trackedFiles) {
-    const doc = await documentFor(rel);
     const expected = baseline.get(rel);
+    const doc = openDocumentFor(rel);
+    if (doc == null) {
+      if (fs.readFileSync(filePath(rel), "utf8") !== expected) {
+        fs.writeFileSync(filePath(rel), expected, "utf8");
+      }
+      continue;
+    }
     if (doc.getText() === expected) {
       continue;
     }
@@ -522,15 +847,15 @@ async function resetWorkspaceToBaseline() {
   if (hasChanges) {
     const applied = await vscode.workspace.applyEdit(edit, { label: "Reset hello-world reliability fixture" });
     assert.strictEqual(applied, true, "fixture reset edit should apply");
-    for (const rel of trackedFiles) {
-      const doc = await documentFor(rel);
-      if (doc.isDirty) {
-        const saved = await doc.save();
-        assert.strictEqual(saved, true, `fixture reset should save ${rel}`);
-      }
+  }
+  for (const rel of trackedFiles) {
+    const doc = openDocumentFor(rel);
+    if (doc?.isDirty) {
+      const saved = await doc.save();
+      assert.strictEqual(saved, true, `fixture reset should save ${rel}`);
     }
   }
-  await waitForDocumentsEqual(trackedFiles, baseline, "fixture reset");
+  await waitForWorkspaceFilesEqual(trackedFiles, baseline, "fixture reset");
   await waitForDirtyState(trackedFiles, false, "fixture reset");
 }
 
@@ -577,8 +902,12 @@ async function openTrackedDocuments() {
 
 async function documentFor(rel) {
   const uri = uriFor(rel);
-  return vscode.workspace.textDocuments.find((doc) => doc.uri.toString() === uri.toString())
-    ?? vscode.workspace.openTextDocument(uri);
+  return openDocumentFor(rel) ?? vscode.workspace.openTextDocument(uri);
+}
+
+function openDocumentFor(rel) {
+  const uri = uriFor(rel);
+  return vscode.workspace.textDocuments.find((doc) => doc.uri.toString() === uri.toString());
 }
 
 async function showDocument(rel) {
@@ -594,6 +923,166 @@ function positionForNeedle(document, needle, token = needle) {
   const tokenStart = text.indexOf(token, start);
   assert.notStrictEqual(tokenStart, -1, `Could not find ${JSON.stringify(token)} inside ${JSON.stringify(needle)}`);
   return document.positionAt(tokenStart + Math.max(0, Math.floor(token.length / 2)));
+}
+
+async function connectRenameUiPage() {
+  const port = Number(process.env.AURELIA_LS_RENAME_UI_CDP_PORT);
+  assert(Number.isSafeInteger(port) && port > 0 && port <= 65_535,
+    `AURELIA_LS_RENAME_UI_CDP_PORT must be a TCP port, received ${process.env.AURELIA_LS_RENAME_UI_CDP_PORT}`);
+  let browser;
+  await waitFor(async () => {
+    try {
+      browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`);
+      return true;
+    } catch {
+      return false;
+    }
+  }, `rename UI driver should connect to VS Code CDP port ${port}`, 30_000);
+  const pages = browser.contexts().flatMap((context) => context.pages());
+  for (const page of pages) {
+    if (await page.locator(".monaco-workbench").count() > 0) {
+      return page;
+    }
+  }
+  throw new Error(`rename UI driver found no VS Code workbench page on CDP port ${port}`);
+}
+
+async function runStateF2Journey(page, targetMode) {
+  const affected = ["src/my-app.html", "src/my-app.ts"];
+  if (targetMode === "open") {
+    await showDocument("src/my-app.ts");
+  } else {
+    assert.strictEqual(openDocumentFor("src/my-app.ts"), undefined,
+      "closed-target F2 journey must begin without a my-app.ts TextDocument");
+  }
+  const origin = await showDocument("src/my-app.html");
+  const before = captureWorkspaceStage("before-rename");
+  assert.strictEqual(before.files["src/my-app.ts"].isOpen, targetMode === "open");
+  assertStateTokenContract(before, "state", 11, 0, affected, "before rename");
+
+  changeLog = [];
+  await renameThroughF2(page, origin, "state.selectionProgressPercent", "state", "state2");
+  await waitForStateTokenContract("state2", 11, 0, affected, "after real F2 rename");
+  await waitForRenamePersistencePolicy(before, targetMode, "after real F2 rename");
+  await waitForDiagnosticsClean(affected, "after real F2 rename");
+  const renamed = captureWorkspaceStage("after-rename");
+  assertOnlyExpectedWorkspaceChanges(before, renamed, new Set(affected), "after real F2 rename");
+  assertStateTokenContract(renamed, "state2", 11, 0, affected, "after real F2 rename");
+  assertRenamePersistencePolicy(before, renamed, targetMode, "after real F2 rename");
+
+  changeLog = [];
+  await runEditorCommand("undo", origin);
+  await waitForEffectiveWorkspaceSnapshot(before, "after exactly one real F2 undo");
+  await waitForDiagnosticsClean(affected, "after exactly one real F2 undo");
+  const undone = captureWorkspaceStage("after-one-undo");
+  assertEffectiveWorkspaceSnapshotsEqual(undone, before, "one real F2 undo");
+  assertStateTokenContract(undone, "state", 11, 0, affected, "after exactly one real F2 undo");
+  assertOneUndoPersistencePolicy(before, renamed, undone, "after exactly one real F2 undo");
+  assertUndoRedoReasons(
+    targetMode === "open" ? affected : ["src/my-app.html"],
+    vscode.TextDocumentChangeReason.Undo,
+    `real F2 ${targetMode}-target undo`,
+  );
+
+  // Native rename deliberately asks VS Code to respect files.refactoring.autoSave.
+  // Capture the exact one-undo state before flushing dirty buffers so the receipt
+  // explains disk/effective divergence without mistaking it for another undo unit.
+  console.log(`[aurelia-extension-host] real F2 one-undo state ${JSON.stringify({
+    autoSave: vscode.workspace.getConfiguration("files").get("autoSave"),
+    autoSaveDelay: vscode.workspace.getConfiguration("files").get("autoSaveDelay"),
+    refactoringAutoSave: vscode.workspace.getConfiguration("files").get("refactoring.autoSave"),
+    files: Object.fromEntries(affected.map((rel) => [rel, undone.files[rel]])),
+  })}`);
+  await saveDocuments(affected, "persisting exactly one real F2 undo");
+  await waitForWorkspaceSnapshot(before, "after persisting exactly one real F2 undo");
+  await waitForDirtyState(affected, false, "after persisting exactly one real F2 undo");
+  const persistedUndone = captureWorkspaceStage("after-one-undo-save");
+  assertWorkspaceSnapshotsEqual(persistedUndone, before, "persisted one real F2 undo");
+
+  changeLog = [];
+  await runEditorCommand("redo", origin);
+  await waitForStateTokenContract("state2", 11, 0, affected, "after real F2 redo");
+  await waitForDiagnosticsClean(affected, "after real F2 redo");
+  const redone = captureWorkspaceStage("after-redo");
+  assertEffectiveWorkspaceSnapshotsEqual(redone, renamed, "real F2 redo");
+  assertStateTokenContract(redone, "state2", 11, 0, affected, "after real F2 redo");
+  assertRedoPersistencePolicy(before, redone, "after real F2 redo");
+  assertUndoRedoReasons(
+    targetMode === "open" ? affected : ["src/my-app.html"],
+    vscode.TextDocumentChangeReason.Redo,
+    `real F2 ${targetMode}-target redo`,
+  );
+
+  const receipt = {
+    schemaVersion: "aurelia-real-f2-rename/1",
+    vscodeVersion: vscode.version,
+    targetMode,
+    renamePath: "keyboard:F2 -> native rename input -> Enter",
+    autoSave: vscode.workspace.getConfiguration("files").get("autoSave"),
+    autoSaveDelay: vscode.workspace.getConfiguration("files").get("autoSaveDelay"),
+    refactoringAutoSave: vscode.workspace.getConfiguration("files").get("refactoring.autoSave"),
+    expectedEditCount: 11,
+    affected,
+    stages: [before, renamed, undone, persistedUndone, redone],
+  };
+  const receiptPath = path.join(workspaceRoot, "..", `state-rename-real-f2-${targetMode}.json`);
+  fs.writeFileSync(receiptPath, JSON.stringify(receipt, null, 2));
+  console.log(`[aurelia-extension-host] real F2 receipt ${receiptPath}`);
+}
+
+async function renameThroughF2(page, document, needle, oldName, newName) {
+  const editor = await vscode.window.showTextDocument(document, { preview: false });
+  const position = positionForNeedle(document, needle, oldName);
+  editor.selection = new vscode.Selection(position, position);
+  await vscode.commands.executeCommand("workbench.action.focusActiveEditorGroup");
+  await page.bringToFront();
+  // Current VS Code uses Chromium EditContext while the minimum 1.91 lane uses
+  // Monaco's textarea input. Focusing either DOM carrier preserves the cursor
+  // selected through the extension API while making the keyboard F2 literal.
+  const editorInputs = page.locator([
+    ".part.editor .monaco-editor:visible .native-edit-context",
+    ".part.editor .monaco-editor:visible textarea.inputarea",
+  ].join(", "));
+  assert.ok(await editorInputs.count() >= 1,
+    "real F2 journey should find a Monaco editor input");
+  const editorInput = editorInputs.last();
+  await editorInput.focus();
+  await page.waitForFunction(() => document.activeElement?.matches(".native-edit-context, textarea.inputarea"));
+  await page.keyboard.press("F2");
+  const input = page.locator(".rename-box input.rename-input").first();
+  try {
+    await input.waitFor({ state: "visible", timeout: 60_000 });
+  } catch (error) {
+    const uiState = await page.evaluate(() => ({
+      activeElement: document.activeElement == null
+        ? null
+        : {
+            className: document.activeElement.className,
+            nodeName: document.activeElement.nodeName,
+          },
+      renameBoxes: [...document.querySelectorAll(".rename-box")].map((element) => ({
+        className: element.className,
+        display: getComputedStyle(element).display,
+        visibility: getComputedStyle(element).visibility,
+      })),
+      renameInputs: [...document.querySelectorAll("input")]
+        .filter((element) => element.className.includes("rename") || element.closest(".rename-box") != null)
+        .map((element) => ({
+          className: element.className,
+          display: getComputedStyle(element).display,
+          visibility: getComputedStyle(element).visibility,
+          value: element.value,
+        })),
+    }));
+    throw new Error(`native F2 did not expose the rename input; ui=${JSON.stringify(uiState)}; ${error.message}`);
+  }
+  assert.strictEqual(await input.inputValue(), oldName,
+    "native rename input should initialize with the authored state token");
+  await input.fill(newName);
+  assert.strictEqual(await input.inputValue(), newName,
+    "native rename input should contain the requested state2 token");
+  await input.press("Enter");
+  await input.waitFor({ state: "hidden", timeout: 60_000 });
 }
 
 async function renameThroughProvider(document, needle, oldName, newName) {
@@ -673,6 +1162,29 @@ async function waitForDocumentsEqual(files, expected, label) {
     }
     return true;
   }, `${label}: documents should match expected text`);
+}
+
+async function waitForWorkspaceFilesEqual(files, expected, label) {
+  await waitFor(() => {
+    for (const rel of files) {
+      const target = expected instanceof Map ? expected.get(rel) : expected[rel];
+      const openDocument = openDocumentFor(rel);
+      const bufferText = openDocument?.getText() ?? null;
+      const diskText = fs.readFileSync(filePath(rel), "utf8");
+      if ((bufferText != null && bufferText !== target) || diskText !== target) {
+        return false;
+      }
+    }
+    return true;
+  }, `${label}: buffers and disk files should match expected text`);
+}
+
+function assertDiskFilesEqual(files, expected, label) {
+  for (const rel of files) {
+    const target = expected instanceof Map ? expected.get(rel) : expected[rel];
+    assert.strictEqual(fs.readFileSync(filePath(rel), "utf8"), target,
+      `${label}: unexpected persisted content in ${rel}`);
+  }
 }
 
 async function waitForDiagnosticsClean(files, label) {

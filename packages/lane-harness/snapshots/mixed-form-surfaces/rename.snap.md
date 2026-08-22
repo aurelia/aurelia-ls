@@ -60,27 +60,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "newText": "caption",
             "range": {
               "end": {
-                "character": 17,
-                "line": 10
-              },
-              "start": {
-                "character": 12,
-                "line": 10
-              }
-            }
-          }
-        ],
-        "textDocument": {
-          "uri": "fixtures://pressure/mixed-form-surfaces/src/components/loose-picklist.ts",
-          "version": null
-        }
-      },
-      {
-        "edits": [
-          {
-            "newText": "caption",
-            "range": {
-              "end": {
                 "character": 9,
                 "line": 1
               },
@@ -94,6 +73,27 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "textDocument": {
           "uri": "fixtures://pressure/mixed-form-surfaces/src/components/loose-picklist.html",
           "version": 1
+        }
+      },
+      {
+        "edits": [
+          {
+            "newText": "caption",
+            "range": {
+              "end": {
+                "character": 17,
+                "line": 10
+              },
+              "start": {
+                "character": 12,
+                "line": 10
+              }
+            }
+          }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/mixed-form-surfaces/src/components/loose-picklist.ts",
+          "version": null
         }
       },
       {
@@ -365,27 +365,6 @@ diff --git a/src/components/ticket-editor.html b/src/components/ticket-editor.ht
             "newText": "caption",
             "range": {
               "end": {
-                "character": 18,
-                "line": 19
-              },
-              "start": {
-                "character": 13,
-                "line": 19
-              }
-            }
-          }
-        ],
-        "textDocument": {
-          "uri": "fixtures://pressure/mixed-form-surfaces/src/models/ticket.ts",
-          "version": null
-        }
-      },
-      {
-        "edits": [
-          {
-            "newText": "caption",
-            "range": {
-              "end": {
                 "character": 20,
                 "line": 4
               },
@@ -399,6 +378,27 @@ diff --git a/src/components/ticket-editor.html b/src/components/ticket-editor.ht
         "textDocument": {
           "uri": "fixtures://pressure/mixed-form-surfaces/src/components/loose-picklist.html",
           "version": 1
+        }
+      },
+      {
+        "edits": [
+          {
+            "newText": "caption",
+            "range": {
+              "end": {
+                "character": 18,
+                "line": 19
+              },
+              "start": {
+                "character": 13,
+                "line": 19
+              }
+            }
+          }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/mixed-form-surfaces/src/models/ticket.ts",
+          "version": null
         }
       }
     ]
@@ -580,27 +580,6 @@ diff --git a/src/models/ticket.ts b/src/models/ticket.ts
             "newText": "theme",
             "range": {
               "end": {
-                "character": 20,
-                "line": 14
-              },
-              "start": {
-                "character": 11,
-                "line": 14
-              }
-            }
-          }
-        ],
-        "textDocument": {
-          "uri": "fixtures://pressure/mixed-form-surfaces/src/app.ts",
-          "version": null
-        }
-      },
-      {
-        "edits": [
-          {
-            "newText": "theme",
-            "range": {
-              "end": {
                 "character": 38,
                 "line": 1
               },
@@ -627,6 +606,27 @@ diff --git a/src/models/ticket.ts b/src/models/ticket.ts
         "textDocument": {
           "uri": "fixtures://pressure/mixed-form-surfaces/src/app.html",
           "version": 1
+        }
+      },
+      {
+        "edits": [
+          {
+            "newText": "theme",
+            "range": {
+              "end": {
+                "character": 20,
+                "line": 14
+              },
+              "start": {
+                "character": 11,
+                "line": 14
+              }
+            }
+          }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/mixed-form-surfaces/src/app.ts",
+          "version": null
         }
       }
     ]

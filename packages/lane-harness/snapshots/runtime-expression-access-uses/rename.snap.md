@@ -250,27 +250,6 @@ diff --git a/src/runtime-expression-access-uses-app.html b/src/runtime-expressio
             "newText": "displayName",
             "range": {
               "end": {
-                "character": 8,
-                "line": 34
-              },
-              "start": {
-                "character": 4,
-                "line": 34
-              }
-            }
-          }
-        ],
-        "textDocument": {
-          "uri": "fixtures://pressure/runtime-expression-access-uses/src/runtime-expression-access-uses-app.ts",
-          "version": null
-        }
-      },
-      {
-        "edits": [
-          {
-            "newText": "displayName",
-            "range": {
-              "end": {
                 "character": 48,
                 "line": 2
               },
@@ -388,6 +367,27 @@ diff --git a/src/runtime-expression-access-uses-app.html b/src/runtime-expressio
         "textDocument": {
           "uri": "fixtures://pressure/runtime-expression-access-uses/src/runtime-expression-access-uses-app.html",
           "version": 1
+        }
+      },
+      {
+        "edits": [
+          {
+            "newText": "displayName",
+            "range": {
+              "end": {
+                "character": 8,
+                "line": 34
+              },
+              "start": {
+                "character": 4,
+                "line": 34
+              }
+            }
+          }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/runtime-expression-access-uses/src/runtime-expression-access-uses-app.ts",
+          "version": null
         }
       }
     ]

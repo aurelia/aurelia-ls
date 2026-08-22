@@ -2,6 +2,10 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import { createMiddleware } from "../../out/client-middleware.js";
 import { EXTENSION_HOST_OBSERVATION_EVENT } from "../../out/extension-host-observation.js";
 import { TEMPLATE_CODE_ACTION_RESOLVE_REFUSAL_REASONS } from "@aurelia-ls/language-server/protocol";
+import {
+  AURELIA_WORKSPACE_EDIT_TRANSACTION_SCHEMA,
+  aureliaWorkspaceEditContentRevision,
+} from "@aurelia-ls/language-server/protocol";
 
 const observationEnv = "AURELIA_LS_EXTENSION_HOST_OBSERVATION";
 const tailObservationEnv = "AURELIA_LS_EXTENSION_HOST_TAIL_OBSERVATION";
@@ -45,6 +49,7 @@ function createHarness(options: {
     languageId: "typescript",
     uri: new StubUri(uri),
     version: options.openDocumentVersion ?? 4,
+    getText: () => "export class App {}\n",
   };
   const action = {
     title: "Declare member 'titel' on MyApp",
@@ -57,6 +62,27 @@ function createHarness(options: {
     },
   };
   const protocolAction = { title: action.title, data: action.data };
+  const resolvedEdit = options.resolvedEdit ?? {
+    documentChanges: [{
+      textDocument: { uri, version: options.editVersion ?? document.version },
+      edits: [],
+    }],
+  };
+  const transactionalResolvedEdit = options.resolvedEdit === null
+    ? null
+    : {
+        ...(resolvedEdit as Record<string, unknown>),
+        aureliaWorkspaceEditTransaction: {
+          schema: AURELIA_WORKSPACE_EDIT_TRANSACTION_SCHEMA,
+          documents: ((resolvedEdit as { documentChanges?: Array<{ textDocument: { uri: string; version: number | null } }> }).documentChanges ?? [])
+            .map((change) => ({
+              uri: change.textDocument.uri,
+              version: change.textDocument.version,
+              contentRevision: aureliaWorkspaceEditContentRevision("export class App {}\n"),
+              physicalPath: null,
+            })),
+        },
+      };
   const protocolResolvedAction = {
     ...protocolAction,
     ...(options.resolvedRefusal === undefined
@@ -71,15 +97,10 @@ function createHarness(options: {
             },
           },
         }),
-    ...(options.resolvedEdit === null
+    ...(transactionalResolvedEdit == null
       ? {}
       : {
-          edit: options.resolvedEdit ?? {
-            documentChanges: [{
-              textDocument: { uri, version: options.editVersion ?? document.version },
-              edits: [],
-            }],
-          },
+          edit: transactionalResolvedEdit,
         }),
   };
   const convertedAction = {
@@ -119,6 +140,9 @@ function createHarness(options: {
           : [{ name: "nested", index: 1, uri: new StubUri(options.workspaceUri) }]),
       ],
       getConfiguration: () => ({ get: () => "auto" }),
+      fs: {
+        readFile: vi.fn(async () => new TextEncoder().encode("export class App {}\n")),
+      },
     },
     window: { showWarningMessage },
   };

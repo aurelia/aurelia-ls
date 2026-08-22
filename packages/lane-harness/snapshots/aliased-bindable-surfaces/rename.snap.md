@@ -60,27 +60,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "newText": "headlineText",
             "range": {
               "end": {
-                "character": 53,
-                "line": 9
-              },
-              "start": {
-                "character": 44,
-                "line": 9
-              }
-            }
-          }
-        ],
-        "textDocument": {
-          "uri": "fixtures://pressure/aliased-bindable-surfaces/src/product-card.ts",
-          "version": null
-        }
-      },
-      {
-        "edits": [
-          {
-            "newText": "headlineText",
-            "range": {
-              "end": {
                 "character": 16,
                 "line": 2
               },
@@ -94,6 +73,27 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "textDocument": {
           "uri": "fixtures://pressure/aliased-bindable-surfaces/src/product-card.html",
           "version": 1
+        }
+      },
+      {
+        "edits": [
+          {
+            "newText": "headlineText",
+            "range": {
+              "end": {
+                "character": 53,
+                "line": 9
+              },
+              "start": {
+                "character": 44,
+                "line": 9
+              }
+            }
+          }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/aliased-bindable-surfaces/src/product-card.ts",
+          "version": null
         }
       }
     ]

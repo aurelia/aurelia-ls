@@ -16,7 +16,8 @@ import type {
   TextDocument,
 } from "vscode";
 import type { RenameFromTsResponse } from "../../types.js";
-import { assertWorkspaceEditVersionsCurrent } from "../../workspace-edit-versions.js";
+import { assertWorkspaceEditTransactionCurrent } from "../../workspace-edit-versions.js";
+import { AureliaSemanticSessionState } from "../../client-core.js";
 
 const SCRIPT_RENAME_SELECTOR: DocumentSelector = [
   { language: "typescript" },
@@ -36,9 +37,13 @@ export const TsRenameFeature: ClientFeature = {
         if (
           isCancelled(token)
           || !isScriptDocument(document)
-          || ctx.languageClient.sessionForUri(document.uri) == null
         ) {
           return undefined;
+        }
+        const sessionState = ctx.languageClient.semanticSessionStateForUri(document.uri);
+        if (sessionState === AureliaSemanticSessionState.Unowned) return undefined;
+        if (sessionState === AureliaSemanticSessionState.Transitioning) {
+          throw new Error("Aurelia cross-domain rename is temporarily unavailable while workspace ownership reconciles; retry the rename.");
         }
 
         log.debug(`[TsRename] rename: ${document.uri.fsPath}:${position.line}:${position.character} -> "${newName}"`);
@@ -57,8 +62,9 @@ export const TsRenameFeature: ClientFeature = {
           throw new Error(message);
         }
 
+        assertNoUnresolvedCandidates(aureliaRename);
+
         if (aureliaRename.status === "not-applicable") {
-          notifyUnverifiedCandidates(ctx, aureliaRename);
           log.debug(`[TsRename] falling through to TypeScript rename: ${aureliaRename.reason}`);
           return undefined;
         }
@@ -76,13 +82,12 @@ export const TsRenameFeature: ClientFeature = {
         if (edit == null) {
           throw new Error("Aurelia cross-domain rename returned no convertible workspace edit.");
         }
-        assertWorkspaceEditVersionsCurrent(
+        await assertWorkspaceEditTransactionCurrent(
           ctx.vscode,
           aureliaRename.workspaceEdit,
-          "Aurelia cross-domain rename was blocked because editor documents changed",
+          "Aurelia cross-domain rename was blocked because target documents changed",
         );
 
-        notifyUnverifiedCandidates(ctx, aureliaRename);
         log.debug(`[TsRename] atomic plan: ${edit.entries().length} files`);
         return edit;
       },
@@ -91,9 +96,13 @@ export const TsRenameFeature: ClientFeature = {
         if (
           isCancelled(token)
           || !isScriptDocument(document)
-          || ctx.languageClient.sessionForUri(document.uri) == null
         ) {
           return undefined;
+        }
+        const sessionState = ctx.languageClient.semanticSessionStateForUri(document.uri);
+        if (sessionState === AureliaSemanticSessionState.Unowned) return undefined;
+        if (sessionState === AureliaSemanticSessionState.Transitioning) {
+          throw new Error("Aurelia cross-domain rename is temporarily unavailable while workspace ownership reconciles; retry the rename.");
         }
         const response = await ctx.lsp.renameFromTs(
           document.uri.toString(),
@@ -102,10 +111,11 @@ export const TsRenameFeature: ClientFeature = {
           token,
         );
         if (isCancelled(token)) return undefined;
-        if (response.status === "not-applicable") return undefined;
         if (response.status === "blocked" || response.status === "refused") {
           throw new Error(renameFailureMessage(response));
         }
+        assertNoUnresolvedCandidates(response);
+        if (response.status === "not-applicable") return undefined;
         if (response.status !== "available") {
           throw new Error("Aurelia cross-domain rename returned an edit result during preparation.");
         }
@@ -136,16 +146,30 @@ function isCancelled(token: CancellationToken | undefined): boolean {
 }
 
 function renameFailureMessage(response: Extract<RenameFromTsResponse, { status: "blocked" | "refused" }>): string {
-  return response.message || `Aurelia cross-domain rename ${response.status}: ${response.reason}`;
+  const base = response.message || `Aurelia cross-domain rename ${response.status}: ${response.reason}`;
+  const candidates = response.candidates ?? [];
+  if (candidates.length === 0) {
+    return base;
+  }
+  const locations = candidates.map((candidate) =>
+    `${candidate.uri}:${candidate.range.start.line + 1}:${candidate.range.start.character + 1} (${candidate.reason})`
+  ).join(", ");
+  return `${base} Unresolved authored locations: ${locations}`;
 }
 
-function notifyUnverifiedCandidates(ctx: Parameters<ClientFeature["activate"]>[0], response: RenameFromTsResponse): void {
+function assertNoUnresolvedCandidates(
+  response: Exclude<RenameFromTsResponse, { status: "blocked" | "refused" }>,
+): void {
   const candidateCount = typeof response.candidateCount === "number" ? response.candidateCount : 0;
   if (candidateCount <= 0) {
     return;
   }
-  const candidateNoun = candidateCount === 1 ? "usage" : "usages";
-  ctx.vscode.window.showInformationMessage(
-    `Aurelia rename left ${candidateCount} same-name template ${candidateNoun} unchanged because they could not be verified.`,
+  const locations = response.candidates.map((candidate) =>
+    `${candidate.uri}:${candidate.range.start.line + 1}:${candidate.range.start.character + 1} (${candidate.reason})`
+  ).join(", ");
+  throw new Error(
+    `Aurelia refused a partial rename plan with ${candidateCount} unresolved authored ${
+      candidateCount === 1 ? "location" : "locations"
+    }.${locations.length === 0 ? "" : ` Locations: ${locations}`}`,
   );
 }

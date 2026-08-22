@@ -54,6 +54,7 @@ import {
   mapSemanticRuntimeTemplateHover,
   mapSemanticRuntimeTemplateCompletions,
   mapSemanticRuntimeTemplateReferences,
+  mapSemanticRuntimeTemplateRenameCandidates,
   mapSemanticRuntimeTemplatePrepareRename,
   mapSemanticRuntimeTemplateRenameEdit,
   semanticRuntimeTemplateCodeActionIdentityFromData,
@@ -65,6 +66,7 @@ import { mapBindingUncertaintyExplanationCodeAction } from "../mapping/binding-u
 import { mapAttributeInterpretationExplanationCodeAction } from "../mapping/attribute-interpretation-explanation.js";
 import {
   templateCodeActionResolveRefusal,
+  type RenameCandidateRefusalData,
   type TemplateCodeActionResolveRefusalKind,
 } from "../protocol.js";
 import { handleSemanticTokensFull } from "./semantic-tokens.js";
@@ -295,6 +297,18 @@ export function handlePrepareRename(
 
   return operation.templateRename(doc.uri, params.position).then((response) => {
     if (response.value.status !== "available") {
+      if (response.value.reason === "unresolved-candidates") {
+        const candidateMapping = mapSemanticRuntimeTemplateRenameCandidates(
+          response,
+          (uri) => operation.documents.lookupText(uri),
+          { documentUris: ctx.documentUris, originDocument: doc },
+        );
+        throw renameCandidateResponseError(
+          response.value.displayText || response.summary,
+          response.value.reason,
+          candidateMapping,
+        );
+      }
       return null;
     }
     return mapSemanticRuntimeTemplatePrepareRename(response, {
@@ -319,7 +333,16 @@ export async function handleRename(
     params.newName,
   );
   if (response.value.status !== "available") {
-    throw new ResponseError(LSPErrorCodes.RequestFailed, response.value.displayText || response.summary);
+    const candidateMapping = mapSemanticRuntimeTemplateRenameCandidates(
+      response,
+      (uri) => operation.documents.lookupText(uri),
+      { documentUris: ctx.documentUris, originDocument: doc },
+    );
+    throw renameCandidateResponseError(
+      response.value.displayText || response.summary,
+      response.value.reason,
+      candidateMapping,
+    );
   }
   const mapping = mapSemanticRuntimeTemplateRenameEdit(response, (uri) => operation.documents.lookupDocumentSnapshot(uri), {
     documentUris: ctx.documentUris,
@@ -331,20 +354,23 @@ export async function handleRename(
       `Rename to '${params.newName}' was blocked: ${mapping.failures.join(" ")}`,
     );
   }
-  if (response.value.candidateRows.length > 0) {
-    operation.deferEffect({
-      kind: "show-message",
-      type: MessageType.Info,
-      message: candidateRenameMessage(response.value.edits.length, response.value.candidateRows.length),
-    });
-  }
   return mapping.edit;
 }
 
-function candidateRenameMessage(verifiedEditCount: number, candidateCount: number): string {
-  const editNoun = verifiedEditCount === 1 ? "edit" : "edits";
-  const candidateNoun = candidateCount === 1 ? "usage" : "usages";
-  return `Aurelia rename prepared ${verifiedEditCount} verified ${editNoun}; ${candidateCount} same-name ${candidateNoun} could not be verified and were left unchanged.`;
+function renameCandidateResponseError(
+  message: string,
+  reason: string | null,
+  mapping: ReturnType<typeof mapSemanticRuntimeTemplateRenameCandidates>,
+): ResponseError<RenameCandidateRefusalData> {
+  const data: RenameCandidateRefusalData = {
+    reason,
+    candidates: mapping.value,
+    mappingFailures: mapping.failures,
+  };
+  return Object.assign(
+    new ResponseError<RenameCandidateRefusalData>(LSPErrorCodes.RequestFailed, message),
+    { data },
+  );
 }
 
 function referenceCoverageMessage(

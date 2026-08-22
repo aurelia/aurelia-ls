@@ -15,11 +15,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "anchor": "external-value.bind=\"externalValue\"",
   "at": "external-value",
   "atOccurrence": 1,
-  "displayPosition": "src/bindable-lab-app.html:38:24",
+  "displayPosition": "src/bindable-lab-app.html:39:24",
   "file": "src/bindable-lab-app.html",
   "lspPosition": {
     "character": 23,
-    "line": 37
+    "line": 38
   },
   "newName": "externalState",
   "occurrence": 1
@@ -36,11 +36,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     "range": {
       "end": {
         "character": 37,
-        "line": 37
+        "line": 38
       },
       "start": {
         "character": 23,
-        "line": 37
+        "line": 38
       }
     }
   }
@@ -57,18 +57,26 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       {
         "edits": [
           {
-            "newText": "externalState",
+            "newText": "external-state",
             "range": {
               "end": {
-                "character": 15,
-                "line": 105
+                "character": 37,
+                "line": 38
               },
               "start": {
-                "character": 2,
-                "line": 105
+                "character": 23,
+                "line": 38
               }
             }
-          },
+          }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/bindable-contracts-lab/src/bindable-lab-app.html",
+          "version": 1
+        }
+      },
+      {
+        "edits": [
           {
             "newText": "externalState",
             "range": {
@@ -94,32 +102,24 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "line": 102
               }
             }
-          }
-        ],
-        "textDocument": {
-          "uri": "fixtures://pressure/bindable-contracts-lab/src/binding-contract-surfaces.ts",
-          "version": null
-        }
-      },
-      {
-        "edits": [
+          },
           {
-            "newText": "external-state",
+            "newText": "externalState",
             "range": {
               "end": {
-                "character": 37,
-                "line": 37
+                "character": 15,
+                "line": 105
               },
               "start": {
-                "character": 23,
-                "line": 37
+                "character": 2,
+                "line": 105
               }
             }
           }
         ],
         "textDocument": {
-          "uri": "fixtures://pressure/bindable-contracts-lab/src/bindable-lab-app.html",
-          "version": 1
+          "uri": "fixtures://pressure/bindable-contracts-lab/src/binding-contract-surfaces.ts",
+          "version": null
         }
       }
     ]
@@ -160,11 +160,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 37,
-          "line": 37
+          "line": 38
         },
         "start": {
           "character": 23,
-          "line": 37
+          "line": 38
         }
       },
       "source": "documentChanges",
@@ -231,7 +231,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 diff --git a/src/bindable-lab-app.html b/src/bindable-lab-app.html
 --- a/src/bindable-lab-app.html
 +++ b/src/bindable-lab-app.html
-@@ -1,40 +1,40 @@
+@@ -1,41 +1,41 @@
  <template>
    <profile-card
      title.bind="titleText"
@@ -252,6 +252,7 @@ diff --git a/src/bindable-lab-app.html b/src/bindable-lab-app.html
    <section display-hint="message.one-time: statusMessage"></section>
    <section display-hint="message: Literal status; tone: ${accentTone}"></section>
    <section display-hint.bind="statusMessage"></section>
+   <section :two-way-state="twoWayValue"></section>
    <section display-hint.bind="statusMessage ? accentTone : aliasLabel"></section>
 
    <section active-state.bind="isActive"></section>
@@ -417,11 +418,11 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
   "anchor": "base-static.bind=\"inheritedStatic\"",
   "at": "base-static",
   "atOccurrence": 1,
-  "displayPosition": "src/bindable-lab-app.html:30:27",
+  "displayPosition": "src/bindable-lab-app.html:31:27",
   "file": "src/bindable-lab-app.html",
   "lspPosition": {
     "character": 26,
-    "line": 29
+    "line": 30
   },
   "newName": "baseValue",
   "occurrence": 1
@@ -438,11 +439,11 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
     "range": {
       "end": {
         "character": 37,
-        "line": 29
+        "line": 30
       },
       "start": {
         "character": 26,
-        "line": 29
+        "line": 30
       }
     }
   }
@@ -459,18 +460,26 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
       {
         "edits": [
           {
-            "newText": "baseValue",
+            "newText": "base-value",
             "range": {
               "end": {
-                "character": 12,
-                "line": 52
+                "character": 37,
+                "line": 30
               },
               "start": {
-                "character": 2,
-                "line": 52
+                "character": 26,
+                "line": 30
               }
             }
-          },
+          }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/bindable-contracts-lab/src/bindable-lab-app.html",
+          "version": 1
+        }
+      },
+      {
+        "edits": [
           {
             "newText": "baseValue",
             "range": {
@@ -481,6 +490,19 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
               "start": {
                 "character": 54,
                 "line": 50
+              }
+            }
+          },
+          {
+            "newText": "baseValue",
+            "range": {
+              "end": {
+                "character": 12,
+                "line": 52
+              },
+              "start": {
+                "character": 2,
+                "line": 52
               }
             }
           },
@@ -501,27 +523,6 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
         "textDocument": {
           "uri": "fixtures://pressure/bindable-contracts-lab/src/binding-contract-surfaces.ts",
           "version": null
-        }
-      },
-      {
-        "edits": [
-          {
-            "newText": "base-value",
-            "range": {
-              "end": {
-                "character": 37,
-                "line": 29
-              },
-              "start": {
-                "character": 26,
-                "line": 29
-              }
-            }
-          }
-        ],
-        "textDocument": {
-          "uri": "fixtures://pressure/bindable-contracts-lab/src/bindable-lab-app.html",
-          "version": 1
         }
       }
     ]
@@ -562,11 +563,11 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
       "range": {
         "end": {
           "character": 37,
-          "line": 29
+          "line": 30
         },
         "start": {
           "character": 26,
-          "line": 29
+          "line": 30
         }
       },
       "source": "documentChanges",
@@ -633,7 +634,7 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
 diff --git a/src/bindable-lab-app.html b/src/bindable-lab-app.html
 --- a/src/bindable-lab-app.html
 +++ b/src/bindable-lab-app.html
-@@ -1,40 +1,40 @@
+@@ -1,41 +1,41 @@
  <template>
    <profile-card
      title.bind="titleText"
@@ -654,6 +655,7 @@ diff --git a/src/bindable-lab-app.html b/src/bindable-lab-app.html
    <section display-hint="message.one-time: statusMessage"></section>
    <section display-hint="message: Literal status; tone: ${accentTone}"></section>
    <section display-hint.bind="statusMessage"></section>
+   <section :two-way-state="twoWayValue"></section>
    <section display-hint.bind="statusMessage ? accentTone : aliasLabel"></section>
 
    <section active-state.bind="isActive"></section>
@@ -819,11 +821,11 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
   "anchor": "inherited-only.bind=\"precedenceInherited\"",
   "at": "inherited-only",
   "atOccurrence": 1,
-  "displayPosition": "src/bindable-lab-app.html:34:5",
+  "displayPosition": "src/bindable-lab-app.html:35:5",
   "file": "src/bindable-lab-app.html",
   "lspPosition": {
     "character": 4,
-    "line": 33
+    "line": 34
   },
   "newName": "baseOnly",
   "occurrence": 1
@@ -840,11 +842,11 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
     "range": {
       "end": {
         "character": 18,
-        "line": 33
+        "line": 34
       },
       "start": {
         "character": 4,
-        "line": 33
+        "line": 34
       }
     }
   }
@@ -858,6 +860,27 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
   "outcome": "result",
   "result": {
     "documentChanges": [
+      {
+        "edits": [
+          {
+            "newText": "base-only",
+            "range": {
+              "end": {
+                "character": 18,
+                "line": 34
+              },
+              "start": {
+                "character": 4,
+                "line": 34
+              }
+            }
+          }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/bindable-contracts-lab/src/bindable-lab-app.html",
+          "version": 1
+        }
+      },
       {
         "edits": [
           {
@@ -890,27 +913,6 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
         "textDocument": {
           "uri": "fixtures://pressure/bindable-contracts-lab/src/binding-contract-surfaces.ts",
           "version": null
-        }
-      },
-      {
-        "edits": [
-          {
-            "newText": "base-only",
-            "range": {
-              "end": {
-                "character": 18,
-                "line": 33
-              },
-              "start": {
-                "character": 4,
-                "line": 33
-              }
-            }
-          }
-        ],
-        "textDocument": {
-          "uri": "fixtures://pressure/bindable-contracts-lab/src/bindable-lab-app.html",
-          "version": 1
         }
       }
     ]
@@ -951,11 +953,11 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
       "range": {
         "end": {
           "character": 18,
-          "line": 33
+          "line": 34
         },
         "start": {
           "character": 4,
-          "line": 33
+          "line": 34
         }
       },
       "source": "documentChanges",
@@ -1005,7 +1007,7 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
 diff --git a/src/bindable-lab-app.html b/src/bindable-lab-app.html
 --- a/src/bindable-lab-app.html
 +++ b/src/bindable-lab-app.html
-@@ -1,40 +1,40 @@
+@@ -1,41 +1,41 @@
  <template>
    <profile-card
      title.bind="titleText"
@@ -1026,6 +1028,7 @@ diff --git a/src/bindable-lab-app.html b/src/bindable-lab-app.html
    <section display-hint="message.one-time: statusMessage"></section>
    <section display-hint="message: Literal status; tone: ${accentTone}"></section>
    <section display-hint.bind="statusMessage"></section>
+   <section :two-way-state="twoWayValue"></section>
    <section display-hint.bind="statusMessage ? accentTone : aliasLabel"></section>
 
    <section active-state.bind="isActive"></section>
@@ -1190,11 +1193,11 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
   "anchor": "static-only.bind=\"precedenceStatic\"",
   "at": "static-only",
   "atOccurrence": 1,
-  "displayPosition": "src/bindable-lab-app.html:35:5",
+  "displayPosition": "src/bindable-lab-app.html:36:5",
   "file": "src/bindable-lab-app.html",
   "lspPosition": {
     "character": 4,
-    "line": 34
+    "line": 35
   },
   "newName": "configuredOnly",
   "occurrence": 1
@@ -1211,11 +1214,11 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
     "range": {
       "end": {
         "character": 15,
-        "line": 34
+        "line": 35
       },
       "start": {
         "character": 4,
-        "line": 34
+        "line": 35
       }
     }
   }
@@ -1232,18 +1235,26 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
       {
         "edits": [
           {
-            "newText": "configuredOnly",
+            "newText": "configured-only",
             "range": {
               "end": {
-                "character": 12,
-                "line": 95
+                "character": 15,
+                "line": 35
               },
               "start": {
-                "character": 2,
-                "line": 95
+                "character": 4,
+                "line": 35
               }
             }
-          },
+          }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/bindable-contracts-lab/src/bindable-lab-app.html",
+          "version": 1
+        }
+      },
+      {
+        "edits": [
           {
             "newText": "configuredOnly",
             "range": {
@@ -1269,32 +1280,24 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
                 "line": 89
               }
             }
-          }
-        ],
-        "textDocument": {
-          "uri": "fixtures://pressure/bindable-contracts-lab/src/binding-contract-surfaces.ts",
-          "version": null
-        }
-      },
-      {
-        "edits": [
+          },
           {
-            "newText": "configured-only",
+            "newText": "configuredOnly",
             "range": {
               "end": {
-                "character": 15,
-                "line": 34
+                "character": 12,
+                "line": 95
               },
               "start": {
-                "character": 4,
-                "line": 34
+                "character": 2,
+                "line": 95
               }
             }
           }
         ],
         "textDocument": {
-          "uri": "fixtures://pressure/bindable-contracts-lab/src/bindable-lab-app.html",
-          "version": 1
+          "uri": "fixtures://pressure/bindable-contracts-lab/src/binding-contract-surfaces.ts",
+          "version": null
         }
       }
     ]
@@ -1335,11 +1338,11 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
       "range": {
         "end": {
           "character": 15,
-          "line": 34
+          "line": 35
         },
         "start": {
           "character": 4,
-          "line": 34
+          "line": 35
         }
       },
       "source": "documentChanges",
@@ -1406,7 +1409,7 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
 diff --git a/src/bindable-lab-app.html b/src/bindable-lab-app.html
 --- a/src/bindable-lab-app.html
 +++ b/src/bindable-lab-app.html
-@@ -1,40 +1,40 @@
+@@ -1,41 +1,41 @@
  <template>
    <profile-card
      title.bind="titleText"
@@ -1427,6 +1430,7 @@ diff --git a/src/bindable-lab-app.html b/src/bindable-lab-app.html
    <section display-hint="message.one-time: statusMessage"></section>
    <section display-hint="message: Literal status; tone: ${accentTone}"></section>
    <section display-hint.bind="statusMessage"></section>
+   <section :two-way-state="twoWayValue"></section>
    <section display-hint.bind="statusMessage ? accentTone : aliasLabel"></section>
 
    <section active-state.bind="isActive"></section>
@@ -1592,11 +1596,11 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
   "anchor": "definition-only.bind=\"precedenceDefinition\"",
   "at": "definition-only",
   "atOccurrence": 1,
-  "displayPosition": "src/bindable-lab-app.html:36:5",
+  "displayPosition": "src/bindable-lab-app.html:37:5",
   "file": "src/bindable-lab-app.html",
   "lspPosition": {
     "character": 4,
-    "line": 35
+    "line": 36
   },
   "newName": "declaredOnly",
   "occurrence": 1
@@ -1613,11 +1617,11 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
     "range": {
       "end": {
         "character": 19,
-        "line": 35
+        "line": 36
       },
       "start": {
         "character": 4,
-        "line": 35
+        "line": 36
       }
     }
   }
@@ -1634,18 +1638,26 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
       {
         "edits": [
           {
-            "newText": "declaredOnly",
+            "newText": "declared-only",
             "range": {
               "end": {
-                "character": 16,
-                "line": 96
+                "character": 19,
+                "line": 36
               },
               "start": {
-                "character": 2,
-                "line": 96
+                "character": 4,
+                "line": 36
               }
             }
-          },
+          }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/bindable-contracts-lab/src/bindable-lab-app.html",
+          "version": 1
+        }
+      },
+      {
+        "edits": [
           {
             "newText": "declaredOnly",
             "range": {
@@ -1671,32 +1683,24 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
                 "line": 83
               }
             }
-          }
-        ],
-        "textDocument": {
-          "uri": "fixtures://pressure/bindable-contracts-lab/src/binding-contract-surfaces.ts",
-          "version": null
-        }
-      },
-      {
-        "edits": [
+          },
           {
-            "newText": "declared-only",
+            "newText": "declaredOnly",
             "range": {
               "end": {
-                "character": 19,
-                "line": 35
+                "character": 16,
+                "line": 96
               },
               "start": {
-                "character": 4,
-                "line": 35
+                "character": 2,
+                "line": 96
               }
             }
           }
         ],
         "textDocument": {
-          "uri": "fixtures://pressure/bindable-contracts-lab/src/bindable-lab-app.html",
-          "version": 1
+          "uri": "fixtures://pressure/bindable-contracts-lab/src/binding-contract-surfaces.ts",
+          "version": null
         }
       }
     ]
@@ -1737,11 +1741,11 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
       "range": {
         "end": {
           "character": 19,
-          "line": 35
+          "line": 36
         },
         "start": {
           "character": 4,
-          "line": 35
+          "line": 36
         }
       },
       "source": "documentChanges",
@@ -1808,7 +1812,7 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
 diff --git a/src/bindable-lab-app.html b/src/bindable-lab-app.html
 --- a/src/bindable-lab-app.html
 +++ b/src/bindable-lab-app.html
-@@ -1,40 +1,40 @@
+@@ -1,41 +1,41 @@
  <template>
    <profile-card
      title.bind="titleText"
@@ -1829,6 +1833,7 @@ diff --git a/src/bindable-lab-app.html b/src/bindable-lab-app.html
    <section display-hint="message.one-time: statusMessage"></section>
    <section display-hint="message: Literal status; tone: ${accentTone}"></section>
    <section display-hint.bind="statusMessage"></section>
+   <section :two-way-state="twoWayValue"></section>
    <section display-hint.bind="statusMessage ? accentTone : aliasLabel"></section>
 
    <section active-state.bind="isActive"></section>
@@ -2019,7 +2024,12 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
 ```json
 {
   "error": {
-    "code": 0,
+    "code": -32803,
+    "data": {
+      "candidates": [],
+      "mappingFailures": [],
+      "reason": "unsupported-resource-kind"
+    },
     "message": "Resource 'one-time' is not renameable from this template position."
   },
   "outcome": "error"

@@ -51,6 +51,18 @@ export interface AureliaLanguageClientSession {
   readonly fileEvents: readonly FileSystemWatcher[];
 }
 
+/** Whether a document has an active, temporarily unpublished, or absent Aurelia session owner. */
+export enum AureliaSemanticSessionState {
+  Active = "active",
+  Transitioning = "transitioning",
+  Unowned = "unowned",
+}
+
+interface TransitioningSemanticSessionScope {
+  readonly session: AureliaLanguageClientSession;
+  count: number;
+}
+
 export type LanguageClientFactory = (
   id: string,
   name: string,
@@ -181,6 +193,7 @@ export class AureliaLanguageClient {
   #started = false;
   #sourceAdmissionTimer: ReturnType<typeof setTimeout> | null = null;
   readonly #latestTopologyFingerprintByClient = new Map<LanguageClient, string>();
+  readonly #transitioningSemanticScopes = new Map<LanguageClient, TransitioningSemanticSessionScope>();
 
   constructor(
     logger: ClientLogger,
@@ -217,6 +230,23 @@ export class AureliaLanguageClient {
       .sort((left, right) => right.folder.uri.fsPath.length - left.folder.uri.fsPath.length)[0];
   }
 
+  semanticSessionStateForUri(uri: string | Uri): AureliaSemanticSessionState {
+    if (this.sessionForUri(uri) != null) {
+      return AureliaSemanticSessionState.Active;
+    }
+    const target = typeof uri === "string" ? this.#vscode.Uri.parse(uri) : uri;
+    const transitioning = [...this.#transitioningSemanticScopes.values()]
+      .map((entry) => entry.session)
+      .filter((session) =>
+        workspaceFolderContainsUri(session.folder, target)
+        && !session.excludedFolders.some((folder) => workspaceFolderContainsUri(folder, target))
+      )
+      .sort((left, right) => right.folder.uri.fsPath.length - left.folder.uri.fsPath.length)[0];
+    return transitioning == null
+      ? AureliaSemanticSessionState.Unowned
+      : AureliaSemanticSessionState.Transitioning;
+  }
+
   async start(context: ExtensionContext): Promise<void> {
     if (this.#startConsumed || this.#stopRequest != null) {
       throw new Error("Aurelia language-client ownership may start only once.");
@@ -235,11 +265,47 @@ export class AureliaLanguageClient {
 
   reconcile(options: ReconcileOptions = {}): Promise<void> {
     if (!this.#acceptingLifecycleRequests) return Promise.resolve();
+    const releaseTransitionScopes = this.#retainTransitioningSemanticScopes();
     const intent = this.#advanceLifecycleIntent();
     return this.#enqueueTransition(async () => {
-      if (!this.#isCurrentLifecycle(intent)) return;
-      await this.#runReconcile(options.reconfirmExisting === true, intent);
+      try {
+        if (!this.#isCurrentLifecycle(intent)) return;
+        await this.#runReconcile(options.reconfirmExisting === true, intent);
+      } finally {
+        releaseTransitionScopes();
+      }
     });
+  }
+
+  #retainTransitioningSemanticScopes(): () => void {
+    const sessions = new Map<LanguageClient, AureliaLanguageClientSession>();
+    for (const session of this.sessions) {
+      sessions.set(session.client, session);
+    }
+    for (const entry of this.#transitioningSemanticScopes.values()) {
+      sessions.set(entry.session.client, entry.session);
+    }
+    for (const session of sessions.values()) {
+      const entry = this.#transitioningSemanticScopes.get(session.client);
+      if (entry == null) {
+        this.#transitioningSemanticScopes.set(session.client, { session, count: 1 });
+      } else {
+        entry.count += 1;
+      }
+    }
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      for (const session of sessions.values()) {
+        const entry = this.#transitioningSemanticScopes.get(session.client);
+        if (entry == null) continue;
+        entry.count -= 1;
+        if (entry.count === 0) {
+          this.#transitioningSemanticScopes.delete(session.client);
+        }
+      }
+    };
   }
 
   /** Reconfirm one settled semantic topology before consumers query a possibly withdrawing session. */
@@ -249,69 +315,74 @@ export class AureliaLanguageClient {
   ): Promise<boolean> {
     if (payload.changeKind !== "topology") return true;
     if (!this.#acceptingLifecycleRequests) return false;
+    const releaseTransitionScopes = this.#retainTransitioningSemanticScopes();
     this.#latestTopologyFingerprintByClient.set(observedSession.client, payload.fingerprint);
     const intent = this.#lifecycleIntent;
     let shouldDispatch = false;
-    await this.#enqueueTransition(async () => {
-      if (!this.#isCurrentLifecycle(intent)) return;
-      const current = this.#sessions.get(observedSession.workspace.key);
-      if (current?.client !== observedSession.client) return;
-      if (this.#latestTopologyFingerprintByClient.get(current.client) !== payload.fingerprint) return;
-      if (current.activationMode === AureliaActivationMode.On || current.status?.fingerprint === payload.fingerprint) {
-        shouldDispatch = true;
-        return;
-      }
+    try {
+      await this.#enqueueTransition(async () => {
+        if (!this.#isCurrentLifecycle(intent)) return;
+        const current = this.#sessions.get(observedSession.workspace.key);
+        if (current?.client !== observedSession.client) return;
+        if (this.#latestTopologyFingerprintByClient.get(current.client) !== payload.fingerprint) return;
+        if (current.activationMode === AureliaActivationMode.On || current.status?.fingerprint === payload.fingerprint) {
+          shouldDispatch = true;
+          return;
+        }
 
-      const candidatesResult = await this.#awaitLifecycle(
-        this.#refreshNativeProjectConfigurationCandidates(current),
-        intent,
-      );
-      if (candidatesResult.status === "invalidated") return;
-      const nativeProjectConfigurationUris = candidatesResult.value;
-      if (this.#latestTopologyFingerprintByClient.get(current.client) !== payload.fingerprint) return;
-      const statusResult = await this.#awaitLifecycle(
-        readWorkspaceStatus(
-          current.client,
-          this.#logger,
-          current.workspace.uri,
-          nativeProjectConfigurationUris,
-        ),
-        intent,
-      );
-      if (statusResult.status === "invalidated" || !this.#isCurrentLifecycle(intent)) return;
-      if (this.#latestTopologyFingerprintByClient.get(current.client) !== payload.fingerprint) return;
-      const status = statusResult.value;
-      if (status == null) {
-        this.#replaceSessionMetadata(current, nativeProjectConfigurationUris, null);
-        shouldDispatch = true;
-        return;
-      }
-      if (status.fingerprint !== payload.fingerprint) {
-        return;
-      }
-      if (workspaceStatusConfirmsSessionRetention(this.#vscode, status, nativeProjectConfigurationUris)) {
+        const candidatesResult = await this.#awaitLifecycle(
+          this.#refreshNativeProjectConfigurationCandidates(current),
+          intent,
+        );
+        if (candidatesResult.status === "invalidated") return;
+        const nativeProjectConfigurationUris = candidatesResult.value;
+        if (this.#latestTopologyFingerprintByClient.get(current.client) !== payload.fingerprint) return;
+        const statusResult = await this.#awaitLifecycle(
+          readWorkspaceStatus(
+            current.client,
+            this.#logger,
+            current.workspace.uri,
+            nativeProjectConfigurationUris,
+          ),
+          intent,
+        );
+        if (statusResult.status === "invalidated" || !this.#isCurrentLifecycle(intent)) return;
+        if (this.#latestTopologyFingerprintByClient.get(current.client) !== payload.fingerprint) return;
+        const status = statusResult.value;
+        if (status == null) {
+          this.#replaceSessionMetadata(current, nativeProjectConfigurationUris, null);
+          shouldDispatch = true;
+          return;
+        }
+        if (status.fingerprint !== payload.fingerprint) {
+          return;
+        }
+        if (workspaceStatusConfirmsSessionRetention(this.#vscode, status, nativeProjectConfigurationUris)) {
+          this.#replaceSessionMetadata(current, nativeProjectConfigurationUris, status);
+          shouldDispatch = true;
+          return;
+        }
+
         this.#replaceSessionMetadata(current, nativeProjectConfigurationUris, status);
-        shouldDispatch = true;
-        return;
-      }
-
-      this.#replaceSessionMetadata(current, nativeProjectConfigurationUris, status);
-      const workspaceKeys = containmentConnectedWorkspaceKeys(
-        this.#vscode.workspace.workspaceFolders ?? [],
-        current.folder,
-      );
-      await this.#reconcileSessions(false, intent, {
-        workspaceKeys,
-        rejectedSession: {
-          workspaceKey: current.workspace.key,
-          client: current.client,
-          fingerprint: payload.fingerprint,
-          nativeProjectConfigurationUris,
-          projectRootHintFolders: current.projectRootHintFolders,
-        },
+        const workspaceKeys = containmentConnectedWorkspaceKeys(
+          this.#vscode.workspace.workspaceFolders ?? [],
+          current.folder,
+        );
+        await this.#reconcileSessions(false, intent, {
+          workspaceKeys,
+          rejectedSession: {
+            workspaceKey: current.workspace.key,
+            client: current.client,
+            fingerprint: payload.fingerprint,
+            nativeProjectConfigurationUris,
+            projectRootHintFolders: current.projectRootHintFolders,
+          },
+        });
       });
-    });
-    return shouldDispatch;
+      return shouldDispatch;
+    } finally {
+      releaseTransitionScopes();
+    }
   }
 
   stop(): Promise<void> {

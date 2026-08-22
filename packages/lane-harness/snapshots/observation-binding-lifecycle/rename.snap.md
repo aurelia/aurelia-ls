@@ -60,27 +60,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "newText": "attributeAfterView",
             "range": {
               "end": {
-                "character": 19,
-                "line": 32
-              },
-              "start": {
-                "character": 2,
-                "line": 32
-              }
-            }
-          }
-        ],
-        "textDocument": {
-          "uri": "fixtures://pressure/observation-binding-lifecycle/src/observation-binding-lifecycle-app.ts",
-          "version": null
-        }
-      },
-      {
-        "edits": [
-          {
-            "newText": "attributeAfterView",
-            "range": {
-              "end": {
                 "character": 77,
                 "line": 7
               },
@@ -107,6 +86,27 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "textDocument": {
           "uri": "fixtures://pressure/observation-binding-lifecycle/src/observation-binding-lifecycle-app.html",
           "version": 1
+        }
+      },
+      {
+        "edits": [
+          {
+            "newText": "attributeAfterView",
+            "range": {
+              "end": {
+                "character": 19,
+                "line": 32
+              },
+              "start": {
+                "character": 2,
+                "line": 32
+              }
+            }
+          }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/observation-binding-lifecycle/src/observation-binding-lifecycle-app.ts",
+          "version": null
         }
       }
     ]

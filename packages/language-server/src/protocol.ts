@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type {
   ApplicationFileRole,
   SemanticAttributeInterpretationExplanation,
@@ -30,6 +31,7 @@ import type {
   SourceFileRole,
   SemanticTemplateResourceAvailabilityState,
   SemanticTemplateResourceAvailabilityRow,
+  SemanticTemplateReferenceCandidateReason,
 } from "@aurelia-ls/semantic-runtime";
 import type { Position, Range, WorkspaceEdit } from "vscode-languageserver/node";
 
@@ -60,6 +62,27 @@ export const AureliaProtocolNotification = {
 } as const;
 
 export const AURELIA_TEMPLATE_CODE_ACTION_RESOLVE_SCHEMA = "aurelia.template-code-action-resolve/1" as const;
+export const AURELIA_WORKSPACE_EDIT_TRANSACTION_SCHEMA = "aurelia.workspace-edit-transaction/1" as const;
+
+/** Exact source snapshot that must still be current immediately before a client returns an edit for application. */
+export interface AureliaWorkspaceEditTransactionDocument {
+  readonly uri: string;
+  readonly version: number | null;
+  readonly contentRevision: string;
+  /** Canonical real path when the source exists on the host filesystem; null is allowed only for versioned buffers. */
+  readonly physicalPath: string | null;
+}
+
+/** Client-verifiable all-or-nothing snapshot for one semantic workspace edit. */
+export interface AureliaWorkspaceEditTransaction {
+  readonly schema: typeof AURELIA_WORKSPACE_EDIT_TRANSACTION_SCHEMA;
+  readonly documents: readonly AureliaWorkspaceEditTransactionDocument[];
+}
+
+/** Collision-resistant UTF-8 text revision shared by the language server and VS Code client. */
+export function aureliaWorkspaceEditContentRevision(text: string): string {
+  return `sha256:${createHash("sha256").update(text, "utf8").digest("hex")}`;
+}
 
 export type ProjectConfigurationParserDiagnosticsOwner = "semantic-runtime" | "client";
 export type TypeScriptProgramDiagnosticsOwner = "semantic-runtime" | "client";
@@ -210,7 +233,10 @@ export type RuntimeAnswerTransport = Omit<
   readonly coverage: `${RuntimeAnswerTransportFields["coverage"]}`;
 };
 
-export type ProtocolWorkspaceEdit = WorkspaceEdit;
+export type ProtocolWorkspaceEdit = WorkspaceEdit & {
+  /** Aurelia extension data ignored safely by generic LSP clients. */
+  readonly aureliaWorkspaceEditTransaction?: AureliaWorkspaceEditTransaction;
+};
 export type ProtocolRange = Range;
 
 /**
@@ -1153,6 +1179,21 @@ export type RenameFromTsParams = {
   newName?: string;
 };
 
+/** Exact authored same-name site whose rename identity remains unresolved. */
+export interface RenameCandidateLocation {
+  readonly uri: string;
+  readonly range: ProtocolRange;
+  readonly name: string;
+  readonly reason: SemanticTemplateReferenceCandidateReason | `${SemanticTemplateReferenceCandidateReason}`;
+}
+
+/** RequestFailed data returned when standard LSP rename refuses unresolved authored candidates. */
+export interface RenameCandidateRefusalData {
+  readonly reason: string | null;
+  readonly candidates: readonly RenameCandidateLocation[];
+  readonly mappingFailures: readonly string[];
+}
+
 export type RenameFromTsResponse = {
   status: "available";
   range: ProtocolRange;
@@ -1161,6 +1202,7 @@ export type RenameFromTsResponse = {
   templateReferenceCount: number;
   typeScriptReferenceCount: number;
   candidateCount: number;
+  candidates: readonly RenameCandidateLocation[];
 } | {
   status: "success";
   workspaceEdit: ProtocolWorkspaceEdit;
@@ -1168,6 +1210,7 @@ export type RenameFromTsResponse = {
   templateReferenceCount: number;
   typeScriptReferenceCount: number;
   candidateCount: number;
+  candidates: readonly RenameCandidateLocation[];
 } | {
   status: "not-applicable";
   reason: string;
@@ -1175,6 +1218,7 @@ export type RenameFromTsResponse = {
   templateReferenceCount: number;
   typeScriptReferenceCount: number;
   candidateCount: number;
+  candidates: readonly RenameCandidateLocation[];
 } | {
   status: "refused";
   reason: string;
@@ -1182,6 +1226,7 @@ export type RenameFromTsResponse = {
   templateReferenceCount: number;
   typeScriptReferenceCount: number;
   candidateCount: number;
+  candidates: readonly RenameCandidateLocation[];
 } | {
   status: "blocked";
   reason: string;
@@ -1190,4 +1235,5 @@ export type RenameFromTsResponse = {
   templateReferenceCount?: number;
   typeScriptReferenceCount?: number;
   candidateCount?: number;
+  candidates?: readonly RenameCandidateLocation[];
 };

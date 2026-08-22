@@ -1,8 +1,9 @@
-import type { CancellationToken, CodeAction, TextDocument, Uri } from "vscode";
+import type { CancellationToken, CodeAction, TextDocument, Uri, WorkspaceEdit } from "vscode";
 import type { Middleware } from "vscode-languageclient/node";
 import type * as LanguageClientProtocol from "vscode-languageclient/node";
 import {
   AURELIA_TEMPLATE_CODE_ACTION_RESOLVE_SCHEMA,
+  type ProtocolWorkspaceEdit,
   templateCodeActionResolveRefusalFromData,
   type TemplateCodeActionResolveRefusalKind,
 } from "@aurelia-ls/language-server/protocol";
@@ -17,7 +18,9 @@ import {
   globalActivationTopologyOwner,
   readWorkspaceActivationTopology,
 } from "./workspace-activation.js";
-import { workspaceEditVersionMismatches } from "./workspace-edit-versions.js";
+import {
+  assertWorkspaceEditTransactionCurrent,
+} from "./workspace-edit-versions.js";
 
 type MiddlewareLanguageClient = {
   readonly client: {
@@ -27,6 +30,7 @@ type MiddlewareLanguageClient = {
     };
     protocol2CodeConverter: {
       asCodeAction(action: LanguageClientProtocol.CodeAction, token: CancellationToken): Promise<CodeAction | undefined>;
+      asWorkspaceEdit(edit: ProtocolWorkspaceEdit, token: CancellationToken): Promise<WorkspaceEdit | undefined>;
     };
   } | undefined;
 };
@@ -91,14 +95,68 @@ export function createMiddleware(
         );
         return action;
       }
-      const mismatches = workspaceEditVersionMismatches(vscode, resolved.edit);
-      if (mismatches.length > 0) {
-        refuseCodeAction(vscode, logger, action.title, `editor documents changed: ${mismatches.join("; ")}`);
+      try {
+        await assertWorkspaceEditTransactionCurrent(
+          vscode,
+          resolved.edit,
+          "editor documents changed",
+        );
+      } catch (error) {
+        refuseCodeAction(
+          vscode,
+          logger,
+          action.title,
+          error instanceof Error ? error.message : "editor documents changed",
+        );
+        return action;
+      }
+      if (token.isCancellationRequested) {
         return action;
       }
       return converted;
     },
+    provideRenameEdits: async (document, position, newName, token, next) => {
+      if (!isAureliaTemplateDocument(document)) {
+        return next(document, position, newName, token);
+      }
+      const rawClient = client.client;
+      if (!rawClient) {
+        return next(document, position, newName, token);
+      }
+      const protocolEdit = await rawClient.sendRequest<ProtocolWorkspaceEdit | null>(
+        "textDocument/rename",
+        {
+          textDocument: { uri: document.uri.toString() },
+          position: { line: position.line, character: position.character },
+          newName,
+        },
+        token,
+      );
+      if (token.isCancellationRequested || protocolEdit == null) {
+        return undefined;
+      }
+      const converted = await rawClient.protocol2CodeConverter.asWorkspaceEdit(protocolEdit, token);
+      if (token.isCancellationRequested) {
+        return undefined;
+      }
+      if (converted == null) {
+        throw new Error("Aurelia rename returned no convertible workspace edit.");
+      }
+      await assertWorkspaceEditTransactionCurrent(
+        vscode,
+        protocolEdit,
+        "Aurelia rename was blocked because target documents changed",
+      );
+      logger.debug?.(`[Rename] validated atomic transaction for ${converted.entries().length} files`);
+      return converted;
+    },
   };
+}
+
+function isAureliaTemplateDocument(document: TextDocument): boolean {
+  return document.languageId === "html"
+    || document.languageId === "aurelia-html"
+    || /\.html?$/iu.test(document.uri.path);
 }
 
 function extensionHostTailMiddleware(): Pick<Middleware, "provideDiagnostics" | "provideCompletionItem"> {

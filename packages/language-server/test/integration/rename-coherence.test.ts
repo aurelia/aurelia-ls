@@ -85,6 +85,36 @@ test("template-origin bindable rename rebuilds from disk for closed edited targe
   }
 });
 
+test("template-origin rename refuses atomically when a closed target mutates after planning", async () => {
+  const fixture = copyFixtureDirectory(helloWorldFixture);
+  const { connection, child, dispose, getStderr } = startServer(fixture);
+  const documents = new Map<string, TrackedDocument>();
+  const openUris = new Set<string>();
+
+  try {
+    await initialize(connection, child, getStderr, fixture);
+    const myApp = openTrackedDocument(connection, fixture, "src/my-app.html", "html", documents, openUris);
+    await waitForDiagnostics(connection, child, () => getStderr(), myApp.uri, 5000);
+    const originalTemplate = fs.readFileSync(fileURLToPath(myApp.uri), "utf8");
+    const closedTargetPath = path.join(fixture, "src/components/stock-badge.ts");
+    const originalTarget = fs.readFileSync(closedTargetPath, "utf8");
+
+    const rename = await renameAtNeedle(connection, myApp, "stock-badge item.bind", "item2");
+    fs.writeFileSync(closedTargetPath, `// external race\n${originalTarget}`, "utf8");
+
+    expect(() => applyWorkspaceEditToTrackedDocuments(rename, documents))
+      .toThrow(/transaction content changed.*stock-badge\.ts/iu);
+    expect(fs.readFileSync(fileURLToPath(myApp.uri), "utf8")).toBe(originalTemplate);
+    expect(fs.readFileSync(closedTargetPath, "utf8")).toBe(`// external race\n${originalTarget}`);
+    expect(fs.readFileSync(fileURLToPath(myApp.uri), "utf8")).not.toContain("item2");
+  } finally {
+    dispose();
+    child.kill("SIGKILL");
+    await waitForExit(child);
+    fs.rmSync(fixture, { recursive: true, force: true });
+  }
+}, 30_000);
+
 test("rename waits for source invalidation when a TypeScript offset shifts immediately before the request", async () => {
   const fixture = copyFixtureDirectory(helloWorldFixture);
   const { connection, child, dispose, getStderr } = startServer(fixture);

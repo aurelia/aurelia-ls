@@ -1,6 +1,9 @@
 import { describe, expect, test, vi } from "vitest";
 import type { LanguageClient, LanguageClientOptions } from "vscode-languageclient/node";
-import { AureliaLanguageClient } from "../../out/client-core.js";
+import {
+  AureliaLanguageClient,
+  AureliaSemanticSessionState,
+} from "../../out/client-core.js";
 import { LspFacade } from "../../out/core/lsp-facade.js";
 import { EXTENSION_HOST_OBSERVATION_EVENT } from "../../out/extension-host-observation.js";
 import {
@@ -378,6 +381,53 @@ describe("AureliaLanguageClient workspace ownership", () => {
     expect(harness.clients[0]?.stop).toHaveBeenCalledWith(30_000);
 
     stopGate.resolve(undefined);
+    await manager.stop();
+  });
+
+  test("retains semantic ownership while overlapping session replacements are unpublished", async () => {
+    const { vscode } = createVscodeApi({
+      workspaceFolders: [{ name: "app", uri: "file:///work/app" }],
+      files: {
+        "file:///work/app/package.json": JSON.stringify({ dependencies: { aurelia: "latest" } }),
+        "file:///work/app/packages/nested/package.json": JSON.stringify({ dependencies: { aurelia: "latest" } }),
+      },
+    });
+    const firstReplacementStart = deferred<void>();
+    const secondReplacementStart = deferred<void>();
+    const harness = createClientHarness(new Map([
+      ["file:///work/app", workspaceStatus("app-world")],
+    ]), {
+      clientStart: (_workspaceUri, clientIndex) => clientIndex === 1
+        ? firstReplacementStart.promise
+        : clientIndex === 2
+          ? secondReplacementStart.promise
+          : undefined,
+    });
+    const manager = createManager(vscode, harness);
+    await manager.start(stubExtensionContext(vscode));
+    const documentUri = "file:///work/app/src/main.ts";
+    expect(manager.semanticSessionStateForUri(documentUri)).toBe(AureliaSemanticSessionState.Active);
+
+    vscode.workspace.workspaceFolders?.push({
+      name: "nested",
+      index: 1,
+      uri: vscode.Uri.parse("file:///work/app/packages/nested"),
+    });
+    const first = manager.reconcile();
+    await vi.waitFor(() => expect(harness.clients).toHaveLength(2));
+    await vi.waitFor(() => expect(manager.sessions).toEqual([]));
+    expect(manager.semanticSessionStateForUri(documentUri)).toBe(AureliaSemanticSessionState.Transitioning);
+
+    const second = manager.reconcile();
+    await first;
+    await vi.waitFor(() => expect(harness.clients).toHaveLength(3));
+    expect(manager.sessions).toEqual([]);
+    expect(manager.semanticSessionStateForUri(documentUri)).toBe(AureliaSemanticSessionState.Transitioning);
+
+    firstReplacementStart.resolve(undefined);
+    secondReplacementStart.resolve(undefined);
+    await second;
+    expect(manager.semanticSessionStateForUri(documentUri)).toBe(AureliaSemanticSessionState.Active);
     await manager.stop();
   });
 

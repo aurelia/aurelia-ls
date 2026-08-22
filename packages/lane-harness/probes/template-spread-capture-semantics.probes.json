@@ -5,7 +5,7 @@
       {
         "id": "spread-root-member",
         "file": "src/template-spread-capture-semantics-app.html",
-        "anchor": "<spread-card ...spreadState>",
+        "anchor": "<spread-card ...$bindables='spreadState'>",
         "at": "spreadState",
         "newName": "spreadModel",
         "verdict": "correct",
@@ -15,7 +15,7 @@
       {
         "id": "spread-inferred-member",
         "file": "src/template-spread-capture-semantics-app.html",
-        "anchor": "...spreadContainer.details",
+        "anchor": "...$bindables='spreadContainer.details'",
         "at": "details",
         "newName": "payload",
         "verdict": "correct",

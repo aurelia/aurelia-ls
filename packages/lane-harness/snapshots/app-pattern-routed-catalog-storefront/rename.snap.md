@@ -60,6 +60,27 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "newText": "queryText",
             "range": {
               "end": {
+                "character": 63,
+                "line": 7
+              },
+              "start": {
+                "character": 53,
+                "line": 7
+              }
+            }
+          }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-list-route.html",
+          "version": 1
+        }
+      },
+      {
+        "edits": [
+          {
+            "newText": "queryText",
+            "range": {
+              "end": {
                 "character": 12,
                 "line": 7
               },
@@ -86,27 +107,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "textDocument": {
           "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/state/catalog-state.ts",
           "version": null
-        }
-      },
-      {
-        "edits": [
-          {
-            "newText": "queryText",
-            "range": {
-              "end": {
-                "character": 63,
-                "line": 7
-              },
-              "start": {
-                "character": 53,
-                "line": 7
-              }
-            }
-          }
-        ],
-        "textDocument": {
-          "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-list-route.html",
-          "version": 1
         }
       }
     ]
@@ -387,6 +387,27 @@ diff --git a/src/state/catalog-state.ts b/src/state/catalog-state.ts
             "newText": "inStockOnly",
             "range": {
               "end": {
+                "character": 68,
+                "line": 10
+              },
+              "start": {
+                "character": 57,
+                "line": 10
+              }
+            }
+          }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-list-route.html",
+          "version": 1
+        }
+      },
+      {
+        "edits": [
+          {
+            "newText": "inStockOnly",
+            "range": {
+              "end": {
                 "character": 13,
                 "line": 8
               },
@@ -413,27 +434,6 @@ diff --git a/src/state/catalog-state.ts b/src/state/catalog-state.ts
         "textDocument": {
           "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/state/catalog-state.ts",
           "version": null
-        }
-      },
-      {
-        "edits": [
-          {
-            "newText": "inStockOnly",
-            "range": {
-              "end": {
-                "character": 68,
-                "line": 10
-              },
-              "start": {
-                "character": 57,
-                "line": 10
-              }
-            }
-          }
-        ],
-        "textDocument": {
-          "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-list-route.html",
-          "version": 1
         }
       }
     ]
@@ -714,6 +714,27 @@ diff --git a/src/state/catalog-state.ts b/src/state/catalog-state.ts
             "newText": "filteredItems",
             "range": {
               "end": {
+                "character": 56,
+                "line": 24
+              },
+              "start": {
+                "character": 44,
+                "line": 24
+              }
+            }
+          }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-list-route.html",
+          "version": 1
+        }
+      },
+      {
+        "edits": [
+          {
+            "newText": "filteredItems",
+            "range": {
+              "end": {
                 "character": 18,
                 "line": 14
               },
@@ -740,27 +761,6 @@ diff --git a/src/state/catalog-state.ts b/src/state/catalog-state.ts
         "textDocument": {
           "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/state/catalog-state.ts",
           "version": null
-        }
-      },
-      {
-        "edits": [
-          {
-            "newText": "filteredItems",
-            "range": {
-              "end": {
-                "character": 56,
-                "line": 24
-              },
-              "start": {
-                "character": 44,
-                "line": 24
-              }
-            }
-          }
-        ],
-        "textDocument": {
-          "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-list-route.html",
-          "version": 1
         }
       }
     ]
@@ -1211,7 +1211,12 @@ diff --git a/src/routes/item-list-route.html b/src/routes/item-list-route.html
 ```json
 {
   "error": {
-    "code": 0,
+    "code": -32803,
+    "data": {
+      "candidates": [],
+      "mappingFailures": [],
+      "reason": "resource-name-has-no-authored-source"
+    },
     "message": "Resource name 'repeat' is convention-derived or otherwise has no authored name token to rename."
   },
   "outcome": "error"
@@ -2224,27 +2229,6 @@ diff --git a/src/routes/item-detail-route.html b/src/routes/item-detail-route.ht
             "newText": "product",
             "range": {
               "end": {
-                "character": 16,
-                "line": 12
-              },
-              "start": {
-                "character": 12,
-                "line": 12
-              }
-            }
-          }
-        ],
-        "textDocument": {
-          "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/components/item-card.ts",
-          "version": null
-        }
-      },
-      {
-        "edits": [
-          {
-            "newText": "product",
-            "range": {
-              "end": {
                 "character": 23,
                 "line": 0
               },
@@ -2413,6 +2397,27 @@ diff --git a/src/routes/item-detail-route.html b/src/routes/item-detail-route.ht
         ],
         "textDocument": {
           "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/components/item-card.html",
+          "version": null
+        }
+      },
+      {
+        "edits": [
+          {
+            "newText": "product",
+            "range": {
+              "end": {
+                "character": 16,
+                "line": 12
+              },
+              "start": {
+                "character": 12,
+                "line": 12
+              }
+            }
+          }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/components/item-card.ts",
           "version": null
         }
       },
@@ -3111,7 +3116,12 @@ diff --git a/src/routes/item-list-route.html b/src/routes/item-list-route.html
 ```json
 {
   "error": {
-    "code": 0,
+    "code": -32803,
+    "data": {
+      "candidates": [],
+      "mappingFailures": [],
+      "reason": "invalid-new-name"
+    },
     "message": "Rename target 'ItemCard' is not a valid Aurelia template resource name. Use lowercase letters, digits, '_' or '-' because Aurelia resolves template element and attribute names from lowercased HTML."
   },
   "outcome": "error"
@@ -3478,7 +3488,12 @@ _No in-memory diff._
 ```json
 {
   "error": {
-    "code": 0,
+    "code": -32803,
+    "data": {
+      "candidates": [],
+      "mappingFailures": [],
+      "reason": "invalid-new-name"
+    },
     "message": "Rename target 'not-valid-name' is not a valid TypeScript identifier."
   },
   "outcome": "error"

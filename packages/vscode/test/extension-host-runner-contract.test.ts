@@ -62,6 +62,8 @@ interface ExecutionProbe {
     readonly ledger: string | null;
     readonly report: string | null;
     readonly resourceDiscoveryEnvironmentNames: readonly string[];
+    readonly renameUiPort: string | null;
+    readonly renameUiLaunchArguments: readonly string[];
     readonly testWorkspace: string;
     readonly userDataArgument: string;
   }[];
@@ -615,6 +617,19 @@ describe("Extension Host support runner", () => {
       ["worker-lifecycle", null],
       ["rename-reliability", null],
       ["product-support", "1"],
+    ]);
+    expect(probe.launches.map((launch) => [launch.shard, launch.renameUiPort])).toEqual([
+      ["worker-lifecycle", null],
+      ["rename-reliability", "9411"],
+      ["product-support", null],
+    ]);
+    expect(probe.launches.map((launch) => [launch.shard, launch.renameUiLaunchArguments])).toEqual([
+      ["worker-lifecycle", []],
+      ["rename-reliability", [
+        "--remote-debugging-address=127.0.0.1",
+        "--remote-debugging-port=9411",
+      ]],
+      ["product-support", []],
     ]);
     expect(probe.launches[2]).toMatchObject({
       descriptor: "/mock/product-support/routed/semantic-workspace.json",
@@ -2711,6 +2726,9 @@ function readExecutionProbe(): ExecutionProbe {
             resourceDiscoveryEnvironmentNames: Object.keys(options.extensionTestsEnv)
               .filter((name) => name.startsWith("AURELIA_LS_RESOURCE_DISCOVERY_HOST_"))
               .sort(),
+            renameUiPort: options.extensionTestsEnv.AURELIA_LS_RENAME_UI_CDP_PORT ?? null,
+            renameUiLaunchArguments: options.launchArgs.filter((argument) =>
+              argument.startsWith("--remote-debugging-")),
             testWorkspace: options.launchArgs[0],
             userDataArgument: options.launchArgs.find((argument) =>
               argument.startsWith("--user-data-dir=")),
@@ -2720,6 +2738,7 @@ function readExecutionProbe(): ExecutionProbe {
         },
       },
       staticContractSha256: "a".repeat(64),
+      allocateRenameUiPort: async () => 9411,
       authenticateReport: ({ workspace }) => {
         authenticatedShards.push(workspace.shard);
       },

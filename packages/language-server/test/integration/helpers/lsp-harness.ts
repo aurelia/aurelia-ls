@@ -10,6 +10,12 @@ import {
   createMessageConnection,
   type MessageConnection,
 } from "vscode-languageserver/node";
+import {
+  AURELIA_WORKSPACE_EDIT_TRANSACTION_SCHEMA,
+  aureliaWorkspaceEditContentRevision,
+  type AureliaWorkspaceEditTransaction,
+} from "../../../src/protocol.js";
+import { canonicalTypeSystemPath } from "@aurelia-ls/semantic-runtime";
 
 const serverEntry = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -298,6 +304,7 @@ export interface RenameResult {
     edits?: Array<{ range: unknown; newText: string }>;
   }>;
   changes?: Record<string, Array<{ range: unknown; newText: string }> | undefined>;
+  aureliaWorkspaceEditTransaction?: AureliaWorkspaceEditTransaction;
 }
 
 export function collectEdits(renameResult: RenameResult): Edit[] {
@@ -456,6 +463,28 @@ export function applyWorkspaceEditToTrackedDocuments(
     const version = existingKey == null ? 0 : documents.get(existingKey)!.version;
     if (editBucket.expectedVersion != null && version !== editBucket.expectedVersion) {
       throw new Error(`WorkspaceEdit for ${uri} expected document version ${editBucket.expectedVersion} but tracked version is ${version}.`);
+    }
+  }
+
+  const transaction = edit.aureliaWorkspaceEditTransaction;
+  if (transaction?.schema !== AURELIA_WORKSPACE_EDIT_TRANSACTION_SCHEMA) {
+    throw new Error("WorkspaceEdit has no supported Aurelia transaction snapshot.");
+  }
+  const transactionUris = new Set(transaction.documents.map((document) => document.uri));
+  expect(transactionUris).toEqual(new Set(editsByUri.keys()));
+  for (const expected of transaction.documents) {
+    const existingKey = trackedDocumentKeyForUri(documents, expected.uri);
+    const text = existingKey == null
+      ? fs.readFileSync(pathFromFileUri(expected.uri), "utf8")
+      : documents.get(existingKey)!.text;
+    if (aureliaWorkspaceEditContentRevision(text) !== expected.contentRevision) {
+      throw new Error(`WorkspaceEdit transaction content changed for ${expected.uri}.`);
+    }
+    if (expected.physicalPath != null) {
+      const physicalPath = canonicalTypeSystemPath(fs.realpathSync.native(pathFromFileUri(expected.uri)));
+      if (physicalPath !== expected.physicalPath) {
+        throw new Error(`WorkspaceEdit transaction physical identity changed for ${expected.uri}.`);
+      }
     }
   }
 

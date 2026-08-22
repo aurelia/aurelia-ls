@@ -1,4 +1,8 @@
 import { describe, expect, test, vi } from "vitest";
+import {
+  AURELIA_WORKSPACE_EDIT_TRANSACTION_SCHEMA,
+  aureliaWorkspaceEditContentRevision,
+} from "@aurelia-ls/language-server/protocol";
 import type { ClientContext } from "../../../out/core/context.js";
 import { TsRenameFeature } from "../../../out/features/rename/ts-rename-feature.js";
 
@@ -23,10 +27,21 @@ class StubRange {
 }
 
 class StubUri {
-  constructor(readonly value: string) {}
+  readonly scheme: string;
+  readonly authority: string;
+  readonly path: string;
+  readonly query = "";
+  readonly fragment = "";
+
+  constructor(readonly value: string) {
+    const parsed = new URL(value);
+    this.scheme = parsed.protocol.slice(0, -1);
+    this.authority = parsed.host;
+    this.path = decodeURIComponent(parsed.pathname);
+  }
 
   get fsPath(): string {
-    return this.value.replace("file:///", "");
+    return this.path;
   }
 
   toString(): string {
@@ -64,14 +79,30 @@ type ProtocolEdit = {
       newText: string;
     }>;
   }>;
+  aureliaWorkspaceEditTransaction?: {
+    schema: typeof AURELIA_WORKSPACE_EDIT_TRANSACTION_SCHEMA;
+    documents: Array<{
+      uri: string;
+      version: number | null;
+      contentRevision: string;
+      physicalPath: string | null;
+    }>;
+  };
 };
 
 type RenameResponse =
-  | { status: "available"; range: ProtocolEditRange; placeholder: string; message: string; templateReferenceCount: number; typeScriptReferenceCount: number; candidateCount: number }
-  | { status: "success"; workspaceEdit: ProtocolEdit; message: string; templateReferenceCount: number; typeScriptReferenceCount: number; candidateCount: number }
-  | { status: "not-applicable"; reason: string; message: string; templateReferenceCount: number; typeScriptReferenceCount: number; candidateCount: number }
-  | { status: "refused"; reason: string; message: string; templateReferenceCount: number; typeScriptReferenceCount: number; candidateCount: number }
-  | { status: "blocked"; reason: string; message: string; failures?: readonly string[]; templateReferenceCount?: number; typeScriptReferenceCount?: number; candidateCount?: number };
+  | { status: "available"; range: ProtocolEditRange; placeholder: string; message: string; templateReferenceCount: number; typeScriptReferenceCount: number; candidateCount: number; candidates?: readonly RenameCandidate[] }
+  | { status: "success"; workspaceEdit: ProtocolEdit; message: string; templateReferenceCount: number; typeScriptReferenceCount: number; candidateCount: number; candidates?: readonly RenameCandidate[] }
+  | { status: "not-applicable"; reason: string; message: string; templateReferenceCount: number; typeScriptReferenceCount: number; candidateCount: number; candidates?: readonly RenameCandidate[] }
+  | { status: "refused"; reason: string; message: string; templateReferenceCount: number; typeScriptReferenceCount: number; candidateCount: number; candidates?: readonly RenameCandidate[] }
+  | { status: "blocked"; reason: string; message: string; failures?: readonly string[]; templateReferenceCount?: number; typeScriptReferenceCount?: number; candidateCount?: number; candidates?: readonly RenameCandidate[] };
+
+type RenameCandidate = {
+  uri: string;
+  range: ProtocolEditRange;
+  name: string;
+  reason: string;
+};
 
 type ProtocolEditRange = {
   start: { line: number; character: number };
@@ -82,12 +113,18 @@ type StubDocument = {
   languageId: string;
   uri: StubUri;
   version: number;
+  text: string;
+  getText(): string;
 };
+
+const scriptText = "line 0\nline 1\nconst title = true;\n";
+const templateText = "<p>title</p>\n";
 
 function createContext(options: {
   renameResponse?: RenameResponse;
   textDocuments?: StubDocument[];
   ownsDocument?: boolean;
+  sessionState?: "active" | "transitioning" | "unowned";
 } = {}) {
   const providers: StubProvider[] = [];
   const selectors: unknown[] = [];
@@ -119,13 +156,24 @@ function createContext(options: {
     return edit;
   });
 
+  const defaultDocuments = [
+    createDocument(),
+    createDocument("html", "file:///app.html", 7, templateText),
+  ];
   const ctx = {
     vscode: {
       Position: StubPosition,
       Range: StubRange,
       Uri: { parse: (value: string) => new StubUri(value) },
       WorkspaceEdit: StubWorkspaceEdit,
-      workspace: { textDocuments: options.textDocuments ?? [] },
+      workspace: {
+        textDocuments: options.textDocuments ?? defaultDocuments,
+        fs: {
+          readFile: vi.fn(async (uri: StubUri) => new TextEncoder().encode(
+            uri.toString() === "file:///app.html" ? templateText : scriptText,
+          )),
+        },
+      },
       window: {
         showInformationMessage: vi.fn((message: string) => {
           infoMessages.push(message);
@@ -137,6 +185,8 @@ function createContext(options: {
     lsp: { renameFromTs, convertWorkspaceEdit },
     languageClient: {
       sessionForUri: () => options.ownsDocument === false ? undefined : {},
+      semanticSessionStateForUri: () => options.sessionState
+        ?? (options.ownsDocument === false ? "unowned" : "active"),
     },
     logger: { debug: vi.fn(), warn: vi.fn() },
   } as unknown as ClientContext;
@@ -152,11 +202,18 @@ function createContext(options: {
   };
 }
 
-function createDocument(languageId = "typescript"): StubDocument {
+function createDocument(
+  languageId = "typescript",
+  uri = "file:///app.ts",
+  version = 1,
+  text = scriptText,
+): StubDocument {
   return {
     languageId,
-    uri: new StubUri("file:///app.ts"),
-    version: 1,
+    uri: new StubUri(uri),
+    version,
+    text,
+    getText: () => text,
   };
 }
 
@@ -201,6 +258,23 @@ function successResponse(): RenameResponse {
           }],
         },
       ],
+      aureliaWorkspaceEditTransaction: {
+        schema: AURELIA_WORKSPACE_EDIT_TRANSACTION_SCHEMA,
+        documents: [
+          {
+            uri: "file:///app.ts",
+            version: 1,
+            contentRevision: aureliaWorkspaceEditContentRevision(scriptText),
+            physicalPath: null,
+          },
+          {
+            uri: "file:///app.html",
+            version: 7,
+            contentRevision: aureliaWorkspaceEditContentRevision(templateText),
+            physicalPath: null,
+          },
+        ],
+      },
     },
     message: "2 cross-domain edits.",
     templateReferenceCount: 1,
@@ -217,6 +291,17 @@ function notApplicableResponse(candidateCount = 0): RenameResponse {
     templateReferenceCount: 0,
     typeScriptReferenceCount: 0,
     candidateCount,
+    candidates: candidateCount === 0
+      ? []
+      : [{
+          uri: "file:///app.html",
+          range: {
+            start: { line: 0, character: 3 },
+            end: { line: 0, character: 8 },
+          },
+          name: "title",
+          reason: "target-open",
+        }],
   };
 }
 
@@ -302,6 +387,19 @@ describe("TsRenameFeature", () => {
     expect(harness.renameFromTs).not.toHaveBeenCalled();
   });
 
+  test("blocks instead of falling through while semantic workspace ownership reconciles", async () => {
+    const harness = createContext({ sessionState: "transitioning" });
+    await activateFeature(harness.ctx);
+    const document = createDocument();
+    const position = new StubPosition(2, 11);
+
+    await expect(harness.providers[0]?.prepareRename(document, position))
+      .rejects.toThrow("workspace ownership reconciles");
+    await expect(harness.providers[0]?.provideRenameEdits(document, position, "heading"))
+      .rejects.toThrow("workspace ownership reconciles");
+    expect(harness.renameFromTs).not.toHaveBeenCalled();
+  });
+
   test("returns the server's atomic TypeScript and Aurelia edit plan", async () => {
     const harness = createContext({ renameResponse: successResponse() });
     await activateFeature(harness.ctx);
@@ -321,13 +419,13 @@ describe("TsRenameFeature", () => {
       token,
     );
     expect(edit?.replacements).toEqual([
-      expect.objectContaining({ uri: { value: "file:///app.ts" }, newText: "heading" }),
-      expect.objectContaining({ uri: { value: "file:///app.html" }, newText: "heading" }),
+      expect.objectContaining({ uri: expect.objectContaining({ value: "file:///app.ts" }), newText: "heading" }),
+      expect.objectContaining({ uri: expect.objectContaining({ value: "file:///app.html" }), newText: "heading" }),
     ]);
   });
 
   test("blocks the atomic rename when any open document version is stale", async () => {
-    const openTemplate = { languageId: "html", uri: new StubUri("file:///app.html"), version: 8 };
+    const openTemplate = createDocument("html", "file:///app.html", 8, templateText);
     const harness = createContext({ textDocuments: [openTemplate], renameResponse: successResponse() });
     await activateFeature(harness.ctx);
 
@@ -335,7 +433,7 @@ describe("TsRenameFeature", () => {
       createDocument(),
       new StubPosition(2, 11),
       "heading",
-    )).rejects.toThrow("editor documents changed");
+    )).rejects.toThrow("target documents changed");
   });
 
   test("honors cancellation before, after, and during cross-domain requests", async () => {
@@ -394,7 +492,7 @@ describe("TsRenameFeature", () => {
     expect((await second)?.replacements).toHaveLength(2);
   });
 
-  test("surfaces blocked atomic plans and reports unverified candidates", async () => {
+  test("surfaces blocked atomic plans and exact unresolved candidate locations", async () => {
     const blocked = createContext({
       renameResponse: {
         status: "blocked",
@@ -413,16 +511,34 @@ describe("TsRenameFeature", () => {
       "heading",
     )).rejects.toThrow("Aurelia cross-domain rename was blocked: stale edit.");
 
-    const candidates = createContext({ renameResponse: notApplicableResponse(2) });
+    const candidates = createContext({
+      renameResponse: {
+        status: "refused",
+        reason: "unresolved-candidates",
+        message: "Aurelia rename was refused because one target is unresolved.",
+        templateReferenceCount: 1,
+        typeScriptReferenceCount: 1,
+        candidateCount: 1,
+        candidates: [{
+          uri: "file:///app.html",
+          range: {
+            start: { line: 0, character: 3 },
+            end: { line: 0, character: 8 },
+          },
+          name: "title",
+          reason: "target-open",
+        }],
+      },
+    });
     await activateFeature(candidates.ctx);
-    expect(await candidates.providers[0]?.provideRenameEdits(
+    await expect(candidates.providers[0]?.provideRenameEdits(
       createDocument(),
       new StubPosition(2, 11),
       "heading",
-    )).toBeUndefined();
-    expect(candidates.infoMessages).toEqual([
-      "Aurelia rename left 2 same-name template usages unchanged because they could not be verified.",
-    ]);
+    )).rejects.toThrow(
+      "Unresolved authored locations: file:///app.html:1:4 (target-open)",
+    );
+
   });
 });
 

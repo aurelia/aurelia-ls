@@ -15,6 +15,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
+import { createServer } from "node:net";
 import {
   dirname,
   isAbsolute,
@@ -221,6 +222,7 @@ export async function runExtensionHostTests(plan, dependencies = {}) {
     ?? (dependencies.staticContractSha256 == null
       ? () => extensionHostStaticContractSha256(extensionDevelopmentPath)
       : () => dependencies.staticContractSha256);
+  const allocateRenameUiPort = dependencies.allocateRenameUiPort ?? allocateLoopbackPort;
   const staticContractSha256 = plan.shards.includes("product-support")
     ? staticContractHasher()
     : null;
@@ -272,11 +274,15 @@ export async function runExtensionHostTests(plan, dependencies = {}) {
       `[aurelia-extension-host] launching shard=${shard} `
         + `requestedVersion=${plan.versionLane} transport=${plan.transport}`,
     );
+    const renameUiPort = shard === "rename-reliability"
+      ? await allocateRenameUiPort()
+      : null;
     const extensionTestsEnv = extensionHostEnvironment(
       plan,
       shard,
       workspace,
       resolvedVersion,
+      renameUiPort,
     );
     await runTests({
       vscodeExecutablePath,
@@ -290,6 +296,12 @@ export async function runExtensionHostTests(plan, dependencies = {}) {
         "--disable-workspace-trust",
         "--skip-welcome",
         "--skip-release-notes",
+        ...(renameUiPort == null
+          ? []
+          : [
+              "--remote-debugging-address=127.0.0.1",
+              `--remote-debugging-port=${renameUiPort}`,
+            ]),
       ],
       extensionTestsEnv,
     });
@@ -308,7 +320,7 @@ export async function runExtensionHostTests(plan, dependencies = {}) {
   }
 }
 
-function extensionHostEnvironment(plan, shard, workspace, resolvedVersion) {
+function extensionHostEnvironment(plan, shard, workspace, resolvedVersion, renameUiPort) {
   return {
     AURELIA_LS_EXTENSION_HOST_WORKSPACE: workspace.aureliaWorkspace,
     AURELIA_LS_EXTENSION_HOST_SECONDARY_WORKSPACE: workspace.secondaryAureliaWorkspace,
@@ -332,10 +344,40 @@ function extensionHostEnvironment(plan, shard, workspace, resolvedVersion) {
     AURELIA_LS_EXTENSION_HOST_EXPECTED_TRANSPORT: plan.transport,
     AURELIA_LS_EXTENSION_HOST_OBSERVATION: "1",
     AURELIA_LS_FORCE_IPC_TRANSPORT: plan.transport === "worker" ? "0" : "1",
+    ...(renameUiPort == null
+      ? {}
+      : { AURELIA_LS_RENAME_UI_CDP_PORT: String(renameUiPort) }),
     ...(process.env.AURELIA_LS_EXTENSION_HOST_GREP
       ? { AURELIA_LS_EXTENSION_HOST_GREP: process.env.AURELIA_LS_EXTENSION_HOST_GREP }
       : {}),
   };
+}
+
+/** Reserve and release one loopback port immediately before Electron launch. */
+export async function allocateLoopbackPort() {
+  return new Promise((resolvePort, rejectPort) => {
+    const server = createServer();
+    const fail = (error) => {
+      rejectPort(error);
+    };
+    server.once("error", fail);
+    server.listen({ host: "127.0.0.1", port: 0, exclusive: true }, () => {
+      server.off("error", fail);
+      const address = server.address();
+      if (address == null || typeof address === "string") {
+        server.close();
+        rejectPort(new Error("Could not allocate a TCP loopback port for rename UI automation."));
+        return;
+      }
+      server.close((error) => {
+        if (error) {
+          rejectPort(error);
+        } else {
+          resolvePort(address.port);
+        }
+      });
+    });
+  });
 }
 
 function setOnce(name, current, next) {

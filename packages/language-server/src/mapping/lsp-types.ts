@@ -4,6 +4,7 @@
  * This is the Boundary 5 conversion layer. All workspace types are
  * converted to LSP wire format here.
  */
+import { realpathSync } from "node:fs";
 import {
   CodeActionKind,
   CompletionItemKind,
@@ -62,10 +63,14 @@ import {
 import type { DocumentUri, WorkspaceDocumentUris } from "../utils/document-uri.js";
 import { languageIdForSource } from "../utils/document-kind.js";
 import {
+  AURELIA_WORKSPACE_EDIT_TRANSACTION_SCHEMA,
   AURELIA_TEMPLATE_CODE_ACTION_RESOLVE_SCHEMA,
   AureliaProtocolCommand,
+  aureliaWorkspaceEditContentRevision,
   templateCodeActionResolveRefusalFromValue,
   type FrameworkCapabilityExplanationParams,
+  type RenameCandidateLocation,
+  type ProtocolWorkspaceEdit,
   type TemplateCodeActionResolveRefusal,
   type TemplateCodeActionResolveData,
 } from "../protocol.js";
@@ -3429,6 +3434,58 @@ export function mapSemanticRuntimeTemplateReferences(
   };
 }
 
+/** Map every unresolved rename candidate to an exact URI/range plus its semantic refusal reason. */
+export function mapSemanticRuntimeTemplateRenameCandidates(
+  answer: SemanticRuntimeAnswer<SemanticTemplateRenameResult>,
+  lookupText: LookupTextFn,
+  options: {
+    readonly documentUris: WorkspaceDocumentUris;
+    readonly originDocument: TextDocument;
+  },
+): SemanticRuntimeReadMapping<readonly RenameCandidateLocation[]> {
+  const candidates: RenameCandidateLocation[] = [];
+  const failures: string[] = [];
+  const originCanonical = options.documentUris.resolve(options.originDocument.uri).uri;
+  for (const row of answer.value.candidateRows) {
+    const label = row.source?.label ?? `candidate:${row.name}`;
+    const source = semanticExactSourceReference(row.source);
+    if (source == null) {
+      failures.push(`Rename candidate ${label} has no exact authored source span.`);
+      continue;
+    }
+    const uri = semanticSourceReferenceUri(source, options.documentUris);
+    if (uri == null) {
+      failures.push(`Rename candidate ${label} cannot be resolved to a workspace document.`);
+      continue;
+    }
+    const canonical = options.documentUris.resolve(uri).uri;
+    const text = canonical === originCanonical
+      ? options.originDocument.getText()
+      : lookupText(canonical);
+    if (text == null) {
+      failures.push(`Rename candidate ${label} targets a document with no readable text.`);
+      continue;
+    }
+    const document = TextDocument.create(uri, languageIdForSource(canonical), 0, text);
+    const range = semanticSourceRangeForDocument(source, document);
+    if (range == null) {
+      failures.push(`Rename candidate ${label} has a span outside the current document text.`);
+      continue;
+    }
+    if (row.candidateReason == null) {
+      failures.push(`Rename candidate ${label} has no semantic candidate reason.`);
+      continue;
+    }
+    candidates.push({
+      uri,
+      range,
+      name: row.name,
+      reason: row.candidateReason,
+    });
+  }
+  return { value: candidates, failures };
+}
+
 export function mapSemanticRuntimeTemplatePrepareRename(
   answer: SemanticRuntimeAnswer<SemanticTemplateRenameResult>,
   options: {
@@ -3456,7 +3513,7 @@ export function mapSemanticRuntimeTemplatePrepareRename(
 
 /** Rename mapping result: a complete WorkspaceEdit or the reasons no edit may be applied. */
 export interface SemanticRuntimeRenameEditMapping {
-  readonly edit: WorkspaceEdit | null;
+  readonly edit: ProtocolWorkspaceEdit | null;
   /** Human-readable reasons for rows that could not be mapped or failed old-text validation. */
   readonly failures: readonly string[];
 }
@@ -3512,6 +3569,12 @@ function mapSemanticRuntimeWorkspaceEditRows(
   const documentChanges = new Map<string, {
     textDocument: { uri: string; version: number | null };
     edits: MappedSemanticRuntimeWorkspaceEdit[];
+    transaction: {
+      uri: string;
+      version: number | null;
+      contentRevision: string;
+      physicalPath: string | null;
+    };
   }>();
   const failures: string[] = [];
   const originCanonical = options.documentUris.resolve(options.originDocument.uri).uri;
@@ -3564,6 +3627,12 @@ function mapSemanticRuntimeWorkspaceEditRows(
     const bucket = existing ?? {
       textDocument: { uri: canonical, version: snapshot.version },
       edits: [],
+      transaction: {
+        uri: canonical,
+        version: snapshot.version,
+        contentRevision: aureliaWorkspaceEditContentRevision(snapshot.text),
+        physicalPath: semanticRuntimeWorkspaceEditPhysicalPath(canonical, options.documentUris),
+      },
     };
     bucket.edits.push({
       range,
@@ -3577,6 +3646,22 @@ function mapSemanticRuntimeWorkspaceEditRows(
 
   for (const [uri, change] of documentChanges) {
     failures.push(...semanticRuntimeWorkspaceEditConflictFailures(uri, change.edits));
+    if (change.transaction.version == null && change.transaction.physicalPath == null) {
+      failures.push(`Closed edit target ${uri} has no stable physical source identity.`);
+    }
+  }
+  const uriByPhysicalPath = new Map<string, string>();
+  for (const [uri, change] of documentChanges) {
+    const physicalPath = change.transaction.physicalPath;
+    if (physicalPath == null) continue;
+    const existingUri = uriByPhysicalPath.get(physicalPath);
+    if (existingUri != null && existingUri !== uri) {
+      failures.push(
+        `Edit targets ${existingUri} and ${uri} alias the same physical source '${physicalPath}'.`,
+      );
+    } else {
+      uriByPhysicalPath.set(physicalPath, uri);
+    }
   }
 
   if (failures.length > 0) {
@@ -3586,13 +3671,34 @@ function mapSemanticRuntimeWorkspaceEditRows(
     ? { edit: null, failures: [options.emptyFailure] }
     : {
         edit: {
-          documentChanges: [...documentChanges.values()].map((change) => ({
+          documentChanges: [...documentChanges.values()]
+            .sort((left, right) => left.textDocument.uri.localeCompare(right.textDocument.uri))
+            .map((change) => ({
             textDocument: change.textDocument,
             edits: change.edits.map(({ range, newText }) => ({ range, newText })),
-          })),
+            })),
+          aureliaWorkspaceEditTransaction: {
+            schema: AURELIA_WORKSPACE_EDIT_TRANSACTION_SCHEMA,
+            documents: [...documentChanges.values()]
+              .map((change) => change.transaction)
+              .sort((left, right) => left.uri.localeCompare(right.uri)),
+          },
         },
         failures: [],
       };
+}
+
+function semanticRuntimeWorkspaceEditPhysicalPath(
+  uri: string,
+  documentUris: WorkspaceDocumentUris,
+): string | null {
+  const hostPath = documentUris.hostPath(uri);
+  if (hostPath == null) return null;
+  try {
+    return canonicalTypeSystemPath(realpathSync.native(hostPath));
+  } catch {
+    return null;
+  }
 }
 
 function semanticRuntimeWorkspaceEditConflictFailures(

@@ -19,6 +19,7 @@ import {
   mapSemanticRuntimeTemplateHover,
   mapSemanticRuntimeTemplateCompletions,
   mapSemanticRuntimeTemplateReferences,
+  mapSemanticRuntimeTemplateRenameCandidates,
   mapSemanticRuntimeTemplateRenameEdit,
   semanticRuntimeDiagnosticCode,
   type LookupTextFn,
@@ -1111,6 +1112,58 @@ describe("mapSemanticRuntimeTemplateCodeActions", () => {
 });
 
 describe("source-backed edit mapping", () => {
+  test("maps exact rename candidates and refuses to invent a missing reason", () => {
+    const doc = TextDocument.create(
+      "file:///C:/projects/app/src/component.html",
+      "html",
+      1,
+      "<p>${title}</p>",
+    );
+    const candidate = {
+      referenceKind: "template-usage",
+      name: "title",
+      definitionName: "component",
+      bindingKind: "property",
+      dependencyKinds: [],
+      source: sourceReference(doc.uri, 5, 10),
+      targetSource: null,
+    };
+    const options = {
+      documentUris: appDocumentUris,
+      originDocument: doc,
+    };
+
+    const missingReason = mapSemanticRuntimeTemplateRenameCandidates(
+      { value: { candidateRows: [candidate] } } as never,
+      () => null,
+      options,
+    );
+    expect(missingReason.value).toEqual([]);
+    expect(missingReason.failures).toEqual([
+      expect.stringContaining("has no semantic candidate reason"),
+    ]);
+
+    const mapped = mapSemanticRuntimeTemplateRenameCandidates(
+      {
+        value: {
+          candidateRows: [{ ...candidate, candidateReason: "target-open" }],
+        },
+      } as never,
+      () => null,
+      options,
+    );
+    expect(mapped.failures).toEqual([]);
+    expect(mapped.value).toEqual([{
+      uri: doc.uri,
+      range: {
+        start: { line: 0, character: 5 },
+        end: { line: 0, character: 10 },
+      },
+      name: "title",
+      reason: "target-open",
+    }]);
+  });
+
   function mapRenameEdits(document: TextDocument, edits: readonly unknown[]) {
     return mapSemanticRuntimeTemplateRenameEdit(
       {

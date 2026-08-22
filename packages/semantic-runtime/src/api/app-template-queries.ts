@@ -93,6 +93,7 @@ import {
   SemanticTemplateBindableDeclarationKind,
   SemanticTemplateBindableAttributeSourceKind,
   SemanticTemplateReferenceKind,
+  SemanticTemplateReferenceCandidateReason,
   SemanticTemplateResourceDeclarationKind,
   SemanticTemplateResourceUsageKind,
   type SemanticTemplateReferenceRow,
@@ -416,7 +417,6 @@ export class SemanticAppTemplateQueries {
         SemanticTemplateRenameStatus.InvalidName,
       );
     }
-
     const relatedMemberRead = context.includeTypeScriptReferences
       ? typeScriptRelatedMemberFamilyRead(this.emission, context.targetSource)
       : null;
@@ -425,6 +425,27 @@ export class SemanticAppTemplateQueries {
           typeScriptRelatedMemberFamilyRead(this.emission, targetSource)
         )
       : [];
+    if (context.candidateRows.length > 0) {
+      return templateRenameUnavailable(
+        SemanticTemplateRenameUnavailableReason.UnresolvedCandidates,
+        unresolvedCandidateRenameSummary(placeholder, context.candidateRows),
+        context.selectedMemberName,
+        context.targetSource,
+        activeSource,
+        SemanticTemplateRenameStatus.NotAvailable,
+        SemanticRuntimeAnswerCoverage.Open,
+        {
+          candidateRows: context.candidateRows,
+          templateReferenceCount: context.templateUsageRows.length,
+          typeScriptReferenceCount: typeScriptRenameReferenceCount(
+            this.emission.project,
+            relatedMemberRead,
+            callbackFamilyReads,
+            placeholder,
+          ),
+        },
+      );
+    }
     const blocker = relatedMemberRead == null
       ? firstTypeScriptRenameBlocker(callbackFamilyReads, `${placeholder}Changed callback`)
       : typeScriptRenameBlocker(relatedMemberRead, placeholder)
@@ -589,6 +610,31 @@ export class SemanticAppTemplateQueries {
         SemanticTemplateRenameStatus.InvalidName,
       );
     }
+    const relatedMemberRead = typeScriptRelatedMemberFamilyRead(this.emission, context.targetSource);
+    const callbackFamilyReads = context.bindableConventionCallbackTargetSources.map((targetSource) =>
+      typeScriptRelatedMemberFamilyRead(this.emission, targetSource)
+    );
+    if (context.candidateRows.length > 0) {
+      return templateRenameUnavailable(
+        SemanticTemplateRenameUnavailableReason.UnresolvedCandidates,
+        unresolvedCandidateRenameSummary(placeholder, context.candidateRows),
+        context.selectedMemberName,
+        context.targetSource,
+        context.activeSource,
+        SemanticTemplateRenameStatus.NotAvailable,
+        SemanticRuntimeAnswerCoverage.Open,
+        {
+          candidateRows: context.candidateRows,
+          templateReferenceCount: context.templateUsageRows.length,
+          typeScriptReferenceCount: typeScriptRenameReferenceCount(
+            this.emission.project,
+            relatedMemberRead,
+            callbackFamilyReads,
+            placeholder,
+          ),
+        },
+      );
+    }
 
     if (
       context.templateUsageRows.length === 0
@@ -603,10 +649,6 @@ export class SemanticAppTemplateQueries {
       );
     }
 
-    const relatedMemberRead = typeScriptRelatedMemberFamilyRead(this.emission, context.targetSource);
-    const callbackFamilyReads = context.bindableConventionCallbackTargetSources.map((targetSource) =>
-      typeScriptRelatedMemberFamilyRead(this.emission, targetSource)
-    );
     const blocker = typeScriptRenameBlocker(relatedMemberRead, placeholder)
       ?? firstTypeScriptRenameBlocker(callbackFamilyReads, `${placeholder}Changed callback`);
     if (blocker != null) {
@@ -1095,6 +1137,7 @@ export class SemanticAppTemplateQueries {
         activeSource,
         null,
         handles,
+        runtimeBindingExpressionAccessCandidateReason(site.resolution),
       )));
 
     return {
@@ -1556,6 +1599,7 @@ export class SemanticAppTemplateQueries {
           targetSource,
           null,
           handles,
+          runtimeBindingExpressionAccessCandidateReason(site.resolution),
         ));
       }
     }
@@ -2556,6 +2600,11 @@ function templateRenameUnavailable(
   activeSource: SemanticSourceReference | null,
   status: SemanticTemplateRenameStatus = SemanticTemplateRenameStatus.NotAvailable,
   coverage: SemanticRuntimeAnswerCoverage = SemanticRuntimeAnswerCoverage.Complete,
+  evidence: {
+    readonly candidateRows?: readonly SemanticTemplateReferenceRow[];
+    readonly templateReferenceCount?: number;
+    readonly typeScriptReferenceCount?: number;
+  } = {},
 ): SemanticRuntimeAnswer<SemanticTemplateRenameResult> {
   return answer(
     SemanticRuntimeAnswerResult.Answered,
@@ -2569,9 +2618,9 @@ function templateRenameUnavailable(
       targetSource,
       activeSource,
       edits: [],
-      candidateRows: [],
-      templateReferenceCount: 0,
-      typeScriptReferenceCount: 0,
+      candidateRows: evidence.candidateRows ?? [],
+      templateReferenceCount: evidence.templateReferenceCount ?? 0,
+      typeScriptReferenceCount: evidence.typeScriptReferenceCount ?? 0,
     },
     {
       selection: selectedMemberName == null && targetSource == null
@@ -2580,6 +2629,16 @@ function templateRenameUnavailable(
       coverage,
     },
   );
+}
+
+function unresolvedCandidateRenameSummary(
+  selectedMemberName: string,
+  candidates: readonly SemanticTemplateReferenceRow[],
+): string {
+  const count = candidates.length;
+  return `Rename for '${selectedMemberName}' was refused because ${count} same-name authored ${
+    count === 1 ? 'location has' : 'locations have'
+  } an unresolved target identity; candidateRows preserves every exact location and reason.`;
 }
 
 function activeTemplateReferenceContext(
@@ -2825,6 +2884,24 @@ function typeScriptRelatedMemberRenameEdits(
     site.text,
     `${site.prefixText ?? ''}${newName}${site.suffixText ?? ''}`,
   )));
+}
+
+function typeScriptRenameReferenceCount(
+  project: ProjectBootFrame,
+  primary: TypeSystemRelatedMemberFamilyRead | null,
+  callbacks: readonly TypeSystemRelatedMemberFamilyRead[],
+  selectedMemberName: string,
+): number {
+  return uniqueTemplateRenameEditRows([
+    ...(primary?.family == null
+      ? []
+      : typeScriptRelatedMemberRenameEdits(project, primary.family, selectedMemberName)),
+    ...callbacks.flatMap((read) =>
+      read.family == null
+        ? []
+        : typeScriptRelatedMemberRenameEdits(project, read.family, `${selectedMemberName}Changed`)
+    ),
+  ]).length;
 }
 
 function typeScriptRenameBlocker(
@@ -3906,6 +3983,7 @@ function templateReferenceRowForRuntimeExpressionAccess(
   targetSource: SemanticSourceReference,
   matchedTarget: RuntimeExpressionAccessTargetLink | null,
   handles: boolean,
+  candidateReason: SemanticTemplateReferenceCandidateReason | null = null,
 ): SemanticTemplateReferenceRow {
   const resolution = site.resolution;
   const dependencyKinds = [...new Set(
@@ -3917,6 +3995,7 @@ function templateReferenceRowForRuntimeExpressionAccess(
     definitionName: site.definitionName,
     bindingKind: site.bindingKind,
     dependencyKinds,
+    candidateReason,
     source: runtimeBindingExpressionAccessNameSource(store, resolution),
     targetSource,
     ...(handles ? {
@@ -3952,15 +4031,27 @@ function runtimeBindingExpressionAccessIsUnprovenSameNameCandidate(
   selectedMemberName: string,
   authoredTextForSource: (source: SemanticSourceReference | null) => string | null,
 ): boolean {
-  if (
-    resolution.targetResolution !== RuntimeExpressionAccessTargetResolution.Open
-    && resolution.targetResolution !== RuntimeExpressionAccessTargetResolution.IndexSignature
-  ) {
+  if (runtimeBindingExpressionAccessCandidateReason(resolution) == null) {
     return false;
   }
   return authoredTextForSource(
     runtimeBindingExpressionAccessNameSource(store, resolution),
   ) === selectedMemberName;
+}
+
+function runtimeBindingExpressionAccessCandidateReason(
+  resolution: RuntimeBindingExpressionAccessResolution,
+): SemanticTemplateReferenceCandidateReason | null {
+  switch (resolution.targetResolution) {
+    case RuntimeExpressionAccessTargetResolution.Open:
+      return SemanticTemplateReferenceCandidateReason.TargetOpen;
+    case RuntimeExpressionAccessTargetResolution.IndexSignature:
+      return SemanticTemplateReferenceCandidateReason.IndexSignatureTarget;
+    case RuntimeExpressionAccessTargetResolution.Exact:
+    case RuntimeExpressionAccessTargetResolution.Finite:
+    case RuntimeExpressionAccessTargetResolution.Missing:
+      return null;
+  }
 }
 
 function unprovenRuntimeBindingExpressionAccessContainsCursor(

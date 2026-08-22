@@ -433,19 +433,24 @@ describe("handleRenameFromTs", () => {
     }
     const changes = result.workspaceEdit.documentChanges ?? [];
     expect(changes).toHaveLength(2);
-    expect(changes[0]).toMatchObject({
+    expect(changes.find((change) =>
+      "textDocument" in change && change.textDocument.uri.endsWith("/src/app.ts")
+    )).toMatchObject({
       textDocument: {
         uri: expect.stringContaining("src/app.ts"),
         version: 1,
       },
     });
-    expect(changes[1]).toMatchObject({
+    const templateChange = changes.find((change) =>
+      "textDocument" in change && change.textDocument.uri.endsWith("/src/app.html")
+    );
+    expect(templateChange).toMatchObject({
       textDocument: {
         uri: expect.stringContaining("src/app.html"),
         version: 4,
       },
     });
-    expect("edits" in changes[1]! ? changes[1].edits : []).toEqual([
+    expect(templateChange != null && "edits" in templateChange ? templateChange.edits : []).toEqual([
       {
         range: {
           start: { line: 0, character: 5 },
@@ -512,6 +517,7 @@ describe("handleRenameFromTs", () => {
       templateReferenceCount: 1,
       typeScriptReferenceCount: 0,
       candidateCount: 0,
+      candidates: [],
     });
     expect(ctx.semanticRuntime.templateRenameFromTypeScript).toHaveBeenCalledWith(
       tsDocument.uri,
@@ -569,6 +575,91 @@ describe("handleRenameFromTs", () => {
       templateReferenceCount: 0,
       typeScriptReferenceCount: 0,
       candidateCount: 0,
+    });
+  });
+
+  test("refuses candidate-bearing propagation with exact authored locations", async () => {
+    const tsDocument = TextDocument.create(
+      renameTypeScriptUri,
+      "typescript",
+      1,
+      "class App { title = ''; }",
+    );
+    const templateText = "<p>${title}</p>";
+    const ctx = createMockContext({
+      workspaceRoot: renameWorkspaceRoot,
+      ensureProgramDocument: vi.fn(() => tsDocument),
+      lookupText: vi.fn(() => templateText),
+    });
+    ctx.semanticRuntime.templateRenameFromTypeScript.mockResolvedValue({
+      schemaVersion: "0.2",
+      result: "answered",
+      selection: "exact",
+      coverage: "open",
+      summary: "unresolved candidates",
+      value: {
+        displayText: "Rename was refused because one same-name location is unresolved.",
+        status: "not-available",
+        reason: "unresolved-candidates",
+        selectedMemberName: "title",
+        placeholder: "title",
+        targetSource: null,
+        activeSource: {
+          kind: "source-span-address",
+          label: "src/app.ts@12..17",
+          path: "src/app.ts",
+          start: 12,
+          end: 17,
+        },
+        edits: [],
+        candidateRows: [{
+          referenceKind: "template-usage",
+          name: "title",
+          definitionName: "app",
+          bindingKind: "property",
+          dependencyKinds: [],
+          candidateReason: "target-open",
+          source: {
+            kind: "source-span-address",
+            label: "src/app.html@5..10",
+            path: "src/app.html",
+            start: 5,
+            end: 10,
+          },
+          targetSource: null,
+        }],
+        templateReferenceCount: 1,
+        typeScriptReferenceCount: 0,
+      },
+      page: null,
+    });
+
+    const result = await handleRenameFromTs(
+      ctx as never,
+      {
+        uri: tsDocument.uri,
+        position: { line: 0, character: 12 },
+        newName: "heading",
+      },
+      createContextTestOperation(ctx),
+    );
+
+    expect(result).toEqual({
+      status: "refused",
+      reason: "unresolved-candidates",
+      message: "Rename was refused because one same-name location is unresolved.",
+      templateReferenceCount: 1,
+      typeScriptReferenceCount: 0,
+      candidateCount: 1,
+      candidates: [{
+        uri: expect.stringContaining("src/app.html"),
+        range: {
+          start: { line: 0, character: 5 },
+          end: { line: 0, character: 10 },
+        },
+        name: "title",
+        reason: "target-open",
+      }],
     });
   });
 

@@ -32,6 +32,7 @@ import type {
   FrameworkCapabilityExplanationResponse,
   RelatedFileCandidate,
   RelatedFilesResponse,
+  RenameCandidateLocation,
   RenameFromTsParams,
   RenameFromTsResponse,
   ResourceInventoryParams,
@@ -80,6 +81,7 @@ import {
   mapAnalysisLimitationItem,
 } from "../mapping/analysis-limitations.js";
 import {
+  mapSemanticRuntimeTemplateRenameCandidates,
   mapSemanticRuntimeTemplatePrepareRename,
   mapSemanticRuntimeTemplateRenameEdit,
 } from "../mapping/lsp-types.js";
@@ -848,6 +850,26 @@ export async function handleRenameFromTs(
   const templateReferenceCount = answer.value.templateReferenceCount;
   const typeScriptReferenceCount = answer.value.typeScriptReferenceCount;
   const candidateCount = answer.value.candidateRows.length;
+  const candidateMapping = mapSemanticRuntimeTemplateRenameCandidates(
+    answer,
+    (uri) => operation.documents.lookupText(uri),
+    {
+      documentUris: ctx.documentUris,
+      originDocument: doc,
+    },
+  );
+  const candidates = candidateMapping.value;
+  if (candidateMapping.failures.length > 0) {
+    return renameFromTsBlocked(
+      "candidate-mapping-failed",
+      `Aurelia could not preserve every unresolved rename candidate: ${candidateMapping.failures.join(" ")}`,
+      candidateMapping.failures,
+      templateReferenceCount,
+      typeScriptReferenceCount,
+      candidateCount,
+      candidates,
+    );
+  }
   if (answer.value.status !== "available") {
     const reason = answer.value.reason ?? answer.value.status;
     const message = answer.value.displayText || answer.summary;
@@ -864,6 +886,7 @@ export async function handleRenameFromTs(
         templateReferenceCount,
         typeScriptReferenceCount,
         candidateCount,
+        candidates,
       };
     }
     if (answer.value.status === "invalid-name") {
@@ -874,6 +897,18 @@ export async function handleRenameFromTs(
         templateReferenceCount,
         typeScriptReferenceCount,
         candidateCount,
+        candidates,
+      };
+    }
+    if (reason === "unresolved-candidates") {
+      return {
+        status: "refused",
+        reason,
+        message,
+        templateReferenceCount,
+        typeScriptReferenceCount,
+        candidateCount,
+        candidates,
       };
     }
     return renameFromTsBlocked(
@@ -883,6 +918,7 @@ export async function handleRenameFromTs(
       templateReferenceCount,
       typeScriptReferenceCount,
       candidateCount,
+      candidates,
     );
   }
 
@@ -899,6 +935,7 @@ export async function handleRenameFromTs(
         templateReferenceCount,
         typeScriptReferenceCount,
         candidateCount,
+        candidates,
       );
     }
     return {
@@ -908,6 +945,7 @@ export async function handleRenameFromTs(
       templateReferenceCount,
       typeScriptReferenceCount,
       candidateCount,
+      candidates,
     };
   }
   if (answer.value.edits.length === 0) {
@@ -918,6 +956,7 @@ export async function handleRenameFromTs(
       templateReferenceCount,
       typeScriptReferenceCount,
       candidateCount,
+      candidates,
     );
   }
   const mapping = mapSemanticRuntimeTemplateRenameEdit(answer, (uri) => operation.documents.lookupDocumentSnapshot(uri), {
@@ -937,6 +976,7 @@ export async function handleRenameFromTs(
       templateReferenceCount,
       typeScriptReferenceCount,
       candidateCount,
+      candidates,
     );
   }
 
@@ -959,6 +999,7 @@ export async function handleRenameFromTs(
       templateReferenceCount,
       typeScriptReferenceCount,
       candidateCount,
+      candidates,
     }
     : {
       status: "blocked",
@@ -967,6 +1008,7 @@ export async function handleRenameFromTs(
       templateReferenceCount,
       typeScriptReferenceCount,
       candidateCount,
+      candidates,
     };
 }
 
@@ -977,6 +1019,7 @@ function renameFromTsBlocked(
   templateReferenceCount?: number,
   typeScriptReferenceCount?: number,
   candidateCount?: number,
+  candidates?: readonly RenameCandidateLocation[],
 ): RenameFromTsResponse {
   return {
     status: "blocked",
@@ -986,6 +1029,7 @@ function renameFromTsBlocked(
     ...(templateReferenceCount == null ? {} : { templateReferenceCount }),
     ...(typeScriptReferenceCount == null ? {} : { typeScriptReferenceCount }),
     ...(candidateCount == null ? {} : { candidateCount }),
+    ...(candidates == null ? {} : { candidates }),
   };
 }
 
@@ -1133,6 +1177,7 @@ export function registerCustomHandlers(ctx: ServerContext): void {
         templateReferenceCount: 0,
         typeScriptReferenceCount: 0,
         candidateCount: 0,
+        candidates: [],
       }),
       (guard) => handleRenameFromTs(ctx, params, guard)));
 }
