@@ -5,10 +5,6 @@ Keep it compact; move stable ownership detail into package READMEs.
 
 ## Fast Local Lanes
 
-Active branch-wide IDE release-confidence work is tracked in
-[`docs/release-readiness/ide-retargeting/README.md`](../../../docs/release-readiness/ide-retargeting/README.md). Resume it
-through Atlas memory record `decision:ide-release-confidence-workstreams` before reopening the broad audit.
-
 ```powershell
 pnpm --filter @aurelia-ls/atlas orient
 pnpm --filter @aurelia-ls/atlas memory
