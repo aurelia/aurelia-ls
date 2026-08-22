@@ -161,7 +161,8 @@ versus newly admitted dependency/library text, and use cache density to understa
 node_modules, declarations, default libraries, and external declarations so memory triage can stay non-extractive while
 still showing which cache class is carrying the mass. Program root/source-file rows also print overlapping source-text
 bucket mass, so a run can tell whether a large Program is mostly app roots, framework/dependency declarations, or
-default-library text before changing source admission or dependency-cache policy. It also reports duplicate parse-option sets so repeated
+default-library text before changing source admission or dependency-cache policy. It also reports the hard entry/text
+limits, superseded-revision and least-recently-used capacity evictions, and duplicate parse-option sets so repeated
 canonical paths can be attributed to systematic TypeScript parse-option families without printing dependency paths. Set
 `SEMANTIC_RUNTIME_TELEMETRY_TYPE_SYSTEM_CACHE_CLEAR_POLICY=default-libraries`, `node-modules`,
 `external-declarations`, or `all` when a run should record before/after dependency-cache density and clear totals at

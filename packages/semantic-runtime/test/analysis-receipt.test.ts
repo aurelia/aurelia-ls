@@ -27,7 +27,9 @@ import {
 } from '../src/api/analysis-receipt.js';
 import { SemanticAnswerTransaction } from '../src/api/analysis-answer-transaction.js';
 import { AureliaAppWorldProjectGeneration } from '../src/configuration/app-analysis-computation.js';
+import { SourceFileAddress, SourceLanguage } from '../src/kernel/address.js';
 import type { ComputationRead } from '../src/kernel/computation-lifecycle.js';
+import { KernelStoreBatch } from '../src/kernel/store.js';
 import {
   QueryClaimGraph,
   type QueryClaimAnswerDisposalCollector,
@@ -609,6 +611,273 @@ describe('semantic answer receipts', () => {
     expect(compatible).toBe(deep);
     expect(validateDeep).toHaveBeenCalledTimes(1);
     expect(validateSecond).not.toHaveBeenCalled();
+  });
+
+  test('keeps one project retained claims and continuations across another project cache miss', async () => {
+    const { workspaceRoot, firstRoot, secondRoot } = await createTwoProjectWorkspace();
+    const runtime = await createSemanticRuntime({
+      workspaceRoot,
+      storeKey: 'analysis-receipt:project-cache-isolation',
+      projects: [
+        { projectKey: 'first', rootDir: firstRoot },
+        { projectKey: 'second', rootDir: secondRoot },
+      ],
+    });
+    const firstShallow = await runtime.openApp({
+      projectKey: 'first',
+      analysisDepth: 'runtime-topology',
+    });
+    const second = await runtime.openApp({ projectKey: 'second' });
+    const query = {
+      kind: SemanticAppQueryKind.Summary,
+      inquiryProfile: 'mcp-orientation',
+    } as const;
+    const initial = second.ask(query);
+    const before = second.cacheSummary(8, true).queryClaimProfiles.find(
+      (candidate) => candidate.inquiryProfile === 'mcp-orientation',
+    );
+
+    expect(initial.continuations?.length).toBeGreaterThan(0);
+    expect(before?.queryClaims).toMatchObject({
+      retainedRecords: 1,
+      retainedAnswerValues: 1,
+      retainedAnswerHits: 0,
+    });
+
+    const first = await runtime.openApp({
+      projectKey: 'first',
+      analysisDepth: 'binding-observation',
+    });
+    const afterMiss = second.cacheSummary(8, true).queryClaimProfiles.find(
+      (candidate) => candidate.inquiryProfile === 'mcp-orientation',
+    );
+
+    expect(runtime.sessionAnalysisCacheOverview().value.cachedAppCount).toBe(2);
+    expect(first).not.toBe(firstShallow);
+    expect(firstShallow.isCurrent()).toBe(false);
+    expect(second.isCurrent()).toBe(true);
+    expect(afterMiss?.queryClaims).toMatchObject({
+      retainedRecords: before?.queryClaims.retainedRecords,
+      retainedAnswerValues: before?.queryClaims.retainedAnswerValues,
+      retainedAnswerHits: before?.queryClaims.retainedAnswerHits,
+    });
+    expect(afterMiss?.queryClaimRows).toEqual(before?.queryClaimRows);
+
+    const retained = second.ask(query);
+    const afterReuse = second.cacheSummary(8, false).queryClaimProfiles.find(
+      (candidate) => candidate.inquiryProfile === 'mcp-orientation',
+    );
+    expect(retained.value).toBe(initial.value);
+    expect(retained.continuations).toBe(initial.continuations);
+    expect(afterReuse?.queryClaims.retainedAnswerHits).toBe(1);
+
+    const cleared = runtime.sessionAnalysisCacheClear().value;
+    expect(cleared).toMatchObject({
+      disposedCachedApps: 2,
+      remainingCachedApps: 0,
+    });
+    expect(cleared.disposedQueryClaimRecords).toBeGreaterThan(0);
+    expect(first.isCurrent()).toBe(false);
+    expect(second.isCurrent()).toBe(false);
+  });
+
+  test('reclaims only the replaced project RetainInOwnerEpoch kernel answer state', async () => {
+    const { workspaceRoot, firstRoot, secondRoot } = await createTwoProjectWorkspace();
+    const runtime = await createSemanticRuntime({
+      workspaceRoot,
+      storeKey: 'analysis-receipt:project-kernel-answer-isolation',
+      projects: [
+        { projectKey: 'first', rootDir: firstRoot },
+        { projectKey: 'second', rootDir: secondRoot },
+      ],
+    });
+    const store = runtime.workspace.store;
+    const query = {
+      kind: SemanticAppQueryKind.Summary,
+      inquiryProfile: 'mcp-authoring',
+    } as const;
+    const firstShallow = await runtime.openApp({
+      projectKey: 'first',
+      analysisDepth: 'runtime-topology',
+    });
+    const firstAnswerRecord = new SourceFileAddress(
+      store.handles.address('answer-local:first'),
+      'answer-local:first',
+      'first-answer.html',
+      SourceLanguage.Html,
+    );
+    const readFirstSummary = firstShallow.summary.bind(firstShallow);
+    const firstSummary = vi.spyOn(firstShallow, 'summary').mockImplementation(() => {
+      store.commit(new KernelStoreBatch([firstAnswerRecord], 'first answer-local materialization'));
+      return readFirstSummary();
+    });
+    const firstAnswer = firstShallow.ask(query);
+    firstSummary.mockRestore();
+
+    const second = await runtime.openApp({ projectKey: 'second' });
+    const secondAnswerRecord = new SourceFileAddress(
+      store.handles.address('answer-local:second'),
+      'answer-local:second',
+      'second-answer.html',
+      SourceLanguage.Html,
+    );
+    const readSecondSummary = second.summary.bind(second);
+    const secondSummary = vi.spyOn(second, 'summary').mockImplementation(() => {
+      store.commit(new KernelStoreBatch([secondAnswerRecord], 'second answer-local materialization'));
+      return readSecondSummary();
+    });
+    const secondAnswer = second.ask(query);
+    secondSummary.mockRestore();
+    const secondReceipt = semanticRuntimeAnalysisReceiptFor(secondAnswer);
+    const secondBefore = second.cacheSummary(8, true).queryClaimProfiles.find(
+      (candidate) => candidate.inquiryProfile === 'mcp-authoring',
+    );
+
+    expect(firstAnswer.continuations?.length).toBeGreaterThan(0);
+    expect(secondAnswer.continuations?.length).toBeGreaterThan(0);
+    expect(secondBefore?.queryClaims).toMatchObject({
+      retentionKind: 'retain-for-app-epoch',
+      answerLocalKernelPolicy: 'retain-in-owner-epoch',
+      retainedRecords: 1,
+    });
+    expect(secondBefore?.queryClaimRows).toContainEqual(expect.objectContaining({
+      queryKind: SemanticAppQueryKind.Summary,
+      kernelRecordDelta: 1,
+      disposedKernelRecords: 0,
+    }));
+    expect(store.read(firstAnswerRecord.handle)).toBe(firstAnswerRecord);
+    expect(store.read(secondAnswerRecord.handle)).toBe(secondAnswerRecord);
+    expect(secondReceipt?.isCurrent()).toBe(true);
+
+    const firstDeep = await runtime.openApp({
+      projectKey: 'first',
+      analysisDepth: 'binding-observation',
+    });
+    const secondAfter = second.cacheSummary(8, true).queryClaimProfiles.find(
+      (candidate) => candidate.inquiryProfile === 'mcp-authoring',
+    );
+
+    expect(firstDeep).not.toBe(firstShallow);
+    expect(firstShallow.isCurrent()).toBe(false);
+    expect(store.read(firstAnswerRecord.handle)).toBeNull();
+    expect(second.isCurrent()).toBe(true);
+    expect(secondReceipt?.isCurrent()).toBe(true);
+    expect(store.read(secondAnswerRecord.handle)).toBe(secondAnswerRecord);
+    expect(secondAfter?.queryClaims).toEqual(secondBefore?.queryClaims);
+    expect(secondAfter?.queryClaimRows).toEqual(secondBefore?.queryClaimRows);
+
+    const cleared = runtime.sessionAnalysisCacheClear().value;
+    expect(cleared).toMatchObject({ disposedCachedApps: 2, remainingCachedApps: 0 });
+    expect(store.read(secondAnswerRecord.handle)).toBeNull();
+    expect(secondReceipt?.isCurrent()).toBe(false);
+  });
+
+  test('rolls back failed RetainInOwnerEpoch kernel materialization without touching prior answers', async () => {
+    const workspaceRoot = await createShapeWorkspace();
+    const runtime = await createSemanticRuntime({
+      workspaceRoot,
+      storeKey: 'analysis-receipt:failed-kernel-answer-frame',
+      projects: [{ projectKey: 'app', rootDir: workspaceRoot }],
+    });
+    const app = await runtime.openApp({ projectKey: 'app' });
+    const store = runtime.workspace.store;
+    const retainedRecord = new SourceFileAddress(
+      store.handles.address('answer-local:retained-before-failure'),
+      'answer-local:retained',
+      'retained-before-failure.html',
+      SourceLanguage.Html,
+    );
+    const failedRecord = new SourceFileAddress(
+      store.handles.address('answer-local:failed-frame'),
+      'answer-local:failed',
+      'failed-frame.html',
+      SourceLanguage.Html,
+    );
+    const readSummary = app.summary.bind(app);
+    const summary = vi.spyOn(app, 'summary').mockImplementation(() => {
+      store.commit(new KernelStoreBatch([retainedRecord], 'retained answer before failure'));
+      return readSummary();
+    });
+    app.ask({ kind: SemanticAppQueryKind.Summary, inquiryProfile: 'mcp-authoring' });
+    summary.mockRestore();
+    const retainedBefore = app.cacheSummary(8, true).queryClaimProfiles.find(
+      (candidate) => candidate.inquiryProfile === 'mcp-authoring',
+    );
+    vi.spyOn(app, 'sourceFiles').mockImplementation(() => {
+      store.commit(new KernelStoreBatch([failedRecord], 'failed answer-local frame'));
+      throw new Error('injected answer failure');
+    });
+
+    expect(() => app.ask({
+      kind: SemanticAppQueryKind.SourceFiles,
+      inquiryProfile: 'mcp-authoring',
+    })).toThrow('injected answer failure');
+
+    const retainedAfter = app.cacheSummary(8, true).queryClaimProfiles.find(
+      (candidate) => candidate.inquiryProfile === 'mcp-authoring',
+    );
+    expect(store.read(failedRecord.handle)).toBeNull();
+    expect(store.read(retainedRecord.handle)).toBe(retainedRecord);
+    expect(retainedAfter?.queryClaims).toMatchObject({
+      retainedRecords: retainedBefore?.queryClaims.retainedRecords,
+      createdRecords: (retainedBefore?.queryClaims.createdRecords ?? 0) + 1,
+      failed: (retainedBefore?.queryClaims.failed ?? 0) + 1,
+      disposed: (retainedBefore?.queryClaims.disposed ?? 0) + 1,
+    });
+    expect(retainedAfter?.queryClaimRows).toEqual(retainedBefore?.queryClaimRows);
+  });
+
+  test('keeps a nested retained-owner row outside an enclosing discard-after-answer cleanup', async () => {
+    const workspaceRoot = await createShapeWorkspace();
+    const runtime = await createSemanticRuntime({
+      workspaceRoot,
+      storeKey: 'analysis-receipt:nested-kernel-answer-policy',
+      projects: [{ projectKey: 'app', rootDir: workspaceRoot }],
+    });
+    const app = await runtime.openApp({ projectKey: 'app' });
+    const store = runtime.workspace.store;
+    const outerRecord = new SourceFileAddress(
+      store.handles.address('answer-local:outer-discard'),
+      'answer-local:outer',
+      'outer-discard.html',
+      SourceLanguage.Html,
+    );
+    const nestedRecord = new SourceFileAddress(
+      store.handles.address('answer-local:nested-retained'),
+      'answer-local:nested',
+      'nested-retained.html',
+      SourceLanguage.Html,
+    );
+    const readSummary = app.summary.bind(app);
+    const readSourceFiles = app.sourceFiles.bind(app);
+    let nestedAnswer: ReturnType<typeof app.ask> | null = null;
+    vi.spyOn(app, 'sourceFiles').mockImplementation((page, detail) => {
+      store.commit(new KernelStoreBatch([nestedRecord], 'nested retained-owner answer'));
+      return readSourceFiles(page, detail);
+    });
+    vi.spyOn(app, 'summary').mockImplementation(() => {
+      store.commit(new KernelStoreBatch([outerRecord], 'outer discard-after-answer answer'));
+      nestedAnswer = app.ask({
+        kind: SemanticAppQueryKind.SourceFiles,
+        inquiryProfile: 'mcp-authoring',
+      });
+      return readSummary();
+    });
+
+    app.ask({ kind: SemanticAppQueryKind.Summary, inquiryProfile: 'lsp-cursor' });
+
+    expect(store.read(outerRecord.handle)).toBeNull();
+    expect(store.read(nestedRecord.handle)).toBe(nestedRecord);
+    expect(semanticRuntimeAnalysisReceiptFor(nestedAnswer)?.isCurrent()).toBe(true);
+    expect(app.cacheSummary(8, true).queryClaimProfiles.find(
+      (candidate) => candidate.inquiryProfile === 'mcp-authoring',
+    )?.queryClaims).toMatchObject({
+      retentionKind: 'retain-for-app-epoch',
+      retainedRecords: 1,
+    });
+
+    runtime.sessionAnalysisCacheClear();
+    expect(store.read(nestedRecord.handle)).toBeNull();
   });
 
   test('reuses an all-authoring app for a subset and rebuilds a finite subset for an all-source request', async () => {
@@ -1201,6 +1470,40 @@ async function createShapeWorkspace(): Promise<string> {
   await writeFile(path.join(workspaceRoot, 'tsconfig.json'), JSON.stringify({ include: ['src/**/*.ts'] }), 'utf8');
   await writeFile(path.join(workspaceRoot, 'src/main.ts'), 'export const initial = true;\n', 'utf8');
   return workspaceRoot;
+}
+
+async function createTwoProjectWorkspace(): Promise<{
+  readonly workspaceRoot: string;
+  readonly firstRoot: string;
+  readonly secondRoot: string;
+}> {
+  const workspaceRoot = await mkdtemp(path.join(tmpdir(), 'semantic-analysis-receipt-projects-'));
+  temporaryRoots.push(workspaceRoot);
+  const projectRoots = await Promise.all(['first', 'second'].map(async (projectKey) => {
+    const projectRoot = path.join(workspaceRoot, projectKey);
+    await mkdir(path.join(projectRoot, 'src'), { recursive: true });
+    await writeFile(
+      path.join(projectRoot, 'package.json'),
+      JSON.stringify({ name: `receipt-shape-${projectKey}` }),
+      'utf8',
+    );
+    await writeFile(
+      path.join(projectRoot, 'tsconfig.json'),
+      JSON.stringify({ include: ['src/**/*.ts'] }),
+      'utf8',
+    );
+    await writeFile(
+      path.join(projectRoot, 'src/main.ts'),
+      `export const ${projectKey} = true;\n`,
+      'utf8',
+    );
+    return projectRoot;
+  }));
+  const [firstRoot, secondRoot] = projectRoots;
+  if (firstRoot == null || secondRoot == null) {
+    throw new Error('Expected both project roots to be created.');
+  }
+  return { workspaceRoot, firstRoot, secondRoot };
 }
 
 function pressureFixtureRoot(fixtureName: string): string {

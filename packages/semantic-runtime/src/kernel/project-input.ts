@@ -967,6 +967,9 @@ export class SemanticRuntimeProjectInputAuthority {
     const sequence = this.eventCurrentness.advance();
     if (changes == null) {
       this.lastBroadChangeSequence = sequence;
+      // The broad watermark supersedes every earlier path-local watermark. Reads captured before it are already
+      // rejected by lastBroadChangeSequence; reads captured at or after it cannot be affected by an older exact event.
+      this.fileContentChangeSequenceByPathKey.clear();
       this.workspaceStructuralCurrentness.advance();
       return sequence;
     }
@@ -983,6 +986,7 @@ export class SemanticRuntimeProjectInputAuthority {
     }
     if (hasStructuralMembershipChange) {
       this.lastBroadChangeSequence = sequence;
+      this.fileContentChangeSequenceByPathKey.clear();
       this.workspaceStructuralCurrentness.advance();
     }
     return sequence;
@@ -990,6 +994,11 @@ export class SemanticRuntimeProjectInputAuthority {
 
   get currentEventSequence(): number {
     return this.eventCurrentness.currentOrdinal;
+  }
+
+  /** Number of exact file-value event watermarks not yet subsumed by a broad structural watermark. */
+  readRetainedFileValueChangePathCount(): number {
+    return this.fileContentChangeSequenceByPathKey.size;
   }
 
   /** Whether an explicit event since one captured read could have changed that read's value. */

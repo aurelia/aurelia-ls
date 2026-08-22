@@ -17,7 +17,10 @@ import type {
   KernelStoreSidecarIndex,
 } from '../kernel/store.js';
 import type { StaticProjectEvaluationGeneration } from '../evaluation/project-evaluation.js';
-import type { TypeSystemProgramSourceCatalog } from './program-source-authority.js';
+import type {
+  TypeSystemProgramSourceCompaction,
+  TypeSystemProgramSourceRetentionCatalog,
+} from './program-source-authority.js';
 import {
   TypeSystemProjectBuilder,
   typeSystemEvaluatedSourceSnapshot,
@@ -99,6 +102,7 @@ class TypeSystemProjectAuthority {
     project: ProjectBootFrame,
     evaluationSources: TypeSystemEvaluationSourceRead,
     typeSystem: TypeSystemProject,
+    programSourceBorrowerKey: string,
   ): TypeSystemProjectGeneration {
     const generation = new TypeSystemProjectGeneration(
       this,
@@ -106,6 +110,7 @@ class TypeSystemProjectAuthority {
       project,
       evaluationSources,
       typeSystem,
+      programSourceBorrowerKey,
     );
     this.generation = generation;
     return generation;
@@ -179,6 +184,7 @@ export class TypeSystemProjectGeneration implements ComputationRead {
     readonly project: ProjectBootFrame,
     private readonly evaluationSources: TypeSystemEvaluationSourceRead,
     private readonly typeSystem: TypeSystemProject,
+    readonly programSourceBorrowerKey: string,
   ) {
     this.readKey = `type-system-project-generation:${project.projectKey}`;
     this.observedRevision = `${project.observedRevision}:${evaluationSources.observedRevision}:${computationAuthority.key}`;
@@ -279,7 +285,7 @@ export class TypeSystemProjectComputationService implements KernelStoreSidecarIn
   constructor(
     private readonly store: KernelStore,
     private readonly lifecycle: ComputationLifecycleRegistry,
-    private readonly programSources: TypeSystemProgramSourceCatalog,
+    private readonly programSources: TypeSystemProgramSourceRetentionCatalog,
   ) {
     store.registerSidecarIndex(this);
   }
@@ -322,6 +328,11 @@ export class TypeSystemProjectComputationService implements KernelStoreSidecarIn
 
     const incumbent = authority.committed()?.readCommittedProject() ?? null;
     const run = this.lifecycle.begin(new TypeSystemProjectLocus(project.projectKey));
+    const programSourceBorrowerKey = `type-system-project:${run.computationId}@${run.runSequence}`;
+    const generationProgramSources = this.programSources.forProjectGeneration(
+      project.projectKey,
+      programSourceBorrowerKey,
+    );
     let finished = false;
     try {
       run.guardCurrent(project.inputGeneration.currentnessGuardKey, project.inputGeneration);
@@ -330,7 +341,7 @@ export class TypeSystemProjectComputationService implements KernelStoreSidecarIn
       for (const read of project.readRegisteredInputs()) {
         run.observe(read);
       }
-      const typeSystem = new TypeSystemProjectBuilder(this.programSources).build(
+      const typeSystem = new TypeSystemProjectBuilder(generationProgramSources).build(
         project,
         evaluation.readBaseline(validationScope),
         { previousProject: incumbent },
@@ -355,6 +366,7 @@ export class TypeSystemProjectComputationService implements KernelStoreSidecarIn
         project,
         evaluationSources,
         typeSystem,
+        programSourceBorrowerKey,
       );
       return new TypeSystemProjectAccess(
         generation,
@@ -372,11 +384,13 @@ export class TypeSystemProjectComputationService implements KernelStoreSidecarIn
 
   retire(projectKey: string): boolean {
     const generation = this.authoritiesByProjectKey.get(projectKey)?.committed() ?? null;
-    return generation != null
+    const retired = generation != null
       && this.lifecycle.retireCommittedGeneration(
         generation.computationAuthority.computationId,
         generation.computationAuthority.runSequence,
       );
+    this.compactProgramSources();
+    return retired;
   }
 
   retireAll(): number {
@@ -393,7 +407,18 @@ export class TypeSystemProjectComputationService implements KernelStoreSidecarIn
         retired += 1;
       }
     }
+    this.compactProgramSources();
     return retired;
+  }
+
+  /** Retire checker-source identities after the outer app owner has replaced every old structural reference. */
+  compactProgramSources(): TypeSystemProgramSourceCompaction {
+    const activeBorrowerKeys = [...this.authoritiesByProjectKey.values()]
+      .flatMap((authority) => {
+        const generation = authority.committed();
+        return generation == null ? [] : [generation.programSourceBorrowerKey];
+      });
+    return this.programSources.compactForActiveGenerations(activeBorrowerKeys);
   }
 
   private authorityFor(projectKey: string): TypeSystemProjectAuthority {

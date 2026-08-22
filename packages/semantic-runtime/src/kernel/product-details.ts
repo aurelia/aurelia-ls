@@ -122,6 +122,7 @@ type ReadProduct = (handle: ProductHandle) => MaterializedProduct | null;
 type ProductDetailWithHandle = { readonly productHandle: ProductHandle };
 type AllocateOrdinal = () => number;
 type AssertMutationAllowed = () => void;
+type ObserveProductDetailHandle = (handle: ProductHandle) => void;
 
 const productEnvelopeByDetail = new WeakMap<object, MaterializedProduct>();
 
@@ -371,13 +372,21 @@ export class ProductDetailCatalog {
     private readonly allocateLifetimeOrdinal: AllocateOrdinal,
     allocateMutationOrdinal: AllocateOrdinal,
     private readonly assertMutationAllowed: AssertMutationAllowed,
+    observeBornEntry: ObserveProductDetailHandle = () => {},
+    observeBorrowedEntry: ObserveProductDetailHandle = () => {},
+    forgetEntry: ObserveProductDetailHandle = () => {},
   ) {
     this.catalog = new DetailCatalog(
       (entry) => entry.productHandle,
       (entry) => entry.slot.detailKind,
       allocateMutationOrdinal,
+      (entry) => observeBornEntry(entry.productHandle),
+      (entry) => forgetEntry(entry.productHandle),
     );
+    this.observeBorrowedEntry = observeBorrowedEntry;
   }
+
+  private readonly observeBorrowedEntry: ObserveProductDetailHandle;
 
   /** Attach a typed detail to an already-committed materialized product. */
   add<TDetail, TProductKind extends ProductKindKey>(
@@ -479,6 +488,7 @@ export class ProductDetailCatalog {
         + `cannot reuse it through a different ${slot.detailKind} slot contract.`,
       );
     }
+    this.observeBorrowedEntry(existing.productHandle);
     return existing as ProductDetailEntry<TDetail, TProductKind>;
   }
 

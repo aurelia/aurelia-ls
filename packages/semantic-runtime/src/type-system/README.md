@@ -541,10 +541,16 @@ hit/write source-text traffic, cacheable-read lanes, bypass lanes, and Program s
 `type-system:program` timing; inspect those numbers before changing source admission, adding a second checker host
 path, or widening cacheability to authored source. The traffic counters are the CPU/memory trade-off unit: write text
 shows dependency/library text admitted into the warm cache during a cold Program, while hit text shows how much cached
-text a later Program reused. Cache keys use canonical file paths, the TypeScript parse options that affect `SourceFile`
-shape (including effective module-detection and JSX module-indicator policy), and the source-text revision. Duplicate
-canonical-path entries are therefore visible as intentional
-parse-option/revision separation rather than hidden map growth or stale source reuse.
+text a later Program reused. Cache identity uses canonical file paths and the TypeScript parse options that affect
+`SourceFile` shape (including effective module-detection and JSX module-indicator policy). Each such identity retains
+only its newest observed source-text revision: admitting a changed dependency removes the superseded warm entry, while
+Programs that already own the old `SourceFile` continue to own it normally. This prevents dependency edit churn from
+becoming process-lifetime revision history without weakening current-Program source identity. Duplicate canonical-path
+entries are therefore visible as intentional parse-option separation, not hidden revision growth or stale source reuse.
+Warm entries are also least-recently-used bounded at 2,048 entries and 32 Mi source-text characters. A carrier larger
+than the text budget is still returned to the Program that requested it but is not retained for a later Program. These
+fixed process ceilings avoid configuration sprawl while preserving the ordinary dependency-heavy warm-reuse case;
+explicit bucket clear policies remain available when a caller needs a lower retained-memory posture.
 `runtime.analysisCacheOverview()` exposes the same process-local cache entry count and lifetime counters, plus
 source-text density counts split by dependency, declaration, default-library, and external-declaration class. Counts
 and text-character mass are both reported because a small number of declaration or default-library files can dominate
@@ -564,9 +570,10 @@ session.
 dependency SourceFile entries by bucket, canonical path, and source-text size. Keep that detail opt-in: bucket density is
 the ordinary cache-policy surface, while entry rows are for explaining a specific memory frontier or validating that a
 cache split is aimed at the right files.
-The same overview reports lifetime clear operations, cleared entry counts, cleared source-text characters, cleared
-default-library/external-declaration bucket mass, and last clear policy, so cache-churn evidence remains visible after
-the terminal output from a reclaim call is gone.
+The same overview reports the entry/text limits, superseded-revision and capacity eviction totals, lifetime clear
+operations, cleared entry counts, cleared source-text characters, cleared default-library/external-declaration bucket
+mass, and last clear policy, so automatic churn and explicit reclamation remain distinguishable after the terminal
+output from a reclaim call is gone.
 `runtime.clearAnalysisCache({ typeSystemDependencyCacheClearPolicy: 'all' })` can drop the retained dependency/lib
 source files when a long-lived process needs memory back. Narrower policies can clear only default libraries,
 node_modules files, or external declarations when overview density shows one bucket dominating. That clear operation

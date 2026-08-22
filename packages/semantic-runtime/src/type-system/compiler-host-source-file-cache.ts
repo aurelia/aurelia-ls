@@ -17,6 +17,10 @@ export interface TypeSystemCompilerHostSourceFileCacheStats {
   readonly misses: number;
   readonly writes: number;
   readonly writeSourceTextCharacters: number;
+  readonly supersededRevisionEvictions: number;
+  readonly supersededRevisionEvictedSourceTextCharacters: number;
+  readonly capacityEvictions: number;
+  readonly capacityEvictedSourceTextCharacters: number;
   readonly bypasses: number;
   readonly cacheableNodeModuleReads: number;
   readonly cacheableExternalDeclarationReads: number;
@@ -38,6 +42,8 @@ export interface TypeSystemCompilerHostSourceFileCacheStats {
 
 export interface TypeSystemCompilerHostSourceFileCacheOverview extends TypeSystemCompilerHostSourceFileCacheStats {
   readonly entries: number;
+  readonly entryLimit: number;
+  readonly sourceTextCharacterLimit: number;
   readonly distinctCanonicalPaths: number;
   readonly duplicateCanonicalPathEntries: number;
   readonly sourceTextCharacters: number;
@@ -115,14 +121,39 @@ type TypeSystemCompilerHostSourceFileCacheClearDensity = {
   >]: Omit<TypeSystemCompilerHostSourceFileCacheClearSummary, 'policy' | 'remainingEntries'>[TKey];
 };
 
-class TypeSystemCompilerHostSourceFileCache {
-  private readonly sourceFiles = new Map<string, ts.SourceFile>();
+interface TypeSystemCompilerHostSourceFileCacheEntry {
+  readonly sourceRevision: string;
+  readonly sourceFile: ts.SourceFile;
+}
+
+export interface TypeSystemCompilerHostSourceFileCacheLimits {
+  readonly entries: number;
+  readonly sourceTextCharacters: number;
+}
+
+/**
+ * A conservative process ceiling that keeps normal dependency-heavy workspaces warm without allowing an unbounded
+ * sequence of distinct package graphs to retain every SourceFile AST for the lifetime of the process.
+ */
+export const TYPE_SYSTEM_COMPILER_HOST_SOURCE_FILE_CACHE_LIMITS = Object.freeze({
+  entries: 2_048,
+  sourceTextCharacters: 32 * 1_024 * 1_024,
+} satisfies TypeSystemCompilerHostSourceFileCacheLimits);
+
+export class TypeSystemCompilerHostSourceFileCache {
+  /** In insertion order, promoted on hits, so the first entry is the least recently used warm carrier. */
+  private readonly sourceFiles = new Map<string, TypeSystemCompilerHostSourceFileCacheEntry>();
   private densitySnapshot: TypeSystemCompilerHostSourceFileCacheDensity | null = null;
+  private retainedSourceTextCharacters = 0;
   private hits = 0;
   private hitSourceTextCharacters = 0;
   private misses = 0;
   private writes = 0;
   private writeSourceTextCharacters = 0;
+  private supersededRevisionEvictions = 0;
+  private supersededRevisionEvictedSourceTextCharacters = 0;
+  private capacityEvictions = 0;
+  private capacityEvictedSourceTextCharacters = 0;
   private bypasses = 0;
   private cacheableNodeModuleReads = 0;
   private cacheableExternalDeclarationReads = 0;
@@ -142,6 +173,13 @@ class TypeSystemCompilerHostSourceFileCache {
   private clearedExternalDeclarationSourceTextCharacters = 0;
   private lastClearPolicy: TypeSystemCompilerHostSourceFileCacheClearPolicy | null = null;
 
+  constructor(
+    private readonly limits: TypeSystemCompilerHostSourceFileCacheLimits = TYPE_SYSTEM_COMPILER_HOST_SOURCE_FILE_CACHE_LIMITS,
+  ) {
+    assertTypeSystemCompilerHostSourceFileCacheLimit('entries', limits.entries);
+    assertTypeSystemCompilerHostSourceFileCacheLimit('sourceTextCharacters', limits.sourceTextCharacters);
+  }
+
   readOrCreate(
     fileName: string,
     languageVersionOrOptions: ts.ScriptTarget | ts.CreateSourceFileOptions,
@@ -158,25 +196,35 @@ class TypeSystemCompilerHostSourceFileCache {
       return create();
     }
 
-    const key = `${typeSystemHostSourceFileCacheKey(
+    const key = typeSystemHostSourceFileCacheKey(
       fileName,
       languageVersionOrOptions,
       compilerOptions,
-    )}\0${sourceRevision}`;
+    );
     const existing = this.sourceFiles.get(key);
-    if (existing !== undefined) {
+    if (existing?.sourceRevision === sourceRevision) {
+      // Promote a hit so capacity trimming retains the dependencies that active workspaces are actually reusing.
+      this.sourceFiles.delete(key);
+      this.sourceFiles.set(key, existing);
       this.hits += 1;
-      this.hitSourceTextCharacters += existing.text.length;
-      return existing;
+      this.hitSourceTextCharacters += existing.sourceFile.text.length;
+      return existing.sourceFile;
     }
 
     this.misses += 1;
     const sourceFile = create();
     if (sourceFile !== undefined) {
-      this.sourceFiles.set(key, sourceFile);
+      if (existing !== undefined) {
+        const evicted = this.deleteEntry(key)!;
+        this.supersededRevisionEvictions += 1;
+        this.supersededRevisionEvictedSourceTextCharacters += evicted.text.length;
+      }
+      this.sourceFiles.set(key, { sourceRevision, sourceFile });
+      this.retainedSourceTextCharacters += sourceFile.text.length;
       this.densitySnapshot = null;
       this.writes += 1;
       this.writeSourceTextCharacters += sourceFile.text.length;
+      this.trimToCapacity();
     }
     return sourceFile;
   }
@@ -188,6 +236,10 @@ class TypeSystemCompilerHostSourceFileCache {
       misses: this.misses,
       writes: this.writes,
       writeSourceTextCharacters: this.writeSourceTextCharacters,
+      supersededRevisionEvictions: this.supersededRevisionEvictions,
+      supersededRevisionEvictedSourceTextCharacters: this.supersededRevisionEvictedSourceTextCharacters,
+      capacityEvictions: this.capacityEvictions,
+      capacityEvictedSourceTextCharacters: this.capacityEvictedSourceTextCharacters,
       bypasses: this.bypasses,
       cacheableNodeModuleReads: this.cacheableNodeModuleReads,
       cacheableExternalDeclarationReads: this.cacheableExternalDeclarationReads,
@@ -214,6 +266,8 @@ class TypeSystemCompilerHostSourceFileCache {
     const density = this.readCacheDensity();
     return {
       entries: this.sourceFiles.size,
+      entryLimit: this.limits.entries,
+      sourceTextCharacterLimit: this.limits.sourceTextCharacters,
       ...density,
       ...this.snapshot(),
       lastClearPolicy: this.lastClearPolicy,
@@ -242,15 +296,13 @@ class TypeSystemCompilerHostSourceFileCache {
     }
 
     const cleared = emptyTypeSystemCompilerHostSourceFileCacheClearDensity();
-    for (const [key, sourceFile] of this.sourceFiles) {
+    for (const [key, entry] of this.sourceFiles) {
+      const sourceFile = entry.sourceFile;
       if (!sourceFileCacheEntryMatchesClearPolicy(sourceFile, policy)) {
         continue;
       }
       recordSourceFileCacheEntryDensity(cleared, sourceFile);
-      this.sourceFiles.delete(key);
-    }
-    if (cleared.entries > 0) {
-      this.densitySnapshot = null;
+      this.deleteEntry(key);
     }
     this.clearOperations += 1;
     this.clearedEntries += cleared.entries;
@@ -294,7 +346,8 @@ class TypeSystemCompilerHostSourceFileCache {
     const parseOptionCounts = new Map<string, number>();
     const parseOptionsByCanonicalPath = new Map<string, Set<string>>();
 
-    for (const [cacheKey, sourceFile] of this.sourceFiles) {
+    for (const [cacheKey, entry] of this.sourceFiles) {
+      const sourceFile = entry.sourceFile;
       const normalizedFileName = canonicalTypeSystemPath(sourceFile.fileName);
       const parseOptionKey = sourceFileCacheEntryParseOptionKey(cacheKey);
       parseOptionCounts.set(parseOptionKey, (parseOptionCounts.get(parseOptionKey) ?? 0) + 1);
@@ -349,12 +402,38 @@ class TypeSystemCompilerHostSourceFileCache {
       return [];
     }
     return [...this.sourceFiles.entries()]
-      .map(([cacheKey, sourceFile]) => sourceFileCacheEntrySummary(cacheKey, sourceFile))
+      .map(([cacheKey, entry]) => sourceFileCacheEntrySummary(cacheKey, entry.sourceFile))
       .sort((left, right) =>
         right.sourceTextCharacters - left.sourceTextCharacters
         || left.canonicalPath.localeCompare(right.canonicalPath)
       )
       .slice(0, limit);
+  }
+
+  private trimToCapacity(): void {
+    while (
+      this.sourceFiles.size > this.limits.entries
+      || this.retainedSourceTextCharacters > this.limits.sourceTextCharacters
+    ) {
+      const oldestKey = this.sourceFiles.keys().next().value;
+      if (oldestKey === undefined) {
+        break;
+      }
+      const evicted = this.deleteEntry(oldestKey)!;
+      this.capacityEvictions += 1;
+      this.capacityEvictedSourceTextCharacters += evicted.text.length;
+    }
+  }
+
+  private deleteEntry(key: string): ts.SourceFile | undefined {
+    const entry = this.sourceFiles.get(key);
+    if (entry === undefined) {
+      return undefined;
+    }
+    this.sourceFiles.delete(key);
+    this.retainedSourceTextCharacters -= entry.sourceFile.text.length;
+    this.densitySnapshot = null;
+    return entry.sourceFile;
   }
 
   private recordDecision(decision: TypeSystemHostSourceFileCacheDecision): void {
@@ -402,6 +481,10 @@ export function diffCompilerHostSourceFileCacheStats(
     misses: after.misses - before.misses,
     writes: after.writes - before.writes,
     writeSourceTextCharacters: after.writeSourceTextCharacters - before.writeSourceTextCharacters,
+    supersededRevisionEvictions: after.supersededRevisionEvictions - before.supersededRevisionEvictions,
+    supersededRevisionEvictedSourceTextCharacters: after.supersededRevisionEvictedSourceTextCharacters - before.supersededRevisionEvictedSourceTextCharacters,
+    capacityEvictions: after.capacityEvictions - before.capacityEvictions,
+    capacityEvictedSourceTextCharacters: after.capacityEvictedSourceTextCharacters - before.capacityEvictedSourceTextCharacters,
     bypasses: after.bypasses - before.bypasses,
     cacheableNodeModuleReads: after.cacheableNodeModuleReads - before.cacheableNodeModuleReads,
     cacheableExternalDeclarationReads: after.cacheableExternalDeclarationReads - before.cacheableExternalDeclarationReads,
@@ -420,6 +503,15 @@ export function diffCompilerHostSourceFileCacheStats(
     clearedExternalDeclarationEntries: after.clearedExternalDeclarationEntries - before.clearedExternalDeclarationEntries,
     clearedExternalDeclarationSourceTextCharacters: after.clearedExternalDeclarationSourceTextCharacters - before.clearedExternalDeclarationSourceTextCharacters,
   };
+}
+
+function assertTypeSystemCompilerHostSourceFileCacheLimit(
+  name: keyof TypeSystemCompilerHostSourceFileCacheLimits,
+  value: number,
+): void {
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new RangeError(`TypeScript compiler-host SourceFile cache limit '${name}' must be a non-negative safe integer.`);
+  }
 }
 
 function typeSystemHostSourceFileCacheKey(

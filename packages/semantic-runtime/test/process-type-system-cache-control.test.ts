@@ -20,6 +20,10 @@ describe('semantic-runtime process TypeScript cache control', () => {
       rowLimit: 2,
     });
 
+    expect(before.entryLimit).toBeGreaterThan(0);
+    expect(before.sourceTextCharacterLimit).toBeGreaterThan(0);
+    expect(before.entries).toBeLessThanOrEqual(before.entryLimit);
+    expect(before.sourceTextCharacters).toBeLessThanOrEqual(before.sourceTextCharacterLimit);
     expect(cleared.typeSystemDependencyCacheClearPolicy).toBe('all');
     expect(cleared.clearedTypeSystemDependencySourceFiles).toBe(before.entries);
     expect(cleared.clearedTypeSystemDependencySourceTextCharacters).toBe(before.sourceTextCharacters);
@@ -28,6 +32,11 @@ describe('semantic-runtime process TypeScript cache control', () => {
     expect(after.sourceTextCharacters).toBe(0);
     expect(after.clearOperations).toBe(before.clearOperations + 1);
     expect(after.lastClearPolicy).toBe('all');
+    expect(after.supersededRevisionEvictions).toBe(before.supersededRevisionEvictions);
+    expect(after.supersededRevisionEvictedSourceTextCharacters)
+      .toBe(before.supersededRevisionEvictedSourceTextCharacters);
+    expect(after.capacityEvictions).toBe(before.capacityEvictions);
+    expect(after.capacityEvictedSourceTextCharacters).toBe(before.capacityEvictedSourceTextCharacters);
 
     const preserved = clearSemanticRuntimeProcessTypeSystemCache({
       typeSystemDependencyCacheClearPolicy: 'preserve',

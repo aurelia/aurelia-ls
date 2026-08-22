@@ -1343,6 +1343,8 @@ export interface SemanticRuntimeAnalysisCacheOverviewResult
 
 export interface SemanticRuntimeTypeSystemDependencyCacheSummary {
   readonly entries: number;
+  readonly entryLimit: number;
+  readonly sourceTextCharacterLimit: number;
   readonly distinctCanonicalPaths: number;
   readonly duplicateCanonicalPathEntries: number;
   readonly sourceTextCharacters: number;
@@ -1361,6 +1363,10 @@ export interface SemanticRuntimeTypeSystemDependencyCacheSummary {
   readonly misses: number;
   readonly writes: number;
   readonly writeSourceTextCharacters: number;
+  readonly supersededRevisionEvictions: number;
+  readonly supersededRevisionEvictedSourceTextCharacters: number;
+  readonly capacityEvictions: number;
+  readonly capacityEvictedSourceTextCharacters: number;
   readonly bypasses: number;
   readonly cacheableNodeModuleReads: number;
   readonly cacheableExternalDeclarationReads: number;
@@ -1665,6 +1671,10 @@ export interface SemanticRuntimeTypeSystemHostSourceFileCacheStats {
   readonly misses: number;
   readonly writes: number;
   readonly writeSourceTextCharacters: number;
+  readonly supersededRevisionEvictions: number;
+  readonly supersededRevisionEvictedSourceTextCharacters: number;
+  readonly capacityEvictions: number;
+  readonly capacityEvictedSourceTextCharacters: number;
   readonly bypasses: number;
   readonly cacheableNodeModuleReads: number;
   readonly cacheableExternalDeclarationReads: number;

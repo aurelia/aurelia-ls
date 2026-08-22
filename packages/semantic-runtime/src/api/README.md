@@ -369,7 +369,8 @@ control-plane cleanup. Use narrower policies such as `default-libraries`, `node-
 classes warm. The overview also reports cached source-text character count plus node_modules,
 declaration, default-library, external-declaration, canonical-path, and duplicate parse-option entry counts so
 long-lived adapters can distinguish warm TypeScript dependency/library retention from app-world kernel or query-claim
-retention. It also reports the dominant retained source-text bucket and a suggested dependency-cache clear policy, plus
+retention. The entry/text ceilings and superseded-revision/capacity-eviction counters distinguish automatic bounded
+retention from caller-requested clear operations. It also reports the dominant retained source-text bucket and a suggested dependency-cache clear policy, plus
 process-lifetime clear operations, source-text characters reclaimed by cache policy, and the cleared default-library /
 external-declaration bucket split. The
 host-cache counters split cacheable node_modules/external-declaration reads from fresh-source, project-source, and

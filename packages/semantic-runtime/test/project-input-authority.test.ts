@@ -296,6 +296,43 @@ describe('SemanticRuntimeProjectInputAuthority', () => {
     expect(authority.captureWorkspace({ workspaceInputKey: 'workspace', rootDir })).not.toBe(firstWorkspace);
   });
 
+  test('compacts exact file-event watermarks behind a broad structural event without reviving older reads', () => {
+    const rootDir = normalize('C:/workspace/app');
+    const firstFile = normalize(`${rootDir}/src/first.ts`);
+    const secondFile = normalize(`${rootDir}/src/second.ts`);
+    const host = new MutableProjectInputHost();
+    host.write(firstFile, 'export const first = 1;');
+    host.write(secondFile, 'export const second = 1;');
+    const authority = new SemanticRuntimeProjectInputAuthority(
+      host,
+      pushObservedFileContentPolicy(firstFile, secondFile),
+    );
+    const beforeChanges = authority.captureExactFileContentRead(firstFile);
+
+    authority.advance([new SemanticRuntimeProjectInputChange(
+      SemanticRuntimeProjectInputChangeKind.FileValue,
+      firstFile,
+    )]);
+    authority.advance([new SemanticRuntimeProjectInputChange(
+      SemanticRuntimeProjectInputChangeKind.FileValue,
+      secondFile,
+    )]);
+    expect(authority.readRetainedFileValueChangePathCount()).toBe(2);
+    expect(beforeChanges.validateObservedValue().isCurrent).toBe(false);
+
+    const afterExactChanges = authority.captureExactFileContentRead(firstFile);
+    expect(afterExactChanges.validateObservedValue().isCurrent).toBe(true);
+    authority.advance([new SemanticRuntimeProjectInputChange(
+      SemanticRuntimeProjectInputChangeKind.StructuralMembership,
+      path.join(rootDir, 'package.json'),
+    )]);
+
+    expect(authority.readRetainedFileValueChangePathCount()).toBe(0);
+    expect(beforeChanges.validateObservedValue().isCurrent).toBe(false);
+    expect(afterExactChanges.validateObservedValue().isCurrent).toBe(false);
+    expect(authority.captureExactFileContentRead(firstFile).validateObservedValue().isCurrent).toBe(true);
+  });
+
   test('keeps file identity current and timestamps a late workspace content read at its observation sequence', () => {
     const rootDir = normalize('C:/workspace/app');
     const sourceFile = normalize(`${rootDir}/src/app.ts`);

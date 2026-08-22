@@ -13,11 +13,17 @@ import path from 'node:path';
 import ts from 'typescript';
 import { afterEach, describe, expect, test } from 'vitest';
 
-import { createSemanticRuntime } from '../src/api/runtime.js';
+import {
+  createSemanticRuntime,
+  semanticRuntimeProcessTypeSystemCacheOverview,
+} from '../src/api/runtime.js';
 import { aureliaAppProjectEvaluationProfile } from '../src/configuration/aurelia-project-evaluation.js';
 import { SourceFileRole } from '../src/kernel/address.js';
 import { SemanticRuntimeProjectInputReadKind } from '../src/kernel/project-input.js';
-import { clearTypeSystemCompilerHostSourceFileCache } from '../src/type-system/compiler-host-source-file-cache.js';
+import {
+  clearTypeSystemCompilerHostSourceFileCache,
+  readTypeSystemCompilerHostSourceFileCacheOverview,
+} from '../src/type-system/compiler-host-source-file-cache.js';
 import { TypeSystemProjectBuilder } from '../src/type-system/project.js';
 
 const temporaryRoots: string[] = [];
@@ -219,6 +225,105 @@ describe('type-system project module resolution', () => {
       expect(secondLocatorRead).toBeDefined();
       expect(sameHostPath(String(secondLocatorRead!.value), linkedRootB)).toBe(true);
       expect(secondLocatorRead!.validateObservedValue().isCurrent).toBe(true);
+    } finally {
+      clearTypeSystemCompilerHostSourceFileCache('all');
+    }
+  }, 30_000);
+
+  test('replaces a changed dependency revision without retaining it in the old Program cache slot', async () => {
+    clearTypeSystemCompilerHostSourceFileCache('all');
+    try {
+      const fixtureRoot = temporaryRoot();
+      const appRoot = path.join(fixtureRoot, 'app');
+      const appEntry = path.join(appRoot, 'src', 'main.ts');
+      const dependencyRoot = path.join(appRoot, 'node_modules', '@fixture', 'revisioned');
+      const dependencyDeclaration = path.join(dependencyRoot, 'index.d.ts');
+      const firstDependencyText = "export declare const revisionMarker: 'first';\n";
+      const secondDependencyText = "export declare const revisionMarker: 'second';\n";
+
+      writeJson(path.join(appRoot, 'package.json'), {
+        name: '@fixture/revision-app',
+        private: true,
+        type: 'module',
+      });
+      writeJson(path.join(appRoot, 'tsconfig.json'), {
+        compilerOptions: {
+          target: 'ES2022',
+          module: 'ESNext',
+          moduleResolution: 'Bundler',
+        },
+        files: ['src/main.ts'],
+      });
+      writeText(appEntry, [
+        "import { revisionMarker } from '@fixture/revisioned';",
+        'export const selectedRevision = revisionMarker;',
+        '',
+      ].join('\n'));
+      writeJson(path.join(dependencyRoot, 'package.json'), {
+        name: '@fixture/revisioned',
+        version: '1.0.0',
+        types: 'index.d.ts',
+      });
+      writeText(dependencyDeclaration, firstDependencyText);
+
+      const runtime = await createSemanticRuntime({
+        workspaceRoot: appRoot,
+        storeKey: `test:type-system-dependency-revision-currentness:${path.basename(fixtureRoot)}`,
+        projects: [{
+          projectKey: 'dependency-revision-currentness',
+          rootDir: appRoot,
+          sourceFiles: [{ path: 'src/main.ts', role: SourceFileRole.AppSource }],
+        }],
+      });
+      const firstProject = runtime.workspace.projects[0]!;
+      const firstEvaluation = runtime.projectEvaluations.acquire(
+        firstProject,
+        aureliaAppProjectEvaluationProfile,
+      ).readBaseline();
+      const builder = new TypeSystemProjectBuilder(runtime.frameworkSupport);
+      const firstTypeSystem = builder.build(firstProject, firstEvaluation);
+      const firstDependencySource = firstTypeSystem.program.getSourceFile(dependencyDeclaration);
+      const cacheAfterFirstProgram = readTypeSystemCompilerHostSourceFileCacheOverview();
+
+      expect(firstDependencySource?.text).toBe(firstDependencyText);
+
+      writeText(dependencyDeclaration, secondDependencyText);
+      const secondProject = firstProject.forInputGeneration(
+        runtime.workspace.projectInputAuthority.capture(firstProject),
+      );
+      const secondEvaluation = runtime.projectEvaluations.acquire(
+        secondProject,
+        aureliaAppProjectEvaluationProfile,
+      ).readBaseline();
+      const secondTypeSystem = builder.build(
+        secondProject,
+        secondEvaluation,
+        { previousProject: firstTypeSystem },
+      );
+      const secondDependencySource = secondTypeSystem.program.getSourceFile(dependencyDeclaration);
+      const cacheAfterSecondProgram = readTypeSystemCompilerHostSourceFileCacheOverview();
+      const publicCacheAfterSecondProgram = semanticRuntimeProcessTypeSystemCacheOverview();
+
+      expect(secondProject.inputGeneration).not.toBe(firstProject.inputGeneration);
+      expect(secondDependencySource).not.toBe(firstDependencySource);
+      expect(secondDependencySource?.text).toBe(secondDependencyText);
+      expect(firstDependencySource?.text).toBe(firstDependencyText);
+      expect(secondTypeSystem.profile.hostSourceFileCache.supersededRevisionEvictions).toBe(1);
+      expect(secondTypeSystem.profile.hostSourceFileCache.supersededRevisionEvictedSourceTextCharacters)
+        .toBe(firstDependencyText.length);
+      expect(cacheAfterSecondProgram.entries).toBe(cacheAfterFirstProgram.entries);
+      expect(cacheAfterSecondProgram.sourceTextCharacters)
+        .toBe(cacheAfterFirstProgram.sourceTextCharacters - firstDependencyText.length + secondDependencyText.length);
+      expect(publicCacheAfterSecondProgram).toMatchObject({
+        entries: cacheAfterSecondProgram.entries,
+        entryLimit: cacheAfterSecondProgram.entryLimit,
+        sourceTextCharacterLimit: cacheAfterSecondProgram.sourceTextCharacterLimit,
+        supersededRevisionEvictions: cacheAfterSecondProgram.supersededRevisionEvictions,
+        supersededRevisionEvictedSourceTextCharacters:
+          cacheAfterSecondProgram.supersededRevisionEvictedSourceTextCharacters,
+        capacityEvictions: cacheAfterSecondProgram.capacityEvictions,
+        capacityEvictedSourceTextCharacters: cacheAfterSecondProgram.capacityEvictedSourceTextCharacters,
+      });
     } finally {
       clearTypeSystemCompilerHostSourceFileCache('all');
     }

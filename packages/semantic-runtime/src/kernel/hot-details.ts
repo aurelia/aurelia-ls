@@ -26,6 +26,7 @@ declare const hotDetailSlotBrand: unique symbol;
 
 type AllocateOrdinal = () => number;
 type AssertMutationAllowed = () => void;
+type ObserveHotDetailHandle = (handle: HotDetailHandle) => void;
 
 /**
  * Typed hot-sidecar slot for analysis-epoch details that should not be promoted into durable kernel products.
@@ -280,15 +281,27 @@ export class HotDetailCatalog {
     private readonly allocateLifetimeOrdinal: AllocateOrdinal,
     allocateMutationOrdinal: AllocateOrdinal,
     private readonly assertMutationAllowed: AssertMutationAllowed,
+    observeBornEntry: ObserveHotDetailHandle = () => {},
+    observeBorrowedEntry: ObserveHotDetailHandle = () => {},
+    forgetEntry: ObserveHotDetailHandle = () => {},
   ) {
     this.catalog = new DetailCatalog(
       (entry) => entry.handle,
       (entry) => entry.slot.detailKind,
       allocateMutationOrdinal,
-      (entry) => this.addHandleForOwner(entry.ownerProductHandle, entry.handle),
-      (entry) => this.removeHandleForOwner(entry.ownerProductHandle, entry.handle),
+      (entry) => {
+        this.addHandleForOwner(entry.ownerProductHandle, entry.handle);
+        observeBornEntry(entry.handle);
+      },
+      (entry) => {
+        this.removeHandleForOwner(entry.ownerProductHandle, entry.handle);
+        forgetEntry(entry.handle);
+      },
     );
+    this.observeBorrowedEntry = observeBorrowedEntry;
   }
+
+  private readonly observeBorrowedEntry: ObserveHotDetailHandle;
 
   add<TDetail>(
     slot: HotDetailSlot<TDetail>,
@@ -393,6 +406,7 @@ export class HotDetailCatalog {
         `Hot detail ${handle} is owned by ${existing.ownerProductHandle}; cannot reuse it for ${ownerProductHandle}.`,
       );
     }
+    this.observeBorrowedEntry(existing.handle);
     return existing as HotDetailEntry<TDetail>;
   }
 

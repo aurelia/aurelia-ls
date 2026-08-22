@@ -364,6 +364,10 @@ function computationGenerationCurrentnessKey(computationId: ComputationId): stri
   return `computation-generation:${computationId}`;
 }
 
+function computationLocusRegistryKey(locus: Pick<ComputationLocus, 'kind' | 'reconciliationKey'>): string {
+  return `${locus.kind}\0${locus.reconciliationKey}`;
+}
+
 /** Exact membership of foreign materializations for one owner, excluding this computation's own replacement closure. */
 export class ComputationMaterializationOwnerRead implements ComputationRead {
   readonly domain = 'kernel-materialization-owner';
@@ -2353,9 +2357,14 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
     store.registerComputationLifecycle(this);
   }
 
+  /** Number of logical computation loci retained by this registry, including retired-but-reusable loci. */
+  readEntryCount(): number {
+    return this.entriesById.size;
+  }
+
   begin(locus: ComputationLocus): ComputationRun {
     const capturedLocus = snapshotComputationLocus(locus);
-    const registryKey = `${capturedLocus.kind}\0${capturedLocus.reconciliationKey}`;
+    const registryKey = computationLocusRegistryKey(capturedLocus);
     let entry = this.entriesByLocus.get(registryKey);
     if (entry == null) {
       const computationId = `computation:${this.nextComputationOrdinal++}` as ComputationId;
@@ -2392,16 +2401,16 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
     run: ComputationRun,
     candidate: KernelPublicationDecisionPreviewCandidate,
   ): readonly KernelPublicationDecision[] {
-    const entry = this.entriesById.get(run.computationId);
-    if (entry == null) {
-      throw new Error(`Cannot preview unknown computation run ${run.computationId}@${run.runSequence}.`);
-    }
     if (!run.candidateCurrentnessWitness.isCurrent()) {
       throw new SemanticRuntimeAnalysisCurrentnessError({
         message: `Cannot preview superseded computation run ${run.computationId}@${run.runSequence}.`,
         reason: 'computation-superseded',
         invalidGenerationKeys: [computationRunCurrentnessKey(run.computationId)],
       });
+    }
+    const entry = this.entriesById.get(run.computationId);
+    if (entry == null) {
+      throw new Error(`Cannot preview unknown computation run ${run.computationId}@${run.runSequence}.`);
     }
     return this.store.previewOwnedPublicationCandidateDecisions(
       entry.state?.publication ?? KernelPublicationManifest.empty,
@@ -2568,6 +2577,55 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
     return true;
   }
 
+  /**
+   * Withdraw one exact generation and its stable reconciliation locus at an explicit domain lifetime boundary.
+   *
+   * Ordinary retirement deliberately keeps the empty locus so a later run can reconcile through the same clocks and
+   * computation id. Domains whose logical keys themselves are ephemeral may instead use this stronger boundary after
+   * proving that no active domain graph still needs the generation. A future run at the same logical key receives a
+   * fresh computation id while deterministic kernel handles may still recover the same semantic identity.
+   */
+  retireCommittedGenerationAndForgetLocus(
+    computationId: ComputationId,
+    runSequence: number,
+  ): boolean {
+    let entry = this.entriesById.get(computationId) ?? null;
+    if (entry == null) {
+      return false;
+    }
+    if (entry.state?.committedRunSequence === runSequence) {
+      if (!this.retireCommittedGeneration(computationId, runSequence)) {
+        return false;
+      }
+      entry = this.entriesById.get(computationId) ?? null;
+    } else if (entry.state != null) {
+      // The locus has already moved to another committed generation. The caller's authority cannot retire it.
+      return false;
+    }
+    if (
+      entry == null
+      || entry.state != null
+      || entry.admittedGenerationDomains.size > 0
+      || entry.latestFinishedRunSequence < runSequence
+    ) {
+      throw new Error(
+        `Computation generation ${computationId}@${runSequence} cannot forget an active or unobserved registry entry.`,
+      );
+    }
+    const registryKey = computationLocusRegistryKey(entry.locus);
+    if (this.entriesByLocus.get(registryKey) !== entry) {
+      throw new Error(
+        `Retired computation generation ${computationId}@${runSequence} lost its reconciliation-locus ownership.`,
+      );
+    }
+    // A store lifetime disposal may already have withdrawn this exact publication. Invalidate any later prepared run
+    // at the now-ephemeral locus before removing both registry indexes; its commit must observe supersession.
+    entry.runCurrentness.advance();
+    this.entriesById.delete(computationId);
+    this.entriesByLocus.delete(registryKey);
+    return true;
+  }
+
   /** Whether a prepared run still owns the newest candidate position at its stable locus. */
   isLatestRun(run: ComputationRun): boolean {
     return this.entriesById.has(run.computationId) && run.candidateCurrentnessWitness.isCurrent();
@@ -2616,6 +2674,9 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
   }
 
   dispose(context: KernelStoreDisposalContext): void {
+    if (context.kind === 'exact-handles') {
+      return;
+    }
     for (const entry of this.entriesById.values()) {
       if (entry.latestFinishedRunSequence < entry.runCurrentness.currentOrdinal) {
         // A lifetime boundary invalidates prepared work even when it has not published a first generation yet.
@@ -2656,6 +2717,11 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
   ): ComputationCommitResult {
     const entry = this.entriesById.get(run.computationId);
     if (entry == null) {
+      // Explicit ephemeral-locus compaction revokes the run clock before removing registry indexes. A prepared run
+      // that resumes afterward is an ordinary superseded candidate, not an internal unknown-computation failure.
+      if (!run.candidateCurrentnessWitness.isCurrent()) {
+        return this.reject(null, run, ComputationCommitState.RejectedSuperseded, [], []);
+      }
       throw new Error(`Unknown computation ${run.computationId}.`);
     }
     if (!run.candidateCurrentnessWitness.isCurrent()) {
@@ -2809,14 +2875,14 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
   }
 
   private reject(
-    entry: MutableComputationEntry,
+    entry: MutableComputationEntry | null,
     run: ComputationRun,
     state: ComputationCommitState,
     invalidReads: readonly ComputationInvalidRead[],
     invalidCurrentnessGuards: readonly ComputationInvalidCurrentnessGuard[],
   ): ComputationCommitResult {
     const transition = new ComputationTransition(
-      entry.computationId,
+      run.computationId,
       run.runSequence,
       state,
       [],
@@ -2825,7 +2891,9 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
       [],
       [],
     );
-    entry.latestTransition = transition;
+    if (entry != null) {
+      entry.latestTransition = transition;
+    }
     return new ComputationCommitResult(state, transition);
   }
 

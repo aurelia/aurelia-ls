@@ -1222,6 +1222,10 @@ function createAggregate() {
       misses: 0,
       writes: 0,
       writeSourceTextCharacters: 0,
+      supersededRevisionEvictions: 0,
+      supersededRevisionEvictedSourceTextCharacters: 0,
+      capacityEvictions: 0,
+      capacityEvictedSourceTextCharacters: 0,
       bypasses: 0,
       cacheableNodeModuleReads: 0,
       cacheableExternalDeclarationReads: 0,
@@ -1301,6 +1305,8 @@ function createProgramSourceFileAggregate() {
 function createTypeSystemDependencyCacheAggregate() {
   return {
     maxEntries: 0,
+    entryLimit: 0,
+    sourceTextCharacterLimit: 0,
     maxDistinctCanonicalPaths: 0,
     maxDuplicateCanonicalPathEntries: 0,
     maxSourceTextCharacters: 0,
@@ -1309,6 +1315,10 @@ function createTypeSystemDependencyCacheAggregate() {
     maxMisses: 0,
     maxWrites: 0,
     maxWriteSourceTextCharacters: 0,
+    maxSupersededRevisionEvictions: 0,
+    maxSupersededRevisionEvictedSourceTextCharacters: 0,
+    maxCapacityEvictions: 0,
+    maxCapacityEvictedSourceTextCharacters: 0,
     maxNodeModuleEntries: 0,
     maxNodeModuleSourceTextCharacters: 0,
     maxDeclarationEntries: 0,
@@ -1531,6 +1541,10 @@ function addHostSourceFileCache(target, source) {
   target.misses += source.misses ?? 0;
   target.writes += source.writes ?? 0;
   target.writeSourceTextCharacters += source.writeSourceTextCharacters ?? 0;
+  target.supersededRevisionEvictions += source.supersededRevisionEvictions ?? 0;
+  target.supersededRevisionEvictedSourceTextCharacters += source.supersededRevisionEvictedSourceTextCharacters ?? 0;
+  target.capacityEvictions += source.capacityEvictions ?? 0;
+  target.capacityEvictedSourceTextCharacters += source.capacityEvictedSourceTextCharacters ?? 0;
   target.bypasses += source.bypasses ?? 0;
   target.cacheableNodeModuleReads += source.cacheableNodeModuleReads ?? 0;
   target.cacheableExternalDeclarationReads += source.cacheableExternalDeclarationReads ?? 0;
@@ -1555,6 +1569,8 @@ function addTypeSystemDependencyCache(target, source) {
     return;
   }
   target.maxEntries = Math.max(target.maxEntries, source.entries ?? 0);
+  target.entryLimit = Math.max(target.entryLimit, source.entryLimit ?? 0);
+  target.sourceTextCharacterLimit = Math.max(target.sourceTextCharacterLimit, source.sourceTextCharacterLimit ?? 0);
   target.maxDistinctCanonicalPaths = Math.max(target.maxDistinctCanonicalPaths, source.distinctCanonicalPaths ?? 0);
   target.maxDuplicateCanonicalPathEntries = Math.max(target.maxDuplicateCanonicalPathEntries, source.duplicateCanonicalPathEntries ?? 0);
   target.maxSourceTextCharacters = Math.max(target.maxSourceTextCharacters, source.sourceTextCharacters ?? 0);
@@ -1563,6 +1579,10 @@ function addTypeSystemDependencyCache(target, source) {
   target.maxMisses = Math.max(target.maxMisses, source.misses ?? 0);
   target.maxWrites = Math.max(target.maxWrites, source.writes ?? 0);
   target.maxWriteSourceTextCharacters = Math.max(target.maxWriteSourceTextCharacters, source.writeSourceTextCharacters ?? 0);
+  target.maxSupersededRevisionEvictions = Math.max(target.maxSupersededRevisionEvictions, source.supersededRevisionEvictions ?? 0);
+  target.maxSupersededRevisionEvictedSourceTextCharacters = Math.max(target.maxSupersededRevisionEvictedSourceTextCharacters, source.supersededRevisionEvictedSourceTextCharacters ?? 0);
+  target.maxCapacityEvictions = Math.max(target.maxCapacityEvictions, source.capacityEvictions ?? 0);
+  target.maxCapacityEvictedSourceTextCharacters = Math.max(target.maxCapacityEvictedSourceTextCharacters, source.capacityEvictedSourceTextCharacters ?? 0);
   target.maxNodeModuleEntries = Math.max(target.maxNodeModuleEntries, source.nodeModuleEntries ?? 0);
   target.maxNodeModuleSourceTextCharacters = Math.max(target.maxNodeModuleSourceTextCharacters, source.nodeModuleSourceTextCharacters ?? 0);
   target.maxDeclarationEntries = Math.max(target.maxDeclarationEntries, source.declarationEntries ?? 0);
@@ -2557,6 +2577,8 @@ function printHostSourceFileCache(label, cache) {
   console.log(
     `${label}: hits=${cache.hits ?? 0}, misses=${cache.misses ?? 0}, writes=${cache.writes ?? 0}, bypasses=${cache.bypasses ?? 0}, ` +
     `traffic(hitText=${formatCharacterCount(cache.hitSourceTextCharacters ?? 0)}, writeText=${formatCharacterCount(cache.writeSourceTextCharacters ?? 0)}), ` +
+    `evictions(revision=${cache.supersededRevisionEvictions ?? 0}/${formatCharacterCount(cache.supersededRevisionEvictedSourceTextCharacters ?? 0)}, ` +
+    `capacity=${cache.capacityEvictions ?? 0}/${formatCharacterCount(cache.capacityEvictedSourceTextCharacters ?? 0)}), ` +
     `cacheable(node_modules=${cache.cacheableNodeModuleReads ?? 0}, externalDecls=${cache.cacheableExternalDeclarationReads ?? 0}), ` +
     `bypass(fresh=${cache.bypassFreshSourceFileReads ?? 0}, project=${cache.bypassProjectSourceReads ?? 0}, external=${cache.bypassExternalSourceReads ?? 0}), ` +
     `clears=${cache.clearOperations ?? 0}/${cache.clearedEntries ?? 0}/${formatCharacterCount(cache.clearedSourceTextCharacters ?? 0)}, ` +
@@ -2570,9 +2592,12 @@ function printTypeSystemDependencyCache(label, cache) {
     return;
   }
   console.log(
-    `${label}: entries=${cache.entries ?? 0}, sourceText=${formatCharacterCount(cache.sourceTextCharacters ?? 0)}, ` +
+    `${label}: entries=${cache.entries ?? 0}/${cache.entryLimit ?? 0}, ` +
+    `sourceText=${formatCharacterCount(cache.sourceTextCharacters ?? 0)}/${formatCharacterCount(cache.sourceTextCharacterLimit ?? 0)}, ` +
     `traffic(hits=${cache.hits ?? 0}/${formatCharacterCount(cache.hitSourceTextCharacters ?? 0)}, ` +
     `writes=${cache.writes ?? 0}/${formatCharacterCount(cache.writeSourceTextCharacters ?? 0)}), ` +
+    `evictions(revision=${cache.supersededRevisionEvictions ?? 0}/${formatCharacterCount(cache.supersededRevisionEvictedSourceTextCharacters ?? 0)}, ` +
+    `capacity=${cache.capacityEvictions ?? 0}/${formatCharacterCount(cache.capacityEvictedSourceTextCharacters ?? 0)}), ` +
     `nodeModules=${cache.nodeModuleEntries ?? 0}/${formatCharacterCount(cache.nodeModuleSourceTextCharacters ?? 0)}, ` +
     `declarations=${cache.declarationEntries ?? 0}/${formatCharacterCount(cache.declarationSourceTextCharacters ?? 0)}, ` +
     `defaultLibs=${cache.defaultLibraryEntries ?? 0}/${formatCharacterCount(cache.defaultLibrarySourceTextCharacters ?? 0)}, ` +
@@ -2626,9 +2651,12 @@ function printTypeSystemDependencyCacheAggregate(label, cache) {
     return;
   }
   console.log(
-    `${label}: entries=${cache.maxEntries}, sourceText=${formatCharacterCount(cache.maxSourceTextCharacters)}, ` +
+    `${label}: entries=${cache.maxEntries}/${cache.entryLimit}, ` +
+    `sourceText=${formatCharacterCount(cache.maxSourceTextCharacters)}/${formatCharacterCount(cache.sourceTextCharacterLimit)}, ` +
     `traffic(hits=${cache.maxHits}/${formatCharacterCount(cache.maxHitSourceTextCharacters)}, ` +
     `writes=${cache.maxWrites}/${formatCharacterCount(cache.maxWriteSourceTextCharacters)}), ` +
+    `evictions(revision=${cache.maxSupersededRevisionEvictions}/${formatCharacterCount(cache.maxSupersededRevisionEvictedSourceTextCharacters)}, ` +
+    `capacity=${cache.maxCapacityEvictions}/${formatCharacterCount(cache.maxCapacityEvictedSourceTextCharacters)}), ` +
     `nodeModules=${cache.maxNodeModuleEntries}/${formatCharacterCount(cache.maxNodeModuleSourceTextCharacters)}, ` +
     `declarations=${cache.maxDeclarationEntries}/${formatCharacterCount(cache.maxDeclarationSourceTextCharacters)}, ` +
     `defaultLibs=${cache.maxDefaultLibraryEntries}/${formatCharacterCount(cache.maxDefaultLibrarySourceTextCharacters)}, ` +

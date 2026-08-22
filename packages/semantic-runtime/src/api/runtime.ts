@@ -173,8 +173,10 @@ import {
 } from './app-query-policy.js';
 import {
   QueryClaimGraph,
+  type QueryClaimAnswerDisposalCollector,
   type QueryClaimAnswerDisposalSummary,
   type QueryClaimAnswerLease,
+  type QueryClaimProvisionalAnswerHandle,
 } from '../inquiry/query-claim-graph.js';
 import {
   InquiryContinuationKind,
@@ -2338,17 +2340,35 @@ export class SemanticRuntime {
         : sourceFilePath == null
           ? this.selectDefaultProject(validationScope)
           : this.captureProject(this.selectProjectForSourceFile(sourceFilePath), validationScope);
-      for (const requestedSourcePath of new Set([
-        ...(sourceFilePath == null ? [] : [sourceFilePath]),
-        ...requestedAuthoringSourceFiles,
-        ...sourceFilePaths,
-      ])) {
-        this.assertSourcePathCompatibleWithProject(project, requestedSourcePath);
+      const sourcePathReadScope = project.inputGeneration.createReadScope(
+        `semantic-app-open-source-path:${this.nextAnalysisReadScopeOrdinal++}`,
+      );
+      let projectSourceFilePath: string | null;
+      let projectAuthoringSourceFiles: readonly string[];
+      try {
+        ({ projectSourceFilePath, projectAuthoringSourceFiles } = project.inputGeneration.withReadScope(
+          sourcePathReadScope,
+          () => {
+            for (const requestedSourcePath of new Set([
+              ...(sourceFilePath == null ? [] : [sourceFilePath]),
+              ...requestedAuthoringSourceFiles,
+              ...sourceFilePaths,
+            ])) {
+              this.assertSourcePathCompatibleWithProject(project, requestedSourcePath);
+            }
+            return {
+              projectSourceFilePath: sourceFilePath == null
+                ? null
+                : canonicalProjectSourceFilePath(project, sourceFilePath),
+              projectAuthoringSourceFiles: canonicalProjectSourceFilePaths(project, requestedAuthoringSourceFiles),
+            };
+          },
+        ));
+      } finally {
+        // Public path fallback is host-dependent even when a candidate is absent. Preserve every positive and negative
+        // probe in the answer plan so retained claims and managed egress prove the exact interpretation they expose.
+        this.observePlanningReads(sourcePathReadScope.readRegisteredInputs());
       }
-      const projectSourceFilePath = sourceFilePath == null
-        ? null
-        : canonicalProjectSourceFilePath(project, sourceFilePath);
-      const projectAuthoringSourceFiles = canonicalProjectSourceFilePaths(project, requestedAuthoringSourceFiles);
       const authoringTemplateSourceFiles = includeAuthoringTemplates
         ? authoringTemplateSourceFilesForOpen(projectSourceFilePath, projectAuthoringSourceFiles)
         : [];
@@ -2481,8 +2501,12 @@ export class SemanticRuntime {
     if (existing != null) {
       return existing;
     }
-    if (this.appsByCacheKey.size > 0) {
-      this.disposeCachedAppAnswerState(QueryClaimDisposalReason.AppEpochDisposed, transactionToken);
+    if (this.hasCachedAppForProject(project.projectKey)) {
+      this.disposeCachedProjectAppAnswerState(
+        project.projectKey,
+        QueryClaimDisposalReason.AppEpochDisposed,
+        transactionToken,
+      );
     }
     const result = this.appAnalysisComputations.prepare(project, {
         analysisDepth,
@@ -2599,25 +2623,29 @@ export class SemanticRuntime {
     }
     let queryClaimRecords = 0;
     for (const app of staleApps) {
-      queryClaimRecords += app.disposeQueryClaims(reason);
+      queryClaimRecords += app.disposeAnswerState(reason).queryClaimRecords;
       app.retireGeneration();
+      app.disposeAnswerState(reason);
     }
     return queryClaimRecords;
   }
 
-  /** Reclaim answer-local publications while preserving the incumbent semantic generation during replacement. */
-  private disposeCachedAppAnswerState(
+  /** Reclaim one project's answer-local publications while preserving every incumbent semantic generation. */
+  private disposeCachedProjectAppAnswerState(
+    projectKey: string,
     reason: QueryClaimDisposalReason,
     transactionToken?: object,
   ): { readonly queryClaimRecords: number; readonly kernel: KernelStoreDisposalSummary } {
-    const apps = [...new Set(this.appsByCacheKey.values())];
-    const queryClaimRecords = apps.reduce(
-      (total, app) => total + app.disposeQueryClaims(reason, transactionToken),
-      0,
-    );
-    const kernel = apps.length === 0
-      ? emptyKernelStoreDisposalSummary()
-      : this.workspace.store.disposeUnownedSince(earliestKernelMarker(apps.map((app) => app.kernelMarker)));
+    const apps = [...new Set(
+      [...this.appsByCacheKey.values()].filter((app) => app.project.projectKey === projectKey),
+    )];
+    let queryClaimRecords = 0;
+    let kernel = emptyKernelStoreDisposalSummary();
+    for (const app of apps) {
+      const disposed = app.disposeAnswerState(reason, transactionToken);
+      queryClaimRecords += disposed.queryClaimRecords;
+      kernel = sumKernelStoreDisposalSummaries(kernel, disposed.kernel);
+    }
     return { queryClaimRecords, kernel };
   }
 
@@ -2646,13 +2674,16 @@ export class SemanticRuntime {
     }
     const kernelBefore = this.workspace.store.readTelemetrySnapshot({ includeBreakdowns: false });
     const earliestMarker = earliestKernelMarker(apps.map((app) => app.kernelMarker));
-    const queryClaimRecords = apps.reduce(
-      (total, app) => total + app.disposeQueryClaims(reason, transactionToken),
-      0,
-    );
+    let queryClaimRecords = 0;
+    for (const app of apps) {
+      queryClaimRecords += app.disposeAnswerState(reason, transactionToken).queryClaimRecords;
+    }
     this.workspace.store.disposeUnownedSince(earliestMarker);
     for (const app of apps) {
       app.retireGeneration();
+    }
+    for (const app of apps) {
+      app.disposeAnswerState(reason, transactionToken);
     }
     const typeSystemProjects = [...new Set(apps.map((app) => app.project.projectKey))]
       .reduce((count, projectKey) => count + Number(this.typeSystemProjects.retire(projectKey)), 0);
@@ -2805,12 +2836,17 @@ export class SemanticRuntime {
     project: ProjectBootFrame,
     sourceFilePath: string,
   ): void {
+    // Boot admission is the semantic owner. Host fallbacks only establish ownership for a path absent from that index;
+    // probing them for an admitted alias would make its answer depend on unrelated files that cannot change its identity.
+    if (project.sourceOwnership.resolvePath(sourceFilePath).kind !== 'absent') {
+      return;
+    }
     const readable = readableUnownedProjectSourceIdentities(
       project,
       sourceFilePath,
       project.inputGeneration.host,
     );
-    if (projectClaimsSourcePath(project, sourceFilePath, readable)) {
+    if (readable.some((source) => project.authoredSources.contains(source.hostPath))) {
       return;
     }
     const foreignOwners = this.workspace.projects.flatMap((candidate) => {
@@ -3715,14 +3751,59 @@ function semanticRuntimeAppWorldFreeProfileSummary(
   };
 }
 
+type SemanticAppKernelAnswerFrameState = 'staged' | 'published' | 'settled' | 'rolled-back';
+
+/** Provisional exact kernel ownership enlisted beside query claims in the same answer transaction. */
+class SemanticAppKernelAnswerFrame implements QueryClaimProvisionalAnswerHandle {
+  readonly commitGroup = this;
+  readonly owner = {};
+  private state: SemanticAppKernelAnswerFrameState = 'staged';
+
+  constructor(
+    private readonly store: KernelStore,
+    private readonly appOwner: object,
+  ) {}
+
+  publish(): void {
+    if (this.state === 'staged') {
+      this.state = 'published';
+    }
+  }
+
+  rollback(deferDisposal?: QueryClaimAnswerDisposalCollector): void {
+    if (this.state === 'rolled-back' || this.state === 'settled') {
+      return;
+    }
+    this.state = 'rolled-back';
+    const dispose = (): void => {
+      this.store.disposeAnswerLocalOwner(this.owner);
+    };
+    if (deferDisposal == null) {
+      dispose();
+    } else {
+      deferDisposal(dispose);
+    }
+  }
+
+  settleCommit(): void {
+    if (this.state !== 'published') {
+      return;
+    }
+    this.store.transferAnswerLocalOwner(this.owner, this.appOwner);
+    this.state = 'settled';
+  }
+}
+
 /** Open app facade. It owns one project-level semantic app-world emission and compact query entrypoints. */
 export class SemanticApp {
+  private readonly answerLocalKernelOwner = {};
   private readonly routeQueries: SemanticAppRouteQueries;
   private readonly defaultQueryClaims: QueryClaimGraph;
   private readonly queryClaimsByProfile = new Map<SemanticRuntimeInquiryProfile, QueryClaimGraph>();
   private readonly activeInquiryProfileStack: SemanticRuntimeInquiryProfile[] = [];
   private readonly activePagePolicyStack: (SemanticRuntimePagePolicy | null)[] = [];
   private readonly activeAnswerTransactionStack: SemanticAnswerTransaction[] = [];
+  private nextSourcePathReadScopeOrdinal = 1;
   private applicationFileRolesByPathCache: ReadonlyMap<string, readonly ApplicationFileRole[]> | null = null;
   private staticEvaluationOriginsByPathCache: ReadonlyMap<string, SemanticOpenSeamSiteRow['staticEvaluationOrigins']> | null = null;
   private readonly currentTemplateQueries: SemanticAppTemplateQueries;
@@ -3927,10 +4008,21 @@ export class SemanticApp {
   ): SemanticRuntimeAnswer<unknown> {
     // An already-open app consumes the workspace-domain source spellings it returns. Unknown project-relative aliases
     // remain available only as a fallback; the runtime facade is the ambiguity-preserving entry for unbound aliases.
-    const canonicalQuery = canonicalizeOpenAppQueryForProject(this.project, query);
+    const sourcePathReadScope = this.project.inputGeneration.createReadScope(
+      `semantic-open-app-query-source-path:${this.nextSourcePathReadScopeOrdinal++}`,
+    );
+    const canonicalQuery = this.project.inputGeneration.withReadScope(
+      sourcePathReadScope,
+      () => canonicalizeOpenAppQueryForProject(this.project, query),
+    );
     return projectSemanticAppQueryContinuations(
       canonicalQuery,
-      this.answerRoutedQuery(canonicalQuery, pagePolicy),
+      this.answerRoutedQueryWithSourcePathReads(
+        canonicalQuery,
+        pagePolicy,
+        this.activeAnswerTransactionStack[this.activeAnswerTransactionStack.length - 1] ?? null,
+        sourcePathReadScope.readRegisteredInputs(),
+      ),
     );
   }
 
@@ -3944,6 +4036,15 @@ export class SemanticApp {
     transaction: SemanticAnswerTransaction | null =
       this.activeAnswerTransactionStack[this.activeAnswerTransactionStack.length - 1] ?? null,
   ): SemanticRuntimeAnswer<unknown> {
+    return this.answerRoutedQueryWithSourcePathReads(query, pagePolicy, transaction, []);
+  }
+
+  private answerRoutedQueryWithSourcePathReads(
+    query: SemanticAppQuery,
+    pagePolicy: SemanticRuntimePagePolicy | null,
+    transaction: SemanticAnswerTransaction | null,
+    sourcePathReads: readonly SemanticRuntimeProjectInputRead[],
+  ): SemanticRuntimeAnswer<unknown> {
     this.appGeneration.readCommittedEmission();
     this.project.inputGeneration.requireCurrent();
     const unsupportedFilterAnswer = answerUnsupportedSemanticAppQuerySelectors(query);
@@ -3955,6 +4056,7 @@ export class SemanticApp {
         () => unsupportedFilterAnswer,
         pagePolicy,
         transaction,
+        sourcePathReads,
       );
     }
     query = semanticAppQueryCatalogShape(query);
@@ -3984,6 +4086,7 @@ export class SemanticApp {
       ),
       pagePolicy,
       transaction,
+      sourcePathReads,
     );
     if (semanticRouteQueryDescriptorFor(query.kind) != null) {
       return answerCurrentQuery(() => {
@@ -4261,6 +4364,7 @@ export class SemanticApp {
     materialize: () => SemanticRuntimeAnswer<TValue>,
     pagePolicy: SemanticRuntimePagePolicy | null = null,
     enclosingTransaction: SemanticAnswerTransaction | null = null,
+    sourcePathReads: readonly SemanticRuntimeProjectInputRead[] = [],
   ): SemanticRuntimeAnswer<TValue> {
     const transaction = enclosingTransaction ?? new SemanticAnswerTransaction();
     const ownsTransaction = enclosingTransaction == null;
@@ -4270,6 +4374,12 @@ export class SemanticApp {
     const queryClaims = this.queryClaimsForProfile(inquiryProfile);
     const retainNavigableHandles = query.detail === SemanticRuntimeDetail.Handles;
     const receiptBuilder = this.runtime.createAnalysisReceiptBuilder(transaction);
+    receiptBuilder.observeProjectInputReads(sourcePathReads);
+    const answerTransaction = transaction.boundaryFor(receiptBuilder);
+    const kernelAnswerFrame = new SemanticAppKernelAnswerFrame(
+      this.runtime.workspace.store,
+      this.answerLocalKernelOwner,
+    );
     let observedReceipt: SemanticRuntimeAnalysisReceipt | null = null;
     const additionalReads = (): readonly SemanticRuntimeProjectInputRead[] => [
       ...this.project.readRegisteredInputs().filter(
@@ -4279,7 +4389,10 @@ export class SemanticApp {
       ...this.committedEmission.typeSystem.readRegisteredInputs(),
     ];
     try {
-      const claimed = queryClaims.answer({
+      answerTransaction.enlistProvisionalAnswer(kernelAnswerFrame);
+      const claimed = this.runtime.workspace.store.withAnswerLocalOwner(
+        kernelAnswerFrame.owner,
+        () => queryClaims.answer({
         queryKind: query.kind,
         queryKey,
         responsePolicyKey: semanticRuntimePagePolicyReuseKey(
@@ -4313,7 +4426,7 @@ export class SemanticApp {
         },
       ), {
         requiredAnswerLeaseKind: SEMANTIC_RUNTIME_ANALYSIS_RECEIPT_KIND,
-        answerTransaction: transaction.boundaryFor(receiptBuilder),
+        answerTransaction,
         composeRetainedAnswerLease: (lease) =>
           this.runtime.composeRetainedAnalysisReceipt(receiptBuilder, lease),
         sealAnswerLease: () => this.runtime.sealAnalysisReceipt(
@@ -4330,8 +4443,9 @@ export class SemanticApp {
         // survive with the app epoch instead of becoming dead handles before the caller receives the answer.
         disposeKernelSince: retainNavigableHandles
           ? undefined
-          : (marker) => this.runtime.workspace.store.disposeSince(marker),
-      });
+          : () => this.runtime.workspace.store.disposeAnswerLocalOwner(kernelAnswerFrame.owner),
+        }),
+      );
       if (observedReceipt == null) {
         throw new Error(`Semantic app query '${query.kind}' returned without an exact analysis receipt.`);
       }
@@ -4430,6 +4544,16 @@ export class SemanticApp {
       disposed += graph.dispose(policy, transactionToken);
     }
     return disposed;
+  }
+
+  /** Dispose this app's retained claims and exact direct kernel publications as one answer-state lifetime. */
+  disposeAnswerState(
+    reason: QueryClaimDisposalReason,
+    transactionToken?: object,
+  ): { readonly queryClaimRecords: number; readonly kernel: KernelStoreDisposalSummary } {
+    const queryClaimRecords = this.disposeQueryClaims(reason, transactionToken);
+    const kernel = this.runtime.workspace.store.disposeAnswerLocalOwner(this.answerLocalKernelOwner);
+    return { queryClaimRecords, kernel };
   }
 
   disposeQueryClaimsByPolicy(
@@ -6295,6 +6419,18 @@ function emptyKernelStoreDisposalSummary(): KernelStoreDisposalSummary {
   };
 }
 
+function sumKernelStoreDisposalSummaries(
+  left: KernelStoreDisposalSummary,
+  right: KernelStoreDisposalSummary,
+): KernelStoreDisposalSummary {
+  return {
+    records: left.records + right.records,
+    productDetails: left.productDetails + right.productDetails,
+    hotDetails: left.hotDetails + right.hotDetails,
+    handleCharacters: left.handleCharacters + right.handleCharacters,
+  };
+}
+
 function kernelDisposalBetween(
   before: SemanticRuntimeKernelCountSnapshot,
   after: SemanticRuntimeKernelCountSnapshot,
@@ -6355,6 +6491,8 @@ function typeSystemDependencyCacheSummary(
   const clearSuggestion = typeSystemDependencyCacheClearSuggestion(cache);
   return {
     entries: cache.entries,
+    entryLimit: cache.entryLimit,
+    sourceTextCharacterLimit: cache.sourceTextCharacterLimit,
     distinctCanonicalPaths: cache.distinctCanonicalPaths,
     duplicateCanonicalPathEntries: cache.duplicateCanonicalPathEntries,
     sourceTextCharacters: cache.sourceTextCharacters,
@@ -6373,6 +6511,10 @@ function typeSystemDependencyCacheSummary(
     misses: cache.misses,
     writes: cache.writes,
     writeSourceTextCharacters: cache.writeSourceTextCharacters,
+    supersededRevisionEvictions: cache.supersededRevisionEvictions,
+    supersededRevisionEvictedSourceTextCharacters: cache.supersededRevisionEvictedSourceTextCharacters,
+    capacityEvictions: cache.capacityEvictions,
+    capacityEvictedSourceTextCharacters: cache.capacityEvictedSourceTextCharacters,
     bypasses: cache.bypasses,
     cacheableNodeModuleReads: cache.cacheableNodeModuleReads,
     cacheableExternalDeclarationReads: cache.cacheableExternalDeclarationReads,
@@ -6402,9 +6544,11 @@ function typeSystemDependencyCacheSummary(
     clearAction: 'clear-analysis-cache-type-system-dependency-cache-clear-policy',
     summary:
       `TypeSystemProject dependency source-file cache retains ${cache.entries} process-local source file(s) ` +
-      `across ${cache.distinctCanonicalPaths} canonical path(s) with ${cache.sourceTextCharacters} source-text character(s); ` +
+      `across ${cache.distinctCanonicalPaths} canonical path(s) with ${cache.sourceTextCharacters} source-text character(s) ` +
+      `(limits: ${cache.entryLimit} entries, ${cache.sourceTextCharacterLimit} source-text characters); ` +
       `lifetime counters are ${cache.hits} hit(s), ${cache.misses} miss(es), ${cache.writes} write(s), ` +
       `${cache.hitSourceTextCharacters} hit source-text character(s), ${cache.writeSourceTextCharacters} write source-text character(s), ` +
+      `${cache.supersededRevisionEvictions} superseded-revision eviction(s), ${cache.capacityEvictions} capacity eviction(s), ` +
       `${cache.bypasses} bypass(es), ${cache.clearOperations} clear operation(s), ` +
       `${cache.clearedEntries} cleared source file(s), and ${cache.duplicateCanonicalPathEntries} duplicate parse-option entry(s). ` +
       `Suggested clear policy is '${clearSuggestion.policy}' from bucket '${clearSuggestion.bucket}'.`,

@@ -328,6 +328,157 @@ describe("computation lifecycle", () => {
     expect(Object.isFrozen(closure)).toBe(true);
   });
 
+  test("keeps durable records and details borrowed by an answer-local owner", () => {
+    const store = new KernelStore("answer-local-durable-borrow");
+    const answerOwner = {};
+    const sourceHandle = store.handles.address("answer-local-durable-borrow:source");
+    const provenanceHandle = store.handles.provenance("answer-local-durable-borrow:provenance");
+    const productHandle = store.handles.product("answer-local-durable-borrow:product");
+    const hotHandle = store.handles.hotDetail("answer-local-durable-borrow:hot");
+    const source = new SourceFileAddress(sourceHandle, "test", "src/durable.html", SourceLanguage.Html);
+    const provenance = new ProvenanceRecord(provenanceHandle);
+    const product = new MaterializedProduct(
+      productHandle,
+      KernelVocabulary.Template.Source.key,
+      sourceHandle,
+      null,
+      provenanceHandle,
+    );
+    const productSlot = defineTestProductDetailSlot<{ readonly owner: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.answer-local-durable-product",
+      "Durable product detail borrowed during an answer.",
+    );
+    const hotSlot = defineTestHotDetailSlot<{ readonly owner: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.answer-local-durable-hot",
+      "Durable hot detail borrowed during an answer.",
+    );
+    const productDetail = { owner: "durable" };
+    const hotDetail = { owner: "durable" };
+    const records = new KernelStoreBatch([source, provenance, product], "answer-local durable records");
+    store.commit(records);
+    store.productDetails.add(productSlot, productHandle, productDetail);
+    store.hotDetails.add(hotSlot, productHandle, hotHandle, hotDetail);
+
+    store.withAnswerLocalOwner(answerOwner, () => {
+      store.commitMissing(records);
+      expect(store.productDetails.addIfAbsent(
+        productSlot,
+        productHandle,
+        { owner: "answer candidate" },
+      ).detail).toBe(productDetail);
+      expect(store.hotDetails.addIfAbsent(
+        hotSlot,
+        productHandle,
+        hotHandle,
+        { owner: "answer candidate" },
+      ).detail).toBe(hotDetail);
+      store.publish(new KernelPublicationPlan(
+        new KernelStoreBatch([], "answer-local borrowed detail publication"),
+        [publishProductDetail(
+          productSlot,
+          productHandle,
+          { owner: "publication candidate" },
+          KernelDetailAdmission.IfAbsent,
+        )],
+        [publishHotDetail(
+          hotSlot,
+          productHandle,
+          hotHandle,
+          { owner: "publication candidate" },
+          KernelDetailAdmission.IfAbsent,
+        )],
+      ));
+    });
+
+    expect(store.disposeAnswerLocalOwner(answerOwner)).toEqual({
+      records: 0,
+      productDetails: 0,
+      hotDetails: 0,
+      handleCharacters: 0,
+    });
+    expect(store.read(sourceHandle)).toBe(source);
+    expect(store.read(provenanceHandle)).toBe(provenance);
+    expect(store.read(productHandle)).toBe(product);
+    expect(store.productDetails.read(productSlot, productHandle)).toBe(productDetail);
+    expect(store.hotDetails.read(hotSlot, hotHandle)).toBe(hotDetail);
+  });
+
+  test("revisits ownerless answer-local rows after their active borrower retires", () => {
+    const store = new KernelStore("answer-local-active-borrow");
+    const answerOwner = {};
+    const activeOwner = {};
+    const preflight = {
+      validate(): void {},
+      validateCurrent(): void {},
+      finalAuthority: emptyGenerationCurrentnessWitness,
+    };
+    const answerHandle = store.handles.address("answer-local-active-borrow:answer");
+    const answerRecord = new SourceFileAddress(
+      answerHandle,
+      "test",
+      "src/answer-local.html",
+      SourceLanguage.Html,
+    );
+    const answerSidecar = new Map([[answerHandle, answerRecord]]);
+    store.registerSidecarIndex({
+      key: "test-answer-local-exact-disposal",
+      summary: "Test sidecar mirroring answer-local record handles.",
+      readEntryCount: () => answerSidecar.size,
+      hasProductDetail: () => false,
+      dispose: (context) => {
+        if (context.kind === "exact-handles") {
+          for (const handle of context.exactHandles.recordHandles) {
+            answerSidecar.delete(handle as AddressHandle);
+          }
+        }
+      },
+    });
+    store.withAnswerLocalOwner(answerOwner, () => {
+      store.commit(new KernelStoreBatch([answerRecord], "answer-local dependency"));
+    });
+    const provenanceHandle = store.handles.provenance("answer-local-active-borrow:provenance");
+    const productHandle = store.handles.product("answer-local-active-borrow:product");
+    const slot = defineTestProductDetailSlot<{ readonly source: AddressHandle }>(
+      KernelVocabulary.Template.Source.key,
+      "test.answer-local-active-borrow",
+      "Active publication borrowing one answer-local record.",
+      (detail) => mergeKernelDetailReferences(kernelRecordReferences(detail.source)),
+    );
+    const active = store.replaceOwnedPublication(
+      KernelPublicationManifest.empty,
+      new KernelPublicationPlan(
+        new KernelStoreBatch([
+          new ProvenanceRecord(provenanceHandle),
+          new MaterializedProduct(
+            productHandle,
+            KernelVocabulary.Template.Source.key,
+            null,
+            null,
+            provenanceHandle,
+          ),
+        ], "active answer-local borrower"),
+        [publishProductDetail(slot, productHandle, { source: answerHandle })],
+      ),
+      activeOwner,
+      preflight,
+    );
+
+    expect(store.disposeAnswerLocalOwner(answerOwner).records).toBe(0);
+    expect(store.read(answerHandle)).toBe(answerRecord);
+    store.replaceOwnedPublication(
+      active.manifest,
+      new KernelPublicationPlan(new KernelStoreBatch([], "retire active answer-local borrower")),
+      activeOwner,
+      preflight,
+    );
+
+    expect(store.disposeAnswerLocalOwner(answerOwner)).toEqual(expect.objectContaining({ records: 1 }));
+    expect(store.read(answerHandle)).toBeNull();
+    expect(answerSidecar.size).toBe(0);
+  });
+
   test("shares logical read validation only within one synchronous proof", () => {
     let revision = "1";
     let validationCount = 0;
@@ -7484,6 +7635,54 @@ describe("computation lifecycle", () => {
       state.publication,
       new KernelPublicationPlan(new KernelStoreBatch([], "empty-publication-retirement:stale")),
     )).toThrow(/stale or foreign publication manifest/);
+  });
+
+  test("rejects a prepared run as superseded after its ephemeral locus is forgotten", () => {
+    const store = new KernelStore("computation-forgotten-locus-prepared-run");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const initial = lifecycle.begin(locus("forgotten-locus-prepared-run"));
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+    const authority = lifecycle.admitCommittedGeneration(
+      initial.computationId,
+      initial.runSequence,
+      "forgotten-locus-owner",
+    );
+    const prepared = lifecycle.begin(locus("forgotten-locus-prepared-run"));
+
+    expect(lifecycle.retireCommittedGenerationAndForgetLocus(
+      authority.computationId,
+      authority.runSequence,
+    )).toBe(true);
+    expect(lifecycle.readEntryCount()).toBe(0);
+    expect(prepared.candidateCurrentnessWitness.isCurrent()).toBe(false);
+    expect(prepared.commit().state).toBe(ComputationCommitState.RejectedSuperseded);
+    expect(lifecycle.readEntryCount()).toBe(0);
+  });
+
+  test("refuses to forget an ephemeral locus through a superseded generation authority", () => {
+    const store = new KernelStore("computation-forgotten-locus-current-replacement");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const initial = lifecycle.begin(locus("forgotten-locus-current-replacement"));
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+    const initialAuthority = lifecycle.admitCommittedGeneration(
+      initial.computationId,
+      initial.runSequence,
+      "forgotten-locus-owner",
+    );
+    const replacement = lifecycle.begin(locus("forgotten-locus-current-replacement"));
+    expect(replacement.commit().state).toBe(ComputationCommitState.Committed);
+    const replacementAuthority = lifecycle.admitCommittedGeneration(
+      replacement.computationId,
+      replacement.runSequence,
+      "forgotten-locus-owner",
+    );
+
+    expect(lifecycle.retireCommittedGenerationAndForgetLocus(
+      initialAuthority.computationId,
+      initialAuthority.runSequence,
+    )).toBe(false);
+    expect(replacementAuthority.isCurrent()).toBe(true);
+    expect(lifecycle.readEntryCount()).toBe(1);
   });
 
   test("retires a store-owned empty publication manifest at its lifetime boundary", () => {

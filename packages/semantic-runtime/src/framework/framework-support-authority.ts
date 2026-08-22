@@ -41,8 +41,10 @@ import {
 } from '../template/runtime-renderer-catalog-materializer.js';
 import {
   TypeSystemProgramSourceAuthority,
-  type TypeSystemProgramSourceCatalog,
+  type TypeSystemProgramSourceCompaction,
+  type TypeSystemProgramSourceGenerationCatalog,
   type TypeSystemProgramSourcePublication,
+  type TypeSystemProgramSourceRetentionCatalog,
 } from '../type-system/program-source-authority.js';
 
 /** Stable framework catalogs borrowed by app and authoring computations. */
@@ -53,7 +55,7 @@ export interface FrameworkSupportCatalogs {
 }
 
 /** Workspace-lived analyzer support consumed while constructing complete app generations. */
-export interface SemanticRuntimeSupport extends FrameworkSupportCatalogs, TypeSystemProgramSourceCatalog {}
+export interface SemanticRuntimeSupport extends FrameworkSupportCatalogs, TypeSystemProgramSourceRetentionCatalog {}
 
 class FrameworkSupportCatalogEntry<TEmission> {
   constructor(
@@ -92,6 +94,18 @@ export class FrameworkSupportAuthority implements SemanticRuntimeSupport {
     role: SourceFileRole,
   ): TypeSystemProgramSourcePublication {
     return this.programSources.sourceFile(publication, projectKey, fileName, role);
+  }
+
+  forProjectGeneration(projectKey: string, borrowerKey: string): TypeSystemProgramSourceGenerationCatalog {
+    return this.programSources.forProjectGeneration(projectKey, borrowerKey);
+  }
+
+  compactForActiveGenerations(activeBorrowerKeys: readonly string[]): TypeSystemProgramSourceCompaction {
+    return this.programSources.compactForActiveGenerations(activeBorrowerKeys);
+  }
+
+  readProgramSourceEntryCount(): number {
+    return this.programSources.readProgramSourceEntryCount();
   }
 
   /** Publish the fixed support corpus before any app-generation or answer-local lifetime begins. */

@@ -173,6 +173,7 @@ export class AureliaAppWorldProjectComputationAttempt {
   constructor(
     private readonly run: ComputationRun,
     private readonly authority: AureliaAppWorldProjectAuthority,
+    private readonly afterCommitted: () => void,
     readonly locus: AureliaAppAnalysisLocus,
     readonly candidateEmission: AureliaAppWorldProjectEmission,
   ) {}
@@ -194,6 +195,11 @@ export class AureliaAppWorldProjectComputationAttempt {
           this.candidateEmission,
         )
       : null;
+    if (committedGeneration != null) {
+      // Program replacement precedes the atomic app replacement. Compact only after the latter has withdrawn or
+      // refreshed every declaration record that could still structurally reference an old checker-source identity.
+      this.afterCommitted();
+    }
     return new AureliaAppWorldProjectComputationResult(
       this.locus,
       this.candidateEmission,
@@ -316,6 +322,7 @@ export class AureliaAppWorldProjectComputationService implements KernelStoreSide
       return new AureliaAppWorldProjectComputationAttempt(
         run,
         authority,
+        () => this.typeSystemProjects.compactProgramSources(),
         locus,
         candidate,
       );

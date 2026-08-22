@@ -158,6 +158,12 @@ interface KernelPublicationDependencyResolutionContext {
   readonly label: string;
 }
 
+interface KernelAnswerLocalOwnership<THandle extends string> {
+  readonly ownersByHandle: Map<THandle, Set<object>>;
+  readonly handlesByOwner: Map<object, Set<THandle>>;
+  readonly everOwnedHandles: Set<THandle>;
+}
+
 /** Boundary for reclaiming entries born inside a later answer or app epoch. */
 export interface KernelStoreLifetimeMarker {
   readonly nextLifetimeOrdinal: number;
@@ -217,10 +223,25 @@ export interface KernelTelemetryReadView {
   readDensitySince(marker: KernelStoreObservationMarker): KernelStoreDensityDelta;
 }
 
-export interface KernelStoreDisposalContext {
-  readonly marker: KernelStoreLifetimeMarker;
-  readonly summary: KernelStoreDisposalSummary;
+export interface KernelStoreExactDisposalHandles {
+  readonly recordHandles: readonly KernelRecordHandle[];
+  readonly productDetailHandles: readonly ProductHandle[];
+  readonly hotDetailHandles: readonly HotDetailHandle[];
 }
+
+export type KernelStoreDisposalContext =
+  | {
+      readonly kind: 'chronological';
+      readonly marker: KernelStoreLifetimeMarker;
+      readonly exactHandles: null;
+      readonly summary: KernelStoreDisposalSummary;
+    }
+  | {
+      readonly kind: 'exact-handles';
+      readonly marker: null;
+      readonly exactHandles: KernelStoreExactDisposalHandles;
+      readonly summary: KernelStoreDisposalSummary;
+    };
 
 export interface KernelStoreSidecarIndex {
   readonly key: string;
@@ -432,6 +453,10 @@ export class KernelStore {
   private readonly immediatePublicationOwner = {};
   private readonly replaceableStorePublicationOwner = {};
   private readonly activePublicationOwners = new Map<KernelPublicationManifest, object>();
+  private readonly activeAnswerLocalOwnerStack: object[] = [];
+  private readonly answerLocalRecordOwnership = createKernelAnswerLocalOwnership<KernelRecordHandle>();
+  private readonly answerLocalProductDetailOwnership = createKernelAnswerLocalOwnership<ProductHandle>();
+  private readonly answerLocalHotDetailOwnership = createKernelAnswerLocalOwnership<HotDetailHandle>();
   private computationLifecycle: KernelStoreComputationLifecycle | null = null;
   private handleCharacterCount = 0;
   private nextLifetimeOrdinal = 0;
@@ -452,12 +477,18 @@ export class KernelStore {
       allocateLifetimeOrdinal,
       allocateMutationOrdinal,
       () => this.assertDetailMutationAllowed(),
+      (handle) => this.observeActiveBornAnswerLocalHandle(this.answerLocalProductDetailOwnership, handle),
+      (handle) => this.observeActiveBorrowedAnswerLocalHandle(this.answerLocalProductDetailOwnership, handle),
+      (handle) => forgetAnswerLocalHandle(this.answerLocalProductDetailOwnership, handle),
     );
     this.hotDetails = new HotDetailCatalog(
       (handle) => this.readProduct(handle),
       allocateLifetimeOrdinal,
       allocateMutationOrdinal,
       () => this.assertDetailMutationAllowed(),
+      (handle) => this.observeActiveBornAnswerLocalHandle(this.answerLocalHotDetailOwnership, handle),
+      (handle) => this.observeActiveBorrowedAnswerLocalHandle(this.answerLocalHotDetailOwnership, handle),
+      (handle) => forgetAnswerLocalHandle(this.answerLocalHotDetailOwnership, handle),
     );
   }
 
@@ -498,6 +529,7 @@ export class KernelStore {
     this.recordMutationOrdinalByHandle.set(record.handle, this.allocateMutationOrdinal());
     this.handleCharacterCount += record.handle.length;
     this.indexRecord(record);
+    this.observeActiveBornAnswerLocalHandle(this.answerLocalRecordOwnership, record.handle);
     return record;
   }
 
@@ -529,6 +561,11 @@ export class KernelStore {
   commitMissing(batch: KernelStoreBatch): void {
     this.assertStoreMutationAllowed('commit missing records');
     const missing = batch.records.filter((record) => !this.records.has(record.handle));
+    for (const record of batch.records) {
+      if (!missing.includes(record)) {
+        this.observeActiveBorrowedAnswerLocalHandle(this.answerLocalRecordOwnership, record.handle);
+      }
+    }
     if (missing.length === 0) {
       return;
     }
@@ -848,6 +885,11 @@ export class KernelStore {
       if (manifest !== KernelPublicationManifest.empty) {
         this.activePublicationOwners.set(manifest, owner);
       }
+      this.observeActiveAnswerLocalPublication(
+        recordsByHandle.keys(),
+        productDetailsByHandle.keys(),
+        hotDetailsByHandle.keys(),
+      );
       return new KernelPublicationReplacement(manifest, decisions);
     } finally {
       this.mutationPhase = KernelStoreMutationPhase.Idle;
@@ -2089,6 +2131,7 @@ export class KernelStore {
     this.recordMutationOrdinalByHandle.delete(handle);
     this.handleCharacterCount -= record.handle.length;
     this.removeRecordFromIndexes(record);
+    forgetAnswerLocalHandle(this.answerLocalRecordOwnership, handle);
   }
 
   markLifetime(): KernelStoreLifetimeMarker {
@@ -2097,6 +2140,174 @@ export class KernelStore {
 
   markObservation(): KernelStoreObservationMarker {
     return { nextMutationOrdinal: this.nextMutationOrdinal };
+  }
+
+  private observeActiveBornAnswerLocalHandle<THandle extends string>(
+    ownership: KernelAnswerLocalOwnership<THandle>,
+    handle: THandle,
+  ): void {
+    const owner = this.activeAnswerLocalOwnerStack[this.activeAnswerLocalOwnerStack.length - 1] ?? null;
+    if (owner != null) {
+      observeKernelAnswerLocalHandle(ownership, owner, handle);
+    }
+  }
+
+  private observeActiveBorrowedAnswerLocalHandle<THandle extends string>(
+    ownership: KernelAnswerLocalOwnership<THandle>,
+    handle: THandle,
+  ): void {
+    if (!ownership.everOwnedHandles.has(handle)) {
+      return;
+    }
+    this.observeActiveBornAnswerLocalHandle(ownership, handle);
+  }
+
+  private observeActiveAnswerLocalPublication(
+    recordHandles: Iterable<KernelRecordHandle>,
+    productDetailHandles: Iterable<ProductHandle>,
+    hotDetailHandles: Iterable<HotDetailHandle>,
+  ): void {
+    for (const handle of recordHandles) {
+      this.observeActiveBorrowedAnswerLocalHandle(this.answerLocalRecordOwnership, handle);
+    }
+    for (const handle of productDetailHandles) {
+      this.observeActiveBorrowedAnswerLocalHandle(this.answerLocalProductDetailOwnership, handle);
+    }
+    for (const handle of hotDetailHandles) {
+      this.observeActiveBorrowedAnswerLocalHandle(this.answerLocalHotDetailOwnership, handle);
+    }
+  }
+
+  /** Assign direct kernel publications during one synchronous answer to its exact app-local lifetime owner. */
+  withAnswerLocalOwner<TValue>(owner: object, answer: () => TValue): TValue {
+    this.activeAnswerLocalOwnerStack.push(owner);
+    let value: TValue;
+    try {
+      value = answer();
+    } catch (error) {
+      const activeOwner = this.activeAnswerLocalOwnerStack.pop();
+      if (activeOwner !== owner) {
+        throw new AggregateError(
+          [error, new Error('Kernel answer-local owners closed out of order.')],
+          'Kernel answer-local materialization failed while its owner stack was inconsistent.',
+        );
+      }
+      throw error;
+    }
+    const activeOwner = this.activeAnswerLocalOwnerStack.pop();
+    if (activeOwner !== owner) {
+      throw new Error('Kernel answer-local owners closed out of order.');
+    }
+    return value;
+  }
+
+  /** Commit one provisional answer frame into its longer-lived app answer-state owner. */
+  transferAnswerLocalOwner(from: object, to: object): void {
+    if (from === to) {
+      return;
+    }
+    transferKernelAnswerLocalOwner(this.answerLocalRecordOwnership, from, to);
+    transferKernelAnswerLocalOwner(this.answerLocalProductDetailOwnership, from, to);
+    transferKernelAnswerLocalOwner(this.answerLocalHotDetailOwnership, from, to);
+  }
+
+  /** Reclaim only orphaned direct publications associated with one answer-local app owner. */
+  disposeAnswerLocalOwner(owner: object): KernelStoreDisposalSummary {
+    this.assertStoreMutationAllowed('dispose an answer-local kernel owner');
+    const releasedRecords = releaseKernelAnswerLocalOwner(this.answerLocalRecordOwnership, owner);
+    const releasedProductDetails = releaseKernelAnswerLocalOwner(
+      this.answerLocalProductDetailOwnership,
+      owner,
+    );
+    const releasedHotDetails = releaseKernelAnswerLocalOwner(this.answerLocalHotDetailOwnership, owner);
+    const candidateRecordHandles = ownerlessKernelAnswerLocalHandles(this.answerLocalRecordOwnership);
+    const candidateProductDetailHandles = ownerlessKernelAnswerLocalHandles(
+      this.answerLocalProductDetailOwnership,
+    );
+    const candidateHotDetailHandles = ownerlessKernelAnswerLocalHandles(this.answerLocalHotDetailOwnership);
+    if (
+      !releasedRecords
+      && !releasedProductDetails
+      && !releasedHotDetails
+      && candidateRecordHandles.size === 0
+      && candidateProductDetailHandles.size === 0
+      && candidateHotDetailHandles.size === 0
+    ) {
+      return emptyKernelStoreDisposalSummary();
+    }
+    const retainedRecordHandles = new Set<KernelRecordHandle>();
+    const retainedProductDetailHandles = new Set<ProductHandle>();
+    const retainedHotDetailHandles = new Set<HotDetailHandle>();
+    this.retainActiveKernelClosure(
+      retainedRecordHandles,
+      retainedProductDetailHandles,
+      retainedHotDetailHandles,
+    );
+
+    for (const handle of this.recordOrder) {
+      if (!candidateRecordHandles.has(handle)) {
+        retainedRecordHandles.add(handle);
+      }
+    }
+    for (const entry of this.productDetails.readEntries()) {
+      if (!candidateProductDetailHandles.has(entry.productHandle)) {
+        retainedProductDetailHandles.add(entry.productHandle);
+      }
+    }
+    for (const entry of this.hotDetails.readEntries()) {
+      if (!candidateHotDetailHandles.has(entry.handle)) {
+        retainedHotDetailHandles.add(entry.handle);
+      }
+    }
+    this.expandRetainedKernelClosure(
+      retainedRecordHandles,
+      retainedProductDetailHandles,
+      retainedHotDetailHandles,
+    );
+
+    const removedProductDetailHandles: ProductHandle[] = [];
+    for (const handle of candidateProductDetailHandles) {
+      if (!retainedProductDetailHandles.has(handle) && this.productDetails.remove(handle) != null) {
+        removedProductDetailHandles.push(handle);
+      }
+    }
+    const removedHotDetailHandles: HotDetailHandle[] = [];
+    for (const handle of candidateHotDetailHandles) {
+      if (!retainedHotDetailHandles.has(handle) && this.hotDetails.remove(handle) != null) {
+        removedHotDetailHandles.push(handle);
+      }
+    }
+    const removedRecordHandles: KernelRecordHandle[] = [];
+    let handleCharacters = 0;
+    for (const handle of [...this.recordOrder].reverse()) {
+      if (!candidateRecordHandles.has(handle) || retainedRecordHandles.has(handle)) {
+        continue;
+      }
+      const record = this.records.get(handle) ?? null;
+      if (record == null) {
+        continue;
+      }
+      handleCharacters += record.handle.length;
+      this.removeRecord(handle);
+      removedRecordHandles.push(handle);
+    }
+    const summary = {
+      records: removedRecordHandles.length,
+      productDetails: removedProductDetailHandles.length,
+      hotDetails: removedHotDetailHandles.length,
+      handleCharacters,
+    };
+    this.notifySidecarIndexes({
+      kind: 'exact-handles',
+      marker: null,
+      exactHandles: {
+        recordHandles: Object.freeze(removedRecordHandles),
+        productDetailHandles: Object.freeze(removedProductDetailHandles),
+        hotDetailHandles: Object.freeze(removedHotDetailHandles),
+      },
+      summary,
+    });
+    return summary;
   }
 
   disposeSince(marker: KernelStoreLifetimeMarker): KernelStoreDisposalSummary {
@@ -2113,26 +2324,24 @@ export class KernelStore {
       if (record == null) {
         continue;
       }
-      this.records.delete(handle);
-      const orderIndex = this.recordOrder.indexOf(handle);
-      if (orderIndex >= 0) {
-        this.recordOrder.splice(orderIndex, 1);
-      }
-      this.recordLifetimeOrdinalByHandle.delete(handle);
-      this.recordMutationOrdinalByHandle.delete(handle);
-      this.handleCharacterCount -= record.handle.length;
       handleCharacters += record.handle.length;
-      this.removeRecordFromIndexes(record);
+      this.removeRecord(handle);
       records += 1;
     }
     const summary = { records, productDetails, hotDetails, handleCharacters };
-    this.computationLifecycle?.dispose({ marker, summary });
+    const context: KernelStoreDisposalContext = {
+      kind: 'chronological',
+      marker,
+      exactHandles: null,
+      summary,
+    };
+    this.computationLifecycle?.dispose(context);
     for (const manifest of this.activePublicationOwners.keys()) {
       if ((manifest.lifetimeOrdinal ?? -1) >= marker.nextLifetimeOrdinal) {
         this.activePublicationOwners.delete(manifest);
       }
     }
-    this.notifySidecarIndexes({ marker, summary });
+    this.notifySidecarIndexes(context);
     return summary;
   }
 
@@ -2147,36 +2356,11 @@ export class KernelStore {
     const retainedRecordHandles = new Set<KernelRecordHandle>();
     const retainedProductDetailHandles = new Set<ProductHandle>();
     const retainedHotDetailHandles = new Set<HotDetailHandle>();
-    for (const manifest of this.activePublicationOwners.keys()) {
-      for (const handle of manifest.recordHandles) {
-        retainedRecordHandles.add(handle);
-      }
-      for (const handle of manifest.productDetailHandles) {
-        retainedProductDetailHandles.add(handle);
-        retainedRecordHandles.add(handle);
-      }
-      for (const handle of manifest.hotDetailHandles) {
-        retainedHotDetailHandles.add(handle);
-        const ownerProductHandle = this.hotDetails.readEntry(handle)?.ownerProductHandle;
-        if (ownerProductHandle != null) {
-          retainedRecordHandles.add(ownerProductHandle);
-        }
-      }
-    }
-    this.computationLifecycle?.retainActiveDependencies({
-      retainRecord: (handle) => retainedRecordHandles.add(handle),
-      retainProductDetail: (handle) => {
-        retainedProductDetailHandles.add(handle);
-        retainedRecordHandles.add(handle);
-      },
-      retainHotDetail: (handle) => {
-        retainedHotDetailHandles.add(handle);
-        const ownerProductHandle = this.hotDetails.readEntry(handle)?.ownerProductHandle;
-        if (ownerProductHandle != null) {
-          retainedRecordHandles.add(ownerProductHandle);
-        }
-      },
-    });
+    this.retainActiveKernelClosure(
+      retainedRecordHandles,
+      retainedProductDetailHandles,
+      retainedHotDetailHandles,
+    );
     this.expandRetainedKernelClosure(
       retainedRecordHandles,
       retainedProductDetailHandles,
@@ -2209,8 +2393,50 @@ export class KernelStore {
       records += 1;
     }
     const summary = { records, productDetails, hotDetails, handleCharacters };
-    this.notifySidecarIndexes({ marker, summary });
+    this.notifySidecarIndexes({
+      kind: 'chronological',
+      marker,
+      exactHandles: null,
+      summary,
+    });
     return summary;
+  }
+
+  private retainActiveKernelClosure(
+    retainedRecordHandles: Set<KernelRecordHandle>,
+    retainedProductDetailHandles: Set<ProductHandle>,
+    retainedHotDetailHandles: Set<HotDetailHandle>,
+  ): void {
+    for (const manifest of this.activePublicationOwners.keys()) {
+      for (const handle of manifest.recordHandles) {
+        retainedRecordHandles.add(handle);
+      }
+      for (const handle of manifest.productDetailHandles) {
+        retainedProductDetailHandles.add(handle);
+        retainedRecordHandles.add(handle);
+      }
+      for (const handle of manifest.hotDetailHandles) {
+        retainedHotDetailHandles.add(handle);
+        const ownerProductHandle = this.hotDetails.readEntry(handle)?.ownerProductHandle;
+        if (ownerProductHandle != null) {
+          retainedRecordHandles.add(ownerProductHandle);
+        }
+      }
+    }
+    this.computationLifecycle?.retainActiveDependencies({
+      retainRecord: (handle) => retainedRecordHandles.add(handle),
+      retainProductDetail: (handle) => {
+        retainedProductDetailHandles.add(handle);
+        retainedRecordHandles.add(handle);
+      },
+      retainHotDetail: (handle) => {
+        retainedHotDetailHandles.add(handle);
+        const ownerProductHandle = this.hotDetails.readEntry(handle)?.ownerProductHandle;
+        if (ownerProductHandle != null) {
+          retainedRecordHandles.add(ownerProductHandle);
+        }
+      },
+    });
   }
 
   /** Keep the transitive three-surface closure required by active publications and exact reads. */
@@ -3015,6 +3241,106 @@ export class KernelStore {
     }
   }
 
+}
+
+function createKernelAnswerLocalOwnership<THandle extends string>(): KernelAnswerLocalOwnership<THandle> {
+  return {
+    ownersByHandle: new Map(),
+    handlesByOwner: new Map(),
+    everOwnedHandles: new Set(),
+  };
+}
+
+function observeKernelAnswerLocalHandle<THandle extends string>(
+  ownership: KernelAnswerLocalOwnership<THandle>,
+  owner: object,
+  handle: THandle,
+): void {
+  let owners = ownership.ownersByHandle.get(handle);
+  if (owners == null) {
+    owners = new Set();
+    ownership.ownersByHandle.set(handle, owners);
+  }
+  owners.add(owner);
+  let handles = ownership.handlesByOwner.get(owner);
+  if (handles == null) {
+    handles = new Set();
+    ownership.handlesByOwner.set(owner, handles);
+  }
+  handles.add(handle);
+  ownership.everOwnedHandles.add(handle);
+}
+
+function forgetAnswerLocalHandle<THandle extends string>(
+  ownership: KernelAnswerLocalOwnership<THandle>,
+  handle: THandle,
+): void {
+  const owners = ownership.ownersByHandle.get(handle);
+  if (owners != null) {
+    for (const owner of owners) {
+      const handles = ownership.handlesByOwner.get(owner);
+      handles?.delete(handle);
+      if (handles?.size === 0) {
+        ownership.handlesByOwner.delete(owner);
+      }
+    }
+    ownership.ownersByHandle.delete(handle);
+  }
+  ownership.everOwnedHandles.delete(handle);
+}
+
+function releaseKernelAnswerLocalOwner<THandle extends string>(
+  ownership: KernelAnswerLocalOwnership<THandle>,
+  owner: object,
+): boolean {
+  const handles = ownership.handlesByOwner.get(owner);
+  if (handles == null) {
+    return false;
+  }
+  ownership.handlesByOwner.delete(owner);
+  for (const handle of handles) {
+    const owners = ownership.ownersByHandle.get(handle);
+    owners?.delete(owner);
+    if (owners?.size === 0) {
+      ownership.ownersByHandle.delete(handle);
+    }
+  }
+  return true;
+}
+
+function transferKernelAnswerLocalOwner<THandle extends string>(
+  ownership: KernelAnswerLocalOwnership<THandle>,
+  from: object,
+  to: object,
+): void {
+  const handles = ownership.handlesByOwner.get(from);
+  if (handles == null) {
+    return;
+  }
+  ownership.handlesByOwner.delete(from);
+  let targetHandles = ownership.handlesByOwner.get(to);
+  if (targetHandles == null) {
+    targetHandles = new Set();
+    ownership.handlesByOwner.set(to, targetHandles);
+  }
+  for (const handle of handles) {
+    const owners = ownership.ownersByHandle.get(handle);
+    owners?.delete(from);
+    owners?.add(to);
+    targetHandles.add(handle);
+  }
+}
+
+function ownerlessKernelAnswerLocalHandles<THandle extends string>(
+  ownership: KernelAnswerLocalOwnership<THandle>,
+): ReadonlySet<THandle> {
+  return new Set(
+    [...ownership.everOwnedHandles].filter((handle) => !ownership.ownersByHandle.has(handle)),
+  );
+}
+
+function emptyKernelStoreDisposalSummary(): KernelStoreDisposalSummary {
+  return { records: 0, productDetails: 0, hotDetails: 0, handleCharacters: 0 };
 }
 
 function maxOptionalOrdinal(left: number | null, right: number | null): number | null {
