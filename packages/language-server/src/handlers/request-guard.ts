@@ -19,6 +19,11 @@ import {
 } from "../runtime/semantic-runtime-session.js";
 import { runServerOperation } from "./lifecycle.js";
 
+export type SemanticRuntimeDocumentAdmissionFailure =
+  | "outside-workspace"
+  | "not-authored"
+  | "ambiguous";
+
 function semanticRuntimeCancellationProbe(
   token: CancellationToken | undefined,
 ): (() => boolean) | null {
@@ -42,7 +47,8 @@ export async function runSemanticRuntimeRequest<T>(
 
 /**
  * Run an incoming document request only when the current semantic-runtime boot
- * admits that exact source as authored by at least one project.
+ * admits that exact source as authored by at least one project. Unkeyed standard providers opt into exact-one
+ * admission; project-aware custom requests retain the full candidate set for explicit selection.
  *
  * URI/workspace ownership remains the coarse transport boundary. The runtime
  * answer is the project-specific authority and deliberately belongs to the
@@ -53,8 +59,12 @@ export async function runSemanticRuntimeDocumentRequest<T>(
   feature: string,
   token: CancellationToken,
   uri: string,
-  whenNotAuthored: (operation: SemanticRuntimeLspOperation) => T | Promise<T>,
+  whenUnavailable: (
+    operation: SemanticRuntimeLspOperation,
+    failure: SemanticRuntimeDocumentAdmissionFailure,
+  ) => T | Promise<T>,
   request: (operation: SemanticRuntimeLspOperation) => T | Promise<T>,
+  options: { readonly requireExactProjectOwner?: boolean } = {},
 ): Promise<T> {
   try {
     return await runServerOperation(ctx, () =>
@@ -62,11 +72,18 @@ export async function runSemanticRuntimeDocumentRequest<T>(
         semanticRuntimeCancellationProbe(token),
         async (operation) => {
           if (!ctx.ownsDocument(uri)) {
-            return await whenNotAuthored(operation);
+            return await whenUnavailable(operation, "outside-workspace");
           }
           const ownership = await operation.authoredSourceOwnership(uri);
-          if (ownership.value.owners.length === 0) {
-            return await whenNotAuthored(operation);
+          const ownerCount = ownership.value.owners.length;
+          if (
+            ownerCount === 0
+            || (options.requireExactProjectOwner === true && ownerCount !== 1)
+          ) {
+            return await whenUnavailable(
+              operation,
+              ownerCount === 0 ? "not-authored" : "ambiguous",
+            );
           }
           return await request(operation);
         },

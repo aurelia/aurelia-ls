@@ -210,6 +210,64 @@ describe("document diagnostics handler", () => {
     await expect(clientOwner.request()).resolves.toEqual(expect.objectContaining({ items: [] }));
   });
 
+  test.each([
+    { languageId: "html", expectedCodes: ["html-syntax-recovery"] },
+    { languageId: "aurelia-html", expectedCodes: ["html-syntax-recovery"] },
+    { languageId: "typescript", expectedCodes: ["html-syntax-recovery"] },
+  ])("projects HTML recovery according to $languageId native-validator ownership", async ({
+    languageId,
+    expectedCodes,
+  }) => {
+    const text = '<div title.bind="value>';
+    const templateDocument = TextDocument.create(uri, languageId, 8, text);
+    const harness = createDiagnosticHarness(templateDocument);
+    const start = text.indexOf('"');
+    const row = {
+      projectKey: "app",
+      diagnosticDomain: "template",
+      phase: null,
+      diagnosticKind: "html-syntax-recovery",
+      diagnosticAuthority: "semantic-authoring-policy",
+      frameworkErrorCode: null,
+      frameworkRawErrorAuthority: null,
+      severity: "error",
+      summary: "Unterminated value for attribute title.bind.",
+      missingInput: "html-recovery:unterminated-attribute",
+      missingInputs: ["html-recovery:unterminated-attribute"],
+      source: {
+        kind: "source-span-address",
+        label: `${harness.ctx.documentUris.hostPath(uri)}@${start}..${text.length}`,
+        path: harness.ctx.documentUris.hostPath(uri),
+        start,
+        end: text.length,
+        role: "range",
+      },
+      subject: {
+        subjectKind: "template-syntax",
+        subjectName: "title.bind",
+        source: null,
+      },
+      diagnosticIdentityHandle: null,
+      relatedInformation: [],
+      suggestion: null,
+      sourceRole: "template",
+      relatedQueryKind: "template-diagnostics",
+    };
+    harness.appDiagnostics.mockResolvedValue({
+      analysisBasis: { revision: "semantic-runtime-analysis:test" },
+      value: {
+        rows: [row],
+        presentation: appDiagnosticPresentation([row] as never, true),
+      },
+    } as never);
+
+    const report = await harness.request();
+
+    expect(report).toEqual(expect.objectContaining({
+      items: expectedCodes.map((code) => expect.objectContaining({ code })),
+    }));
+  });
+
   test("fails instead of publishing a partial Problems projection", async () => {
     const harness = createDiagnosticHarness();
     harness.appDiagnostics.mockResolvedValueOnce({
@@ -321,6 +379,25 @@ describe("document diagnostics handler", () => {
       items: [],
     });
     expect(harness.authoredSourceOwnership).toHaveBeenCalledOnce();
+    expect(harness.appDiagnostics).not.toHaveBeenCalled();
+  });
+
+  test("returns an explicit empty report when one URI is admitted by multiple projects", async () => {
+    const harness = createDiagnosticHarness();
+    harness.authoredSourceOwnership.mockResolvedValue({
+      analysisBasis: { revision: "semantic-runtime-analysis:test" },
+      value: {
+        sourceFilePath: "C:\\projects\\app\\src\\shared.html",
+        templateOwned: true,
+        owners: [{ projectKey: "alpha" }, { projectKey: "beta" }],
+      },
+    });
+
+    await expect(harness.request()).resolves.toEqual({
+      kind: DocumentDiagnosticReportKind.Full,
+      resultId: "diagnostic:test",
+      items: [],
+    });
     expect(harness.appDiagnostics).not.toHaveBeenCalled();
   });
 

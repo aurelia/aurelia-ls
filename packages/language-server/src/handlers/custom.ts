@@ -98,6 +98,7 @@ import {
 import {
   runSemanticRuntimeDocumentRequest,
   runSemanticRuntimeRequest,
+  type SemanticRuntimeDocumentAdmissionFailure,
 } from "./request-guard.js";
 import {
   isSemanticRuntimeLspRequestAborted,
@@ -1164,22 +1165,26 @@ export function registerCustomHandlers(ctx: ServerContext): void {
   ctx.connection.onRequest(AureliaProtocolRequest.RelatedFiles, (params: DocumentUriParams, token: CancellationToken) =>
     documentRequest(ctx, "getRelatedFiles", token, params.uri,
       () => [],
-      (guard) => handleGetRelatedFiles(ctx, params, guard)));
+      (guard) => handleGetRelatedFiles(ctx, params, guard),
+      { requireExactProjectOwner: true }));
   ctx.connection.onRequest(AureliaProtocolRequest.WorkspaceStatus, (params: WorkspaceStatusParams, token: CancellationToken) =>
     request(ctx, "workspaceStatus", token, undefined,
       (guard) => handleWorkspaceStatus(ctx, params, guard)));
   ctx.connection.onRequest(AureliaProtocolRequest.RenameFromTypeScript, (params: RenameFromTsParams, token: CancellationToken) =>
     documentRequest(ctx, "renameFromTs", token, params.uri,
-      (): RenameFromTsResponse => ({
+      (_operation, failure): RenameFromTsResponse => ({
         status: "not-applicable",
-        reason: "source-not-authored",
-        message: "Aurelia cross-domain rename is unavailable because this source is not authored by the project.",
+        reason: failure === "ambiguous" ? "source-project-ambiguous" : "source-not-authored",
+        message: failure === "ambiguous"
+          ? "Aurelia cross-domain rename is unavailable because this source belongs to multiple projects."
+          : "Aurelia cross-domain rename is unavailable because this source is not authored by the project.",
         templateReferenceCount: 0,
         typeScriptReferenceCount: 0,
         candidateCount: 0,
         candidates: [],
       }),
-      (guard) => handleRenameFromTs(ctx, params, guard)));
+      (guard) => handleRenameFromTs(ctx, params, guard),
+      { requireExactProjectOwner: true }));
 }
 
 function refusedAttributeInterpretationExplanation(
@@ -1382,16 +1387,21 @@ function documentRequest<T>(
   feature: string,
   token: CancellationToken,
   uri: string,
-  whenNotAuthored: (operation: SemanticRuntimeLspOperation) => T | Promise<T>,
+  whenUnavailable: (
+    operation: SemanticRuntimeLspOperation,
+    failure: SemanticRuntimeDocumentAdmissionFailure,
+  ) => T | Promise<T>,
   handler: (operation: SemanticRuntimeLspOperation) => T | Promise<T>,
+  options: { readonly requireExactProjectOwner?: boolean } = {},
 ): Promise<T> {
   return runSemanticRuntimeDocumentRequest(
     ctx,
     feature,
     token,
     uri,
-    whenNotAuthored,
+    whenUnavailable,
     handler,
+    options,
   );
 }
 

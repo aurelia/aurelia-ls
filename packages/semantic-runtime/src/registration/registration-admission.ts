@@ -236,7 +236,9 @@ export class RegistryRegistrationAdmission {
 }
 
 /**
- * Admission for a converged Aurelia resource definition before its kind-specific registration effects are spent.
+ * Admission for a converged Aurelia resource definition or a definition-header-constrained resource-only result before
+ * its kind-specific registration effects are spent. Constraint values retain possible runtime keys but may not resolve
+ * to a full definition product; DI keeps those slots open instead of treating the admission as an arbitrary registry.
  */
 export class ResourceRegistrationAdmission {
   constructor(

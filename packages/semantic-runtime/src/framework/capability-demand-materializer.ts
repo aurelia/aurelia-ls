@@ -20,7 +20,6 @@ import {
   EvidenceRole,
 } from '../kernel/evidence.js';
 import { SemanticClaim } from '../kernel/claim.js';
-import type { SourceSpan } from '../expression/source-span.js';
 import type {
   BindingBehaviorExpression,
   ValueConverterExpression,
@@ -32,7 +31,6 @@ import type {
   ProductHandle,
 } from '../kernel/handles.js';
 import type { OpenSeam } from '../kernel/open-seam.js';
-import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import { FrameworkIdentity } from '../kernel/identity.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import {
@@ -76,13 +74,18 @@ import {
 import type { DiWorldConstructionEmission } from '../di/world-construction.js';
 import { registrationOperationsVisibleToContainer } from '../di/world-construction.js';
 import {
+  registrationHidingOpenSeamsForContainer,
+  registrationOpenPressureFacts,
+  registrationOpenSeamCanHideFrameworkCapability,
+  type RegistrationOpenPressureFact,
+} from '../di/registration-open-pressure.js';
+import {
   FrameworkRegistrationCapability,
   frameworkRegistrationCapabilitiesForKind,
   frameworkRegistrationKindsForCapability,
   frameworkRegistrationModuleNamesForCapability,
 } from '../registration/framework-registration-manifest.js';
 import type { RegistrationAdmissionProduct } from '../registration/registration-admission.js';
-import { FrameworkRegistrationKind } from '../registration/registration-reference.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import {
   compileAttributePatternDefinition,
@@ -153,7 +156,7 @@ import {
 } from './capability-demand.js';
 import { FrameworkProductDetails } from './product-details.js';
 import {
-  FrameworkServiceRoot,
+  type FrameworkServiceRoot,
   FrameworkServiceRootBasis,
   FrameworkServiceRootKind,
   frameworkServiceRootBasisResolvesDiKey,
@@ -422,12 +425,7 @@ class SourceServiceApiAdmission {
 
 class SourceServiceApiAdmissionContext {
   private readonly chainFacts: DiContainerChainFacts;
-  private readonly registrationHidingOpenSeams: readonly OpenSeam[];
-  private readonly constrainedRegistrationHidingOpenSeamOperations: ReadonlyMap<
-    OpenSeamHandle,
-    readonly ContainerRegistrationOperation[]
-  >;
-  private readonly registrationHidingOpenSeamContainerScopes: ReadonlyMap<OpenSeamHandle, readonly IdentityHandle[]>;
+  private readonly registrationOpenPressure: readonly RegistrationOpenPressureFact[];
   private readonly serviceRootsByProduct: ReadonlyMap<ProductHandle, FrameworkServiceRoot>;
   private readonly appTaskContainerIdentitiesByTask: ReadonlyMap<ProductHandle, readonly IdentityHandle[]>;
   private readonly consultingContainerCache = new Map<ProductHandle, IdentityHandle | null>();
@@ -444,13 +442,10 @@ class SourceServiceApiAdmissionContext {
     private readonly serviceRootEnrichment: FrameworkServiceRootEnrichmentProjectResult,
   ) {
     this.chainFacts = chainFacts;
-    const openSeamFacts = registrationHidingOpenSeamFacts(
+    this.registrationOpenPressure = registrationOpenPressureFacts(
       diWorld,
-      configuration,
+      configuration.openSeamScopes,
     );
-    this.registrationHidingOpenSeams = openSeamFacts.seams;
-    this.constrainedRegistrationHidingOpenSeamOperations = openSeamFacts.constrainedOperations;
-    this.registrationHidingOpenSeamContainerScopes = openSeamFacts.containerScopes;
     this.serviceRootsByProduct = new Map(serviceRoots.map((root) => [root.productHandle, root]));
     this.appTaskContainerIdentitiesByTask = appTaskContainerIdentitiesByTask(diWorld);
   }
@@ -498,34 +493,31 @@ class SourceServiceApiAdmissionContext {
     const consultingChain = consultingContainer == null
       ? null
       : new Set(this.chainFacts.containerChainIdentityHandles(consultingContainer));
-    return this.registrationHidingOpenSeams.filter((seam) =>
-      this.registrationHidingOpenSeamBlocksRoot(seam, root, requiredCapability, consultingChain)
-    );
+    const seams = new Map<OpenSeamHandle, OpenSeam>();
+    for (const fact of this.registrationOpenPressure) {
+      if (this.registrationHidingOpenSeamBlocksRoot(fact, root, requiredCapability, consultingChain)) {
+        seams.set(fact.seam.handle, fact.seam);
+      }
+    }
+    return [...seams.values()];
   }
 
   private registrationHidingOpenSeamBlocksRoot(
-    seam: OpenSeam,
+    fact: RegistrationOpenPressureFact,
     root: FrameworkServiceRoot,
     requiredCapability: FrameworkRegistrationCapability,
     consultingChain: ReadonlySet<IdentityHandle> | null,
   ): boolean {
-    const constrainedOperations = this.constrainedRegistrationHidingOpenSeamOperations.get(seam.handle);
-    if (
-      constrainedOperations != null
-      && !constrainedOperations.some((operation) =>
-        frameworkRegistrationOperationCarriesCapability(operation, requiredCapability)
-      )
-    ) {
+    if (!registrationOpenSeamCanHideFrameworkCapability(fact.operation, requiredCapability)) {
       return false;
     }
-    const scopedContainers = this.registrationHidingOpenSeamContainerScopes.get(seam.handle) ?? [];
-    if (scopedContainers.length > 0) {
+    if (fact.containerIdentityHandles != null) {
       return consultingChain == null
-        ? sourceAddressesMayShareFile(this.publication, root.sourceAddressHandle, seam.addressHandle)
-        : scopedContainers.some((container) => consultingChain.has(container));
+        ? sourceAddressesMayShareFile(this.publication, root.sourceAddressHandle, fact.seam.addressHandle)
+        : fact.containerIdentityHandles.some((identityHandle) => consultingChain.has(identityHandle));
     }
     return consultingChain == null
-      && sourceAddressesMayShareFile(this.publication, root.sourceAddressHandle, seam.addressHandle);
+      && sourceAddressesMayShareFile(this.publication, root.sourceAddressHandle, fact.seam.addressHandle);
   }
 
   private consultingContainerIdentityForRoot(root: FrameworkServiceRoot): IdentityHandle | null {
@@ -764,8 +756,10 @@ class TemplateCapabilityAdmissionContext {
         },
       );
     }
-    return new TemplateCapabilityAdmission(
-      admissionStateForBoolean(admitted),
+    return this.forObservedAdmission(
+      resource,
+      demand.requiredCapability,
+      admitted,
       admissionSources,
     );
   }
@@ -796,8 +790,10 @@ class TemplateCapabilityAdmissionContext {
         },
       );
     }
-    return new TemplateCapabilityAdmission(
-      admissionStateForBoolean(admitted),
+    return this.forObservedAdmission(
+      resource,
+      demand.requiredCapability,
+      admitted,
       admissionSources,
     );
   }
@@ -807,8 +803,10 @@ class TemplateCapabilityAdmissionContext {
     capability: FrameworkRegistrationCapability,
     admitted: boolean,
   ): TemplateCapabilityAdmission {
-    return new TemplateCapabilityAdmission(
-      admissionStateForBoolean(admitted),
+    return this.forObservedAdmission(
+      resource,
+      capability,
+      admitted,
       this.admissionSourceAddressHandles(resource, capability),
     );
   }
@@ -828,8 +826,10 @@ class TemplateCapabilityAdmissionContext {
       admission.sourceAddressHandle == null ? [] : [admission.sourceAddressHandle]
     ))];
     if (admissions.length === 0) {
-      return new TemplateCapabilityAdmission(
-        FrameworkCapabilityAdmissionState.NotAdmitted,
+      return this.forObservedAdmission(
+        resource,
+        capability,
+        false,
         admissionSources,
       );
     }
@@ -842,6 +842,8 @@ class TemplateCapabilityAdmissionContext {
           ? FrameworkCapabilityAdmissionState.Admitted
           : FrameworkCapabilityAdmissionState.AdmissionUnknown,
         admissionSources,
+        [],
+        admitted ? [] : this.blockingOpenSeamHandles(resource, capability),
       );
     }
     const openMemberships = memberships.filter((membership) =>
@@ -855,12 +857,22 @@ class TemplateCapabilityAdmissionContext {
         [...new Set(openMemberships.flatMap((membership) => membership.openSeamHandles))],
       );
     }
+    const exclusionSourceAddressHandles = [...new Set(memberships.flatMap((membership) =>
+      membership.exclusionSourceAddressHandle == null ? [] : [membership.exclusionSourceAddressHandle]
+    ))];
+    const blockingOpenSeamHandles = this.blockingOpenSeamHandles(resource, capability);
+    if (blockingOpenSeamHandles.length > 0) {
+      return new TemplateCapabilityAdmission(
+        FrameworkCapabilityAdmissionState.AdmissionUnknown,
+        admissionSources,
+        exclusionSourceAddressHandles,
+        blockingOpenSeamHandles,
+      );
+    }
     return new TemplateCapabilityAdmission(
       FrameworkCapabilityAdmissionState.ConfiguredOut,
       admissionSources,
-      [...new Set(memberships.flatMap((membership) =>
-        membership.exclusionSourceAddressHandle == null ? [] : [membership.exclusionSourceAddressHandle]
-      ))],
+      exclusionSourceAddressHandles,
     );
   }
 
@@ -875,6 +887,54 @@ class TemplateCapabilityAdmissionContext {
           ? []
           : [operation.admission.sourceAddressHandle]
       ))];
+  }
+
+  /**
+   * Absence is diagnostic only in a concrete app-root world whose registration chain is closed for this capability.
+   * Authoring islands and container-scoped registration pressure retain uncertainty instead of accusing a missing
+   * registration from an incomplete compiler world.
+   */
+  private forObservedAdmission(
+    resource: TemplateResourceRuntimeAnalysisEmission,
+    capability: FrameworkRegistrationCapability,
+    admitted: boolean,
+    admissionSourceAddressHandles: readonly AddressHandle[],
+  ): TemplateCapabilityAdmission {
+    if (admitted) {
+      return new TemplateCapabilityAdmission(
+        FrameworkCapabilityAdmissionState.Admitted,
+        admissionSourceAddressHandles,
+      );
+    }
+    const blockingOpenSeamHandles = this.blockingOpenSeamHandles(resource, capability);
+    if (
+      resource.compilation.appRootDefinitionProductHandle == null
+      || blockingOpenSeamHandles.length > 0
+    ) {
+      return new TemplateCapabilityAdmission(
+        FrameworkCapabilityAdmissionState.AdmissionUnknown,
+        admissionSourceAddressHandles,
+        [],
+        blockingOpenSeamHandles,
+      );
+    }
+    return new TemplateCapabilityAdmission(
+      FrameworkCapabilityAdmissionState.NotAdmitted,
+      admissionSourceAddressHandles,
+    );
+  }
+
+  private blockingOpenSeamHandles(
+    resource: TemplateResourceRuntimeAnalysisEmission,
+    capability: FrameworkRegistrationCapability,
+  ): readonly OpenSeamHandle[] {
+    return registrationHidingOpenSeamsForContainer(
+      this.world,
+      this.configuration.openSeamScopes,
+      this.containerChainFacts,
+      resource.compilation.compilerWorld.container.identityHandle,
+      (operation) => registrationOpenSeamCanHideFrameworkCapability(operation, capability),
+    ).map((seam) => seam.handle);
   }
 
   private operationsForResource(
@@ -902,14 +962,6 @@ interface ConfiguredSurfaceMembership {
   readonly membership: FrameworkCapabilityConfigurationMembership;
   readonly exclusionSourceAddressHandle: AddressHandle | null;
   readonly openSeamHandles: readonly OpenSeamHandle[];
-}
-
-function admissionStateForBoolean(
-  admitted: boolean,
-): FrameworkCapabilityAdmissionState {
-  return admitted
-    ? FrameworkCapabilityAdmissionState.Admitted
-    : FrameworkCapabilityAdmissionState.NotAdmitted;
 }
 
 function compilerWorldBuiltInAttributePatternMatchForSyntax(
@@ -1572,91 +1624,6 @@ function frameworkCapabilityDemandLocalKey(
   ].join(':');
 }
 
-interface RegistrationHidingOpenSeamFacts {
-  readonly seams: readonly OpenSeam[];
-  readonly constrainedOperations: ReadonlyMap<OpenSeamHandle, readonly ContainerRegistrationOperation[]>;
-  readonly containerScopes: ReadonlyMap<OpenSeamHandle, readonly IdentityHandle[]>;
-}
-
-/**
- * Project registration uncertainty from the exact DI spending loci that produced it.
- * A missing or user-authored admission leaves the seam unconstrained; a missing container
- * leaves it world-scoped. Neither uncertainty is reconstructed from publication topology.
- */
-function registrationHidingOpenSeamFacts(
-  world: DiWorldConstructionEmission,
-  configuration: ConfigurationKernelEmission,
-): RegistrationHidingOpenSeamFacts {
-  const seamsByHandle = new Map(
-    [
-      ...world.registrationOpenSeamScopes.map((scope) => scope.seam),
-      ...configuration.openSeamScopes
-        .map((scope) => scope.seam)
-        .filter(isConfigurationRegistrationHidingOpenSeam),
-    ].map((seam) => [seam.handle, seam] as const),
-  );
-  const operationsBySeam = new Map<OpenSeamHandle, Map<ProductHandle, ContainerRegistrationOperation>>();
-  const admissionUnconstrainedSeams = new Set<OpenSeamHandle>();
-  const containersBySeam = new Map<OpenSeamHandle, Set<IdentityHandle>>();
-  const containerUnconstrainedSeams = new Set<OpenSeamHandle>();
-
-  const recordScope = (
-    seam: OpenSeam,
-    operation: ContainerRegistrationOperation | null,
-    containerIdentityHandle: IdentityHandle | null,
-  ): void => {
-    if (!seamsByHandle.has(seam.handle)) {
-      return;
-    }
-    if (operation == null || frameworkRegistrationKindForOperation(operation) == null) {
-      admissionUnconstrainedSeams.add(seam.handle);
-    } else {
-      let operations = operationsBySeam.get(seam.handle);
-      if (operations == null) {
-        operations = new Map();
-        operationsBySeam.set(seam.handle, operations);
-      }
-      operations.set(operation.productHandle, operation);
-    }
-
-    if (containerIdentityHandle == null) {
-      containerUnconstrainedSeams.add(seam.handle);
-    } else {
-      let containers = containersBySeam.get(seam.handle);
-      if (containers == null) {
-        containers = new Set();
-        containersBySeam.set(seam.handle, containers);
-      }
-      containers.add(containerIdentityHandle);
-    }
-  };
-
-  for (const scope of configuration.openSeamScopes) {
-    recordScope(scope.seam, null, scope.containerIdentityHandle);
-  }
-  for (const scope of world.registrationOpenSeamScopes) {
-    recordScope(
-      scope.seam,
-      scope.operation,
-      scope.operation?.container.identityHandle ?? null,
-    );
-  }
-
-  return {
-    seams: [...seamsByHandle.values()],
-    constrainedOperations: new Map(
-      [...operationsBySeam]
-        .filter(([handle]) => !admissionUnconstrainedSeams.has(handle))
-        .map(([handle, operations]) => [handle, [...operations.values()]] as const),
-    ),
-    containerScopes: new Map(
-      [...containersBySeam]
-        .filter(([handle]) => !containerUnconstrainedSeams.has(handle))
-        .map(([handle, containers]) => [handle, [...containers]] as const),
-    ),
-  };
-}
-
 function frameworkRegistrationOperationCarriesCapability(
   operation: ContainerRegistrationOperation,
   capability: FrameworkRegistrationCapability,
@@ -1676,29 +1643,6 @@ function uniqueRegistrationAdmissions(
   return [...byProduct.values()];
 }
 
-/**
- * Configuration scopes predate DI application, so only registration-preparation pressure can hide a provider.
- * DI-owned scopes are already explicitly typed as registration hiding and must not be filtered again by seam kind.
- */
-function isConfigurationRegistrationHidingOpenSeam(
-  seam: OpenSeam,
-): boolean {
-  switch (seam.seamKindKey) {
-    case KernelVocabulary.Di.OpenRegistryBody.key:
-      return true;
-    case KernelVocabulary.Di.OpenRegistrationSpending.key:
-      return seam.reasonKinds.some(isRegistrationHidingDiSpendingReason);
-    case KernelVocabulary.Registration.OpenKeyExpression.key:
-    case KernelVocabulary.Registration.OpenValueExpression.key:
-    case KernelVocabulary.Registration.OpenStrategy.key:
-    case KernelVocabulary.Registration.OpenSpread.key:
-    case KernelVocabulary.Registration.OpenAliasTarget.key:
-      return true;
-    default:
-      return false;
-  }
-}
-
 function sourceAddressesMayShareFile(
   store: KernelStoreReadView,
   leftHandle: AddressHandle | null,
@@ -1709,28 +1653,6 @@ function sourceAddressesMayShareFile(
   return left == null
     || right == null
     || left.fileHandle === right.fileHandle;
-}
-
-function uniqueIdentityHandles(
-  handles: readonly IdentityHandle[],
-): readonly IdentityHandle[] {
-  return [...new Set(handles)];
-}
-
-function isRegistrationHidingDiSpendingReason(
-  reason: OpenSeamReasonKind,
-): boolean {
-  switch (reason) {
-    case OpenSeamReasonKind.DiRegistrationContainerOpen:
-    case OpenSeamReasonKind.DiRegistrationAdmissionOpen:
-    case OpenSeamReasonKind.DiRegistrationKeyOpen:
-    case OpenSeamReasonKind.DiRegistrationStrategyOpen:
-    case OpenSeamReasonKind.DiRegistrationPublicationOpen:
-    case OpenSeamReasonKind.DiRegistryBodyOpen:
-      return true;
-    default:
-      return false;
-  }
 }
 
 function readCapabilityAvailabilityEvidence(

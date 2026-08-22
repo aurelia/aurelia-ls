@@ -72,7 +72,9 @@ async function documentDiagnostics(
     }
 
     const ownership = await operation.authoredSourceOwnership(document.uri);
-    if (ownership.value.owners.length === 0) {
+    // A document diagnostic pull has no project selector. Publishing either owner's rows would make Problems depend
+    // on arbitrary project order, so overlap stays explicitly clear while project-aware discovery exposes candidates.
+    if (ownership.value.owners.length !== 1) {
       return [];
     }
 

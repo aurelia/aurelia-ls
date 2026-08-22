@@ -2591,6 +2591,34 @@ describe("SemanticRuntimeLspSession diagnostic receipt cache", () => {
     await session.dispose();
   });
 
+  test("recomputes presentation when native-suppression language ownership changes", async () => {
+    const fixtureRoot = minimalFixtureRoot();
+    const htmlPath = path.join(fixtureRoot, "src/app.html");
+    const htmlUri = pathToFileURL(htmlPath).toString();
+    const text = fs.readFileSync(htmlPath, "utf8");
+    const documents = new TestDocumentStore();
+    documents.add(TextDocument.create(htmlUri, "aurelia-html", 1, text));
+    const session = createSession(fixtureRoot, documents);
+    const render = vi.fn((operation) => [{
+      languageId: operation.documents.ensureProgramDocument(htmlUri)?.languageId,
+    }]);
+
+    const suppressed = await session.runDiagnosticRequest(null, diagnosticRequest(htmlUri), render);
+    if (suppressed.kind !== "full") throw new Error("Expected a full diagnostic report.");
+    documents.add(TextDocument.create(htmlUri, "html", 1, text));
+
+    const native = await session.runDiagnosticRequest(
+      null,
+      diagnosticRequest(htmlUri, suppressed.resultId),
+      render,
+    );
+
+    expect(native).toMatchObject({ kind: "full", items: [{ languageId: "html" }] });
+    expect(native.resultId).not.toBe(suppressed.resultId);
+    expect(render).toHaveBeenCalledTimes(2);
+    await session.dispose();
+  });
+
   test("evicts the directly changed URI and disposes its retained proof", async () => {
     const fixtureRoot = minimalFixtureRoot();
     const htmlPath = path.join(fixtureRoot, "src/app.html");

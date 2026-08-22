@@ -533,6 +533,8 @@ class RegistrationAdmissionSupportMaterializer {
       observation.frameworkKind,
       observation.registryBody,
       keyKind,
+      observation.resourceLookupKeys,
+      observation.resourceKind,
     );
   }
 
@@ -1134,8 +1136,10 @@ function hasRegistrationOpen(
 function isResourceRegistrationReference(
   reference: RegistrationValueReference | null,
 ): reference is RegistrationValueReference {
-  return reference?.valueKind === RegistrationValueKind.ResourceDefinition
-    && reference.productHandle != null;
+  return (
+    reference?.valueKind === RegistrationValueKind.ResourceDefinition
+    || reference?.valueKind === RegistrationValueKind.ResourceDefinitionConstraint
+  ) && reference.productHandle != null;
 }
 
 function registrationValueSymbolSite(node: ts.Node): ts.Node {

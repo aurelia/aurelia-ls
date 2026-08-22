@@ -6,6 +6,7 @@ import {
 import type {
   AddressHandle,
   ClaimHandle,
+  IdentityHandle,
   OpenSeamHandle,
   ProductHandle,
   ProvenanceHandle,
@@ -446,6 +447,7 @@ class DiRegistrationSpendingFrame {
       registrationOpenSeamScopes: this.openSeams.map((seam) => new DiRegistrationOpenSeamScope(
         seam,
         this.operation.product,
+        this.operation.product.container.identityHandle,
       )),
       issues: this.issues,
       resourceIssues: this.resourceIssues,
@@ -1156,10 +1158,15 @@ class DiWorldConstructionFrame {
       readonly records: readonly KernelStoreRecord[];
       readonly seam: OpenSeam;
     },
+    containerIdentityHandle: IdentityHandle | null = null,
   ): void {
     this.records.push(...seam.records);
     this.openSeams.push(seam.seam);
-    this.registrationOpenSeamScopes.push(new DiRegistrationOpenSeamScope(seam.seam, null));
+    this.registrationOpenSeamScopes.push(new DiRegistrationOpenSeamScope(
+      seam.seam,
+      null,
+      containerIdentityHandle,
+    ));
   }
 
   recordSpending(spent: {
@@ -1475,6 +1482,7 @@ export class DiWorldConstructor {
             `di-open-admission:${step.productHandle}:${admissionProductHandle}`,
             'Configuration step referenced a registration admission product that was not present in the configuration emission.',
             [OpenSeamReasonKind.DiRegistrationAdmissionOpen],
+            container.identityHandle,
           );
           continue;
         }
@@ -1518,6 +1526,7 @@ export class DiWorldConstructor {
     local: string,
     summary: string,
     reasonKinds: readonly OpenSeamReasonKind[],
+    containerIdentityHandle: IdentityHandle | null = null,
   ): void {
     const emission = recordsForDiOpenSeam(
       this.store,
@@ -1527,7 +1536,7 @@ export class DiWorldConstructor {
       step.sourceAddressHandle,
       reasonKinds,
     );
-    frame.recordOpenSeam(emission);
+    frame.recordOpenSeam(emission, containerIdentityHandle);
     frame.records.push(new MaterializationRecord(
       this.store.handles.materialization(local),
       step.identityHandle,

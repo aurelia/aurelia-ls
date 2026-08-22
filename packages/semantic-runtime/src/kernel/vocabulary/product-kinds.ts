@@ -852,6 +852,14 @@ export const KernelProductKinds = {
       'Authored HTML attribute before attribute-pattern parsing.',
     ),
 
+    /** Product kind for one exact HTML parser recovery fact. */
+    HtmlRecovery: defineVocabulary(
+      KernelVocabularyNamespace.Template,
+      'html-recovery',
+      KernelVocabularySlot.ProductKind,
+      'One exact authored HTML parser recovery fact before diagnostic policy.',
+    ),
+
     /** Product kind for a compiled template after DOM pass-through and instruction-row assembly. */
     CompiledTemplate: defineVocabulary(
       KernelVocabularyNamespace.Template,

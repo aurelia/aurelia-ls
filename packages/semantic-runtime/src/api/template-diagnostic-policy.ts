@@ -35,6 +35,7 @@ import {
   RuntimeValueConverterIssueKind,
 } from '../template/runtime-value-converter.js';
 import type { RuntimeBindingTargetAccess } from '../template/runtime-binding.js';
+import { HtmlRecoveryKind } from '../template/html-ir.js';
 import {
   type RuntimeControllerIssue,
   RuntimeControllerIssueKind,
@@ -665,6 +666,85 @@ export function expressionParseErrorDiagnostic(
       valueTypeSource: null,
     },
   };
+}
+
+/** Actionable Aurelia-owned authored-markup recovery in either supported template language mode. */
+export function htmlRecoveryDiagnostic(
+  recoveryKind: HtmlRecoveryKind,
+  message: string,
+  source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
+): SemanticTemplateCursorDiagnosticRow {
+  return {
+    diagnosticKind: 'html-syntax-recovery',
+    diagnosticAuthority: 'semantic-authoring-policy',
+    frameworkErrorCode: null,
+    severity: htmlRecoveryDiagnosticSeverity(recoveryKind),
+    summary: diagnosticSentence(message),
+    missingInput: `html-recovery:${recoveryKind}`,
+    missingInputs: [`html-recovery:${recoveryKind}`],
+    source,
+    selectedMemberName: null,
+    ownerTypeDisplay: null,
+    ownerTypeShapeKind: null,
+    ownerTypeOrigin: null,
+    suggestion: {
+      suggestionKind: 'fix-template-syntax',
+      actionKind: 'rewrite-template-syntax',
+      actionTarget: suggestionActionTarget('template-syntax', source, null, null),
+      summary: htmlRecoverySuggestion(recoveryKind),
+      targetMemberName: null,
+      ownerTypeDisplay: null,
+      valueTypeDisplay: null,
+      valueTypeSource: null,
+    },
+  };
+}
+
+function htmlRecoveryDiagnosticSeverity(
+  recoveryKind: HtmlRecoveryKind,
+): SemanticTemplateCursorDiagnosticRow['severity'] {
+  switch (recoveryKind) {
+    case HtmlRecoveryKind.MissingEndTag:
+    case HtmlRecoveryKind.DuplicateAttribute:
+    case HtmlRecoveryKind.MalformedComment:
+    case HtmlRecoveryKind.NonVoidSelfClosing:
+      return 'warning';
+    default:
+      return 'error';
+  }
+}
+
+function htmlRecoverySuggestion(recoveryKind: HtmlRecoveryKind): string {
+  switch (recoveryKind) {
+    case HtmlRecoveryKind.MissingEndTag:
+      return 'Close the element explicitly so the browser and Aurelia compiler receive the intended tree.';
+    case HtmlRecoveryKind.UnexpectedEndTag:
+      return 'Remove the closing tag or make it match the currently open element.';
+    case HtmlRecoveryKind.UnterminatedStartTag:
+      return 'Close the start tag with > before authoring child content.';
+    case HtmlRecoveryKind.UnterminatedEndTag:
+      return 'Close the end tag with >.';
+    case HtmlRecoveryKind.NonVoidSelfClosing:
+      return 'Use an explicit closing tag for non-void HTML elements so following siblings keep their intended parent.';
+    case HtmlRecoveryKind.UnterminatedAttribute:
+      return 'Close the quoted attribute value before authoring later attributes or child markup.';
+    case HtmlRecoveryKind.MissingAttributeValue:
+      return 'Add an attribute value after =, or remove = for a boolean attribute.';
+    case HtmlRecoveryKind.InvalidAttribute:
+      return 'Give the attribute a valid authored name.';
+    case HtmlRecoveryKind.UnterminatedComment:
+      return 'Close the HTML comment with --> so later template content remains visible.';
+    case HtmlRecoveryKind.MalformedComment:
+      return 'Use <!-- ... --> for a well-formed HTML comment.';
+    case HtmlRecoveryKind.UnterminatedCdata:
+      return 'Close the foreign-content CDATA section with ]]>.';
+    case HtmlRecoveryKind.DuplicateAttribute:
+      return 'Remove or merge the duplicate attribute; the browser keeps only one value.';
+    case HtmlRecoveryKind.InvalidDoctype:
+      return 'Close or rewrite the declaration so it has one valid > delimiter.';
+    default:
+      return 'Rewrite the malformed markup so browser parsing has one unambiguous result.';
+  }
 }
 
 export function templateCompilerErrorDiagnostic(

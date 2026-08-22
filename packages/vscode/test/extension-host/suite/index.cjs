@@ -52,6 +52,9 @@ async function run() {
     mocha.grep(process.env.AURELIA_LS_EXTENSION_HOST_GREP);
   }
   mocha.addFile(path.join(__dirname, shardFiles[shard]));
+  if (shard === "product-support") {
+    mocha.addFile(path.join(__dirname, "diagnostics-lifecycle.test.cjs"));
+  }
 
   return new Promise((resolve, reject) => {
     try {

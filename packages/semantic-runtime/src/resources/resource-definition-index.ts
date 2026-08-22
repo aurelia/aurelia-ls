@@ -19,8 +19,12 @@ import {
   type ResourceDependencyReference,
 } from './resource-reference.js';
 import type { FullResourceDefinition } from './resource-definition.js';
-import { ResourceDefinitionKind } from './resource-kind.js';
+import {
+  ResourceDefinitionKind,
+  runtimeResourceKeyForKind,
+} from './resource-kind.js';
 import type { ResourceRecognitionProjectResult } from './resource-recognition-project-pass.js';
+import { assignedExpressionVariableDeclaration } from './resource-convergence-support.js';
 
 export class ResourceDefinitionIndexEntry {
   constructor(
@@ -35,12 +39,27 @@ export class ResourceDefinitionIndexEntry {
   ) {}
 }
 
+/** Recognized resource-only return effect retained even when full definition convergence stays open. */
+export class ResourceDefinitionEffectConstraint {
+  constructor(
+    /** Materialized definition-header product that proves this call result can only register a resource. */
+    readonly productHandle: ProductHandle,
+    readonly moduleKey: string,
+    readonly localName: string | null,
+    readonly sourceNode: ts.Node,
+    readonly resourceKind: ResourceDefinitionKind,
+    readonly resourceName: string | null,
+    readonly runtimeLookupKeys: readonly string[],
+  ) {}
+}
+
 /**
  * Lookup table that lets later materializers connect evaluated registration values back to converged resource definitions.
  */
 export class ResourceDefinitionIndex {
   static fromProject(project: ResourceRecognitionProjectResult): ResourceDefinitionIndex {
     const entries: ResourceDefinitionIndexEntry[] = [];
+    const effectConstraints: ResourceDefinitionEffectConstraint[] = [];
     const effectiveDefinitions = new Set(project.readDefinitions());
 
     for (const source of project.sources) {
@@ -54,6 +73,24 @@ export class ResourceDefinitionIndex {
             : [[addressHandle, observation] as const];
         }),
       );
+      for (const header of source.emission.definitions) {
+        const observation = source.observations[header.observationIndex] ?? null;
+        if (observation == null) continue;
+        effectConstraints.push(new ResourceDefinitionEffectConstraint(
+          header.productHandle,
+          moduleKey,
+          resourceCarrierResultLocalName(observation.sourceNode)
+            ?? header.targetReference?.localName
+            ?? null,
+          observation.sourceNode,
+          header.resourceKind,
+          header.primaryName,
+          header.lookupNames.flatMap((name) => {
+            const key = runtimeResourceKeyForKind(header.resourceKind, name);
+            return key == null ? [] : [key];
+          }),
+        ));
+      }
       for (const definition of source.convergence.definitions) {
         if (!effectiveDefinitions.has(definition)) {
           continue;
@@ -70,7 +107,7 @@ export class ResourceDefinitionIndex {
       }
     }
 
-    return new ResourceDefinitionIndex(entries);
+    return new ResourceDefinitionIndex(entries, effectConstraints);
   }
 
   private readonly byModuleLocal = new Map<string, readonly ResourceDefinitionIndexEntry[]>();
@@ -80,9 +117,12 @@ export class ResourceDefinitionIndex {
   private readonly byModule = new Map<string, readonly FullResourceDefinition[]>();
   private readonly byResourceName = new Map<string, readonly FullResourceDefinition[]>();
   private readonly bySourceNode = new WeakMap<ts.Node, FullResourceDefinition>();
+  private readonly effectConstraintsByModuleLocal = new Map<string, readonly ResourceDefinitionEffectConstraint[]>();
+  private readonly effectConstraintBySourceNode = new WeakMap<ts.Node, ResourceDefinitionEffectConstraint>();
 
   constructor(
     readonly entries: readonly ResourceDefinitionIndexEntry[],
+    readonly effectConstraints: readonly ResourceDefinitionEffectConstraint[] = [],
   ) {
     for (const entry of entries) {
       if (entry.localName != null) {
@@ -116,6 +156,19 @@ export class ResourceDefinitionIndex {
           entry.definition,
         ]);
       }
+    }
+    for (const constraint of effectConstraints) {
+      if (constraint.localName != null) {
+        const key = resourceDefinitionIndexKey(constraint.moduleKey, constraint.localName);
+        this.effectConstraintsByModuleLocal.set(key, [
+          ...(this.effectConstraintsByModuleLocal.get(key) ?? []),
+          constraint,
+        ]);
+      }
+      this.effectConstraintBySourceNode.set(
+        ts.isExpression(constraint.sourceNode) ? unwrapExpression(constraint.sourceNode) : constraint.sourceNode,
+        constraint,
+      );
     }
   }
 
@@ -305,6 +358,47 @@ export class ResourceDefinitionIndex {
       ? this.bySourceNode.get(unwrapExpression(carrier)) ?? null
       : null;
   }
+
+  lookupEffectConstraintByModuleLocal(
+    moduleKey: string,
+    localName: string,
+  ): ResourceDefinitionEffectConstraint | null {
+    const matching = this.effectConstraintsByModuleLocal.get(resourceDefinitionIndexKey(moduleKey, localName)) ?? [];
+    return matching.length === 1 ? matching[0]! : null;
+  }
+
+  lookupEffectConstraintByTypeScriptExpression(
+    typeSystem: TypeSystemProject,
+    expression: ts.Expression,
+  ): ResourceDefinitionEffectConstraint | null {
+    const symbol = typeSystem.readProgramAliasedSymbolAtLocation(unwrapExpression(expression));
+    if (symbol == null) return null;
+    const matching = new Set<ResourceDefinitionEffectConstraint>();
+    for (const declaration of symbol.declarations ?? []) {
+      const localName = readDeclarationLocalName(declaration);
+      const moduleKey = typeSystem.readModuleKeyForSourceFile(declaration.getSourceFile());
+      if (localName == null || moduleKey == null) continue;
+      for (const constraint of this.effectConstraintsByModuleLocal.get(
+        resourceDefinitionIndexKey(moduleKey, localName),
+      ) ?? []) {
+        matching.add(constraint);
+      }
+    }
+    return matching.size === 1 ? matching.values().next().value ?? null : null;
+  }
+
+  lookupEffectConstraintByCarrierNode(node: ts.Node | null): ResourceDefinitionEffectConstraint | null {
+    if (node == null || !ts.isExpression(node)) return null;
+    return this.effectConstraintBySourceNode.get(unwrapExpression(node)) ?? null;
+  }
+
+}
+
+function resourceCarrierResultLocalName(node: ts.Node): string | null {
+  const declaration = assignedExpressionVariableDeclaration(node);
+  return declaration != null && ts.isIdentifier(declaration.name)
+    ? declaration.name.text
+    : null;
 }
 
 function resourceDefinitionIndexKey(moduleKey: string, localName: string): string {

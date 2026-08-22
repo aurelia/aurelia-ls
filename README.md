@@ -59,14 +59,20 @@ The extension analyzes your Aurelia project and provides:
 - **Contextual explanations** — use native Quick Fixes or Resource Explorer actions to explain eligible diagnostics,
   uncertain bindings, authored attribute names, resource availability, and policy-controlled analysis limitations
 
-By default, Aurelia templates remain in VS Code's native `html` mode, retaining built-in HTML/CSS/JavaScript validation,
+By default, Aurelia templates remain in VS Code's native `html` mode, retaining embedded CSS/JavaScript validation,
 the default file icon, and ordinary language-scoped settings. Those validators can report false Problems for valid
 interpolation such as `style="width: ${value}%"`. Set `aurelia.templateDiagnostics.suppressNative` to `true` for a
-workspace folder to move only semantically proved Aurelia templates into **Aurelia HTML** mode and suppress those native
-diagnostics, including legitimate native findings. HTML language-service participation and completions remain available,
+workspace folder to move only semantically proved Aurelia templates into **Aurelia HTML** mode and suppress those
+embedded diagnostics, including legitimate CSS/JavaScript findings. HTML language-service participation and completions remain available,
 but this is not full native-mode parity: file icons, `[html]`-scoped settings, snippets, formatter selection, and other
 native HTML or editor behavior can change. When suppression is enabled, exact ownership is asynchronous on a cold first
 open, so a native diagnostic can appear briefly before admission settles.
+In both modes Aurelia reports bounded recovery Problems for supported malformed tags, attributes, comments,
+declarations, and foreign-content CDATA. This is not a general HTML validator; other tokenizer and tree-building rules
+remain outside that set.
+Keeping the default is recommended because embedded validators cannot selectively discard interpolation rows today. Enable
+suppression only when interpolation noise is more costly than losing embedded CSS/JavaScript Problems, and retain that
+coverage through the project's lint or build checks.
 
 See the [extension README](packages/vscode/README.md) for the full feature list and exact invocation points.
 

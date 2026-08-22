@@ -106,6 +106,32 @@ const extensionManifest = readManifest(new URL("../package.json", import.meta.ur
 const rootManifest = readManifest(new URL("../../../package.json", import.meta.url));
 
 describe("Extension Host support runner", () => {
+  test("statically admits the dedicated Problems lifecycle journey", () => {
+    const suiteIndex = readFileSync(
+      fileURLToPath(new URL("extension-host/suite/index.cjs", import.meta.url)),
+      "utf8",
+    );
+    const lifecycleJourney = readFileSync(
+      fileURLToPath(new URL("extension-host/suite/diagnostics-lifecycle.test.cjs", import.meta.url)),
+      "utf8",
+    );
+
+    expect(suiteIndex).toContain('mocha.addFile(path.join(__dirname, "diagnostics-lifecycle.test.cjs"))');
+    for (const marker of [
+      "the file-renamed old URI",
+      "the transient rename URI",
+      "the folder-renamed old URI",
+      "the configuration-excluded URI",
+      "the retired-session URI",
+      "the retired-workspace URI",
+      "the final cumulative retired-URI sweep",
+    ]) {
+      expect(lifecycleJourney).toContain(marker);
+    }
+    expect(lifecycleJourney).toContain("assertAureliaDiagnosticsRemainAbsent");
+    expect(lifecycleJourney).toContain("deleteWorkspaceDirectoryIfPresent");
+  });
+
   test("pins and enforces the bounded Resource Discovery observation ledger size", async () => {
     const root = join(contractTempRoot, randomUUID());
     try {

@@ -91,6 +91,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "label": "src/main.ts@1025..1048",
               "path": "src/main.ts",
               "role": "line:32:character:6",
+              "sourceFileRole": "app-source",
+              "sourceWorkspaceKey": "validation-rule-source-errors",
               "start": 1025
             },
             "sourceRole": "app-source"
@@ -203,11 +205,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 39,
-          "line": 49
+          "line": 56
         },
         "start": {
           "character": 4,
-          "line": 46
+          "line": 53
         }
       },
       "rangeText": "this.rules\n      .on(Person)\n      .ensure('name')\n      .withMessage('Name is required.')",
@@ -244,11 +246,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 54,
-          "line": 52
+          "line": 59
         },
         "start": {
           "character": 14,
-          "line": 52
+          "line": 59
         }
       },
       "rangeText": "(person: any) => person[getDynamicKey()]",
@@ -285,11 +287,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 62,
-          "line": 56
+          "line": 63
         },
         "start": {
           "character": 55,
-          "line": 56
+          "line": 63
         }
       },
       "rangeText": "'email'",
@@ -326,11 +328,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 113,
-          "line": 61
+          "line": 68
         },
         "start": {
           "character": 4,
-          "line": 58
+          "line": 65
         }
       },
       "rangeText": "this.erasedContainer\n      .get(IValidationRules)\n      .ensure('container-root')\n      .withMessage('Container-returned validation rules stay framework-rooted when the receiver type is erased.')",
@@ -367,11 +369,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 10,
-          "line": 65
+          "line": 72
         },
         "start": {
           "character": 8,
-          "line": 65
+          "line": 72
         }
       },
       "rangeText": "''",
@@ -408,11 +410,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 50,
-          "line": 66
+          "line": 73
         },
         "start": {
           "character": 40,
-          "line": 66
+          "line": 73
         }
       },
       "rangeText": "customRule",

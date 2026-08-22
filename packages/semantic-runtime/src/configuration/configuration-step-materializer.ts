@@ -46,6 +46,7 @@ import {
 } from '../kernel/vocabulary.js';
 import type { FullResourceDefinition } from '../resources/resource-definition.js';
 import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
+import { runtimeResourceKeyForKind } from '../resources/resource-kind.js';
 import {
   RegistrationEmissionContext,
   RegistrationEmissionScope,
@@ -1518,7 +1519,28 @@ function enrichResourceRegistration(
   resources: ResourceDefinitionIndex | null,
 ): RegistrationAdmissionObservation {
   const definition = resourceDefinitionForRegistrationValue(observation, context, resources);
-  if (definition == null || observation.registeredValue == null) {
+  const effectConstraint = definition == null
+    ? resourceEffectConstraintForRegistrationValue(observation, context, resources)
+    : null;
+  let registeredValue = observation.registeredValue;
+  if (registeredValue == null && effectConstraint != null) {
+    registeredValue = new RegistrationValueObservation(
+      RegistrationValueKind.ResourceDefinitionConstraint,
+      effectConstraint.localName,
+      effectConstraint.sourceNode,
+      effectConstraint.localName != null,
+      effectConstraint.productHandle,
+      null,
+      null,
+      effectConstraint.moduleKey,
+      null,
+      null,
+      null,
+      effectConstraint.runtimeLookupKeys,
+      effectConstraint.resourceKind,
+    );
+  }
+  if (registeredValue == null || (definition == null && effectConstraint == null)) {
     return observation;
   }
 
@@ -1526,16 +1548,66 @@ function enrichResourceRegistration(
     RegistrationStrategy.Resource,
     RegistrationKeyRole.Unknown,
     null,
-    observation.registeredValue.withProductProjection(
-      RegistrationValueKind.ResourceDefinition,
-      definition.target.localName ?? observation.registeredValue.localName,
-      definition.productHandle,
-      observation.registeredValue.frameworkKind,
+    registeredValue.withProductProjection(
+      definition == null
+        ? RegistrationValueKind.ResourceDefinitionConstraint
+        : RegistrationValueKind.ResourceDefinition,
+      definition?.target.localName
+        ?? registeredValue.localName,
+      definition?.productHandle ?? effectConstraint?.productHandle ?? null,
+      registeredValue.frameworkKind,
+      definition == null
+        ? effectConstraint?.runtimeLookupKeys ?? registeredValue.resourceLookupKeys
+        : resourceDefinitionRuntimeLookupKeys(definition, observation.resourceLookupNameOverride),
+      definition?.type ?? effectConstraint?.resourceKind ?? registeredValue.resourceKind,
     ),
     observation.openSeams.filter((seam) =>
       seam.openKind !== KernelVocabulary.Registration.OpenStrategy.key
     ),
   );
+}
+
+function resourceDefinitionRuntimeLookupKeys(
+  definition: FullResourceDefinition,
+  lookupNameOverride: string | null,
+): readonly string[] {
+  if (!('name' in definition)) return [];
+  return [lookupNameOverride ?? definition.name, ...definition.aliases.map((alias) => alias.name)]
+    .flatMap((name) => {
+      const key = runtimeResourceKeyForKind(definition.type, name);
+      return key == null ? [] : [key];
+    });
+}
+
+function resourceEffectConstraintForRegistrationValue(
+  observation: RegistrationAdmissionObservation,
+  context: ConfigurationRecognitionContext,
+  resources: ResourceDefinitionIndex | null,
+) {
+  const registeredValue = observation.registeredValue;
+  if (resources == null) return null;
+  const carrierConstraint = resources.lookupEffectConstraintByCarrierNode(observation.sourceNode);
+  if (carrierConstraint != null) return carrierConstraint;
+  if (registeredValue == null) return null;
+  if (
+    registeredValue.isDeclaration
+    && registeredValue.moduleKey != null
+    && registeredValue.localName != null
+  ) {
+    const constraint = resources.lookupEffectConstraintByModuleLocal(
+      registeredValue.moduleKey,
+      registeredValue.localName,
+    );
+    if (constraint != null) return constraint;
+  }
+  if (context.typeSystem != null && ts.isExpression(registeredValue.node)) {
+    const constraint = resources.lookupEffectConstraintByTypeScriptExpression(
+      context.typeSystem,
+      registeredValue.node,
+    );
+    if (constraint != null) return constraint;
+  }
+  return resources.lookupEffectConstraintByCarrierNode(registeredValue.node);
 }
 
 function resourceDefinitionForRegistrationValue(

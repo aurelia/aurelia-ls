@@ -40,8 +40,15 @@ export const enum HtmlCommentSemanticKind {
 export const enum HtmlRecoveryKind {
   MissingEndTag = 'missing-end-tag',
   UnexpectedEndTag = 'unexpected-end-tag',
+  UnterminatedStartTag = 'unterminated-start-tag',
+  UnterminatedEndTag = 'unterminated-end-tag',
+  NonVoidSelfClosing = 'non-void-self-closing',
   UnterminatedComment = 'unterminated-comment',
+  MalformedComment = 'malformed-comment',
+  UnterminatedCdata = 'unterminated-cdata',
   UnterminatedAttribute = 'unterminated-attribute',
+  MissingAttributeValue = 'missing-attribute-value',
+  InvalidAttribute = 'invalid-attribute',
   DuplicateAttribute = 'duplicate-attribute',
   InvalidDoctype = 'invalid-doctype',
   Open = 'open',
@@ -108,6 +115,7 @@ export type HtmlCommentField =
 const HtmlDocumentDetailKind = 'template.html-document';
 const HtmlNodeDetailKind = 'template.html-node';
 const HtmlAttributeDetailKind = 'template.html-attribute';
+const HtmlRecoveryDetailKind = 'template.html-recovery';
 
 /** Reference to one authored HTML IR node. */
 export class HtmlNodeReference {
@@ -147,6 +155,14 @@ export class HtmlRecovery {
     /** Provenance for the recovery observation. */
     readonly provenanceHandle: ProvenanceHandle | null,
   ) {}
+
+  get productHandle(): ProductHandle {
+    return productDetailHandle(this, HtmlRecoveryDetailKind);
+  }
+
+  get identityHandle(): IdentityHandle {
+    return productDetailIdentityHandle(this, HtmlRecoveryDetailKind);
+  }
 }
 
 /** Authored HTML document or template fragment before Aurelia attribute classification. */
@@ -287,6 +303,7 @@ export class HtmlText {
 
   constructor(
     readonly text: string,
+    readonly recoveries: readonly HtmlRecovery[] = [],
     readonly fieldProvenance: readonly FieldProvenance<HtmlTextField>[] = [],
   ) {}
 

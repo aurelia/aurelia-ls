@@ -4,6 +4,7 @@ import type {
   ProductHandle,
 } from '../kernel/handles.js';
 import type { DiKeyIdentityKind } from '../kernel/identity.js';
+import type { ResourceDefinitionKind } from '../resources/resource-kind.js';
 
 export const enum RegistrationValueKind {
   /** Use when a registration value expression was observed but not classified. */
@@ -24,6 +25,8 @@ export const enum RegistrationValueKind {
   Factory = 'factory',
   /** Aurelia resource definition value admitted through container registration. */
   ResourceDefinition = 'resource-definition',
+  /** Resource define-call result whose kind/name are known from a header but whose full target remains open. */
+  ResourceDefinitionConstraint = 'resource-definition-constraint',
   /** Static `$au` resource class admitted through container registration. */
   StaticResourceType = 'static-resource-type',
   /** IRegistry-compatible object or class with a register method. */
@@ -135,5 +138,9 @@ export class RegistrationValueReference {
     readonly registryBody: RegistryBodyReference | null = null,
     /** Runtime key shape when this value itself denotes a DI key, notably an alias target. */
     readonly keyKind: DiKeyIdentityKind | null = null,
+    /** Possible canonical runtime resource keys retained by a resource-only definition-header constraint. */
+    readonly resourceLookupKeys: readonly string[] = [],
+    /** Resource registration kind retained when dynamic naming prevents an exact canonical key. */
+    readonly resourceKind: ResourceDefinitionKind | null = null,
   ) {}
 }

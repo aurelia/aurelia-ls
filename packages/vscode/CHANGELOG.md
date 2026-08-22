@@ -15,10 +15,14 @@ source and disclose partial, refused, or failed results instead of filling seman
 - Extended TypeScript, TSX, JavaScript, and JSX member renames atomically into admitted templates, while leaving unverified same-name candidates unchanged and reporting them.
 - Made Quick Fixes re-plan against the current document and reject stale, overlapping, or otherwise unsafe workspace edits.
 - Preserved framework and template-checker TypeScript codes through VS Code Problems while leaving ordinary Program diagnostics to VS Code's native TypeScript/JavaScript provider, and hardened native symbols, highlights, selection ranges, paired-tag linked editing, folding ranges, inlay hints, and semantic-token source ranges.
-- Prevented retained native CSS and JavaScript false positives in semantically proved templates, including valid
-  `style="width: ${value}%"` interpolation, by moving settled documents into the scoped **Aurelia HTML** language mode.
-  Ordinary HTML keeps native validation and no global `html.validate.*` setting changes. Cold first-open admission remains
-  asynchronous, so a native diagnostic can appear briefly before exact ownership settles and clears it.
+- Kept unkeyed editor providers neutral when one source belongs to multiple Aurelia projects, while project-aware Resource Discovery continues to expose the exact project candidates instead of selecting one implicitly.
+- Kept embedded CSS and JavaScript validation on by default so legitimate native Problems remain visible. Added
+  resource-scoped `aurelia.templateDiagnostics.suppressNative` as an explicit tradeoff for teams that prefer removing
+  interpolation false positives such as `style="width: ${value}%"`: proved templates then use **Aurelia HTML** mode,
+  which also hides legitimate CSS/JavaScript findings. Bounded Aurelia recovery Problems for supported malformed tags,
+  attributes, comments, declarations, and foreign-content CDATA remain in both modes; they are not general HTML validation. Ordinary
+  HTML remains native and no global `html.validate.*` setting is changed. Cold first-open ownership proof remains
+  asynchronous, so a native diagnostic can appear briefly before enabled suppression settles.
 - Semantic-token responses now require complete, source-backed, non-overlapping single-line classifications, and the extension declares native fallback types for its Aurelia token vocabulary.
 
 ### Workspace and resource discovery

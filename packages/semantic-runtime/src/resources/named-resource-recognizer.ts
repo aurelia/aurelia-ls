@@ -42,6 +42,7 @@ import {
   ResourceDefinitionKind,
   type NamedResourceDefinitionKind,
 } from './resource-kind.js';
+import { assignedExpressionVariableDeclaration } from './resource-convergence-support.js';
 
 /** Combined recognizer for named resources that are visible by markup or expression syntax names. */
 export class NamedResourceRecognizer {
@@ -400,9 +401,12 @@ function recognizeDefineCall(
   const targetRead = targetExpression == null
     ? null
     : readEvaluatedExpressionTarget(targetExpression, context.expressionReader);
-  const target = targetRead == null
-    ? generatedDefineCallTarget(call, resourceKind)
-    : resourceTargetObservation(targetRead);
+  // CustomElement.define returns the defined Type. When an explicit target remains dynamic but the call result is
+  // assigned to a declaration, that declaration is still an exact resource-only registration carrier. Preserve the
+  // target-evaluation seam below, but do not discard the define-call effect constraint or turn its later registration
+  // into an arbitrary unknown registry.
+  const target = (targetRead == null ? null : resourceTargetObservation(targetRead))
+    ?? generatedDefineCallTarget(call, resourceKind);
   const read = readNamedResourceDefinition(
     resourceKind,
     target,
@@ -441,28 +445,15 @@ function generatedDefineCallTarget(
   call: ts.CallExpression,
   resourceKind: NamedResourceDefinitionKind,
 ): ResourceTargetObservation | null {
-  if (resourceKind !== ResourceDefinitionKind.CustomElement) {
+  // Only CustomElement.define may synthesize a Type when no target is supplied. Every named-resource define API,
+  // however, returns its explicit target Type, so an assigned call result remains an exact resource carrier even when
+  // evaluating that target stayed open.
+  if (call.arguments[1] == null && resourceKind !== ResourceDefinitionKind.CustomElement) {
     return null;
   }
 
-  let carrier: ts.Node = call;
-  while (
-    carrier.parent != null
-    && (
-      ts.isAsExpression(carrier.parent)
-      || ts.isTypeAssertionExpression(carrier.parent)
-      || ts.isParenthesizedExpression(carrier.parent)
-      || ts.isNonNullExpression(carrier.parent)
-      || ts.isSatisfiesExpression(carrier.parent)
-    )
-  ) {
-    carrier = carrier.parent;
-  }
-  const declaration = carrier.parent;
-  return declaration != null
-    && ts.isVariableDeclaration(declaration)
-    && declaration.initializer === carrier
-    && ts.isIdentifier(declaration.name)
+  const declaration = assignedExpressionVariableDeclaration(call);
+  return declaration != null && ts.isIdentifier(declaration.name)
     ? new ResourceTargetObservation(declaration.name.text, declaration.name, declaration)
     : new ResourceTargetObservation(null, call, null);
 }
@@ -523,7 +514,9 @@ function readNamedResourceDefinition(
       KernelVocabulary.Resource.OpenNameExpression.key,
       name?.openSummary ?? missingNameSummary,
       name?.node ?? definitionExpression ?? carrierNode,
-      name?.openReasonKinds ?? [],
+      name?.openReasonKinds.length
+        ? name.openReasonKinds
+        : [OpenSeamReasonKind.ResourceDefinitionNameOpen],
     ));
   } else if (name.openSummary != null) {
     openSeams.push(new ResourceRecognitionOpen(

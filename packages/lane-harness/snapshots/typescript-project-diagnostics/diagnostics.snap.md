@@ -170,6 +170,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "label": "src/diagnostic-contract.ts@45..57",
               "path": "src/diagnostic-contract.ts",
               "role": "line:1:character:2",
+              "sourceFileRole": "app-source",
+              "sourceWorkspaceKey": "typescript-project-diagnostics",
               "start": 45
             },
             "sourceRole": "app-source"

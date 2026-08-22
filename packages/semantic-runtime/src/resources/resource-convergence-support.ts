@@ -1,9 +1,9 @@
 import ts from 'typescript';
 import type { AddressHandle } from '../kernel/handles.js';
-import type { OpenSeamReasonKind } from '../kernel/open-seam.js';
+import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import {
-  EvaluationRead,
   readStaticStringValue,
+  type EvaluationRead,
   type StaticEvaluationExpressionReader,
 } from '../evaluation/expression-reader.js';
 import {
@@ -86,6 +86,23 @@ export function convergenceOpenForRead(
   );
 }
 
+/**
+ * Retain evaluator causality when evaluation itself is open; use the framework-shape reason only for a closed value
+ * that the resource metadata contract rejects.
+ */
+export function convergenceOpenForRejectedReadShape(
+  summary: string,
+  read: EvaluationRead<EvaluationValue> | null,
+  closedShapeReasonKinds: readonly OpenSeamReasonKind[],
+): readonly ConvergenceOpen[] {
+  const evaluationReasonKinds = openSeamReasonKindsForEvaluationRead(read);
+  return convergenceOpenForNode(
+    summary,
+    read?.node ?? read?.value?.node,
+    evaluationReasonKinds.length === 0 ? closedShapeReasonKinds : evaluationReasonKinds,
+  );
+}
+
 export function nullableConvergenceOpenForRead(
   summary: string,
   read: EvaluationRead<EvaluationValue> | null,
@@ -157,6 +174,32 @@ export function readNearestStaticClassProperty(
     }
   }
   return null;
+}
+
+/** Transparent-wrapper-aware variable declaration that receives one expression's exact return value. */
+export function assignedExpressionVariableDeclaration(
+  expression: ts.Node,
+): ts.VariableDeclaration | null {
+  let carrier = expression;
+  while (
+    carrier.parent != null
+    && (
+      ts.isAsExpression(carrier.parent)
+      || ts.isTypeAssertionExpression(carrier.parent)
+      || ts.isParenthesizedExpression(carrier.parent)
+      || ts.isNonNullExpression(carrier.parent)
+      || ts.isSatisfiesExpression(carrier.parent)
+    )
+  ) {
+    carrier = carrier.parent;
+  }
+  const declaration = carrier.parent;
+  return declaration != null
+    && ts.isVariableDeclaration(declaration)
+    && declaration.initializer === carrier
+    && ts.isIdentifier(declaration.name)
+    ? declaration
+    : null;
 }
 
 export function readObjectProperty(
@@ -233,7 +276,11 @@ function convergenceScalarRead<TValue>(
     ? new ConvergenceScalarRead<TValue>(value, [], read.node ?? read.value?.node ?? null)
     : new ConvergenceScalarRead<TValue>(
         value,
-        convergenceOpenForRead(openSummary, read, []),
+        convergenceOpenForRejectedReadShape(
+          openSummary,
+          read,
+          [OpenSeamReasonKind.ResourceDefinitionFieldOpen],
+        ),
         read.node ?? read.value?.node ?? null,
       );
 }

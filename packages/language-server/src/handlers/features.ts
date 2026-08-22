@@ -623,16 +623,19 @@ function documentRequest<T>(
   feature: string,
   token: CancellationToken,
   uri: string,
-  whenNotAuthored: (operation: SemanticRuntimeLspOperation) => T | Promise<T>,
+  whenUnavailable: (operation: SemanticRuntimeLspOperation) => T | Promise<T>,
   handler: (operation: SemanticRuntimeLspOperation) => T | Promise<T>,
 ): Promise<T> {
+  // Standard LSP document requests carry no Aurelia project selector. Multiple exact owners must therefore fall back
+  // neutrally; project-aware custom requests use their own wrapper and preserve the candidate set for user selection.
   return runSemanticRuntimeDocumentRequest(
     ctx,
     feature,
     token,
     uri,
-    whenNotAuthored,
+    whenUnavailable,
     handler,
+    { requireExactProjectOwner: true },
   );
 }
 

@@ -7,21 +7,21 @@ import {
 import { registrationOperationsVisibleToContainer } from '../di/world-construction.js';
 import {
   frameworkRegistrationKindForOperation,
-  type ContainerRegistrationOperation,
 } from '../di/container-registration.js';
+import {
+  registrationHidingOpenSeamsForContainer,
+  registrationOpenSeamCanHideResource,
+} from '../di/registration-open-pressure.js';
 import type { AddressHandle } from '../kernel/handles.js';
 import {
-  OpenSeamReasonKind,
   openSeamBoundaryKindForReason,
   type OpenSeam,
 } from '../kernel/open-seam.js';
 import type { KernelStore } from '../kernel/store.js';
-import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
   FrameworkRegistrationCapability,
   frameworkRegistrationCapabilitiesForKind,
 } from '../registration/framework-registration-manifest.js';
-import { runtimeResourceKeyForKind } from '../resources/resource-kind.js';
 import {
   TemplateCompilerWorldKind,
   TemplateResourceScopeExclusionReason,
@@ -246,7 +246,16 @@ function resourceExplanationForScope(
   // Without an exact seam-to-slot ordering witness, a registration-hiding seam on the consulting chain can precede
   // and replace a modeled positive winner just as easily as it can fill a modeled absence. It can also invalidate the
   // effective configuration path whose closed membership excluded this resource, so every conclusion stays open.
-  const registrationBlockers = registrationHidingOpenSeams(emission, scope);
+  const registrationBlockers = registrationHidingOpenSeamsForContainer(
+    emission.appWorld.diWorld,
+    emission.appWorld.configuration.openSeamScopes,
+    emission.containerChainFacts,
+    scope.container.identityHandle,
+    (operation) => registrationOpenSeamCanHideResource(
+      operation,
+      resource.registrationKey == null ? null : new Set([resource.registrationKey]),
+    ),
+  );
   const blockers = projectOpenSeamBlockers(
     store,
     [...configuration.openSeams, ...registrationBlockers],
@@ -562,79 +571,6 @@ function notIndicatedConfigurationEvidence(): SemanticResourceAvailabilityExplan
   };
 }
 
-function registrationHidingOpenSeams(
-  emission: AureliaAppWorldProjectEmission,
-  scope: TemplateResourceScope,
-): readonly OpenSeam[] {
-  const containerIdentityHandle = scope.container.identityHandle;
-  const chain = containerIdentityHandle == null
-    ? null
-    : new Set(emission.containerChainFacts.containerChainIdentityHandles(containerIdentityHandle));
-  const seams: OpenSeam[] = [];
-  for (const scoped of emission.appWorld.diWorld.registrationOpenSeamScopes) {
-    const operationContainer = scoped.operation?.container.identityHandle ?? null;
-    if (
-      (chain == null || operationContainer == null || chain.has(operationContainer))
-      && registrationOpenSeamCanHideResource(scoped.operation)
-    ) {
-      seams.push(scoped.seam);
-    }
-  }
-  for (const scoped of emission.appWorld.configuration.openSeamScopes) {
-    if (!isConfigurationRegistrationHidingOpenSeam(scoped.seam)) continue;
-    if (
-      chain == null
-      || scoped.containerIdentityHandle == null
-      || chain.has(scoped.containerIdentityHandle)
-    ) {
-      seams.push(scoped.seam);
-    }
-  }
-  return uniqueOpenSeams(seams);
-}
-
-function registrationOpenSeamCanHideResource(
-  operation: ContainerRegistrationOperation | null,
-): boolean {
-  if (operation == null) return true;
-  // Recognized framework groups project resource catalogs through their own closed catalog family. Their residual
-  // DI-body seam covers non-resource providers and must not make every built-in resource perpetually uncertain.
-  const frameworkKind = frameworkRegistrationKindForOperation(operation);
-  return frameworkKind == null;
-}
-
-function isConfigurationRegistrationHidingOpenSeam(seam: OpenSeam): boolean {
-  switch (seam.seamKindKey) {
-    case KernelVocabulary.Di.OpenRegistryBody.key:
-      return true;
-    case KernelVocabulary.Di.OpenRegistrationSpending.key:
-      return seam.reasonKinds.some(isRegistrationHidingReason);
-    case KernelVocabulary.Registration.OpenKeyExpression.key:
-    case KernelVocabulary.Registration.OpenValueExpression.key:
-    case KernelVocabulary.Registration.OpenStrategy.key:
-    case KernelVocabulary.Registration.OpenSpread.key:
-    case KernelVocabulary.Registration.OpenAliasTarget.key:
-      return true;
-    default:
-      return false;
-  }
-}
-
-function isRegistrationHidingReason(reason: OpenSeamReasonKind): boolean {
-  switch (reason) {
-    case OpenSeamReasonKind.DiRegistrationContainerOpen:
-    case OpenSeamReasonKind.DiRegistrationAdmissionOpen:
-    case OpenSeamReasonKind.DiRegistrationKeyOpen:
-    case OpenSeamReasonKind.DiRegistrationStrategyOpen:
-    case OpenSeamReasonKind.DiRegistrationPublicationOpen:
-    case OpenSeamReasonKind.DiRegistryBodyOpen:
-    case OpenSeamReasonKind.DiResourceSlotOpen:
-      return true;
-    default:
-      return false;
-  }
-}
-
 function projectOpenSeamBlockers(
   store: KernelStore,
   seams: readonly OpenSeam[],
@@ -771,10 +707,6 @@ function resourceExplanationNextSteps(
     },
   });
   return steps.slice(0, 3);
-}
-
-function canonicalRegistrationKey(resource: TemplateVisibleResource): string | null {
-  return runtimeResourceKeyForKind(resource.resourceKind, resource.name);
 }
 
 function coverageForFacts(facts: readonly ResourceExplanationFacts[]): SemanticRuntimeAnswerCoverage {

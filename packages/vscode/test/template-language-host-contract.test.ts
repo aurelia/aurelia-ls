@@ -169,6 +169,7 @@ describe("owned-template Extension Host contract", () => {
     expect(containmentJourney).not.toContain("setTextDocumentLanguage must be observed through the replacement TextDocument");
     expect(containmentJourney).not.toContain("initialHtmlDocument.isClosed");
     expect(containmentJourney).toContain('getConfiguration("html", owned.uri).get("validate.styles")');
+    expect(containmentJourney).toContain('getConfiguration("html", owned.uri).get("validate.scripts")');
     expect(containmentJourney).toContain('getConfiguration("aurelia.templateDiagnostics", ownedUri)');
     expect(containmentJourney).toContain("templateDiagnosticsSuppressNative(ownedUri)");
     expect(containmentJourney).not.toContain('suppression.get("suppressNative")');
@@ -177,7 +178,17 @@ describe("owned-template Extension Host contract", () => {
     expect(containmentJourney).toContain("the workspace-folder suppression opt-in should become effective");
     expect(containmentJourney).toContain("the workspace-folder suppression opt-out should become effective");
     expect(containmentJourney).toContain("a proved Aurelia template must retain native HTML mode while suppression is disabled");
-    expect(containmentJourney).toContain("enabled suppression should clear native CSS diagnostics");
+    expect(containmentJourney).toContain("native HTML mode should report interpolation noise plus legitimate CSS and JavaScript faults");
+    expect(containmentJourney).toContain("enabled suppression should clear native CSS and JavaScript diagnostics");
+    expect(containmentJourney).toContain("suppressed native-fault cleanup should remain free of native CSS and JavaScript diagnostics");
+    expect(containmentJourney).toContain("const malformedMarkup = ownedBaseline.replace(");
+    expect(containmentJourney).toContain('const malformedRangeText = "--!>"');
+    expect(containmentJourney).toContain("native html should publish one bounded Aurelia recovery row");
+    expect(containmentJourney).toContain("suppressed malformed markup should publish one Aurelia recovery row");
+    expect(containmentJourney).toContain("suppressed HTML recovery Problem should clear after repair");
+    expect(containmentJourney).toContain("assertHtmlRecoveryProblem(owned, recoveryDiagnostics[0]");
+    expect(productSurface).toContain("function assertHtmlRecoveryProblem(document, recovery, malformedMarkup, malformedRangeText)");
+    expect(productSurface).toContain("Malformed HTML comment closing delimiter; use -->.");
     expect(containmentJourney).toContain("disabling suppression should restore native CSS diagnostics");
     expect(containmentJourney).toContain("Aurelia HTML mode should retain the native article-element completion");
     expect(containmentJourney).toContain("Aurelia HTML mode should retain Aurelia expression completions");
@@ -196,6 +207,10 @@ describe("owned-template Extension Host contract", () => {
     expect(containmentJourney).not.toContain('excludedAureliaWorkspace, "src", "excluded-view.html"');
     expect(productSurface).toContain('"css-propertyvalueexpected"');
     expect(productSurface).toContain('"css-ruleorselectorexpected"');
+    expect(productSurface).toContain('const nativeCssProbe = "#12zz34"');
+    expect(productSurface).toContain('const nativeJavaScriptProbe = "const aureliaNativePolicyProbe = ;"');
+    expect(productSurface).toContain("function nativeJavaScriptDiagnostics(uri)");
+    expect(productSurface).toContain("function diagnosticsTouchingText(document, diagnostics, text)");
     expect(productSurface).toContain("retiring the owning session should retain default native HTML mode");
     expect(productSurface).toContain("re-admitted ownership should retain default native CSS diagnostics");
     expect(productSurface).toContain('get("templateDiagnostics.suppressNative", false)');

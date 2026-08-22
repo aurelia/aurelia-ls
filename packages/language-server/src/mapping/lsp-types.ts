@@ -225,15 +225,21 @@ export function mapSemanticRuntimeAppDiagnostics(
   }
   for (const group of presentation.groups) {
     const primaryRow = rows[group.primary.rowIndex]!;
+    const clientOwnsTypeScriptProgramDiagnostics =
+      options.clientOwnsTypeScriptProgramDiagnostics === true;
     if (
-      options.clientOwnsTypeScriptProgramDiagnostics === true
+      clientOwnsTypeScriptProgramDiagnostics
       && isTypeScriptProgramDiagnostic(primaryRow)
     ) {
       continue;
     }
     const relatedInformation: DiagnosticRelatedInformation[] = [];
     const contextual: DetachedSemanticDiagnosticPresentationContext[] = [];
-    for (const related of group.related) {
+    const visibleRelated = group.related.filter((related) =>
+      !clientOwnsTypeScriptProgramDiagnostics
+      || !isTypeScriptProgramDiagnostic(rows[related.rowIndex]!)
+    );
+    for (const related of visibleRelated) {
       const row = rows[related.rowIndex]!;
       const relatedMapping = semanticRuntimeDiagnosticRelatedInformation(row, document, documentUris, lookupText);
       relatedInformation.push(...relatedMapping.value);
@@ -251,9 +257,12 @@ export function mapSemanticRuntimeAppDiagnostics(
       relatedInformation,
       group.primarySeverity,
       {
-        rawRowCount: group.rawRowCount,
+        rawRowCount: 1 + visibleRelated.length,
         primarySeverity: group.primarySeverity,
-        maxRawSeverity: group.maxRawSeverity,
+        maxRawSeverity: maxDiagnosticSeverity([
+          primaryRow,
+          ...visibleRelated.map((related) => rows[related.rowIndex]!),
+        ]),
         contextual,
       },
     );
@@ -292,6 +301,18 @@ const semanticDiagnosticSeverityRank: Readonly<Record<SemanticAppDiagnosticRow["
   warning: 2,
   information: 1,
 };
+
+function maxDiagnosticSeverity(
+  rows: readonly SemanticAppDiagnosticRow[],
+): SemanticAppDiagnosticRow["severity"] {
+  return rows.reduce(
+    (maximum, row) =>
+      semanticDiagnosticSeverityRank[row.severity] > semanticDiagnosticSeverityRank[maximum]
+        ? row.severity
+        : maximum,
+    rows[0]?.severity ?? "information",
+  );
+}
 
 function semanticDiagnosticPresentationFailures(
   presentation: NonNullable<SemanticAppDiagnosticsResult["presentation"]>,

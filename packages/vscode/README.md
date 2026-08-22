@@ -36,8 +36,14 @@ need a separate, evidence-backed policy.
 VS Code's built-in HTML service sends embedded style and script text to its CSS and JavaScript validators without
 understanding Aurelia interpolation. Aurelia templates stay in native `html` mode with those validators by default.
 Set `aurelia.templateDiagnostics.suppressNative` to `true` for a workspace folder to move exactly proved templates into
-the filename-neutral **Aurelia HTML** language mode and suppress built-in HTML/CSS/JavaScript diagnostics. This avoids
-false Problems for interpolation such as `style="width: ${value}%"`, but also suppresses legitimate native findings.
+the filename-neutral **Aurelia HTML** language mode and suppress embedded CSS/JavaScript diagnostics. This avoids
+false Problems for interpolation such as `style="width: ${value}%"`, but also suppresses legitimate CSS/JavaScript findings.
+Keeping suppression disabled is the recommended safety default. Enable it only when interpolation noise is more costly
+than losing embedded CSS/JavaScript Problems, and use project lint or build checks to retain that validation.
+
+Exact owned templates keep bounded Aurelia recovery Problems for supported malformed tags, attributes, comments,
+declarations, and foreign-content CDATA in either language mode. This is not a general HTML validator; other tokenizer
+and tree-building rules remain outside that set.
 
 HTML language-service participation and completions remain available in Aurelia HTML mode, but full native-mode parity
 is not promised: file icons, `[html]`-scoped settings, snippets, formatter selection, and other native HTML or editor
@@ -155,16 +161,20 @@ anything, so a stale selection cannot be paired with a newer project snapshot.
 
 ### Native Template Diagnostics
 
-Aurelia templates remain in VS Code's native `html` language mode by default. This preserves built-in HTML, CSS, and
-JavaScript diagnostics, default file icons, and ordinary language-scoped settings, but the native validators may report
+Aurelia templates remain in VS Code's native `html` language mode by default. This preserves embedded CSS and
+JavaScript diagnostics, default file icons, and ordinary language-scoped settings, but those validators may report
 false positives for valid Aurelia interpolation.
 
 Set `aurelia.templateDiagnostics.suppressNative` to `true` for a workspace folder to suppress those native diagnostics.
 Only templates proved to belong to Aurelia move into `aurelia-html` mode; unowned HTML remains native `html`. Aurelia
 features and HTML language-service completions remain available, but this is not full native-mode parity. Enabling the
-setting suppresses legitimate native findings too, and may affect file icons, `[html]`-scoped settings, snippets,
+setting suppresses legitimate CSS/JavaScript findings too, and may affect file icons, `[html]`-scoped settings, snippets,
 formatter selection, and other native HTML or editor behavior. On a cold first open, ownership proof is asynchronous,
 so a native diagnostic may appear briefly before enabled suppression settles.
+Bounded Aurelia recovery Problems for supported malformed tags, attributes, comments, declarations, and foreign-content
+CDATA remain in both modes, but do not constitute general HTML validation.
+Keep the setting `false` unless interpolation false Problems outweigh embedded CSS/JavaScript validation, and retain that
+validation in project lint or build checks when opting in.
 
 ### Binding Mode Hints
 
@@ -245,7 +255,7 @@ workspaces. Virtual workspaces are unsupported, and remote development is not ye
 |---------|---------|-------|---------|
 | `aurelia.activationMode` | `auto` | Workspace folder | Use project-shape-confirmed automatic activation, explicit `on`, or hard subtree exclusion with `off` |
 | `aurelia.inlayHints.bindingMode` | `false` | Workspace folder | Show the resolved mode of implicit `.bind` bindings |
-| `aurelia.templateDiagnostics.suppressNative` | `false` | Workspace folder | Move proved Aurelia templates into `aurelia-html` mode and suppress VS Code's built-in HTML/CSS/JavaScript diagnostics |
+| `aurelia.templateDiagnostics.suppressNative` | `false` | Workspace folder | Opt into quieter interpolation at the cost of embedded CSS/JavaScript Problems |
 
 ## Getting Started
 

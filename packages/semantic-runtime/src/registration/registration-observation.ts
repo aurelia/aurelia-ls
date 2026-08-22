@@ -16,6 +16,7 @@ import type {
   RegistryBodyReference,
   RegistrationValueKind,
 } from './registration-reference.js';
+import type { ResourceDefinitionKind } from '../resources/resource-kind.js';
 
 /** Evaluator-owned constructable declaration source used when no TypeChecker epoch is available. */
 export class EvaluatedRegistrationKeyDeclarationSource {
@@ -99,6 +100,10 @@ export class RegistrationValueObservation {
     readonly keyObservation: RegistrationKeyObservation | null = null,
     /** Candidate-local evaluator value retained for later execution without entering kernel records. */
     readonly evaluatedValue: EvaluationValue | null = null,
+    /** Possible canonical runtime resource keys when a define-call result is resource-only but not fully converged. */
+    readonly resourceLookupKeys: readonly string[] = [],
+    /** Resource registration kind retained even when a dynamic name prevents exact key materialization. */
+    readonly resourceKind: ResourceDefinitionKind | null = null,
   ) {}
 
   /** Preserve the source/evaluator witness while another layer attaches a materialized product projection. */
@@ -107,6 +112,8 @@ export class RegistrationValueObservation {
     localName: string | null,
     productHandle: ProductHandle | null,
     frameworkKind: FrameworkRegistrationKind | null,
+    resourceLookupKeys: readonly string[] = this.resourceLookupKeys,
+    resourceKind: ResourceDefinitionKind | null = this.resourceKind,
   ): RegistrationValueObservation {
     return new RegistrationValueObservation(
       valueKind,
@@ -120,6 +127,8 @@ export class RegistrationValueObservation {
       this.registryBody,
       this.keyObservation,
       this.evaluatedValue,
+      resourceLookupKeys,
+      resourceKind,
     );
   }
 }

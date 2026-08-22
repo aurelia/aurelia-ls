@@ -43,6 +43,7 @@ import type {
   HtmlAttribute,
   HtmlDocument,
   HtmlIrNode,
+  HtmlRecovery,
 } from './html-ir.js';
 import type {
   TemplateInstruction,
@@ -292,6 +293,14 @@ export const TemplateDetailDescriptors = {
     KernelVocabulary.Template.HtmlAttribute.key,
     'template.html-attribute',
     'Authored HTML attribute detail.',
+  ),
+  HtmlRecovery: defineProductDetailDescriptor<
+    HtmlRecovery,
+    typeof KernelVocabulary.Template.HtmlRecovery.key
+  >(
+    KernelVocabulary.Template.HtmlRecovery.key,
+    'template.html-recovery',
+    'One exact authored HTML parser recovery fact.',
   ),
   CompiledTemplate: defineProductDetailDescriptor<
     CompiledTemplate,

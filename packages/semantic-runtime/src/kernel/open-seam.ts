@@ -54,6 +54,10 @@ export const enum OpenSeamReasonKind {
   ResourceWatchOpen = 'resource-watch-open',
   /** Resource recognition could not close the class/function target named by a definition carrier. */
   ResourceDefinitionTargetOpen = 'resource-definition-target-open',
+  /** Resource recognition could not close the canonical authored/runtime name of a definition carrier. */
+  ResourceDefinitionNameOpen = 'resource-definition-name-open',
+  /** A present resource definition field closed to a value shape that the framework metadata contract does not accept. */
+  ResourceDefinitionFieldOpen = 'resource-definition-field-open',
   /** A legal framework feature exists but this semantic-runtime substrate has not modeled it yet. */
   FeatureNotYetModeled = 'feature-not-yet-modeled',
   /** Binding-command dispatch reached an executable body with no modeled lowering semantics. */
@@ -264,6 +268,8 @@ export function openSeamBoundaryKindForReason(
     case OpenSeamReasonKind.ResourceAnnotationOpen:
     case OpenSeamReasonKind.ResourceWatchOpen:
     case OpenSeamReasonKind.ResourceDefinitionTargetOpen:
+    case OpenSeamReasonKind.ResourceDefinitionNameOpen:
+    case OpenSeamReasonKind.ResourceDefinitionFieldOpen:
     case OpenSeamReasonKind.BindingSourceResourceOpen:
     case OpenSeamReasonKind.BindingObserverSelectionOpen:
     case OpenSeamReasonKind.BindingObserverCapabilityOpen:
@@ -345,7 +351,9 @@ export class OpenSeam {
     readonly reasonSources: readonly OpenSeamReasonSource[] = [],
   ) {
     if (reasonKinds.length === 0) {
-      throw new Error(`Open seam '${seamKindKey}' must retain at least one typed causal reason.`);
+      throw new Error(
+        `Open seam '${seamKindKey}' must retain at least one typed causal reason: ${summary}`,
+      );
     }
   }
 }

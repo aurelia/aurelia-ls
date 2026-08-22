@@ -105,12 +105,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "sourceRole": "template",
         "subject": {
           "source": {
-            "end": 711,
+            "end": 775,
             "kind": "source-span-address",
-            "label": "src/template-spread-capture-semantics-app.html@697..711",
+            "label": "src/template-spread-capture-semantics-app.html@761..775",
             "path": "src/template-spread-capture-semantics-app.html",
             "role": "binding-source-assignment",
-            "start": 697
+            "start": 761
           },
           "span": null,
           "subjectKind": "template-expression",
@@ -121,11 +121,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "message": "Binding source type string | undefined may be nullish, but target 'title' requires string.",
       "range": {
         "end": {
-          "character": 32,
+          "character": 44,
           "line": 11
         },
         "start": {
-          "character": 18,
+          "character": 30,
           "line": 11
         }
       },
@@ -167,12 +167,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "sourceRole": "template",
         "subject": {
           "source": {
-            "end": 767,
+            "end": 844,
             "kind": "source-span-address",
-            "label": "src/template-spread-capture-semantics-app.html@745..767",
+            "label": "src/template-spread-capture-semantics-app.html@822..844",
             "path": "src/template-spread-capture-semantics-app.html",
             "role": "binding-source-assignment",
-            "start": 745
+            "start": 822
           },
           "span": null,
           "subjectKind": "template-expression",
@@ -183,11 +183,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "message": "Binding source type string | undefined may be nullish, but target 'title' requires string.",
       "range": {
         "end": {
-          "character": 40,
+          "character": 52,
           "line": 12
         },
         "start": {
-          "character": 18,
+          "character": 30,
           "line": 12
         }
       },
@@ -234,11 +234,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 26,
-          "line": 23
+          "line": 24
         },
         "start": {
           "character": 15,
-          "line": 23
+          "line": 24
         }
       },
       "rangeText": "...$element",
@@ -284,11 +284,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 23,
-          "line": 24
+          "line": 25
         },
         "start": {
           "character": 15,
-          "line": 24
+          "line": 25
         }
       },
       "rangeText": "$element",
@@ -334,11 +334,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 20,
-          "line": 25
+          "line": 26
         },
         "start": {
           "character": 7,
-          "line": 25
+          "line": 26
         }
       },
       "rangeText": "...$bindables",
@@ -384,11 +384,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 16,
-          "line": 26
+          "line": 27
         },
         "start": {
           "character": 7,
-          "line": 26
+          "line": 27
         }
       },
       "rangeText": "...$attrs",
@@ -434,11 +434,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 33,
-          "line": 45
+          "line": 46
         },
         "start": {
           "character": 4,
-          "line": 45
+          "line": 46
         }
       },
       "rangeText": "inner-gate.bind=\"showCapture\"",

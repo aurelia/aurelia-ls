@@ -15934,7 +15934,9 @@
                   "fields": {
                     "authoredName": "validation-errors.bind",
                     "requiredCapability": "validation-html.default-resources",
-                    "admissionState": "configured-out"
+                    "admissionState": "admission-unknown",
+                    "actionability": "registration-status-unknown",
+                    "blockingOpenSeamCount": 1
                   },
                   "sourceField": "configurationSources.0",
                   "source": { "sourceFile": "src/main.ts", "marker": "options.UseSubscriberCustomAttribute = false", "token": "options.UseSubscriberCustomAttribute = false" },
@@ -15944,7 +15946,9 @@
                   "fields": {
                     "authoredName": "validation-container",
                     "requiredCapability": "validation-html.default-resources",
-                    "admissionState": "configured-out"
+                    "admissionState": "admission-unknown",
+                    "actionability": "registration-status-unknown",
+                    "blockingOpenSeamCount": 1
                   },
                   "sourceField": "configurationSources.0",
                   "source": { "sourceFile": "src/main.ts", "marker": "options.SubscriberCustomElementTemplate = ''", "token": "options.SubscriberCustomElementTemplate = ''" },
@@ -15954,7 +15958,9 @@
                   "fields": {
                     "authoredName": "validation-container",
                     "requiredCapability": "validation-html.default-resources",
-                    "admissionState": "configured-out"
+                    "admissionState": "admission-unknown",
+                    "actionability": "registration-status-unknown",
+                    "blockingOpenSeamCount": 1
                   },
                   "sourceField": "admissionSources.0",
                   "source": { "sourceFile": "src/main.ts", "marker": "coreOnlyValidation", "markerOccurrence": 2, "token": "coreOnlyValidation" },

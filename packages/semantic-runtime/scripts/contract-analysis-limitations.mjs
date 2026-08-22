@@ -81,14 +81,16 @@ const sourceFilteredAnswer = app.ask({
   page: { size: 20 },
 });
 const sourceFiltered = sourceFilteredAnswer.value;
-const otherSourceFiltered = app.ask({
-  kind: SemanticAppQueryKind.AnalysisLimitations,
-  sourceFile: { filePath: 'src/app.ts' },
-  page: { size: 20 },
-}).value;
 assert.equal(sourceFiltered.rows.length, 1);
-assert.equal(otherSourceFiltered.candidateCount, 0);
-assert.equal(otherSourceFiltered.rows.length, 0);
+assert.throws(
+  () => app.ask({
+    kind: SemanticAppQueryKind.AnalysisLimitations,
+    sourceFile: { filePath: 'src/app.ts' },
+    page: { size: 20 },
+  }),
+  /source file.*not.*project source|neither.*workspace.*project source/iu,
+  'A source-filtered query must reject a nonexistent locus instead of treating it as an empty admitted source.',
+);
 for (const targetKind of [SemanticAppQueryKind.AppDiagnostics, SemanticAppQueryKind.OpenSeamSites]) {
   const continuation = sourceFilteredAnswer.continuations.find((row) => row.targetQueryKind === targetKind);
   assert.ok(continuation, `Expected analysis limitations to continue to ${targetKind}.`);

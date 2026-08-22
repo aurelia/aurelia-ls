@@ -57,14 +57,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                         "sourceFileRole": "app-source",
                         "sourceWorkspaceKey": "router-configuration-root-ownership"
                       },
-                      "end": 2852,
+                      "end": 2889,
                       "kind": "source-span-address",
-                      "label": "src/main.ts@2787..2852",
+                      "label": "src/main.ts@2824..2889",
                       "path": "src/main.ts",
                       "role": "range",
                       "sourceFileRole": "app-source",
                       "sourceWorkspaceKey": "router-configuration-root-ownership",
-                      "start": 2787
+                      "start": 2824
                     }
                   }
                 ],
@@ -98,14 +98,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                         "sourceFileRole": "app-source",
                         "sourceWorkspaceKey": "router-configuration-root-ownership"
                       },
-                      "end": 2852,
+                      "end": 2889,
                       "kind": "source-span-address",
-                      "label": "src/main.ts@2787..2852",
+                      "label": "src/main.ts@2824..2889",
                       "path": "src/main.ts",
                       "role": "range",
                       "sourceFileRole": "app-source",
                       "sourceWorkspaceKey": "router-configuration-root-ownership",
-                      "start": 2787
+                      "start": 2824
                     }
                   }
                 ],
@@ -139,14 +139,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                         "sourceFileRole": "app-source",
                         "sourceWorkspaceKey": "router-configuration-root-ownership"
                       },
-                      "end": 2852,
+                      "end": 2889,
                       "kind": "source-span-address",
-                      "label": "src/main.ts@2787..2852",
+                      "label": "src/main.ts@2824..2889",
                       "path": "src/main.ts",
                       "role": "range",
                       "sourceFileRole": "app-source",
                       "sourceWorkspaceKey": "router-configuration-root-ownership",
-                      "start": 2787
+                      "start": 2824
                     }
                   }
                 ],
@@ -175,14 +175,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "sourceFileRole": "app-source",
                 "sourceWorkspaceKey": "router-configuration-root-ownership"
               },
-              "end": 2852,
+              "end": 2889,
               "kind": "source-span-address",
-              "label": "src/main.ts@2787..2852",
+              "label": "src/main.ts@2824..2889",
               "path": "src/main.ts",
               "role": "range",
               "sourceFileRole": "app-source",
               "sourceWorkspaceKey": "router-configuration-root-ownership",
-              "start": 2787
+              "start": 2824
             }
           }
         ],
@@ -196,11 +196,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 70,
-          "line": 125
+          "line": 126
         },
         "start": {
           "character": 4,
-          "line": 125
+          "line": 126
         }
       },
       "rangeText": "RouterConfiguration.customize({ activeClass: 'duplicate-second' })",
@@ -212,11 +212,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "range": {
             "end": {
               "character": 69,
-              "line": 124
+              "line": 125
             },
             "start": {
               "character": 4,
-              "line": 124
+              "line": 125
             }
           },
           "rangeText": "RouterConfiguration.customize({ activeClass: 'duplicate-first' })",
@@ -229,11 +229,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "range": {
             "end": {
               "character": 70,
-              "line": 125
+              "line": 126
             },
             "start": {
               "character": 4,
-              "line": 125
+              "line": 126
             }
           },
           "rangeText": "RouterConfiguration.customize({ activeClass: 'duplicate-second' })",
@@ -246,11 +246,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "range": {
             "end": {
               "character": 69,
-              "line": 124
+              "line": 125
             },
             "start": {
               "character": 4,
-              "line": 124
+              "line": 125
             }
           },
           "rangeText": "RouterConfiguration.customize({ activeClass: 'duplicate-first' })",
@@ -263,11 +263,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "range": {
             "end": {
               "character": 70,
-              "line": 125
+              "line": 126
             },
             "start": {
               "character": 4,
-              "line": 125
+              "line": 126
             }
           },
           "rangeText": "RouterConfiguration.customize({ activeClass: 'duplicate-second' })",
@@ -280,11 +280,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "range": {
             "end": {
               "character": 70,
-              "line": 125
+              "line": 126
             },
             "start": {
               "character": 4,
-              "line": 125
+              "line": 126
             }
           },
           "rangeText": "RouterConfiguration.customize({ activeClass: 'duplicate-second' })",

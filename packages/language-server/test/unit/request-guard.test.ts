@@ -175,6 +175,42 @@ describe("semantic-runtime request boundary", () => {
     expect(handler).not.toHaveBeenCalled();
   });
 
+  test("keeps project-aware ambiguity available while standard document providers require one exact owner", async () => {
+    const ctx = context();
+    ctx.testOperation.authoredSourceOwnership.mockResolvedValue({
+      value: {
+        sourceFilePath: "/app/src/shared.html",
+        templateOwned: true,
+        owners: [{ projectKey: "alpha" }, { projectKey: "beta" }],
+      },
+    });
+    const projectAwareHandler = vi.fn(async () => "project-aware");
+    const standardHandler = vi.fn(async () => "standard");
+    const exactFallback = vi.fn(() => "not-authored");
+
+    await expect(runSemanticRuntimeDocumentRequest(
+      ctx as never,
+      "templateResourceAvailability",
+      token as never,
+      "file:///app/src/shared.html",
+      () => "not-authored",
+      projectAwareHandler,
+    )).resolves.toBe("project-aware");
+    await expect(runSemanticRuntimeDocumentRequest(
+      ctx as never,
+      "semanticTokens",
+      token as never,
+      "file:///app/src/shared.html",
+      exactFallback,
+      standardHandler,
+      { requireExactProjectOwner: true },
+    )).resolves.toBe("not-authored");
+
+    expect(projectAwareHandler).toHaveBeenCalledOnce();
+    expect(exactFallback).toHaveBeenCalledWith(ctx.testOperation, "ambiguous");
+    expect(standardHandler).not.toHaveBeenCalled();
+  });
+
   test("does not query semantic ownership for a URI outside the coarse workspace boundary", async () => {
     const ctx = context();
     ctx.ownsDocument.mockReturnValue(false);

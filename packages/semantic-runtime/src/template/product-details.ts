@@ -212,6 +212,7 @@ export const TemplateProductDetails = {
   HtmlDocument: defineProductDetailSlot(TemplateDetailDescriptors.HtmlDocument, referencesForHtmlDocument),
   HtmlNode: defineProductDetailSlot(TemplateDetailDescriptors.HtmlNode, referencesForHtmlNode),
   HtmlAttribute: defineProductDetailSlot(TemplateDetailDescriptors.HtmlAttribute, referencesForHtmlAttribute),
+  HtmlRecovery: defineProductDetailSlot(TemplateDetailDescriptors.HtmlRecovery, referencesForHtmlRecovery),
   CompiledTemplate: defineProductDetailSlot(
     TemplateDetailDescriptors.CompiledTemplate,
     referencesForCompiledTemplate,
@@ -872,11 +873,24 @@ function htmlAttributeReferenceReferences(
       );
 }
 
-function htmlRecoveryReferences(
+function referencesForHtmlRecovery(
   recovery: HtmlRecovery,
 ): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     kernelRecordReferences(recovery.addressHandle, recovery.provenanceHandle),
+  );
+}
+
+function htmlRecoveryReferenceReferences(
+  recovery: HtmlRecovery,
+): KernelDetailReferenceClosure {
+  return mergeKernelDetailReferences(
+    productIdentityAddressReferences(
+      recovery.productHandle,
+      recovery.identityHandle,
+      recovery.addressHandle,
+      TemplateDetailDescriptors.HtmlRecovery,
+    ),
   );
 }
 
@@ -885,7 +899,7 @@ function referencesForHtmlDocument(
 ): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     ...document.rootNodes.map(htmlNodeReferenceReferences),
-    ...document.recoveries.map(htmlRecoveryReferences),
+    ...document.recoveries.map(htmlRecoveryReferenceReferences),
     kernelFieldProvenanceReferences(document.fieldProvenance),
   );
 }
@@ -899,25 +913,28 @@ function referencesForHtmlNode(
     case HtmlIrNodeKind.Fragment:
       return mergeKernelDetailReferences(
         ...node.children.map(htmlNodeReferenceReferences),
-        ...node.recoveries.map(htmlRecoveryReferences),
+        ...node.recoveries.map(htmlRecoveryReferenceReferences),
       );
     case HtmlIrNodeKind.Element:
       return mergeKernelDetailReferences(
         ...node.attributes.map(htmlAttributeReferenceReferences),
         ...node.children.map(htmlNodeReferenceReferences),
         kernelRecordReferences(node.tagNameAddressHandle, node.closingTagNameAddressHandle),
-        ...node.recoveries.map(htmlRecoveryReferences),
+        ...node.recoveries.map(htmlRecoveryReferenceReferences),
         kernelFieldProvenanceReferences(node.fieldProvenance),
       );
     case HtmlIrNodeKind.Text:
-      return mergeKernelDetailReferences(kernelFieldProvenanceReferences(node.fieldProvenance));
+      return mergeKernelDetailReferences(
+        ...node.recoveries.map(htmlRecoveryReferenceReferences),
+        kernelFieldProvenanceReferences(node.fieldProvenance),
+      );
     case HtmlIrNodeKind.Comment:
       return mergeKernelDetailReferences(
-        ...node.recoveries.map(htmlRecoveryReferences),
+        ...node.recoveries.map(htmlRecoveryReferenceReferences),
         kernelFieldProvenanceReferences(node.fieldProvenance),
       );
     case HtmlIrNodeKind.Doctype:
-      return mergeKernelDetailReferences(...node.recoveries.map(htmlRecoveryReferences));
+      return mergeKernelDetailReferences(...node.recoveries.map(htmlRecoveryReferenceReferences));
   }
 }
 
@@ -926,7 +943,7 @@ function referencesForHtmlAttribute(
 ): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     kernelRecordReferences(attribute.nameAddressHandle, attribute.valueAddressHandle),
-    ...attribute.recoveries.map(htmlRecoveryReferences),
+    ...attribute.recoveries.map(htmlRecoveryReferenceReferences),
     kernelFieldProvenanceReferences(attribute.fieldProvenance),
   );
 }

@@ -51,13 +51,19 @@ inspection.
 
 ### Optional native-diagnostic suppression
 
-Aurelia templates stay in VS Code's native `html` mode by default, including its built-in HTML, CSS, and JavaScript
-diagnostics. If those validators report false positives for valid Aurelia interpolation, enable the resource-scoped
+Aurelia templates stay in VS Code's native `html` mode by default, including embedded CSS and JavaScript diagnostics.
+If those validators report false positives for valid Aurelia interpolation, enable the resource-scoped
 `aurelia.templateDiagnostics.suppressNative` setting for that workspace folder. Templates proved to belong to Aurelia
-then use `aurelia-html` mode and suppress the built-in diagnostics; unowned HTML is unchanged. Because language mode can
+then use `aurelia-html` mode and suppress the embedded diagnostics; unowned HTML is unchanged. Because language mode can
 influence file icons, `[html]`-scoped settings, snippets, formatter selection, and other native HTML or editor behavior,
-this behavior is opt-in. It also suppresses legitimate native findings, although HTML language-service participation
+this behavior is opt-in. It also suppresses legitimate CSS/JavaScript findings, although HTML language-service participation
 and completions remain available.
+Exact owned templates keep Aurelia's bounded recovery Problems for supported malformed tags, attributes, comments,
+declarations, and foreign-content CDATA in both modes. These rows are not general HTML validation; other tokenizer and
+tree-building rules are outside the admitted set.
+Leave suppression disabled for the safer default. Enable it only when interpolation false Problems outweigh losing
+embedded CSS/JavaScript Problems, and use the project's lint or build checks for the validation that VS Code will
+no longer publish in those templates.
 
 ## Using the MCP Release
 

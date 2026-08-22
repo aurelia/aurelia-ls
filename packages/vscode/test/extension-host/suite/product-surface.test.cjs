@@ -396,12 +396,104 @@ suite("extension-host product surface", () => {
         true,
         "the opt-in must not mutate the user's URI-scoped native HTML validation setting",
       );
+      assert.strictEqual(
+        vscode.workspace.getConfiguration("html", owned.uri).get("validate.scripts"),
+        true,
+        "the opt-in must not mutate the user's URI-scoped native script validation setting",
+      );
       await vscode.window.showTextDocument(owned, { preview: false });
       await waitFor(
         () => hasExactNativeInterpolationDiagnostics(owned.uri),
         () => `default native HTML mode should retain its interpolation diagnostic; observed ${diagnosticSummary(vscode.languages.getDiagnostics(owned.uri))}`,
         60_000,
       );
+
+      ownedBaseline = owned.getText();
+      const malformedMarkup = ownedBaseline.replace(
+        "  <h3>${labelText}</h3>",
+        "  <h3>${labelText}</h3>\n  <!-- closed --!>",
+      );
+      const malformedRangeText = "--!>";
+      assert.notStrictEqual(malformedMarkup, ownedBaseline);
+      let observationStart = extensionHostObservations.length;
+      await replaceDocumentText(owned, malformedMarkup);
+      let receipt = await waitForCurrentDiagnosticProviderSettlement(
+        observationStart,
+        owned,
+        "native HTML recovery ownership should settle one current Aurelia diagnostic pull",
+      );
+      assert.strictEqual(receipt.itemCount, 1,
+        `native html should publish one bounded Aurelia recovery row; receipt ${JSON.stringify(receipt)}`);
+      let recoveryDiagnostics = [];
+      await waitFor(
+        () => {
+          recoveryDiagnostics = vscode.languages.getDiagnostics(owned.uri).filter((diagnostic) =>
+            diagnostic.source === "aurelia" && diagnosticCode(diagnostic) === "html-syntax-recovery"
+          );
+          return recoveryDiagnostics.length === 1;
+        },
+        () => `native html should publish one exact bounded Aurelia recovery Problem; observed ${diagnosticSummary(vscode.languages.getDiagnostics(owned.uri))}`,
+        60_000,
+      );
+      assertHtmlRecoveryProblem(owned, recoveryDiagnostics[0], malformedMarkup, malformedRangeText);
+      assert.deepStrictEqual(
+        diagnosticsTouchingText(owned, nativeHtmlDiagnostics(owned.uri), malformedRangeText),
+        [],
+        "the bounded Aurelia recovery must not be attributed to a nonexistent native HTML Problem",
+      );
+
+      observationStart = extensionHostObservations.length;
+      await replaceDocumentText(owned, ownedBaseline);
+      receipt = await waitForCurrentDiagnosticProviderSettlement(
+        observationStart,
+        owned,
+        "native HTML recovery repair should settle one current Aurelia diagnostic pull",
+      );
+      assert.strictEqual(receipt.itemCount, 0,
+        `native HTML recovery repair should remain clear; receipt ${JSON.stringify(receipt)}`);
+      await waitFor(
+        () => hasExactNativeInterpolationDiagnostics(owned.uri)
+          && !vscode.languages.getDiagnostics(owned.uri).some((diagnostic) =>
+            diagnostic.source === "aurelia" && diagnosticCode(diagnostic) === "html-syntax-recovery"
+          ),
+        "native HTML recovery repair should restore only the known interpolation noise",
+        60_000,
+      );
+
+      const nativeCssProbe = "#12zz34";
+      const nativeJavaScriptProbe = "const aureliaNativePolicyProbe = ;";
+      const nativeFaultText = `${ownedBaseline}\n<style>\n  .aurelia-native-policy-probe { color: ${nativeCssProbe}; }\n</style>\n<script>\n  ${nativeJavaScriptProbe}\n</script>\n`;
+      await replaceDocumentText(owned, nativeFaultText);
+      let legitimateCssDiagnostics = [];
+      let legitimateJavaScriptDiagnostics = [];
+      await waitFor(
+        () => {
+          legitimateCssDiagnostics = diagnosticsTouchingText(
+            owned,
+            nativeCssDiagnostics(owned.uri),
+            nativeCssProbe,
+          );
+          legitimateJavaScriptDiagnostics = diagnosticsTouchingText(
+            owned,
+            nativeJavaScriptDiagnostics(owned.uri),
+            nativeJavaScriptProbe,
+          );
+          return hasExactNativeInterpolationDiagnostics(owned.uri)
+            && legitimateCssDiagnostics.length > 0
+            && legitimateJavaScriptDiagnostics.length > 0;
+        },
+        () => `native HTML mode should report interpolation noise plus legitimate CSS and JavaScript faults; observed ${diagnosticSummary(vscode.languages.getDiagnostics(owned.uri))}`,
+        60_000,
+      );
+      console.log(`[aurelia-extension-host] native diagnostic policy ${JSON.stringify({
+        mode: "html",
+        interpolationCount: nativeCssDiagnostics(owned.uri).filter((diagnostic) => [
+          "css-propertyvalueexpected",
+          "css-ruleorselectorexpected",
+        ].includes(diagnosticCode(diagnostic))).length,
+        legitimateCss: diagnosticPolicyEvidence(legitimateCssDiagnostics),
+        legitimateJavaScript: diagnosticPolicyEvidence(legitimateJavaScriptDiagnostics),
+      })}`);
 
       await suppression.update("suppressNative", true, vscode.ConfigurationTarget.WorkspaceFolder);
       await waitFor(
@@ -418,8 +510,73 @@ suite("extension-host product surface", () => {
       );
       await vscode.window.showTextDocument(owned, { preview: false });
       await waitFor(
-        () => nativeCssDiagnostics(owned.uri).length === 0,
-        () => `enabled suppression should clear native CSS diagnostics; observed ${diagnosticSummary(vscode.languages.getDiagnostics(owned.uri))}`,
+        () => nativeCssDiagnostics(owned.uri).length === 0
+          && nativeJavaScriptDiagnostics(owned.uri).length === 0,
+        () => `enabled suppression should clear native CSS and JavaScript diagnostics; observed ${diagnosticSummary(vscode.languages.getDiagnostics(owned.uri))}`,
+        60_000,
+      );
+      const suppressedDiagnostics = vscode.languages.getDiagnostics(owned.uri);
+      assert.deepStrictEqual(
+        diagnosticsTouchingText(owned, suppressedDiagnostics, nativeCssProbe),
+        [],
+        `suppression should hide the legitimate CSS fault without an Aurelia replacement; observed ${diagnosticSummary(suppressedDiagnostics)}`,
+      );
+      assert.deepStrictEqual(
+        diagnosticsTouchingText(owned, suppressedDiagnostics, nativeJavaScriptProbe),
+        [],
+        `suppression should hide the legitimate JavaScript fault without an Aurelia replacement; observed ${diagnosticSummary(suppressedDiagnostics)}`,
+      );
+      console.log(`[aurelia-extension-host] native diagnostic policy ${JSON.stringify({
+        mode: "aurelia-html",
+        interpolationCount: 0,
+        legitimateCss: { count: 0, diagnostics: [] },
+        legitimateJavaScript: { count: 0, diagnostics: [] },
+      })}`);
+      await replaceDocumentText(owned, ownedBaseline);
+      await waitFor(
+        () => nativeCssDiagnostics(owned.uri).length === 0
+          && nativeJavaScriptDiagnostics(owned.uri).length === 0,
+        "suppressed native-fault cleanup should remain free of native CSS and JavaScript diagnostics",
+        60_000,
+      );
+
+      observationStart = extensionHostObservations.length;
+      await replaceDocumentText(owned, malformedMarkup);
+      receipt = await waitForCurrentDiagnosticProviderSettlement(
+        observationStart,
+        owned,
+        "suppressed HTML recovery should settle one current full Aurelia diagnostic pull",
+      );
+      assert.strictEqual(receipt.itemCount, 1,
+        `suppressed malformed markup should publish one Aurelia recovery row; receipt ${JSON.stringify(receipt)}`);
+      recoveryDiagnostics = [];
+      await waitFor(
+        () => {
+          recoveryDiagnostics = vscode.languages.getDiagnostics(owned.uri).filter((diagnostic) =>
+            diagnostic.source === "aurelia" && diagnosticCode(diagnostic) === "html-syntax-recovery"
+          );
+          return recoveryDiagnostics.length === 1;
+        },
+        () => `suppressed malformed markup should publish one exact Aurelia recovery Problem; observed ${diagnosticSummary(vscode.languages.getDiagnostics(owned.uri))}`,
+        60_000,
+      );
+      assertHtmlRecoveryProblem(owned, recoveryDiagnostics[0], malformedMarkup, malformedRangeText);
+      assert.deepStrictEqual(nativeHtmlDiagnostics(owned.uri), []);
+
+      observationStart = extensionHostObservations.length;
+      await replaceDocumentText(owned, ownedBaseline);
+      receipt = await waitForCurrentDiagnosticProviderSettlement(
+        observationStart,
+        owned,
+        "suppressed HTML recovery repair should settle one current full Aurelia diagnostic pull",
+      );
+      assert.strictEqual(receipt.itemCount, 0,
+        `suppressed HTML recovery repair should clear the Aurelia row; receipt ${JSON.stringify(receipt)}`);
+      await waitFor(
+        () => !vscode.languages.getDiagnostics(owned.uri).some((diagnostic) =>
+          diagnostic.source === "aurelia" && diagnosticCode(diagnostic) === "html-syntax-recovery"
+        ),
+        "suppressed HTML recovery Problem should clear after repair",
         60_000,
       );
       const articleStart = owned.getText().indexOf("<article");
@@ -442,7 +599,6 @@ suite("extension-host product surface", () => {
         "Aurelia HTML mode should retain Aurelia expression completions",
       );
 
-      ownedBaseline = owned.getText();
       const diagnosticProbe = "missingContainmentMember";
       const diagnosticChanged = ownedBaseline.replace(
         "  <h3>${labelText}</h3>",
@@ -580,6 +736,9 @@ suite("extension-host product surface", () => {
         "the scoped opt-in, ownership withdrawal/restore, and disable should produce exact reversible transitions",
       );
     } finally {
+      if (owned != null && ownedBaseline != null && !owned.isClosed && owned.getText() !== ownedBaseline) {
+        await replaceDocumentText(owned, ownedBaseline);
+      }
       if (ordinary != null && ordinaryBaseline != null && ordinary.getText() !== ordinaryBaseline) {
         await replaceDocumentText(ordinary, ordinaryBaseline);
         await waitFor(
@@ -2124,6 +2283,191 @@ suite("extension-host product surface", () => {
     }
   });
 
+  test("transitions an authored analysis-limitation Problem through project finding policy", async function() {
+    this.timeout(600_000);
+    const findingCode = "aurelia.analysis.dynamic-registration-spread";
+    const spreadToken = "...dynamicRegistrations";
+    const settingsSnapshot = snapshotWorkspaceFolderSettings(aureliaWorkspace);
+    const configurationUri = vscode.Uri.file(path.join(aureliaWorkspace, "aurelia.project.json"));
+    const configurationDocument = vscode.workspace.textDocuments.find((document) =>
+      document.uri.toString() === configurationUri.toString()
+    ) ?? await vscode.workspace.openTextDocument(configurationUri);
+    const mainDocument = await showAureliaDocument("src/main.ts");
+    const activation = vscode.workspace.getConfiguration("aurelia", mainDocument.uri);
+    const originalActivationMode = activation.inspect("activationMode")?.workspaceFolderValue;
+    const configurationDiskBaseline = readFileSync(configurationUri.fsPath, "utf8");
+    const mainDiskBaseline = readFileSync(mainDocument.uri.fsPath, "utf8");
+
+    for (const [document, baseline, label] of [
+      [configurationDocument, configurationDiskBaseline, "project configuration"],
+      [mainDocument, mainDiskBaseline, "app entry"],
+    ]) {
+      if (document.getText() !== baseline || document.isDirty) {
+        await vscode.window.showTextDocument(document, { preview: false });
+        await vscode.commands.executeCommand("workbench.action.files.revert");
+        await waitFor(
+          () => document.getText() === baseline && !document.isDirty,
+          `analysis-limitation ${label} should start from its clean disk baseline`,
+          60_000,
+        );
+      }
+    }
+    await vscode.window.showTextDocument(mainDocument, { preview: false });
+    const configurationBaseline = configurationDocument.getText();
+    const mainBaseline = mainDocument.getText();
+    assert.strictEqual(configurationBaseline, configurationDiskBaseline);
+    assert.strictEqual(mainBaseline, mainDiskBaseline);
+    assert(!configurationBaseline.includes(findingCode),
+      "the fixture baseline should exercise the rule's default information disposition");
+    assert.strictEqual(dynamicRegistrationFindingProblems(mainDocument, findingCode).length, 0);
+
+    const dynamicMain = mainBaseline
+      .replace(
+        "import Aurelia from 'aurelia';",
+        "import { Aurelia, StandardConfiguration } from '@aurelia/runtime-html';",
+      )
+      .replace(
+        "import { MyApp } from './my-app';",
+        "import { MyApp } from './my-app';\n\ndeclare const dynamicRegistrations: readonly unknown[];",
+      )
+      .replace(
+        "void Aurelia\n  .app({",
+        [
+          "new Aurelia()",
+          "  .register(",
+          "    StandardConfiguration,",
+          `    ${spreadToken},`,
+          "  )",
+          "  .app({",
+        ].join("\n"),
+      );
+    assert.notStrictEqual(dynamicMain, mainBaseline);
+    assert.strictEqual(dynamicMain.split(spreadToken).length - 1, 1);
+    const findingConfiguration = (disposition) => `{
+  "version": 1,
+  "findings": {
+    "${findingCode}": "${disposition}"
+  }
+}
+`;
+
+    try {
+      await replaceAndSaveDocumentText(mainDocument, dynamicMain, "planting the dynamic registration spread");
+      const templateDocument = await showAureliaDocument("src/my-app.html");
+      await activation.update("activationMode", "off", vscode.ConfigurationTarget.WorkspaceFolder);
+      await waitFor(
+        async () => !(await hoverMarkdown(templateDocument, "<product-card", "product-card"))
+          .includes("<product-card>"),
+        "dynamic finding setup should retire the pre-mutation semantic session",
+        120_000,
+      );
+      await activation.update("activationMode", "on", vscode.ConfigurationTarget.WorkspaceFolder);
+      await waitForWorkspaceAnswer(
+        templateDocument,
+        aureliaWorkspace,
+        "dynamic finding setup should re-admit the mutated app configuration",
+      );
+      await vscode.window.showTextDocument(mainDocument, { preview: false });
+
+      let observationStart = extensionHostObservations.length;
+      await replaceAndSaveDocumentText(
+        mainDocument,
+        `${dynamicMain}\n`,
+        "settling the boot-discovered dynamic registration spread",
+      );
+      await assertDynamicRegistrationFindingState(
+        mainDocument,
+        findingCode,
+        spreadToken,
+        vscode.DiagnosticSeverity.Information,
+        observationStart,
+        "default information finding",
+      );
+
+      for (const [disposition, severity] of [
+        ["warning", vscode.DiagnosticSeverity.Warning],
+        ["error", vscode.DiagnosticSeverity.Error],
+      ]) {
+        observationStart = extensionHostObservations.length;
+        await replaceAndSaveDocumentText(
+          configurationDocument,
+          findingConfiguration(disposition),
+          `configuring the dynamic registration spread as ${disposition}`,
+        );
+        await assertDynamicRegistrationFindingState(
+          mainDocument,
+          findingCode,
+          spreadToken,
+          severity,
+          observationStart,
+          `${disposition} finding policy`,
+        );
+      }
+
+      observationStart = extensionHostObservations.length;
+      await replaceAndSaveDocumentText(
+        configurationDocument,
+        findingConfiguration("off"),
+        "configuring the dynamic registration spread off",
+      );
+      await assertDynamicRegistrationFindingState(
+        mainDocument,
+        findingCode,
+        spreadToken,
+        null,
+        observationStart,
+        "off finding policy",
+      );
+
+      observationStart = extensionHostObservations.length;
+      await replaceAndSaveDocumentText(
+        configurationDocument,
+        configurationBaseline,
+        "restoring the default finding policy",
+      );
+      await assertDynamicRegistrationFindingState(
+        mainDocument,
+        findingCode,
+        spreadToken,
+        vscode.DiagnosticSeverity.Information,
+        observationStart,
+        "restored default information finding",
+      );
+
+      observationStart = extensionHostObservations.length;
+      await replaceAndSaveDocumentText(mainDocument, mainBaseline, "removing the dynamic registration spread");
+      await assertDynamicRegistrationFindingState(
+        mainDocument,
+        findingCode,
+        spreadToken,
+        null,
+        observationStart,
+        "clean default finding state",
+      );
+    } finally {
+      await replaceAndSaveDocumentText(
+        configurationDocument,
+        configurationBaseline,
+        "analysis-limitation project-configuration cleanup",
+      );
+      await replaceAndSaveDocumentText(mainDocument, mainBaseline, "analysis-limitation app-entry cleanup");
+      await activation.update(
+        "activationMode",
+        originalActivationMode,
+        vscode.ConfigurationTarget.WorkspaceFolder,
+      );
+      await vscode.window.showTextDocument(mainDocument, { preview: false });
+      await waitFor(
+        () => dynamicRegistrationFindingProblems(mainDocument, findingCode).length === 0,
+        "analysis-limitation cleanup should clear the authored finding",
+        120_000,
+      );
+      assert.strictEqual(readFileSync(configurationUri.fsPath, "utf8"), configurationDiskBaseline);
+      assert.strictEqual(readFileSync(mainDocument.uri.fsPath, "utf8"), mainDiskBaseline);
+      restoreWorkspaceFolderSettings(settingsSnapshot, "analysis-limitation activation cleanup");
+    }
+  });
+
   test("publishes the default Problems policy through native diagnostics and code actions", async () => {
     const typeScriptDocument = await showAureliaDocument("src/my-app.ts");
     const templateDocument = await showAureliaDocument("src/my-app.html");
@@ -2287,14 +2631,17 @@ suite("extension-host product surface", () => {
 
   test("does not duplicate TypeScript-owned Problems through the Aurelia diagnostic provider", async () => {
     const document = await showAureliaDocument("src/my-app.ts");
+    const shimDocument = await showAureliaDocument("src/aurelia-shim.d.ts");
+    await vscode.window.showTextDocument(document, { preview: false });
     const baseline = document.getText();
+    const shimBaseline = shimDocument.getText();
     const marker = "a3RelatedInfoContract";
     const changed = `${baseline}\ninterface A3RequiredContract {\n  requiredName: string;\n}\n\nconst ${marker}: A3RequiredContract = {};\n`;
 
     try {
-      const observationStart = extensionHostObservations.length;
+      let observationStart = extensionHostObservations.length;
       await replaceDocumentText(document, changed);
-      const receipt = await waitForCurrentDiagnosticProviderSettlement(
+      let receipt = await waitForCurrentDiagnosticProviderSettlement(
         observationStart,
         document,
         "the TypeScript ownership canary should finish one current full Aurelia diagnostic pull",
@@ -2322,10 +2669,101 @@ suite("extension-host product surface", () => {
       );
       assert(relatedDeclaration, "Native TS2741 should retain the related required property declaration location.");
       assert.strictEqual(relatedDeclaration.message, "'requiredName' is declared here.");
+
+      observationStart = extensionHostObservations.length;
+      await replaceDocumentText(document, baseline);
+      receipt = await waitForCurrentDiagnosticProviderSettlement(
+        observationStart,
+        document,
+        "the standalone TypeScript ownership canary should clear before the correlated decorator case",
+      );
+      assert.strictEqual(receipt.itemCount, 0);
+      await waitFor(
+        () => !vscode.languages.getDiagnostics(document.uri).some((candidate) =>
+          diagnosticCode(candidate) === 2741 || diagnosticCode(candidate) === "TS2741"
+        ),
+        "the standalone TypeScript ownership canary should clear before the correlated decorator case",
+        120_000,
+      );
+
+      const correlated = baseline.replace(
+        "import { customElement } from 'aurelia';",
+        "import { bindable, customElement } from 'aurelia';",
+      ).replace(
+          "@customElement({",
+          "@bindable(null as unknown as { name: string })\n@customElement({",
+      );
+      assert.notStrictEqual(correlated, baseline);
+      const decoratorArgument = "null as unknown as { name: string }";
+      const typedShim = shimBaseline.replace(
+        "  export const bindable: any;",
+        [
+          "  export function bindable(target: object, propertyKey: string | symbol): void;",
+          "  export function bindable(config?: { attribute?: string }): ClassDecorator & PropertyDecorator;",
+          "  export function bindable(property: string): ClassDecorator;",
+        ].join("\n"),
+      );
+      assert.notStrictEqual(typedShim, shimBaseline);
+      observationStart = extensionHostObservations.length;
+      await replaceDocumentTexts([
+        [shimDocument, typedShim],
+        [document, correlated],
+      ]);
+      receipt = await waitForCurrentDiagnosticProviderSettlement(
+        observationStart,
+        document,
+        "the correlated decorator case should finish one current full Aurelia diagnostic pull",
+      );
+      assert.strictEqual(receipt.itemCount, 1,
+        `Aurelia should publish only its semantic primary; receipt ${JSON.stringify(receipt)}`);
+
+      let nativeDecoratorProblems = [];
+      let aureliaDecoratorProblems = [];
+      await waitFor(() => {
+        const current = vscode.languages.getDiagnostics(document.uri);
+        nativeDecoratorProblems = current.filter((candidate) =>
+          candidate.source === "ts"
+          && document.getText(candidate.range) === decoratorArgument
+        );
+        aureliaDecoratorProblems = current.filter((candidate) =>
+          candidate.source === "aurelia" && diagnosticCode(candidate) === "AUR0228"
+        );
+        return nativeDecoratorProblems.length === 1 && aureliaDecoratorProblems.length === 1;
+      }, () => `the correlated decorator case should publish one native TS Problem and one Aurelia Problem; observed ${diagnosticSummary(vscode.languages.getDiagnostics(document.uri))}`, 120_000);
+
+      const nativeDecorator = nativeDecoratorProblems[0];
+      const aureliaDecorator = aureliaDecoratorProblems[0];
+      assert.strictEqual(diagnosticCode(nativeDecorator), 2769);
+      assert.strictEqual(nativeDecorator.severity, vscode.DiagnosticSeverity.Error);
+      assert.strictEqual(aureliaDecorator.severity, vscode.DiagnosticSeverity.Error);
+      assert.strictEqual(aureliaDecorator.message, "Class-level @bindable cannot use a null configuration.");
+      assert.deepStrictEqual(aureliaDecorator.relatedInformation ?? [], []);
+      assert.strictEqual(
+        JSON.stringify(aureliaDecorator).includes(nativeDecorator.message),
+        false,
+        "the Aurelia semantic Problem must not repeat the client-owned native TS message as context",
+      );
+      console.log(`[aurelia-extension-host] correlated TypeScript ownership ${JSON.stringify({
+        vscodeVersion: vscode.version,
+        native: {
+          source: nativeDecorator.source,
+          code: diagnosticCode(nativeDecorator),
+          rangeText: document.getText(nativeDecorator.range),
+        },
+        aurelia: {
+          source: aureliaDecorator.source,
+          code: diagnosticCode(aureliaDecorator),
+          rangeText: document.getText(aureliaDecorator.range),
+          relatedInformationCount: aureliaDecorator.relatedInformation?.length ?? 0,
+        },
+      })}`);
     } finally {
       const observationStart = extensionHostObservations.length;
-      if (document.getText() !== baseline) {
-        await replaceDocumentText(document, baseline);
+      if (document.getText() !== baseline || shimDocument.getText() !== shimBaseline) {
+        await replaceDocumentTexts([
+          [shimDocument, shimBaseline],
+          [document, baseline],
+        ]);
         const receipt = await waitForCurrentDiagnosticProviderSettlement(
           observationStart,
           document,
@@ -2335,9 +2773,15 @@ suite("extension-host product surface", () => {
       }
       await waitFor(
         () => !vscode.languages.getDiagnostics(document.uri).some((diagnostic) =>
-          diagnosticCode(diagnostic) === 2741 || diagnosticCode(diagnostic) === "TS2741"
+          diagnosticCode(diagnostic) === 2741
+            || diagnosticCode(diagnostic) === "TS2741"
+            || diagnosticCode(diagnostic) === 2559
+            || diagnosticCode(diagnostic) === "TS2559"
+            || diagnosticCode(diagnostic) === 2769
+            || diagnosticCode(diagnostic) === "TS2769"
+            || diagnosticCode(diagnostic) === "AUR0228"
         ),
-        "TypeScript ownership canary cleanup should clear TS2741",
+        "TypeScript ownership canary cleanup should clear native and Aurelia correlated diagnostics",
         120_000,
       );
     }
@@ -5450,9 +5894,24 @@ function publicEditorFact() {
       };
 }
 
-async function replaceAndSaveDocumentText(document, text) {
-  await replaceDocumentText(document, text);
-  assert.strictEqual(await document.save(), true, `Expected ${document.uri.toString()} to save.`);
+async function replaceAndSaveDocumentText(
+  document,
+  text,
+  label = `saving ${document.uri.toString()}`,
+) {
+  if (document.getText() !== text) {
+    await replaceDocumentText(document, text);
+  }
+  if (document.isDirty) {
+    assert.strictEqual(await document.save(), true, `${label}: expected the document to save`);
+  }
+  await waitFor(
+    () => document.getText() === text
+      && !document.isDirty
+      && readFileSync(document.uri.fsPath, "utf8") === text,
+    `${label}: buffer and disk should settle to the requested text`,
+    60_000,
+  );
 }
 
 async function replaceUniqueDocumentSubstringAndSave(document, before, after, cursor) {
@@ -6341,6 +6800,74 @@ async function replaceDocumentTexts(changes) {
   assert.strictEqual(await vscode.workspace.applyEdit(edit), true, "Expected workspace edit to apply.");
 }
 
+function dynamicRegistrationFindingProblems(document, findingCode) {
+  return vscode.languages.getDiagnostics(document.uri).filter((diagnostic) =>
+    diagnostic.source === "aurelia" && diagnosticCode(diagnostic) === findingCode
+  );
+}
+
+async function assertDynamicRegistrationFindingState(
+  document,
+  findingCode,
+  spreadToken,
+  expectedSeverity,
+  observationStart,
+  label,
+) {
+  const expectedCount = expectedSeverity == null ? 0 : 1;
+  let receipt;
+  let problems = [];
+  await waitFor(
+    () => {
+      const parsed = parseDiagnosticProviderSettlement(
+        extensionHostObservations,
+        document.uri.toString(),
+        document.version,
+        observationStart,
+      );
+      if (parsed.error != null) {
+        throw new Error(`${parsed.error}; trace ${JSON.stringify(parsed.trace)}`);
+      }
+      receipt = parsed.settlement;
+      problems = dynamicRegistrationFindingProblems(document, findingCode);
+      return receipt?.itemCount === expectedCount && problems.length === expectedCount;
+    },
+    () => `${label}: stale provider settlement or Problems state; receipt ${JSON.stringify(receipt)}; diagnostics ${diagnosticSummary(vscode.languages.getDiagnostics(document.uri))}`,
+    120_000,
+  );
+  if (expectedSeverity == null) {
+    console.log(`[aurelia-extension-host] analysis limitation policy ${JSON.stringify({
+      label,
+      itemCount: receipt.itemCount,
+      severity: null,
+    })}`);
+    return;
+  }
+
+  const problem = problems[0];
+  const spreadStart = document.getText().indexOf(spreadToken);
+  assert.notStrictEqual(spreadStart, -1, `${label}: expected the planted registration spread`);
+  assert.deepStrictEqual(problem.range, new vscode.Range(
+    document.positionAt(spreadStart),
+    document.positionAt(spreadStart + spreadToken.length),
+  ));
+  assert.strictEqual(document.getText(problem.range), spreadToken);
+  assert.strictEqual(problem.source, "aurelia");
+  assert.strictEqual(diagnosticCode(problem), findingCode);
+  assert.strictEqual(problem.severity, expectedSeverity);
+  assert.strictEqual(
+    problem.message,
+    "Dynamic registration spread limits resource analysis. A runtime-dependent spread prevents static analysis from proving every registration and resource contributed at this point. Register statically known entries explicitly, or keep this rule informational or off when runtime registration is intentional.",
+  );
+  assert.deepStrictEqual(problem.relatedInformation ?? [], []);
+  console.log(`[aurelia-extension-host] analysis limitation policy ${JSON.stringify({
+    label,
+    itemCount: receipt.itemCount,
+    severity: problem.severity,
+    rangeText: document.getText(problem.range),
+  })}`);
+}
+
 async function executeCodeActionProvider(uri, range, itemResolveCount) {
   const actions = await vscode.commands.executeCommand(
     "vscode.executeCodeActionProvider",
@@ -6766,8 +7293,55 @@ function diagnosticSummary(diagnostics) {
   })));
 }
 
+function diagnosticPolicyEvidence(diagnostics) {
+  return {
+    count: diagnostics.length,
+    diagnostics: diagnostics.map((diagnostic) => ({
+      source: diagnostic.source ?? null,
+      code: diagnosticCode(diagnostic),
+      severity: diagnostic.severity,
+      message: diagnostic.message,
+    })),
+  };
+}
+
+function assertHtmlRecoveryProblem(document, recovery, malformedMarkup, malformedRangeText) {
+  const malformedStart = malformedMarkup.indexOf(malformedRangeText);
+  assert.notStrictEqual(malformedStart, -1);
+  assert.strictEqual(recovery.source, "aurelia");
+  assert.strictEqual(diagnosticCode(recovery), "html-syntax-recovery");
+  assert.deepStrictEqual(recovery.range, new vscode.Range(
+    document.positionAt(malformedStart),
+    document.positionAt(malformedStart + malformedRangeText.length),
+  ));
+  assert.strictEqual(document.getText(recovery.range), malformedRangeText);
+  assert.strictEqual(recovery.severity, vscode.DiagnosticSeverity.Warning);
+  assert.strictEqual(recovery.message, "Malformed HTML comment closing delimiter; use -->.");
+}
+
 function nativeCssDiagnostics(uri) {
   return vscode.languages.getDiagnostics(uri).filter((diagnostic) => diagnostic.source === "css");
+}
+
+function nativeHtmlDiagnostics(uri) {
+  return vscode.languages.getDiagnostics(uri).filter((diagnostic) => diagnostic.source === "html");
+}
+
+function nativeJavaScriptDiagnostics(uri) {
+  return vscode.languages.getDiagnostics(uri).filter((diagnostic) =>
+    diagnostic.source === "js" || diagnostic.source === "javascript"
+  );
+}
+
+function diagnosticsTouchingText(document, diagnostics, text) {
+  const start = document.getText().indexOf(text);
+  assert.notStrictEqual(start, -1, `Expected diagnostic probe text ${JSON.stringify(text)}.`);
+  const end = start + text.length;
+  return diagnostics.filter((diagnostic) => {
+    const diagnosticStart = document.offsetAt(diagnostic.range.start);
+    const diagnosticEnd = document.offsetAt(diagnostic.range.end);
+    return diagnosticStart <= end && diagnosticEnd >= start;
+  });
 }
 
 function hasExactNativeInterpolationDiagnostics(uri) {

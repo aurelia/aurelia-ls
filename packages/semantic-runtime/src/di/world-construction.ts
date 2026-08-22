@@ -37,6 +37,8 @@ export class DiRegistrationOpenSeamScope {
     readonly seam: OpenSeam,
     /** Exact registration operation whose spending retained or produced this seam. */
     readonly operation: ContainerRegistrationOperation | null,
+    /** Receiving container retained independently when an operation could not be materialized. */
+    readonly containerIdentityHandle: IdentityHandle | null = operation?.container.identityHandle ?? null,
   ) {}
 }
 

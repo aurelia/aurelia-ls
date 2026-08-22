@@ -49,7 +49,14 @@ import {
   semanticAppAnalysisDepthSatisfies,
 } from '../configuration/app-analysis.js';
 import type { TemplateResourceRuntimeAnalysisEmission } from '../template/template-compilation-project-pass.js';
-import type { TemplateCompilerIssue } from '../template/compiler-issue.js';
+import {
+  TemplateCompilerIssueKind,
+  type TemplateCompilerIssue,
+} from '../template/compiler-issue.js';
+import {
+  registrationHidingOpenSeamsForContainer,
+  registrationOpenSeamCanHideResource,
+} from '../di/registration-open-pressure.js';
 import type { RuntimeBindingScopeIssue } from '../template/runtime-binding-scope-issue.js';
 import type { RuntimeBindingIssue } from '../template/runtime-binding-issue.js';
 import type { RuntimeBindingBehaviorIssue } from '../template/runtime-binding-behavior.js';
@@ -69,17 +76,29 @@ import { TemplateValueSiteKind } from '../template/value-site.js';
 import { TemplateProductDetails } from '../template/product-details.js';
 import { readTemplateExpressionParse } from '../template/expression-parse-product.js';
 import type {
-  HtmlAttribute,
   HtmlIrNode,
 } from '../template/html-ir.js';
-import { HtmlElement } from '../template/html-ir.js';
+import {
+  HtmlAttribute,
+  HtmlComment,
+  HtmlDoctype,
+  type HtmlDocument,
+  HtmlElement,
+  HtmlNamespaceKind,
+  type HtmlRecovery,
+  HtmlRecoveryKind,
+  HtmlText,
+} from '../template/html-ir.js';
 import { ResourceProductDetails } from '../resources/product-details.js';
 import {
   resourceDefinitionNameSourceAddressHandle,
   taxonomyResourceKindForDefinition,
   type FullResourceDefinition,
 } from '../resources/resource-definition.js';
-import { ResourceDefinitionKind } from '../resources/resource-kind.js';
+import {
+  ResourceDefinitionKind,
+  runtimeResourceKeyForKind,
+} from '../resources/resource-kind.js';
 import {
   runtimeAsElementResourceName,
   runtimeAttributeName,
@@ -198,6 +217,7 @@ import {
   runtimeControllerIssueDiagnostic,
   routerIssueDiagnostic,
   frameworkCapabilityDemandDiagnostic,
+  htmlRecoveryDiagnostic,
   unsupportedExpressionGlobalDiagnostic,
   templateCompilerErrorDiagnostic,
 } from './template-diagnostic-policy.js';
@@ -288,6 +308,7 @@ interface TemplateCompletionAnswerContext {
 
 interface TemplateDiagnosticsScanContext {
   readonly store: KernelStore;
+  readonly emission: AureliaAppWorldProjectEmission;
   readonly includeHandles: boolean;
   readonly capabilityDemands: readonly FrameworkCapabilityDemand[];
   readonly router: TemplateCompletionRouterContext;
@@ -1178,7 +1199,9 @@ export function readTemplateDiagnosticRows(
   const context = templateDiagnosticsScanContext(store, workspaceRootDir, emission, includeHandles);
   const selections = templateResourceSelections(store, emission)
     .filter((selection) => templateDiagnosticSelectionMatchesFile(store, selection, sourceFile));
+  const htmlRecovery = htmlRecoveryDiagnosticProjection(store, selections, sourceFile, context);
   const rows = [
+    ...htmlRecovery.rows,
     ...selections.flatMap((selection) => expressionParseDiagnosticRowsForSelection(store, selection, sourceFile, context)),
     ...selections.flatMap((selection) => frameworkCapabilityDemandDiagnosticRowsForSelection(store, emission, selection, sourceFile, context)),
     ...selections.flatMap((selection) => templateCompilerIssueDiagnosticRowsForSelection(store, selection, sourceFile, context)),
@@ -1195,7 +1218,34 @@ export function readTemplateDiagnosticRows(
     ...selections.flatMap((selection) => expressionRootDiagnosticRowsForSelection(store, emission, selection, sourceFile, context)),
     ...templateOverlayTypeDiagnosticRows(store, emission, selections, sourceFile, context, projectionPolicy),
   ];
-  return [...rows].sort((left, right) =>
+  const uncertainCapabilityIdentities = new Set(emission.capabilityDemands.readDemands()
+    .filter((demand) =>
+      demand.admissionState === FrameworkCapabilityAdmissionState.AdmissionUnknown
+      || demand.admissionState === FrameworkCapabilityAdmissionState.AdmittedChainUnproven
+    )
+    .map((demand) => demand.identityHandle));
+  // AUR4001 already owns the exact duplicate t-params carrier with framework semantics. Keep that stronger row instead
+  // of replacing it with the generic HTML duplicate-attribute recovery; unrelated framework rows do not suppress it.
+  const duplicateAttributeFrameworkSources = rows
+    .filter((row) => row.frameworkErrorCode === 'AUR4001')
+    .map((row) => semanticExactSourceReference(row.source))
+    .filter((source): source is NonNullable<typeof source> => source != null);
+  return rows.filter((row) =>
+    !row.diagnosticRelations?.some((relation) =>
+      relation.relationKind === 'derived-consequence'
+      && uncertainCapabilityIdentities.has(relation.relatedDiagnosticIdentityHandle)
+    )
+    && (
+      row.diagnosticKind === 'html-syntax-recovery'
+      || row.diagnosticAuthority === 'framework-error-code'
+      || !htmlRecovery.blockedSources.some((blocked) => semanticSourceContains(blocked, row.source))
+    )
+    && !(
+      row.diagnosticKind === 'html-syntax-recovery'
+      && row.missingInput === `html-recovery:${HtmlRecoveryKind.DuplicateAttribute}`
+      && duplicateAttributeFrameworkSources.some((frameworkSource) => semanticSourceContains(frameworkSource, row.source))
+    )
+  ).sort((left, right) =>
     (left.source?.path ?? '').localeCompare(right.source?.path ?? '')
     || (left.source?.start ?? 0) - (right.source?.start ?? 0)
     || (left.selectedMemberName ?? '').localeCompare(right.selectedMemberName ?? '')
@@ -1203,6 +1253,305 @@ export function readTemplateDiagnosticRows(
     || (left.frameworkErrorCode ?? '').localeCompare(right.frameworkErrorCode ?? '')
     || left.diagnosticKind.localeCompare(right.diagnosticKind)
   );
+}
+
+interface HtmlRecoveryDiagnosticProjection {
+  readonly rows: readonly SemanticTemplateDiagnosticRow[];
+  /** Malformed carriers whose downstream semantic rows would only be parser-recovery cascades. */
+  readonly blockedSources: readonly NonNullable<SemanticTemplateDiagnosticRow['source']>[];
+}
+
+interface HtmlRecoveryDiagnosticSite {
+  readonly recovery: HtmlRecovery;
+  readonly owner: HtmlAttribute | HtmlComment | HtmlDoctype | HtmlDocument | HtmlElement | HtmlText | null;
+  readonly ownerSource: SemanticTemplateDiagnosticRow['source'];
+}
+
+const htmlOptionalEndTagNames = new Set([
+  'html',
+  'head',
+  'body',
+  'li',
+  'dt',
+  'dd',
+  'p',
+  'rt',
+  'rp',
+  'rb',
+  'rtc',
+  'optgroup',
+  'option',
+  'colgroup',
+  'thead',
+  'tbody',
+  'tfoot',
+  'tr',
+  'td',
+  'th',
+]);
+
+function htmlRecoveryDiagnosticProjection(
+  store: KernelStore,
+  selections: readonly TemplateCompletionResourceSelection[],
+  sourceFile: SemanticRuntimeSourceFileInput | null | undefined,
+  context: TemplateDiagnosticsScanContext,
+): HtmlRecoveryDiagnosticProjection {
+  const rows: SemanticTemplateDiagnosticRow[] = [];
+  const blockedSources: NonNullable<SemanticTemplateDiagnosticRow['source']>[] = [];
+  for (const selection of selections) {
+    const sites = actionableHtmlRecoverySites(store, selection);
+    for (const site of sites) {
+      const source = describeAddress(store, site.recovery.addressHandle);
+      if (source == null || !sourceReferenceMatchesFile(source, sourceFile)) {
+        continue;
+      }
+      const diagnostic = htmlRecoveryDiagnostic(site.recovery.recoveryKind, site.recovery.summary, source);
+      const key = templateDiagnosticRowKey(diagnostic, source);
+      if (context.seenRows.has(key)) {
+        continue;
+      }
+      context.seenRows.add(key);
+      const owner = site.owner;
+      rows.push({
+        ...diagnostic,
+        ...templateDiagnosticOriginFields(store, context.includeHandles, {
+          phase: null,
+          semanticProductHandle: site.recovery.productHandle,
+          sourceAddressHandle: site.recovery.addressHandle,
+        }),
+        subject: {
+          subjectKind: 'template-syntax',
+          subjectName: owner instanceof HtmlElement
+            ? owner.tagName
+            : owner instanceof HtmlAttribute
+              ? owner.rawName
+              : null,
+          source,
+        },
+        siteKind: owner instanceof HtmlElement
+          ? TemplateCompletionSiteKind.ElementName
+          : owner instanceof HtmlAttribute
+            ? TemplateCompletionSiteKind.AttributeValue
+            : TemplateCompletionSiteKind.Unknown,
+        valueSiteKind: null,
+        template: {
+          compilationLane: selection.lane,
+          source: describeAddress(store, selection.sourceAddressHandle),
+        },
+      });
+      if (htmlRecoveryBlocksOwnedSemanticRows(site.recovery.recoveryKind)) {
+        const blocked = semanticExactSourceReference(
+          htmlRecoveryBlockingOwnerSource(store, selection, site) ?? source,
+        );
+        if (blocked != null) {
+          blockedSources.push(blocked);
+        }
+      }
+    }
+  }
+  return { rows, blockedSources };
+}
+
+function actionableHtmlRecoverySites(
+  store: KernelStore,
+  selection: TemplateCompletionResourceSelection,
+): readonly HtmlRecoveryDiagnosticSite[] {
+  const html = selection.resource.compilation.html;
+  const ownerByRecovery = new Map<
+    HtmlRecovery,
+    HtmlAttribute | HtmlComment | HtmlDoctype | HtmlDocument | HtmlElement | HtmlText
+  >();
+  for (const recovery of html.document.recoveries) {
+    ownerByRecovery.set(recovery, html.document);
+  }
+  for (const node of html.nodes) {
+    if (
+      !(node instanceof HtmlElement)
+      && !(node instanceof HtmlComment)
+      && !(node instanceof HtmlDoctype)
+      && !(node instanceof HtmlText)
+    ) {
+      continue;
+    }
+    for (const recovery of node.recoveries) {
+      ownerByRecovery.set(recovery, node);
+    }
+  }
+  for (const attribute of html.attributes) {
+    for (const recovery of attribute.recoveries) {
+      ownerByRecovery.set(recovery, attribute);
+    }
+  }
+  const sites = html.recoveries.flatMap((recovery): HtmlRecoveryDiagnosticSite[] => {
+    const owner = ownerByRecovery.get(recovery) ?? null;
+    if (!htmlRecoveryIsActionable(recovery.recoveryKind, owner)) {
+      return [];
+    }
+    return [{
+      recovery,
+      owner,
+      ownerSource: owner == null ? null : describeAddress(store, owner.sourceAddressHandle),
+    }];
+  });
+  const invalidAttributeCarrierSources = sites
+    .filter((site) => site.recovery.recoveryKind === HtmlRecoveryKind.InvalidAttribute)
+    .map((site) => semanticExactSourceReference(htmlRecoveryBlockingOwnerSource(store, selection, site)))
+    .filter((source): source is NonNullable<typeof source> => source != null);
+  const swallowingSources = sites
+    .filter((site) => htmlRecoverySwallowsFollowingMarkup(site.recovery.recoveryKind))
+    .map((site) => semanticExactSourceReference(site.ownerSource ?? describeAddress(store, site.recovery.addressHandle)))
+    .filter((source): source is NonNullable<typeof source> => source != null);
+  const attributeFailureSources = sites
+    .filter((site) => site.owner instanceof HtmlAttribute && htmlRecoveryIsAttributeFailure(site.recovery.recoveryKind))
+    .map((site) => semanticExactSourceReference(site.ownerSource))
+    .filter((source): source is NonNullable<typeof source> => source != null);
+  const redundantStartTags = new Set(sites.filter((site) => {
+    if (site.recovery.recoveryKind !== HtmlRecoveryKind.UnterminatedStartTag) {
+      return false;
+    }
+    const ownerSource = semanticExactSourceReference(site.ownerSource);
+    return ownerSource != null && attributeFailureSources.some((attribute) =>
+      attribute.path === ownerSource.path
+      && attribute.start! >= ownerSource.start!
+      && attribute.end === ownerSource.end
+    );
+  }));
+  const missingSites = sites.filter((site) => site.recovery.recoveryKind === HtmlRecoveryKind.MissingEndTag);
+  const nonVoidSelfClosingOwners = new Set(sites
+    .filter((site) => site.recovery.recoveryKind === HtmlRecoveryKind.NonVoidSelfClosing)
+    .map((site) => site.owner));
+  const deepestMissingByEnd = new Map<string, HtmlRecoveryDiagnosticSite>();
+  for (const site of missingSites) {
+    const ownerSource = semanticExactSourceReference(site.ownerSource);
+    if (
+      ownerSource?.path == null
+      || ownerSource.start == null
+      || ownerSource.end == null
+    ) {
+      deepestMissingByEnd.set(`recovery:${String(site.recovery.addressHandle)}`, site);
+      continue;
+    }
+    if (swallowingSources.some((swallowing) =>
+      swallowing.path === ownerSource.path
+      && swallowing.start! >= ownerSource.start!
+      && swallowing.end === ownerSource.end
+    )) {
+      continue;
+    }
+    const key = `${ownerSource.path}:${ownerSource.end}`;
+    const existing = deepestMissingByEnd.get(key);
+    const existingStart = semanticExactSourceReference(existing?.ownerSource ?? null)?.start ?? -1;
+    if (ownerSource.start >= existingStart) {
+      deepestMissingByEnd.set(key, site);
+    }
+  }
+  const admittedMissing = new Set(deepestMissingByEnd.values());
+  const hasUnterminatedEndTag = sites.some((site) =>
+    site.recovery.recoveryKind === HtmlRecoveryKind.UnterminatedEndTag
+  );
+  return sites.filter((site) =>
+    !redundantStartTags.has(site)
+    && !(
+      site.recovery.recoveryKind !== HtmlRecoveryKind.InvalidAttribute
+      && invalidAttributeCarrierSources.some((carrier) =>
+        semanticSourceContains(carrier, describeAddress(store, site.recovery.addressHandle))
+      )
+    )
+    && !(
+      site.recovery.recoveryKind === HtmlRecoveryKind.MissingEndTag
+      && nonVoidSelfClosingOwners.has(site.owner)
+    )
+    && (
+      site.recovery.recoveryKind !== HtmlRecoveryKind.MissingEndTag
+      || (!hasUnterminatedEndTag && admittedMissing.has(site))
+    )
+  );
+}
+
+function htmlRecoveryBlockingOwnerSource(
+  store: KernelStore,
+  selection: TemplateCompletionResourceSelection,
+  site: HtmlRecoveryDiagnosticSite,
+): SemanticTemplateDiagnosticRow['source'] {
+  if (
+    site.recovery.recoveryKind !== HtmlRecoveryKind.InvalidAttribute
+    || !(site.owner instanceof HtmlAttribute)
+  ) {
+    return site.ownerSource;
+  }
+  const owner = selection.resource.compilation.html.nodes.find((node): node is HtmlElement =>
+    node instanceof HtmlElement
+    && node.attributes.some((attribute) => attribute.productHandle === site.owner?.productHandle)
+  ) ?? null;
+  return owner == null ? site.ownerSource : describeAddress(store, owner.sourceAddressHandle);
+}
+
+function htmlRecoveryIsActionable(
+  recoveryKind: HtmlRecoveryKind,
+  owner: HtmlAttribute | HtmlComment | HtmlDoctype | HtmlDocument | HtmlElement | HtmlText | null,
+): boolean {
+  switch (recoveryKind) {
+    case HtmlRecoveryKind.MissingEndTag:
+      return owner instanceof HtmlElement
+        && (
+          owner.namespace !== HtmlNamespaceKind.Html
+          || !htmlOptionalEndTagNames.has(owner.tagName.toLowerCase())
+        );
+    case HtmlRecoveryKind.UnexpectedEndTag:
+    case HtmlRecoveryKind.UnterminatedStartTag:
+    case HtmlRecoveryKind.UnterminatedEndTag:
+    case HtmlRecoveryKind.NonVoidSelfClosing:
+    case HtmlRecoveryKind.UnterminatedComment:
+    case HtmlRecoveryKind.MalformedComment:
+    case HtmlRecoveryKind.UnterminatedCdata:
+    case HtmlRecoveryKind.UnterminatedAttribute:
+    case HtmlRecoveryKind.MissingAttributeValue:
+    case HtmlRecoveryKind.InvalidAttribute:
+    case HtmlRecoveryKind.DuplicateAttribute:
+    case HtmlRecoveryKind.InvalidDoctype:
+      return true;
+    default:
+      return false;
+  }
+}
+
+function htmlRecoverySwallowsFollowingMarkup(recoveryKind: HtmlRecoveryKind): boolean {
+  return recoveryKind === HtmlRecoveryKind.UnterminatedStartTag
+    || recoveryKind === HtmlRecoveryKind.UnterminatedEndTag
+    || recoveryKind === HtmlRecoveryKind.UnterminatedAttribute
+    || recoveryKind === HtmlRecoveryKind.UnterminatedComment
+    || recoveryKind === HtmlRecoveryKind.UnterminatedCdata
+    || recoveryKind === HtmlRecoveryKind.InvalidDoctype;
+}
+
+function htmlRecoveryBlocksOwnedSemanticRows(recoveryKind: HtmlRecoveryKind): boolean {
+  return htmlRecoverySwallowsFollowingMarkup(recoveryKind)
+    || recoveryKind === HtmlRecoveryKind.MissingAttributeValue
+    || recoveryKind === HtmlRecoveryKind.InvalidAttribute
+    || recoveryKind === HtmlRecoveryKind.DuplicateAttribute;
+}
+
+function htmlRecoveryIsAttributeFailure(recoveryKind: HtmlRecoveryKind): boolean {
+  return recoveryKind === HtmlRecoveryKind.UnterminatedAttribute
+    || recoveryKind === HtmlRecoveryKind.MissingAttributeValue
+    || recoveryKind === HtmlRecoveryKind.InvalidAttribute;
+}
+
+function semanticSourceContains(
+  owner: NonNullable<SemanticTemplateDiagnosticRow['source']>,
+  candidate: SemanticTemplateDiagnosticRow['source'],
+): boolean {
+  const exactCandidate = semanticExactSourceReference(candidate);
+  return exactCandidate != null
+    && owner.path != null
+    && exactCandidate.path != null
+    && sameTypeSystemSourcePath(owner.path, exactCandidate.path)
+    && owner.start != null
+    && owner.end != null
+    && exactCandidate.start != null
+    && exactCandidate.end != null
+    && owner.start <= exactCandidate.start
+    && exactCandidate.end <= owner.end;
 }
 
 function typeProjectionTemplateDiagnosticRows(
@@ -1595,6 +1944,7 @@ function templateDiagnosticsScanContext(
 ): TemplateDiagnosticsScanContext {
   return {
     store,
+    emission,
     includeHandles,
     capabilityDemands: emission.capabilityDemands.readDemands(),
     router: templateCompletionRouterContext(emission),
@@ -2076,6 +2426,24 @@ function templateCompilerIssueDiagnosticRowsForSelection(
   context: TemplateDiagnosticsScanContext,
 ): readonly SemanticTemplateDiagnosticRow[] {
   return templateCompilerIssues(store, selection.resource).flatMap((issue) => {
+    if (
+      issue.issueKind === TemplateCompilerIssueKind.ProjectionOnNonCustomElement
+      && (
+        selection.resource.compilation.appRootDefinitionProductHandle == null
+        || registrationHidingOpenSeamsForContainer(
+          context.emission.appWorld.diWorld,
+          context.emission.appWorld.configuration.openSeamScopes,
+          context.emission.containerChainFacts,
+          selection.resource.compilation.compilerWorld.container.identityHandle,
+          (operation) => registrationOpenSeamCanHideResource(
+            operation,
+            projectionTargetLookupKeysForIssue(selection, issue),
+          ),
+        ).length > 0
+      )
+    ) {
+      return [];
+    }
     const source = describeAddress(store, issue.sourceAddressHandle);
     if (source == null || !sourceReferenceMatchesFile(source, sourceFile)) {
       return [];
@@ -2111,6 +2479,30 @@ function templateCompilerIssueDiagnosticRowsForSelection(
       },
     }];
   });
+}
+
+function projectionTargetLookupKeysForIssue(
+  selection: TemplateCompletionResourceSelection,
+  issue: TemplateCompilerIssue,
+): ReadonlySet<string> | null {
+  const html = selection.resource.compilation.html;
+  const projectedAttribute = html.attributes.find((attribute) =>
+    attribute.sourceAddressHandle === issue.sourceAddressHandle
+  ) ?? null;
+  if (projectedAttribute == null) return null;
+  const projectedOwner = html.nodes.find((node): node is HtmlElement =>
+    node instanceof HtmlElement
+    && node.attributes.some((attribute) => attribute.productHandle === projectedAttribute.productHandle)
+  ) ?? null;
+  if (projectedOwner == null) return null;
+  const parent = html.nodes.find((node): node is HtmlElement =>
+    node instanceof HtmlElement
+    && node.children.some((child) => child.productHandle === projectedOwner.productHandle)
+  ) ?? null;
+  if (parent == null) return null;
+  const lookupName = runtimeElementResourceName(parent.tagName, parent.namespace);
+  const lookupKey = runtimeResourceKeyForKind(ResourceDefinitionKind.CustomElement, lookupName);
+  return lookupKey == null ? null : new Set([lookupKey]);
 }
 
 function frameworkCapabilityDemandDiagnosticRowsForSelection(

@@ -1008,6 +1008,40 @@ describe("inlay-hint request admission", () => {
       message: expect.stringContaining("semantic token mapping was blocked"),
     });
   });
+
+  test("returns neutral standard-provider results for a document with multiple exact project owners", async () => {
+    const document = TextDocument.create(templateUri, "html", 1, codeActionText);
+    const templateSemanticTokens = vi.fn();
+    const templateCodeActions = vi.fn();
+    const harness = createInlayRegistrationHarness({
+      authoredSourceOwnership: vi.fn(async () => ({
+        value: {
+          templateOwned: true,
+          owners: [{ projectKey: "alpha" }, { projectKey: "beta" }],
+        },
+      })),
+      documents: { ensureProgramDocument: () => document },
+      templateSemanticTokens,
+      templateCodeActions,
+    });
+    const token = { isCancellationRequested: false, onCancellationRequested: vi.fn() };
+
+    await expect(harness.semanticTokensHandler(
+      { textDocument: { uri: templateUri } },
+      token,
+    )).resolves.toEqual({ data: [] });
+    await expect(harness.codeActionHandler({
+      textDocument: { uri: templateUri },
+      range: {
+        start: { line: 0, character: codeActionStart },
+        end: { line: 0, character: codeActionStart },
+      },
+      context: { diagnostics: [] },
+    }, token)).resolves.toBeNull();
+
+    expect(templateSemanticTokens).not.toHaveBeenCalled();
+    expect(templateCodeActions).not.toHaveBeenCalled();
+  });
 });
 
 describe("registered code-action failure boundary", () => {

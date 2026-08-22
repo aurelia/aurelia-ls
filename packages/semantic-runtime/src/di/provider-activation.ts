@@ -2513,6 +2513,7 @@ function registrationValueKindCanConstruct(valueKind: RegistrationValueKind): bo
     case RegistrationValueKind.Resolver:
     case RegistrationValueKind.Factory:
     case RegistrationValueKind.ResourceDefinition:
+    case RegistrationValueKind.ResourceDefinitionConstraint:
     case RegistrationValueKind.Registry:
     case RegistrationValueKind.RecursiveCarrier:
     case RegistrationValueKind.FrameworkRegistration:

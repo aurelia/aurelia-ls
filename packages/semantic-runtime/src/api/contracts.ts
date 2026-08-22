@@ -4985,6 +4985,7 @@ export type SemanticTemplateCursorDiagnosticKind =
   | 'template-expression-typescript-diagnostic'
   | 'expression-runtime-evaluation-error'
   | 'expression-parse-error'
+  | 'html-syntax-recovery'
   | 'template-compiler-error'
   | 'framework-capability-not-registered'
   | 'framework-capability-configured-out'

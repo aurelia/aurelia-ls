@@ -70,7 +70,8 @@ import {
 export class ConfigurationOpenSeamScope {
   constructor(
     readonly seam: OpenSeam,
-    readonly containerIdentityHandle: IdentityHandle | null,
+    /** Every known receiving container; null means the configuration target itself stayed unresolved. */
+    readonly containerIdentityHandles: readonly IdentityHandle[] | null,
   ) {}
 }
 
@@ -270,9 +271,12 @@ export class ConfigurationKernelEmitter {
       sequenceEmission.sequence.productHandle,
       observation.sourceNode,
     );
-    const openSeamContainerIdentityHandle = stepSet.sequenceAppRoot?.container.identityHandle
+    const preferredOpenSeamContainerIdentityHandle = stepSet.sequenceAppRoot?.container.identityHandle
       ?? stepSet.sequenceAurelia?.container.identityHandle
-      ?? uniqueContainerIdentityHandle(stepSet.containers);
+      ?? null;
+    const openSeamContainerIdentityHandles = preferredOpenSeamContainerIdentityHandle == null
+      ? knownContainerIdentityHandles(stepSet.containers)
+      : [preferredOpenSeamContainerIdentityHandle];
 
     return {
       records,
@@ -286,7 +290,7 @@ export class ConfigurationKernelEmitter {
       registrationAdmissions: stepSet.registrationAdmissions,
       openSeamScopes: openSeams.seams.map((seam) => new ConfigurationOpenSeamScope(
         seam,
-        openSeamContainerIdentityHandle,
+        openSeamContainerIdentityHandles,
       )),
     };
   }
@@ -412,7 +416,7 @@ export class ConfigurationKernelEmitter {
 
 }
 
-function uniqueContainerIdentityHandle(containers: readonly Container[]): IdentityHandle | null {
+function knownContainerIdentityHandles(containers: readonly Container[]): readonly IdentityHandle[] | null {
   const handles = [...new Set(containers.map((container) => container.identityHandle))];
-  return handles.length === 1 ? handles[0]! : null;
+  return handles.length === 0 ? null : handles;
 }

@@ -145,6 +145,7 @@ function keyKindForRegistrationValue(
     case RegistrationValueKind.Resolver:
       return ContainerLookupKeyKind.Resolver;
     case RegistrationValueKind.ResourceDefinition:
+    case RegistrationValueKind.ResourceDefinitionConstraint:
       return ContainerLookupKeyKind.Resource;
     case RegistrationValueKind.AliasTarget:
       return containerLookupKeyKindForIdentityKind(value.keyKind);

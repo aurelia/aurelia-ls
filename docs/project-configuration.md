@@ -130,16 +130,21 @@ in VS Code settings:
 | `aurelia.project.json` | Authored-source membership and semantic finding presentation shared by semantic-runtime, the language server, and MCP. |
 | `aurelia.activationMode` | Whether the VS Code extension automatically admits, forcibly enables, or excludes a workspace folder. |
 | `aurelia.inlayHints.bindingMode` | VS Code presentation for binding-mode inlay hints. |
-| `aurelia.templateDiagnostics.suppressNative` | Opt-in suppression of VS Code's built-in HTML, CSS, and JavaScript diagnostics for proved Aurelia templates. |
+| `aurelia.templateDiagnostics.suppressNative` | Opt-in suppression of VS Code's embedded CSS and JavaScript diagnostics for proved Aurelia templates. |
 
 Extension activation, snippets, UI preferences, and logging do not belong in the project file. Conversely, copying
 `authoredSources` or `findings` into `.vscode/settings.json` does not configure the shared semantic runtime.
 
 Native template-diagnostic suppression is disabled by default. Enabling it moves only templates with exact Aurelia
-ownership into the extension's `aurelia-html` language mode. This suppresses VS Code's built-in HTML/CSS/JavaScript
-diagnostics, including legitimate native findings. HTML language-service participation remains available, but file icons,
+ownership into the extension's `aurelia-html` language mode. This suppresses VS Code's embedded CSS/JavaScript
+diagnostics, including legitimate findings. HTML language-service participation remains available, but file icons,
 `[html]`-scoped settings, snippets, formatter selection, and other native HTML or editor behavior can change. Unowned
 HTML remains in native `html` mode.
+Exact owned templates keep Aurelia's bounded recovery Problems for supported malformed tags, attributes, comments,
+declarations, and foreign-content CDATA in both modes. This is not general HTML validation; other tokenizer and
+tree-building rules remain outside that set.
+The disabled default is recommended because suppression is all-or-nothing: enable it only when interpolation noise is
+more costly than losing embedded CSS/JavaScript Problems, and keep that coverage in project lint or build checks.
 
 The VS Code extension associates the exact `aurelia.project.json` filename with bundled, offline annotation assistance
 for root fields, sections, known rule IDs, and values. Those suggestions are an editing aid, not a second semantic

@@ -653,6 +653,107 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
     )).toEqual({ value: [], failures: [] });
   });
 
+  test("removes client-owned Program diagnostics from semantic-primary context", () => {
+    const text = "@bindable(null as unknown as { name: string })";
+    const doc = TextDocument.create(
+      "file:///C:/projects/app/src/component.ts",
+      "typescript",
+      1,
+      text,
+    );
+    const source = sourceReference("src/component.ts", 0, text.length);
+    const rows = [
+      {
+        projectKey: "app",
+        diagnosticDomain: "resource",
+        phase: "bindable-decorator",
+        diagnosticKind: "invalid-bindable-decorator-usage-class-without-configuration",
+        diagnosticAuthority: "framework-error-code",
+        typeScriptDiagnosticCode: null,
+        frameworkErrorCode: "AUR0228",
+        frameworkRawErrorAuthority: null,
+        severity: "error",
+        summary: "Class-level @bindable cannot use a null configuration.",
+        missingInput: null,
+        missingInputs: [],
+        source,
+        subject: { subjectKind: "custom-element", subjectName: "invalid-card", source },
+        diagnosticIdentityHandle: null,
+        relatedInformation: [],
+        suggestion: null,
+        sourceRole: "app-source",
+        relatedQueryKind: "resource-issues",
+      },
+      {
+        projectKey: "app",
+        diagnosticDomain: "typescript",
+        phase: "semantic",
+        diagnosticKind: "TS2769",
+        diagnosticAuthority: "typescript",
+        typeScriptDiagnosticCode: 2769,
+        frameworkErrorCode: null,
+        frameworkRawErrorAuthority: null,
+        severity: "error",
+        summary: "TS2769: No overload matches this call.",
+        missingInput: null,
+        missingInputs: [],
+        source,
+        subject: null,
+        diagnosticIdentityHandle: null,
+        relatedInformation: [],
+        suggestion: null,
+        sourceRole: "app-source",
+        relatedQueryKind: "typescript-diagnostics",
+      },
+    ];
+    const answer = completeDiagnosticAnswer({ value: { rows } } as never);
+
+    const genericClient = mapSemanticRuntimeAppDiagnostics(
+      answer,
+      doc,
+      appDocumentUris,
+    );
+    expect(genericClient.failures).toEqual([]);
+    expect(genericClient.value).toHaveLength(1);
+    expect(genericClient.value[0]?.relatedInformation?.map((entry) => entry.message)).toEqual([
+      "TS2769: No overload matches this call.",
+    ]);
+    expect(genericClient.value[0]?.data).toMatchObject({
+      semanticRuntime: {
+        presentation: {
+          rawRowCount: 2,
+          contextual: [{
+            relation: "checker-evidence",
+            diagnostic: { diagnosticKind: "TS2769" },
+          }],
+        },
+      },
+    });
+
+    const bundledClient = mapSemanticRuntimeAppDiagnostics(
+      answer,
+      doc,
+      appDocumentUris,
+      null,
+      { clientOwnsTypeScriptProgramDiagnostics: true },
+    );
+    expect(bundledClient.failures).toEqual([]);
+    expect(bundledClient.value).toHaveLength(1);
+    expect(bundledClient.value[0]?.source).toBe("aurelia");
+    expect(bundledClient.value[0]?.code).toBe("AUR0228");
+    expect(bundledClient.value[0]?.relatedInformation ?? []).toEqual([]);
+    expect(bundledClient.value[0]?.data).toMatchObject({
+      semanticRuntime: {
+        presentation: {
+          rawRowCount: 1,
+          primarySeverity: "error",
+          maxRawSeverity: "error",
+          contextual: [],
+        },
+      },
+    });
+  });
+
   test("prefers framework and structured TypeScript codes before the diagnostic-kind fallback", () => {
     expect(semanticRuntimeDiagnosticCode({
       diagnosticKind: "fallback-diagnostic",

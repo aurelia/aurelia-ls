@@ -569,8 +569,10 @@ describe("VS Code product contract", () => {
       default: false,
       scope: "resource",
       description: [
-        "Suppress VS Code's built-in HTML, CSS, and JavaScript diagnostics, including legitimate native findings, for templates proven to belong to Aurelia.",
-        "When enabled, proven templates use Aurelia HTML language mode; HTML language-service participation remains available, but file icons, [html]-scoped settings, snippets, formatter selection, and other native HTML or editor behavior may change.",
+        "Suppress VS Code's embedded CSS and JavaScript diagnostics for proved Aurelia templates.",
+        "Keep disabled (default) to retain legitimate findings.",
+        "Enable only when removing interpolation false positives is worth losing that validation; proved templates then use Aurelia HTML mode, which can change file icons, [html]-scoped settings, snippets, formatter selection, and other editor behavior.",
+        "Bounded Aurelia recovery Problems for supported malformed tags, attributes, comments, declarations, and foreign-content CDATA remain in both modes; this is not general HTML validation.",
       ].join(" "),
     }));
   });

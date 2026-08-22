@@ -173,6 +173,7 @@ import {
   appendConvergenceOpen,
   convergenceOpenForNode,
   convergenceOpenForRead,
+  convergenceOpenForRejectedReadShape,
   convergenceOpenForReadPressure,
   decoratorCallNamed,
   decoratorIdentifierNamed,
@@ -1545,7 +1546,11 @@ function readCustomElementCapture(
     return new CustomElementCaptureRead(
       new CustomElementCaptureDefinition(CustomElementCaptureKind.Open),
       null,
-      convergenceOpenForRead('Custom element capture metadata evaluation did not produce a value.', read, []),
+      convergenceOpenForRejectedReadShape(
+        'Custom element capture metadata evaluation did not produce a value.',
+        read,
+        [OpenSeamReasonKind.ResourceDefinitionFieldOpen],
+      ),
     );
   }
   if (value.kind === EvaluationValueKind.Undefined
@@ -1586,7 +1591,11 @@ function readCustomElementCapture(
   return new CustomElementCaptureRead(
     new CustomElementCaptureDefinition(CustomElementCaptureKind.Open),
     null,
-    convergenceOpenForRead('Custom element capture metadata did not close to a boolean or predicate.', read, []),
+    convergenceOpenForRejectedReadShape(
+      'Custom element capture metadata did not close to a boolean or predicate.',
+      read,
+      [OpenSeamReasonKind.ResourceDefinitionFieldOpen],
+    ),
   );
 }
 
@@ -1634,7 +1643,11 @@ function readCustomElementTemplate(
       new CustomElementTemplateDefinition(CustomElementTemplateKind.Open),
       [],
       new ResourceDependenciesRead([], []),
-      convergenceOpenForRead('Custom element template metadata evaluation did not produce a value.', read, []),
+      convergenceOpenForRejectedReadShape(
+        'Custom element template metadata evaluation did not produce a value.',
+        read,
+        [OpenSeamReasonKind.ResourceDefinitionFieldOpen],
+      ),
     );
   }
   if (value == null || value.kind === EvaluationValueKind.Null || value.kind === EvaluationValueKind.Undefined) {
@@ -1665,7 +1678,11 @@ function readCustomElementTemplate(
     new CustomElementTemplateDefinition(CustomElementTemplateKind.Open),
     [],
     new ResourceDependenciesRead([], []),
-    convergenceOpenForRead('Custom element template metadata did not close to markup or an imported template.', read, []),
+    convergenceOpenForRejectedReadShape(
+      'Custom element template metadata did not close to markup or an imported template.',
+      read,
+      [OpenSeamReasonKind.ResourceDefinitionFieldOpen],
+    ),
   );
 }
 
@@ -1841,7 +1858,11 @@ function readShadowOptions(
   if (value == null) {
     return new ShadowOptionsRead(
       null,
-      convergenceOpenForRead('Custom element shadowOptions evaluation did not produce a value.', read, []),
+      convergenceOpenForRejectedReadShape(
+        'Custom element shadowOptions evaluation did not produce a value.',
+        read,
+        [OpenSeamReasonKind.ResourceDefinitionFieldOpen],
+      ),
     );
   }
   if (value.kind === EvaluationValueKind.Undefined || value.kind === EvaluationValueKind.Null) {
@@ -1853,7 +1874,11 @@ function readShadowOptions(
   if (value?.kind !== EvaluationValueKind.Object) {
     return new ShadowOptionsRead(
       null,
-      convergenceOpenForRead('Custom element shadowOptions did not close to an object.', read, []),
+      convergenceOpenForRejectedReadShape(
+        'Custom element shadowOptions did not close to an object.',
+        read,
+        [OpenSeamReasonKind.ResourceDefinitionFieldOpen],
+      ),
     );
   }
   const mode = readStaticValueProperty(value, 'mode', read.node);
@@ -1873,7 +1898,11 @@ function readShadowOptions(
     default:
       return new ShadowOptionsRead(
         null,
-        convergenceOpenForRead('Custom element shadowOptions mode did not close to open or closed.', read, []),
+        convergenceOpenForRejectedReadShape(
+          'Custom element shadowOptions mode did not close to open or closed.',
+          read,
+          [OpenSeamReasonKind.ResourceDefinitionFieldOpen],
+        ),
       );
   }
 }
@@ -2035,7 +2064,11 @@ function readChildrenDecoratorQuery(
     ? new ChildrenDecoratorQueryRead(
         null,
         sourceNode,
-        convergenceOpenForRead('Children query metadata did not close to a string.', queryRead, []),
+        convergenceOpenForRejectedReadShape(
+          'Children query metadata did not close to a string.',
+          queryRead,
+          [OpenSeamReasonKind.ResourceDefinitionFieldOpen],
+        ),
       )
     : new ChildrenDecoratorQueryRead(
         query,
@@ -2085,10 +2118,10 @@ function readProcessContentHookArgument(
       target: null,
       records: [],
       issueNode: null,
-      open: convergenceOpenForRead(
+      open: convergenceOpenForRejectedReadShape(
         'Process-content hook did not close to a function or method name.',
         read,
-        [],
+        [OpenSeamReasonKind.ResourceDefinitionFieldOpen],
       ),
     };
   }
@@ -2126,7 +2159,11 @@ function readTargetField(
         )
       : new ResourceTargetFieldRead(
           null,
-          convergenceOpenForRead(`Resource ${fieldName} did not close to a function or class.`, read, []),
+          convergenceOpenForRejectedReadShape(
+            `Resource ${fieldName} did not close to a function or class.`,
+            read,
+            [OpenSeamReasonKind.ResourceDefinitionTargetOpen],
+          ),
         );
   }
   return new ResourceTargetFieldRead(
