@@ -34,9 +34,9 @@ Do not repeat the broad audit unless the branch base or declared product envelop
 | Audit baseline | `00e81ae472d7d43b9beee55922e2e3ad28a4762e` |
 | Branch/base | `ide-retargeting`, 252 commits ahead of `main` at audit time |
 | Current checkpoint | CP1 — Semantic foundation |
-| Active workstreams | WS06 assurance is active; WS01 is ready to start |
+| Active workstreams | WS06 assurance is active; WS02, WS03, and WS04 are ready |
 | Release authority | `not-accepted` |
-| Release posture | Known red contract, source-identity ambiguity, and exact rename journey remain open |
+| Release posture | WS01 is verified at `e507dabc8`; CP1 automation admission and the exact rename/diagnostic journeys remain open |
 | Last tracker review | 2026-08-22 |
 
 Update this table whenever the checkpoint, active stream set, candidate SHA, or release authority changes. Do not create
@@ -56,10 +56,10 @@ checkpoint gate pass on a commit that remains valid.
 
 | Id | Workstream | Status | Depends on | Packet | Primary checkpoint |
 |---|---|---|---|---|---|
-| WS01 | Semantic identity, provenance, and compiler-world invariants | ready | CP0 | [packet](workstreams/WS01-semantic-foundations.md) | CP1 |
-| WS02 | Rename and edit-transaction correctness | queued | WS01; WS04 support | [packet](workstreams/WS02-rename-edit-transactions.md) | CP2 |
-| WS03 | Diagnostics, recovery, and Problems policy | queued | WS01; WS04 support | [packet](workstreams/WS03-diagnostics-recovery.md) | CP3 |
-| WS04 | Incremental lifecycle, cancellation, performance, and retention | queued | WS01 | [packet](workstreams/WS04-lifecycle-performance.md) | CP3–CP4 |
+| WS01 | Semantic identity, provenance, and compiler-world invariants | complete | CP0 | [packet](workstreams/WS01-semantic-foundations.md) | CP1 |
+| WS02 | Rename and edit-transaction correctness | ready | WS01; WS04 support | [packet](workstreams/WS02-rename-edit-transactions.md) | CP2 |
+| WS03 | Diagnostics, recovery, and Problems policy | ready | WS01; WS04 support | [packet](workstreams/WS03-diagnostics-recovery.md) | CP3 |
+| WS04 | Incremental lifecycle, cancellation, performance, and retention | ready | WS01 | [packet](workstreams/WS04-lifecycle-performance.md) | CP3–CP4 |
 | WS05 | Provider composition, multi-root, platform, and compatibility | queued | WS02–WS04 stable | [packet](workstreams/WS05-host-provider-integration.md) | CP4 |
 | WS06 | Assurance admission, documentation, and exact release evidence | active | transverse; closes last | [packet](workstreams/WS06-assurance-release.md) | CP1–CP5 |
 
@@ -71,7 +71,7 @@ proofs to both, then completes its full soak at CP4. WS06 starts now and continu
 | Id | Status | Required outcome |
 |---|---|---|
 | CP0 — Audit authority | complete | Scope, baseline, workstreams, known reds, recovery path, and evidence are durable and queryable. |
-| CP1 — Semantic foundation | active | WS01 exits; full semantic tests and conformance are green; identity fails closed on ambiguity; affected lane baselines are current. |
+| CP1 — Semantic foundation | verification | WS01 exits; full semantic tests and conformance are green; identity fails closed on ambiguity; affected lane baselines are current. |
 | CP2 — Mutating IDE correctness | queued | WS02 exits; supported rename/edit surfaces are complete and atomic through the real host, including exact undo/redo and session churn. |
 | CP3 — Diagnostic settlement | queued | WS03 exits and feature-critical WS04 slices are green; Problems settle through malformed edits and file/config/session transitions. |
 | CP4 — Integrated resilience | queued | WS04 and WS05 exit; provider composition, multi-root/platform behavior, cancellation, latency, and retention meet the support envelope. |
@@ -143,9 +143,7 @@ At checkpoint review:
 
 ## Next Actions
 
-1. Start WS01 by reproducing F-FND-001 and grounding the intended owner-resource invariant before changing the planner or
-   test.
-2. Specify exact, relative, ambiguous, linked, and case-aware source identity outcomes for F-FND-002; enumerate every
-   authority-bearing consumer before editing the shared matcher.
-3. Build the cross-lane collision fixture and make the complete semantic suite green.
-4. In parallel, let WS06 design aggregate semantic/conformance/lane gates without changing expected behavior.
+1. WS06 admits the 84-file semantic suite and 684-assertion conformance runner, plus publication parity, to close CP1.
+2. Start WS02 with the exact `state -> state2` real-host rename/undo journey and atomic edit transaction contract.
+3. Start WS03 diagnostic policy/lifecycle work in parallel, using the now-fixed source identity boundary.
+4. Run the feature-critical WS04 currentness/performance slices needed by WS02 and WS03 before their checkpoints close.
