@@ -41,7 +41,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "actionCount": 1,
+  "actionCount": 2,
   "actions": [
     {
       "diagnosticCount": 1,
@@ -50,6 +50,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "isPreferred": true,
       "kind": "quickfix",
       "title": "Register RouterConfiguration for router.default-resources"
+    },
+    {
+      "diagnosticCount": 1,
+      "hasCommand": true,
+      "hasEdit": false,
+      "isPreferred": false,
+      "kind": "quickfix",
+      "title": "Explain this Aurelia diagnostic"
     }
   ],
   "outcome": "result"
@@ -120,7 +128,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "actionCount": 1,
+  "actionCount": 2,
   "actions": [
     {
       "command": null,
@@ -160,6 +168,70 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "outcome": "resolved"
       },
       "title": "Register RouterConfiguration for router.default-resources"
+    },
+    {
+      "command": {
+        "arguments": [
+          {
+            "documentVersion": 1,
+            "frameworkCapability": "router.default-resources",
+            "position": {
+              "character": 8,
+              "line": 0
+            },
+            "projectKey": "unregistered-plugin-resources",
+            "range": {
+              "end": {
+                "character": 21,
+                "line": 0
+              },
+              "start": {
+                "character": 8,
+                "line": 0
+              }
+            },
+            "uri": "fixtures://pressure/unregistered-plugin-resources/src/unregistered-plugin-resources-app.html"
+          }
+        ],
+        "command": "aurelia.explainFrameworkCapability",
+        "title": "Explain Aurelia diagnostic"
+      },
+      "data": {
+        "semanticRuntime": {
+          "explanationSeed": {
+            "documentVersion": 1,
+            "frameworkCapability": "router.default-resources",
+            "position": {
+              "character": 8,
+              "line": 0
+            },
+            "projectKey": "unregistered-plugin-resources",
+            "range": {
+              "end": {
+                "character": 21,
+                "line": 0
+              },
+              "start": {
+                "character": 8,
+                "line": 0
+              }
+            },
+            "uri": "fixtures://pressure/unregistered-plugin-resources/src/unregistered-plugin-resources-app.html"
+          },
+          "queryKind": "framework-capability-explanation"
+        }
+      },
+      "diagnosticCount": 1,
+      "disabled": null,
+      "index": 1,
+      "isPreferred": false,
+      "kind": "quickfix",
+      "resolution": {
+        "hasCommand": true,
+        "hasEdit": false,
+        "outcome": "not-requested"
+      },
+      "title": "Explain this Aurelia diagnostic"
     }
   ]
 }
@@ -201,6 +273,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "status": "ok"
         }
       ]
+    },
+    {
+      "anomalies": [],
+      "editCount": 0,
+      "expectedOldTexts": [
+        ""
+      ],
+      "filesTouched": [],
+      "index": 1,
+      "outcome": "no-workspace-edit",
+      "title": "Explain this Aurelia diagnostic",
+      "validation": []
     }
   ],
   "expectedOldTexts": [
@@ -241,3 +325,7 @@ diff --git a/src/main.ts b/src/main.ts
    })
    .start();
 ```
+
+#### 1: Explain this Aurelia diagnostic
+
+_No in-memory diff._

@@ -41,7 +41,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "actionCount": 1,
+  "actionCount": 2,
   "actions": [
     {
       "diagnosticCount": 1,
@@ -50,6 +50,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "isPreferred": true,
       "kind": "quickfix",
       "title": "Register ShortHandBindingSyntax for runtime-html.short-hand-binding-syntax"
+    },
+    {
+      "diagnosticCount": 1,
+      "hasCommand": true,
+      "hasEdit": false,
+      "isPreferred": false,
+      "kind": "quickfix",
+      "title": "Explain this Aurelia diagnostic"
     }
   ],
   "outcome": "result"
@@ -120,7 +128,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "actionCount": 1,
+  "actionCount": 2,
   "actions": [
     {
       "command": null,
@@ -160,6 +168,70 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "outcome": "resolved"
       },
       "title": "Register ShortHandBindingSyntax for runtime-html.short-hand-binding-syntax"
+    },
+    {
+      "command": {
+        "arguments": [
+          {
+            "documentVersion": 1,
+            "frameworkCapability": "runtime-html.short-hand-binding-syntax",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "projectKey": "unregistered-shorthand-syntax",
+            "range": {
+              "end": {
+                "character": 21,
+                "line": 0
+              },
+              "start": {
+                "character": 7,
+                "line": 0
+              }
+            },
+            "uri": "fixtures://pressure/unregistered-shorthand-syntax/src/unregistered-shorthand-syntax-app.html"
+          }
+        ],
+        "command": "aurelia.explainFrameworkCapability",
+        "title": "Explain Aurelia diagnostic"
+      },
+      "data": {
+        "semanticRuntime": {
+          "explanationSeed": {
+            "documentVersion": 1,
+            "frameworkCapability": "runtime-html.short-hand-binding-syntax",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "projectKey": "unregistered-shorthand-syntax",
+            "range": {
+              "end": {
+                "character": 21,
+                "line": 0
+              },
+              "start": {
+                "character": 7,
+                "line": 0
+              }
+            },
+            "uri": "fixtures://pressure/unregistered-shorthand-syntax/src/unregistered-shorthand-syntax-app.html"
+          },
+          "queryKind": "framework-capability-explanation"
+        }
+      },
+      "diagnosticCount": 1,
+      "disabled": null,
+      "index": 1,
+      "isPreferred": false,
+      "kind": "quickfix",
+      "resolution": {
+        "hasCommand": true,
+        "hasEdit": false,
+        "outcome": "not-requested"
+      },
+      "title": "Explain this Aurelia diagnostic"
     }
   ]
 }
@@ -219,6 +291,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "status": "ok"
         }
       ]
+    },
+    {
+      "anomalies": [],
+      "editCount": 0,
+      "expectedOldTexts": [
+        "{ Aurelia, StandardConfiguration }",
+        ""
+      ],
+      "filesTouched": [],
+      "index": 1,
+      "outcome": "no-workspace-edit",
+      "title": "Explain this Aurelia diagnostic",
+      "validation": []
     }
   ],
   "expectedOldTexts": [
@@ -250,3 +335,7 @@ diff --git a/src/main.ts b/src/main.ts
    })
    .start();
 ```
+
+#### 1: Explain this Aurelia diagnostic
+
+_No in-memory diff._

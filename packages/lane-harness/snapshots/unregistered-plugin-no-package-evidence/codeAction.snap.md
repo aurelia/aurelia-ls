@@ -41,8 +41,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "outcome": "result",
-  "result": null
+  "actionCount": 1,
+  "actions": [
+    {
+      "diagnosticCount": 1,
+      "hasCommand": true,
+      "hasEdit": false,
+      "isPreferred": false,
+      "kind": "quickfix",
+      "title": "Explain this Aurelia diagnostic"
+    }
+  ],
+  "outcome": "result"
 }
 ```
 
@@ -110,8 +120,73 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "actionCount": 0,
-  "actions": []
+  "actionCount": 1,
+  "actions": [
+    {
+      "command": {
+        "arguments": [
+          {
+            "documentVersion": 1,
+            "frameworkCapability": "router.default-resources",
+            "position": {
+              "character": 0,
+              "line": 0
+            },
+            "projectKey": "unregistered-plugin-no-package-evidence",
+            "range": {
+              "end": {
+                "character": 27,
+                "line": 0
+              },
+              "start": {
+                "character": 0,
+                "line": 0
+              }
+            },
+            "uri": "fixtures://pressure/unregistered-plugin-no-package-evidence/src/unregistered-plugin-no-package-evidence-app.html"
+          }
+        ],
+        "command": "aurelia.explainFrameworkCapability",
+        "title": "Explain Aurelia diagnostic"
+      },
+      "data": {
+        "semanticRuntime": {
+          "explanationSeed": {
+            "documentVersion": 1,
+            "frameworkCapability": "router.default-resources",
+            "position": {
+              "character": 0,
+              "line": 0
+            },
+            "projectKey": "unregistered-plugin-no-package-evidence",
+            "range": {
+              "end": {
+                "character": 27,
+                "line": 0
+              },
+              "start": {
+                "character": 0,
+                "line": 0
+              }
+            },
+            "uri": "fixtures://pressure/unregistered-plugin-no-package-evidence/src/unregistered-plugin-no-package-evidence-app.html"
+          },
+          "queryKind": "framework-capability-explanation"
+        }
+      },
+      "diagnosticCount": 1,
+      "disabled": null,
+      "index": 0,
+      "isPreferred": false,
+      "kind": "quickfix",
+      "resolution": {
+        "hasCommand": true,
+        "hasEdit": false,
+        "outcome": "not-requested"
+      },
+      "title": "Explain this Aurelia diagnostic"
+    }
+  ]
 }
 ```
 
@@ -119,7 +194,20 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "actions": [],
+  "actions": [
+    {
+      "anomalies": [],
+      "editCount": 0,
+      "expectedOldTexts": [
+        ""
+      ],
+      "filesTouched": [],
+      "index": 0,
+      "outcome": "no-workspace-edit",
+      "title": "Explain this Aurelia diagnostic",
+      "validation": []
+    }
+  ],
   "expectedOldTexts": [
     ""
   ]
