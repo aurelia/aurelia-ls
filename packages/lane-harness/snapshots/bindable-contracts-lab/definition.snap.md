@@ -15,11 +15,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "anchor": "external-value.bind=\"externalValue\"",
   "at": "external-value",
   "atOccurrence": 1,
-  "displayPosition": "src/bindable-lab-app.html:38:24",
+  "displayPosition": "src/bindable-lab-app.html:39:24",
   "file": "src/bindable-lab-app.html",
   "lspPosition": {
     "character": 23,
-    "line": 37
+    "line": 38
   },
   "occurrence": 1
 }
@@ -93,11 +93,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "anchor": "base-static.bind=\"inheritedStatic\"",
   "at": "base-static",
   "atOccurrence": 1,
-  "displayPosition": "src/bindable-lab-app.html:30:27",
+  "displayPosition": "src/bindable-lab-app.html:31:27",
   "file": "src/bindable-lab-app.html",
   "lspPosition": {
     "character": 26,
-    "line": 29
+    "line": 30
   },
   "occurrence": 1
 }
@@ -171,11 +171,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "anchor": "inherited-only.bind=\"precedenceInherited\"",
   "at": "inherited-only",
   "atOccurrence": 1,
-  "displayPosition": "src/bindable-lab-app.html:34:5",
+  "displayPosition": "src/bindable-lab-app.html:35:5",
   "file": "src/bindable-lab-app.html",
   "lspPosition": {
     "character": 4,
-    "line": 33
+    "line": 34
   },
   "occurrence": 1
 }
@@ -249,11 +249,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "anchor": "static-only.bind=\"precedenceStatic\"",
   "at": "static-only",
   "atOccurrence": 1,
-  "displayPosition": "src/bindable-lab-app.html:35:5",
+  "displayPosition": "src/bindable-lab-app.html:36:5",
   "file": "src/bindable-lab-app.html",
   "lspPosition": {
     "character": 4,
-    "line": 34
+    "line": 35
   },
   "occurrence": 1
 }
@@ -327,11 +327,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "anchor": "definition-only.bind=\"precedenceDefinition\"",
   "at": "definition-only",
   "atOccurrence": 1,
-  "displayPosition": "src/bindable-lab-app.html:36:5",
+  "displayPosition": "src/bindable-lab-app.html:37:5",
   "file": "src/bindable-lab-app.html",
   "lspPosition": {
     "character": 4,
-    "line": 35
+    "line": 36
   },
   "occurrence": 1
 }
