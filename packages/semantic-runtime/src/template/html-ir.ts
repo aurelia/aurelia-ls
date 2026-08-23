@@ -51,6 +51,7 @@ export const enum HtmlRecoveryKind {
   InvalidAttribute = 'invalid-attribute',
   DuplicateAttribute = 'duplicate-attribute',
   InvalidDoctype = 'invalid-doctype',
+  NestingLimitExceeded = 'nesting-limit-exceeded',
   Open = 'open',
 }
 

@@ -64,7 +64,7 @@ import {
   type ParsedHtmlNodeDraft,
   parseHtmlDocumentDraft,
 } from './html-parse-materializer.js';
-import { HtmlIrNodeKind } from './html-ir.js';
+import { HtmlIrNodeKind, HtmlRecoveryKind } from './html-ir.js';
 import { TemplateRecoveryPolicy } from './parse-context.js';
 import { runtimeAttributeName, runtimeElementResourceName } from './runtime-dom-name.js';
 
@@ -433,6 +433,11 @@ export class LocalTemplateDefinitionMaterializer {
 
 function readLocalTemplateSyntaxes(markup: string): readonly LocalTemplateSyntax[] {
   const document = parseHtmlDocumentDraft(markup, TemplateRecoveryPolicy.Strict);
+  if (document.recoveries.some((recovery) =>
+    recovery.recoveryKind === HtmlRecoveryKind.NestingLimitExceeded
+  )) {
+    return [];
+  }
   const rootTemplate = effectiveRootTemplate(document.rootNodes);
   if (rootTemplate != null && attributeForDraft(rootTemplate, 'as-custom-element') != null) {
     return [];

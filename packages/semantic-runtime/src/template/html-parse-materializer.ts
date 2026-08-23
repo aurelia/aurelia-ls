@@ -387,6 +387,9 @@ export function parseHtmlDocumentDraft(
   return new HtmlScanner(markup, recoveryPolicy).parseDocument();
 }
 
+/** Maximum authored element ancestry retained by the parser and every recursive compiler consumer. */
+export const MAX_HTML_ELEMENT_NESTING_DEPTH = 128;
+
 class HtmlParseTreeMaterializer {
   constructor(
     private readonly store: KernelStoreReadView,
@@ -838,6 +841,7 @@ function mapTemplateSourceSpan(
 class HtmlScanner {
   private pos = 0;
   private readonly recoveries: HtmlRecoveryDraft[] = [];
+  private nestingLimitReached = false;
 
   constructor(
     private readonly text: string,
@@ -886,6 +890,14 @@ class HtmlScanner {
           ));
         }
         continue;
+      }
+
+      if (
+        this.startsStartTag()
+        && pathPrefix.length >= MAX_HTML_ELEMENT_NESTING_DEPTH
+      ) {
+        this.stopAtNestingLimit();
+        return new ParsedHtmlNodeSequenceDraft(nodes, null);
       }
 
       const path = [...pathPrefix, nodes.length];
@@ -1158,7 +1170,12 @@ class HtmlScanner {
     const children = childSequence.nodes;
     const end = this.pos;
     recoveries.push(...(childSequence.closingTag?.recoveries ?? []));
-    if (!selfClosing && !htmlVoidElement && childSequence.closingTag == null) {
+    if (
+      !selfClosing
+      && !htmlVoidElement
+      && childSequence.closingTag == null
+      && !this.nestingLimitReached
+    ) {
       recoveries.push(new HtmlRecoveryDraft(
         HtmlRecoveryKind.MissingEndTag,
         `Missing closing tag </${tagName}>.`,
@@ -1186,6 +1203,21 @@ class HtmlScanner {
         childSequence.closingTag?.end ?? null,
       ),
     );
+  }
+
+  private stopAtNestingLimit(): void {
+    this.pos++;
+    const nameStart = this.pos;
+    const tagName = this.readName();
+    const nameEnd = this.pos;
+    this.recoveries.push(new HtmlRecoveryDraft(
+      HtmlRecoveryKind.NestingLimitExceeded,
+      `HTML element nesting exceeds the supported maximum of ${MAX_HTML_ELEMENT_NESTING_DEPTH} levels at <${tagName}>; remaining template markup was not analyzed.`,
+      nameStart,
+      nameEnd,
+    ));
+    this.nestingLimitReached = true;
+    this.pos = this.text.length;
   }
 
   private parseRawTextElement(

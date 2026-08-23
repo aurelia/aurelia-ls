@@ -10,6 +10,7 @@ import {
   type SemanticAppDiagnosticRow,
 } from '../src/index.js';
 import {
+  MAX_HTML_ELEMENT_NESTING_DEPTH,
   parseHtmlDocumentDraft,
   type ParsedHtmlNodeDraft,
 } from '../src/template/html-parse-materializer.js';
@@ -76,6 +77,72 @@ describe('HTML recovery diagnostics', () => {
     });
     expect(draft.rootNodes[1]).toMatchObject({ tagName: 'div', recoveries: [] });
   });
+
+  test('bounds pathological element nesting as one source-backed recovery', async () => {
+    const exactMarkup = nestedElementSpine(MAX_HTML_ELEMENT_NESTING_DEPTH);
+    const exact = await openRecoveryApp(exactMarkup);
+    const exactHtml = exact.app.emission.templates.resources[0]!.compilation.html;
+    expect(exactHtml.nodes.filter((node) => node instanceof HtmlElement && node.tagName === 'div'))
+      .toHaveLength(MAX_HTML_ELEMENT_NESTING_DEPTH);
+    expect(exactHtml.recoveries.filter((recovery) =>
+      recovery.recoveryKind === HtmlRecoveryKind.NestingLimitExceeded
+    )).toEqual([]);
+
+    const prefix = [
+      '<template as-custom-element="ignored-prefix"><span></span></template>',
+      '<p>${missingPrefix}</p>',
+    ].join('');
+    const ignoredLocalTemplate = '<template as-custom-element="ignored-tail"><span></span></template>';
+    const pathologicalDepth = 2_048;
+    const pathologicalMarkup = [
+      prefix,
+      '<div>'.repeat(pathologicalDepth),
+      ignoredLocalTemplate,
+      '</div>'.repeat(pathologicalDepth),
+    ].join('');
+    const pathological = await openRecoveryApp(pathologicalMarkup);
+    const html = pathological.app.emission.templates.resources[0]!.compilation.html;
+    const nestingRecoveries = html.recoveries.filter((recovery) =>
+      recovery.recoveryKind === HtmlRecoveryKind.NestingLimitExceeded
+    );
+    expect(html.nodes.filter((node) => node instanceof HtmlElement && node.tagName === 'div'))
+      .toHaveLength(MAX_HTML_ELEMENT_NESTING_DEPTH);
+    expect(nestingRecoveries).toHaveLength(1);
+    expect(html.recoveries.some((recovery) => recovery.recoveryKind === HtmlRecoveryKind.MissingEndTag))
+      .toBe(false);
+    const compiledResourceNames = [
+      ...pathological.app.emission.templates.resources,
+      ...pathological.app.emission.templates.authoringResources,
+    ].map((resource) => resource.compilation.definition.name);
+    expect(compiledResourceNames).not.toContain('ignored-prefix');
+    expect(compiledResourceNames).not.toContain('ignored-tail');
+
+    const diagnostics = pathological.app.ask({
+      kind: SemanticAppQueryKind.TemplateDiagnostics,
+      sourceFile: { filePath: 'src/my-app.html' },
+      page: { size: 300 },
+    }).value.rows;
+    const nestingDiagnostics = diagnostics.filter((row) =>
+      row.missingInput === `html-recovery:${HtmlRecoveryKind.NestingLimitExceeded}`
+    );
+    const expectedNameStart = prefix.length + '<div>'.length * MAX_HTML_ELEMENT_NESTING_DEPTH + 1;
+    expect(nestingDiagnostics).toEqual([
+      expect.objectContaining({
+        diagnosticKind: 'html-syntax-recovery',
+        severity: 'error',
+        source: expect.objectContaining({
+          start: expectedNameStart,
+          end: expectedNameStart + 'div'.length,
+        }),
+        suggestion: expect.objectContaining({
+          suggestionKind: 'fix-template-syntax',
+          actionKind: 'rewrite-template-syntax',
+          summary: expect.stringMatching(/reduce element nesting.*extract nested markup into a child component/iu),
+        }),
+      }),
+    ]);
+    expect(diagnostics.some((row) => row.selectedMemberName === 'missingPrefix')).toBe(true);
+  }, 30_000);
 
   test.each([
     {
@@ -456,6 +523,10 @@ async function openRecoveryApp(markup: string) {
   });
   const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
   return { runtime, app };
+}
+
+function nestedElementSpine(depth: number): string {
+  return '<div>'.repeat(depth) + '</div>'.repeat(depth);
 }
 
 function draftRecoveries(

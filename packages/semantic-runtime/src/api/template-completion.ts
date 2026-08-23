@@ -1477,7 +1477,7 @@ function actionableHtmlRecoverySites(
     .filter((source): source is NonNullable<typeof source> => source != null);
   const swallowingSources = sites
     .filter((site) => htmlRecoverySwallowsFollowingMarkup(site.recovery.recoveryKind))
-    .map((site) => semanticExactSourceReference(site.ownerSource ?? describeAddress(store, site.recovery.addressHandle)))
+    .map((site) => semanticExactSourceReference(htmlRecoverySwallowingSource(store, site)))
     .filter((source): source is NonNullable<typeof source> => source != null);
   const attributeFailureSources = sites
     .filter((site) => site.owner instanceof HtmlAttribute && htmlRecoveryIsAttributeFailure(site.recovery.recoveryKind))
@@ -1551,6 +1551,9 @@ function htmlRecoveryBlockingOwnerSource(
   selection: TemplateCompletionResourceSelection,
   site: HtmlRecoveryDiagnosticSite,
 ): SemanticTemplateDiagnosticRow['source'] {
+  if (site.recovery.recoveryKind === HtmlRecoveryKind.NestingLimitExceeded) {
+    return describeAddress(store, site.recovery.addressHandle);
+  }
   if (
     site.recovery.recoveryKind !== HtmlRecoveryKind.InvalidAttribute
     || !(site.owner instanceof HtmlAttribute)
@@ -1562,6 +1565,15 @@ function htmlRecoveryBlockingOwnerSource(
     && node.attributes.some((attribute) => attribute.productHandle === site.owner?.productHandle)
   ) ?? null;
   return owner == null ? site.ownerSource : describeAddress(store, owner.sourceAddressHandle);
+}
+
+function htmlRecoverySwallowingSource(
+  store: KernelStore,
+  site: HtmlRecoveryDiagnosticSite,
+): SemanticTemplateDiagnosticRow['source'] {
+  return site.recovery.recoveryKind === HtmlRecoveryKind.NestingLimitExceeded
+    ? describeAddress(store, site.recovery.addressHandle)
+    : site.ownerSource ?? describeAddress(store, site.recovery.addressHandle);
 }
 
 function htmlRecoveryIsActionable(
@@ -1587,6 +1599,7 @@ function htmlRecoveryIsActionable(
     case HtmlRecoveryKind.InvalidAttribute:
     case HtmlRecoveryKind.DuplicateAttribute:
     case HtmlRecoveryKind.InvalidDoctype:
+    case HtmlRecoveryKind.NestingLimitExceeded:
       return true;
     default:
       return false;
@@ -1599,7 +1612,8 @@ function htmlRecoverySwallowsFollowingMarkup(recoveryKind: HtmlRecoveryKind): bo
     || recoveryKind === HtmlRecoveryKind.UnterminatedAttribute
     || recoveryKind === HtmlRecoveryKind.UnterminatedComment
     || recoveryKind === HtmlRecoveryKind.UnterminatedCdata
-    || recoveryKind === HtmlRecoveryKind.InvalidDoctype;
+    || recoveryKind === HtmlRecoveryKind.InvalidDoctype
+    || recoveryKind === HtmlRecoveryKind.NestingLimitExceeded;
 }
 
 function htmlRecoveryBlocksOwnedSemanticRows(recoveryKind: HtmlRecoveryKind): boolean {

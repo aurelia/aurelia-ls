@@ -742,6 +742,8 @@ function htmlRecoverySuggestion(recoveryKind: HtmlRecoveryKind): string {
       return 'Remove or merge the duplicate attribute; the browser keeps only one value.';
     case HtmlRecoveryKind.InvalidDoctype:
       return 'Close or rewrite the declaration so it has one valid > delimiter.';
+    case HtmlRecoveryKind.NestingLimitExceeded:
+      return 'Reduce element nesting or extract nested markup into a child component so the template stays within the supported analysis depth.';
     default:
       return 'Rewrite the malformed markup so browser parsing has one unambiguous result.';
   }
