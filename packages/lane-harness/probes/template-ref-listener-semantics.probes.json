@@ -9,7 +9,7 @@
         "at": "focus-ring",
         "newName": "focus-halo",
         "verdict": "correct",
-        "reason": "A named ref target is a resource usage, so resource rename updates the declaration, ordinary attribute use, and ref target atomically.",
+        "reason": "A named ref target is a primary-name resource usage, so rename updates the primary declaration plus every ordinary and named-ref `focus-ring` usage atomically while preserving the separately authored `focus` alias.",
         "note": "NEW 2026-07-13. Representative LSP projection of same-node named-ref resource identity and the resource-ref-target edit kind."
       }
     ],
@@ -20,7 +20,7 @@
         "anchor": "focus-ring.ref=\"focusRingController\"",
         "at": "focus-ring",
         "verdict": "correct",
-        "reason": "References include the custom-attribute primary and alias declarations, ordinary same-node attribute use, and named ref target with exact token spans.",
+        "reason": "References include the custom-attribute primary and alias declarations plus every ordinary, alias, and named-ref usage with exact token spans.",
         "note": "NEW 2026-07-13; strengthened 2026-08-03. Confirms the IDE spends resource identity, including every authored public-name declaration, instead of rescanning attribute spelling."
       }
     ],
@@ -61,7 +61,7 @@
         "anchor": "focus-ring.ref=\"focusRingController\"",
         "at": "focus-ring",
         "verdict": "correct",
-        "reason": "Definition navigates from the named ref target to the authored custom-attribute name literal.",
+        "reason": "Definition navigates from the named ref target to the source-backed custom-attribute implementation class.",
         "note": "NEW 2026-07-13. Representative navigation projection for named refs."
       }
     ],
@@ -72,7 +72,7 @@
         "anchor": "focus-ring.ref=\"focusRingController\"",
         "at": "focus-ring",
         "verdict": "correct",
-        "reason": "Document highlights include both the ordinary focus-ring attribute and the same-file named ref target.",
+        "reason": "Document highlights include the ordinary primary usage, both same-file named ref targets, and the bare alias because all four resolve to one resource identity.",
         "note": "NEW 2026-07-13. Highlights inherit the shared resource-reference context."
       }
     ]

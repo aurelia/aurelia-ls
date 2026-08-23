@@ -35,21 +35,21 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "targetRange": {
         "end": {
           "character": 22,
-          "line": 7
+          "line": 10
         },
         "start": {
           "character": 13,
-          "line": 7
+          "line": 10
         }
       },
       "targetSelectionRange": {
         "end": {
           "character": 22,
-          "line": 7
+          "line": 10
         },
         "start": {
           "character": 13,
-          "line": 7
+          "line": 10
         }
       },
       "targetUri": "fixtures://pressure/template-ref-listener-semantics/src/focus-ring.ts"
@@ -70,11 +70,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 22,
-          "line": 7
+          "line": 10
         },
         "start": {
           "character": 13,
-          "line": 7
+          "line": 10
         }
       },
       "rangeText": "FocusRing",

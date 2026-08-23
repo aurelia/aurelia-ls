@@ -56,6 +56,32 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "line": 8
         }
       }
+    },
+    {
+      "kind": 1,
+      "range": {
+        "end": {
+          "character": 16,
+          "line": 12
+        },
+        "start": {
+          "character": 11,
+          "line": 12
+        }
+      }
+    },
+    {
+      "kind": 1,
+      "range": {
+        "end": {
+          "character": 27,
+          "line": 12
+        },
+        "start": {
+          "character": 17,
+          "line": 12
+        }
+      }
     }
   ]
 }
@@ -65,7 +91,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "highlightCount": 2,
+  "highlightCount": 4,
   "highlights": [
     {
       "anomaly": null,
@@ -93,6 +119,36 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "start": {
           "character": 2,
           "line": 8
+        }
+      },
+      "rangeText": "focus-ring"
+    },
+    {
+      "anomaly": null,
+      "kind": "text",
+      "range": {
+        "end": {
+          "character": 16,
+          "line": 12
+        },
+        "start": {
+          "character": 11,
+          "line": 12
+        }
+      },
+      "rangeText": "focus"
+    },
+    {
+      "anomaly": null,
+      "kind": "text",
+      "range": {
+        "end": {
+          "character": 27,
+          "line": 12
+        },
+        "start": {
+          "character": 17,
+          "line": 12
         }
       },
       "rangeText": "focus-ring"
