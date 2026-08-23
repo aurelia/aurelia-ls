@@ -115,11 +115,21 @@ if (!summary.displayText.includes('src/app.ts') && !summaryText.includes('src/ap
 if (!/src\/app\.ts:\d+:\d+/u.test(summary.displayText)) {
   failures.push(`Expected open-seam-summary display to include a line/column source sample, observed: ${summary.displayText}`);
 }
-if (!overview.displayText.includes('Open seam samples:')) {
-  failures.push('Expected app overview display text to include compact open seam samples.');
+const overviewUnresolvedSite = overview.openSeams.value.rows.find((row) =>
+  row.seamKindKeys.includes('evaluation.unresolved-identifier')
+);
+if (
+  overview.openSeams.value.totalOpenSeamRows === 0
+  || overview.openSeams.value.totalOpenSeamSites === 0
+  || overviewUnresolvedSite?.source?.path.endsWith('src/app.ts') !== true
+) {
+  failures.push('Expected explicit openSeamPageSize to preserve the source-backed unresolved identifier in the typed overview audit child.');
 }
-if (!overview.displayText.includes('src/app.ts')) {
-  failures.push('Expected app overview open seam samples to include a concrete source file.');
+if (!overview.displayText.includes('no diagnostic rows or configured analysis limitations')) {
+  failures.push(`Expected evidence-only evaluator seams to remain outside normal overview pressure, observed: ${overview.displayText}`);
+}
+if (/raw derivation|Open seam samples|open seam site\(s\)|sourceRole=|appRoles=|evalOrigins=/u.test(overview.displayText)) {
+  failures.push(`Expected normal app overview text to keep the explicit raw seam audit quiet, observed: ${overview.displayText}`);
 }
 
 if (failures.length > 0) {

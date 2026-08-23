@@ -69,11 +69,11 @@
         "Use `SemanticApp.answerCatalogQuery(...)` as the runtime facade's app-query-family dispatch boundary. If a new public app-query group appears, update the catalog row, grouped dispatch, and contract canaries together rather than adding an ungrouped case to `ask(...)`.",
         "Public adapters should call claim-backed runtime catalog methods such as `appQueryCatalog` and routed app-query helpers instead of raw readSemantic* helpers when the result crosses a transport boundary.",
         "Keep `SemanticRuntime.summary()` summary-first for monorepos: whole-workspace rollups and app candidates should remain complete, detailed project rows are opt-in through `projectPage`, and the public summary answer itself should remain query-claim-backed under the caller's inquiry profile.",
-        "Keep `AppOverview` summary-first for real apps: diagnostics and open seams are default pressure signals, compact topology counts should not expand the full AppTopology DTO, and generation-specific orientation belongs to future app-builder APIs rather than the overview DTO.",
+        "Keep `AppOverview` summary-first for real apps: diagnostics and configured analysis limitations are the normal pressure signals, compact topology counts should not expand the full AppTopology DTO, raw open seams remain a quiet typed audit child with opt-in paging, and generation-specific orientation belongs to future app-builder APIs rather than the overview DTO.",
         "MCP onboarding guidance should be canonical, app-agnostic, and contract-backed. Server instructions, workflow prompts, and the orientation markdown resource should share one orientation module that teaches the golden path: workspace overview, retained app overview with small samples, catalog, rollup-first summaries, focused rows/cursor, catalog-shaped file scoping, and analysis-depth auto-selection.",
-        "When AppOverview or another default overview shows breakdowns derived from a paged row family, label them as samples. Global totals may be shown as totals, but boundary/source/reason breakdowns from the returned `open-seam-sites` page must not read as full-app distributions.",
+        "When a public overview shows breakdowns derived from a paged row family, label them as samples. `AppOverview` should not promote its opt-in `open-seam-sites` audit child into normal display pressure; explicit seam answers may show global totals as totals, but boundary/source/reason breakdowns from a returned page must not read as full-app distributions.",
         "Open-seam counts in public MCP/IDE-facing answers must be immediately navigable: summary text should include primary and reason-source samples, `OpenSeams`, `OpenSeamSummary`, and `OpenSeamSites` should accept sourceFile/sourceRole/openSeamKindKey/openSeamReasonKind filters, and continuations plus query-claim identity should preserve those filters when moving between site, cluster, and raw rows.",
-        "Open-seam raw, summary, site, and overview displays should prefer authored `path:line:column` samples when source ranges are available. Byte-offset labels are acceptable as structured source-reference identity, but first-read text should not force users or AIs to translate offsets before acting.",
+        "Open-seam raw, summary, and site displays should prefer authored `path:line:column` samples when source ranges are available. `AppOverview` conserves those sources in its typed audit child without promoting them into normal display text. Byte-offset labels are acceptable as structured source-reference identity, but explicit seam text should not force users or AIs to translate offsets before acting.",
         "`OpenSeamSummary` should distinguish raw derivation row counts from `uniqueSiteCount`. Cluster queries are often the first drill-down an MCP user tries, and raw counts alone can make repeated evaluator derivations look like hundreds of independent user problems.",
         "Open-seam rows are not diagnostics. Public MCP/IDE surfaces should project factual `attempt` and `boundary` interpretation from the controlled seam vocabulary so large clusters explain which semantic operation hit which boundary without inventing confidence, severity, or adapter-local classifications.",
         "Default public seam overview should prefer `open-seam-sites` over raw rows: repeated evaluator derivations can create many raw seams at one authored span, so first-read answers must distinguish unique authored sites from raw derivation rows, include attempt/boundary/reason-kind summaries, and preserve raw rows only as drill-down detail.",
@@ -140,7 +140,7 @@
         {
           "kind": "script",
           "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:evaluation-ambient-globals",
-          "summary": "Contract proving filtered open-seam summary/raw rows and app overview expose concrete source samples."
+          "summary": "Contract proving filtered open-seam summary/raw rows expose concrete source samples while explicit AppOverview audit paging conserves the typed source and keeps normal display pressure quiet."
         },
         {
           "kind": "script",
@@ -346,7 +346,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-08-03"
+      "updatedAt": "2026-08-23"
     },
     {
       "id": "frontier:app-diagnostics-substrate",
