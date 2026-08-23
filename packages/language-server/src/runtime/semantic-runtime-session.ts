@@ -1658,6 +1658,7 @@ export class SemanticRuntimeLspSession {
 class SemanticRuntimeLspOperationDocumentsScope implements SemanticRuntimeLspOperationDocuments {
   private active = true;
   private readonly workspaceSnapshots = new Map<DocumentUri, SemanticRuntimeLspDocumentSnapshot | null>();
+  private readonly externalSourceTextByUri = new Map<DocumentUri, string | null>();
   private readonly openDocuments = new Map<DocumentUri, TextDocument | null>();
 
   constructor(
@@ -1738,12 +1739,27 @@ class SemanticRuntimeLspOperationDocumentsScope implements SemanticRuntimeLspOpe
 
   lookupText(uri: DocumentUri): string | null {
     this.assertActive();
-    return this.lookupWorkspaceDocumentSnapshot(uri)?.text ?? null;
+    const workspaceSnapshot = this.lookupWorkspaceDocumentSnapshot(uri);
+    if (workspaceSnapshot != null) {
+      return workspaceSnapshot.text;
+    }
+    const resolved = this.documentUris.resolve(uri);
+    const canonical = resolved.uri;
+    if (resolved.hostPath == null || this.documentUris.workspaceHostPath(canonical) != null) {
+      return null;
+    }
+    if (this.externalSourceTextByUri.has(canonical)) {
+      return this.externalSourceTextByUri.get(canonical) ?? null;
+    }
+    const text = this.readSourceText(resolved.hostPath) ?? null;
+    this.externalSourceTextByUri.set(canonical, text);
+    return text;
   }
 
   close(): void {
     this.active = false;
     this.workspaceSnapshots.clear();
+    this.externalSourceTextByUri.clear();
     this.openDocuments.clear();
   }
 

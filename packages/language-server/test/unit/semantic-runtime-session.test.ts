@@ -2591,6 +2591,30 @@ describe("SemanticRuntimeLspSession diagnostic receipt cache", () => {
     await session.dispose();
   });
 
+  test("reads exact external mapping sources without granting workspace document ownership", async () => {
+    const fixtureRoot = minimalFixtureRoot();
+    const externalRoot = fs.mkdtempSync(path.join(tmpdir(), "aurelia-ls-mapping-source-"));
+    temporaryWorkspaceRoots.push(externalRoot);
+    const externalPath = path.join(externalRoot, "lib.external.d.ts");
+    const externalText = "interface ExternalSurface { readonly value: string; }\n";
+    fs.writeFileSync(externalPath, externalText, "utf8");
+    const externalUri = pathToFileURL(externalPath).toString();
+    const session = createSession(fixtureRoot, new TestDocumentStore());
+
+    const result = await session.runRequest(null, (operation) => ({
+      text: operation.documents.lookupText(externalUri),
+      authoredSnapshot: operation.documents.lookupDocumentSnapshot(externalUri),
+      workspaceSnapshot: operation.documents.lookupWorkspaceDocumentSnapshot(externalUri),
+    }));
+
+    expect(result).toEqual({
+      text: externalText,
+      authoredSnapshot: null,
+      workspaceSnapshot: null,
+    });
+    await session.dispose();
+  });
+
   test("recomputes presentation when native-suppression language ownership changes", async () => {
     const fixtureRoot = minimalFixtureRoot();
     const htmlPath = path.join(fixtureRoot, "src/app.html");

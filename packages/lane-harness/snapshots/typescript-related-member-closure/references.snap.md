@@ -34,6 +34,32 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     {
       "range": {
         "end": {
+          "character": 12,
+          "line": 1
+        },
+        "start": {
+          "character": 7,
+          "line": 1
+        }
+      },
+      "uri": "fixtures://pressure/typescript-related-member-closure/src/app.html"
+    },
+    {
+      "range": {
+        "end": {
+          "character": 7,
+          "line": 11
+        },
+        "start": {
+          "character": 2,
+          "line": 11
+        }
+      },
+      "uri": "fixtures://pressure/typescript-related-member-closure/src/app.ts"
+    },
+    {
+      "range": {
+        "end": {
           "character": 16,
           "line": 50
         },
@@ -147,32 +173,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         }
       },
       "uri": "fixtures://pressure/typescript-related-member-closure/src/contracts.ts"
-    },
-    {
-      "range": {
-        "end": {
-          "character": 12,
-          "line": 1
-        },
-        "start": {
-          "character": 7,
-          "line": 1
-        }
-      },
-      "uri": "fixtures://pressure/typescript-related-member-closure/src/app.html"
-    },
-    {
-      "range": {
-        "end": {
-          "character": 7,
-          "line": 11
-        },
-        "start": {
-          "character": 2,
-          "line": 11
-        }
-      },
-      "uri": "fixtures://pressure/typescript-related-member-closure/src/app.ts"
     }
   ]
 }
@@ -401,32 +401,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     {
       "range": {
         "end": {
-          "character": 21,
-          "line": 52
-        },
-        "start": {
-          "character": 11,
-          "line": 52
-        }
-      },
-      "uri": "fixtures://pressure/typescript-related-member-closure/src/app.ts"
-    },
-    {
-      "range": {
-        "end": {
-          "character": 12,
-          "line": 20
-        },
-        "start": {
-          "character": 2,
-          "line": 20
-        }
-      },
-      "uri": "fixtures://pressure/typescript-related-member-closure/src/contracts.ts"
-    },
-    {
-      "range": {
-        "end": {
           "character": 17,
           "line": 3
         },
@@ -449,6 +423,32 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         }
       },
       "uri": "fixtures://pressure/typescript-related-member-closure/src/app.ts"
+    },
+    {
+      "range": {
+        "end": {
+          "character": 21,
+          "line": 52
+        },
+        "start": {
+          "character": 11,
+          "line": 52
+        }
+      },
+      "uri": "fixtures://pressure/typescript-related-member-closure/src/app.ts"
+    },
+    {
+      "range": {
+        "end": {
+          "character": 12,
+          "line": 20
+        },
+        "start": {
+          "character": 2,
+          "line": 20
+        }
+      },
+      "uri": "fixtures://pressure/typescript-related-member-closure/src/contracts.ts"
     }
   ]
 }
@@ -565,6 +565,32 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     {
       "range": {
         "end": {
+          "character": 20,
+          "line": 5
+        },
+        "start": {
+          "character": 7,
+          "line": 5
+        }
+      },
+      "uri": "fixtures://pressure/typescript-related-member-closure/src/app.html"
+    },
+    {
+      "range": {
+        "end": {
+          "character": 19,
+          "line": 22
+        },
+        "start": {
+          "character": 6,
+          "line": 22
+        }
+      },
+      "uri": "fixtures://pressure/typescript-related-member-closure/src/app.ts"
+    },
+    {
+      "range": {
+        "end": {
           "character": 19,
           "line": 26
         },
@@ -600,32 +626,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         }
       },
       "uri": "fixtures://pressure/typescript-related-member-closure/src/contracts.ts"
-    },
-    {
-      "range": {
-        "end": {
-          "character": 20,
-          "line": 5
-        },
-        "start": {
-          "character": 7,
-          "line": 5
-        }
-      },
-      "uri": "fixtures://pressure/typescript-related-member-closure/src/app.html"
-    },
-    {
-      "range": {
-        "end": {
-          "character": 19,
-          "line": 22
-        },
-        "start": {
-          "character": 6,
-          "line": 22
-        }
-      },
-      "uri": "fixtures://pressure/typescript-related-member-closure/src/app.ts"
     }
   ]
 }
@@ -758,6 +758,32 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     {
       "range": {
         "end": {
+          "character": 17,
+          "line": 10
+        },
+        "start": {
+          "character": 7,
+          "line": 10
+        }
+      },
+      "uri": "fixtures://pressure/typescript-related-member-closure/src/app.html"
+    },
+    {
+      "range": {
+        "end": {
+          "character": 12,
+          "line": 36
+        },
+        "start": {
+          "character": 2,
+          "line": 36
+        }
+      },
+      "uri": "fixtures://pressure/typescript-related-member-closure/src/app.ts"
+    },
+    {
+      "range": {
+        "end": {
           "character": 12,
           "line": 37
         },
@@ -806,32 +832,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         }
       },
       "uri": "fixtures://pressure/typescript-related-member-closure/src/contracts.ts"
-    },
-    {
-      "range": {
-        "end": {
-          "character": 17,
-          "line": 10
-        },
-        "start": {
-          "character": 7,
-          "line": 10
-        }
-      },
-      "uri": "fixtures://pressure/typescript-related-member-closure/src/app.html"
-    },
-    {
-      "range": {
-        "end": {
-          "character": 12,
-          "line": 36
-        },
-        "start": {
-          "character": 2,
-          "line": 36
-        }
-      },
-      "uri": "fixtures://pressure/typescript-related-member-closure/src/app.ts"
     }
   ]
 }
@@ -993,19 +993,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     {
       "range": {
         "end": {
-          "character": 30,
-          "line": 57
-        },
-        "start": {
-          "character": 24,
-          "line": 57
-        }
-      },
-      "uri": "fixtures://pressure/typescript-related-member-closure/src/app.ts"
-    },
-    {
-      "range": {
-        "end": {
           "character": 19,
           "line": 12
         },
@@ -1015,6 +1002,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         }
       },
       "uri": "fixtures://pressure/typescript-related-member-closure/src/app.html"
+    },
+    {
+      "range": {
+        "end": {
+          "character": 30,
+          "line": 57
+        },
+        "start": {
+          "character": 24,
+          "line": 57
+        }
+      },
+      "uri": "fixtures://pressure/typescript-related-member-closure/src/app.ts"
     }
   ]
 }
