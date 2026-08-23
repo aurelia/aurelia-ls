@@ -523,6 +523,30 @@ describe("Extension Host product-surface contracts", () => {
     expect(helper).not.toContain("reopened declaration should settle through its exact routed semantic invalidation");
   });
 
+  test("records the navigation fault that causes each recovery presentation", () => {
+    const source = readFileSync(
+      new URL("./extension-host/suite/product-surface.test.cjs", import.meta.url),
+      "utf8",
+    );
+    const treeStart = source.indexOf("async function recoverTreeNavigationWithPrimaryRetry(");
+    const availableStart = source.indexOf("async function recoverAvailableNavigationWithPrimaryRetry(", treeStart);
+    const presentationStart = source.indexOf("function assertShippingRecoveryPresentation(", availableStart);
+    expect(treeStart).toBeGreaterThanOrEqual(0);
+    expect(availableStart).toBeGreaterThan(treeStart);
+    expect(presentationStart).toBeGreaterThan(availableStart);
+
+    const treeHelper = source.slice(treeStart, availableStart);
+    const availableHelper = source.slice(availableStart, presentationStart);
+    for (const helper of [treeHelper, availableHelper]) {
+      expect(helper).toContain("const navigationFaultApplied = await");
+      expect(helper).toMatch(/return \{ navigationFaultApplied, presented, choice/u);
+    }
+    expect(source).toContain("navigationFaultApplied: newestRecovery.navigationFaultApplied");
+    expect(source).toContain("navigationFaultApplied: totalRecovery.navigationFaultApplied");
+    expect(source).toMatch(/facts\.recovery\.newest[\s\S]*?"navigationFaultApplied"/u);
+    expect(source).toMatch(/facts\.recovery\.totalFailure[\s\S]*?"navigationFaultApplied"/u);
+  });
+
   test("settles on a current full receipt followed by serialized unChanged reuse", () => {
     const events = [
       request("full", 2),

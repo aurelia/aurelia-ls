@@ -4669,6 +4669,7 @@ suite("extension-host product surface", () => {
     resourceDiscoveryEvidence.facts.recovery.newest = {
       faultApplied: newest.faultApplied,
       outOfDatePublication: newest.publication,
+      navigationFaultApplied: newestRecovery.navigationFaultApplied,
       recoveryPresented: newestRecovery.presented,
       recoveryChoice: newestRecovery.choice,
       retryInvalidated: newestRecovery.retryInvalidated,
@@ -4799,6 +4800,22 @@ suite("extension-host product surface", () => {
           expectedRemainingIssueIds,
           `Total recovery ${index + 1} must conserve intentional baseline issues plus not-yet-retried workspace failures.`,
         );
+        for (const [workspaceIndex, workspaceGroup] of affectedWorkspaceGroups.entries()) {
+          const expectedNodes = workspaceIndex <= index ? baselineNodes : totalNodes;
+          const expectedState = workspaceIndex <= index ? "authenticated baseline" : "controlled failure";
+          for (const { failedProject } of workspaceGroup.projects) {
+            const currentProject = currentNodes.find((node) => node.nodeId === failedProject.nodeId);
+            const expectedProject = expectedNodes.find((node) => node.nodeId === failedProject.nodeId);
+            assert(currentProject && expectedProject, `Project ${failedProject.nodeId} must remain published.`);
+            assert.deepStrictEqual(
+              [currentProject, ...publishedDescendants(currentNodes, currentProject.nodeId)]
+                .map(publicationNodeRecoveryShape),
+              [expectedProject, ...publishedDescendants(expectedNodes, expectedProject.nodeId)]
+                .map(publicationNodeRecoveryShape),
+              `Total recovery ${index + 1} must retain project ${failedProject.nodeId} in its ${expectedState} shape.`,
+            );
+          }
+        }
         recoveries.push({
           workspaceIdentity: group.workspaceIdentity,
           targetNodeId: currentTarget.nodeId,
@@ -4840,10 +4857,13 @@ suite("extension-host product surface", () => {
         "Serial total recovery must conserve the exact public baseline issue-row shape.",
       );
       const finalHostAlpha = exactPublishedProjectNode(currentNodes, "host-alpha");
-      assert(
-        [finalHostAlpha, ...publishedDescendants(currentNodes, finalHostAlpha.nodeId)]
-          .every((node) => node.contextValue !== "resourceProjectIssue"),
-        "Serial total recovery must clear the targeted host-alpha project failure.",
+      const baselineHostAlpha = exactPublishedProjectNode(baselineNodes, "host-alpha");
+      assert.strictEqual(finalHostAlpha.answerResult, baselineHostAlpha.answerResult);
+      assert.strictEqual(finalHostAlpha.answerCoverage, baselineHostAlpha.answerCoverage);
+      assert.strictEqual(
+        visibleStableCodeCount("AURELIA_RD_C2_TOTAL"),
+        0,
+        "Serial total recovery must clear the injected host-alpha failure while retaining intentional baseline issue rows.",
       );
       const finalState = {
         nodeCount: currentNodes.length,
@@ -4870,6 +4890,7 @@ suite("extension-host product surface", () => {
         faultApplied: total.faultApplied,
         failedPublication: total.publication,
         affectedProjects,
+        navigationFaultApplied: totalRecovery.navigationFaultApplied,
         recoveryPresented: totalRecovery.presented,
         recoveryChoice: totalRecovery.choice,
         recoveries,
@@ -5305,6 +5326,7 @@ function assertResourceDiscoveryFactsReady(facts) {
   assertExactHostKeys(facts.recovery.newest, [
     "faultApplied",
     "outOfDatePublication",
+    "navigationFaultApplied",
     "recoveryPresented",
     "recoveryChoice",
     "retryInvalidated",
@@ -5317,6 +5339,7 @@ function assertResourceDiscoveryFactsReady(facts) {
       "faultApplied",
       "failedPublication",
       "affectedProjects",
+      "navigationFaultApplied",
       "recoveryPresented",
       "recoveryChoice",
       "recoveries",
@@ -5697,6 +5720,12 @@ function publishedProjectBoundary(nodes, projectNode) {
     workspaceIdentity: [...workspaceIdentities][0],
     projectKey: [...projectKeys][0],
   };
+}
+
+function publicationNodeRecoveryShape(node) {
+  const shape = { ...publicationNodeDurableShape(node) };
+  for (const field of ["ordinal", "description", "accessibilityLabel"]) delete shape[field];
+  return shape;
 }
 
 function observedWorkspaceIdentity(workspaceKey) {
@@ -6584,7 +6613,7 @@ async function recoverTreeNavigationWithPrimaryRetry({ controlId, node, stableCo
     "aurelia.openResourceDeclaration",
     { id: node.nodeId },
   )).finally(() => { settled = true; });
-  await waitForResourceDiscoveryObservation(
+  const navigationFaultApplied = await waitForResourceDiscoveryObservation(
     start,
     (event) => event.source === "resource-discovery-host-control"
       && event.observationId === controlId
@@ -6656,7 +6685,7 @@ async function recoverTreeNavigationWithPrimaryRetry({ controlId, node, stableCo
   await awaitRoutedSemanticReadinessAndExplorerPublication(
     "newest navigation clean reopen explicit recovery refresh",
   );
-  return { presented, choice, retryInvalidated, recoveredPublication };
+  return { navigationFaultApplied, presented, choice, retryInvalidated, recoveredPublication };
 }
 
 async function recoverAvailableNavigationWithPrimaryRetry({ controlId, stableCode }) {
@@ -6693,7 +6722,7 @@ async function recoverAvailableNavigationWithPrimaryRetry({ controlId, stableCod
     (event) => event.resourceIdentity === left.identityKey,
     extensionHostObservations.indexOf(accepted) + 1,
   );
-  await waitForExtensionHostObservation(
+  const navigationFaultApplied = await waitForExtensionHostObservation(
     flow.start,
     (event) => event.source === "resource-discovery-host-control"
       && event.observationId === controlId
@@ -6723,7 +6752,7 @@ async function recoverAvailableNavigationWithPrimaryRetry({ controlId, stableCod
   );
   assert.strictEqual(choice.choice, "Retry");
   await settleObservedCommand(flow, "the active-template navigation should succeed on its genuine Retry");
-  return { presented, choice };
+  return { navigationFaultApplied, presented, choice };
 }
 
 function assertShippingRecoveryPresentation(event) {

@@ -111,6 +111,40 @@ const extensionManifest = readManifest(new URL("../package.json", import.meta.ur
 const rootManifest = readManifest(new URL("../../../package.json", import.meta.url));
 
 describe("Extension Host support runner", () => {
+  test("binds recovery presentations to their navigation fault controls", () => {
+    const source = readFileSync(runnerPath, "utf8");
+    const newestStart = source.indexOf("function validateRecoveryFacts(");
+    const totalStart = source.indexOf("function validateTotalFailureRecovery(", newestStart);
+    const totalEnd = source.indexOf("export function validateTotalRecoveryWorkspaceSequence(", totalStart);
+    expect(newestStart).toBeGreaterThanOrEqual(0);
+    expect(totalStart).toBeGreaterThan(newestStart);
+    expect(totalEnd).toBeGreaterThan(totalStart);
+
+    const newest = source.slice(newestStart, totalStart);
+    const total = source.slice(totalStart, totalEnd);
+    for (const [validator, stableCode] of [
+      [newest, "AURELIA_RD_C2_NEWEST_NAV"],
+      [total, "AURELIA_RD_C2_TOTAL_NAV"],
+    ] as const) {
+      expect(validator).toContain('"navigationFaultApplied"');
+      expect(validator).toContain('"resource-discovery-host-control"');
+      expect(validator).toContain('"fault-applied"');
+      expect(validator).toContain('"project-error-once"');
+      expect(validator).toContain('"host-alpha"');
+      expect(validator).toContain(`"${stableCode}"`);
+      expect(validator).toContain("navigationFaultApplied.requestOrdinal");
+      expect(validator).toContain("fileWorkspaceKeyMatches(");
+    }
+    expect(newest).toContain('"resource-explorer-view",\n    "recovery-presented"');
+    expect(total).toContain('"go-to-available-resource",\n    "recovery-presented"');
+    expect(newest).toContain(
+      "[newestFault, outOfDate, newestNavigationFault, presented, choice, newestRetryInvalidated, newestRecovered]",
+    );
+    expect(total).toContain("[fault, failed, navigationFault, presented, choice]");
+    expect(total).toContain("projectPublicationRecoveryShapeByNodeId(");
+    expect(total).toContain('workspaceIndex <= index ? context.baseline.nodes : failedNodes');
+  });
+
   test("statically admits the dedicated Problems lifecycle journey", () => {
     const suiteIndex = readFileSync(
       fileURLToPath(new URL("extension-host/suite/index.cjs", import.meta.url)),
@@ -1926,8 +1960,15 @@ describe("Extension Host support runner", () => {
     };
     expect([...runner.recoveryOutputTargetNodeIds(
       [staleHealthyIssue, newFailure],
-      new Set([baselineIssue.event.nodeId]),
-    )]).toEqual(["tree-node:host-alpha-project"]);
+      exactBaseline,
+    )]).toEqual([
+      baselineIssue.event.nodeId,
+      "tree-node:host-alpha-project",
+    ]);
+    expect([...runner.recoveryOutputTargetNodeIds(
+      [staleHealthyIssue],
+      [staleHealthyIssue],
+    )]).toEqual([]);
 
     const affectedProjects = [
       { group: { projects: [{ nodeId: "primary-app" }] } },

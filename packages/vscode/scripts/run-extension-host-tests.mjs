@@ -3862,6 +3862,7 @@ function validateRecoveryFacts(value, context) {
   const newest = exactObject(facts.newest, [
     "faultApplied",
     "outOfDatePublication",
+    "navigationFaultApplied",
     "recoveryPresented",
     "recoveryChoice",
     "retryInvalidated",
@@ -3891,11 +3892,40 @@ function validateRecoveryFacts(value, context) {
   if (!outOfDateNodes.some((record) => record.event.rowStates.split("|").includes("out-of-date"))) {
     throw new Error(`${label}.newest publication does not expose an out-of-date row state.`);
   }
+  const newestNavigationFault = resolveLedgerReference(
+    newest.navigationFaultApplied,
+    `${label}.newest.navigationFaultApplied`,
+    context,
+    "resource-discovery-host-control",
+    "fault-applied",
+  );
+  requireEqual(
+    newestNavigationFault.event.effect,
+    "project-error-once",
+    `${label}.newest.navigationFaultApplied.effect`,
+  );
+  requireEqual(
+    newestNavigationFault.event.projectKey,
+    "host-alpha",
+    `${label}.newest.navigationFaultApplied.projectKey`,
+  );
+  requireEqual(
+    newestNavigationFault.event.stableCode,
+    "AURELIA_RD_C2_NEWEST_NAV",
+    `${label}.newest.navigationFaultApplied.stableCode`,
+  );
+  requirePositiveInteger(
+    newestNavigationFault.event.requestOrdinal,
+    `${label}.newest.navigationFaultApplied.requestOrdinal`,
+  );
+  if (!fileWorkspaceKeyMatches(newestNavigationFault.event.workspaceKey, context.workspaceRoot)) {
+    throw new Error(`${label}.newest.navigationFaultApplied.workspaceKey does not authenticate the routed workspace.`);
+  }
   const presented = resolveLedgerReference(
     newest.recoveryPresented,
     `${label}.newest.recoveryPresented`,
     context,
-    ["resource-explorer-view", "go-to-available-resource"],
+    "resource-explorer-view",
     "recovery-presented",
   );
   requirePositiveInteger(presented.event.actionCount, `${label}.newest.recoveryPresented.actionCount`);
@@ -3924,6 +3954,11 @@ function validateRecoveryFacts(value, context) {
   requireNonemptyString(
     newestRetryInvalidated.event.workspaceKey,
     `${label}.newest.retryInvalidated.workspaceKey`,
+  );
+  requireEqual(
+    newestNavigationFault.event.workspaceKey,
+    newestRetryInvalidated.event.workspaceKey,
+    `${label}.newest navigation fault workspace`,
   );
   if (!fileWorkspaceKeyMatches(newestRetryInvalidated.event.workspaceKey, context.workspaceRoot)) {
     throw new Error(`${label}.newest.retryInvalidated.workspaceKey does not authenticate the routed workspace.`);
@@ -3956,18 +3991,18 @@ function validateRecoveryFacts(value, context) {
     context.baseline.nodes,
     `${label}.newest recovered baseline issue rows`,
   );
-  const newestRecoveredHostAlphaNodes = [
-    projectNodeForKey(newestRecoveredNodes, "host-alpha"),
-    ...descendantRecords(
-      newestRecoveredNodes,
-      projectNodeForKey(newestRecoveredNodes, "host-alpha").event.nodeId,
-    ),
-  ];
-  if (newestRecoveredHostAlphaNodes.some((record) => (
-    record.event.contextValue === "resourceProjectIssue"
-  ))) {
-    throw new Error(`${label}.newest recovered host-alpha subtree retains a project issue row.`);
-  }
+  const newestRecoveredHostAlpha = projectNodeForKey(newestRecoveredNodes, "host-alpha");
+  const baselineHostAlpha = projectNodeForKey(context.baseline.nodes, "host-alpha");
+  requireEqual(
+    newestRecoveredHostAlpha.event.answerResult,
+    baselineHostAlpha.event.answerResult,
+    `${label}.newest recovered host-alpha answerResult`,
+  );
+  requireEqual(
+    newestRecoveredHostAlpha.event.answerCoverage,
+    baselineHostAlpha.event.answerCoverage,
+    `${label}.newest recovered host-alpha answerCoverage`,
+  );
   if (newestRecoveredNodes.some((record) => (
     rowStatesInclude(record.event, "out-of-date") || rowStatesInclude(record.event, "updating")
   ))) {
@@ -3979,7 +4014,7 @@ function validateRecoveryFacts(value, context) {
     `${label}.newest recovered host-alpha subtree`,
   );
   requireStrictOrdinalOrder(
-    [newestFault, outOfDate, presented, choice, newestRetryInvalidated, newestRecovered],
+    [newestFault, outOfDate, newestNavigationFault, presented, choice, newestRetryInvalidated, newestRecovered],
     `${label}.newest`,
   );
   requirePositiveInteger(newest.retainedRowCount, `${label}.newest.retainedRowCount`);
@@ -3991,12 +4026,16 @@ function validateRecoveryFacts(value, context) {
     context,
     `${label}.newest.stableCodeVisibleCount`,
   );
+  validateStableCodeVisibility(
+    newest.stableCodeVisibleCount,
+    newestNavigationFault,
+    context,
+    `${label}.newest.navigationStableCodeVisibleCount`,
+  );
   context.recovery.set("newest", {
     outputTargetNodeIds: recoveryOutputTargetNodeIds(
       outOfDateNodes,
-      new Set(context.baseline.nodes
-        .filter((record) => record.event.contextValue === "resourceProjectIssue")
-        .map((record) => record.event.nodeId)),
+      context.baseline.nodes,
     ),
   });
   context.claims.add("stale");
@@ -4011,6 +4050,7 @@ function validateTotalFailureRecovery(value, context, label) {
     "faultApplied",
     "failedPublication",
     "affectedProjects",
+    "navigationFaultApplied",
     "recoveryPresented",
     "recoveryChoice",
     "recoveries",
@@ -4117,11 +4157,32 @@ function validateTotalFailureRecovery(value, context, label) {
     requireEqual(affected.nodeId, group.representative.event.nodeId, `${affectedLabel}.nodeId`);
     return Object.freeze({ ...affected, published, group });
   });
+  const navigationFault = resolveLedgerReference(
+    fact.navigationFaultApplied,
+    `${label}.navigationFaultApplied`,
+    context,
+    "resource-discovery-host-control",
+    "fault-applied",
+  );
+  requireEqual(navigationFault.event.effect, "project-error-once", `${label}.navigationFaultApplied.effect`);
+  requireEqual(navigationFault.event.projectKey, "host-alpha", `${label}.navigationFaultApplied.projectKey`);
+  requireEqual(
+    navigationFault.event.stableCode,
+    "AURELIA_RD_C2_TOTAL_NAV",
+    `${label}.navigationFaultApplied.stableCode`,
+  );
+  requirePositiveInteger(
+    navigationFault.event.requestOrdinal,
+    `${label}.navigationFaultApplied.requestOrdinal`,
+  );
+  if (!fileWorkspaceKeyMatches(navigationFault.event.workspaceKey, context.workspaceRoot)) {
+    throw new Error(`${label}.navigationFaultApplied.workspaceKey does not authenticate the routed workspace.`);
+  }
   const presented = resolveLedgerReference(
     fact.recoveryPresented,
     `${label}.recoveryPresented`,
     context,
-    ["resource-explorer-view", "go-to-available-resource"],
+    "go-to-available-resource",
     "recovery-presented",
   );
   validateRecoveryPresentation(presented, `${label}.recoveryPresented`);
@@ -4208,8 +4269,27 @@ function validateTotalFailureRecovery(value, context, label) {
       expectedRemainingIssueIds,
       `${recoveryLabel} remaining issue project node IDs`,
     );
+    for (const [workspaceIndex, group] of affectedGroups.entries()) {
+      const expectedNodes = workspaceIndex <= index ? context.baseline.nodes : failedNodes;
+      const expectedState = workspaceIndex <= index ? "authenticated baseline" : "controlled failure";
+      for (const project of group.projects) {
+        requireEqual(
+          JSON.stringify(projectPublicationRecoveryShapeByNodeId(
+            recovery.nodes,
+            project.nodeId,
+            `${recoveryLabel} current project ${project.nodeId}`,
+          )),
+          JSON.stringify(projectPublicationRecoveryShapeByNodeId(
+            expectedNodes,
+            project.nodeId,
+            `${recoveryLabel} expected project ${project.nodeId}`,
+          )),
+          `${recoveryLabel} project ${project.nodeId} ${expectedState} shape`,
+        );
+      }
+    }
   }
-  const orderedRecoveryRecords = [fault, failed, presented, choice];
+  const orderedRecoveryRecords = [fault, failed, navigationFault, presented, choice];
   for (const recovery of recoveries) orderedRecoveryRecords.push(recovery.retry, recovery.recovered);
   requireStrictOrdinalOrder(orderedRecoveryRecords, label);
 
@@ -4259,6 +4339,12 @@ function validateTotalFailureRecovery(value, context, label) {
     `${label}.finalState workspace fingerprints`,
   );
   validateStableCodeVisibility(fact.stableCodeVisibleCount, fault, context, `${label}.stableCodeVisibleCount`);
+  validateStableCodeVisibility(
+    fact.stableCodeVisibleCount,
+    navigationFault,
+    context,
+    `${label}.navigationStableCodeVisibleCount`,
+  );
   context.recovery.set("totalFailure", {
     outputTargetNodeIds: new Set(issueNodes.map((record) => record.event.nodeId)),
   });
@@ -4482,13 +4568,19 @@ export function validateIssuePublicationConservation(actualNodes, baselineNodes,
   );
 }
 
-export function recoveryOutputTargetNodeIds(nodes, baselineIssueNodeIds) {
+export function recoveryOutputTargetNodeIds(nodes, baselineNodes) {
+  const baselineByNodeId = new Map(baselineNodes.map((record) => [record.event.nodeId, record]));
   return new Set(nodes
-    .filter((record) => (
-      record.event.contextValue === "resourceProjectIssue"
-        && rowStatesInclude(record.event, "out-of-date")
-        && !baselineIssueNodeIds.has(record.event.nodeId)
-    ))
+    .filter((record) => {
+      if (
+        record.event.contextValue !== "resourceProjectIssue"
+        || !rowStatesInclude(record.event, "out-of-date")
+      ) return false;
+      const baseline = baselineByNodeId.get(record.event.nodeId);
+      return baseline == null
+        || JSON.stringify(publicationNodeDurableShape(record))
+          !== JSON.stringify(publicationNodeDurableShape(baseline));
+    })
     .map((record) => record.event.nodeId));
 }
 
@@ -4508,6 +4600,21 @@ export function expectedRecoveryIssueProjectNodeIds(
 function projectPublicationDurableShape(nodes, projectKey) {
   const project = projectNodeForKey(nodes, projectKey);
   return [project, ...descendantRecords(nodes, project.event.nodeId)].map(publicationNodeDurableShape);
+}
+
+function projectPublicationRecoveryShapeByNodeId(nodes, nodeId, label) {
+  const matches = nodes.filter((record) => (
+    record.event.nodeKind === "project" && record.event.nodeId === nodeId
+  ));
+  if (matches.length !== 1) {
+    throw new Error(`${label} must contain exactly one project node.`);
+  }
+  const project = matches[0];
+  return [project, ...descendantRecords(nodes, project.event.nodeId)].map((record) => {
+    const shape = { ...publicationNodeDurableShape(record) };
+    for (const field of ["ordinal", "description", "accessibilityLabel"]) delete shape[field];
+    return shape;
+  });
 }
 
 function codeUnitOrder(left, right) {
