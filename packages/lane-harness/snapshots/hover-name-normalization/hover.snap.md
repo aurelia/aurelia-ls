@@ -240,7 +240,7 @@ Aurelia binding command.
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCodePoints": 95,
+    "markdownCodePoints": 126,
     "range": {
       "end": {
         "character": 14,
@@ -263,6 +263,7 @@ Aurelia binding command.
 (custom attribute) VIEWBOX
 ```
 
+Static value; no binding mode.
 Aurelia custom attribute. Implementation: `SvgViewBox`.
 ````
 
