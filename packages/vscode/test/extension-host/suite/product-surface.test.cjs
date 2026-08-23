@@ -920,6 +920,62 @@ suite("extension-host product surface", () => {
     }
   });
 
+  test("deduplicates TS-origin bindable references after native provider composition", async () => {
+    const productDocument = await showAureliaDocument("src/components/product-card.ts");
+    const declarationPosition = positionIn(productDocument, "@bindable item", "item");
+    const productPath = normalize(productDocument.uri.fsPath);
+    const componentTemplatePath = normalize(path.join(
+      aureliaWorkspace,
+      "src",
+      "components",
+      "product-card.html",
+    ));
+    const parentTemplatePath = normalize(path.join(aureliaWorkspace, "src", "my-app.html"));
+    let references = [];
+
+    await waitFor(async () => {
+      references = await referencesAt(productDocument, "@bindable item", "item");
+      const paths = new Set(references.map((location) => normalize(location.uri.fsPath)));
+      const typeScriptReferences = references.filter((location) =>
+        normalize(location.uri.fsPath) === productPath
+      );
+      return paths.has(componentTemplatePath)
+        && paths.has(parentTemplatePath)
+        && typeScriptReferences.some((location) => location.range.contains(declarationPosition))
+        && typeScriptReferences.some((location) => !location.range.contains(declarationPosition));
+    }, "TS-origin references should include native TypeScript and Aurelia template loci", 120_000);
+
+    const locationKeys = references.map((location) => [
+      location.uri.toString(),
+      location.range.start.line,
+      location.range.start.character,
+      location.range.end.line,
+      location.range.end.character,
+    ].join(":"));
+    assert.strictEqual(
+      new Set(locationKeys).size,
+      locationKeys.length,
+      `Expected host-composed references to contain unique URI/range loci; observed ${JSON.stringify(locationKeys)}.`,
+    );
+
+    const typeScriptReferences = references.filter((location) =>
+      normalize(location.uri.fsPath) === productPath
+    );
+    const declaration = typeScriptReferences.find((location) => location.range.contains(declarationPosition));
+    const usage = typeScriptReferences.find((location) => !location.range.contains(declarationPosition));
+    assert(declaration, "Expected the TypeScript bindable declaration in the composed reference result.");
+    assert(usage, "Expected a native TypeScript bindable usage in the composed reference result.");
+    assert.strictEqual(productDocument.getText(declaration.range), "item");
+    assert.strictEqual(productDocument.getText(usage.range), "item");
+
+    for (const expectedPath of [componentTemplatePath, parentTemplatePath]) {
+      const location = references.find((candidate) => normalize(candidate.uri.fsPath) === expectedPath);
+      assert(location, `Expected a composed template reference in ${expectedPath}.`);
+      const document = await vscode.workspace.openTextDocument(location.uri);
+      assert.strictEqual(document.getText(location.range), "item");
+    }
+  });
+
   test("projects bounded hover cards and related facts through live editor providers", async () => {
     const document = await showAureliaDocument("src/my-app.html");
     const resourceHoverResult = await exactHoverAt(
