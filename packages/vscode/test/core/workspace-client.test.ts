@@ -871,6 +871,39 @@ describe("AureliaLanguageClient workspace ownership", () => {
     await manager.stop();
   });
 
+  test("reconciles a topology change without reconfirming a disjoint workspace", async () => {
+    const { vscode, recorded } = twoWorkspaceApi();
+    const harness = createClientHarness(new Map([
+      ["file:///work/a", workspaceStatus("app-world")],
+      ["file:///work/b", workspaceStatus("app-world")],
+    ]));
+    const manager = createManager(vscode, harness);
+    await manager.start(stubExtensionContext(vscode));
+    const [workspaceA, workspaceB] = harness.clients;
+    workspaceA!.sendRequest.mockClear();
+    workspaceA!.sendNotification.mockClear();
+    workspaceB!.sendRequest.mockClear();
+    workspaceB!.sendNotification.mockClear();
+    const packageWatcher = recorded.fileWatchers.find((watcher) => watcher.globPattern === "**/package.json")!;
+
+    packageWatcher.fireChange(vscode.Uri.parse("file:///work/a/package.json"));
+
+    await vi.waitFor(() => expect(workspaceA!.sendNotification).toHaveBeenCalledWith(
+      "workspace/didChangeWatchedFiles",
+      { changes: [{ uri: "file:///work/a/package.json", type: 2 }] },
+    ));
+    await vi.waitFor(() => expect(workspaceA!.sendRequest).toHaveBeenCalledWith(
+      "aurelia/workspaceStatus",
+      { nativeProjectConfigurationUris: [] },
+    ));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(workspaceB!.sendNotification).not.toHaveBeenCalled();
+    expect(workspaceB!.sendRequest).not.toHaveBeenCalled();
+    expect(manager.sessions.map((session) => session.workspace.name)).toEqual(["a", "b"]);
+
+    await manager.stop();
+  });
+
   test("retains a failed package topology notification for the next reconciliation", async () => {
     const { vscode, recorded } = createVscodeApi({
       workspaceFolders: [{ name: "app", uri: "file:///work/app" }],
@@ -899,6 +932,48 @@ describe("AureliaLanguageClient workspace ownership", () => {
       "workspace/didChangeWatchedFiles",
       { changes: [{ uri: "file:///work/app/package.json", type: 2 }] },
     );
+    await manager.stop();
+  });
+
+  test("retries only the topology notification that failed across disjoint workspaces", async () => {
+    const workspaceA = "file:///work/a";
+    const workspaceB = "file:///work/b";
+    const { vscode, recorded } = twoWorkspaceApi();
+    let failWorkspaceA = true;
+    const harness = createClientHarness(new Map([
+      [workspaceA, workspaceStatus("app-world")],
+      [workspaceB, workspaceStatus("app-world")],
+    ]), {
+      clientNotification: (workspaceUri, method) => {
+        if (
+          failWorkspaceA
+          && workspaceUri === workspaceA
+          && method === "workspace/didChangeWatchedFiles"
+        ) {
+          throw new Error("workspace A notification failed");
+        }
+      },
+    });
+    const manager = createManager(vscode, harness);
+    await manager.start(stubExtensionContext(vscode));
+    const packageWatcher = recorded.fileWatchers.find((watcher) => watcher.globPattern === "**/package.json")!;
+
+    packageWatcher.fireChange(vscode.Uri.parse(`${workspaceA}/package.json`));
+    packageWatcher.fireChange(vscode.Uri.parse(`${workspaceB}/package.json`));
+    await manager.reconcile({ reconfirmExisting: true });
+
+    expect(harness.clients[0]!.sendNotification).toHaveBeenCalledTimes(1);
+    expect(harness.clients[1]!.sendNotification).toHaveBeenCalledTimes(1);
+    failWorkspaceA = false;
+
+    await manager.reconcile({ reconfirmExisting: true });
+
+    expect(harness.clients[0]!.sendNotification).toHaveBeenCalledTimes(2);
+    expect(harness.clients[0]!.sendNotification).toHaveBeenLastCalledWith(
+      "workspace/didChangeWatchedFiles",
+      { changes: [{ uri: `${workspaceA}/package.json`, type: 2 }] },
+    );
+    expect(harness.clients[1]!.sendNotification).toHaveBeenCalledTimes(1);
     await manager.stop();
   });
 

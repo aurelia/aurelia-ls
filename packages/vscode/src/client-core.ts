@@ -113,7 +113,7 @@ interface RejectedSessionWitness {
 
 interface ReconcileScope {
   readonly workspaceKeys: ReadonlySet<string>;
-  readonly rejectedSession: RejectedSessionWitness;
+  readonly rejectedSession?: RejectedSessionWitness;
 }
 
 interface LifecycleIntent {
@@ -125,6 +125,7 @@ interface LifecycleIntent {
 interface PendingTopologyChange {
   readonly uri: Uri;
   readonly type: FileChangeType;
+  readonly workspaceKeys: ReadonlySet<string>;
 }
 
 type LifecycleAwaitResult<T> =
@@ -229,6 +230,9 @@ export class AureliaLanguageClient {
   readonly #startingClientRecoveryTimers = new Map<LanguageClient, ReturnType<typeof setTimeout>>();
   #lifecycleIntent = createLifecycleIntent(0);
   #pendingTopologyChanges = new Map<string, PendingTopologyChange>();
+  // A global request dominates later topology-only requests until one current
+  // pass completes, so watcher churn cannot narrow away a workspace/policy change.
+  #pendingGlobalReconciliation = false;
   #acceptingLifecycleRequests = false;
   #startConsumed = false;
   #stopRequest: Promise<void> | null = null;
@@ -314,12 +318,24 @@ export class AureliaLanguageClient {
 
   reconcile(options: ReconcileOptions = {}): Promise<void> {
     if (!this.#acceptingLifecycleRequests) return Promise.resolve();
+    this.#pendingGlobalReconciliation = true;
+    return this.#enqueueReconcile(options);
+  }
+
+  #enqueueReconcile(options: ReconcileOptions = {}): Promise<void> {
+    if (!this.#acceptingLifecycleRequests) return Promise.resolve();
     const releaseTransitionScopes = this.#retainTransitioningSemanticScopes();
     const intent = this.#advanceLifecycleIntent();
     return this.#enqueueTransition(async () => {
       try {
         if (!this.#isCurrentLifecycle(intent)) return;
-        await this.#runReconcile(options.reconfirmExisting === true, intent);
+        const scope = this.#pendingGlobalReconciliation
+          ? null
+          : topologyReconcileScope(this.#pendingTopologyChanges);
+        await this.#runReconcile(options.reconfirmExisting === true, intent, scope);
+        if (this.#isCurrentLifecycle(intent)) {
+          this.#pendingGlobalReconciliation = false;
+        }
       } finally {
         releaseTransitionScopes();
       }
@@ -450,6 +466,7 @@ export class AureliaLanguageClient {
     this.#lifecycle?.dispose();
     this.#lifecycle = null;
     this.#pendingTopologyChanges.clear();
+    this.#pendingGlobalReconciliation = false;
     this.#latestTopologyFingerprintByClient.clear();
     const sessions = [...this.#sessions.values()];
     this.#publishSessions(new Map());
@@ -536,22 +553,26 @@ export class AureliaLanguageClient {
 
   #handlePackageChange(uri: Uri, changeType: FileChangeType): void {
     const topology = readWorkspaceActivationTopology(this.#vscode);
-    if (
-      globalActivationTopologyOwner(topology, uri) == null
-      || !this.#acceptingLifecycleRequests
-    ) return;
-    this.#pendingTopologyChanges.set(uri.toString(), { uri, type: changeType });
-    this.#requestReconcile({ reconfirmExisting: true });
+    const owner = globalActivationTopologyOwner(topology, uri);
+    if (owner == null || !this.#acceptingLifecycleRequests) return;
+    this.#pendingTopologyChanges.set(uri.toString(), {
+      uri,
+      type: changeType,
+      workspaceKeys: containmentConnectedWorkspaceKeys(topology.folders, owner),
+    });
+    this.#requestTopologyReconcile({ reconfirmExisting: true });
   }
 
   #handleProjectConfigurationChange(uri: Uri, changeType: FileChangeType): void {
     const topology = readWorkspaceActivationTopology(this.#vscode);
-    if (
-      globalActivationTopologyOwner(topology, uri) == null
-      || !this.#acceptingLifecycleRequests
-    ) return;
-    this.#pendingTopologyChanges.set(uri.toString(), { uri, type: changeType });
-    this.#requestReconcile({ reconfirmExisting: true });
+    const owner = globalActivationTopologyOwner(topology, uri);
+    if (owner == null || !this.#acceptingLifecycleRequests) return;
+    this.#pendingTopologyChanges.set(uri.toString(), {
+      uri,
+      type: changeType,
+      workspaceKeys: containmentConnectedWorkspaceKeys(topology.folders, owner),
+    });
+    this.#requestTopologyReconcile({ reconfirmExisting: true });
   }
 
   #scheduleSourceAdmission(): void {
@@ -568,14 +589,18 @@ export class AureliaLanguageClient {
     return readWorkspaceActivationTopology(this.#vscode).isDisabled(uri);
   }
 
-  async #runReconcile(reconfirmExisting: boolean, intent: LifecycleIntent): Promise<void> {
+  async #runReconcile(
+    reconfirmExisting: boolean,
+    intent: LifecycleIntent,
+    scope: ReconcileScope | null = null,
+  ): Promise<void> {
     const topologyChanges = new Map(this.#pendingTopologyChanges);
     const delivered = await this.#notifyTopologyChanges(topologyChanges, intent);
     if (!this.#isCurrentLifecycle(intent)) return;
-    await this.#reconcileSessions(reconfirmExisting || topologyChanges.size > 0, intent);
-    if (!delivered || !this.#isCurrentLifecycle(intent)) return;
+    await this.#reconcileSessions(reconfirmExisting || topologyChanges.size > 0, intent, scope);
+    if (!this.#isCurrentLifecycle(intent)) return;
     for (const [key, change] of topologyChanges) {
-      if (this.#pendingTopologyChanges.get(key) === change) {
+      if (delivered.has(key) && this.#pendingTopologyChanges.get(key) === change) {
         this.#pendingTopologyChanges.delete(key);
       }
     }
@@ -584,30 +609,35 @@ export class AureliaLanguageClient {
   async #notifyTopologyChanges(
     topologyChanges: ReadonlyMap<string, PendingTopologyChange>,
     intent: LifecycleIntent,
-  ): Promise<boolean> {
-    const bySession = new Map<AureliaLanguageClientSession, PendingTopologyChange[]>();
-    for (const change of topologyChanges.values()) {
+  ): Promise<ReadonlySet<string>> {
+    const bySession = new Map<AureliaLanguageClientSession, Array<readonly [string, PendingTopologyChange]>>();
+    const delivered = new Set<string>();
+    for (const [key, change] of topologyChanges) {
       const session = this.sessionForUri(change.uri);
-      if (session == null) continue;
+      if (session == null) {
+        // A newly admitted server starts from the current host state, so no
+        // retiring or absent process needs this historical notification.
+        delivered.add(key);
+        continue;
+      }
       const changes = bySession.get(session) ?? [];
-      changes.push(change);
+      changes.push([key, change]);
       bySession.set(session, changes);
     }
-    let delivered = true;
-    for (const [session, changes] of bySession) {
+    for (const [session, entries] of bySession) {
       try {
         const result = await this.#awaitLifecycle(
           session.client.sendNotification(DidChangeWatchedFilesNotification.type.method, {
-            changes: changes.map((change) => ({
+            changes: entries.map(([, change]) => ({
               uri: change.uri.toString(),
               type: change.type,
             })),
           }),
           intent,
         );
-        if (result.status === "invalidated") return false;
+        if (result.status === "invalidated") return delivered;
+        for (const [key] of entries) delivered.add(key);
       } catch (error) {
-        delivered = false;
         this.#logger.warn(`[client] project topology notification failed for ${session.workspace.uri}: ${errorMessage(error)}`);
       }
     }
@@ -717,7 +747,7 @@ export class AureliaLanguageClient {
       }
       const projectRootHintFolders = projectRootHintFoldersResult.value;
       if (
-        scope?.rejectedSession.workspaceKey === key
+        scope?.rejectedSession?.workspaceKey === key
         && scope.rejectedSession.client === nextSessions.get(key)?.client
         && admission.mode === AureliaActivationMode.Auto
         && sameUris(
@@ -1009,6 +1039,12 @@ export class AureliaLanguageClient {
 
   #requestReconcile(options: ReconcileOptions): void {
     void this.reconcile(options).catch((error) => {
+      this.#logger.warn(`[client] workspace reconciliation failed: ${errorMessage(error)}`);
+    });
+  }
+
+  #requestTopologyReconcile(options: ReconcileOptions): void {
+    void this.#enqueueReconcile(options).catch((error) => {
       this.#logger.warn(`[client] workspace reconciliation failed: ${errorMessage(error)}`);
     });
   }
@@ -1453,6 +1489,16 @@ function containmentConnectedWorkspaceKeys(
     }
   }
   return new Set(connected.keys());
+}
+
+function topologyReconcileScope(
+  changes: ReadonlyMap<string, PendingTopologyChange>,
+): ReconcileScope {
+  const workspaceKeys = new Set<string>();
+  for (const change of changes.values()) {
+    for (const key of change.workspaceKeys) workspaceKeys.add(key);
+  }
+  return { workspaceKeys };
 }
 
 function sameUris(left: readonly Uri[], right: readonly Uri[]): boolean {
