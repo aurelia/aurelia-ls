@@ -8,6 +8,7 @@ import {
   createSemanticRuntime,
   SemanticAppQueryKind,
   SemanticRuntimeAnswerCoverage,
+  SemanticRuntimeAnswerSelection,
 } from '../src/index.js';
 import { OpenSeamReasonKind } from '../src/kernel/open-seam.js';
 import { RegistryRegistrationAdmission } from '../src/registration/registration-admission.js';
@@ -63,6 +64,15 @@ describe('opaque registry authoring boundary', () => {
     expect(availability.coverage).toBe(SemanticRuntimeAnswerCoverage.Open);
     expect(availability.value.completeness.openVisibility).toBe(1);
     expect(availability.value.rows.some((row) => row.resource.name.startsWith('opaque'))).toBe(false);
+
+    const isolatedAvailability = app.ask({
+      kind: SemanticAppQueryKind.TemplateResourceAvailability,
+      cursor: sourceCursor(fixture.isolatedTemplate, 'isolatedMessage', 4, 'src/isolated-app.html'),
+    });
+    expect(isolatedAvailability.selection).toBe(SemanticRuntimeAnswerSelection.Exact);
+    expect(isolatedAvailability.value.selectedTemplate?.definitionName).toBe('isolated-app');
+    expect(isolatedAvailability.coverage).toBe(SemanticRuntimeAnswerCoverage.Complete);
+    expect(isolatedAvailability.value.completeness.openVisibility).toBe(1);
 
     const completion = app.ask({
       kind: SemanticAppQueryKind.TemplateCompletions,
@@ -201,7 +211,11 @@ describe('opaque registry authoring boundary', () => {
   }, 30_000);
 });
 
-function opaqueRegistryFixture(): { readonly root: string; readonly template: string } {
+function opaqueRegistryFixture(): {
+  readonly root: string;
+  readonly template: string;
+  readonly isolatedTemplate: string;
+} {
   const root = temporaryProjectRoot('opaque');
   const template = [
     '<opaque-panel title.bind="message"></opaque-panel>',
@@ -212,15 +226,22 @@ function opaqueRegistryFixture(): { readonly root: string; readonly template: st
     '<p>${message}</p>',
     '',
   ].join('\n');
+  const isolatedTemplate = '<p>${isolatedMessage}</p>\n';
   writeCommonProject(root, template, [
     "import { Aurelia, StandardConfiguration } from '@aurelia/runtime-html';",
     "import { OpaquePlugin } from '@acme/opaque-plugin';",
     "import { App } from './app.js';",
     "import { KnownPanel } from './known-panel.js';",
+    "import { IsolatedApp } from './isolated-app.js';",
     '',
     'new Aurelia()',
     '  .register(StandardConfiguration, KnownPanel, OpaquePlugin)',
     '  .app({ host: document.body, component: App })',
+    '  .start();',
+    '',
+    'new Aurelia()',
+    '  .register(StandardConfiguration)',
+    '  .app({ host: document.body, component: IsolatedApp })',
     '  .start();',
     '',
   ]);
@@ -237,6 +258,17 @@ function opaqueRegistryFixture(): { readonly root: string; readonly template: st
     'export class KnownPanel {}',
     '',
   ].join('\n'));
+  writeProjectFile(root, 'src/isolated-app.ts', [
+    "import { customElement } from '@aurelia/runtime-html';",
+    "import template from './isolated-app.html';",
+    '',
+    "@customElement({ name: 'isolated-app', template })",
+    'export class IsolatedApp {',
+    "  isolatedMessage = 'isolated';",
+    '}',
+    '',
+  ].join('\n'));
+  writeProjectFile(root, 'src/isolated-app.html', isolatedTemplate);
   writeProjectFile(root, 'node_modules/@acme/opaque-plugin/package.json', JSON.stringify({
     name: '@acme/opaque-plugin',
     version: '0.0.0',
@@ -271,7 +303,7 @@ function opaqueRegistryFixture(): { readonly root: string; readonly template: st
     '};',
     '',
   ].join('\n'));
-  return { root, template };
+  return { root, template, isolatedTemplate };
 }
 
 function sourceRegistryFixture(): { readonly root: string; readonly template: string } {
@@ -358,12 +390,13 @@ function sourceCursor(
   template: string,
   marker: string,
   markerOffset: number,
+  filePath = 'src/app.html',
 ): { readonly filePath: string; readonly offset: number } {
   const start = template.indexOf(marker);
   if (start < 0) {
     throw new Error(`Expected template marker '${marker}'.`);
   }
-  return { filePath: 'src/app.html', offset: start + markerOffset };
+  return { filePath, offset: start + markerOffset };
 }
 
 function writeProjectFile(root: string, relativePath: string, text: string): void {

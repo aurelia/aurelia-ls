@@ -1036,7 +1036,7 @@
       "projectKey": "host-alpha",
       "result": "answered",
       "selection": "not-applicable",
-      "coverage": "complete",
+      "coverage": "open",
       "pageSize": 500,
       "pageRequestCount": 2,
       "generatedResourceCount": 501,
@@ -1046,10 +1046,10 @@
         "headerOnly": 5,
         "visibilityOnly": 0,
         "localTemplates": 5,
-        "excludedCompilerSyntax": 58,
+        "excludedCompilerSyntax": 60,
         "unnamedDefinitions": 0,
         "unresolvedModules": 0,
-        "openVisibility": 0
+        "openVisibility": 2
       },
       "first": {
         "identityKey": "typescript-resource:v1:uUlPN8dTsbnF50cz40Wrk9",
@@ -1251,7 +1251,7 @@
                 "excludedCompilerSyntax": 19,
                 "unnamedDefinitions": 0,
                 "unresolvedModules": 0,
-                "openVisibility": 0
+                "openVisibility": 2
               }
             }
           },
@@ -1357,7 +1357,7 @@
                 "excludedCompilerSyntax": 19,
                 "unnamedDefinitions": 0,
                 "unresolvedModules": 0,
-                "openVisibility": 0
+                "openVisibility": 2
               }
             }
           }
@@ -1367,7 +1367,7 @@
             "projectKey": "host-alpha",
             "result": "answered",
             "selection": "not-applicable",
-            "coverage": "complete",
+            "coverage": "open",
             "rowCount": 29,
             "completeness": {
               "fullDefinitions": 29,
@@ -1377,7 +1377,7 @@
               "excludedCompilerSyntax": 19,
               "unnamedDefinitions": 0,
               "unresolvedModules": 0,
-              "openVisibility": 0
+              "openVisibility": 2
             },
             "removedIdentityKey": "typescript-resource:v1:azpBidTgEqjH8hleJeG8v2",
             "removedIdentityPresent": false
@@ -1414,7 +1414,7 @@
                 "excludedCompilerSyntax": 19,
                 "unnamedDefinitions": 0,
                 "unresolvedModules": 0,
-                "openVisibility": 0
+                "openVisibility": 2
               }
             }
           },
@@ -1520,7 +1520,7 @@
                 "excludedCompilerSyntax": 19,
                 "unnamedDefinitions": 0,
                 "unresolvedModules": 0,
-                "openVisibility": 0
+                "openVisibility": 2
               }
             }
           }

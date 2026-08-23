@@ -2428,7 +2428,7 @@ function validateBaselineTreeFacts(value, context, label) {
 
   const projectNodes = nodes.filter((record) => record.event.nodeKind === "project");
   const expectedProjects = new Map([
-    ["host-alpha", { coverage: "complete", rowCount: context.versionLane === "current-stable"
+    ["host-alpha", { coverage: "open", rowCount: context.versionLane === "current-stable"
       ? context.fixture.witnesses.pageDrain.rowCount
       : null }],
     ["host-beta", { coverage: "complete", rowCount: null }],
@@ -4967,7 +4967,7 @@ function validateRaceRestartFacts(scopeValue, declarationValue, context, navigat
     baselineResponse: race.scopeEdit.restartWithoutSelection.response,
     retiredResponse: race.afterRemoval.retiredRightOnlyScopeReproof.response,
     currentResponse: race.afterRemoval.restartWithoutSelection.response,
-    resourcePresence: "absent",
+    resourcePresence: "unconfirmed",
   });
   context.claims.add("scope-restart");
   context.claims.add("declaration-restart");
@@ -6298,7 +6298,7 @@ function validatePageDrainWitness(value) {
   requireEqual(witness.projectKey, "host-alpha", `${label}.projectKey`);
   requireEqual(witness.result, "answered", `${label}.result`);
   requireEqual(witness.selection, "not-applicable", `${label}.selection`);
-  requireEqual(witness.coverage, "complete", `${label}.coverage`);
+  requireEqual(witness.coverage, "open", `${label}.coverage`);
   requireEqual(witness.pageSize, 500, `${label}.pageSize`);
   requireEqual(witness.pageRequestCount, 2, `${label}.pageRequestCount`);
   requireEqual(witness.generatedResourceCount, 501, `${label}.generatedResourceCount`);
@@ -6308,10 +6308,10 @@ function validatePageDrainWitness(value) {
     headerOnly: 5,
     visibilityOnly: 0,
     localTemplates: 5,
-    excludedCompilerSyntax: 58,
+    excludedCompilerSyntax: 60,
     unnamedDefinitions: 0,
     unresolvedModules: 0,
-    openVisibility: 0,
+    openVisibility: 2,
   });
   for (const [field, expectedName] of [["first", "page-drain-000"], ["last", "page-drain-500"]]) {
     const rowLabel = `${label}.${field}`;
@@ -6573,7 +6573,7 @@ function validateAvailabilityRaceWitness(value, label, removedIdentityKey) {
   requireEqual(inventory.projectKey, baseline.projectKey, `${label}.afterRemoval.inventory.projectKey`);
   requireEqual(inventory.result, "answered", `${label}.afterRemoval.inventory.result`);
   requireEqual(inventory.selection, "not-applicable", `${label}.afterRemoval.inventory.selection`);
-  requireEqual(inventory.coverage, "complete", `${label}.afterRemoval.inventory.coverage`);
+  requireEqual(inventory.coverage, "open", `${label}.afterRemoval.inventory.coverage`);
   requireEqual(inventory.rowCount, 29, `${label}.afterRemoval.inventory.rowCount`);
   validateCompleteness(
     inventory.completeness,
@@ -6681,7 +6681,7 @@ function availabilityCompleteness(fullDefinitions) {
     excludedCompilerSyntax: 19,
     unnamedDefinitions: 0,
     unresolvedModules: 0,
-    openVisibility: 0,
+    openVisibility: 2,
   };
 }
 

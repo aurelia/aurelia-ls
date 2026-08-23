@@ -3398,8 +3398,11 @@ suite("extension-host product surface", () => {
           : project.projectKey === fixture.witnesses.openCoverage.projectKey
             ? fixture.witnesses.openCoverage
             : null;
+        const expectedCoverage = project.projectKey === "host-alpha"
+          ? "open"
+          : witness?.coverage ?? "complete";
         assert.strictEqual(projectNode.answerResult, "answered");
-        assert.strictEqual(projectNode.answerCoverage, witness?.coverage ?? "complete");
+        assert.strictEqual(projectNode.answerCoverage, expectedCoverage);
         assert(Number.isInteger(projectNode.answerRowCount) && projectNode.answerRowCount > 0);
         if (witness != null) assert.strictEqual(projectNode.answerRowCount, witness.rowCount);
         if (project.projectKey === "host-alpha" && resourceDiscoveryAcceptance.versionLane === "current-stable") {
@@ -3555,7 +3558,6 @@ suite("extension-host product surface", () => {
         }
       }
 
-      resourceDiscoveryEvidence.duplicateNodes = duplicateNodes;
       resourceDiscoveryEvidence.facts.tree.headerOnlyPublished = headerOnlyPublished;
       resourceDiscoveryEvidence.facts.tree.openCoverage = {
         projectKey: fixture.witnesses.openCoverage.projectKey,
@@ -3645,7 +3647,7 @@ suite("extension-host product surface", () => {
     for (const [index, row] of fixture.witnesses.longSuffixDuplicates.rows.entries()) {
       const opened = await invokeObservedTreeAction(
         "aurelia.openResourceDeclaration",
-        resourceDiscoveryEvidence.duplicateNodes[index],
+        resourceNode(row.identityKey, fixture.witnesses.longSuffixDuplicates.projectKey),
         "opened",
         (event) => event.resourceIdentity === row.identityKey,
       );
@@ -4448,7 +4450,7 @@ suite("extension-host product surface", () => {
         baselineResponse: race.scopeEdit.restartWithoutSelection.response,
         excludedAppRootIdentityKey: race.excludedAppRootIdentityKey,
         controlId: "c2-availability-removed",
-        expectedInventoryPresence: "absent",
+        expectedInventoryPresence: "unconfirmed",
         includedCurrentRow: leftRow,
         mutate: async () => await replaceAndSaveDocumentText(rightDocument, witness.removed.replacement),
         projectKey: race.baseline.projectKey,
@@ -4655,9 +4657,12 @@ suite("extension-host product surface", () => {
       baselineHostAlphaNodes.map(publicationNodeDurableShape),
       "Newest recovery must restore the exact public host-alpha subtree.",
     );
-    assert(
-      recoveredHostAlphaNodes.every((node) => node.contextValue !== "resourceProjectIssue"),
-      "Newest recovery must clear the targeted host-alpha project failure.",
+    assert.strictEqual(recoveredHostAlpha.answerResult, baselineHostAlpha.answerResult);
+    assert.strictEqual(recoveredHostAlpha.answerCoverage, baselineHostAlpha.answerCoverage);
+    assert.strictEqual(
+      visibleStableCodeCount("AURELIA_RD_C2_NEWEST"),
+      0,
+      "Newest recovery must clear the injected host-alpha failure while retaining intentional baseline issue rows.",
     );
     assert(!newestRecoveredNodes.some((node) => node.rowStates.split("|").includes("out-of-date")));
     assert(!newestRecoveredNodes.some((node) => node.rowStates.split("|").includes("updating")));
@@ -6213,7 +6218,7 @@ async function runAvailabilityRestartRace({
       && event.observationId === selected.observationId
       && event.phase === "navigation-stale-retry"
       && event.resourcePresence === expectedInventoryPresence,
-    `${resourceIdentity} should carry authenticated F2 presence into fresh reproof`,
+    `${resourceIdentity} should carry authenticated F2 evidence into fresh reproof`,
     flow.settled,
     120_000,
   );

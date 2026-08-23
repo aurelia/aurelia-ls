@@ -348,11 +348,18 @@ export function readSemanticTemplateResourceAvailability(
           };
     })
     .filter((row): row is NonNullable<typeof row> => row != null);
+  // `completeness` remains project-wide inventory metadata; exact availability must not inherit registration pressure
+  // from an unrelated app-root/compiler container.
+  const selectedContainerIdentityHandle = selectedScope.container.identityHandle;
   const coverage = sourceDiscoveryTruncated
     ? SemanticRuntimeAnswerCoverage.Truncated
     : rows.some((row) => row.state === SemanticTemplateResourceAvailabilityState.Open)
+      || selectedContainerIdentityHandle == null
+      || resourceHidingRegistrationOpenSeamsForContainer(emission, selectedContainerIdentityHandle).length > 0
+      || completeness.unnamedDefinitions > 0
+      || completeness.unresolvedModules > 0
       ? SemanticRuntimeAnswerCoverage.Open
-      : resourceInventoryCoverage(completeness);
+      : SemanticRuntimeAnswerCoverage.Complete;
   return answer(
     SemanticRuntimeAnswerResult.Answered,
     `Returned ${rows.length} resource(s) available to ${selected.candidate.definitionName}.`,
@@ -763,12 +770,9 @@ export class ResourceInventoryBuilder {
       containerIdentityHandles.add(compilerWorld.container.identityHandle);
     }
     for (const containerIdentityHandle of containerIdentityHandles) {
-      for (const seam of registrationHidingOpenSeamsForContainer(
-        this.emission.appWorld.diWorld,
-        this.emission.appWorld.configuration.openSeamScopes,
-        this.emission.containerChainFacts,
+      for (const seam of resourceHidingRegistrationOpenSeamsForContainer(
+        this.emission,
         containerIdentityHandle,
-        (operation) => registrationOpenSeamCanHideResource(operation),
       )) {
         registrationBlockers.add(seam.handle);
       }
@@ -1240,6 +1244,19 @@ export class ResourceInventoryBuilder {
       header.lookupNames,
     ]));
   }
+}
+
+function resourceHidingRegistrationOpenSeamsForContainer(
+  emission: AureliaAppWorldProjectEmission,
+  containerIdentityHandle: IdentityHandle,
+) {
+  return registrationHidingOpenSeamsForContainer(
+    emission.appWorld.diWorld,
+    emission.appWorld.configuration.openSeamScopes,
+    emission.containerChainFacts,
+    containerIdentityHandle,
+    (operation) => registrationOpenSeamCanHideResource(operation),
+  );
 }
 
 /** @internal One exact compiler scope selected from a template cursor. */
