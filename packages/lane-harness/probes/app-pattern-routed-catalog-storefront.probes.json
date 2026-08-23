@@ -671,7 +671,7 @@
         "at": "item.bind",
         "verdict": "correct",
         "reason": "",
-        "note": "Hover presents the public bindable attribute with its proved `Item | null` value type and correctly labels the declaration mode as `Default mode`."
+        "note": "Hover presents the public bindable attribute with its proved `Item | null` value type and reports the exact usage-effective `to view` mode as a framework fallback rather than an authored bindable default."
       },
       {
         "id": "repeat-local-badge-three-sites",

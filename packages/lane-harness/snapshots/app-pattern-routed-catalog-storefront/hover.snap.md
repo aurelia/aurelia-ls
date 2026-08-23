@@ -338,7 +338,7 @@ Let local.
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCodePoints": 62,
+    "markdownCodePoints": 85,
     "range": {
       "end": {
         "character": 25,
@@ -361,7 +361,7 @@ Let local.
 (bindable) item: Item | null
 ```
 
-Default mode: to view.
+Effective mode: to view (framework fallback).
 ````
 
 ## repeat-local-badge-three-sites

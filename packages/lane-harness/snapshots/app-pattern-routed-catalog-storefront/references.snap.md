@@ -34,19 +34,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     {
       "range": {
         "end": {
-          "character": 33,
-          "line": 15
-        },
-        "start": {
-          "character": 23,
-          "line": 15
-        }
-      },
-      "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/state/catalog-state.ts"
-    },
-    {
-      "range": {
-        "end": {
           "character": 63,
           "line": 7
         },
@@ -66,6 +53,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "start": {
           "character": 2,
           "line": 7
+        }
+      },
+      "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/state/catalog-state.ts"
+    },
+    {
+      "range": {
+        "end": {
+          "character": 33,
+          "line": 15
+        },
+        "start": {
+          "character": 23,
+          "line": 15
         }
       },
       "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/state/catalog-state.ts"
@@ -169,19 +169,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     {
       "range": {
         "end": {
-          "character": 27,
-          "line": 18
-        },
-        "start": {
-          "character": 16,
-          "line": 18
-        }
-      },
-      "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/state/catalog-state.ts"
-    },
-    {
-      "range": {
-        "end": {
           "character": 68,
           "line": 10
         },
@@ -201,6 +188,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "start": {
           "character": 2,
           "line": 8
+        }
+      },
+      "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/state/catalog-state.ts"
+    },
+    {
+      "range": {
+        "end": {
+          "character": 27,
+          "line": 18
+        },
+        "start": {
+          "character": 16,
+          "line": 18
         }
       },
       "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/state/catalog-state.ts"
@@ -304,19 +304,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     {
       "range": {
         "end": {
-          "character": 28,
-          "line": 28
-        },
-        "start": {
-          "character": 16,
-          "line": 28
-        }
-      },
-      "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/state/catalog-state.ts"
-    },
-    {
-      "range": {
-        "end": {
           "character": 56,
           "line": 24
         },
@@ -336,6 +323,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "start": {
           "character": 6,
           "line": 14
+        }
+      },
+      "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/state/catalog-state.ts"
+    },
+    {
+      "range": {
+        "end": {
+          "character": 28,
+          "line": 28
+        },
+        "start": {
+          "character": 16,
+          "line": 28
         }
       },
       "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/state/catalog-state.ts"
@@ -2032,19 +2032,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     {
       "range": {
         "end": {
-          "character": 16,
-          "line": 11
-        },
-        "start": {
-          "character": 11,
-          "line": 11
-        }
-      },
-      "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-list-route.ts"
-    },
-    {
-      "range": {
-        "end": {
           "character": 19,
           "line": 2
         },
@@ -2158,6 +2145,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         }
       },
       "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-list-route.html"
+    },
+    {
+      "range": {
+        "end": {
+          "character": 16,
+          "line": 11
+        },
+        "start": {
+          "character": 11,
+          "line": 11
+        }
+      },
+      "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-list-route.ts"
     }
   ]
 }
@@ -2775,6 +2775,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     {
       "range": {
         "end": {
+          "character": 63,
+          "line": 7
+        },
+        "start": {
+          "character": 53,
+          "line": 7
+        }
+      },
+      "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-list-route.html"
+    },
+    {
+      "range": {
+        "end": {
           "character": 12,
           "line": 7
         },
@@ -2797,19 +2810,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         }
       },
       "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/state/catalog-state.ts"
-    },
-    {
-      "range": {
-        "end": {
-          "character": 63,
-          "line": 7
-        },
-        "start": {
-          "character": 53,
-          "line": 7
-        }
-      },
-      "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-list-route.html"
     }
   ]
 }
