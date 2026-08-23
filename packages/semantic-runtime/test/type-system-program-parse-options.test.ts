@@ -51,6 +51,51 @@ describe('type-system Program parse options', () => {
       .toBe(evaluatedSource.sourceFile.statements[0]);
   }, 30_000);
 
+  test('remaps resolved-signature reads into the Program epoch and refuses foreign calls', async () => {
+    const root = temporaryRoot();
+    const sourcePath = path.join(root, 'src', 'calls.ts');
+    writeJson(path.join(root, 'tsconfig.json'), {
+      compilerOptions: {
+        target: 'ES2022',
+        module: 'ESNext',
+        moduleResolution: 'Bundler',
+        moduleDetection: 'Force',
+      },
+      files: ['src/calls.ts'],
+    });
+    writeText(sourcePath, [
+      'export function choose(value: string): string;',
+      'export function choose(value: number): number;',
+      'export function choose(value: string | number): string | number { return value; }',
+      "export const selected = choose('text');",
+      '',
+    ].join('\n'));
+
+    const { evaluatedSource, typeSystem } = await buildTypeSystem(root, [
+      { path: 'src/calls.ts', role: SourceFileRole.AppSource },
+    ], sourcePath);
+    const evaluatedCall = firstCallExpression(evaluatedSource.sourceFile);
+    const programCall = typeSystem.readProgramNode(evaluatedCall);
+    const candidates: ts.Signature[] = [];
+    const resolved = typeSystem.readProgramResolvedSignature(evaluatedCall, candidates);
+
+    expect(programCall).not.toBe(evaluatedCall);
+    expect(resolved).not.toBeNull();
+    expect(candidates).toHaveLength(2);
+    expect(typeSystem.checker.signatureToString(resolved!)).toBe('(value: string): string');
+
+    const foreignSource = ts.createSourceFile(
+      path.join(root, 'src', 'foreign.ts'),
+      "choose('text');\n",
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    const foreignCandidates: ts.Signature[] = [];
+    expect(typeSystem.readProgramResolvedSignature(firstCallExpression(foreignSource), foreignCandidates)).toBeNull();
+    expect(foreignCandidates).toEqual([]);
+  }, 30_000);
+
   test('keeps NodeNext parse modes on separate Program carriers', async () => {
     const root = temporaryRoot();
     const esmPath = path.join(root, 'src', 'esm.ts');
@@ -244,6 +289,25 @@ function evaluatedSourceAt(
   );
   expect(source).not.toBeUndefined();
   return source!;
+}
+
+function firstCallExpression(sourceFile: ts.SourceFile): ts.CallExpression {
+  let call: ts.CallExpression | null = null;
+  const visit = (node: ts.Node): void => {
+    if (call != null) {
+      return;
+    }
+    if (ts.isCallExpression(node)) {
+      call = node;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  if (call == null) {
+    throw new Error(`Expected one call expression in ${sourceFile.fileName}.`);
+  }
+  return call;
 }
 
 function temporaryRoot(): string {

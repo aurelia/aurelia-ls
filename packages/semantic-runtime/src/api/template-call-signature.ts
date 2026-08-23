@@ -199,30 +199,39 @@ function selectedSignatureForOverlayCall(
   diagnostics: readonly TypeSystemOverlayDiagnostic[],
   open: (reason: string, candidateCount?: number) => TemplateSelectedCallSignatureProjection,
 ): TemplateSelectedCallSignatureProjection {
+  const programCall = typeSystem.readProgramExpression(call);
+  if (programCall == null || !ts.isCallExpression(programCall)) {
+    return open('The selected overlay call did not enter the current checker program.');
+  }
   const bareCallScope = authoredCall.callKind === 'scope'
-    && !ts.isPropertyAccessExpression(call.expression);
+    && !ts.isPropertyAccessExpression(programCall.expression);
   const checker = typeSystem.checker;
-  const rawCalleeType = checker.getTypeAtLocation(call.expression);
+  const rawCalleeType = typeSystem.readProgramTypeAtLocation(programCall.expression);
+  if (rawCalleeType == null) {
+    return open('The selected overlay callee did not enter the current checker program.');
+  }
   const calleeType = checker.getNonNullableType(rawCalleeType);
   const signatures = checker.getSignaturesOfType(calleeType, ts.SignatureKind.Call);
   if (signatures.length === 0) {
     return open('The selected overlay callee has no checker call signatures.');
   }
   const resolvedCandidates: ts.Signature[] = [];
-  const resolved = checker.getResolvedSignature(call, resolvedCandidates);
+  const resolved = typeSystem.readProgramResolvedSignature(programCall, resolvedCandidates);
   const candidates = resolvedCandidates.length > 0 ? resolvedCandidates : signatures;
   const candidateCount = candidates.length;
-  if (
-    candidateCount > 1
-    && call.arguments.some((argument) => {
-      const type = checker.getTypeAtLocation(argument);
-      return (type.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) !== 0;
-    })
-  ) {
-    return open('Weak any/unknown call arguments cannot authenticate one overload.', candidateCount);
+  if (candidateCount > 1) {
+    for (const argument of programCall.arguments) {
+      const type = typeSystem.readProgramTypeAtLocation(argument);
+      if (type == null) {
+        return open('A selected call argument did not enter the current checker program.', candidateCount);
+      }
+      if ((type.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) !== 0) {
+        return open('Weak any/unknown call arguments cannot authenticate one overload.', candidateCount);
+      }
+    }
   }
-  const callStart = call.getStart(sourceFile);
-  const callEnd = call.getEnd();
+  const callStart = programCall.getStart(sourceFile);
+  const callEnd = programCall.getEnd();
   const diagnostic = diagnostics.find((candidate) =>
     candidate.diagnostic.phase === 'semantic'
     && candidate.diagnostic.category === 'error'
@@ -263,14 +272,14 @@ function selectedSignatureForOverlayCall(
     return open('The resolved signature did not identify one member of the checker candidate family.', candidateCount);
   }
   const selectedBasis = candidates[selectedCandidateIndex < 0 ? 0 : selectedCandidateIndex] ?? null;
-  const presentationKind = signaturePresentationKind(checker, call, declaration);
+  const presentationKind = signaturePresentationKind(typeSystem, programCall, declaration);
   const formatFlags = ts.TypeFormatFlags.NoTruncation
     | ts.TypeFormatFlags.UseAliasDefinedOutsideCurrentScope
     | ts.TypeFormatFlags.WriteTypeArgumentsOfSignature
     | (presentationKind === 'callable-value' ? ts.TypeFormatFlags.WriteArrowStyleSignature : 0);
   const rawSignatureTail = checker.signatureToString(
     resolved,
-    call,
+    programCall,
     formatFlags,
     ts.SignatureKind.Call,
   );
@@ -377,14 +386,14 @@ export function isCheckerCallTextSafe(value: string): boolean {
 }
 
 function signaturePresentationKind(
-  checker: ts.TypeChecker,
+  typeSystem: TypeSystemProject,
   call: ts.CallExpression,
   declaration: ts.SignatureDeclaration | null,
 ): 'method' | 'callable-value' {
   const name = tsCallNameNode(call);
   const declarations = name == null
     ? []
-    : checker.getSymbolAtLocation(name)?.getDeclarations() ?? [];
+    : typeSystem.readProgramSymbolAtLocation(name)?.getDeclarations() ?? [];
   return (
     declarations.length > 0
     && declarations.every((candidate) => ts.isMethodDeclaration(candidate) || ts.isMethodSignature(candidate))

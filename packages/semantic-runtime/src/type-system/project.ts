@@ -510,6 +510,18 @@ export class TypeSystemProject {
     return checkerNode == null ? null : this.checker.getSymbolAtLocation(checkerNode) ?? null;
   }
 
+  /** Resolve one call-like expression only after remapping it into this Program epoch. */
+  readProgramResolvedSignature(
+    node: ts.CallLikeExpression,
+    candidatesOutArray?: ts.Signature[],
+    argumentCount?: number,
+  ): ts.Signature | null {
+    const checkerNode = this.readProgramNode(node);
+    return checkerNode == null || !ts.isCallLikeExpression(checkerNode)
+      ? null
+      : this.checker.getResolvedSignature(checkerNode, candidatesOutArray, argumentCount) ?? null;
+  }
+
   /** Read an alias-resolved TypeChecker symbol from a Program-remapped value site. */
   readProgramAliasedSymbolAtLocation(node: ts.Node): ts.Symbol | null {
     const symbol = this.readProgramSymbolAtLocation(node);
