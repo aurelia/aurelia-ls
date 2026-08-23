@@ -12,13 +12,13 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "anchor": "<spread-card ...spreadState>",
+  "anchor": "<spread-card ...$bindables='spreadState'>",
   "at": "spreadState",
   "atOccurrence": 1,
-  "displayPosition": "src/template-spread-capture-semantics-app.html:2:19",
+  "displayPosition": "src/template-spread-capture-semantics-app.html:2:31",
   "file": "src/template-spread-capture-semantics-app.html",
   "lspPosition": {
-    "character": 18,
+    "character": 30,
     "line": 1
   },
   "occurrence": 1
@@ -34,12 +34,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "isIncomplete": false,
   "kindCounts": {
     "method": 2,
-    "property": 21
+    "property": 22
   },
   "labelFallbackCount": 0,
   "outcome": "result",
-  "textEditCount": 23,
-  "totalItems": 23
+  "textEditCount": 24,
+  "totalItems": 24
 }
 ```
 
@@ -54,7 +54,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "binding-context-slot | string | public"
       ],
       "edits": [
-        "1:18..1:29 \"spreadState\" -> \"capturedValue\""
+        "1:30..1:41 \"spreadState\" -> \"capturedValue\""
       ],
       "expectation": "present",
       "found": true,
@@ -68,7 +68,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "binding-context-slot | (event: MouseEvent) => void | public"
       ],
       "edits": [
-        "1:18..1:29 \"spreadState\" -> \"handleCaptured\""
+        "1:30..1:41 \"spreadState\" -> \"handleCaptured\""
       ],
       "expectation": "present",
       "found": true,
@@ -82,7 +82,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "binding-context-slot | SpreadCardState[] | public"
       ],
       "edits": [
-        "1:18..1:29 \"spreadState\" -> \"spreadCards\""
+        "1:30..1:41 \"spreadState\" -> \"spreadCards\""
       ],
       "expectation": "present",
       "found": true,
@@ -96,7 +96,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "binding-context-slot | { details: { title: string; count: number; tone: string; internal: string; }; } | public"
       ],
       "edits": [
-        "1:18..1:29 \"spreadState\" -> \"spreadContainer\""
+        "1:30..1:41 \"spreadState\" -> \"spreadContainer\""
       ],
       "expectation": "present",
       "found": true,
@@ -110,7 +110,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "binding-context-slot | SpreadCardState | public"
       ],
       "edits": [
-        "1:18..1:29 \"spreadState\" -> \"spreadState\""
+        "1:30..1:41 \"spreadState\" -> \"spreadState\""
       ],
       "expectation": "present",
       "found": true,
@@ -180,13 +180,13 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "kindCounts": {
     "keyword": 1,
     "method": 2,
-    "property": 22,
+    "property": 23,
     "variable": 8
   },
   "labelFallbackCount": 0,
   "outcome": "result",
-  "textEditCount": 33,
-  "totalItems": 33
+  "textEditCount": 34,
+  "totalItems": 34
 }
 ```
 
@@ -258,11 +258,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "anchor": "value.bind=\"capturedValue\"",
   "at": "capturedValue",
   "atOccurrence": 1,
-  "displayPosition": "src/template-spread-capture-semantics-app.html:30:17",
+  "displayPosition": "src/template-spread-capture-semantics-app.html:31:17",
   "file": "src/template-spread-capture-semantics-app.html",
   "lspPosition": {
     "character": 16,
-    "line": 29
+    "line": 30
   },
   "occurrence": 1
 }
@@ -277,12 +277,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "isIncomplete": false,
   "kindCounts": {
     "method": 2,
-    "property": 21
+    "property": 22
   },
   "labelFallbackCount": 0,
   "outcome": "result",
-  "textEditCount": 23,
-  "totalItems": 23
+  "textEditCount": 24,
+  "totalItems": 24
 }
 ```
 
@@ -297,7 +297,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "binding-context-slot | string | public"
       ],
       "edits": [
-        "29:16..29:29 \"capturedValue\" -> \"capturedValue\""
+        "30:16..30:29 \"capturedValue\" -> \"capturedValue\""
       ],
       "expectation": "present",
       "found": true,
@@ -311,7 +311,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "binding-context-slot | (event: MouseEvent) => void | public"
       ],
       "edits": [
-        "29:16..29:29 \"capturedValue\" -> \"handleCaptured\""
+        "30:16..30:29 \"capturedValue\" -> \"handleCaptured\""
       ],
       "expectation": "present",
       "found": true,
@@ -325,7 +325,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "binding-context-slot | boolean | public"
       ],
       "edits": [
-        "29:16..29:29 \"capturedValue\" -> \"isActive\""
+        "30:16..30:29 \"capturedValue\" -> \"isActive\""
       ],
       "expectation": "present",
       "found": true,
@@ -339,7 +339,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "binding-context-slot | SpreadCardState | public"
       ],
       "edits": [
-        "29:16..29:29 \"capturedValue\" -> \"spreadState\""
+        "30:16..30:29 \"capturedValue\" -> \"spreadState\""
       ],
       "expectation": "present",
       "found": true,

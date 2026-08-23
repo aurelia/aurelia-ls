@@ -15,11 +15,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "anchor": "...$element=\"spreadState\"",
   "at": "...$element",
   "atOccurrence": 1,
-  "displayPosition": "src/template-spread-capture-semantics-app.html:24:16",
+  "displayPosition": "src/template-spread-capture-semantics-app.html:25:16",
   "file": "src/template-spread-capture-semantics-app.html",
   "lspPosition": {
     "character": 15,
-    "line": 23
+    "line": 24
   },
   "occurrence": 1
 }
@@ -90,11 +90,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 26,
-          "line": 23
+          "line": 24
         },
         "start": {
           "character": 15,
-          "line": 23
+          "line": 24
         }
       },
       "rangeText": "...$element",
@@ -139,11 +139,11 @@ _No in-memory diff._
   "anchor": "<div ...$attrs>",
   "at": "...$attrs",
   "atOccurrence": 1,
-  "displayPosition": "src/template-spread-capture-semantics-app.html:27:8",
+  "displayPosition": "src/template-spread-capture-semantics-app.html:28:8",
   "file": "src/template-spread-capture-semantics-app.html",
   "lspPosition": {
     "character": 7,
-    "line": 26
+    "line": 27
   },
   "occurrence": 1
 }
@@ -214,11 +214,11 @@ _No in-memory diff._
       "range": {
         "end": {
           "character": 16,
-          "line": 26
+          "line": 27
         },
         "start": {
           "character": 7,
-          "line": 26
+          "line": 27
         }
       },
       "rangeText": "...$attrs",
@@ -263,11 +263,11 @@ _No in-memory diff._
   "anchor": "inner-gate.bind=\"showCapture\"",
   "at": "inner-gate",
   "atOccurrence": 1,
-  "displayPosition": "src/template-spread-capture-semantics-app.html:46:5",
+  "displayPosition": "src/template-spread-capture-semantics-app.html:47:5",
   "file": "src/template-spread-capture-semantics-app.html",
   "lspPosition": {
     "character": 4,
-    "line": 45
+    "line": 46
   },
   "occurrence": 1
 }
@@ -338,11 +338,11 @@ _No in-memory diff._
       "range": {
         "end": {
           "character": 33,
-          "line": 45
+          "line": 46
         },
         "start": {
           "character": 4,
-          "line": 45
+          "line": 46
         }
       },
       "rangeText": "inner-gate.bind=\"showCapture\"",

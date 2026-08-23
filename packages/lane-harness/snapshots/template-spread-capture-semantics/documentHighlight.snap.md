@@ -12,13 +12,13 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "anchor": "<spread-card ...spreadState>",
+  "anchor": "<spread-card ...$bindables='spreadState'>",
   "at": "spreadState",
   "atOccurrence": 1,
-  "displayPosition": "src/template-spread-capture-semantics-app.html:2:19",
+  "displayPosition": "src/template-spread-capture-semantics-app.html:2:31",
   "file": "src/template-spread-capture-semantics-app.html",
   "lspPosition": {
-    "character": 18,
+    "character": 30,
     "line": 1
   },
   "occurrence": 1
@@ -35,11 +35,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "kind": 1,
       "range": {
         "end": {
-          "character": 29,
+          "character": 41,
           "line": 1
         },
         "start": {
-          "character": 18,
+          "character": 30,
           "line": 1
         }
       }
@@ -54,6 +54,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "start": {
           "character": 30,
           "line": 3
+        }
+      }
+    },
+    {
+      "kind": 1,
+      "range": {
+        "end": {
+          "character": 41,
+          "line": 4
+        },
+        "start": {
+          "character": 30,
+          "line": 4
         }
       }
     },
@@ -62,11 +75,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 45,
-          "line": 4
+          "line": 5
         },
         "start": {
           "character": 34,
-          "line": 4
+          "line": 5
         }
       }
     },
@@ -75,11 +88,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 41,
-          "line": 5
+          "line": 6
         },
         "start": {
           "character": 30,
-          "line": 5
+          "line": 6
         }
       }
     },
@@ -88,11 +101,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 50,
-          "line": 6
+          "line": 7
         },
         "start": {
           "character": 39,
-          "line": 6
+          "line": 7
         }
       }
     },
@@ -101,11 +114,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 76,
-          "line": 6
+          "line": 7
         },
         "start": {
           "character": 65,
-          "line": 6
+          "line": 7
         }
       }
     },
@@ -114,24 +127,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 101,
-          "line": 6
+          "line": 7
         },
         "start": {
           "character": 90,
-          "line": 6
-        }
-      }
-    },
-    {
-      "kind": 1,
-      "range": {
-        "end": {
-          "character": 43,
-          "line": 13
-        },
-        "start": {
-          "character": 32,
-          "line": 13
+          "line": 7
         }
       }
     }
@@ -150,11 +150,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "kind": "text",
       "range": {
         "end": {
-          "character": 29,
+          "character": 41,
           "line": 1
         },
         "start": {
-          "character": 18,
+          "character": 30,
           "line": 1
         }
       },
@@ -171,6 +171,21 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "start": {
           "character": 30,
           "line": 3
+        }
+      },
+      "rangeText": "spreadState"
+    },
+    {
+      "anomaly": null,
+      "kind": "text",
+      "range": {
+        "end": {
+          "character": 41,
+          "line": 4
+        },
+        "start": {
+          "character": 30,
+          "line": 4
         }
       },
       "rangeText": "spreadState"
@@ -181,11 +196,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 45,
-          "line": 4
+          "line": 5
         },
         "start": {
           "character": 34,
-          "line": 4
+          "line": 5
         }
       },
       "rangeText": "spreadState"
@@ -196,11 +211,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 41,
-          "line": 5
+          "line": 6
         },
         "start": {
           "character": 30,
-          "line": 5
+          "line": 6
         }
       },
       "rangeText": "spreadState"
@@ -211,11 +226,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 50,
-          "line": 6
+          "line": 7
         },
         "start": {
           "character": 39,
-          "line": 6
+          "line": 7
         }
       },
       "rangeText": "spreadState"
@@ -226,11 +241,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 76,
-          "line": 6
+          "line": 7
         },
         "start": {
           "character": 65,
-          "line": 6
+          "line": 7
         }
       },
       "rangeText": "spreadState"
@@ -241,26 +256,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 101,
-          "line": 6
+          "line": 7
         },
         "start": {
           "character": 90,
-          "line": 6
-        }
-      },
-      "rangeText": "spreadState"
-    },
-    {
-      "anomaly": null,
-      "kind": "text",
-      "range": {
-        "end": {
-          "character": 43,
-          "line": 13
-        },
-        "start": {
-          "character": 32,
-          "line": 13
+          "line": 7
         }
       },
       "rangeText": "spreadState"
@@ -278,11 +278,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "anchor": "repeat.for=\"card of spreadCards\" ...card",
   "at": "card",
   "atOccurrence": 2,
-  "displayPosition": "src/template-spread-capture-semantics-app.html:8:52",
+  "displayPosition": "src/template-spread-capture-semantics-app.html:9:52",
   "file": "src/template-spread-capture-semantics-app.html",
   "lspPosition": {
     "character": 51,
-    "line": 7
+    "line": 8
   },
   "occurrence": 1
 }
@@ -299,11 +299,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 31,
-          "line": 7
+          "line": 8
         },
         "start": {
           "character": 27,
-          "line": 7
+          "line": 8
         }
       }
     },
@@ -312,11 +312,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 55,
-          "line": 7
+          "line": 8
         },
         "start": {
           "character": 51,
-          "line": 7
+          "line": 8
         }
       }
     }
@@ -336,11 +336,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 31,
-          "line": 7
+          "line": 8
         },
         "start": {
           "character": 27,
-          "line": 7
+          "line": 8
         }
       },
       "rangeText": "card"
@@ -351,11 +351,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 55,
-          "line": 7
+          "line": 8
         },
         "start": {
           "character": 51,
-          "line": 7
+          "line": 8
         }
       },
       "rangeText": "card"
@@ -373,11 +373,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "anchor": "spreadState | spreadIdentity",
   "at": "spreadIdentity",
   "atOccurrence": 1,
-  "displayPosition": "src/template-spread-capture-semantics-app.html:6:45",
+  "displayPosition": "src/template-spread-capture-semantics-app.html:7:45",
   "file": "src/template-spread-capture-semantics-app.html",
   "lspPosition": {
     "character": 44,
-    "line": 5
+    "line": 6
   },
   "occurrence": 1
 }
@@ -394,11 +394,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 58,
-          "line": 5
+          "line": 6
         },
         "start": {
           "character": 44,
-          "line": 5
+          "line": 6
         }
       }
     }
@@ -418,11 +418,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 58,
-          "line": 5
+          "line": 6
         },
         "start": {
           "character": 44,
-          "line": 5
+          "line": 6
         }
       },
       "rangeText": "spreadIdentity"
@@ -440,11 +440,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "anchor": "value.bind=\"capturedValue\"",
   "at": "capturedValue",
   "atOccurrence": 1,
-  "displayPosition": "src/template-spread-capture-semantics-app.html:19:17",
+  "displayPosition": "src/template-spread-capture-semantics-app.html:31:17",
   "file": "src/template-spread-capture-semantics-app.html",
   "lspPosition": {
     "character": 16,
-    "line": 18
+    "line": 30
   },
   "occurrence": 1
 }
@@ -461,11 +461,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 29,
-          "line": 18
+          "line": 30
         },
         "start": {
           "character": 16,
-          "line": 18
+          "line": 30
         }
       }
     },
@@ -474,11 +474,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 45,
-          "line": 39
+          "line": 51
         },
         "start": {
           "character": 32,
-          "line": 39
+          "line": 51
         }
       }
     },
@@ -487,11 +487,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 49,
-          "line": 41
+          "line": 53
         },
         "start": {
           "character": 36,
-          "line": 41
+          "line": 53
         }
       }
     }
@@ -511,11 +511,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 29,
-          "line": 18
+          "line": 30
         },
         "start": {
           "character": 16,
-          "line": 18
+          "line": 30
         }
       },
       "rangeText": "capturedValue"
@@ -526,11 +526,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 45,
-          "line": 39
+          "line": 51
         },
         "start": {
           "character": 32,
-          "line": 39
+          "line": 51
         }
       },
       "rangeText": "capturedValue"
@@ -541,11 +541,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 49,
-          "line": 41
+          "line": 53
         },
         "start": {
           "character": 36,
-          "line": 41
+          "line": 53
         }
       },
       "rangeText": "capturedValue"
@@ -563,11 +563,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "anchor": "input-mark=\"receiver-local-mark\"",
   "at": "input-mark",
   "atOccurrence": 1,
-  "displayPosition": "src/template-spread-capture-semantics-app.html:24:5",
+  "displayPosition": "src/template-spread-capture-semantics-app.html:36:5",
   "file": "src/template-spread-capture-semantics-app.html",
   "lspPosition": {
     "character": 4,
-    "line": 23
+    "line": 35
   },
   "occurrence": 1
 }
@@ -584,11 +584,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 14,
-          "line": 23
+          "line": 35
         },
         "start": {
           "character": 4,
-          "line": 23
+          "line": 35
         }
       }
     }
@@ -608,11 +608,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 14,
-          "line": 23
+          "line": 35
         },
         "start": {
           "character": 4,
-          "line": 23
+          "line": 35
         }
       },
       "rangeText": "input-mark"

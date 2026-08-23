@@ -69,7 +69,7 @@
       {
         "id": "spread-root-member",
         "file": "src/template-spread-capture-semantics-app.html",
-        "anchor": "<spread-card ...spreadState>",
+        "anchor": "<spread-card ...$bindables='spreadState'>",
         "at": "spreadState",
         "verdict": "correct",
         "reason": "References should merge the TypeScript declaration with every authored template spread occurrence of spreadState."
@@ -77,7 +77,7 @@
       {
         "id": "spread-inferred-member",
         "file": "src/template-spread-capture-semantics-app.html",
-        "anchor": "...spreadContainer.details",
+        "anchor": "...$bindables='spreadContainer.details'",
         "at": "details",
         "verdict": "correct",
         "reason": "References should include the exact details token and its inferred object-property declaration."
@@ -121,7 +121,7 @@
       {
         "id": "spread-root-member",
         "file": "src/template-spread-capture-semantics-app.html",
-        "anchor": "<spread-card ...spreadState>",
+        "anchor": "<spread-card ...$bindables='spreadState'>",
         "at": "spreadState",
         "verdict": "correct",
         "reason": "Hover should describe spreadState as SpreadCardState, not the spread mechanism or target component."
@@ -129,7 +129,7 @@
       {
         "id": "spread-inferred-member",
         "file": "src/template-spread-capture-semantics-app.html",
-        "anchor": "...spreadContainer.details",
+        "anchor": "...$bindables='spreadContainer.details'",
         "at": "details",
         "verdict": "correct",
         "reason": "Hover should describe the inferred details member and its object shape at the authored leaf token."
@@ -182,7 +182,7 @@
       {
         "id": "spread-root-member",
         "file": "src/template-spread-capture-semantics-app.html",
-        "anchor": "<spread-card ...spreadState>",
+        "anchor": "<spread-card ...$bindables='spreadState'>",
         "at": "spreadState",
         "verdict": "correct",
         "reason": "Definition should navigate to the spreadState TypeScript property token."
@@ -190,7 +190,7 @@
       {
         "id": "spread-inferred-member",
         "file": "src/template-spread-capture-semantics-app.html",
-        "anchor": "...spreadContainer.details",
+        "anchor": "...$bindables='spreadContainer.details'",
         "at": "details",
         "verdict": "correct",
         "reason": "Definition should navigate to the inferred details property token in the TypeScript object literal."
@@ -234,7 +234,7 @@
       {
         "id": "spread-root-member",
         "file": "src/template-spread-capture-semantics-app.html",
-        "anchor": "<spread-card ...spreadState>",
+        "anchor": "<spread-card ...$bindables='spreadState'>",
         "at": "spreadState",
         "verdict": "correct",
         "reason": "Highlights should include every spreadState expression token in this template."
@@ -278,7 +278,7 @@
       {
         "id": "spread-root-scope",
         "file": "src/template-spread-capture-semantics-app.html",
-        "anchor": "<spread-card ...spreadState>",
+        "anchor": "<spread-card ...$bindables='spreadState'>",
         "at": "spreadState",
         "watch": {
           "present": ["spreadState", "spreadContainer", "spreadCards", "capturedValue", "handleCaptured"],

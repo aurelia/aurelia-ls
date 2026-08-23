@@ -12,13 +12,13 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "anchor": "<spread-card ...spreadState>",
+  "anchor": "<spread-card ...$bindables='spreadState'>",
   "at": "spreadState",
   "atOccurrence": 1,
-  "displayPosition": "src/template-spread-capture-semantics-app.html:2:19",
+  "displayPosition": "src/template-spread-capture-semantics-app.html:2:31",
   "file": "src/template-spread-capture-semantics-app.html",
   "lspPosition": {
-    "character": 18,
+    "character": 30,
     "line": 1
   },
   "occurrence": 1
@@ -35,11 +35,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     "markdownCodePoints": 38,
     "range": {
       "end": {
-        "character": 29,
+        "character": 41,
         "line": 1
       },
       "start": {
-        "character": 18,
+        "character": 30,
         "line": 1
       }
     },
@@ -62,13 +62,13 @@ spreadState: SpreadCardState
 
 ```json
 {
-  "anchor": "...spreadContainer.details",
+  "anchor": "...$bindables='spreadContainer.details'",
   "at": "details",
   "atOccurrence": 1,
-  "displayPosition": "src/template-spread-capture-semantics-app.html:3:35",
+  "displayPosition": "src/template-spread-capture-semantics-app.html:3:47",
   "file": "src/template-spread-capture-semantics-app.html",
   "lspPosition": {
-    "character": 34,
+    "character": 46,
     "line": 2
   },
   "occurrence": 1
@@ -85,11 +85,11 @@ spreadState: SpreadCardState
     "markdownCodePoints": 84,
     "range": {
       "end": {
-        "character": 41,
+        "character": 53,
         "line": 2
       },
       "start": {
-        "character": 34,
+        "character": 46,
         "line": 2
       }
     },
@@ -219,11 +219,11 @@ Aurelia value converter. Implementation: `SpreadIdentityValueConverter`.
   "anchor": "value.bind=\"capturedValue\"",
   "at": "capturedValue",
   "atOccurrence": 1,
-  "displayPosition": "src/template-spread-capture-semantics-app.html:30:17",
+  "displayPosition": "src/template-spread-capture-semantics-app.html:31:17",
   "file": "src/template-spread-capture-semantics-app.html",
   "lspPosition": {
     "character": 16,
-    "line": 29
+    "line": 30
   },
   "occurrence": 1
 }
@@ -240,11 +240,11 @@ Aurelia value converter. Implementation: `SpreadIdentityValueConverter`.
     "range": {
       "end": {
         "character": 29,
-        "line": 29
+        "line": 30
       },
       "start": {
         "character": 16,
-        "line": 29
+        "line": 30
       }
     },
     "rangeText": "capturedValue"
@@ -269,11 +269,11 @@ capturedValue: string
   "anchor": "click.trigger=\"handleCaptured($event)\"",
   "at": "$event",
   "atOccurrence": 1,
-  "displayPosition": "src/template-spread-capture-semantics-app.html:32:35",
+  "displayPosition": "src/template-spread-capture-semantics-app.html:33:35",
   "file": "src/template-spread-capture-semantics-app.html",
   "lspPosition": {
     "character": 34,
-    "line": 31
+    "line": 32
   },
   "occurrence": 1
 }
@@ -290,11 +290,11 @@ capturedValue: string
     "range": {
       "end": {
         "character": 40,
-        "line": 31
+        "line": 32
       },
       "start": {
         "character": 34,
-        "line": 31
+        "line": 32
       }
     },
     "rangeText": "$event"
@@ -321,11 +321,11 @@ Listener contextual value.
   "anchor": "input-mark=\"receiver-local-mark\"",
   "at": "input-mark",
   "atOccurrence": 1,
-  "displayPosition": "src/template-spread-capture-semantics-app.html:35:5",
+  "displayPosition": "src/template-spread-capture-semantics-app.html:36:5",
   "file": "src/template-spread-capture-semantics-app.html",
   "lspPosition": {
     "character": 4,
-    "line": 34
+    "line": 35
   },
   "occurrence": 1
 }
@@ -342,11 +342,11 @@ Listener contextual value.
     "range": {
       "end": {
         "character": 14,
-        "line": 34
+        "line": 35
       },
       "start": {
         "character": 4,
-        "line": 34
+        "line": 35
       }
     },
     "rangeText": "input-mark"
