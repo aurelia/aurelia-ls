@@ -23,7 +23,7 @@ jobs:
   release:
     name: Verify and publish the exact VSIX
     runs-on: windows-latest
-    timeout-minutes: 90
+    timeout-minutes: 150
     defaults:
       run:
         shell: pwsh
@@ -172,6 +172,35 @@ jobs:
 
       - name: Test the bounded IDE support contracts
         run: pnpm test:ide:support
+
+      - name: Check aggregate IDE assurance
+        run: pnpm test:ide:assurance
+
+      - name: Test release VS Code Worker hosts
+        run: pnpm test:vscode:extension-host:release
+
+      - name: Recheck exact clean release tree
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $head = (git rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $head -ne '${{ steps.release.outputs.head }}') {
+            throw "Pre-package HEAD $head does not match admitted release commit ${{ steps.release.outputs.head }}."
+          }
+          $status = @(git status --porcelain=v1 --untracked-files=all --ignore-submodules=none)
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Unable to recheck the complete pre-package worktree state.'
+          }
+          if ($status.Count -ne 0) {
+            throw "Pre-package worktree is not clean:`n$($status -join "`n")"
+          }
+          $submodules = @(git submodule status --recursive)
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Unable to recheck recursive submodule state.'
+          }
+          $invalidSubmodules = @($submodules | Where-Object { $_ -notmatch '^ ' })
+          if ($invalidSubmodules.Count -ne 0) {
+            throw "Pre-package submodules are not at exact admitted commits:`n$($invalidSubmodules -join "`n")"
+          }
 
       - name: Package the extension exactly once
         run: pnpm package:ide:vsix

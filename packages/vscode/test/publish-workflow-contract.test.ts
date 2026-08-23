@@ -13,12 +13,14 @@ interface WorkflowStep {
 }
 
 interface WorkflowJob {
+  readonly name?: string;
   readonly needs?: unknown;
   readonly "runs-on"?: string;
+  readonly "timeout-minutes"?: number;
   readonly steps?: readonly WorkflowStep[];
 }
 
-interface PublishWorkflow {
+interface GithubWorkflow {
   readonly on?: {
     readonly workflow_dispatch?: {
       readonly inputs?: Readonly<Record<string, {
@@ -33,19 +35,27 @@ interface PublishWorkflow {
 }
 
 const workflowPath = new URL("../../../.github/workflows/publish-vscode.yml", import.meta.url);
+const ciWorkflowPath = new URL("../../../.github/workflows/ci.yml", import.meta.url);
 const extensionPackagePath = new URL("../package.json", import.meta.url);
 const rootPackagePath = new URL("../../../package.json", import.meta.url);
+const semanticPackagePath = new URL("../../semantic-runtime/package.json", import.meta.url);
+const lanePackagePath = new URL("../../lane-harness/package.json", import.meta.url);
 const workflowText = readFileSync(workflowPath, "utf8");
+const ciWorkflowText = readFileSync(ciWorkflowPath, "utf8");
 const extensionPackage = JSON.parse(readFileSync(extensionPackagePath, "utf8"));
 const rootPackage = JSON.parse(readFileSync(rootPackagePath, "utf8"));
+const semanticPackage = JSON.parse(readFileSync(semanticPackagePath, "utf8"));
+const lanePackage = JSON.parse(readFileSync(lanePackagePath, "utf8"));
 
 // Reuse the parser already locked below the pinned VSCE release tool instead of
 // adding another release dependency solely for this static workflow contract.
 const extensionRequire = createRequire(extensionPackagePath);
 const vsceRequire = createRequire(extensionRequire.resolve("@vscode/vsce/package.json"));
 const yaml = vsceRequire("js-yaml") as { load(value: string): unknown };
-const workflow = yaml.load(workflowText) as PublishWorkflow;
+const workflow = yaml.load(workflowText) as GithubWorkflow;
+const ciWorkflow = yaml.load(ciWorkflowText) as GithubWorkflow;
 const jobs = workflow.jobs ?? {};
+const ciJobs = ciWorkflow.jobs ?? {};
 const release = jobs["release"];
 const steps = release?.steps ?? [];
 
@@ -57,6 +67,20 @@ function namedStep(name: string): WorkflowStep {
 
 function stepIndex(name: string): number {
   return steps.findIndex((candidate) => candidate.name === name);
+}
+
+function namedJobStep(job: WorkflowJob | undefined, name: string): WorkflowStep {
+  const step = job?.steps?.find((candidate) => candidate.name === name);
+  if (step == null) throw new Error(`Missing workflow step: ${name}`);
+  return step;
+}
+
+function commandCount(workflowValue: GithubWorkflow, command: string): number {
+  return Object.values(workflowValue.jobs ?? {})
+    .flatMap((job) => job.steps ?? [])
+    .flatMap((step) => step.run?.split(/\r?\n/u) ?? [])
+    .filter((line) => line.trim() === command)
+    .length;
 }
 
 describe("VS Code publish workflow contract", () => {
@@ -119,6 +143,101 @@ describe("VS Code publish workflow contract", () => {
       .toBeLessThan(stepIndex("Publish the exact accepted VSIX"));
     expect(stepIndex("Publish the exact accepted VSIX"))
       .toBeLessThan(stepIndex("Final verification of the published-or-ready bytes"));
+  });
+
+  test("admits one canonical semantic/lane and Worker-host release gate in CI and publication", () => {
+    expect(rootPackage.scripts).toMatchObject({
+      "test:semantic-runtime": "pnpm --filter @aurelia-ls/semantic-runtime test",
+      "test:semantic-runtime:built": "node scripts/run-vitest.mjs packages/semantic-runtime/test",
+      "test:semantic-conformance:built":
+        "node packages/semantic-runtime/scripts/contract-semantic-conformance.mjs --strict",
+      "test:semantic-contracts:built":
+        "node packages/semantic-runtime/scripts/contract-suite.mjs --route diagnostics --route inquiry --route kernel --route type-system --skip-build && node packages/semantic-runtime/scripts/contract-suite.mjs --route evaluation --route di --domain \"mcp;api;open-seams;reason-kinds\" --skip-build",
+      "test:ide:lanes:built": "pnpm --filter @aurelia-ls/lane-harness detect",
+      "test:ide:assurance": "pnpm run build:ide:types && pnpm run test:ide:assurance:built",
+      "test:ide:assurance:built":
+        "pnpm run test:semantic-runtime:built && pnpm run test:semantic-conformance:built && pnpm run test:semantic-contracts:built && pnpm run test:ide:lanes:built",
+      "test:vscode:extension-host:release": "pnpm --filter aurelia-2 test:extension-host:release",
+    });
+    expect(semanticPackage.scripts.test)
+      .toBe("pnpm build && pnpm -w run test:semantic-runtime:built");
+    expect(lanePackage.scripts.detect).toBe("node scripts/detect-lanes.mjs");
+    expect(rootPackage.scripts["test:ide:support"])
+      .toContain("packages/lane-harness/test/detect-lanes.test.ts");
+    const aggregateScriptText = [
+      rootPackage.scripts["test:ide:lanes:built"],
+      rootPackage.scripts["test:semantic-contracts:built"],
+      rootPackage.scripts["test:ide:assurance"],
+      rootPackage.scripts["test:ide:assurance:built"],
+      lanePackage.scripts.detect,
+    ].join("\n");
+    expect(aggregateScriptText).not.toContain("--update");
+
+    expect(release).toMatchObject({
+      "runs-on": "windows-latest",
+      "timeout-minutes": 150,
+    });
+    expect(namedStep("Check aggregate IDE assurance").run)
+      .toBe("pnpm test:ide:assurance");
+    expect(namedStep("Test release VS Code Worker hosts").run)
+      .toBe("pnpm test:vscode:extension-host:release");
+    expect(commandCount(workflow, "pnpm test:ide:assurance")).toBe(1);
+    expect(commandCount(workflow, "pnpm test:ide:assurance:built")).toBe(0);
+    expect(commandCount(workflow, "pnpm test:vscode:extension-host:release")).toBe(1);
+    expect(stepIndex("Test the bounded IDE support contracts"))
+      .toBeLessThan(stepIndex("Check aggregate IDE assurance"));
+    expect(stepIndex("Check aggregate IDE assurance"))
+      .toBeLessThan(stepIndex("Test release VS Code Worker hosts"));
+    expect(stepIndex("Test release VS Code Worker hosts"))
+      .toBeLessThan(stepIndex("Recheck exact clean release tree"));
+    expect(stepIndex("Recheck exact clean release tree") + 1)
+      .toBe(stepIndex("Package the extension exactly once"));
+    expect(namedStep("Recheck exact clean release tree").run).toContain(
+      "git status --porcelain=v1 --untracked-files=all --ignore-submodules=none",
+    );
+    expect(namedStep("Recheck exact clean release tree").run)
+      .toContain("git submodule status --recursive");
+    expect(namedStep("Recheck exact clean release tree").run)
+      .toContain("steps.release.outputs.head");
+
+    const semanticRuntime = ciJobs["semantic-runtime"];
+    expect(semanticRuntime).toMatchObject({
+      name: "IDE Semantic Assurance",
+      "runs-on": "ubuntu-latest",
+      "timeout-minutes": 60,
+    });
+    expect(namedJobStep(semanticRuntime, "Check aggregate IDE assurance").run)
+      .toBe("pnpm test:ide:assurance");
+    expect(commandCount(ciWorkflow, "pnpm test:ide:assurance")).toBe(1);
+    expect(commandCount(ciWorkflow, "pnpm test:ide:assurance:built")).toBe(0);
+    const semanticRunText = semanticRuntime?.steps?.flatMap((step) => step.run ?? []).join("\n") ?? "";
+    expect(semanticRunText).not.toContain("contract-suite.mjs");
+
+    const ideSupport = ciJobs["ide-support"];
+    expect(ideSupport).toMatchObject({ "timeout-minutes": 30 });
+    expect(ideSupport?.steps?.some((step) => step.name === "Check aggregate IDE assurance"))
+      .toBe(false);
+
+    const hostJob = ciJobs["vscode-extension-host"];
+    expect(hostJob).toMatchObject({
+      "runs-on": "windows-latest",
+      "timeout-minutes": 60,
+    });
+    expect(namedJobStep(hostJob, "Test release VS Code Worker hosts").run)
+      .toBe("pnpm test:vscode:extension-host:release");
+    expect(commandCount(ciWorkflow, "pnpm test:vscode:extension-host:release")).toBe(1);
+    const hostRunText = hostJob?.steps?.flatMap((step) => step.run ?? []).join("\n") ?? "";
+    expect(hostRunText).not.toContain("pnpm test:vscode:extension-host:current-stable");
+    expect(hostRunText).not.toContain("pnpm test:vscode:extension-host:minimum");
+
+    expect(stepIndex("Test release VS Code Worker hosts"))
+      .toBeLessThan(stepIndex("Package the extension exactly once"));
+
+    expect(workflowText).not.toContain("--update");
+    expect(ciWorkflowText).not.toContain("--update");
+    const publicationRunText = steps.flatMap((step) => step.run ?? []).join("\n");
+    expect(publicationRunText).not.toContain("pnpm test:vscode:extension-host:current-stable");
+    expect(publicationRunText).not.toContain("pnpm test:vscode:extension-host:minimum");
   });
 
   test("attests and uploads only exact computed release and evidence paths", () => {

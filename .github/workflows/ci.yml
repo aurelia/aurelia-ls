@@ -14,11 +14,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # CI is currently scoped to semantic-runtime, IDE support, and MCP release confidence.
+  # CI is currently scoped to IDE semantic assurance, bounded host support, and MCP release confidence.
   # Legacy compiler/SSR/SSG/Vite/playground lanes are parked until they target semantic-runtime.
   semantic-runtime:
-    name: Semantic Runtime Contracts
+    name: IDE Semantic Assurance
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:
@@ -49,14 +50,8 @@ jobs:
       - name: Bootstrap linked Aurelia dependencies
         run: pnpm bootstrap:aurelia
 
-      - name: Build semantic runtime
-        run: pnpm --filter @aurelia-ls/semantic-runtime build
-
-      - name: Check public query/type-system contracts
-        run: node packages/semantic-runtime/scripts/contract-suite.mjs --route diagnostics --route inquiry --route kernel --route type-system --skip-build
-
-      - name: Check open-seam release contracts
-        run: node packages/semantic-runtime/scripts/contract-suite.mjs --route evaluation --route di --domain 'mcp;api;open-seams;reason-kinds' --skip-build
+      - name: Check aggregate IDE assurance
+        run: pnpm test:ide:assurance
 
   mcp-release:
     name: MCP Release Pack
@@ -169,7 +164,7 @@ jobs:
     name: VS Code Extension Host Support (Windows)
     runs-on: windows-latest
     needs: ide-support
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:
@@ -201,8 +196,5 @@ jobs:
       - name: Bootstrap linked Aurelia dependencies
         run: pnpm bootstrap:aurelia
 
-      - name: Test current stable VS Code with Worker transport
-        run: pnpm test:vscode:extension-host:current-stable
-
-      - name: Test exact minimum VS Code with Worker transport
-        run: pnpm test:vscode:extension-host:minimum
+      - name: Test release VS Code Worker hosts
+        run: pnpm test:vscode:extension-host:release

@@ -8,6 +8,7 @@
     "node": ">=22.13 <25"
   },
   "scripts": {
-    "lane": "node scripts/run-lane.mjs"
+    "lane": "node scripts/run-lane.mjs",
+    "detect": "node scripts/detect-lanes.mjs"
   }
 }

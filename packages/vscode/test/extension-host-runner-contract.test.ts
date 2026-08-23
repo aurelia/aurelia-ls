@@ -2677,12 +2677,20 @@ describe("Extension Host support runner", () => {
       .toBe("pnpm run test:extension-host");
     expect(extensionManifest.scripts?.["test:extension-host:minimum"])
       .toContain("--worker --minimum");
+    expect(extensionManifest.scripts?.["test:extension-host:release:built"])
+      .toBe(
+        "node scripts/run-extension-host-tests.mjs --worker --current-stable && "
+        + "node scripts/run-extension-host-tests.mjs --worker --minimum",
+      );
+    expect(extensionManifest.scripts?.["test:extension-host:release"])
+      .toBe("pnpm -w run build:ide:types && pnpm run bundle && pnpm run test:extension-host:release:built");
     expect(rootManifest.scripts).toMatchObject({
       "test:vscode:extension-host": "pnpm --filter aurelia-2 test:extension-host",
       "test:vscode:extension-host:worker": "pnpm --filter aurelia-2 test:extension-host:worker",
       "test:vscode:extension-host:ipc": "pnpm --filter aurelia-2 test:extension-host:ipc",
       "test:vscode:extension-host:current-stable": "pnpm --filter aurelia-2 test:extension-host:current-stable",
       "test:vscode:extension-host:minimum": "pnpm --filter aurelia-2 test:extension-host:minimum",
+      "test:vscode:extension-host:release": "pnpm --filter aurelia-2 test:extension-host:release",
     });
   });
 });

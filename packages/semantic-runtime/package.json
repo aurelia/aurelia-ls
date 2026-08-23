@@ -127,7 +127,7 @@
     "pressure:cursor-loci": "pnpm build && node scripts/cursor-locus-pressure.mjs",
     "profile:app-telemetry": "pnpm build && node --expose-gc scripts/app-telemetry.mjs",
     "profile:managed-query-latency": "pnpm build && node scripts/managed-query-latency.mjs",
-    "test": "pnpm build"
+    "test": "pnpm build && pnpm -w run test:semantic-runtime:built"
   },
   "dependencies": {
     "@rollup/pluginutils": "5.0.2",

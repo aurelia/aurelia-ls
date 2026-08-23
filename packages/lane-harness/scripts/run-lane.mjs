@@ -14,7 +14,17 @@ const REQUEST_TIMEOUT_MS = 30000;
 const STARTUP_TIMEOUT_MS = 10000;
 const SHUTDOWN_TIMEOUT_MS = 5000;
 const DIAGNOSTICS_TIMEOUT_MS = 30000;
-const SUPPORTED_LANES = new Set(["rename", "references", "hover", "completions", "definition", "documentHighlight", "diagnostics", "codeAction"]);
+export const supportedLaneNames = Object.freeze([
+  "rename",
+  "references",
+  "hover",
+  "completions",
+  "definition",
+  "documentHighlight",
+  "diagnostics",
+  "codeAction",
+]);
+const SUPPORTED_LANES = new Set(supportedLaneNames);
 
 // Regression guard: analysis qualifications must never become insertable completion candidates.
 const COMPLETION_GAP_MARKER_LABEL = "Aurelia analysis incomplete";
@@ -257,7 +267,7 @@ async function main() {
   if (!existsSync(SERVER_PATH)) {
     throw new HarnessError(
       `Language server build output is missing: ${path.relative(REPO_ROOT, SERVER_PATH)}\n` +
-        "Run the workspace build first, for example: pnpm --filter @aurelia-ls/semantic-runtime build",
+        "Build the IDE types first, for example: pnpm run build:ide:types",
     );
   }
 
