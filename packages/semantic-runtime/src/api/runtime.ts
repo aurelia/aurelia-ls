@@ -420,6 +420,7 @@ import {
   type SemanticRouterOverviewRequest,
   type SemanticRouterOverviewResult,
   type SemanticRuntimeAnswer,
+  type SemanticRuntimeAnswerCoverage,
   type SemanticRuntimeContinuationRow,
   type SemanticRuntimeCompositionResult,
   type SemanticTemplateContentProjectionResult,
@@ -4975,6 +4976,7 @@ export class SemanticApp {
     const detail = appQuery.detail ?? SemanticRuntimeDetail.Compact;
     const rows = this.appDiagnosticRowsForQuery(appQuery, detail);
     const paged = pageRows(rows, appQuery.page);
+    const coverage = this.appDiagnosticCoverageForQuery(appQuery);
     const typeScript = includeTypeScriptDiagnostics(appQuery)
       ? semanticTypeScriptEnvironmentSummary(this.emission.typeSystem)
       : null;
@@ -4987,7 +4989,7 @@ export class SemanticApp {
         rows: paged.rows,
         presentation: appDiagnosticPresentation(paged.rows, paged.rows.length === rows.length),
       },
-      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, coverage, page: paged.page },
     );
   }
 
@@ -5006,6 +5008,7 @@ export class SemanticApp {
     const diagnosticRows = this.appDiagnosticRowsForQuery(appQuery, detail);
     const rows = appDiagnosticSummaryRows(diagnosticRows);
     const paged = pageRows(rows, appQuery.page);
+    const coverage = this.appDiagnosticCoverageForQuery(appQuery);
     const typeScript = includeTypeScriptDiagnostics(appQuery)
       ? semanticTypeScriptEnvironmentSummary(this.emission.typeSystem)
       : null;
@@ -5018,7 +5021,7 @@ export class SemanticApp {
         typeScript,
         rows: paged.rows,
       },
-      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
+      { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, coverage, page: paged.page },
     );
   }
 
@@ -5112,6 +5115,10 @@ export class SemanticApp {
       routeRows,
       analysisLimitationRows,
     );
+  }
+
+  private appDiagnosticCoverageForQuery(query: SemanticAppQuery): SemanticRuntimeAnswerCoverage {
+    return this.templateQueries.templateDiagnosticCoverage(query.sourceFile);
   }
 
   evaluationIssues(

@@ -4,6 +4,10 @@ import {
   semanticSourceReferenceHostPath,
 } from '../boot/source-ownership.js';
 import { ResolvedEvaluationModuleSourceScope } from '../evaluation/package-origin.js';
+import {
+  registrationHidingOpenSeamsForContainer,
+  registrationOpenSeamCanHideResource,
+} from '../di/registration-open-pressure.js';
 import type { AddressHandle, IdentityHandle, ProductHandle } from '../kernel/handles.js';
 import {
   AureliaResourceIdentity,
@@ -740,10 +744,36 @@ export class ResourceInventoryBuilder {
       excludedCompilerSyntax: this.excludedCompilerSyntax.size,
       unnamedDefinitions: this.unnamedDefinitions,
       unresolvedModules: this.emission.resources.readUnresolvedModules().length,
-      openVisibility: this.candidates.filter((candidate) =>
-        candidate.visibilityRows.some((row) => row.visibilityKind === TemplateResourceVisibilityKind.Open)
-      ).length,
+      openVisibility: this.openVisibilityCount(),
     };
+  }
+
+  private openVisibilityCount(): number {
+    const openResourceCandidates = this.candidates.filter((candidate) =>
+      candidate.visibilityRows.some((row) => row.visibilityKind === TemplateResourceVisibilityKind.Open)
+    ).length;
+    const registrationBlockers = new Set<string>();
+    const containerIdentityHandles = new Set<IdentityHandle>();
+    for (const appRoot of this.emission.appWorld.configuration.appRoots) {
+      if (appRoot.container.identityHandle != null) {
+        containerIdentityHandles.add(appRoot.container.identityHandle);
+      }
+    }
+    for (const compilerWorld of this.emission.templates.compilerWorlds) {
+      containerIdentityHandles.add(compilerWorld.container.identityHandle);
+    }
+    for (const containerIdentityHandle of containerIdentityHandles) {
+      for (const seam of registrationHidingOpenSeamsForContainer(
+        this.emission.appWorld.diWorld,
+        this.emission.appWorld.configuration.openSeamScopes,
+        this.emission.containerChainFacts,
+        containerIdentityHandle,
+        (operation) => registrationOpenSeamCanHideResource(operation),
+      )) {
+        registrationBlockers.add(seam.handle);
+      }
+    }
+    return openResourceCandidates + registrationBlockers.size;
   }
 
   private rowForCandidate(candidate: ResourceInventoryCandidate): SemanticResourceInventoryRow {

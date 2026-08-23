@@ -1959,7 +1959,7 @@ function createTemplateCompletionAnswerFrame(
     ? null
     : expressionCompletionFrontier(expressionResult);
   const requiresBindingScope = shouldOfferBindingScopeCandidates(query.siteKind, expressionFrontier);
-  const needsResourceScope = shouldReadResourceScope(query.siteKind, expressionFrontier);
+  const needsResourceScope = templateCompletionReadsResourceScope(query.siteKind, expressionFrontier);
   const bindingScope = requiresBindingScope
     ? context.selectedScopeSlot?.scope
       ?? readBindingScope(store, query.bindingScopeProductHandle, missingInputs)
@@ -2242,7 +2242,7 @@ function collectBindingScopeCandidates(
 function collectResourceScopeCandidates(
   frame: TemplateCompletionAnswerFrame,
 ): void {
-  if (!shouldReadResourceScope(frame.query.siteKind, frame.expressionFrontier) || frame.resourceScope == null) {
+  if (!templateCompletionReadsResourceScope(frame.query.siteKind, frame.expressionFrontier) || frame.resourceScope == null) {
     return;
   }
   frame.candidates.push(...resourceScopeCandidates(
@@ -3364,7 +3364,8 @@ function shouldOfferBindingScopeCandidates(
   }
 }
 
-function shouldReadResourceScope(
+/** Whether this completion locus depends on the compiler world's resource membership being closed. */
+export function templateCompletionReadsResourceScope(
   siteKind: TemplateCompletionSiteKind,
   frontier: TemplateExpressionCompletionFrontier | null,
 ): boolean {

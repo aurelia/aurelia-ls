@@ -2,6 +2,7 @@ import ts from 'typescript';
 
 import {
   answerTemplateCompletion,
+  templateCompletionReadsResourceScope,
   templateRouteExpressionPathSpanForCursor,
   TemplateCompletionSiteKind,
   templateCompletionQueryForCursor,
@@ -59,8 +60,14 @@ import {
 } from '../di/registration-open-pressure.js';
 import type { RuntimeBindingScopeIssue } from '../template/runtime-binding-scope-issue.js';
 import type { RuntimeBindingIssue } from '../template/runtime-binding-issue.js';
-import type { RuntimeBindingBehaviorIssue } from '../template/runtime-binding-behavior.js';
-import type { RuntimeValueConverterIssue } from '../template/runtime-value-converter.js';
+import {
+  RuntimeBindingBehaviorIssueKind,
+  type RuntimeBindingBehaviorIssue,
+} from '../template/runtime-binding-behavior.js';
+import {
+  RuntimeValueConverterIssueKind,
+  type RuntimeValueConverterIssue,
+} from '../template/runtime-value-converter.js';
 import type { RuntimeControllerIssue } from '../template/runtime-controller-issue.js';
 import type { RuntimeRendererIssue } from '../template/runtime-renderer-issue.js';
 import { RefBindingInstruction } from '../template/instruction-ir.js';
@@ -306,6 +313,8 @@ interface TemplateCompletionAnswerContext {
   readonly selection: TemplateCompletionResourceSelection;
 }
 
+const TEMPLATE_RESOURCE_REGISTRATION_OPEN_MISSING_INPUT = 'template-resource-scope:registration-open';
+
 interface TemplateDiagnosticsScanContext {
   readonly store: KernelStore;
   readonly emission: AureliaAppWorldProjectEmission;
@@ -327,6 +336,48 @@ function templateCompletionRouterContext(
     configurableRoutes: emission.routeRecognizer.readConfigurableRoutes(),
     recognizedRoutes: emission.routeRecognition.readRecognizedRoutes(),
   };
+}
+
+function templateResourceRegistrationMissingInputs(
+  emission: AureliaAppWorldProjectEmission,
+  selection: TemplateCompletionResourceSelection,
+  cursorContext: TemplateCompletionCursorContext,
+): readonly string[] {
+  return templateCompletionReadsResourceScope(
+    cursorContext.query.siteKind,
+    cursorContext.expressionFrontier,
+  ) && registrationHidingResourceSeamsForSelection(emission, selection, null).length > 0
+    ? [TEMPLATE_RESOURCE_REGISTRATION_OPEN_MISSING_INPUT]
+    : [];
+}
+
+function registrationHidingResourceSeamsForSelection(
+  emission: AureliaAppWorldProjectEmission,
+  selection: TemplateCompletionResourceSelection,
+  requestedLookupKeys: ReadonlySet<string> | null,
+) {
+  return registrationHidingOpenSeamsForContainer(
+    emission.appWorld.diWorld,
+    emission.appWorld.configuration.openSeamScopes,
+    emission.containerChainFacts,
+    selection.resource.compilation.compilerWorld.container.identityHandle,
+    (operation) => registrationOpenSeamCanHideResource(operation, requestedLookupKeys),
+  );
+}
+
+function registrationCanHideNamedResource(
+  emission: AureliaAppWorldProjectEmission,
+  selection: TemplateCompletionResourceSelection,
+  resourceKind: ResourceDefinitionKind,
+  resourceName: string,
+): boolean {
+  const lookupKey = runtimeResourceKeyForKind(resourceKind, resourceName);
+  return lookupKey != null
+    && registrationHidingResourceSeamsForSelection(
+      emission,
+      selection,
+      new Set([lookupKey]),
+    ).length > 0;
 }
 
 interface TemplateDiagnosticOrigin {
@@ -454,6 +505,7 @@ function readTemplateCursorInfoValue(
     ...cursorContext.missingInputs,
     ...bindableUsageModeMissingInputs(selectedBindableUsageMode),
     ...(selectedCall?.openReason == null ? [] : ['selected-call-signature:open']),
+    ...templateResourceRegistrationMissingInputs(emission, readContext.selection, cursorContext),
   ])];
   const cursorOffset = readContext.locus.cursor.offset;
   const baseValue = templateCursorInfoResult(
@@ -930,6 +982,7 @@ export function readSemanticTemplateDiagnostics(
   );
   const paged = pageRows(rows, page);
   const scopedToSourceFile = sourceFile != null;
+  const coverage = readSemanticTemplateDiagnosticCoverage(store, emission, sourceFile);
   return publicAnswer(
     SemanticRuntimeAnswerResult.Answered,
     !scopedToSourceFile
@@ -939,8 +992,24 @@ export function readSemanticTemplateDiagnostics(
       displayText: semanticTemplateDiagnosticsDisplayText(paged.rows, rows.length, scopedToSourceFile),
       rows: paged.rows,
     },
-    { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
+    { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, coverage, page: paged.page },
   );
+}
+
+/** Exact diagnostic completeness for the selected template set's consulting registration chains. */
+export function readSemanticTemplateDiagnosticCoverage(
+  store: KernelStore,
+  emission: AureliaAppWorldProjectEmission,
+  sourceFile: SemanticRuntimeSourceFileInput | null | undefined,
+): SemanticRuntimeAnswerCoverage {
+  if (emission.project.sourceDiscovery?.truncated === true) {
+    return SemanticRuntimeAnswerCoverage.Truncated;
+  }
+  return templateDiagnosticSelectionsForSource(store, emission, sourceFile).some((selection) =>
+    registrationHidingResourceSeamsForSelection(emission, selection, null).length > 0
+  )
+    ? SemanticRuntimeAnswerCoverage.Open
+    : SemanticRuntimeAnswerCoverage.Complete;
 }
 
 function semanticTemplateDiagnosticsDisplayText(
@@ -1134,6 +1203,7 @@ function readTemplateCompletion(
     answer,
     includeHandles,
     page,
+    templateResourceRegistrationMissingInputs(emission, readContext.selection, cursorContext),
   );
 }
 
@@ -1197,8 +1267,7 @@ export function readTemplateDiagnosticRows(
 ): readonly SemanticTemplateDiagnosticRow[] {
   const projectionPolicy = normalizeSemanticDiagnosticProjectionPolicy(diagnosticProjection);
   const context = templateDiagnosticsScanContext(store, workspaceRootDir, emission, includeHandles);
-  const selections = templateResourceSelections(store, emission)
-    .filter((selection) => templateDiagnosticSelectionMatchesFile(store, selection, sourceFile));
+  const selections = templateDiagnosticSelectionsForSource(store, emission, sourceFile);
   const htmlRecovery = htmlRecoveryDiagnosticProjection(store, selections, sourceFile, context);
   const rows = [
     ...htmlRecovery.rows,
@@ -1253,6 +1322,15 @@ export function readTemplateDiagnosticRows(
     || (left.frameworkErrorCode ?? '').localeCompare(right.frameworkErrorCode ?? '')
     || left.diagnosticKind.localeCompare(right.diagnosticKind)
   );
+}
+
+function templateDiagnosticSelectionsForSource(
+  store: KernelStore,
+  emission: AureliaAppWorldProjectEmission,
+  sourceFile: SemanticRuntimeSourceFileInput | null | undefined,
+): readonly TemplateCompletionResourceSelection[] {
+  return templateResourceSelections(store, emission)
+    .filter((selection) => templateDiagnosticSelectionMatchesFile(store, selection, sourceFile));
 }
 
 interface HtmlRecoveryDiagnosticProjection {
@@ -2426,19 +2504,27 @@ function templateCompilerIssueDiagnosticRowsForSelection(
   context: TemplateDiagnosticsScanContext,
 ): readonly SemanticTemplateDiagnosticRow[] {
   return templateCompilerIssues(store, selection.resource).flatMap((issue) => {
+    const unknownCommandLookupKeys = issue.issueKind === TemplateCompilerIssueKind.UnknownBindingCommand
+      ? unknownBindingCommandLookupKeysForIssue(store, selection, issue)
+      : null;
+    if (
+      unknownCommandLookupKeys != null
+      && registrationHidingResourceSeamsForSelection(
+        context.emission,
+        selection,
+        unknownCommandLookupKeys,
+      ).length > 0
+    ) {
+      return [];
+    }
     if (
       issue.issueKind === TemplateCompilerIssueKind.ProjectionOnNonCustomElement
       && (
         selection.resource.compilation.appRootDefinitionProductHandle == null
-        || registrationHidingOpenSeamsForContainer(
-          context.emission.appWorld.diWorld,
-          context.emission.appWorld.configuration.openSeamScopes,
-          context.emission.containerChainFacts,
-          selection.resource.compilation.compilerWorld.container.identityHandle,
-          (operation) => registrationOpenSeamCanHideResource(
-            operation,
-            projectionTargetLookupKeysForIssue(selection, issue),
-          ),
+        || registrationHidingResourceSeamsForSelection(
+          context.emission,
+          selection,
+          projectionTargetLookupKeysForIssue(selection, issue),
         ).length > 0
       )
     ) {
@@ -2502,6 +2588,25 @@ function projectionTargetLookupKeysForIssue(
   if (parent == null) return null;
   const lookupName = runtimeElementResourceName(parent.tagName, parent.namespace);
   const lookupKey = runtimeResourceKeyForKind(ResourceDefinitionKind.CustomElement, lookupName);
+  return lookupKey == null ? null : new Set([lookupKey]);
+}
+
+function unknownBindingCommandLookupKeysForIssue(
+  store: KernelStore,
+  selection: TemplateCompletionResourceSelection,
+  issue: TemplateCompilerIssue,
+): ReadonlySet<string> | null {
+  const issueSource = semanticExactSourceReference(describeAddress(store, issue.sourceAddressHandle));
+  if (issueSource == null) return null;
+  const syntax = selection.resource.compilation.authoredAttributeSyntaxes.find((candidate) =>
+    candidate.command != null
+    && semanticTemplateCursorSourcesMatchExactly(
+      semanticExactSourceReference(describeAddress(store, candidate.commandSourceAddressHandle)),
+      issueSource,
+    )
+  ) ?? null;
+  if (syntax?.command == null) return null;
+  const lookupKey = runtimeResourceKeyForKind(ResourceDefinitionKind.BindingCommand, syntax.command);
   return lookupKey == null ? null : new Set([lookupKey]);
 }
 
@@ -2675,6 +2780,17 @@ function runtimeBindingBehaviorIssueDiagnosticRowsForSelection(
   context: TemplateDiagnosticsScanContext,
 ): readonly SemanticTemplateDiagnosticRow[] {
   return selection.resource.runtimeAnalysis.bindingBehavior.issues.flatMap((issue) => {
+    if (
+      issue.issueKind === RuntimeBindingBehaviorIssueKind.ResourceNotFound
+      && registrationCanHideNamedResource(
+        context.emission,
+        selection,
+        ResourceDefinitionKind.BindingBehavior,
+        issue.application.behaviorName,
+      )
+    ) {
+      return [];
+    }
     const source = sourceReferenceForRuntimeBindingBehaviorIssue(store, issue);
     if (source == null || !sourceReferenceMatchesFile(source, sourceFile)) {
       return [];
@@ -2712,6 +2828,17 @@ function runtimeValueConverterIssueDiagnosticRowsForSelection(
   context: TemplateDiagnosticsScanContext,
 ): readonly SemanticTemplateDiagnosticRow[] {
   return selection.resource.runtimeAnalysis.valueConverter.issues.flatMap((issue) => {
+    if (
+      issue.issueKind === RuntimeValueConverterIssueKind.ResourceNotFound
+      && registrationCanHideNamedResource(
+        context.emission,
+        selection,
+        ResourceDefinitionKind.ValueConverter,
+        issue.application.converterName,
+      )
+    ) {
+      return [];
+    }
     const source = sourceReferenceForRuntimeValueConverterIssue(store, issue);
     if (source == null || !sourceReferenceMatchesFile(source, sourceFile)) {
       return [];
@@ -3128,14 +3255,19 @@ function templateCompletionReadResult(
   context: TemplateCompletionAnswerContext,
   answer: ReturnType<typeof answerTemplateCompletion>,
   includeHandles: boolean,
-  pageInput?: SemanticRuntimePageInput,
+  pageInput: SemanticRuntimePageInput | undefined,
+  additionalMissingInputs: readonly string[] = [],
 ): TemplateCompletionReadResult {
   const replacementSource = templateCompletionReplacementSource(store, context);
   const rows = answer.value.candidates.map((candidate) =>
     templateCompletionCandidateRow(candidate, replacementSource, includeHandles)
   );
   const paged = pageRows(rows, pageInput);
-  const missingInputs = [...new Set([...context.cursorContext.missingInputs, ...answer.value.missingInputs])];
+  const missingInputs = [...new Set([
+    ...context.cursorContext.missingInputs,
+    ...answer.value.missingInputs,
+    ...additionalMissingInputs,
+  ])];
   const selection = answer.selection;
   const inquiryCoverage = answer.coverage;
   const coverage = missingInputs.length > 0 && inquiryCoverage === SemanticRuntimeAnswerCoverage.Complete
@@ -3590,6 +3722,7 @@ function cursorSelectedMemberActiveSource(
 }
 
 const resourceAvailabilityMissingInputs = new Set<string>([
+  TEMPLATE_RESOURCE_REGISTRATION_OPEN_MISSING_INPUT,
   FrameworkRegistrationCapability.RuntimeHtmlDefaultResources,
   FrameworkRegistrationCapability.I18nDefaultResources,
   FrameworkRegistrationCapability.ValidationHtmlDefaultResources,

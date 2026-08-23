@@ -598,6 +598,24 @@ describe('resource discovery', () => {
       }) as SemanticRuntimeAnswer<SemanticTemplateResourceAvailabilityResult>;
       expect(staleScope.selection).toBe(SemanticRuntimeAnswerSelection.Absent);
       expect(staleScope.coverage).toBe(SemanticRuntimeAnswerCoverage.Truncated);
+
+      const templateDiagnostics = await runtime.answerAppQuery({
+        kind: SemanticAppQueryKind.TemplateDiagnostics,
+        includeAuthoringTemplates: true,
+      });
+      expect(templateDiagnostics.coverage).toBe(SemanticRuntimeAnswerCoverage.Truncated);
+
+      const appDiagnostics = await runtime.answerAppQuery({
+        kind: SemanticAppQueryKind.AppDiagnostics,
+        includeAuthoringTemplates: true,
+      });
+      expect(appDiagnostics.coverage).toBe(SemanticRuntimeAnswerCoverage.Truncated);
+
+      const appDiagnosticSummary = await runtime.answerAppQuery({
+        kind: SemanticAppQueryKind.AppDiagnosticSummary,
+        includeAuthoringTemplates: true,
+      });
+      expect(appDiagnosticSummary.coverage).toBe(SemanticRuntimeAnswerCoverage.Truncated);
     } finally {
       await rm(workspaceRoot, { recursive: true, force: true });
     }

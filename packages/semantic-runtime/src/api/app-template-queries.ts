@@ -46,6 +46,7 @@ import {
 import {
   readSemanticTemplateCursorInfo,
   readSemanticTemplateCompletions,
+  readSemanticTemplateDiagnosticCoverage,
   readSemanticTemplateDiagnostics,
   readTemplateDiagnosticRows,
 } from './template-completion.js';
@@ -75,6 +76,7 @@ import {
   type SemanticAppQuery,
   type SemanticRuntimeAnswer,
   type SemanticRuntimePageInput,
+  type SemanticRuntimeSourceFileInput,
   type SemanticTemplateCompilationResult,
   type SemanticTemplateCompilationRow,
   type SemanticTemplateCompletionResult,
@@ -907,6 +909,13 @@ export class SemanticAppTemplateQueries {
       (query.detail ?? SemanticRuntimeDetail.Compact) === SemanticRuntimeDetail.Handles,
       query.diagnosticProjection,
     );
+  }
+
+  templateDiagnosticCoverage(
+    sourceFile: SemanticRuntimeSourceFileInput | null | undefined,
+  ): SemanticRuntimeAnswerCoverage {
+    this.requireCurrentGeneration();
+    return readSemanticTemplateDiagnosticCoverage(this.store, this.emission, sourceFile);
   }
 
   private requireCurrentGeneration(): void {
