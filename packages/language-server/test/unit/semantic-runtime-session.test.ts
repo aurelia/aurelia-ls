@@ -998,7 +998,7 @@ describe("SemanticRuntimeLspSession", () => {
     }).toEqual({
       result: "answered",
       selection: "not-applicable",
-      coverage: "complete",
+      coverage: "open",
       completeness: {
         fullDefinitions: 601,
         headerOnly: 5,
@@ -1007,7 +1007,7 @@ describe("SemanticRuntimeLspSession", () => {
         excludedCompilerSyntax: 61,
         unnamedDefinitions: 0,
         unresolvedModules: 0,
-        openVisibility: 0,
+        openVisibility: 1,
       },
       rowCount: 606,
     });
@@ -2591,27 +2591,50 @@ describe("SemanticRuntimeLspSession diagnostic receipt cache", () => {
     await session.dispose();
   });
 
-  test("reads exact external mapping sources without granting workspace document ownership", async () => {
+  test("reads and pull-validates external mapping sources without granting document ownership", async () => {
     const fixtureRoot = minimalFixtureRoot();
+    const htmlPath = path.join(fixtureRoot, "src/app.html");
+    const htmlUri = pathToFileURL(htmlPath).toString();
     const externalRoot = fs.mkdtempSync(path.join(tmpdir(), "aurelia-ls-mapping-source-"));
     temporaryWorkspaceRoots.push(externalRoot);
     const externalPath = path.join(externalRoot, "lib.external.d.ts");
     const externalText = "interface ExternalSurface { readonly value: string; }\n";
     fs.writeFileSync(externalPath, externalText, "utf8");
     const externalUri = pathToFileURL(externalPath).toString();
-    const session = createSession(fixtureRoot, new TestDocumentStore());
-
-    const result = await session.runRequest(null, (operation) => ({
+    const documents = new TestDocumentStore();
+    documents.add(TextDocument.create(htmlUri, "html", 1, fs.readFileSync(htmlPath, "utf8")));
+    const session = createSession(fixtureRoot, documents);
+    const render = vi.fn((operation) => [{
       text: operation.documents.lookupText(externalUri),
       authoredSnapshot: operation.documents.lookupDocumentSnapshot(externalUri),
       workspaceSnapshot: operation.documents.lookupWorkspaceDocumentSnapshot(externalUri),
-    }));
+    }]);
 
-    expect(result).toEqual({
+    const first = await session.runDiagnosticRequest(null, diagnosticRequest(htmlUri), render);
+    if (first.kind !== "full") throw new Error("Expected a full diagnostic report.");
+
+    expect(first.items).toEqual([{
       text: externalText,
       authoredSnapshot: null,
       workspaceSnapshot: null,
-    });
+    }]);
+
+    const changedExternalText = externalText.replace("string", "number");
+    fs.writeFileSync(externalPath, changedExternalText, "utf8");
+    const second = await session.runDiagnosticRequest(
+      null,
+      diagnosticRequest(htmlUri, first.resultId),
+      render,
+    );
+
+    expect(second.kind).toBe("full");
+    if (second.kind !== "full") throw new Error("Expected an external-source change to force a full report.");
+    expect(second.items).toEqual([{
+      text: changedExternalText,
+      authoredSnapshot: null,
+      workspaceSnapshot: null,
+    }]);
+    expect(render).toHaveBeenCalledTimes(2);
     await session.dispose();
   });
 
