@@ -26,6 +26,11 @@ import {
 } from "../inquiry/runtime/framework-capability-territory.js";
 import type { SelfValue } from "../inquiry/runtime/self-value.js";
 import type { PluginArchitectureValue } from "../inquiry/runtime/plugin-architecture-lenses.js";
+import { productArchitectureSameHandleFanOutGroups } from "../inquiry/runtime/product-architecture-field-provenance-pressure.js";
+import {
+  isProductArchitectureSameHandleFanOutCandidate,
+  readProductArchitectureKernelRecordRows,
+} from "../inquiry/runtime/product-architecture-kernel-records.js";
 import type { WorkspaceArchitectureValue } from "../inquiry/runtime/workspace-architecture-lenses.js";
 import { createApi } from "../session/index.js";
 import {
@@ -37,6 +42,7 @@ import {
 const api = createApi({ idleTtlMs: 30_000, requestTimeoutMs: 180_000 });
 
 assertAuLinkFacetParsing();
+assertFieldProvenanceExpressionOrigins();
 
 const mapAnswer = await api.map("script-self-check");
 const map = mapAnswer.value;
@@ -699,5 +705,150 @@ function assertAuLinkFacetParsing(): void {
         `auLink facet parser misclassified ${testCase.options ?? "an omitted options argument"}.`,
       );
     }
+  }
+}
+
+function assertFieldProvenanceExpressionOrigins(): void {
+  const sourceFile = ts.createSourceFile(
+    "field-provenance-expression-origin-self-check.ts",
+    [
+      "function remap(provenance: readonly { field: string; provenanceHandle: string }[]) {",
+      "  return provenance.map((entry) => {",
+      "    switch (entry.field) {",
+      "      case 'first': return new FieldProvenance('mappedFirst', entry.provenanceHandle);",
+      "      case 'second': return new FieldProvenance('mappedSecond', entry.provenanceHandle);",
+      "      case 'third': return new FieldProvenance('mappedThird', entry.provenanceHandle);",
+      "      default: return new FieldProvenance('mappedOther', entry.provenanceHandle);",
+      "    }",
+      "  });",
+      "}",
+      "type Entry = { field: string; provenanceHandle: string };",
+      "function wrappedAlias(provenance: readonly Entry[]) {",
+      "  return provenance.map((((entry) => {",
+      "    const handle = entry.provenanceHandle;",
+      "    switch (entry.field) {",
+      "      case 'first': return new FieldProvenance('wrappedFirst', handle);",
+      "      case 'second': return new FieldProvenance('wrappedSecond', handle);",
+      "      case 'third': return new FieldProvenance('wrappedThird', handle);",
+      "      default: return new FieldProvenance('wrappedOther', handle);",
+      "    }",
+      "  }) satisfies (entry: Entry) => unknown));",
+      "}",
+      "function coequalCallback(provenance: readonly Entry[]) {",
+      "  return provenance.map((entry) => [",
+      "    new FieldProvenance('coequalFirst', entry.provenanceHandle),",
+      "    new FieldProvenance('coequalSecond', entry.provenanceHandle),",
+      "    new FieldProvenance('coequalThird', entry.provenanceHandle),",
+      "    new FieldProvenance('coequalFourth', entry.provenanceHandle),",
+      "  ]);",
+      "}",
+      "function nestedClosure(provenance: readonly Entry[]) {",
+      "  return provenance.map((entry) => {",
+      "    const nested = () => [",
+      "      new FieldProvenance('nestedFirst', entry.provenanceHandle),",
+      "      new FieldProvenance('nestedSecond', entry.provenanceHandle),",
+      "      new FieldProvenance('nestedThird', entry.provenanceHandle),",
+      "      new FieldProvenance('nestedFourth', entry.provenanceHandle),",
+      "    ];",
+      "    return nested();",
+      "  });",
+      "}",
+      "function stableShadow(provenance: readonly Entry[], stableHandle: string) {",
+      "  return provenance.map((entry) => {",
+      "    {",
+      "      const entry = { field: 'stable', provenanceHandle: stableHandle };",
+      "      return [",
+      "        new FieldProvenance('shadowFirst', entry.provenanceHandle),",
+      "        new FieldProvenance('shadowSecond', entry.provenanceHandle),",
+      "        new FieldProvenance('shadowThird', entry.provenanceHandle),",
+      "        new FieldProvenance('shadowFourth', entry.provenanceHandle),",
+      "      ];",
+      "    }",
+      "  });",
+      "}",
+      "function direct(provenanceHandle: string) {",
+      "  return [",
+      "    new FieldProvenance('first', provenanceHandle),",
+      "    new FieldProvenance('second', provenanceHandle),",
+      "    new FieldProvenance('third', provenanceHandle),",
+      "    new FieldProvenance('fourth', provenanceHandle),",
+      "  ];",
+      "}",
+    ].join("\n"),
+    ts.ScriptTarget.ES2023,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const rows = readProductArchitectureKernelRecordRows([{
+    sourceFile,
+    filePath: "packages/atlas/self-check/field-provenance-expression-origin.ts",
+    area: "self-check",
+  }]).fieldProvenanceConstructions;
+  const callbackRows = rows.filter((row) => row.ownerFunctionName === "remap");
+  const wrappedAliasRows = rows.filter((row) => row.ownerFunctionName === "wrappedAlias");
+  const coequalCallbackRows = rows.filter((row) => row.ownerFunctionName === "coequalCallback");
+  const nestedClosureRows = rows.filter((row) => row.ownerFunctionName === "nestedClosure.nested");
+  const stableShadowRows = rows.filter((row) => row.ownerFunctionName === "stableShadow");
+  const directRows = rows.filter((row) => row.ownerFunctionName === "direct");
+  if (
+    callbackRows.length !== 4 ||
+    callbackRows.some((row) =>
+      row.provenanceExpressionOrigin !== "exclusive-callback-switch-remap" ||
+      isProductArchitectureSameHandleFanOutCandidate(row)
+    ) ||
+    productArchitectureSameHandleFanOutGroups(callbackRows).length !== 0
+  ) {
+    throw new Error("Atlas did not exclude callback-parameter provenance expressions from same-handle pressure.");
+  }
+  if (
+    wrappedAliasRows.length !== 4 ||
+    wrappedAliasRows.some((row) =>
+      row.provenanceExpression !== "handle" ||
+      row.provenanceExpressionOrigin !== "exclusive-callback-switch-remap"
+    ) ||
+    productArchitectureSameHandleFanOutGroups(wrappedAliasRows).length !== 0
+  ) {
+    throw new Error("Atlas lost callback provenance through a transparent wrapper or local alias.");
+  }
+  if (
+    coequalCallbackRows.length !== 4 ||
+    coequalCallbackRows.some((row) =>
+      row.provenanceExpressionOrigin !== "callback-parameter" ||
+      !isProductArchitectureSameHandleFanOutCandidate(row)
+    ) ||
+    productArchitectureSameHandleFanOutGroups(coequalCallbackRows).length !== 1
+  ) {
+    throw new Error("Atlas suppressed co-reachable callback field-provenance constructions.");
+  }
+  if (
+    nestedClosureRows.length !== 4 ||
+    nestedClosureRows.some((row) =>
+      row.provenanceExpressionOrigin === "exclusive-callback-switch-remap" ||
+      !isProductArchitectureSameHandleFanOutCandidate(row)
+    ) ||
+    productArchitectureSameHandleFanOutGroups(nestedClosureRows).length !== 1
+  ) {
+    throw new Error("Atlas suppressed callback provenance captured by a nested closure.");
+  }
+  if (
+    stableShadowRows.length !== 4 ||
+    stableShadowRows.some((row) =>
+      row.provenanceExpressionOrigin !== "other"
+    ) ||
+    productArchitectureSameHandleFanOutGroups(stableShadowRows).length !== 1
+  ) {
+    throw new Error("Atlas attributed a lexically shadowed stable handle to the callback parameter.");
+  }
+  if (
+    directRows.length !== 4 ||
+    new Set(directRows.map((row) => row.fieldNameLiteral)).size !== 4 ||
+    directRows.some((row) =>
+      row.provenanceExpression !== "provenanceHandle" ||
+      row.provenanceExpressionOrigin !== "other" ||
+      !isProductArchitectureSameHandleFanOutCandidate(row)
+    ) ||
+    productArchitectureSameHandleFanOutGroups(directRows).length !== 1
+  ) {
+    throw new Error("Atlas lost genuine direct shared-handle fan-out eligibility.");
   }
 }

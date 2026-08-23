@@ -81,6 +81,11 @@ export interface ProductArchitectureKernelRecordBatchRow {
 }
 
 /** Source-level construction of one field-level provenance link. */
+export type ProductArchitectureProvenanceExpressionOrigin =
+  | "exclusive-callback-switch-remap"
+  | "callback-parameter"
+  | "other";
+
 export interface ProductArchitectureFieldProvenanceConstructionRow {
   /** Stable row id. */
   readonly id: string;
@@ -100,6 +105,8 @@ export interface ProductArchitectureFieldProvenanceConstructionRow {
   readonly fieldNameLiteral: string | null;
   /** Expression supplying the provenance handle. */
   readonly provenanceExpression: string | null;
+  /** Whether the expression reads a parameter whose callback can receive a different handle per invocation. */
+  readonly provenanceExpressionOrigin: ProductArchitectureProvenanceExpressionOrigin;
   /** Repository-relative source file path. */
   readonly filePath: string;
   /** Top-level semantic-runtime source area containing the construction site. */
@@ -119,6 +126,13 @@ export interface ProductArchitectureKernelRecordRows {
   readonly constructions: readonly ProductArchitectureKernelRecordConstructionRow[];
   readonly batches: readonly ProductArchitectureKernelRecordBatchRow[];
   readonly fieldProvenanceConstructions: readonly ProductArchitectureFieldProvenanceConstructionRow[];
+}
+
+/** True when lexical expression equality can remain eligible for same-handle pressure. */
+export function isProductArchitectureSameHandleFanOutCandidate(
+  row: { readonly provenanceExpressionOrigin: ProductArchitectureProvenanceExpressionOrigin },
+): boolean {
+  return row.provenanceExpressionOrigin !== "exclusive-callback-switch-remap";
 }
 
 interface KernelRecordClassDefinition {
@@ -359,6 +373,7 @@ function fieldProvenanceConstructionRow(
     fieldNameExpression,
     fieldNameLiteral,
     provenanceExpression,
+    provenanceExpressionOrigin: provenanceExpressionOrigin(node, provenanceArgument),
     filePath: entry.filePath,
     area: entry.area,
     ownerClassName: context.className,
@@ -385,6 +400,7 @@ function fieldProvenanceRowsForHelperCall(
   const provenanceExpression = provenanceArgument === undefined
     ? null
     : compactSourceExpressionText(provenanceArgument, entry.sourceFile);
+  const expressionOrigin = provenanceExpressionOrigin(node, provenanceArgument);
   const candidates = fieldProvenanceFieldCandidatesForArgument(
     entry,
     fieldArgument,
@@ -398,6 +414,7 @@ function fieldProvenanceRowsForHelperCall(
       fieldNameExpression: candidate.fieldNameExpression,
       fieldNameLiteral: candidate.fieldNameLiteral,
       provenanceExpression,
+      provenanceExpressionOrigin: expressionOrigin,
       filePath: entry.filePath,
       area: entry.area,
       ownerClassName: context.className,
@@ -577,6 +594,282 @@ function isNullishExpression(expression: ts.Expression): boolean {
       ts.isNumericLiteral(current.expression) &&
       current.expression.text === "0"
     );
+}
+
+function provenanceExpressionOrigin(
+  construction: ts.NewExpression | ts.CallExpression,
+  expression: ts.Expression | undefined,
+): ProductArchitectureProvenanceExpressionOrigin {
+  if (expression === undefined) {
+    return "other";
+  }
+  const callback = enclosingCallArgumentCallback(expression);
+  if (callback === null) {
+    return "other";
+  }
+  if (!expressionDependsOnCallbackParameter(expression, callback, new Set())) {
+    return "other";
+  }
+  return ts.isNewExpression(construction) && isExclusiveCallbackSwitchReturn(construction, callback)
+    ? "exclusive-callback-switch-remap"
+    : "callback-parameter";
+}
+
+function isExclusiveCallbackSwitchReturn(
+  construction: ts.NewExpression,
+  callback: ts.ArrowFunction | ts.FunctionExpression,
+): boolean {
+  const returnStatement = construction.parent;
+  if (
+    !ts.isReturnStatement(returnStatement) ||
+    returnStatement.expression !== construction ||
+    !(
+      ts.isCaseClause(returnStatement.parent) ||
+      ts.isDefaultClause(returnStatement.parent)
+    )
+  ) {
+    return false;
+  }
+  const switchStatement = returnStatement.parent.parent.parent;
+  if (!ts.isSwitchStatement(switchStatement)) {
+    return false;
+  }
+  let current: ts.Node | undefined = switchStatement.parent;
+  while (current !== undefined && current !== callback) {
+    if (ts.isFunctionLike(current)) {
+      return false;
+    }
+    current = current.parent;
+  }
+  return current === callback;
+}
+
+function enclosingCallArgumentCallback(
+  node: ts.Node,
+): ts.ArrowFunction | ts.FunctionExpression | null {
+  let current = node.parent;
+  while (current !== undefined && !ts.isSourceFile(current)) {
+    if (ts.isFunctionLike(current)) {
+      if (ts.isArrowFunction(current) || ts.isFunctionExpression(current)) {
+        let argument: ts.Expression = current;
+        while (isTransparentExpressionWrapper(argument.parent, argument)) {
+          argument = argument.parent;
+        }
+        if (
+          ts.isCallExpression(argument.parent) &&
+          argument.parent.arguments.some((candidate) => candidate === argument)
+        ) {
+          return current;
+        }
+      }
+      return null;
+    }
+    current = current.parent;
+  }
+  return null;
+}
+
+function isTransparentExpressionWrapper(
+  parent: ts.Node | undefined,
+  child: ts.Expression,
+): parent is ts.Expression {
+  return parent !== undefined && (
+    (
+      (
+        ts.isParenthesizedExpression(parent) ||
+        ts.isAsExpression(parent) ||
+        ts.isTypeAssertionExpression(parent) ||
+        ts.isNonNullExpression(parent) ||
+        ts.isSatisfiesExpression(parent)
+      ) &&
+      parent.expression === child
+    )
+  );
+}
+
+interface ProductArchitectureLexicalBinding {
+  readonly declaration: ts.Node;
+  readonly initializer: ts.Expression | null;
+  readonly callbackParameter: boolean;
+}
+
+function expressionDependsOnCallbackParameter(
+  expression: ts.Expression,
+  callback: ts.ArrowFunction | ts.FunctionExpression,
+  visitedBindings: Set<ts.Node>,
+): boolean {
+  let depends = false;
+  const visit = (node: ts.Node): void => {
+    if (depends || ts.isTypeNode(node)) {
+      return;
+    }
+    if (node !== expression && ts.isFunctionLike(node)) {
+      return;
+    }
+    if (ts.isIdentifier(node) && !isNonValueIdentifierPosition(node)) {
+      const binding = lexicalBindingForIdentifier(node, callback);
+      if (binding?.callbackParameter === true) {
+        depends = true;
+        return;
+      }
+      if (
+        binding?.initializer != null &&
+        !visitedBindings.has(binding.declaration)
+      ) {
+        visitedBindings.add(binding.declaration);
+        depends = expressionDependsOnCallbackParameter(
+          binding.initializer,
+          callback,
+          visitedBindings,
+        );
+        visitedBindings.delete(binding.declaration);
+        if (depends) {
+          return;
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(expression);
+  return depends;
+}
+
+function lexicalBindingForIdentifier(
+  identifier: ts.Identifier,
+  callback: ts.ArrowFunction | ts.FunctionExpression,
+): ProductArchitectureLexicalBinding | null {
+  let current: ts.Node | undefined = identifier.parent;
+  while (current !== undefined) {
+    const local = lexicalBindingInScope(current, identifier.text, callback);
+    if (local !== null) {
+      return local;
+    }
+    if (current === callback || ts.isFunctionLike(current)) {
+      return null;
+    }
+    current = current.parent;
+  }
+  return null;
+}
+
+function lexicalBindingInScope(
+  scope: ts.Node,
+  name: string,
+  callback: ts.ArrowFunction | ts.FunctionExpression,
+): ProductArchitectureLexicalBinding | null {
+  if (scope === callback) {
+    for (const parameter of callback.parameters) {
+      const declaration = bindingDeclarationForName(parameter.name, name);
+      if (declaration !== null) {
+        return { declaration, initializer: null, callbackParameter: true };
+      }
+    }
+    return null;
+  }
+  if (ts.isBlock(scope) || ts.isSourceFile(scope)) {
+    return lexicalBindingInStatements(scope.statements, name);
+  }
+  if (ts.isCaseBlock(scope)) {
+    return lexicalBindingInStatements(
+      scope.clauses.flatMap((clause) => [...clause.statements]),
+      name,
+    );
+  }
+  if (ts.isCatchClause(scope) && scope.variableDeclaration !== undefined) {
+    return lexicalBindingForVariableDeclaration(scope.variableDeclaration, name);
+  }
+  if (
+    ts.isForStatement(scope) ||
+    ts.isForInStatement(scope) ||
+    ts.isForOfStatement(scope)
+  ) {
+    const initializer = scope.initializer;
+    if (initializer !== undefined && ts.isVariableDeclarationList(initializer)) {
+      return lexicalBindingInVariableDeclarations(initializer.declarations, name);
+    }
+  }
+  return null;
+}
+
+function lexicalBindingInStatements(
+  statements: readonly ts.Statement[],
+  name: string,
+): ProductArchitectureLexicalBinding | null {
+  for (const statement of statements) {
+    if (ts.isVariableStatement(statement)) {
+      const binding = lexicalBindingInVariableDeclarations(
+        statement.declarationList.declarations,
+        name,
+      );
+      if (binding !== null) {
+        return binding;
+      }
+    }
+  }
+  return null;
+}
+
+function lexicalBindingInVariableDeclarations(
+  declarations: readonly ts.VariableDeclaration[],
+  name: string,
+): ProductArchitectureLexicalBinding | null {
+  for (const declaration of declarations) {
+    const binding = lexicalBindingForVariableDeclaration(declaration, name);
+    if (binding !== null) {
+      return binding;
+    }
+  }
+  return null;
+}
+
+function lexicalBindingForVariableDeclaration(
+  variable: ts.VariableDeclaration,
+  name: string,
+): ProductArchitectureLexicalBinding | null {
+  const declaration = bindingDeclarationForName(variable.name, name);
+  return declaration === null
+    ? null
+    : {
+        declaration,
+        initializer: variable.initializer ?? null,
+        callbackParameter: false,
+      };
+}
+
+function bindingDeclarationForName(
+  bindingName: ts.BindingName,
+  name: string,
+): ts.Identifier | ts.BindingElement | null {
+  if (ts.isIdentifier(bindingName)) {
+    return bindingName.text === name ? bindingName : null;
+  }
+  for (const element of bindingName.elements) {
+    if (!ts.isOmittedExpression(element)) {
+      if (ts.isIdentifier(element.name) && element.name.text === name) {
+        return element;
+      }
+      const nested = bindingDeclarationForName(element.name, name);
+      if (nested !== null) {
+        return nested;
+      }
+    }
+  }
+  return null;
+}
+
+function isNonValueIdentifierPosition(node: ts.Identifier): boolean {
+  const parent = node.parent;
+  return (
+    (ts.isPropertyAccessExpression(parent) && parent.name === node) ||
+    (ts.isPropertyAssignment(parent) && parent.name === node) ||
+    (ts.isMethodDeclaration(parent) && parent.name === node) ||
+    (ts.isPropertyDeclaration(parent) && parent.name === node) ||
+    (ts.isPropertySignature(parent) && parent.name === node) ||
+    (ts.isMethodSignature(parent) && parent.name === node) ||
+    (ts.isBindingElement(parent) && parent.name === node) ||
+    (ts.isParameter(parent) && parent.name === node) ||
+    (ts.isVariableDeclaration(parent) && parent.name === node)
+  );
 }
 
 function kernelRecordBatchSummary(

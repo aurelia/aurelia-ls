@@ -297,6 +297,13 @@
       "liveChecks": [
         {
           "kind": "product-large-class",
+          "className": "TypeSystemProgramSourceAuthority",
+          "filePath": "packages/semantic-runtime/src/type-system/program-source-authority.ts",
+          "minLineCount": 180,
+          "minMethodCount": 6
+        },
+        {
+          "kind": "product-large-class",
           "className": "TypeSystemProject",
           "filePath": "packages/semantic-runtime/src/type-system/project.ts",
           "minLineCount": 80,

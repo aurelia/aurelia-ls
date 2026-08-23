@@ -149,9 +149,21 @@
         },
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/framework/capability-demand-materializer.ts",
-          "symbolName": "registrationHidingOpenSeamFacts",
-          "summary": "Capability-specific blocker projection from materialization-owned seams to exact registration operations."
+          "filePath": "packages/semantic-runtime/src/di/registration-open-pressure.ts",
+          "symbolName": "registrationOpenPressureFacts",
+          "summary": "Shared unresolved-registration facts from materialization-owned seams and exact registration operations."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/registration-open-pressure.ts",
+          "symbolName": "registrationHidingOpenSeamsForContainer",
+          "summary": "Container-chain projection of unresolved registration pressure."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/registration-open-pressure.ts",
+          "symbolName": "registrationOpenSeamCanHideFrameworkCapability",
+          "summary": "Capability-specific predicate for unresolved registration pressure."
         },
         {
           "kind": "fixture",
@@ -184,6 +196,21 @@
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/di/container-registration.ts",
           "symbolName": "frameworkRegistrationKindForOperation"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/di/registration-open-pressure.ts",
+          "symbolName": "registrationOpenPressureFacts"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/di/registration-open-pressure.ts",
+          "symbolName": "registrationHidingOpenSeamsForContainer"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/di/registration-open-pressure.ts",
+          "symbolName": "registrationOpenSeamCanHideFrameworkCapability"
         }
       ],
       "createdAt": "2026-07-19",
