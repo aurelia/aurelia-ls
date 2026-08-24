@@ -9555,6 +9555,11 @@
           "id": "promise-parent-member-and-implicit-target-assignment",
           "expectations": [
             {
+              "name": "catch expression selects the exact parent method receiver",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "formatReason(reason)", "token": "formatReason" } },
+              "equals": { "value.selectedMemberName": "formatReason", "value.selectedCall.status": "exact", "value.selectedCall.callKind": "scope", "value.selectedCall.signatureTail": "(reason: unknown): string", "value.diagnostics.length": 0 }
+            },
+            {
               "name": "explicit parent catch target preserves the root member identity",
               "query": { "kind": "template-cursor-info", "cursor": { "marker": "formatReason($parent.rejectedReason)", "token": "rejectedReason" } },
               "equals": { "value.selectedMemberName": "rejectedReason", "value.selectedMember.typeDisplay": "unknown", "value.diagnostics.length": 0 }

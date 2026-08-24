@@ -525,7 +525,9 @@ const contractSuites = [
     'controller',
     'type-system',
     'overlay',
-  ], 'contract-template-controller-built-ins.mjs', 'Built-in template-controller flow rows and overlay scope replay for if/else, repeat, with, promise, switch, and portal.'),
+  ], 'contract-template-controller-built-ins.mjs', 'Built-in template-controller flow rows and overlay scope replay for if/else, repeat, with, promise, switch, and portal.', {
+    routeAliases: ['type-system.template-controller-built-ins'],
+  }),
   contract('expression', 'fast', [
     'expression',
     'type-system',

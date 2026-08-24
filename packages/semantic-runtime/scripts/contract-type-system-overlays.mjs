@@ -2263,8 +2263,8 @@ async function readAuthoredScopePathOverlayProbe() {
     skippedExpressionCount: emission?.skippedExpressions.length ?? 0,
     currentArrowExpressionPresent: expressions.includes("groups.map(group => $this.heading).join(', ')"),
     nestedArrowExpressionPresent: expressions.includes("groups.map(group => group.items.map(item => $this.heading).join(', ')).join('; ')"),
-    currentArrowProjected: source.includes("groups.map(group => heading).join(', ')"),
-    nestedArrowProjected: source.includes("groups.map(group => group.items.map(item => heading).join(', ')).join('; ')"),
+    currentArrowProjected: source.includes("groups?.map?.(group => heading)?.join?.(', ')"),
+    nestedArrowProjected: source.includes("groups?.map?.(group => group?.items?.map?.(item => heading)?.join?.(', '))?.join?.('; ')"),
   };
 }
 

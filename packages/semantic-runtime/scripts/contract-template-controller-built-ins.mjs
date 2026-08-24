@@ -176,6 +176,8 @@ assertExpressionType('repeatIndex.toFixed()', 'string');
 assertExpressionType('resolved.label', 'string');
 assertExpressionType('resolved.labelLength()', 'number');
 assertExpressionType('formatReason(reason)', 'string');
+assertExpressionType('formatReason(carrierReason)', 'string');
+assertExpressionType('formatReason($parent.rejectedReason)', 'string');
 assert(
   new Set(promiseBranchLinks.map((link) => link.targetController.productHandle)).size === 4,
   `Expected promise branches to retain four concrete promise applications, observed ${new Set(promiseBranchLinks.map((link) => link.targetController.productHandle)).size}.`,

@@ -1,4 +1,5 @@
 import {
+  BindingContextKind,
   BindingScopeConditionPolarity,
   BindingScopeCreator,
   BindingScopeCreatorKind,
@@ -519,7 +520,16 @@ export class TemplateControllerFlowScopeMaterializer {
     localSuffix: string,
   ): BindingScope {
     frame.flowState.clearBranch(parent);
-    const emission = this.constructObjectScope(frame.input, parent, instruction, controller, localSuffix, null);
+    const emission = this.constructObjectScope(
+      frame.input,
+      parent,
+      instruction,
+      controller,
+      localSuffix,
+      null,
+      instruction.sourceAddressHandle,
+      BindingContextKind.Synthetic,
+    );
     frame.addDerivedScope(emission);
     frame.flowState.rememberPromise(emission.scope, instruction, controller, parent);
     return emission.scope;
@@ -905,12 +915,14 @@ export class TemplateControllerFlowScopeMaterializer {
     localSuffix: string,
     contextType: Parameters<typeof BindingScope.fromParentObject>[0]['contextType'],
     sourceAddressHandle: AddressHandle | null = instruction.sourceAddressHandle,
+    contextKind: BindingContextKind.Object | BindingContextKind.Synthetic = BindingContextKind.Object,
   ): BindingScopeConstructionEmission {
     return this.scopeMaterializer.prepare(BindingScope.fromParentObject({
       localKey: `${input.localKey}:scope:template-controller:${localSuffix}:object`,
       ownerProductHandle: controller?.productHandle ?? instruction.productHandle,
       ownerIdentityHandle: controller?.identityHandle ?? instruction.identityHandle,
       parent,
+      contextKind,
       contextType,
       sourceAddressHandle,
       scopeCreators: [new BindingScopeCreator(

@@ -16,7 +16,13 @@ import {
 type DiagnosticReport = {
   readonly kind: 'full';
   readonly resultId: string;
-  readonly items: readonly { readonly code?: unknown }[];
+  readonly items: readonly {
+    readonly code?: unknown;
+    readonly range?: {
+      readonly start: { readonly line: number; readonly character: number };
+      readonly end: { readonly line: number; readonly character: number };
+    };
+  }[];
 };
 
 const packageRoot = path.resolve(fileURLToPath(new URL('../../..', import.meta.url)));
@@ -100,6 +106,73 @@ test('one retained session settles closed-open-closed capability and resource Pr
     fs.rmSync(fixture, { recursive: true, force: true });
   }
 }, 60_000);
+
+test('template diagnostics use the default, false, and true Aurelia strictness modes', async () => {
+  const template = '<p>${maybeItem.label}</p>';
+  const fixture = createAureliaAppFixture({
+    'src/app.ts': [
+      "import { customElement } from 'aurelia';",
+      "import { DefaultStrictPanel } from './default-strict-panel';",
+      "import { ExplicitLoosePanel } from './explicit-loose-panel';",
+      "import { ExplicitStrictPanel } from './explicit-strict-panel';",
+      "@customElement({ name: 'app-root', template: '<default-strict-panel></default-strict-panel><explicit-loose-panel></explicit-loose-panel><explicit-strict-panel></explicit-strict-panel>', dependencies: [DefaultStrictPanel, ExplicitLoosePanel, ExplicitStrictPanel] })",
+      'export class AppRoot {}',
+    ].join('\n'),
+    'src/default-strict-panel.ts': strictPanelSource('default-strict-panel', 'default-strict.html', null),
+    'src/explicit-loose-panel.ts': strictPanelSource('explicit-loose-panel', 'explicit-loose.html', false),
+    'src/explicit-strict-panel.ts': strictPanelSource('explicit-strict-panel', 'explicit-strict.html', true),
+    'src/default-strict.html': template,
+    'src/explicit-loose.html': template,
+    'src/explicit-strict.html': template,
+    'src/aurelia-assets.d.ts': "declare module '*.html' { const value: string; export default value; }",
+  });
+  const { connection, child, dispose, getStderr } = startServer(fixture);
+
+  try {
+    await initialize(connection, child, getStderr, fixture, {
+      diagnostics: { onRefresh: () => undefined },
+    });
+    const reports = new Map<string, DiagnosticReport>();
+    for (const relativePath of ['src/default-strict.html', 'src/explicit-loose.html', 'src/explicit-strict.html']) {
+      const uri = fileUri(fixture, relativePath);
+      openDocument(connection, uri, 'html', template, 1);
+      reports.set(relativePath, await pullDiagnostics(connection, uri));
+    }
+
+    expect(reports.get('src/default-strict.html')?.items.map(diagnosticCode)).not.toContain('TS18047');
+    expect(reports.get('src/explicit-loose.html')?.items.map(diagnosticCode)).not.toContain('TS18047');
+    const strictNullish = reports.get('src/explicit-strict.html')?.items.filter((item) =>
+      diagnosticCode(item) === 'TS18047'
+    ) ?? [];
+    expect(strictNullish).toHaveLength(1);
+    expect(strictNullish[0]?.range).toEqual({
+      start: { line: 0, character: 5 },
+      end: { line: 0, character: 14 },
+    });
+  } finally {
+    dispose();
+    child.kill('SIGKILL');
+    await waitForExit(child);
+    fs.rmSync(fixture, { recursive: true, force: true });
+  }
+}, 60_000);
+
+function strictPanelSource(
+  elementName: string,
+  templateFileName: string,
+  strict: boolean | null,
+): string {
+  const strictField = strict == null ? '' : `, strict: ${strict}`;
+  return [
+    "import { customElement } from 'aurelia';",
+    `import template from './${templateFileName}';`,
+    'interface Item { readonly label: string; }',
+    `@customElement({ name: '${elementName}', template${strictField} })`,
+    `export class ${elementName.split('-').map((part) => part[0]!.toUpperCase() + part.slice(1)).join('')} {`,
+    '  readonly maybeItem: Item | null = null;',
+    '}',
+  ].join('\n');
+}
 
 function certaintyMainSource(openRegistration: boolean): string {
   return [

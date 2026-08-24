@@ -531,12 +531,14 @@ export class BindingScope {
     );
   }
 
-  /** Runtime `Scope.fromParent(parentScope, value)` shape for object-backed synthetic views such as `with.bind`. */
+  /** Runtime `Scope.fromParent(parentScope, value)` shape for object-backed views, including finite framework objects. */
   static fromParentObject(input: {
     readonly localKey: string;
     readonly ownerProductHandle: ProductHandle | null;
     readonly ownerIdentityHandle: IdentityHandle | null;
     readonly parent: BindingScope;
+    /** Ordinary source values stay structurally open; framework-created finite objects use the synthetic lane. */
+    readonly contextKind?: BindingContextKind.Object | BindingContextKind.Synthetic;
     readonly contextType: CheckerTypeReference | null;
     readonly sourceAddressHandle: AddressHandle | null;
     readonly scopeCreators?: readonly BindingScopeCreator[];
@@ -548,7 +550,7 @@ export class BindingScope {
       input.ownerIdentityHandle,
       input.parent,
       BindingScopeBindingContextConstruction.materialize(
-        BindingContextKind.Object,
+        input.contextKind ?? BindingContextKind.Object,
         input.contextType,
       ),
       null,

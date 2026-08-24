@@ -10,6 +10,7 @@ interface OverlayItem {
 @customElement({
   name: 'template-overlay-type-errors-app',
   template,
+  strict: true,
 })
 export class TemplateOverlayTypeErrorsApp {
   readonly items: readonly OverlayItem[] = [

@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 
 import { createSemanticRuntime } from '../src/api/runtime.js';
+import { SemanticAppQueryKind } from '../src/api/contracts.js';
 import { OpenSeamReasonKind } from '../src/kernel/open-seam.js';
 import { KernelVocabulary } from '../src/kernel/vocabulary.js';
 
@@ -35,13 +36,16 @@ describe('resource definition open reasons', () => {
       ].join('\n'),
       'src/open-reason-app.ts': [
         "import { customElement } from '@aurelia/runtime-html';",
+        "import { DefaultStrictPanel, ExplicitLoosePanel, ExplicitStrictPanel } from './strict-panels.js';",
         'declare function runtimeTemplate(): unknown;',
+        'declare const runtimeStrict: boolean;',
         '@customElement({',
         "  name: 'open-reason-app',",
         '  template: 42,',
         '  capture: 42,',
         '  shadowOptions: 42,',
         "  strict: 'yes',",
+        '  dependencies: [DefaultStrictPanel, ExplicitLoosePanel, ExplicitStrictPanel],',
         '})',
         'export class OpenReasonApp {}',
         '@customElement({',
@@ -49,6 +53,36 @@ describe('resource definition open reasons', () => {
         '  template: runtimeTemplate(),',
         '})',
         'export class DynamicTemplateApp {}',
+        "@customElement({ name: 'default-strict-app', template: '' })",
+        'export class DefaultStrictApp {}',
+        "@customElement({ name: 'explicit-loose-app', template: '', strict: false })",
+        'export class ExplicitLooseApp {}',
+        "@customElement({ name: 'explicit-strict-app', template: '', strict: true })",
+        'export class ExplicitStrictApp {}',
+        "@customElement({ name: 'dynamic-strict-app', template: '', strict: runtimeStrict })",
+        'export class DynamicStrictApp {}',
+      ].join('\n'),
+      'src/strict-panels.ts': [
+        "import { customElement } from '@aurelia/runtime-html';",
+        "import defaultTemplate from './default-strict.html';",
+        "import looseTemplate from './explicit-loose.html';",
+        "import strictTemplate from './explicit-strict.html';",
+        'interface Item { readonly label: string; }',
+        "@customElement({ name: 'default-strict-panel', template: defaultTemplate })",
+        'export class DefaultStrictPanel { readonly maybeItem: Item | null = null; }',
+        "@customElement({ name: 'explicit-loose-panel', template: looseTemplate, strict: false })",
+        'export class ExplicitLoosePanel { readonly maybeItem: Item | null = null; }',
+        "@customElement({ name: 'explicit-strict-panel', template: strictTemplate, strict: true })",
+        'export class ExplicitStrictPanel { readonly maybeItem: Item | null = null; }',
+      ].join('\n'),
+      'src/default-strict.html': '<p>${maybeItem.label}</p>',
+      'src/explicit-loose.html': '<p>${maybeItem.label}</p>',
+      'src/explicit-strict.html': '<p>${maybeItem.label}</p>',
+      'src/aurelia-assets.d.ts': [
+        "declare module '*.html' {",
+        '  const value: string;',
+        '  export default value;',
+        '}',
       ].join('\n'),
     });
   });
@@ -65,7 +99,18 @@ describe('resource definition open reasons', () => {
       storeKey: `test:resource-definition-open-reasons:${path.basename(workspaceRoot)}`,
     });
 
-    await expect(runtime.openApp({ analysisDepth: 'binding-observation' })).resolves.toBeDefined();
+    const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
+    const definitions = app.emission.resources.sources.flatMap((source) => source.convergence.definitions);
+    const strictFor = (name: string) => {
+      const definition = definitions.find((candidate) =>
+        'name' in candidate && candidate.name === name
+      );
+      return definition != null && 'strict' in definition ? definition.strict : undefined;
+    };
+    expect(strictFor('default-strict-app')).toBe(false);
+    expect(strictFor('explicit-loose-app')).toBe(false);
+    expect(strictFor('explicit-strict-app')).toBe(true);
+    expect(strictFor('dynamic-strict-app')).toBeNull();
     const seams = runtime.workspace.store.readOpenSeams().filter((seam) =>
       seam.seamKindKey === KernelVocabulary.Resource.OpenDefinitionField.key
       && seam.summary.startsWith('Custom element ')
@@ -90,6 +135,29 @@ describe('resource definition open reasons', () => {
       && !seam.reasonKinds.includes(OpenSeamReasonKind.ResourceDefinitionFieldOpen)
     );
     expect(dynamicTemplate?.reasonKinds).toEqual([OpenSeamReasonKind.HostEnvironmentValue]);
+    const dynamicStrict = seams.find((seam) =>
+      seam.summary === 'Custom element strict metadata did not close to a boolean.'
+      && seam.reasonKinds.includes(OpenSeamReasonKind.HostEnvironmentValue)
+    );
+    expect(dynamicStrict?.reasonKinds).toEqual([OpenSeamReasonKind.HostEnvironmentValue]);
+  }, 30_000);
+
+  test('uses the framework non-strict default while preserving explicit strict diagnostics', async () => {
+    const runtime = await createSemanticRuntime({
+      workspaceRoot,
+      storeKey: `test:resource-definition-strict-default:${path.basename(workspaceRoot)}`,
+    });
+    const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
+    const nullishDiagnosticCount = (filePath: string): number => app.ask({
+      kind: SemanticAppQueryKind.TemplateDiagnostics,
+      sourceFile: { filePath },
+      diagnosticProjection: 'type-projection',
+      page: { size: 100 },
+    }).value.rows.filter((row) => row.missingInputs.includes('typescript:TS18047')).length;
+
+    expect(nullishDiagnosticCount('src/default-strict.html')).toBe(0);
+    expect(nullishDiagnosticCount('src/explicit-loose.html')).toBe(0);
+    expect(nullishDiagnosticCount('src/explicit-strict.html')).toBe(1);
   }, 30_000);
 });
 

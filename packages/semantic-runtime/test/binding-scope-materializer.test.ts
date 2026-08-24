@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest';
 
 import { BindingScopeMaterializer } from '../src/configuration/scope-materializer.js';
 import {
+  BindingContextKind,
   BindingContextSlotDraft,
   BindingScope,
   BindingContextSlotAssignmentAccessKind,
@@ -59,6 +60,52 @@ describe('binding scope materialization', () => {
       status: RuntimeScopeNamedLookupStatus.Open,
       ancestor: 1,
       scope: innerBoundary,
+      slot: null,
+    });
+  });
+
+  test('lets a finite empty Promise context fall through while an unknown object context stays open', () => {
+    const store = new KernelStore('binding-scope-finite-empty-context');
+    const projector = new CheckerTypeProjector(store, store);
+    const materializer = new BindingScopeMaterializer(store, projector);
+    const typeAccess = new CheckerTypeShapeAccess(store, projector);
+    const parent = materializer.construct(BindingScope.forCustomElementController({
+      localKey: 'parent',
+      ownerProductHandle: null,
+      ownerIdentityHandle: null,
+      parent: null,
+      viewModelType: null,
+      bindingContextSlots: [new BindingContextSlotDraft('formatReason')],
+      sourceAddressHandle: null,
+    })).scope;
+    const promise = materializer.construct(BindingScope.fromParentObject({
+      localKey: 'promise',
+      ownerProductHandle: null,
+      ownerIdentityHandle: null,
+      parent,
+      contextKind: BindingContextKind.Synthetic,
+      contextType: null,
+      sourceAddressHandle: null,
+    })).scope;
+    const unknownObject = materializer.construct(BindingScope.fromParentObject({
+      localKey: 'unknown-object',
+      ownerProductHandle: null,
+      ownerIdentityHandle: null,
+      parent,
+      contextType: null,
+      sourceAddressHandle: null,
+    })).scope;
+
+    expect(runtimeScopeNamedLookup(typeAccess, promise, 'formatReason')).toMatchObject({
+      status: RuntimeScopeNamedLookupStatus.Context,
+      ancestor: 1,
+      scope: parent,
+      slot: expect.objectContaining({ name: 'formatReason' }),
+    });
+    expect(runtimeScopeNamedLookup(typeAccess, unknownObject, 'formatReason')).toMatchObject({
+      status: RuntimeScopeNamedLookupStatus.Open,
+      ancestor: 0,
+      scope: unknownObject,
       slot: null,
     });
   });

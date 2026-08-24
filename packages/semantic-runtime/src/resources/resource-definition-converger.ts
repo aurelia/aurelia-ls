@@ -450,6 +450,7 @@ class CustomElementConvergenceFrame {
       'strict',
       'Custom element strict metadata did not close to a boolean.',
     );
+    const strict = strictRead.value ?? (strictRead.open.length === 0 ? false : null);
     const hasSlots = hasSlotsRead.value ?? false;
     const controllerIssue = this.readControllerIssue(containerless, shadowOptions, hasSlots);
     const processContent = this.readProcessContent();
@@ -478,7 +479,7 @@ class CustomElementConvergenceFrame {
       hasSlots,
       enhance: enhanceRead.value ?? false,
       needsCompile: needsCompileRead.value ?? true,
-      strict: strictRead.value,
+      strict,
       processContent: processContent.target,
       issueRecords: [
         ...(controllerIssue?.records ?? []),
