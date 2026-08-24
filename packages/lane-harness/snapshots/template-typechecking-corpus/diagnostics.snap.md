@@ -850,14 +850,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "sourceFileRole": "app-source",
                 "sourceWorkspaceKey": "aurelia-template-typechecking-corpus"
               },
-              "end": 925,
+              "end": 939,
               "kind": "source-span-address",
-              "label": "src/read-expressions.ts@910..925",
+              "label": "src/read-expressions.ts@924..939",
               "path": "src/read-expressions.ts",
               "role": "name",
               "sourceFileRole": "app-source",
               "sourceWorkspaceKey": "aurelia-template-typechecking-corpus",
-              "start": 910
+              "start": 924
             }
           },
           {
@@ -871,14 +871,14 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "sourceFileRole": "app-source",
                 "sourceWorkspaceKey": "aurelia-template-typechecking-corpus"
               },
-              "end": 1000,
+              "end": 1014,
               "kind": "source-span-address",
-              "label": "src/read-expressions.ts@990..1000",
+              "label": "src/read-expressions.ts@1004..1014",
               "path": "src/read-expressions.ts",
               "role": "range",
               "sourceFileRole": "app-source",
               "sourceWorkspaceKey": "aurelia-template-typechecking-corpus",
-              "start": 990
+              "start": 1004
             }
           }
         ],

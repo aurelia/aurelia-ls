@@ -2,7 +2,7 @@ import { customElement } from 'aurelia';
 import { corpusItems, type CorpusItem, type CorpusPair } from './model';
 import template from './read-expressions.html';
 
-@customElement({ name: 'read-expressions', template })
+@customElement({ name: 'read-expressions', template, strict: true })
 export class ReadExpressions {
   readonly items = corpusItems;
   readonly definiteItem = corpusItems[0]!;
