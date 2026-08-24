@@ -3,8 +3,8 @@
 `aurelia.project.json` is the optional, durable project-semantics file shared by Aurelia tooling. Put it at the exact
 root of the project it describes. In a workspace with nested projects, each project root may have its own file.
 
-The current contract is a clean-slate **version 1**. Version 1 includes both authored-source boundaries and finding
-presentation policy; there is no earlier authored-source-only V1 to preserve and no supported V2.
+The current contract is **version 1**. It includes authored-source boundaries
+and finding presentation policy. There is no supported V2.
 
 ## Minimal and complete examples
 
@@ -48,10 +48,11 @@ unquoted property names, hexadecimal numbers, single-quoted strings, or expressi
 | `$schema` | No | Omitted | Optional string metadata. It does not select the format version or change runtime semantics. |
 
 Unknown or duplicate root fields are errors. The `authoredSources` object also rejects unknown or duplicate fields.
-Finding keys are rule IDs rather than a fixed set of ordinary property names; their handling is described below.
+Finding keys use namespaced rule IDs; their handling is described below.
 
-There is no stable public schema URL to put in `$schema` today. The VS Code extension recognizes the exact filename and
-uses its bundled assistance without that field, so do not guess or copy a schema URL into the file.
+The VS Code extension recognizes the exact filename and provides bundled editing
+assistance without a `$schema` field. There is no stable public schema URL to
+add today.
 
 ## Authored-source exclusions
 
@@ -65,18 +66,20 @@ Each `excludedRoots` entry names one directory boundary relative to the project 
 - contains no control characters; and
 - does not name an existing file.
 
-Both `/` and `\` separators are accepted and normalized for the host. The directory does not need to exist yet, which
-allows generated-output boundaries to remain stable before a generator runs. Equivalent or nested redundant boundaries
-are normalized into the effective exclusion set.
+Both `/` and `\` separators are accepted and normalized for the host. The
+directory may name future generated output, so it can be configured before a
+generator runs. Equivalent or nested redundant boundaries are normalized into
+the effective exclusion set.
 
-An exclusion changes authored-source membership. It does not create a filesystem read embargo: an admitted source may
-still reach a file under that boundary through ordinary module resolution and retain it as dependency evidence. The
-setting also does not configure a bundler, delete generated output, or change TypeScript's own module-resolution rules.
+An exclusion changes authored-source membership, not filesystem access. Files
+under the boundary may still be read as dependency evidence through normal
+module resolution. The setting has no effect on bundling, generated output, or
+TypeScript's module-resolution rules.
 
 ## Finding presentation
 
-The `findings` object controls how admitted semantic findings are projected to consumers. It never erases the underlying
-analysis evidence and does not change source admission or Resource Explorer completeness.
+The `findings` object controls how admitted semantic findings are projected to consumers. Presentation policy leaves the
+underlying analysis evidence, source admission, and resource-analysis coverage unchanged.
 
 The current known rule is:
 
@@ -86,7 +89,7 @@ The current known rule is:
 
 Every known rule accepts `off`, `information`, `warning`, or `error`:
 
-- `off` suppresses that projected finding and its review row;
+- `off` suppresses eligible projected findings; it does not promise a visible review row;
 - `information`, `warning`, and `error` select its consumer-facing presentation level.
 
 A well-formed namespaced rule ID has at least two lowercase dot-separated segments. Each segment starts with a letter
@@ -115,10 +118,12 @@ contents of the file.
 The accepted version is `1` when that field is unique and supported, even if an unrelated root error rejects the file.
 It is unknown when `version` is missing, duplicated, malformed, or unsupported.
 
-The MCP `aurelia_project_configurations` tool exposes existing files only. Its configuration rows include the accepted
-version, `applied` / `partial` / `rejected` state, normalized applied exclusions, complete effective finding policy
-including default or project authority, and diagnostic count. Use `view=diagnostics` for exact messages and source
-spans. An absent project therefore has defaults internally but no configuration inventory row.
+The MCP `aurelia_project_configurations` tool exposes existing files only. Its
+default view reports the accepted version, application state, applied
+exclusions, and diagnostic count. Each effective finding policy says whether it
+came from the project or a default. Use `view=diagnostics` for exact messages
+and source spans. A project without a configuration still uses defaults
+internally, but has no inventory row.
 
 ## Project semantics and VS Code settings
 
@@ -132,37 +137,38 @@ in VS Code settings:
 | `aurelia.inlayHints.bindingMode` | VS Code presentation for binding-mode inlay hints. |
 | `aurelia.templateDiagnostics.suppressNative` | Opt-in suppression of VS Code's embedded CSS and JavaScript diagnostics for proved Aurelia templates. |
 
-Extension activation, snippets, UI preferences, and logging do not belong in the project file. Conversely, copying
-`authoredSources` or `findings` into `.vscode/settings.json` does not configure the shared semantic runtime.
+Extension activation, snippets, UI preferences, and logging stay in VS Code
+settings. Shared `authoredSources` and `findings` policy stays in
+`aurelia.project.json`.
 
-Native template-diagnostic suppression is disabled by default. Enabling it moves only templates with exact Aurelia
-ownership into the extension's `aurelia-html` language mode. This suppresses VS Code's embedded CSS/JavaScript
-diagnostics, including legitimate findings. HTML language-service participation remains available, but file icons,
-`[html]`-scoped settings, snippets, formatter selection, and other native HTML or editor behavior can change. Unowned
-HTML remains in native `html` mode.
-Exact owned templates keep Aurelia's bounded recovery Problems for supported malformed tags, attributes, comments,
-declarations, and foreign-content CDATA in both modes. This is not general HTML validation; other tokenizer and
-tree-building rules remain outside that set.
-The disabled default is recommended because suppression is all-or-nothing: enable it only when interpolation noise is
-more costly than losing embedded CSS/JavaScript Problems, and keep that coverage in project lint or build checks.
+Native template-diagnostic suppression is disabled by default. Enabling it moves
+only exactly owned Aurelia templates into `aurelia-html`. This removes embedded
+CSS/JavaScript diagnostics and can change normal HTML editor behavior such as
+icons, scoped settings, snippets, or formatter selection. Unowned HTML stays in
+native `html` mode.
 
-The VS Code extension associates the exact `aurelia.project.json` filename with bundled, offline annotation assistance
-for root fields, sections, known rule IDs, and values. Those suggestions are an editing aid, not a second semantic
-validator. VS Code's JSONC service may present editor-local parser feedback for malformed JSONC or duplicate keys;
-semantic-runtime remains the sole authority for semantic configuration diagnostics, format acceptance, filesystem
-checks, normalized effective values, and application state across consumers.
+Aurelia's bounded recovery Problems remain available in either mode, but they
+are not a general HTML validator. Enable suppression only when interpolation
+noise outweighs the lost CSS/JavaScript coverage, and replace that coverage with
+project lint or build checks.
+
+The VS Code extension associates the exact filename with a separate, bundled
+editor-assistance schema. VS Code's JSONC service can report syntax and
+duplicate-key problems. Project meaning comes from semantic-runtime's canonical
+schema and parser, which own format acceptance, semantic diagnostics,
+filesystem checks, and the effective configuration applied across consumers.
 
 ## Current boundary and future versions
 
-Version 1 is deliberately small. It does not configure resource naming conventions, decorator or `static $au`
-interpretation, template compilation, routes, Vite, SSR/SSG, emitted AOT output, build directories, or extension-only
-features. Those concerns remain with their current semantic or build owners.
+Version 1 is deliberately small. It owns source boundaries and finding
+presentation. Framework conventions, template and route semantics, build
+tooling, output directories, and extension-only behavior stay with their
+existing owners.
 
 There is no V2 contract today. New known finding rule IDs may extend V1: the namespaced `findings` map is its explicit
-forward-compatible lane, and older tooling warns about and ignores a well-formed unknown ID. New root fields or new
-grammar inside a fixed section require a new format version because V1 rejects unknown fields rather than silently
-guessing their meaning.
+forward-compatible lane, and older tooling warns about and ignores a well-formed unknown ID. V1 rejects unknown root
+fields, so new root structure or section grammar requires a new format version.
 
-Future AOT or convention configuration should enter this file only after IDE, MCP, and build consumers can share the
-same meaning, defaults, provenance, and currentness rules. Any incompatible persisted contract must define an explicit
-new version and migration boundary rather than assigning new meaning to existing V1 files.
+Future AOT or convention settings belong here only when IDE, MCP, and build
+consumers can share one contract and lifecycle. Incompatible changes require an
+explicit new version and migration boundary.
