@@ -17,7 +17,7 @@ declare const __AURELIA_MCP_SERVER_VERSION__: string | undefined;
 export const AURELIA_MCP_SERVER_NAME = 'au-mcp' as const;
 export const AURELIA_MCP_SERVER_VERSION = typeof __AURELIA_MCP_SERVER_VERSION__ === 'string'
   ? __AURELIA_MCP_SERVER_VERSION__
-  : '0.1.0';
+  : '0.3.0';
 
 export const aureliaMcpToolNames = {
   workspaceOverview: 'aurelia_workspace_overview',

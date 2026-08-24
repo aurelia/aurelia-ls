@@ -2,7 +2,7 @@ Requires Node >=22.13 <25.
 
 # GitHub Tarball Release
 
-The current MCP release is distributed as a GitHub Release tarball until npm
+MCP releases are distributed as GitHub Release tarballs until npm
 publishing is available. The tarball contains bundled `au-mcp.js`, a generated
 `package.json`, and an offline Aurelia docs corpus snapshot under `docs/`; the
 workspace package stays private and keeps its workspace dependencies on
@@ -63,12 +63,29 @@ through natural menu searches and example fetches.
 The project-local install probe verifies the recommended app-local install path
 and checks that TypeScript resolves from the same package context as the app.
 
+## Promote Published Documentation
+
+Source documentation can target the next MCP protocol while install guidance
+continues to identify the last hosted tarball. Before creating the 0.3.0 tag:
+
+1. Set `publishedReleaseVersion` to `0.3.0` in
+   `scripts/contract-release-docs.mjs`.
+2. Promote the MCP release/status/install links in the root README,
+   `docs/getting-started.md`, the package README, and every provider guide from
+   0.2.0 to 0.3.0, and remove the package README's source-versus-published
+   transition wording.
+3. Run `pnpm --filter @aurelia-ls/mcp contract:release` again.
+
+Do not create the tag while any current install surface still identifies
+0.2.0 as the published release. Historical 0.2.0 release notes are excluded
+from that promotion.
+
 ## GitHub Release Flow
 
 ```powershell
-git tag mcp-v0.2.0
-git push origin mcp-v0.2.0
-gh release create mcp-v0.2.0 packages/mcp/.release/aurelia-ls-mcp-0.2.0.tgz --title "Aurelia MCP 0.2.0" --notes-file packages/mcp/release-notes/mcp-v0.2.0.md
+git tag mcp-v0.3.0
+git push origin mcp-v0.3.0
+gh release create mcp-v0.3.0 packages/mcp/.release/aurelia-ls-mcp-0.3.0.tgz --title "Aurelia MCP 0.3.0" --notes-file packages/mcp/release-notes/mcp-v0.3.0.md
 ```
 
 Do not add npm publish steps to this flow yet.
@@ -79,7 +96,7 @@ For diagnostic-authoritative use, install the tarball as a dev
 dependency in the Aurelia app being analyzed:
 
 ```powershell
-npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.2.0/aurelia-ls-mcp-0.2.0.tgz
+npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.3.0/aurelia-ls-mcp-0.3.0.tgz
 ```
 
 Then configure the MCP server from that project:
@@ -133,7 +150,7 @@ Use the release asset URL directly in an MCP client config:
   "mcpServers": {
     "aurelia": {
       "command": "npx",
-      "args": ["-y", "https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.2.0/aurelia-ls-mcp-0.2.0.tgz"]
+      "args": ["-y", "https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.3.0/aurelia-ls-mcp-0.3.0.tgz"]
     }
   }
 }
@@ -158,7 +175,7 @@ After uploading the release asset, run a real hosted-URL smoke before sharing
 the docs:
 
 ```powershell
-npx -y https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.2.0/aurelia-ls-mcp-0.2.0.tgz
+npx -y https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.3.0/aurelia-ls-mcp-0.3.0.tgz
 ```
 
 For a full check, point an MCP client at the same URL and run

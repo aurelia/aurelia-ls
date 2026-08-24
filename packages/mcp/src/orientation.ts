@@ -24,7 +24,7 @@ export const AURELIA_MCP_SERVER_INSTRUCTIONS = [
 export const AURELIA_MCP_ORIENTATION_RESOURCE_TEXT = [
   '# Aurelia MCP Orientation',
   '',
-  'This MCP is a read-only semantic-runtime shell for Aurelia apps plus compact Aurelia Patterns and bundled docs surfaces. It is meant to give an AI the same semantic facts an IDE/LSP surface should expose: workspace shape, app topology, diagnostics, configured analysis limitations, template/cursor context, router facts, binding/value-flow facts, explicitly auditable open semantic seams, curated app-building examples, and local docs grounding without runtime web requests.',
+  'This MCP makes no project-file writes. It exposes semantic-runtime analysis for Aurelia apps plus compact Aurelia Patterns and bundled docs surfaces. It is meant to give an AI the same semantic facts an IDE/LSP surface should expose: workspace shape, app topology, diagnostics, configured analysis limitations, template/cursor context, router facts, binding/value-flow facts, explicitly auditable open semantic seams, curated app-building examples, and local docs grounding without runtime web requests. The cache-clear tool can reclaim in-memory analyzer caches and managed-session analysis retention.',
   '',
   '## Golden Path',
   '',
@@ -107,7 +107,7 @@ export function aureliaBuildAppFeaturePromptText(input: {
 }): string {
   return [
     `Plan and implement this Aurelia feature: ${input.featureGoal}.`,
-    'The MCP tools are read-only. Use them for semantic guidance, then edit files directly in the workspace.',
+    'The MCP tools make no project-file writes. Use them for semantic guidance, then edit files directly in the workspace; cache clear only reclaims analyzer caches and managed-session analysis retention.',
     input.workspaceRoot == null || input.workspaceRoot.length === 0
       ? 'For a new app or fresh feature shape, start with aurelia_pattern_menu and fetch a relevant pattern with aurelia_pattern_example. For an existing app, first obtain the absolute workspaceRoot.'
       : `Use workspaceRoot ${input.workspaceRoot}; start with aurelia_workspace_overview and aurelia_app_overview before editing.`,

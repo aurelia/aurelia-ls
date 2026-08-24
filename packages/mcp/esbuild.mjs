@@ -64,6 +64,11 @@ await esbuild.build({
   define: {
     __AURELIA_MCP_SERVER_VERSION__: JSON.stringify(releaseVersion),
   },
+  // Bundled CommonJS dependencies can retain dynamic requires for Node builtins.
+  // Supply ESM's local require so the standalone tarball can execute them.
+  banner: {
+    js: "import { createRequire as __aureliaCreateRequire } from 'node:module'; const require = __aureliaCreateRequire(import.meta.url);",
+  },
   legalComments: 'none',
 });
 
