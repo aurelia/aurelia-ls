@@ -150,6 +150,7 @@ export class ProjectModuleResolver {
   private readonly packageLocator: ProjectPackageLocator;
   private readonly resolutions = new Map<string, ProjectModuleResolution>();
   private readonly knownLinkedPackages = new Map<string, KnownLinkedPackage>();
+  private readonly runtimeResolutionCaches = new Map<string, ts.ModuleResolutionCache>();
 
   constructor(
     private readonly rootDir: string,
@@ -215,6 +216,55 @@ export class ProjectModuleResolver {
         );
     this.resolutions.set(cacheKey, resolution);
     return resolution;
+  }
+
+  /**
+   * Resolve the condition-selected JavaScript package target independently from the declaration/source lane.
+   *
+   * Declaration files under the already-selected package instance are hidden only for this second resolution. A
+   * separate cache prevents TypeScript from replaying the declaration result from the ordinary resolution.
+   */
+  resolvePackageRuntimeModuleName(
+    moduleSpecifier: string,
+    containingFile: string,
+    packageRoots: readonly string[],
+    resolutionMode?: ts.ResolutionMode,
+  ): ts.ResolvedModuleFull | null {
+    const roots = [...new Set(packageRoots.map((root) => path.resolve(root)))];
+    if (roots.length === 0) return null;
+    const cacheKey = JSON.stringify([
+      roots.map(projectModuleHostPathKey).sort(),
+      resolutionMode ?? null,
+    ]);
+    let cache = this.runtimeResolutionCaches.get(cacheKey);
+    if (cache == null) {
+      cache = ts.createModuleResolutionCache(
+        this.rootDir,
+        projectModuleHostPathKey,
+        this.compilerOptions,
+      );
+      this.runtimeResolutionCaches.set(cacheKey, cache);
+    }
+    const host: ts.ModuleResolutionHost = {
+      ...this.moduleResolutionHost,
+      fileExists: (fileName) =>
+        !(isDeclarationFilePath(fileName) && roots.some((root) => isHostPathWithin(fileName, root)))
+        && this.moduleResolutionHost.fileExists(fileName),
+    };
+    const resolved = ts.resolveModuleName(
+      moduleSpecifier,
+      path.resolve(containingFile),
+      this.compilerOptions,
+      host,
+      cache,
+      undefined,
+      resolutionMode,
+    ).resolvedModule;
+    return resolved != null
+      && isRuntimeJavaScriptResolution(resolved)
+      && roots.some((root) => isHostPathWithin(resolved.resolvedFileName, root))
+        ? resolved
+        : null;
   }
 
   readSourceLinks(): readonly ResolvedProjectModuleSourceLink[] {
@@ -587,6 +637,22 @@ function projectModuleResolutionCacheKey(
       : projectModuleHostPathKey(redirectedReference.sourceFile.fileName),
   ]);
 }
+
+function isDeclarationFilePath(fileName: string): boolean {
+  const lower = fileName.toLowerCase();
+  return lower.endsWith('.d.ts') || lower.endsWith('.d.mts') || lower.endsWith('.d.cts');
+}
+
+function isRuntimeJavaScriptResolution(resolved: ts.ResolvedModuleFull): boolean {
+  return runtimeJavaScriptExtensions.has(resolved.extension);
+}
+
+const runtimeJavaScriptExtensions = new Set<string>([
+  ts.Extension.Js,
+  ts.Extension.Jsx,
+  ts.Extension.Mjs,
+  ts.Extension.Cjs,
+]);
 
 function sameLinkedPackageManifestIdentity(
   logical: BootPackageManifest | null,

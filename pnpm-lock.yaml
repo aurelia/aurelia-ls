@@ -306,6 +306,9 @@ importers:
 
   packages/semantic-runtime:
     dependencies:
+      '@jridgewell/trace-mapping':
+        specifier: ^0.3.31
+        version: 0.3.31
       '@rollup/pluginutils':
         specifier: 5.0.2
         version: 5.0.2

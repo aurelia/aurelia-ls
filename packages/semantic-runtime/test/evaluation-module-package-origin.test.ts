@@ -99,6 +99,14 @@ describe('evaluation module package origin', () => {
         'export declare const toolkitConfig: { marker: string };\n',
       );
       writeText(
+        path.join(packageRoot, 'dist', 'esm', 'index.js'),
+        "export { toolkitConfig } from './config.js';\n",
+      );
+      writeText(
+        path.join(packageRoot, 'dist', 'esm', 'config.js'),
+        "export const toolkitConfig = { marker: 'runtime' };\n",
+      );
+      writeText(
         packageEntry,
         [
           "export { toolkitConfig } from './config.js';",
@@ -174,6 +182,13 @@ describe('evaluation module package origin', () => {
 
       expect(entryOrigin).toMatchObject({
         packageRelativePath: 'src/index.ts',
+        buildLinks: [expect.objectContaining({
+          containingFile: path.resolve(entryFile),
+          moduleSpecifier: '@acme/aurelia-toolkit',
+          logicalDeclarationPath: expect.stringContaining('dist'),
+          logicalSourcePath: expect.stringContaining('src'),
+          logicalRuntimePath: expect.stringContaining('dist'),
+        })],
         packageInstance: {
           name: '@acme/aurelia-toolkit',
           version: '0.0.0',
@@ -195,6 +210,10 @@ describe('evaluation module package origin', () => {
       expect(
         sameHostPath(entryOrigin!.packageInstance.physicalRootDir, realpathSync(packageRoot)),
       ).toBe(true);
+      expect(sameHostPath(
+        entryOrigin!.buildLinks[0]!.physicalRuntimePath,
+        path.join(packageRoot, 'dist', 'esm', 'index.js'),
+      )).toBe(true);
       expect(relativeOrigin?.packageInstance.instanceKey).toBe(
         entryOrigin?.packageInstance.instanceKey,
       );
@@ -235,6 +254,55 @@ describe('evaluation module package origin', () => {
       );
     },
   );
+
+  test('retains distinct import and require runtime targets beside one declaration/source identity', () => {
+    const appRoot = temporaryRoot();
+    const entryFile = path.join(appRoot, 'src', 'main.ts');
+    const packageRoot = path.join(appRoot, 'node_modules', '@acme', 'aurelia-modes');
+    const sourceEntry = path.join(packageRoot, 'src', 'index.ts');
+    writeText(entryFile, "import { marker } from '@acme/aurelia-modes';\n");
+    writeJson(path.join(packageRoot, 'package.json'), {
+      name: '@acme/aurelia-modes',
+      version: '1.0.0',
+      type: 'module',
+      dependencies: { aurelia: '2.0.0' },
+      exports: {
+        '.': {
+          types: './dist/types/index.d.ts',
+          import: './dist/esm/index.js',
+          require: './dist/cjs/index.cjs',
+        },
+      },
+    });
+    writeText(path.join(packageRoot, 'dist', 'types', 'index.d.ts'), 'export declare const marker: string;\n');
+    writeText(path.join(packageRoot, 'dist', 'esm', 'index.js'), "export const marker = 'import';\n");
+    writeText(path.join(packageRoot, 'dist', 'cjs', 'index.cjs'), "exports.marker = 'require';\n");
+    writeText(sourceEntry, "export const marker = 'source';\n");
+
+    const { host } = evaluationHost(appRoot);
+    const imported = host.resolveModuleSpecifier(
+      entryFile,
+      '@acme/aurelia-modes',
+      ts.ModuleKind.ESNext,
+    );
+    const required = host.resolveModuleSpecifier(
+      entryFile,
+      '@acme/aurelia-modes',
+      ts.ModuleKind.CommonJS,
+    );
+
+    expect(imported).not.toBeNull();
+    expect(required).toBe(imported);
+    const origin = host.readPackageOrigin(imported!);
+    expect(origin?.buildLinks).toHaveLength(2);
+    expect(new Set(origin!.buildLinks.map((link) => link.resolutionMode))).toEqual(new Set([
+      ts.ModuleKind.ESNext,
+      ts.ModuleKind.CommonJS,
+    ]));
+    expect(new Set(origin!.buildLinks.map((link) =>
+      normalizeModuleKey(path.relative(packageRoot, link.physicalRuntimePath))
+    ))).toEqual(new Set(['dist/esm/index.js', 'dist/cjs/index.cjs']));
+  });
 
   test('honors an authored TypeScript paths target before an opaque node_modules homonym', () => {
     const appRoot = temporaryRoot();

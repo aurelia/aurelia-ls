@@ -176,6 +176,23 @@ export class RegistrationValueSupportEmission {
   ) {}
 }
 
+/** Candidate-local admission shape refined from stronger evaluator evidence. */
+export class RegistrationAdmissionRefinementEmission {
+  constructor(
+    readonly support: RegistrationValueSupportEmission,
+    /** Operation-local view retaining the source admission's durable product and identity handles. */
+    readonly admission: RegistrationAdmissionProduct,
+  ) {}
+
+  get records(): readonly KernelStoreRecord[] {
+    return this.support.records;
+  }
+
+  get openSeams(): readonly OpenSeam[] {
+    return this.support.openSeams;
+  }
+}
+
 class RegistrationClaimTarget {
   constructor(
     readonly handle: AddressHandle | IdentityHandle | ProductHandle,
@@ -714,6 +731,35 @@ export class RegistrationKernelEmitter {
     );
   }
 
+  /**
+   * Refine one durable source admission for a concrete DI application without publishing a duplicate admission product.
+   */
+  materializeAdmissionRefinement(
+    context: RegistrationEmissionContext,
+    sourceAdmission: RegistrationAdmissionProduct,
+    observation: RegistrationAdmissionObservation,
+    local: string,
+  ): RegistrationAdmissionRefinementEmission {
+    const support = this.materializeValueSupport(context, observation, local);
+    const product = this.admissionProductForObservation(
+      observation,
+      sourceAdmission.productHandle,
+      sourceAdmission.identityHandle,
+      sourceAdmission.sourceAddressHandle ?? support.sourceAddressHandle,
+      mergeRegistrationAdmissionFieldProvenance(
+        sourceAdmission.fieldProvenance,
+        support.fieldProvenance,
+      ),
+      support.key,
+      support.value,
+      support.registryParameters,
+    );
+    return new RegistrationAdmissionRefinementEmission(
+      support,
+      product.admission,
+    );
+  }
+
   private recordsForObservation(
     context: RegistrationEmissionContext,
     observation: RegistrationAdmissionObservation,
@@ -1124,6 +1170,16 @@ function registrationAdmissionFieldProvenance(
     value.provenanceHandle == null ? null : new FieldProvenance('registeredValue', value.provenanceHandle),
     registryParameters.fieldProvenance,
   ]);
+}
+
+function mergeRegistrationAdmissionFieldProvenance(
+  source: readonly FieldProvenance<RegistrationAdmissionField>[],
+  refined: readonly FieldProvenance<RegistrationAdmissionField>[],
+): readonly FieldProvenance<RegistrationAdmissionField>[] {
+  const byField = new Map<RegistrationAdmissionField, FieldProvenance<RegistrationAdmissionField>>();
+  for (const entry of source) byField.set(entry.field, entry);
+  for (const entry of refined) byField.set(entry.field, entry);
+  return [...byField.values()];
 }
 
 function hasRegistrationOpen(

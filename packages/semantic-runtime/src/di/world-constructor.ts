@@ -55,7 +55,7 @@ import {
 } from '../evaluation/property-access.js';
 import { StaticProjectEvaluationSourceIndex } from '../evaluation/project-source-index.js';
 import type { TypeSystemProject } from '../type-system/project.js';
-import {
+import type {
   AppTaskDefinition,
 } from '../configuration/app-task.js';
 import {
@@ -68,6 +68,7 @@ import {
 import {
   buildRegistryBodyStepIndex,
   RegistryAdmissionBodyExecution,
+  type RegistryBodyStepExecution,
   type RegistryBodyStepIndex,
 } from '../configuration/registry-body-index.js';
 import type {
@@ -109,10 +110,10 @@ import {
   frameworkRegistrationKindForOperation,
 } from './container-registration.js';
 import {
-  ContainerFactorySlot,
-  ContainerResourceSlot,
   ContainerResolverSlot,
   ContainerSelfResolverSlot,
+  type ContainerFactorySlot,
+  type ContainerResourceSlot,
 } from './container-slot.js';
 import type { ContainerResolutionFailureKind } from './container-lookup.js';
 import {
@@ -134,7 +135,7 @@ import {
 } from './registry.js';
 import {
   DiRegistrationValueMaterializer,
-  DiRegistrationValueMaterialization,
+  type DiRegistrationValueMaterialization,
 } from './registration-value-materializer.js';
 import type {
   DiRegistrationEvidenceAuthority,
@@ -162,7 +163,7 @@ import {
   DiResourceSlotEmission,
   DiResourceSlotPublicationMaterializer,
   DiResolverPublicationMaterializer,
-  DiSourceSet,
+  type DiSourceSet,
   recordsForDiOpenSeam,
   recordsForDiEvaluationOpenSeams,
   recordsForDiSource,
@@ -252,6 +253,7 @@ type DiRegistrationDirectSpender = (
   container: Container,
   step: ConfigurationStep,
   admission: RegistrationAdmissionProduct,
+  dispatchAdmission: RegistrationAdmissionProduct,
   ordinal: number,
   runtimeValue: EvaluationValue | null,
   registrationValue: DiRegistrationValueMaterialization,
@@ -288,7 +290,7 @@ interface DiRegistrationSpendingCascadeServices {
   readonly retainEvaluationPressure: (
     local: string,
     openSeams: readonly EvaluationOpenSeam[],
-    fallbackAddressHandle: import('../kernel/handles.js').AddressHandle | null,
+    fallbackAddressHandle: AddressHandle | null,
   ) => {
     readonly records: readonly KernelStoreRecord[];
     readonly seams: readonly OpenSeam[];
@@ -568,6 +570,7 @@ class DiRegistrationSpendingCascade {
     try {
       const runtimeValue = carrier?.value ?? null;
       const registrationValue = this.services.materializeValue(admission, carrier);
+      const dispatchAdmission = registrationValue.dispatchAdmission ?? admission;
       let application = emptyDiRegistrationApplication();
       if (
         registrationValue.product instanceof RegistryValue
@@ -608,6 +611,7 @@ class DiRegistrationSpendingCascade {
           container,
           step,
           admission,
+          dispatchAdmission,
           ordinal,
           runtimeValue,
           registrationValue,
@@ -730,7 +734,7 @@ class DiRegistrationSpendingCascade {
       const issue = this.services.issuePublisher.publishCyclicDependency(
         this.parameterizedRegistryLocal(container, step, admission, ordinal, 'handler-cycle'),
         registry.key.localName,
-        registry.key.localName ?? `${registry.key.identityHandle}`,
+        registry.key.localName ?? String(registry.key.identityHandle),
         activation.cycle,
         registry.sourceAddressHandle,
       );
@@ -988,7 +992,7 @@ class DiRegistrationSpendingCascade {
   private recordBodyStep(
     frame: DiRegistrationSpendingCascadeFrame,
     container: Container,
-    execution: import('../configuration/registry-body-index.js').RegistryBodyStepExecution,
+    execution: RegistryBodyStepExecution,
   ): boolean {
     const bodyStep = execution.step;
     for (const admissionHandle of bodyStep.registrationAdmissionProductHandles) {
@@ -1280,6 +1284,7 @@ export class DiWorldConstructor {
       configuration,
       evaluation,
       typeSystem,
+      resourceDefinitions,
       projectKey,
       this.resolverPublication,
       this.registryPublication,
@@ -1372,6 +1377,7 @@ export class DiWorldConstructor {
         container,
         step,
         admission,
+        dispatchAdmission,
         ordinal,
         runtimeValue,
         registrationValue,
@@ -1382,6 +1388,7 @@ export class DiWorldConstructor {
           container,
           step,
           admission,
+          dispatchAdmission,
           ordinal,
           runtimeValue,
           registrationValue,
@@ -1550,6 +1557,7 @@ export class DiWorldConstructor {
     container: Container,
     step: ConfigurationStep,
     admission: RegistrationAdmissionProduct,
+    dispatchAdmission: RegistrationAdmissionProduct,
     ordinal: number,
     runtimeValue: EvaluationValue | null,
     registrationValue: DiRegistrationValueMaterialization,
@@ -1602,7 +1610,7 @@ export class DiWorldConstructor {
     this.spendRegistrationAdmission(
       frame,
       container,
-      admission,
+      dispatchAdmission,
       runtimeValue,
       registrationValue.product,
       typeSystem,

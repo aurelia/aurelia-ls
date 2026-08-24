@@ -130,6 +130,7 @@
     "test": "pnpm build && pnpm -w run test:semantic-runtime:built"
   },
   "dependencies": {
+    "@jridgewell/trace-mapping": "^0.3.31",
     "@rollup/pluginutils": "5.0.2",
     "typescript": "6.0.3"
   },

@@ -1,4 +1,4 @@
-import type ts from 'typescript';
+import ts from 'typescript';
 
 import type { StaticInvocationIdentity } from '../evaluation/invocation.js';
 import { evaluateStaticUnaryOperation } from '../evaluation/operators.js';
@@ -14,7 +14,7 @@ import type {
   EvaluationValue,
 } from '../evaluation/values.js';
 import { EvaluationValueKind } from '../evaluation/values.js';
-import type { ProductHandle, ProvenanceHandle } from '../kernel/handles.js';
+import type { AddressHandle, ProductHandle, ProvenanceHandle } from '../kernel/handles.js';
 import { MaterializedProduct } from '../kernel/materialization.js';
 import type { OpenSeam } from '../kernel/open-seam.js';
 import {
@@ -26,6 +26,7 @@ import type { KernelStore, KernelStoreRecord } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
   frameworkRegistrationKindForAdmission,
+  OpenRegistrationAdmission,
   ParameterizedRegistryAdmission,
   RegistrationAdmissionKind,
   RegistryRegistrationAdmission,
@@ -51,26 +52,27 @@ import {
   type RegistrationValueSupportEmission,
 } from '../registration/registration-kernel-emitter.js';
 import {
-  EvaluatedRegistrationCarrier,
   RegistrationAdmissionObservation,
   RegistrationCarrierKind,
   RegistrationRecognitionOpen,
   RegistrationValueObservation,
+  type EvaluatedRegistrationCarrier,
 } from '../registration/registration-observation.js';
 import {
   evaluatedRegistryValueObservation,
   type EvaluatedRegistryValue,
 } from '../registration/evaluated-registration-value.js';
 import {
-  FrameworkRegistrationKind,
   RegistrationValueKind,
+  type FrameworkRegistrationKind,
   type RegistrationKeyReference,
   type RegistrationValueReference,
 } from '../registration/registration-reference.js';
 import { projectEvaluatedRegistrationValue } from '../registration/evaluated-registration-projector.js';
+import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
+import { enrichResourceRegistration } from '../resources/resource-registration-refinement.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import {
-  aureliaAppTaskEvaluationForValue,
   aureliaFrameworkRegistrationKindForEvaluationValue,
   aureliaRegistryBodyForEvaluationValue,
 } from '../configuration/aurelia-evaluation-runtime.js';
@@ -81,14 +83,13 @@ import {
   frameworkRegistrationKindForRegistrationEvidence,
 } from '../registration/evaluated-registration-classifier.js';
 import {
-  DiRegistryPublicationMaterializer,
-  DiResolverPublicationMaterializer,
   resolverFieldProvenanceForRegistration,
+  type DiRegistryPublicationMaterializer,
+  type DiResolverPublicationMaterializer,
   type DiResolverPublication,
 } from './world-publication.js';
 import {
   ParameterizedRegistry,
-  RegistryValue,
   type RegistryField,
 } from './registry.js';
 import {
@@ -108,6 +109,8 @@ export class DiRegistrationValueMaterialization {
     readonly openSeams: readonly OpenSeam[],
     readonly authority: DiRegistrationEvidenceAuthority,
     readonly frameworkRegistrationKind: FrameworkRegistrationKind | null,
+    /** Stronger candidate-local dispatch shape, kept separate from the durable source admission product. */
+    readonly dispatchAdmission: RegistrationAdmissionProduct | null = null,
   ) {}
 
   /** Exact dispatch evidence makes generic source-recognition pressure irrelevant to this application. */
@@ -136,7 +139,7 @@ class CanonicalDiRegistrationValue {
 }
 
 interface RegistrationValueFacts {
-  readonly sourceAddressHandle: import('../kernel/handles.js').AddressHandle | null;
+  readonly sourceAddressHandle: AddressHandle | null;
   readonly provenanceHandle: ProvenanceHandle;
   readonly key: RegistrationKeyReference | null;
   readonly value: RegistrationValueReference | null;
@@ -169,6 +172,7 @@ export class DiRegistrationValueMaterializer {
     configuration: ConfigurationKernelEmission,
     evaluation: StaticProjectEvaluationResult,
     private readonly typeSystem: TypeSystemProject,
+    private readonly resourceDefinitions: ResourceDefinitionIndex | null,
     private readonly projectKey: string | null,
     private readonly resolverPublication: DiResolverPublicationMaterializer,
     private readonly registryPublication: DiRegistryPublicationMaterializer,
@@ -221,7 +225,13 @@ export class DiRegistrationValueMaterializer {
       classification?.kind === EvaluatedRegistrationClassificationKind.Interface
       || classification?.kind === EvaluatedRegistrationClassificationKind.PlainClass
     ) {
-      // The evaluator projector has already lowered these exact runtime branches into resolver admission facts.
+      if (admission instanceof OpenRegistrationAdmission && carrier != null) {
+        const refined = this.materializeEvaluatedAdmissionRefinement(admission, carrier);
+        if (refined != null) {
+          return refined;
+        }
+      }
+      // Direct source carriers have already been lowered into resolver admission facts.
       return this.materializeAdmissionValue(
         admission,
         DiRegistrationEvidenceAuthority.Evaluation,
@@ -243,6 +253,75 @@ export class DiRegistrationValueMaterializer {
 
   evaluatedResolverState(resolver: Resolver): EvaluationValue | null {
     return this.resolverStatesByProduct.get(resolver.productHandle) ?? null;
+  }
+
+  private materializeEvaluatedAdmissionRefinement(
+    admission: OpenRegistrationAdmission,
+    carrier: EvaluatedRegistrationCarrier,
+  ): DiRegistrationValueMaterialization | null {
+    if (!ts.isExpression(carrier.sourceNode)) {
+      return null;
+    }
+    const source = this.sourceIndex.readEvaluatedForNode(carrier.sourceNode);
+    if (source == null) {
+      return null;
+    }
+    const projectionContext: EvaluatedRegistrationFactoryContext = {
+      sourceFileAddressHandleForNode: (node) => this.sourceIndex.addressHandleForNode(node),
+      registrationKeyObservationForValue: (expression, value) =>
+        registrationKeyObservationForEvaluatedValue(
+          expression,
+          value,
+          (node) => this.sourceIndex.addressHandleForNode(node),
+        ),
+    };
+    const projected = projectEvaluatedRegistrationValue(
+      projectionContext,
+      carrier.sourceNode,
+      carrier.value,
+      [],
+      admission.admissionKind,
+      admission.carrierKind,
+    );
+    if (projected?.length !== 1) {
+      return null;
+    }
+    const observation = enrichResourceRegistration(
+      projected[0]!,
+      { typeSystem: this.typeSystem },
+      this.resourceDefinitions,
+    );
+    const local = [
+      'di-registration-refinement',
+      this.nextAdmissionValueOrdinal++,
+      admission.productHandle,
+    ].join(':');
+    const refinement = this.registrationEmitter.materializeAdmissionRefinement(
+      new RegistrationEmissionContext(
+        source.sourceFile,
+        source.moduleKey,
+        source.admission.addressHandle,
+        (node) => this.sourceIndex.addressHandleForNode(node),
+        this.projectKey,
+        this.typeSystem,
+        RegistrationEmissionScope.DiRegistrationOperation,
+        local,
+      ),
+      admission,
+      observation,
+      local,
+    );
+    return this.materializeFacts(
+      refinement.admission,
+      observation.strategy,
+      factsForSupport(refinement.support),
+      local,
+      refinement.records,
+      refinement.openSeams,
+      DiRegistrationEvidenceAuthority.Evaluation,
+      frameworkRegistrationKindForRegistrationEvidence(refinement.admission, carrier),
+      refinement.admission,
+    );
   }
 
   evaluatedRegistryParameterElements(registry: ParameterizedRegistry): readonly EvaluationArrayElement[] {
@@ -509,6 +588,7 @@ export class DiRegistrationValueMaterializer {
     supportOpenSeams: readonly OpenSeam[] = [],
     authority: DiRegistrationEvidenceAuthority,
     frameworkKind: FrameworkRegistrationKind | null,
+    dispatchAdmission: RegistrationAdmissionProduct | null = null,
   ): DiRegistrationValueMaterialization {
     if (isResolverRegistrationStrategy(strategy)) {
       const resolverStrategy = resolverStrategyForRegistrationStrategy(strategy);
@@ -519,6 +599,7 @@ export class DiRegistrationValueMaterializer {
           supportOpenSeams,
           authority,
           frameworkKind,
+          dispatchAdmission,
         );
       }
       const publication: DiResolverPublication = {
@@ -541,6 +622,7 @@ export class DiRegistrationValueMaterializer {
         supportOpenSeams,
         authority,
         frameworkKind,
+        dispatchAdmission,
       );
     }
 
@@ -552,6 +634,7 @@ export class DiRegistrationValueMaterializer {
           supportOpenSeams,
           authority,
           frameworkKind,
+          dispatchAdmission,
         );
       }
       const emitted = this.registryPublication.recordsForCanonicalParameterizedRegistry(
@@ -569,6 +652,7 @@ export class DiRegistrationValueMaterializer {
         supportOpenSeams,
         authority,
         frameworkKind,
+        dispatchAdmission,
       );
     }
 
@@ -587,6 +671,7 @@ export class DiRegistrationValueMaterializer {
         supportOpenSeams,
         authority,
         frameworkKind,
+        dispatchAdmission,
       );
     }
 
@@ -596,6 +681,7 @@ export class DiRegistrationValueMaterializer {
       supportOpenSeams,
       authority,
       frameworkKind,
+      dispatchAdmission,
     );
   }
 

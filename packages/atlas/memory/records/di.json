@@ -757,6 +757,7 @@
         "Treat RegistrationAdmissionProduct as the normalized value offered to registration, DiRegistrationValueProduct as a reusable runtime resolver or registry object, and ContainerRegistrationOperation as one ordered application to one concrete container.",
         "Use Di.AppliesRegistration for operation-to-admission topology and Di.UsesRegistrationValue for operation-to-reusable-value topology. Container and produced-effect ownership use Di.ProducesProduct.",
         "Exact evaluator evidence is authoritative even when it proves that no framework package applies. Post-spending consumers must use frameworkRegistrationKindForOperation(...) and must not reclassify operation.admission.",
+        "When registry-body execution supplies a stronger exact class carrier than source recognition retained, project and resource-enrich an operation-local dispatch shape through DiRegistrationValueMaterializer. Keep ContainerRegistrationOperation.admission and Di.AppliesRegistration on the original durable source product; the dispatch shape guides spending only and must never become a second product behind the same handle.",
         "Use registrationOperationsVisibleToContainer(...) for consulting-chain visibility. Do not restore container-to-admission helper joins or sibling/world-global admission scans.",
         "ConfigurationEvaluationBindings owns generation-local evaluator and AST-node relations. Registry-body execution and option ownership must use those relations directly instead of reverse-mapping source addresses or comparing spans.",
         "Treat every DiRegistrationOpenSeamScope as authoritative application/container uncertainty regardless of the retained seam's domain kind. Evaluator-owned branch or call pressure can hide nested registry effects; only raw pre-application configuration seams need kind filtering.",
@@ -782,6 +783,12 @@
           "filePath": "packages/semantic-runtime/src/di/world-construction.ts",
           "symbolName": "registrationOperationsVisibleToContainer",
           "summary": "Shared consulting-container-chain operation projection."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/registration-value-materializer.ts",
+          "symbolName": "DiRegistrationValueMaterializer",
+          "summary": "Candidate-local evaluator refinement and reusable registration-value materialization."
         },
         {
           "kind": "source",
@@ -813,7 +820,7 @@
         }
       ],
       "createdAt": "2026-07-25",
-      "updatedAt": "2026-07-25"
+      "updatedAt": "2026-08-24"
     }
   ]
 }

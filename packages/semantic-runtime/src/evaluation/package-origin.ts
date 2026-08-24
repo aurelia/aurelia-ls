@@ -1,4 +1,5 @@
 import path from 'node:path';
+import type ts from 'typescript';
 
 import { isHostPathWithin } from '../boot/host-files.js';
 import { projectModuleHostPathKey } from '../project-analysis/package-identity.js';
@@ -13,12 +14,28 @@ export const enum ResolvedEvaluationModuleSourceScope {
   ExternalDependency = 'external-dependency',
 }
 
+/** Exact package export-condition bridge retained when declaration, authored source, and runtime modules diverge. */
+export class ResolvedEvaluationModuleBuildLink {
+  constructor(
+    readonly containingFile: string,
+    readonly moduleSpecifier: string,
+    readonly resolutionMode: ts.ResolutionMode | null,
+    readonly logicalDeclarationPath: string,
+    readonly physicalDeclarationPath: string,
+    readonly logicalSourcePath: string,
+    readonly physicalSourcePath: string,
+    readonly logicalRuntimePath: string,
+    readonly physicalRuntimePath: string,
+  ) {}
+}
+
 /** Package provenance for one evaluator module, independent from exact boot ownership/editability. */
 export class ResolvedEvaluationModuleOrigin {
   constructor(
     readonly packageInstance: ResolvedPackageInstance,
     readonly packageRelativePath: string,
     readonly sourceScope: ResolvedEvaluationModuleSourceScope,
+    readonly buildLinks: readonly ResolvedEvaluationModuleBuildLink[] = [],
   ) {}
 }
 
@@ -50,6 +67,7 @@ export class EvaluationPackageOriginIndex {
     physicalFileName: string,
     packageInstance: ResolvedPackageInstance,
     sourceScope: ResolvedEvaluationModuleSourceScope,
+    buildLink: ResolvedEvaluationModuleBuildLink | null = null,
   ): ResolvedEvaluationModuleOrigin {
     if (!isHostPathWithin(physicalFileName, packageInstance.physicalRootDir)) {
       throw new Error(
@@ -73,16 +91,26 @@ export class EvaluationPackageOriginIndex {
           + `'${existing.sourceScope}' and '${sourceScope}'.`,
         );
       }
-      this.originsByModulePath.set(moduleKey, existing);
+      const buildLinks = retainEvaluationModuleBuildLink(existing.buildLinks, buildLink);
+      const retained = buildLinks === existing.buildLinks
+        ? existing
+        : new ResolvedEvaluationModuleOrigin(
+            existing.packageInstance,
+            existing.packageRelativePath,
+            existing.sourceScope,
+            buildLinks,
+          );
+      this.originsByModulePath.set(moduleKey, retained);
       if (!this.preserveSymlinks) {
-        this.originsByModulePath.set(physicalKey, existing);
+        this.originsByModulePath.set(physicalKey, retained);
       }
-      return existing;
+      return retained;
     }
     const origin = new ResolvedEvaluationModuleOrigin(
       packageInstance,
       normalizeModuleKey(path.relative(packageInstance.physicalRootDir, physicalFileName)),
       sourceScope,
+      buildLink == null ? [] : [buildLink],
     );
     this.originsByModulePath.set(moduleKey, origin);
     if (!this.preserveSymlinks) {
@@ -90,4 +118,28 @@ export class EvaluationPackageOriginIndex {
     }
     return origin;
   }
+}
+
+function retainEvaluationModuleBuildLink(
+  links: readonly ResolvedEvaluationModuleBuildLink[],
+  link: ResolvedEvaluationModuleBuildLink | null,
+): readonly ResolvedEvaluationModuleBuildLink[] {
+  if (link == null || links.some((candidate) => evaluationModuleBuildLinkKey(candidate) === evaluationModuleBuildLinkKey(link))) {
+    return links;
+  }
+  return [...links, link];
+}
+
+function evaluationModuleBuildLinkKey(link: ResolvedEvaluationModuleBuildLink): string {
+  return [
+    projectModuleHostPathKey(link.containingFile),
+    link.moduleSpecifier,
+    link.resolutionMode ?? 'none',
+    projectModuleHostPathKey(link.logicalDeclarationPath),
+    projectModuleHostPathKey(link.physicalDeclarationPath),
+    projectModuleHostPathKey(link.logicalSourcePath),
+    projectModuleHostPathKey(link.physicalSourcePath),
+    projectModuleHostPathKey(link.logicalRuntimePath),
+    projectModuleHostPathKey(link.physicalRuntimePath),
+  ].join('\0');
 }

@@ -111,17 +111,23 @@ function findTemplateAdmission(
   context: ResourceRecognitionContext,
   candidates: readonly string[],
 ): SourceFileAdmission | null {
-  for (const candidate of candidates) {
-    const admission = context.sourceFiles.find((source) =>
-      source.path === candidate
-      && source.language === SourceLanguage.Html
-      && source.role === SourceFileRole.Template
-    ) ?? null;
-    if (admission != null) {
-      return admission;
-    }
-  }
-  return null;
+  const candidatePaths = new Set(candidates.map((candidate) => normalizedAbsoluteProjectPath(
+    context.projectRootDir,
+    candidate,
+  )));
+  return context.sourceFiles.find((source) =>
+    candidatePaths.has(normalizedAbsoluteProjectPath(context.projectRootDir, source.path))
+    && source.language === SourceLanguage.Html
+    && source.role === SourceFileRole.Template
+  ) ?? null;
+}
+
+function normalizedAbsoluteProjectPath(projectRootDir: string | null, filePath: string): string {
+  const absolute = path.isAbsolute(filePath)
+    ? filePath
+    : path.resolve(projectRootDir ?? '', filePath);
+  const normalized = normalizeProjectPath(path.resolve(absolute));
+  return ts.sys.useCaseSensitiveFileNames ? normalized : normalized.toLowerCase();
 }
 
 function normalizeProjectPath(filePath: string): string {

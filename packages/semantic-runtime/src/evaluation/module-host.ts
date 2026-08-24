@@ -514,6 +514,15 @@ export class FileSystemEvaluationModuleSourceHost implements EvaluationModuleSou
       resolved != null
         && !resolved.isExternalLibraryImport
         && compilerOptionsPathsCanResolve(this.compilerOptions, modulePathSpecifier),
+      resolutionMode,
+      resolved == null
+        ? null
+        : (packageRoots) => this.projectModules.resolvePackageRuntimeModuleName(
+            modulePathSpecifier,
+            fromAbsolute,
+            packageRoots,
+            resolutionMode,
+          ),
     );
     if (sourceResolution.sourcePath != null) {
       this.resolvedByTypeScript += 1;

@@ -61,9 +61,13 @@ export class ResourceRecognitionPass {
     this.sourceTextCache = new AuthoredSourceTextCache('', inputHost);
   }
 
-  recognize(context: ResourceRecognitionContext): readonly ResourceRecognitionObservation[] {
+  recognize(
+    context: ResourceRecognitionContext,
+    supplementalObservations: readonly ResourceRecognitionObservation[] = [],
+  ): readonly ResourceRecognitionObservation[] {
     return [
       ...this.namedResources.recognize(context),
+      ...supplementalObservations,
       ...this.syntaxResources.recognize(context),
     ];
   }
@@ -72,6 +76,7 @@ export class ResourceRecognitionPass {
     store: KernelStore,
     context: ResourceRecognitionContext,
     publication: KernelPublicationContext,
+    supplementalObservations: readonly ResourceRecognitionObservation[] = [],
   ): ResourceRecognitionResult {
     const started = performance.now();
     const phases: ResourceRecognitionPhaseTiming[] = [];
@@ -83,6 +88,7 @@ export class ResourceRecognitionPass {
     );
     const observations = [
       ...namedObservations,
+      ...supplementalObservations,
       ...syntaxObservations,
     ];
     const emission = measureResourceRecognitionPhase(phases, 'kernel-emission', () =>

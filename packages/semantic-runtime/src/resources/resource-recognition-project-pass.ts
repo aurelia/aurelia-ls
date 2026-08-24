@@ -40,10 +40,14 @@ import {
   registrationResourceKindFor,
 } from './resource-kind.js';
 import {
-  ResourceConventionTransformAdmissionIndex,
   ResourceConventionTransformAdmissionMaterializer,
   type ResourceConventionToolingEvaluationContext,
+  type ResourceConventionTransformAdmissionIndex,
 } from './resource-convention-transform-admission.js';
+import {
+  PackageResourceBuildBridgeMaterializer,
+  type PackageResourceBuildBridgeIndex,
+} from './package-resource-build-bridge.js';
 
 /** Resource-recognition result for one boot-admitted source file. */
 export class ResourceRecognitionSourceResult {
@@ -243,8 +247,10 @@ export class ResourceRecognitionProjectPass {
     const started = performance.now();
     const phases: ResourceRecognitionProjectPhaseTiming[] = [];
     const recognition = new ResourceRecognitionPass(project.inputGeneration.host);
+    const packageBuildBridges = new PackageResourceBuildBridgeMaterializer()
+      .materializeAndEmit(store, project, evaluation, publication);
     const sourceFiles = measureResourceRecognitionProjectPhase(phases, 'source-file-selection', () =>
-      resourceRecognitionSourceFiles(project, evaluation)
+      resourceRecognitionSourceFiles(project, evaluation, packageBuildBridges)
     );
     const conventionTransforms = new ResourceConventionTransformAdmissionMaterializer()
       .materializeAndEmit(store, project, conventionToolingEvaluation, publication);
@@ -257,7 +263,14 @@ export class ResourceRecognitionProjectPass {
     );
     const sources = evaluation.sources.map((source) => {
       const sourceStarted = performance.now();
-      const result = this.recognizeSource(store, publication, recognition, source, contexts);
+      const result = this.recognizeSource(
+        store,
+        publication,
+        recognition,
+        source,
+        contexts,
+        packageBuildBridges,
+      );
       phases.push({
         name: isEvaluatedProjectSource(source) ? 'evaluated-source' : 'open-source',
         milliseconds: performance.now() - sourceStarted,
@@ -281,6 +294,7 @@ export class ResourceRecognitionProjectPass {
     recognition: ResourceRecognitionPass,
     source: StaticProjectEvaluationResult['sources'][number],
     contexts: ReadonlyMap<string, ResourceRecognitionContext>,
+    packageBuildBridges: PackageResourceBuildBridgeIndex,
   ): ResourceRecognitionSourceResult {
     if (!isEvaluatedProjectSource(source)) {
       return this.openSourceResult(source);
@@ -293,6 +307,7 @@ export class ResourceRecognitionProjectPass {
       store,
       context,
       publication,
+      packageBuildBridges.observationsForContext(context),
     );
     return new ResourceRecognitionSourceResult(
       source.admission,
@@ -354,10 +369,14 @@ function evaluatedResourceRecognitionContexts(
 function resourceRecognitionSourceFiles(
   project: ProjectBootFrame,
   evaluation: StaticProjectEvaluationResult,
+  packageBuildBridges: PackageResourceBuildBridgeIndex,
 ): readonly SourceFileAdmission[] {
   const sourceFiles = new Map(project.sourceFiles.map((source) => [source.addressHandle, source] as const));
   for (const source of evaluation.sources) {
     sourceFiles.set(source.admission.addressHandle, source.admission);
+  }
+  for (const admission of packageBuildBridges.templateAdmissions) {
+    sourceFiles.set(admission.addressHandle, admission);
   }
   return [...sourceFiles.values()];
 }

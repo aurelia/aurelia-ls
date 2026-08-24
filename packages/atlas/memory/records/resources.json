@@ -26,6 +26,7 @@
         "Resource metadata annotations live in resource-metadata-annotations.ts: shared @alias(...) annotation values feed all named resources, while custom-element @containerless, @useShadowDOM(...), @capture(...), and member @children/@slotted registry dependencies feed full-definition convergence before definition-object and static class fallbacks.",
         "Function-valued custom-element capture metadata keeps durable ResourceTargetReference identity and StaticCallableSlot addresses separate from candidate-local StaticCallableTarget closures. Resource recognition emits exact execution bindings, compiler worlds re-authorize them under the current evaluation generation, and compiler reads compare predicate outcomes; both definition-object and @capture(...) forms use the same boundary.",
         "Inherited metadata nodes belong to their declaring source file. Use ResourceRecognitionContextIndex/readNodeContext so imported decorator configuration is evaluated in the declaring module environment instead of the subclass module environment.",
+        "Build-generated package resource identity must remain class-specific and evidence-gated. PackageResourceBuildBridgeMaterializer accepts only an exact condition-selected runtime graph, an imported generated metadata namespace applied by a mapped decorator-helper call, matching source-map content, a closed metadata surface, and matching shipped HTML; missing or conflicting evidence leaves the package on its existing open path.",
         "Resource source spans should use sourceFileAddressHandleForNode/readAdmittedNodeContext over contexts admitted by the resource-recognition pass. Do not re-resolve node source file names through KernelStore from resource convergence helpers.",
         "Resource dependency uncertainty should carry resource-specific reason kinds through ConvergenceOpen and recordsForSourceOpenSeam. Vite-style `import.meta.env` optional dependency spreads should keep known dependency entries while reporting `resource-definition-dependencies-open`, not evaluator unsupported-expression noise.",
         "Do not drop resource convergence open seams merely because the node cannot be mapped to an authored source-file span. Publish an addressless `resource.open-definition-field` seam with evidence and reason kinds so public open-seam rows can report the unresolved fact as unlocated rather than silently losing it."
@@ -101,6 +102,12 @@
           "summary": "Header publication stage before convergence."
         },
         {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/package-resource-build-bridge.ts",
+          "symbolName": "PackageResourceBuildBridgeMaterializer",
+          "summary": "Exact package build/source bridge for generated custom-element convention admissions."
+        },
+        {
           "kind": "lens",
           "lensId": "framework.resources",
           "projection": "convergence",
@@ -128,10 +135,17 @@
           "filePath": "packages/semantic-runtime/src/resources/bindable-convergence.ts",
           "minLineCount": 90,
           "minMethodCount": 4
+        },
+        {
+          "kind": "product-large-class",
+          "className": "PackageResourceBuildBridgeMaterializer",
+          "filePath": "packages/semantic-runtime/src/resources/package-resource-build-bridge.ts",
+          "minLineCount": 100,
+          "minMethodCount": 1
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-07-24"
+      "updatedAt": "2026-08-24"
     },
     {
       "id": "frontier:resource-metadata-diagnostics",
