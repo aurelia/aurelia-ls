@@ -384,6 +384,78 @@ test("secondary template lanes stay usable after a live TypeScript source refres
   }
 }, 30000);
 
+test("binding-mode hints follow the latest rapid unsaved edit without stale duplicates or source mutation", async () => {
+  const fixture = copyFixtureDirectory(helloWorldFixture);
+  const templatePath = path.join(fixture, "src/my-app.html");
+  const templateUri = fileUri(fixture, "src/my-app.html");
+  const baseline = fs.readFileSync(templatePath, "utf8");
+  const { connection, child, dispose, getStderr } = startServer(fixture);
+  const diagnostics = createDiagnosticsRecorder(connection, child, getStderr);
+
+  let currentText = baseline;
+  let version = 1;
+  try {
+    await initialize(connection, child, getStderr, fixture, {
+      configuration: {
+        "aurelia.inlayHints.bindingMode": true,
+      },
+    });
+    openDocument(connection, templateUri, "html", currentText, version);
+    await waitForCleanDiagnostics(diagnostics, templateUri);
+
+    const baselineValueBindEnd = currentText.indexOf("value.bind") + "value.bind".length;
+    expect(baselineValueBindEnd).toBeGreaterThanOrEqual("value.bind".length);
+    const firstEdit = `<!-- first deliberately longer rapid edit -->\n${baseline}`;
+    const secondEdit = firstEdit.replace("value.bind", "value.two-way");
+    const finalText = `<!-- final rapid edit -->\n${baseline}`;
+    const firstEditValueBindEnd = firstEdit.indexOf("value.bind") + "value.bind".length;
+
+    for (const text of [firstEdit, secondEdit, finalText]) {
+      version += 1;
+      currentText = text;
+      changeDocument(connection, templateUri, currentText, version);
+    }
+    await waitForCleanDiagnostics(diagnostics, templateUri);
+
+    const range = {
+      start: { line: 0, character: 0 },
+      end: positionAt(currentText, currentText.length),
+    };
+    const requestHints = async (): Promise<LspInlayHint[]> =>
+      await connection.sendRequest("textDocument/inlayHint", {
+        textDocument: { uri: templateUri },
+        range,
+      }) as LspInlayHint[] | null ?? [];
+    const hints = await requestHints();
+    expect(hints.length).toBeGreaterThan(0);
+    expect(await requestHints()).toEqual(hints);
+
+    const hintKeys = hints.map((hint) => JSON.stringify([hint.position, hint.label]));
+    expect(new Set(hintKeys).size).toBe(hintKeys.length);
+    const currentBindEnds = new Set<number>();
+    for (let offset = currentText.indexOf(".bind"); offset >= 0; offset = currentText.indexOf(".bind", offset + 1)) {
+      currentBindEnds.add(offset + ".bind".length);
+    }
+    expect(hints.every((hint) => currentBindEnds.has(offsetAt(currentText, hint.position)))).toBe(true);
+
+    const finalValueBindEnd = currentText.indexOf("value.bind") + "value.bind".length;
+    expect(hints.filter((hint) => offsetAt(currentText, hint.position) === finalValueBindEnd)).toEqual([
+      expect.objectContaining({ label: ": twoWay" }),
+    ]);
+    expect(finalValueBindEnd).not.toBe(baselineValueBindEnd);
+    expect(finalValueBindEnd).not.toBe(firstEditValueBindEnd);
+    expect(hints.some((hint) => offsetAt(currentText, hint.position) === baselineValueBindEnd)).toBe(false);
+    expect(hints.some((hint) => offsetAt(currentText, hint.position) === firstEditValueBindEnd)).toBe(false);
+    expect(fs.readFileSync(templatePath, "utf8")).toBe(baseline);
+  } finally {
+    diagnostics.dispose();
+    dispose();
+    child.kill("SIGKILL");
+    await waitForExit(child);
+    fs.rmSync(fixture, { recursive: true, force: true });
+  }
+}, 60_000);
+
 function textForRange(text: string, range: LspRange): string {
   return text.slice(offsetAt(text, range.start), offsetAt(text, range.end));
 }

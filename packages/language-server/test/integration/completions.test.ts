@@ -200,6 +200,61 @@ describe("Completions", () => {
     }
   });
 
+  test("lists the exact TodoTask surface after a member dot without root globals", async () => {
+    const fixture = createAureliaAppFixture({
+      "src/app.ts": [
+        "import { customElement } from 'aurelia';",
+        "import template from './app.html';",
+        "interface TodoTask {",
+        "  id: number;",
+        "  title: string;",
+        "  listId: number;",
+        "  tagIds: number[];",
+        "  completed: boolean;",
+        "  toggle(): void;",
+        "}",
+        "@customElement({ name: 'app-root', template })",
+        "export class AppRoot {",
+        "  heading = 'Tasks';",
+        "  task!: TodoTask;",
+        "}",
+      ].join("\n"),
+      "src/app.html": "<p>${task.}</p>",
+    });
+    const htmlUri = fileUri(fixture, "src/app.html");
+    const { connection, child, dispose, getStderr } = startServer(fixture);
+
+    try {
+      await initialize(connection, child, getStderr, fixture);
+      const htmlText = fs.readFileSync(path.join(fixture, "src/app.html"), "utf8");
+      await openDocument(connection, htmlUri, "html", htmlText);
+      await waitForDiagnostics(connection, child, () => getStderr(), htmlUri, 5000);
+      const completionList = expectCompletionList(await connection.sendRequest(
+        "textDocument/completion",
+        {
+          textDocument: { uri: htmlUri },
+          position: positionAt(htmlText, htmlText.indexOf("task.") + "task.".length),
+        },
+      ));
+
+      expect(completionList.isIncomplete).toBe(false);
+      expect(completionList.items.map((item) => item.label)).toEqual([
+        "completed",
+        "id",
+        "listId",
+        "tagIds",
+        "title",
+        "toggle",
+      ]);
+      expect(completionList.items.map((item) => item.label)).not.toContain("heading");
+    } finally {
+      dispose();
+      child.kill("SIGKILL");
+      await waitForExit(child);
+      fs.rmSync(fixture, { recursive: true, force: true });
+    }
+  });
+
   test("presents authorable hostile and stockText surfaces through the real stdio server", async () => {
     const fixture = createAureliaAppFixture({
       "src/app.ts": [

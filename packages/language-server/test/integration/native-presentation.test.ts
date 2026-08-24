@@ -238,6 +238,129 @@ test("native SVG foreignObject tags cannot inherit a colliding component declara
   }
 }, 60_000);
 
+test("issue-shaped css, SVG href, and host class carriers stay diagnostic-free and token-exact", async () => {
+  const templatePath = path.join(scopeFixture, "src/components/product-card.html");
+  const componentPath = path.join(scopeFixture, "src/components/product-card.ts");
+  const templateUri = fileUri(scopeFixture, "src/components/product-card.html");
+  const componentUri = fileUri(scopeFixture, "src/components/product-card.ts");
+  const templateBaseline = fs.readFileSync(templatePath, "utf8");
+  const componentText = fs.readFileSync(componentPath, "utf8");
+  const templateText = [
+    '<template class="host ${selected ? \'selected\' : \'\'}">',
+    '  <div css="width: ${selectionProgressPercent}%"></div>',
+    '  <svg><use href="#progress-shape"></use></svg>',
+    "</template>",
+    "",
+  ].join("\n");
+
+  const { connection, child, dispose, getStderr } = startServer(scopeFixture);
+  const diagnostics = createDiagnosticsRecorder(connection, child, getStderr);
+  try {
+    await initialize(connection, child, getStderr, scopeFixture);
+    openDocument(connection, componentUri, "typescript", componentText);
+    openDocument(connection, templateUri, "html", templateText);
+    expect(await diagnostics.wait(templateUri, 20_000)).toEqual([]);
+
+    const hoverAt = async (token: string, occurrence = 0): Promise<Hover | null> => {
+      let start = -1;
+      for (let index = 0; index <= occurrence; index += 1) {
+        start = templateText.indexOf(token, start + 1);
+      }
+      expect(start, `expected token ${token}`).toBeGreaterThanOrEqual(0);
+      return await connection.sendRequest<Hover | null>("textDocument/hover", {
+        textDocument: { uri: templateUri },
+        position: positionAt(templateText, start + Math.min(2, token.length - 1)),
+      });
+    };
+
+    expect(await hoverAt("css")).toBeNull();
+    expect(await hoverAt("href")).toBeNull();
+
+    const memberHover = await hoverAt("selectionProgressPercent");
+    expect((memberHover?.contents as { value?: string } | undefined)?.value ?? "")
+      .toBe("```ts\nreadonly selectionProgressPercent: 40\n```");
+    expect(memberHover?.range == null ? null : textForRange(templateText, memberHover.range))
+      .toBe("selectionProgressPercent");
+
+    expect(fs.readFileSync(templatePath, "utf8")).toBe(templateBaseline);
+    expect(fs.readFileSync(componentPath, "utf8")).toBe(componentText);
+  } finally {
+    diagnostics.dispose();
+    dispose();
+    child.kill("SIGKILL");
+    await waitForExit(child);
+  }
+}, 60_000);
+
+test("nested member hovers keep receiver-local types while string literal unions remain valid", async () => {
+  const htmlPath = path.join(scopeFixture, "src/my-app.html");
+  const componentPath = path.join(scopeFixture, "src/my-app.ts");
+  const htmlUri = fileUri(scopeFixture, "src/my-app.html");
+  const componentUri = fileUri(scopeFixture, "src/my-app.ts");
+  const htmlBaseline = fs.readFileSync(htmlPath, "utf8");
+  const componentBaseline = fs.readFileSync(componentPath, "utf8");
+  const htmlText = htmlBaseline.replace(
+    "  </main>",
+    [
+      "    <p data-hover-entity>${entity.element}</p>",
+      "    <p data-hover-severity>${severity}</p>",
+      "  </main>",
+    ].join("\n"),
+  );
+  const componentText = componentBaseline.replace(
+    "  readonly heading = 'Aurelia IDE playground';",
+    [
+      "  readonly heading = 'Aurelia IDE playground';",
+      "  readonly entity: { element: string; count: number } = { element: 'section', count: 1 };",
+      "  readonly severity: 'info' | 'warn' = 'info';",
+    ].join("\n"),
+  );
+  const { connection, child, dispose, getStderr } = startServer(scopeFixture);
+  const diagnostics = createDiagnosticsRecorder(connection, child, getStderr);
+
+  try {
+    await initialize(connection, child, getStderr, scopeFixture);
+    openDocument(connection, componentUri, "typescript", componentText);
+    openDocument(connection, htmlUri, "html", htmlText);
+    expect(await diagnostics.wait(htmlUri, 20_000)).toEqual([]);
+
+    const hoverAt = async (marker: string, token: string): Promise<Hover | null> => {
+      const markerStart = htmlText.indexOf(marker);
+      const tokenStart = htmlText.indexOf(token, markerStart);
+      expect(markerStart).toBeGreaterThanOrEqual(0);
+      expect(tokenStart).toBeGreaterThanOrEqual(markerStart);
+      return await connection.sendRequest<Hover | null>("textDocument/hover", {
+        textDocument: { uri: htmlUri },
+        position: positionAt(htmlText, tokenStart + 1),
+      });
+    };
+
+    const entity = await hoverAt("${entity.element}", "entity");
+    const entityMarkdown = (entity?.contents as { value?: string } | undefined)?.value ?? "";
+    expect(entityMarkdown).toContain("readonly entity:");
+    expect(entityMarkdown).toContain("element: string");
+    expect(entity?.range == null ? null : textForRange(htmlText, entity.range)).toBe("entity");
+
+    const element = await hoverAt("${entity.element}", "element");
+    expect((element?.contents as { value?: string } | undefined)?.value ?? "")
+      .toBe("```ts\nelement: string\n```");
+    expect(element?.range == null ? null : textForRange(htmlText, element.range)).toBe("element");
+
+    const severity = await hoverAt("${severity}", "severity");
+    expect((severity?.contents as { value?: string } | undefined)?.value ?? "")
+      .toContain("readonly severity: \"info\" | \"warn\"");
+    expect(severity?.range == null ? null : textForRange(htmlText, severity.range)).toBe("severity");
+
+    expect(fs.readFileSync(htmlPath, "utf8")).toBe(htmlBaseline);
+    expect(fs.readFileSync(componentPath, "utf8")).toBe(componentBaseline);
+  } finally {
+    diagnostics.dispose();
+    dispose();
+    child.kill("SIGKILL");
+    await waitForExit(child);
+  }
+}, 60_000);
+
 test("native hover preserves exact bare parent ancestry without confusing a $parent member", async () => {
   const htmlPath = path.join(scopeFixture, "src/my-app.html");
   const componentPath = path.join(scopeFixture, "src/my-app.ts");

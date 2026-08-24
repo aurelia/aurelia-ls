@@ -20,6 +20,14 @@ import {
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
 const helloWorldFixture = path.join(repoRoot, "fixtures", "hello-world");
+const conventionFixture = path.join(
+  repoRoot,
+  "packages",
+  "semantic-runtime",
+  "fixtures",
+  "pressure",
+  "resource-conventions-scoped",
+);
 
 test("resource discovery transports exact project inventory and cursor-selected availability", async () => {
   const fixture = copyFixtureDirectory(helloWorldFixture);
@@ -205,6 +213,50 @@ test("resource discovery transports exact project inventory and cursor-selected 
     fs.rmSync(fixture, { recursive: true, force: true });
   }
 });
+
+test("related files follow a deeply nested convention pair in both directions", async () => {
+  const fixture = copyFixtureDirectory(conventionFixture);
+  const sourceRelativePath = "src/features/catalog/deep-related-card.ts";
+  const templateRelativePath = "src/features/catalog/deep-related-card.html";
+  const sourcePath = path.join(fixture, sourceRelativePath);
+  const templatePath = path.join(fixture, templateRelativePath);
+  fs.mkdirSync(path.dirname(sourcePath), { recursive: true });
+  fs.writeFileSync(sourcePath, "export class DeepRelatedCard {}\n", "utf8");
+  fs.writeFileSync(templatePath, "<template>Deep related card</template>\n", "utf8");
+  const sourceUri = fileUri(fixture, sourceRelativePath);
+  const templateUri = fileUri(fixture, templateRelativePath);
+  const { connection, child, dispose, getStderr } = startServer(fixture);
+
+  try {
+    await initialize(connection, child, getStderr, fixture);
+    openDocument(connection, sourceUri, "typescript", fs.readFileSync(sourcePath, "utf8"));
+    openDocument(connection, templateUri, "html", fs.readFileSync(templatePath, "utf8"));
+
+    expect(await connection.sendRequest<RelatedFilesResponse>(
+      AureliaProtocolRequest.RelatedFiles,
+      { uri: sourceUri },
+    )).toEqual([{
+      uri: templateUri,
+      role: "component-template",
+      elementName: "deep-related-card",
+      className: "DeepRelatedCard",
+    }]);
+    expect(await connection.sendRequest<RelatedFilesResponse>(
+      AureliaProtocolRequest.RelatedFiles,
+      { uri: templateUri },
+    )).toEqual([{
+      uri: sourceUri,
+      role: "component-source",
+      elementName: "deep-related-card",
+      className: "DeepRelatedCard",
+    }]);
+  } finally {
+    dispose();
+    child.kill("SIGKILL");
+    await waitForExit(child);
+    fs.rmSync(fixture, { recursive: true, force: true });
+  }
+}, 30_000);
 
 function seedAdversarialResourceDiscovery(fixture: string): void {
   const cardPath = path.join(fixture, "src/components/product-card.ts");
