@@ -2,64 +2,89 @@
 
 ## 0.5.0
 
-The extension and language server now use the shared Aurelia semantic runtime. Editor answers preserve exact authored
-source and disclose partial, refused, or failed results instead of filling semantic gaps with guesses.
+Version 0.5 moves the extension and language server onto the shared Aurelia semantic runtime. One source-backed model now
+supplies editor features, project/resource discovery, diagnostics, and currentness across workspace roots.
+
+### Highlights
+
+- Cross-file rename is one authenticated workspace transaction and one native VS Code undo unit.
+- **Aurelia Resources** now presents project inventory and selected-template availability with navigation and recovery.
+- Hover and completions add `$parent`, member documentation, effective binding modes, overloads, generics, and exact edits.
+- Contextual explanations and `aurelia.project.json` V1 expose more of the semantic model when requested.
+- Each admitted workspace root uses an isolated Worker-backed language server with restart and multi-root isolation.
 
 ### Language intelligence
 
-- Reworked hover into bounded exact-locus cards for member, local, and bare `$this` types; resource, implementation, and alias identity when proved; bindable type and declaration-default mode; selected static route ids or paths; and at most one Stage 6A-presented cursor diagnostic or typed uncertainty. Raw origin, provenance, handles, and analysis keys stay out of default cards.
-- Made completions carry exact replacement edits, including safe `.bind` composition for bindables and `.for` for the framework `repeat` controller, without duplicating an existing command or inferring framework behavior from spelling alone.
-- Added exact Go to Definition targets from static router `load` paths and route ids to their owning route-configuration declarations.
-- Made Find References report unverified or unmappable candidates instead of presenting a verified subset as complete.
-- Made template rename cover source-backed members, bindables and aliases, custom elements, custom attributes, template controllers, value converters, and binding behaviors when their declarations and references are editable and verified.
-- Extended TypeScript, TSX, JavaScript, and JSX member renames atomically into admitted templates, while leaving unverified same-name candidates unchanged and reporting them.
-- Made Quick Fixes re-plan against the current document and reject stale, overlapping, or otherwise unsafe workspace edits.
-- Preserved framework and template-checker TypeScript codes through VS Code Problems while leaving ordinary Program diagnostics to VS Code's native TypeScript/JavaScript provider, and hardened native symbols, highlights, selection ranges, paired-tag linked editing, folding ranges, inlay hints, and semantic-token source ranges.
-- Kept unkeyed editor providers neutral when one source belongs to multiple Aurelia projects, while project-aware Resource Discovery continues to expose the exact project candidates instead of selecting one implicitly.
-- Kept embedded CSS and JavaScript validation on by default so legitimate native Problems remain visible. Added
-  resource-scoped `aurelia.templateDiagnostics.suppressNative` as an explicit tradeoff for teams that prefer removing
-  interpolation false positives such as `style="width: ${value}%"`: proved templates then use **Aurelia HTML** mode,
-  which also hides legitimate CSS/JavaScript findings. Bounded Aurelia recovery Problems for supported malformed tags,
-  attributes, comments, declarations, and foreign-content CDATA remain in both modes; they are not general HTML validation. Ordinary
-  HTML remains native and no global `html.validate.*` setting is changed. Cold first-open ownership proof remains
-  asynchronous, so a native diagnostic can appear briefly before enabled suppression settles.
-- Semantic-token responses now require complete, source-backed, non-overlapping single-line classifications, and the extension declares native fallback types for its Aurelia token vocabulary.
+- Exact-locus hover covers member/local and `$this` types, authored `$parent` hops, member documentation and deprecation,
+  resource identity, bindable declaration and effective usage modes, selected overloads/generics, and static route
+  ids/paths.
+- Completions carry exact replacement edits and safely compose `.bind` for bindables and `.for` for framework `repeat`.
+- Definitions, references, and highlights use source-backed identity across templates, TypeScript related symbols, linked
+  declarations, and source-resolvable route ids/`load` paths. Find References reports omitted candidate counts when its
+  returned rows are not complete.
+- Route-parameter object-key completions use endpoint declarations from source-resolvable route topology.
+- Supported resource/member rename extends between TypeScript and templates when the complete edit set is current and
+  editable. An unverified candidate or stale target refuses the whole operation.
+- Semantic tokens, symbols, selection ranges, linked editing, folding, highlights, and optional binding-mode hints share
+  the same source evidence. Resource lookup preserves authored casing and SVG/HTML `foreignObject` ownership.
 
-### Workspace and resource discovery
+### Diagnostics and safe fixes
 
-- Added resource-scoped `auto`, `on`, and `off` activation for multi-root workspaces. Automatic activation requires semantic-runtime project-shape confirmation, and an excluded parent subtree cannot be re-enabled by a nested folder.
-- Added exact JSONC parsing for `aurelia.project.json`, with parser diagnostics owned by VS Code and admitted semantic
-  configuration diagnostics owned by semantic-runtime; the canonical full schema remains packaged but unassociated.
-- Rebuilt **Aurelia Resources** in VS Code's built-in Explorer over exact project inventory, aliases, bindables, origin, ambiguity, and partial or failed analysis state.
-- Replaced the Resource Explorer's arbitrary TypeScript-symbol glyph mapping with a quieter visual grammar: stable project
-  identity, text-led kind and resource rows, relationship icons only for aliases and bindables, and problem color only for
-  true failed, incomplete or invalid, unsupported, or out-of-date project states.
-- Replaced **Find Resource** and **Show Available Resources** with **Go to Resource...** and **Go to Resource Available to Active Template...**, using exact workspace inventory and active-template compiler scope.
-- Added bounded declaration, implementation, and side-by-side resource actions; explicit updating, stale, incomplete, unsupported, and failed states; Retry plus Output recovery on failed or out-of-date project rows; Output-only context for unsupported projects; and searchable owner and metadata-state context in resource Quick Picks.
-- Scoped settled **Aurelia Resources** refreshes to the workspace whose analysis changed while retaining full refreshes for topology, session, and explicit user-refresh events.
-- Made an isolated Worker-backed language server the default transport for active roots, with IPC retained for debugging and explicit fallback.
+- Pull diagnostics preserve semantic/checker context while VS Code's native provider continues to own ordinary
+  TypeScript/JavaScript Program diagnostics.
+- Edit-backed Quick Fixes re-plan against current source and refuse stale, overlapping, ambiguous, or excluded targets.
+  Aurelia recovery Problems cover a bounded set of malformed tags, attributes, comments, declarations, foreign-content
+  CDATA, and excessive element nesting.
+- Templates use native `html` mode by default. Resource-scoped `aurelia.templateDiagnostics.suppressNative` can move
+  proved templates to **Aurelia HTML** mode to remove interpolation false positives. It also suppresses legitimate
+  embedded CSS/JavaScript findings and can change icons, `[html]` settings, snippets, formatters, and related behavior.
 
-### Explanations and analysis limitations
+### Resources, explanations, and configuration
 
-- Added **Review Analysis Limitations** to the **Aurelia Resources** view when a current limitation is eligible for
-  review. Version 2 `aurelia.project.json` files can set the admitted
-  `aurelia.analysis.dynamic-registration-spread` finding to `off`, `information`, `warning`, or `error` without
-  erasing the underlying semantic evidence; `off` does not promise a visible review row.
-- Added invoked-only **Explain this Aurelia diagnostic** and **Explain this Aurelia binding** Quick Fixes for exact
-  framework-capability Problems and materially uncertain bindings.
-- Added **Explain how Aurelia uses this attribute** only at an exact non-plain, top-level authored HTML attribute name;
-  attribute values, secondary inline multi-binding parts, and plain attributes do not advertise the action.
-- Added **Explain Availability in Active Template** to supported Resource Explorer rows when an Aurelia-owned HTML
-  template is active, with an exact scope choice when current compiler scopes are ambiguous.
-- Kept every explanation in native VS Code UI with fresh document, subject, and source re-checks. The contextual actions
-  remain absent from the Command Palette, and no generic Inspect/report surface was restored.
+- **Aurelia Resources** lives in Explorer and covers custom elements, custom attributes, template controllers, value
+  converters, and binding behaviors. It reports inventory, active-template availability, answer coverage, project state,
+  aliases, bindables, declaration modes, ownership, provenance/locality, and source targets.
+- Icons carry one information axis at each level: resource kind, resource provenance/locality, alias relationship, or
+  declared bindable mode. Text, tooltips, and accessibility labels carry the same information.
+- Resource rows provide declaration, implementation, and side navigation. Failed/out-of-date projects provide Retry and
+  Output; unsupported projects provide Output.
+- **Go to Resource...** searches navigable inventory across active roots. **Go to Resource Available to Active
+  Template...** searches the active template's selected compiler scope and prompts when project/scope identity is
+  ambiguous.
+- Contextual native actions include **Explain this Aurelia diagnostic**, **Explain this Aurelia binding**, **Explain how Aurelia uses this attribute**, and **Explain Availability in Active Template** for their exact eligible subjects. They
+  re-check the current document and subject and remain absent from the Command Palette.
+- **Review Analysis Limitations** exposes the configured dynamic-registration-spread finding when eligible.
+  `aurelia.project.json` V1 can set it to `off`, `information`, `warning`, or `error`. The policy changes presentation;
+  `off` does not promise a visible review row.
+- V1 also owns `authoredSources.excludedRoots`. Semantic-runtime owns format acceptance, application state, filesystem
+  checks, semantic diagnostics, and effective policy. VS Code provides JSONC feedback plus a bundled offline assistance
+  schema; the canonical semantic schema is packaged separately.
 
-### Compatibility and product changes
+### Workspace activation and reliability
 
-- Requires VS Code 1.91 or newer and a filesystem-backed workspace. Virtual workspaces are unsupported; remote development is not yet a declared release promise.
-- Moved the resource view from a dedicated Activity Bar container into VS Code's built-in Explorer.
-- Removed approximate CodeLens, global snippets, default keybindings, Diagnostics Report and suppressed-diagnostics commands, Inspect at Cursor, status and inline-confidence presentation, public debug and observability surfaces, dead feature toggles, and the experimental AI setting.
-- **Open Related File** remains available without a bundled keyboard shortcut.
+- Resource-scoped `aurelia.activationMode` supports `auto`, `on`, and hard-subtree `off`. Automatic mode starts
+  provisionally from dependency/source/configuration evidence and then requires semantic project-shape confirmation. An
+  excluded parent subtree cannot be re-enabled below.
+- Disjoint workspace roots receive independent language-server sessions, resource state, diagnostics, and refreshes.
+  Session replacement and Worker restart refresh ownership and current answers. IPC is available for Extension
+  Development Host debugging and `AURELIA_LS_FORCE_IPC_TRANSPORT=1` diagnosis.
+
+### Compatibility, changed surface, and removals
+
+- Requires VS Code 1.91 or newer and a filesystem-backed local workspace. Virtual workspaces are unsupported; remote
+  development is not a release-tested promise.
+- Modeled Repeat, virtualization, routing, and validation behavior is aligned with the Aurelia framework baseline used
+  for this release.
+- The resource view moved from its dedicated Activity Bar container into Explorer and is now named **Aurelia Resources**.
+- `aurelia.findResource` and `aurelia.showAvailableResources` were replaced by `aurelia.goToResource` and
+  `aurelia.goToAvailableResource`. The old `Ctrl/Cmd+Alt+A` and `Ctrl/Cmd+Alt+I` bindings were removed. **Open Related
+  File** moved from `Alt+O` to the scoped `Alt+R`, which is the only bundled default keybinding.
+- Removed approximate CodeLens, ordinary-HTML global snippets, Diagnostics Report and suppressed-diagnostics commands,
+  Inspect at Cursor, overlay/mapping/state viewers, status and inline-confidence presentation, public debug/observability
+  commands, dead feature toggles, and the experimental AI setting.
+- Removed the `aurelia.features.*`, `aurelia.observability.*`, and `aurelia.experimental.ai` settings. The supported 0.5
+  settings are `aurelia.activationMode`, `aurelia.inlayHints.bindingMode`, and
+  `aurelia.templateDiagnostics.suppressNative`, all scoped per workspace folder.
 
 ## 0.4.4
 

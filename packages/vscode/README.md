@@ -14,11 +14,14 @@ that materially affects its exact selected answer; broader resource state remain
 
 Hover over a supported Aurelia-authored token for one bounded answer at its exact authored range. Template members and
 locals show the selected type, with a local role when semantic evidence proves it; bare `$this` shows the current
-binding-context type. Resource tokens show authored identity and Aurelia kind, with an alias relationship or
-implementation only when source-backed evidence proves it. Bindable attributes and declarations show the public type
-and declaration-default mode. Exact static route-id or route-path tokens show the selected route context. A card may then
-include at most one presented cursor diagnostic or one typed uncertainty that affects that answer. Resource tags do not
-enumerate a component's bindables, and hover omits origin and provenance by default.
+binding-context type, and each authored `$parent` hop shows the corresponding ancestor context. Member cards can include
+source-authored documentation, declared visibility, and deprecation; exact calls can show the selected overload or
+instantiated generic signature. Resource tokens show authored identity and Aurelia kind, with an alias relationship or
+implementation only when source-backed evidence proves it. Bindable declarations show their public type and declared
+default mode, while bindable usages show the exact effective mode and its authority when current evidence proves it.
+Exact static route-id or route-path tokens show the selected route context. A card may then include at most one presented
+cursor diagnostic or one typed uncertainty that affects that answer. Resource tags do not enumerate a component's
+bindables, and hover omits broad origin and provenance by default.
 
 ### Diagnostics — catch real problems
 
@@ -93,7 +96,7 @@ When the **Aurelia Resources** view reports a current analysis limitation eligib
 
 The accepted dispositions are `off`, `information`, `warning`, and `error`. They change consumer presentation only.
 `off` can suppress the projected finding and its review row; it does not erase the underlying limitation or change
-Resource Explorer completeness. Version 1 also owns `authoredSources.excludedRoots`; see the shared
+resource coverage in **Aurelia Resources**. Version 1 also owns `authoredSources.excludedRoots`; see the shared
 [Project Configuration](https://github.com/aurelia/aurelia-ls/blob/main/docs/project-configuration.md) contract for
 defaults and failure behavior.
 
@@ -121,7 +124,10 @@ request returns the verified subset and reports the omitted count instead of pre
 Rename source-backed template members, bindables and attribute aliases, custom elements, custom attributes, template
 controllers, value converters, and binding behaviors when semantic-runtime can prove editable declarations and
 verified references. Renames initiated from TypeScript, TSX, JavaScript, or JSX members are extended atomically into
-admitted templates. Unverified same-name candidates are left unchanged and reported.
+admitted templates only when the complete current transaction is verified and editable. If semantic-runtime retains an
+unverified candidate that could belong to the rename, or any target becomes stale, excluded, or physically different,
+the whole rename is refused and nothing is applied. In supported VS Code F2 journeys, one multi-file rename is one undo
+unit.
 
 ### Semantic Tokens — see the meaning
 
@@ -136,7 +142,7 @@ stay in VS Code's native UI and use the same source-backed semantic answers as n
 
 ### Resource Discovery
 
-Browse exact runtime resources in the **Aurelia Resources** view in VS Code's built-in Explorer, grouped by kind. The view
+Browse the current runtime-resource inventory in the **Aurelia Resources** view in VS Code's built-in Explorer, grouped by kind. The view
 covers custom elements, custom attributes, template controllers, value converters, and binding behaviors; compiler-syntax
 features such as binding commands and attribute patterns remain outside the runtime-resource inventory. Aliases, bindables,
 declaration forms, origin, and exact source navigation stay attached to their owning definition. Multi-root workspaces show
@@ -146,35 +152,24 @@ retains the last coherent tree as out of date. Resource rows provide exact decla
 navigation when those targets are proved. Failed or out-of-date project rows offer **Retry Resource Discovery** and
 **Open Aurelia Output**; unsupported project rows offer Output without implying that retry can change support.
 
-The tree uses a role-based visual grammar: project boundaries use the project glyph, resource-kind collections use the
-library glyph, canonical Aurelia resources use the code glyph, aliases use the link glyph, and bindables use the plug
-glyph. Resource kinds remain named in text instead of being projected onto unrelated TypeScript declaration symbols.
-Error, warning, and information colors identify actual failed, incomplete or invalid, unsupported, or out-of-date
-project states; legitimate pathless, duplicate, or open resources do not acquire problem styling.
+The tree assigns one information axis to each level. Project boundaries use the project role; each collection has a
+distinct resource-kind icon; canonical resource rows show local-template, project, package, core-framework,
+official-plugin, external, or unknown provenance/locality; aliases show their relationship; and bindables show their
+declared default, one-time, to-view, from-view, two-way, or unknown mode. Text, tooltips, and accessibility labels retain
+the same information instead of relying on icons alone. Error, warning, and information colors identify actual failed,
+incomplete or invalid, unsupported, or out-of-date project states; legitimate pathless, duplicate, or open resources do
+not acquire problem styling.
 
-Use **Aurelia: Go to Resource...** to search navigable resources from the exact inventory across active Aurelia workspaces. Use
+When an opaque third-party registry could contribute resources that static analysis cannot enumerate, affected
+inventory or availability remains explicitly open. The extension does not fabricate those resources or claim that a
+missing name is definitely absent merely because it cannot inspect the registry body.
+
+Use **Aurelia: Go to Resource...** to search navigable resources from the current inventory across active Aurelia workspaces. Use
 **Aurelia: Go to Resource Available to Active Template...** for the exact compiler scope at the current template cursor. The
 contextual command asks you to choose when project or template ownership is genuinely ambiguous; it never derives scope from
 which Explorer item happens to have focus. Quick Picks keep aliases, bindables, kinds, workspace and project ownership, source
 location, and incomplete metadata searchable. A navigation retry repeats the current template-availability proof before opening
 anything, so a stale selection cannot be paired with a newer project snapshot.
-
-### Native Template Diagnostics
-
-Aurelia templates remain in VS Code's native `html` language mode by default. This preserves embedded CSS and
-JavaScript diagnostics, default file icons, and ordinary language-scoped settings, but those validators may report
-false positives for valid Aurelia interpolation.
-
-Set `aurelia.templateDiagnostics.suppressNative` to `true` for a workspace folder to suppress those native diagnostics.
-Only templates proved to belong to Aurelia move into `aurelia-html` mode; unowned HTML remains native `html`. Aurelia
-features and HTML language-service completions remain available, but this is not full native-mode parity. Enabling the
-setting suppresses legitimate CSS/JavaScript findings too, and may affect file icons, `[html]`-scoped settings, snippets,
-formatter selection, and other native HTML or editor behavior. On a cold first open, ownership proof is asynchronous,
-so a native diagnostic may appear briefly before enabled suppression settles.
-Bounded Aurelia recovery Problems for supported malformed tags, attributes, comments, declarations, and foreign-content
-CDATA remain in both modes, but do not constitute general HTML validation.
-Keep the setting `false` unless interpolation false Problems outweigh embedded CSS/JavaScript validation, and retain that
-validation in project lint or build checks when opting in.
 
 ### Binding Mode Hints
 
@@ -272,9 +267,9 @@ commands remain unbound unless you assign them.
 
 | Command | Shortcut | Description |
 |---------|----------|-------------|
-| Aurelia: Go to Resource... | — | Search exact runtime resources across active Aurelia workspace folders |
+| Aurelia: Go to Resource... | — | Search current navigable resource inventory across active Aurelia workspace folders |
 | Aurelia: Open Related File | `Alt+R` | Open a component class or file-backed template, prompting when topology proves multiple counterparts |
-| Aurelia: Go to Resource Available to Active Template... | — | Search exact runtime resources in the active template cursor's compiler scope |
+| Aurelia: Go to Resource Available to Active Template... | — | Search resources reported for the active template cursor's current compiler scope, prompting when scope is ambiguous |
 | Aurelia: Refresh | — | Refresh the Aurelia Resources view |
 
 ## Troubleshooting
