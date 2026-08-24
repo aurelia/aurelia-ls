@@ -14,6 +14,7 @@ import {
 import type { ModuleEnvironmentRecord } from '../evaluation/environment.js';
 import {
   evaluationAbruptCompletionSummary,
+  ThrowEvaluationCompletion,
   type EvaluationExpressionAbruptCompletion,
 } from '../evaluation/completion.js';
 import {
@@ -21,6 +22,7 @@ import {
   type StaticEvaluationRuntimeHost,
 } from '../evaluation/evaluator.js';
 import { EvaluationRead } from '../evaluation/expression-reader.js';
+import { StaticEvaluationSessionFork } from '../evaluation/evaluation-session.js';
 import type { StaticIntrinsicEvaluationHost } from '../evaluation/intrinsics.js';
 import {
   isStaticCallInvocationOccurrence,
@@ -28,6 +30,7 @@ import {
   StaticInvocationKind,
   StaticInvocationNotApplicable,
   staticInvocationValue,
+  type StaticInvocationFrame,
   type StaticInvocationOccurrence,
 } from '../evaluation/invocation.js';
 import { normalizeModuleKey } from '../evaluation/module-graph.js';
@@ -59,6 +62,8 @@ import {
   EvaluationValueKind,
   type EvaluationValue,
 } from '../evaluation/values.js';
+import { EvaluationRuntimeIdentityIndex } from '../evaluation/value-relation.js';
+import { evaluationValueSnapshotsHaveEqualExecutionState } from '../evaluation/value-snapshot-state.js';
 import type { AddressHandle, IdentityHandle } from '../kernel/handles.js';
 import {
   SourceFileAddress,
@@ -720,6 +725,30 @@ export class DiProviderActivationView {
   }
 }
 
+class DiRegistryExecutionState {
+  private mutationCount = 0;
+
+  constructor(
+    readonly snapshot: EvaluationValue,
+    readonly value: EvaluationValue,
+  ) {}
+
+  canReuseDifferentSnapshot(snapshot: EvaluationValue): boolean {
+    return this.mutationCount === 0
+      && evaluationValueSnapshotsHaveEqualExecutionState(this.snapshot, snapshot);
+  }
+
+  recordMutations(count: number): void {
+    this.mutationCount += count;
+  }
+}
+
+interface DiRegistryRegisterEffect {
+  readonly shouldContinue: boolean;
+  readonly hasEvaluationMutation: boolean;
+  readonly abruptCompletion: EvaluationExpressionAbruptCompletion | null;
+}
+
 export class DiProviderActivationSession {
   private readonly frames: DiProviderActivationFrame[] = [];
   private readonly internalRuntimeHosts = new WeakMap<StaticEvaluationRuntimeHost, StaticEvaluationRuntimeHost>();
@@ -728,10 +757,12 @@ export class DiProviderActivationSession {
   private readonly singletonValues = new Map<object, DiProviderActivationResult>();
   private readonly activeSingletons = new Set<object>();
   private readonly activeAliases = new Set<Resolver>();
+  private readonly registryExecutions = new EvaluationRuntimeIdentityIndex<DiRegistryExecutionState>();
   private readonly classDependencies: DiClassDependencyPlanner<Container>;
   private activeRequestor: Container | null = null;
   private activeExecutionOrdinal: number | null = null;
   private activationDepth = 0;
+  private registryExecutionDepth = 0;
   private detectedCycle: DiProviderActivationResult | null = null;
 
   constructor(
@@ -832,31 +863,85 @@ export class DiProviderActivationSession {
     requestor: Container,
     registryValue: EvaluationValue,
     parameterValues: readonly EvaluationValue[],
+    onRegister: ((frame: StaticInvocationFrame<ts.CallExpression>) => DiRegistryRegisterEffect | void) | null = null,
   ): DiRegistryExecutionResult | null {
-    const registerFunction = evaluatedRegistryRegisterFunction(registryValue);
-    const source = registerFunction == null ? null : this.view.sourceForNode(registerFunction.declaration);
-    if (registerFunction == null || source == null) {
+    const sourceFunction = evaluatedRegistryRegisterFunction(registryValue);
+    const source = sourceFunction == null ? null : this.view.sourceForNode(sourceFunction.declaration);
+    if (sourceFunction == null || source == null) {
       return null;
     }
-    const invocationNode = registerFunction.declaration;
-    const containerValue = new EvaluationObjectValue(new Map(), false, invocationNode);
-    return this.withActiveRequestor(requestor, () => executeDiRegistryFunction(
-      registerFunction,
-      registryValue,
-      containerValue,
-      parameterValues,
-      invocationNode,
-      source.evaluation.policy,
-      this.internalRuntimeHost(source.evaluation.runtimeHost),
-      (frame, host) => frame.propertyKey === 'register'
-        ? containerValue
-        : host.unknown(
+    if (this.registryExecutionDepth >= source.evaluation.policy.guardrails.maxExpressionDepth) {
+      return null;
+    }
+    this.registryExecutionDepth += 1;
+    try {
+      const runtimeHost = this.internalRuntimeHost(source.evaluation.runtimeHost);
+      let executionRegistryValue = runtimeHost.evaluationValueGraph?.adoptExternal(registryValue)
+        ?? registryValue;
+      let executionState = this.registryExecutions.read(executionRegistryValue);
+      if (executionState != null && executionState.value !== executionRegistryValue) {
+        if (!executionState.canReuseDifferentSnapshot(registryValue)) {
+          // Runtime identity alone cannot reconcile changed immutable occurrence state into one sequential value.
+          return null;
+        }
+        executionRegistryValue = executionState.value;
+      }
+      if (executionState == null) {
+        const stateSnapshot = new StaticEvaluationSessionFork(runtimeHost)
+          .forkValue(executionRegistryValue);
+        executionState = new DiRegistryExecutionState(stateSnapshot, executionRegistryValue);
+        this.registryExecutions.retain(
+          executionRegistryValue,
+          executionState,
+        );
+      }
+      const registerFunction = evaluatedRegistryRegisterFunction(executionRegistryValue);
+      if (registerFunction == null) {
+        return null;
+      }
+      const invocationNode = registerFunction.declaration;
+      const containerValue = new EvaluationObjectValue(new Map(), false, invocationNode);
+      const result = this.withActiveRequestor(requestor, () => executeDiRegistryFunction(
+        registerFunction,
+        executionRegistryValue,
+        containerValue,
+        parameterValues,
+        invocationNode,
+        source.evaluation.policy,
+        runtimeHost,
+        (frame, host) => {
+          if (frame.propertyKey === 'register' && ts.isCallExpression(frame.node)) {
+            const effect = onRegister?.(frame as StaticInvocationFrame<ts.CallExpression>);
+            if (effect?.hasEvaluationMutation === true) {
+              host.recordMutation();
+            }
+            if (effect?.shouldContinue === false) {
+              if (effect.abruptCompletion != null) {
+                return host.raise(effect.abruptCompletion);
+              }
+              const unknownFailure = host.unknown(
+                'Nested Aurelia registry application failed without an exact thrown value.',
+                frame.node,
+                frame.moduleKey,
+                EvaluationOpenSeamKind.DynamicCall,
+              );
+              return host.raise(new ThrowEvaluationCompletion(unknownFailure, []));
+            }
+            return containerValue;
+          }
+          return host.unknown(
             `Registry execution reached unsupported container.${frame.propertyKey ?? '<computed>'}(...).`,
             frame.node,
             frame.moduleKey,
             EvaluationOpenSeamKind.DynamicCall,
-          ),
-    ));
+          );
+        },
+      ));
+      executionState.recordMutations(result.mutationCount);
+      return result;
+    } finally {
+      this.registryExecutionDepth -= 1;
+    }
   }
 
   resolutionFailureForContainerApiInvocation(

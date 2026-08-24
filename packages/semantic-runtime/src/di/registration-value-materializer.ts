@@ -60,6 +60,7 @@ import {
 } from '../registration/registration-observation.js';
 import {
   evaluatedRegistryValueObservation,
+  evaluatedValueLocalName,
   type EvaluatedRegistryValue,
 } from '../registration/evaluated-registration-value.js';
 import {
@@ -523,6 +524,7 @@ export class DiRegistrationValueMaterializer {
       runtimeValue,
       frameworkKind,
       aureliaRegistryBodyForEvaluationValue(runtimeValue),
+      evaluatedValueLocalName(runtimeValue),
     );
     const valueObservation = retainSourceProductProjection(
       evaluatedObservation,

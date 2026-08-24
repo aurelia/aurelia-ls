@@ -52,7 +52,7 @@ import {
   ResolverResolutionKind,
 } from '../src/di/resolver.js';
 import { InstanceProvider } from '../src/di/instance-provider.js';
-import { ParameterizedRegistry } from '../src/di/registry.js';
+import { ParameterizedRegistry, RegistryValue } from '../src/di/registry.js';
 import type { DiWorldConstructionEmission } from '../src/di/world-construction.js';
 import {
   DiIssueKind,
@@ -86,6 +86,7 @@ import {
   FrameworkRegistrationAdmission,
   OpenRegistrationAdmission,
   RegistrationAdmissionKind,
+  ResourceRegistrationAdmission,
   RegistryRegistrationAdmission,
   ResolverRegistrationAdmission,
   RegistrationStrategy,
@@ -96,6 +97,7 @@ import {
   RegistrationCarrierKind,
 } from '../src/registration/registration-observation.js';
 import { FrameworkRegistrationKind } from '../src/registration/registration-reference.js';
+import { ResourceIssueKind } from '../src/resources/resource-issue.js';
 import {
   TypeSystemProjectBuilder,
   type TypeSystemProject,
@@ -761,6 +763,7 @@ describe('DI provider model', () => {
     const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
     const world = app.emission.appWorld;
     const resolverNames = world.diWorld.resolverSlots.map(resolverKeyName);
+
     const frameworkKinds = world.diWorld.registrationOperations.flatMap((operation) => {
       const frameworkKind = frameworkRegistrationKindForOperation(operation);
       return frameworkKind == null ? [] : [frameworkKind];
@@ -1030,6 +1033,316 @@ describe('DI provider model', () => {
     expect(new Set(world.diWorld.registrationOperations.map((operation) => operation.productHandle)).size)
       .toBe(world.diWorld.registrationOperations.length);
     expect(world.compilerWorlds).toHaveLength(1);
+  });
+
+  test('preserves a nested registry module guard across repeated applications', async () => {
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: path.join(pressureFixtures, 'di-nested-guarded-registry'),
+      storeKey: 'test:di-provider-model:nested-guarded-registry',
+    });
+    const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
+    const world = app.emission.appWorld.diWorld;
+    const relevantOperations = world.registrationOperations.flatMap((operation) => {
+      const admission = operation.admission;
+      if (admission instanceof RegistryRegistrationAdmission) {
+        const localName = admission.registryValue?.localName ?? null;
+        if (localName === 'OuterRegistry') {
+          return [{ operation, localName }];
+        }
+        if (localName === 'InnerRegistry') {
+          return [{ operation, localName: 'SecondContainerInnerRegistry' }];
+        }
+        return [];
+      }
+      if (
+        admission instanceof OpenRegistrationAdmission
+        && operation.registrationValue instanceof RegistryValue
+        && admission.registeredValue?.localName === 'innerRegistry'
+      ) {
+        return [{ operation, localName: 'InnerRegistry' }];
+      }
+      if (
+        admission instanceof OpenRegistrationAdmission
+        && operation.registrationValue instanceof RegistryValue
+        && admission.registeredValue?.localName === 'mutableRegistry'
+      ) {
+        return [{ operation, localName: 'MutableRegistry' }];
+      }
+      if (admission instanceof ResourceRegistrationAdmission) {
+        const localName = admission.registeredValue?.localName ?? null;
+        return [
+          'GuardedOnceCustomAttribute',
+          'FirstEffectCustomAttribute',
+          'SecondEffectCustomAttribute',
+        ].includes(localName ?? '')
+          ? [{ operation, localName }]
+          : [];
+      }
+      return [];
+    });
+    const innerOperations = relevantOperations.filter(({ localName }) => localName === 'InnerRegistry');
+    const mutableOperations = relevantOperations.filter(({ localName }) => localName === 'MutableRegistry');
+    const secondContainerInnerOperations = relevantOperations.filter(({ localName }) =>
+      localName === 'SecondContainerInnerRegistry'
+    );
+    const resourceOperations = relevantOperations.filter(({ localName }) => localName === 'GuardedOnceCustomAttribute');
+    const innerOperationSeams = runtime.workspace.store.readMaterializations()
+      .filter((materialization) => innerOperations.some(({ operation }) =>
+        materialization.productHandles.includes(operation.productHandle)
+      ))
+      .flatMap((materialization) => materialization.openSeamHandles)
+      .map((handle) => runtime.workspace.store.readOpenSeam(handle))
+      .filter((seam) => seam != null);
+    const mutableOperationSeams = runtime.workspace.store.readMaterializations()
+      .filter((materialization) => mutableOperations.some(({ operation }) =>
+        materialization.productHandles.includes(operation.productHandle)
+      ))
+      .flatMap((materialization) => materialization.openSeamHandles)
+      .map((handle) => runtime.workspace.store.readOpenSeam(handle))
+      .filter((seam) => seam != null);
+    const resourceKey = 'au:resource:custom-attribute:guarded-once';
+
+    expect(relevantOperations.map(({ localName }) => localName)).toEqual([
+      'OuterRegistry',
+      'InnerRegistry',
+      'GuardedOnceCustomAttribute',
+      'InnerRegistry',
+      'MutableRegistry',
+      'FirstEffectCustomAttribute',
+      'MutableRegistry',
+      'SecondEffectCustomAttribute',
+      'SecondContainerInnerRegistry',
+    ]);
+    expect(innerOperations).toHaveLength(2);
+    expect(innerOperations.every(({ operation }) =>
+      operation.admission instanceof OpenRegistrationAdmission
+      && operation.evidenceAuthority === 'evaluation'
+    )).toBe(true);
+    expect(new Set(innerOperations.map(({ operation }) => operation.admission)).size).toBe(1);
+    expect(new Set(innerOperations.map(({ operation }) => operation.registrationValue)).size).toBe(1);
+    expect(new Set(innerOperations.map(({ operation }) => operation.productHandle)).size).toBe(2);
+    expect(new Set(innerOperations.map(({ operation }) => operation.ordinal)).size).toBe(2);
+    expect(mutableOperations).toHaveLength(2);
+    expect(new Set(mutableOperations.map(({ operation }) => operation.admission)).size).toBe(1);
+    expect(new Set(mutableOperations.map(({ operation }) => operation.registrationValue)).size).toBe(1);
+    expect(secondContainerInnerOperations).toHaveLength(1);
+    expect(secondContainerInnerOperations[0]?.operation.container.productHandle)
+      .not.toBe(innerOperations[0]?.operation.container.productHandle);
+    expect(resourceOperations).toHaveLength(1);
+    expect(world.resourceSlots.filter((slot) => [
+      resourceKey,
+      'au:resource:custom-attribute:first-effect',
+      'au:resource:custom-attribute:second-effect',
+    ].includes(slot.resourceKey))).toHaveLength(3);
+    expect(world.resourceSlotExclusions.filter((exclusion) => exclusion.resourceKey === resourceKey)).toHaveLength(0);
+    expect(world.resourceIssues.filter((issue) =>
+      issue.issueKind === ResourceIssueKind.CustomAttributeAlreadyRegistered
+    )).toHaveLength(0);
+    expect(innerOperationSeams).toHaveLength(0);
+    expect(mutableOperationSeams).toHaveLength(0);
+    const secondContainerOperationSeams = runtime.workspace.store.readMaterializations()
+      .filter((materialization) => secondContainerInnerOperations.some(({ operation }) =>
+        materialization.productHandles.includes(operation.productHandle)
+      ))
+      .flatMap((materialization) => materialization.openSeamHandles);
+    expect(secondContainerOperationSeams).toHaveLength(1);
+    expect(runtime.workspace.store.readOpenSeam(secondContainerOperationSeams[0]!)?.reasonKinds)
+      .toContain(OpenSeamReasonKind.DiRegistryBodyOpen);
+    expect(world.resourceSlots.filter((slot) =>
+      slot.resourceKey === resourceKey
+      && slot.container.productHandle === secondContainerInnerOperations[0]?.operation.container.productHandle
+    )).toHaveLength(0);
+
+    const configurationAdmissions = app.emission.appWorld.configuration.registrationAdmissions;
+    const innerAdmission = configurationAdmissions.find((admission) =>
+      admission instanceof OpenRegistrationAdmission
+      && admission.registeredValue?.localName === 'innerRegistry'
+    );
+    const mutableAdmission = configurationAdmissions.find((admission) =>
+      admission instanceof OpenRegistrationAdmission
+      && admission.registeredValue?.localName === 'mutableRegistry'
+    );
+    expect(innerAdmission).toBeInstanceOf(OpenRegistrationAdmission);
+    expect(mutableAdmission).toBeInstanceOf(OpenRegistrationAdmission);
+    expect(innerOperations.every(({ operation }) => operation.admission === innerAdmission)).toBe(true);
+    expect(mutableOperations.every(({ operation }) => operation.admission === mutableAdmission)).toBe(true);
+    const innerRegistryValue = innerOperations[0]?.operation.registrationValue;
+    const mutableRegistryValue = mutableOperations[0]?.operation.registrationValue;
+    expect(innerRegistryValue).toBeInstanceOf(RegistryValue);
+    expect(mutableRegistryValue).toBeInstanceOf(RegistryValue);
+    expect(secondContainerInnerOperations[0]?.operation.registrationValue).toBe(innerRegistryValue);
+    expect((innerRegistryValue as RegistryValue).registryValue?.localName).toBe('InnerRegistry');
+    expect((mutableRegistryValue as RegistryValue).registryValue?.localName).toBe('MutableRegistry');
+    expect(sourcePathForAddress(runtime, (innerRegistryValue as RegistryValue).registryValue?.addressHandle ?? null))
+      .toMatch(/src\/guarded-registry\.ts$/u);
+    expect(sourcePathForAddress(runtime, (mutableRegistryValue as RegistryValue).registryValue?.addressHandle ?? null))
+      .toMatch(/src\/main\.ts$/u);
+    for (const { operation } of [...innerOperations, ...mutableOperations]) {
+      expect(sourcePathForAddress(runtime, operation.sourceAddressHandle)).toMatch(/src\/main\.ts$/u);
+      const claims = runtime.workspace.store.readClaimsForSubject(operation.productHandle)
+        .map((handle) => runtime.workspace.store.readClaim(handle));
+      const applies = claims.find((claim) =>
+        claim?.predicateKey === KernelVocabulary.Di.AppliesRegistration.key
+        && claim.objectHandle === operation.admission.productHandle
+      );
+      const uses = claims.find((claim) =>
+        claim?.predicateKey === KernelVocabulary.Di.UsesRegistrationValue.key
+        && claim.objectHandle === operation.registrationValue?.productHandle
+      );
+      const materialization = runtime.workspace.store.readMaterializations().find((candidate) =>
+        candidate.productHandles.includes(operation.productHandle)
+      );
+      expect(applies).toBeDefined();
+      expect(uses).toBeDefined();
+      expect(materialization?.claimHandles).toEqual(expect.arrayContaining([
+        applies!.handle,
+        uses!.handle,
+      ]));
+    }
+
+    const registrySource = app.emission.evaluation.sources.find((source) =>
+      isEvaluatedProjectSource(source) && /guarded-registry\.ts$/u.test(source.moduleKey)
+    );
+    expect(registrySource != null && isEvaluatedProjectSource(registrySource)).toBe(true);
+    expect(registrySource != null && isEvaluatedProjectSource(registrySource)
+      ? registrySource.evaluation.environment.readValue('registered')
+      : null
+    ).toMatchObject({ kind: EvaluationValueKind.Boolean, value: false });
+
+    const freshRuntime = await createSemanticRuntime({
+      workspaceRoot: path.join(pressureFixtures, 'di-nested-guarded-registry'),
+      storeKey: 'test:di-provider-model:nested-guarded-registry:fresh-world',
+    });
+    const freshApp = await freshRuntime.openApp({ analysisDepth: 'binding-observation' });
+    const freshWorld = freshApp.emission.appWorld.diWorld;
+    const guardedResourceKeys = [
+      resourceKey,
+      'au:resource:custom-attribute:first-effect',
+      'au:resource:custom-attribute:second-effect',
+    ];
+    expect(freshWorld.resourceSlots.filter((slot) =>
+      guardedResourceKeys.includes(slot.resourceKey)
+    )).toHaveLength(3);
+    expect(freshWorld.resourceSlotExclusions.filter((exclusion) =>
+      guardedResourceKeys.includes(exclusion.resourceKey)
+    )).toHaveLength(0);
+    expect(freshWorld.resourceIssues.filter((issue) =>
+      issue.issueKind === ResourceIssueKind.CustomAttributeAlreadyRegistered
+    )).toHaveLength(0);
+    const freshInnerRegistryValue = freshWorld.registrationOperations.find((operation) =>
+      operation.admission instanceof OpenRegistrationAdmission
+      && operation.admission.registeredValue?.localName === 'innerRegistry'
+      && operation.registrationValue instanceof RegistryValue
+    )?.registrationValue;
+    expect(freshInnerRegistryValue).toBeInstanceOf(RegistryValue);
+    expect(freshInnerRegistryValue).not.toBe(innerRegistryValue);
+  });
+
+  test('keeps changed immutable registry snapshots open instead of replaying stale state', async () => {
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: path.join(pressureFixtures, 'di-registry-snapshot-state-boundary'),
+      storeKey: 'test:di-provider-model:registry-snapshot-state-boundary',
+    });
+    const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
+    const world = app.emission.appWorld.diWorld;
+    const registryOperations = world.registrationOperations.filter((operation) =>
+      operation.registrationValue instanceof RegistryValue
+      && operation.registrationValue.registryValue?.localName === 'SnapshotRegistry'
+    );
+    const resetRegistryOperations = world.registrationOperations.filter((operation) =>
+      operation.registrationValue instanceof RegistryValue
+      && operation.registrationValue.registryValue?.localName === 'ResetRegistry'
+    );
+    const arrowRegistryOperations = world.registrationOperations.filter((operation) =>
+      operation.registrationValue instanceof RegistryValue
+      && operation.admission instanceof RegistryRegistrationAdmission
+      && operation.admission.registryValue?.localName === 'ArrowRegistry'
+    );
+    const resourceOperationNames = world.registrationOperations.flatMap((operation) => {
+      const admission = operation.admission;
+      return admission instanceof ResourceRegistrationAdmission
+        ? [admission.registeredValue.localName]
+        : [];
+    });
+    const registryOperationSeams = registryOperations.map((operation) =>
+      runtime.workspace.store.readMaterializations()
+        .filter((materialization) => materialization.productHandles.includes(operation.productHandle))
+        .flatMap((materialization) => materialization.openSeamHandles)
+        .map((handle) => runtime.workspace.store.readOpenSeam(handle))
+        .filter((seam) => seam != null)
+    );
+    const resetRegistryOperationSeams = resetRegistryOperations.map((operation) =>
+      runtime.workspace.store.readMaterializations()
+        .filter((materialization) => materialization.productHandles.includes(operation.productHandle))
+        .flatMap((materialization) => materialization.openSeamHandles)
+        .map((handle) => runtime.workspace.store.readOpenSeam(handle))
+        .filter((seam) => seam != null)
+    );
+    const arrowRegistryOperationSeams = arrowRegistryOperations.map((operation) =>
+      runtime.workspace.store.readMaterializations()
+        .filter((materialization) => materialization.productHandles.includes(operation.productHandle))
+        .flatMap((materialization) => materialization.openSeamHandles)
+        .map((handle) => runtime.workspace.store.readOpenSeam(handle))
+        .filter((seam) => seam != null)
+    );
+
+    expect(registryOperations).toHaveLength(2);
+    expect(new Set(registryOperations.map((operation) => operation.registrationValue)).size).toBe(1);
+    expect(resourceOperationNames).toContain('SnapshotFirstCustomAttribute');
+    expect(resourceOperationNames).not.toContain('SnapshotSecondCustomAttribute');
+    expect(registryOperationSeams[0]).toHaveLength(0);
+    expect(registryOperationSeams[1]?.some((seam) =>
+      seam.reasonKinds.includes(OpenSeamReasonKind.DiRegistryBodyOpen)
+    )).toBe(true);
+    expect(resetRegistryOperations).toHaveLength(2);
+    expect(new Set(resetRegistryOperations.map((operation) => operation.registrationValue)).size).toBe(1);
+    expect(resourceOperationNames).toContain('ResetFirstCustomAttribute');
+    expect(resourceOperationNames).not.toContain('ResetSecondCustomAttribute');
+    expect(resetRegistryOperationSeams[0]).toHaveLength(0);
+    expect(resetRegistryOperationSeams[1]?.some((seam) =>
+      seam.reasonKinds.includes(OpenSeamReasonKind.DiRegistryBodyOpen)
+    )).toBe(true);
+    expect(arrowRegistryOperations).toHaveLength(2);
+    expect(new Set(arrowRegistryOperations.map((operation) => operation.registrationValue)).size).toBe(1);
+    expect(resourceOperationNames).toContain('ArrowFirstCustomAttribute');
+    expect(resourceOperationNames).not.toContain('ArrowSecondCustomAttribute');
+    expect(arrowRegistryOperationSeams[0]).toHaveLength(0);
+    expect(arrowRegistryOperationSeams[1]?.some((seam) =>
+      seam.reasonKinds.includes(OpenSeamReasonKind.DiRegistryBodyOpen)
+    )).toBe(true);
+    expect(world.resourceIssues.filter((issue) =>
+      issue.issueKind === ResourceIssueKind.CustomAttributeAlreadyRegistered
+    )).toHaveLength(0);
+  });
+
+  test('preserves caught and finally effects from nested registry failures', async () => {
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: path.join(pressureFixtures, 'di-registry-nested-failure-control'),
+      storeKey: 'test:di-provider-model:registry-nested-failure-control',
+    });
+    const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
+    const world = app.emission.appWorld;
+    const resolverNames = world.diWorld.resolverSlots.map(resolverKeyName);
+
+    expect(resolverNames).toEqual(expect.arrayContaining([
+      'caught-inner-before-throw',
+      'caught-outer-after-catch',
+      'finally-inner-before-throw',
+      'finally-outer-effect',
+      'mixed-outer-after-catch',
+      'mixed-inner-before-throw',
+      'deferred-outer-after-catch',
+      'deferred-fallback-after-catch',
+    ]));
+    expect(resolverNames).not.toContain('finally-unreachable');
+    expect(resolverNames).not.toContain('caught-outer-wrong-value');
+    expect(resolverNames).not.toContain('deferred-outer-wrong-value');
+    expect(resolverNames).not.toContain('deferred-fallback-wrong-value');
+    expect(world.diWorld.issues.filter((issue) =>
+      issue.issueKind === DiIssueKind.RegistryApplicationFailed
+    )).toHaveLength(2);
+    expect(world.compilerWorlds).toHaveLength(1);
+    expect(world.compilerWorlds[0]?.attributePatterns.length).toBeGreaterThan(0);
   });
 
   test('reifies repeated registration applications without collapsing admission or container identity', async () => {

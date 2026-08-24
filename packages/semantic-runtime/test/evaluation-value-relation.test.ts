@@ -10,13 +10,20 @@ import {
   evaluationStrictEqualityDecision,
   evaluationValuesShareLineage,
 } from '../src/evaluation/value-relation.js';
+import { evaluationValueSnapshotsHaveEqualExecutionState } from '../src/evaluation/value-snapshot-state.js';
 import {
+  EvaluationArrayValue,
   EvaluationBigIntValue,
   EvaluationBoundaryKind,
   EvaluationBoundaryObjectValue,
+  EvaluationBoundaryValue,
   EvaluationModuleNamespaceValue,
   EvaluationNumberValue,
+  EvaluationObjectProperty,
+  EvaluationObjectPropertyState,
   EvaluationObjectValue,
+  EvaluationStringPatternHole,
+  EvaluationStringPatternValue,
 } from '../src/evaluation/values.js';
 
 describe('evaluator value relation', () => {
@@ -118,5 +125,74 @@ describe('evaluator value relation', () => {
 
     expect(evaluationStrictEqualityDecision(first, second)).toBe(EvaluationValueRelationKind.Miss);
     expect(evaluationStrictEqualityDecision(first, other)).toBe(EvaluationValueRelationKind.Miss);
+  });
+
+  test('requires closed SameValue state before registry snapshots can share execution', () => {
+    const zero = new EvaluationNumberValue(0);
+    const negativeZero = new EvaluationNumberValue(-0);
+    const nan = new EvaluationNumberValue(Number.NaN);
+    const otherNan = new EvaluationNumberValue(Number.NaN);
+    const boundary = new EvaluationBoundaryValue(EvaluationBoundaryKind.HostEnvironment, 'host.flag');
+    const pattern = new EvaluationStringPatternValue(
+      ['', ''],
+      [new EvaluationStringPatternHole(boundary)],
+    );
+
+    expect(evaluationValueSnapshotsHaveEqualExecutionState(zero, negativeZero)).toBe(false);
+    expect(evaluationValueSnapshotsHaveEqualExecutionState(nan, otherNan)).toBe(true);
+    expect(evaluationValueSnapshotsHaveEqualExecutionState(boundary, boundary)).toBe(false);
+    expect(evaluationValueSnapshotsHaveEqualExecutionState(pattern, pattern)).toBe(false);
+  });
+
+  test('rejects equal open property state while accepting closed lineage snapshots', () => {
+    const runtimeHost = {};
+    const closedSource = new EvaluationObjectValue(new Map(), false);
+    const openSource = new EvaluationObjectValue(new Map([
+      ['value', new EvaluationObjectProperty(
+        'value',
+        new EvaluationNumberValue(1),
+        null,
+        EvaluationObjectPropertyState.Open,
+      )],
+    ]), false);
+    const closedLeft = new StaticEvaluationSessionFork(runtimeHost).forkValue(closedSource);
+    const closedRight = new StaticEvaluationSessionFork(runtimeHost).forkValue(closedSource);
+    const openLeft = new StaticEvaluationSessionFork(runtimeHost).forkValue(openSource);
+    const openRight = new StaticEvaluationSessionFork(runtimeHost).forkValue(openSource);
+
+    expect(evaluationValueSnapshotsHaveEqualExecutionState(closedLeft, closedRight)).toBe(true);
+    expect(evaluationValueSnapshotsHaveEqualExecutionState(openLeft, openRight)).toBe(false);
+  });
+
+  test('bounds recursive snapshot comparison without rejecting closed cycles', () => {
+    const runtimeHost = {};
+    const cyclicSource = new EvaluationObjectValue(new Map(), false);
+    cyclicSource.properties.set('self', new EvaluationObjectProperty(
+      'self',
+      cyclicSource,
+      null,
+      EvaluationObjectPropertyState.Closed,
+    ));
+    const cyclicLeft = new StaticEvaluationSessionFork(runtimeHost).forkValue(cyclicSource);
+    const cyclicRight = new StaticEvaluationSessionFork(runtimeHost).forkValue(cyclicSource);
+
+    let deepSource = new EvaluationObjectValue(new Map(), false);
+    for (let depth = 0; depth < 300; depth += 1) {
+      const owner = new EvaluationObjectValue(new Map(), false);
+      owner.properties.set('next', new EvaluationObjectProperty(
+        'next',
+        deepSource,
+        null,
+        EvaluationObjectPropertyState.Closed,
+      ));
+      deepSource = owner;
+    }
+    const deepLeft = new StaticEvaluationSessionFork(runtimeHost).forkValue(deepSource);
+    const deepRight = new StaticEvaluationSessionFork(runtimeHost).forkValue(deepSource);
+    const array = new EvaluationArrayValue([]);
+
+    expect(evaluationValueSnapshotsHaveEqualExecutionState(cyclicLeft, cyclicRight)).toBe(true);
+    expect(evaluationValueSnapshotsHaveEqualExecutionState(deepLeft, deepRight)).toBe(false);
+    expect(evaluationValueSnapshotsHaveEqualExecutionState(array, array)).toBe(false);
   });
 });

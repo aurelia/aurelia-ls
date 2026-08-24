@@ -39,6 +39,8 @@ export class DiRegistryExecutionResult {
     /** Every unresolved boundary reached while executing effects, including discarded expression results. */
     readonly auditOpenSeams: readonly EvaluationOpenSeam[],
     readonly handledInvocations: readonly StaticInvocationOccurrence<ts.CallExpression>[],
+    /** Modeled evaluator writes performed by this registry invocation. */
+    readonly mutationCount: number,
   ) {}
 }
 
@@ -98,5 +100,6 @@ export function executeDiRegistryFunction(
       && invocation.propertyKey != null
       && handledInvocations.has(invocation.identity)
     ),
+    result.mutationCount,
   );
 }

@@ -27,6 +27,7 @@ import {
 } from './seams.js';
 import {
   isStaticInvocationOccurrence,
+  type StaticInvocationFrame,
   type StaticInvocationEvaluation,
   type StaticInvocationOccurrence,
 } from './invocation.js';
@@ -200,7 +201,7 @@ export class StaticEvaluationExpressionReader implements StaticExpressionEvaluat
 /** Expression reader over a selected invocation-evidence lane without source replay. */
 export class StaticInvocationEvidenceExpressionReader implements StaticExpressionEvaluationReader {
   private readonly invocationsByExpression = new Map<ts.Expression, StaticInvocationOccurrence[]>();
-  private readonly invocationEvaluationsByExpression = new Map<ts.Expression, StaticInvocationEvaluation[]>();
+  private readonly invocationEvaluationsByExpression = new Map<ts.Expression, StaticInvocationEvidenceInput[]>();
   private readonly evidenceByExpression = new Map<ts.Expression, EvaluationValueEvidence[]>();
 
   constructor(
@@ -208,26 +209,18 @@ export class StaticInvocationEvidenceExpressionReader implements StaticExpressio
     invocationEvaluations: readonly StaticInvocationEvaluation[],
   ) {
     for (const invocation of invocationEvaluations) {
-      appendMapValue(this.invocationEvaluationsByExpression, invocation.node, invocation);
-      if (isStaticInvocationOccurrence(invocation)) {
-        appendMapValue(this.invocationsByExpression, invocation.node, invocation);
-      }
-      this.indexExpressionEvidence(invocation.reference.calleeNode, invocation.reference.callee);
-      if (invocation.reference.receiverNode != null && invocation.reference.thisValue != null) {
-        this.indexExpressionEvidence(invocation.reference.receiverNode, invocation.reference.thisValue);
-      }
-      if (invocation.reference.propertyKeyNode != null
-        && ts.isExpression(invocation.reference.propertyKeyNode)
-        && invocation.reference.propertyKeyEvidence != null) {
-        this.indexExpressionEvidence(invocation.reference.propertyKeyNode, invocation.reference.propertyKeyEvidence);
-      }
-      for (const argument of invocation.argumentList.authoredArguments) {
-        this.indexExpressionEvidence(argument.valueExpression, argument.evidence);
-        if (argument.node !== argument.valueExpression) {
-          this.indexExpressionEvidence(argument.node, argument.evidence);
-        }
-      }
+      this.indexInvocationEvidence(invocation);
     }
+  }
+
+  /** Read one live preparation only while its owning runtime-host callback is still on the stack. */
+  static forPreparedFrame(
+    moduleKey: string,
+    frame: StaticInvocationFrame,
+  ): StaticInvocationEvidenceExpressionReader {
+    const reader = new StaticInvocationEvidenceExpressionReader(moduleKey, []);
+    reader.indexInvocationEvidence(frame);
+    return reader;
   }
 
   evaluateExpression(expression: ts.Expression): EvaluationRead<EvaluationValue> {
@@ -271,6 +264,28 @@ export class StaticInvocationEvidenceExpressionReader implements StaticExpressio
   ): void {
     appendMapValue(this.evidenceByExpression, expression, evidence);
     this.indexRetainedChildEvidence(evidence.value, expression, new Set());
+  }
+
+  private indexInvocationEvidence(invocation: StaticInvocationEvidenceInput): void {
+    appendMapValue(this.invocationEvaluationsByExpression, invocation.node, invocation);
+    if (isRetainedInvocationOccurrence(invocation)) {
+      appendMapValue(this.invocationsByExpression, invocation.node, invocation);
+    }
+    this.indexExpressionEvidence(invocation.reference.calleeNode, invocation.reference.callee);
+    if (invocation.reference.receiverNode != null && invocation.reference.thisValue != null) {
+      this.indexExpressionEvidence(invocation.reference.receiverNode, invocation.reference.thisValue);
+    }
+    if (invocation.reference.propertyKeyNode != null
+      && ts.isExpression(invocation.reference.propertyKeyNode)
+      && invocation.reference.propertyKeyEvidence != null) {
+      this.indexExpressionEvidence(invocation.reference.propertyKeyNode, invocation.reference.propertyKeyEvidence);
+    }
+    for (const argument of invocation.argumentList.authoredArguments) {
+      this.indexExpressionEvidence(argument.valueExpression, argument.evidence);
+      if (argument.node !== argument.valueExpression) {
+        this.indexExpressionEvidence(argument.node, argument.evidence);
+      }
+    }
   }
 
   private indexRetainedChildEvidence(
@@ -367,7 +382,7 @@ export class StaticInvocationEvidenceExpressionReader implements StaticExpressio
     }
   }
 
-  private enclosingInvocationEvaluation(node: ts.Node): StaticInvocationEvaluation | null {
+  private enclosingInvocationEvaluation(node: ts.Node): StaticInvocationEvidenceInput | null {
     let current: ts.Node | undefined = node;
     while (current != null && !ts.isSourceFile(current)) {
       if (ts.isCallExpression(current) || ts.isNewExpression(current)) {
@@ -392,6 +407,14 @@ export class StaticInvocationEvidenceExpressionReader implements StaticExpressio
       this.moduleKey,
     )]);
   }
+}
+
+type StaticInvocationEvidenceInput = StaticInvocationEvaluation | StaticInvocationFrame;
+
+function isRetainedInvocationOccurrence(
+  invocation: StaticInvocationEvidenceInput,
+): invocation is StaticInvocationOccurrence {
+  return 'evaluationKind' in invocation && isStaticInvocationOccurrence(invocation);
 }
 
 /** Expression reader over every definite invocation retained by one evaluated module. */

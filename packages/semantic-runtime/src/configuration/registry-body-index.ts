@@ -5,6 +5,11 @@ import {
   type EvaluationValue,
 } from '../evaluation/values.js';
 import type { DiRegistryExecutionResult } from '../di/registry-execution.js';
+import type {
+  StaticInvocationFrame,
+  StaticInvocationIdentity,
+  StaticInvocationOccurrence,
+} from '../evaluation/invocation.js';
 import {
   RegistryRegistrationAdmission,
   type RegistrationAdmissionProduct,
@@ -50,6 +55,68 @@ export class RegistryAdmissionBodyExecution {
   }
 }
 
+/** Live, candidate-local matcher used while one registry body is executing. */
+export class RegistryBodyExecutionSession {
+  private readonly invocationIdentities: StaticInvocationIdentity[] = [];
+  private readonly inventoryBySource: ReadonlyMap<ts.Node, readonly ConfigurationStep[]>;
+  private complete = true;
+
+  constructor(
+    private readonly configuration: ConfigurationKernelEmission,
+    inventory: readonly ConfigurationStep[],
+    private readonly admissionsByProduct: ReadonlyMap<ProductHandle, RegistrationAdmissionProduct>,
+  ) {
+    this.inventoryBySource = registryStepInventoryBySource(configuration, inventory);
+  }
+
+  record(
+    invocation: StaticInvocationFrame<ts.CallExpression> | StaticInvocationOccurrence<ts.CallExpression>,
+  ): RegistryBodyStepExecution | null {
+    this.invocationIdentities.push(invocation.identity);
+    return this.executionFor(invocation);
+  }
+
+  finish(execution: DiRegistryExecutionResult | null): RegistryAdmissionBodyExecution {
+    const retainedRegisterInvocations = execution?.handledInvocations.filter((invocation) =>
+      invocation.propertyKey === 'register'
+    ) ?? [];
+    const invocationSequenceMatches = retainedRegisterInvocations.length === this.invocationIdentities.length
+      && retainedRegisterInvocations.every((invocation, index) =>
+        invocation.identity === this.invocationIdentities[index]
+      );
+    const steps = retainedRegisterInvocations.flatMap((invocation) => {
+      const step = this.executionFor(invocation);
+      return step == null ? [] : [step];
+    });
+    return new RegistryAdmissionBodyExecution(
+      steps,
+      execution != null && this.complete && invocationSequenceMatches,
+      execution,
+    );
+  }
+
+  private executionFor(
+    invocation: StaticInvocationFrame<ts.CallExpression> | StaticInvocationOccurrence<ts.CallExpression>,
+  ): RegistryBodyStepExecution | null {
+    const candidates = this.inventoryBySource.get(invocation.node) ?? null;
+    if (candidates == null || candidates.length !== 1) {
+      this.complete = false;
+      return null;
+    }
+    const step = candidates[0]!;
+    const execution = new RegistryBodyStepExecution(
+      step,
+      runtimeCarriersForStepAdmissions(
+        this.configuration,
+        this.admissionsByProduct,
+        step,
+        invocation,
+      ),
+    );
+    return execution;
+  }
+}
+
 /** Source-owned registry inventory joined to exact candidate-local execution evidence. */
 export class RegistryBodyStepIndex {
   constructor(
@@ -63,59 +130,63 @@ export class RegistryBodyStepIndex {
     runtimeValue: EvaluationValue | null,
     execution: DiRegistryExecutionResult | null,
   ): RegistryAdmissionBodyExecution {
-    if (!(admission instanceof RegistryRegistrationAdmission)) {
-      return new RegistryAdmissionBodyExecution([], false);
-    }
-    const ownerNode = runtimeValue == null
-      ? null
-      : registryRuntimeValueSourceNode(runtimeValue);
-    const ownedValueNode = ownerNode
-      ?? this.configuration.evaluationBindings.runtimeValueSourceNodeForProduct(admission.productHandle);
-    if (ownedValueNode == null) {
-      return new RegistryAdmissionBodyExecution([], false);
-    }
-    return this.matchRuntimeValueAtNode(execution, ownedValueNode);
+    return this.matchExecution(this.openAdmissionExecution(admission, runtimeValue), execution);
   }
 
   matchRuntimeValue(
     runtimeValue: EvaluationValue,
     execution: DiRegistryExecutionResult | null,
   ): RegistryAdmissionBodyExecution {
-    const ownedValueNode = registryRuntimeValueSourceNode(runtimeValue);
-    return ownedValueNode == null
-      ? new RegistryAdmissionBodyExecution([], false)
-      : this.matchRuntimeValueAtNode(execution, ownedValueNode);
+    return this.matchExecution(this.openRuntimeValueExecution(runtimeValue), execution);
   }
 
-  private matchRuntimeValueAtNode(
-    execution: DiRegistryExecutionResult | null,
-    ownedValueNode: ts.Node,
-  ): RegistryAdmissionBodyExecution {
-    const inventory = this.registryStepsByOwnerNode.get(ownedValueNode) ?? null;
-    if (inventory == null) {
-      return new RegistryAdmissionBodyExecution([], false);
+  openAdmissionExecution(
+    admission: RegistrationAdmissionProduct,
+    runtimeValue: EvaluationValue | null,
+  ): RegistryBodyExecutionSession | null {
+    const runtimeOwner = runtimeValue == null
+      ? null
+      : registryRuntimeValueSourceNode(runtimeValue);
+    if (runtimeOwner != null) {
+      return this.openExecutionAtNode(runtimeOwner);
     }
-    if (execution == null) {
-      return new RegistryAdmissionBodyExecution([], false);
+    if (!(admission instanceof RegistryRegistrationAdmission)) {
+      return null;
     }
-    const matched = matchReachedRegisterCalls(
-      this.configuration,
-      inventory,
-      execution.handledInvocations.filter((invocation) => invocation.propertyKey === 'register'),
-    );
-    return new RegistryAdmissionBodyExecution(
-      matched.steps.map(({ step, invocation }) => new RegistryBodyStepExecution(
-        step,
-        runtimeCarriersForStepAdmissions(
+    const sourceOwner = this.configuration.evaluationBindings
+      .runtimeValueSourceNodeForProduct(admission.productHandle);
+    return sourceOwner == null ? null : this.openExecutionAtNode(sourceOwner);
+  }
+
+  openRuntimeValueExecution(runtimeValue: EvaluationValue): RegistryBodyExecutionSession | null {
+    const owner = registryRuntimeValueSourceNode(runtimeValue);
+    return owner == null ? null : this.openExecutionAtNode(owner);
+  }
+
+  private openExecutionAtNode(ownerNode: ts.Node): RegistryBodyExecutionSession | null {
+    const inventory = this.registryStepsByOwnerNode.get(ownerNode) ?? null;
+    return inventory == null
+      ? null
+      : new RegistryBodyExecutionSession(
           this.configuration,
+          inventory,
           this.admissionsByProduct,
-          step,
-          invocation,
-        ),
-      )),
-      matched.complete,
-      execution,
-    );
+        );
+  }
+
+  private matchExecution(
+    session: RegistryBodyExecutionSession | null,
+    execution: DiRegistryExecutionResult | null,
+  ): RegistryAdmissionBodyExecution {
+    if (session == null || execution == null) {
+      return new RegistryAdmissionBodyExecution([], false);
+    }
+    for (const invocation of execution.handledInvocations) {
+      if (invocation.propertyKey === 'register') {
+        session.record(invocation);
+      }
+    }
+    return session.finish(execution);
   }
 }
 
@@ -137,11 +208,10 @@ function registryRuntimeValueSourceNode(
     : null;
 }
 
-function matchReachedRegisterCalls(
+function registryStepInventoryBySource(
   configuration: ConfigurationKernelEmission,
   inventory: readonly ConfigurationStep[],
-  calls: readonly import('../evaluation/invocation.js').StaticInvocationOccurrence<ts.CallExpression>[],
-): { readonly steps: readonly ReachedRegistryBodyStep[]; readonly complete: boolean } {
+): ReadonlyMap<ts.Node, readonly ConfigurationStep[]> {
   const inventoryBySource = new Map<ts.Node, ConfigurationStep[]>();
   for (const step of inventory) {
     const sourceNode = configuration.evaluationBindings.sourceNodeForProduct(step.productHandle);
@@ -155,32 +225,18 @@ function matchReachedRegisterCalls(
       existing.push(step);
     }
   }
-
-  const steps: ReachedRegistryBodyStep[] = [];
-  let complete = true;
-  for (const event of calls) {
-    const candidates = inventoryBySource.get(event.node) ?? null;
-    if (candidates == null || candidates.length !== 1) {
-      complete = false;
-      continue;
-    }
-    steps.push({ step: candidates[0]!, invocation: event });
-  }
-  return { steps, complete };
-}
-
-interface ReachedRegistryBodyStep {
-  readonly step: ConfigurationStep;
-  readonly invocation: import('../evaluation/invocation.js').StaticInvocationOccurrence<ts.CallExpression>;
+  return inventoryBySource;
 }
 
 function runtimeCarriersForStepAdmissions(
   configuration: ConfigurationKernelEmission,
   admissionsByProduct: ReadonlyMap<ProductHandle, RegistrationAdmissionProduct>,
   step: ConfigurationStep,
-  invocation: import('../evaluation/invocation.js').StaticInvocationOccurrence<ts.CallExpression>,
+  invocation: StaticInvocationFrame<ts.CallExpression> | StaticInvocationOccurrence<ts.CallExpression>,
 ): ReadonlyMap<ProductHandle, EvaluatedRegistrationCarrier> {
-  const reader = new StaticInvocationEvidenceExpressionReader(invocation.moduleKey, [invocation]);
+  const reader = 'evaluationKind' in invocation
+    ? new StaticInvocationEvidenceExpressionReader(invocation.moduleKey, [invocation])
+    : StaticInvocationEvidenceExpressionReader.forPreparedFrame(invocation.moduleKey, invocation);
   const result = new Map<ProductHandle, EvaluatedRegistrationCarrier>();
   for (const productHandle of step.registrationAdmissionProductHandles) {
     const admission = admissionsByProduct.get(productHandle) ?? null;

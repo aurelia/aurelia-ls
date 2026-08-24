@@ -45,6 +45,7 @@ import {
 } from '../evaluation/seams.js';
 import {
   evaluationAbruptCompletionSummary,
+  type EvaluationExpressionAbruptCompletion,
 } from '../evaluation/completion.js';
 import {
   openSeamReasonKindsForEvaluationPressure,
@@ -68,6 +69,7 @@ import {
 import {
   buildRegistryBodyStepIndex,
   RegistryAdmissionBodyExecution,
+  type RegistryBodyExecutionSession,
   type RegistryBodyStepExecution,
   type RegistryBodyStepIndex,
 } from '../configuration/registry-body-index.js';
@@ -190,6 +192,8 @@ interface DiRegistrationSpendingEmission {
   readonly registrationOpenSeamScopes: readonly DiRegistrationOpenSeamScope[];
   readonly issues: readonly DiIssue[];
   readonly resourceIssues: readonly ResourceIssue[];
+  readonly evaluationMutationCount: number;
+  readonly abruptCompletion: EvaluationExpressionAbruptCompletion | null;
 }
 
 interface DiRegistrationSpendingCascadeEmission {
@@ -207,16 +211,22 @@ interface DiRegistrationSpendingCascadeEmission {
   readonly registrationOpenSeamScopes: readonly DiRegistrationOpenSeamScope[];
   readonly issues: readonly DiIssue[];
   readonly resourceIssues: readonly ResourceIssue[];
+  readonly evaluationMutationCount: number;
+  readonly abruptCompletion: EvaluationExpressionAbruptCompletion | null;
   readonly completion: DiRegistrationCascadeCompletion;
 }
 
 interface DiRegistrationApplication {
   readonly body: RegistryAdmissionBodyExecution;
+  /** Body cascades already spent synchronously at their reached container.register call sites. */
+  readonly bodyCascades: readonly DiRegistrationSpendingCascadeEmission[] | null;
   readonly conditionalAdmissions: RegistrationKernelEmission | null;
   readonly records: readonly KernelStoreRecord[];
   readonly openSeams: readonly OpenSeam[];
   readonly issues: readonly DiIssuePublication[];
   readonly fatal: boolean;
+  /** Exact thrown registry completion awaiting the nearest uncaught registration boundary. */
+  readonly abruptFailure: EvaluationExpressionAbruptCompletion | null;
 }
 
 const enum DiRegistryHandlerReadState {
@@ -317,6 +327,8 @@ class DiRegistrationSpendingFrame {
     source: DiSourceSet,
     readonly operation: DiRegistrationOperationEmission,
     registrationValue: DiRegistrationValueMaterialization,
+    readonly evaluationMutationCount: number,
+    readonly abruptCompletion: EvaluationExpressionAbruptCompletion | null,
   ) {
     this.records = [
       ...source.records,
@@ -453,6 +465,8 @@ class DiRegistrationSpendingFrame {
       )),
       issues: this.issues,
       resourceIssues: this.resourceIssues,
+      evaluationMutationCount: this.evaluationMutationCount,
+      abruptCompletion: this.abruptCompletion,
     };
   }
 }
@@ -472,6 +486,8 @@ class DiRegistrationSpendingCascadeFrame {
   private readonly registrationOpenSeamScopes: DiRegistrationOpenSeamScope[] = [];
   private readonly issues: DiIssue[] = [];
   private readonly resourceIssues: ResourceIssue[] = [];
+  private evaluationMutationCount = 0;
+  private abruptCompletion: EvaluationExpressionAbruptCompletion | null = null;
   private completion = DiRegistrationCascadeCompletion.Completed;
 
   constructor(direct: DiRegistrationSpendingEmission) {
@@ -493,6 +509,8 @@ class DiRegistrationSpendingCascadeFrame {
     this.registrationOpenSeamScopes.push(...spent.registrationOpenSeamScopes);
     this.issues.push(...spent.issues);
     this.resourceIssues.push(...spent.resourceIssues);
+    this.evaluationMutationCount += spent.evaluationMutationCount;
+    this.abruptCompletion ??= spent.abruptCompletion;
   }
 
   recordCascade(spent: DiRegistrationSpendingCascadeEmission): void {
@@ -510,6 +528,8 @@ class DiRegistrationSpendingCascadeFrame {
     this.registrationOpenSeamScopes.push(...spent.registrationOpenSeamScopes);
     this.issues.push(...spent.issues);
     this.resourceIssues.push(...spent.resourceIssues);
+    this.evaluationMutationCount += spent.evaluationMutationCount;
+    this.abruptCompletion ??= spent.abruptCompletion;
     if (spent.completion === DiRegistrationCascadeCompletion.Fatal) {
       this.completion = DiRegistrationCascadeCompletion.Fatal;
     }
@@ -539,6 +559,8 @@ class DiRegistrationSpendingCascadeFrame {
       registrationOpenSeamScopes: this.registrationOpenSeamScopes,
       issues: this.issues,
       resourceIssues: this.resourceIssues,
+      evaluationMutationCount: this.evaluationMutationCount,
+      abruptCompletion: this.abruptCompletion,
       completion: this.completion,
     };
   }
@@ -560,6 +582,7 @@ class DiRegistrationSpendingCascade {
     admission: RegistrationAdmissionProduct,
     carrier: EvaluatedRegistrationCarrier | null,
     admissionOpenSeams: readonly OpenSeam[] | null = null,
+    propagateRegistryFailure = false,
   ): DiRegistrationSpendingCascadeEmission {
     const spentKey = `${container.productHandle}:${step.productHandle}:${admission.productHandle}`;
     if (this.activeAdmissionKeys.has(spentKey)) {
@@ -576,17 +599,14 @@ class DiRegistrationSpendingCascade {
         registrationValue.product instanceof RegistryValue
         && hasEvaluationRegisterFunction(runtimeValue)
       ) {
-        const body = this.services.registryBodyIndex.matchAdmission(
-          admission,
-          runtimeValue,
-          this.services.activation.executeRegistrationRegistry(container, runtimeValue, []),
-        );
-        application = this.applicationForRegistryBody(
+        application = this.executeRegistryBody(
           container,
           step,
           admission,
           ordinal,
-          body,
+          runtimeValue,
+          [],
+          this.services.registryBodyIndex.openAdmissionExecution(admission, runtimeValue),
         );
       }
       if (registrationValue.product instanceof ParameterizedRegistry) {
@@ -596,6 +616,19 @@ class DiRegistrationSpendingCascade {
           admission,
           ordinal,
           registrationValue.product,
+        );
+      }
+      if (application.abruptFailure != null && !propagateRegistryFailure) {
+        application = mergeDiRegistrationApplications(
+          application,
+          this.failedRegistryApplication(
+            container,
+            step,
+            admission,
+            ordinal,
+            DiRegistryApplicationFailureKind.AbruptCompletion,
+            `Registry application failed after its reached effects: ${evaluationAbruptCompletionSummary(application.abruptFailure)}`,
+          ),
         );
       }
       const inheritedOpenSeams = registrationValue.closesAdmissionRecognition
@@ -627,6 +660,7 @@ class DiRegistrationSpendingCascade {
             conditionalAdmission,
             application.conditionalAdmissions.evaluatedCarriersByAdmissionProduct.get(conditionalAdmission.productHandle) ?? null,
             application.conditionalAdmissions.openSeamsByAdmissionProduct.get(conditionalAdmission.productHandle) ?? [],
+            propagateRegistryFailure,
           );
           frame.recordCascade(spent);
           if (spent.completion === DiRegistrationCascadeCompletion.Fatal) {
@@ -635,9 +669,15 @@ class DiRegistrationSpendingCascade {
         }
       }
       if (!frame.fatal) {
-        for (const bodyStep of application.body.steps) {
-          if (!this.recordBodyStep(frame, container, bodyStep)) {
-            break;
+        if (application.bodyCascades != null) {
+          for (const spent of application.bodyCascades) {
+            frame.recordCascade(spent);
+          }
+        } else {
+          for (const bodyStep of application.body.steps) {
+            if (!this.recordBodyStep(frame, container, bodyStep)) {
+              break;
+            }
           }
         }
       }
@@ -648,6 +688,57 @@ class DiRegistrationSpendingCascade {
     } finally {
       this.activeAdmissionKeys.delete(spentKey);
     }
+  }
+
+  private executeRegistryBody(
+    container: Container,
+    step: ConfigurationStep,
+    admission: RegistrationAdmissionProduct,
+    ordinal: number,
+    runtimeValue: EvaluationValue,
+    parameterValues: readonly EvaluationValue[],
+    bodySession: RegistryBodyExecutionSession | null,
+  ): DiRegistrationApplication {
+    const bodyCascades: DiRegistrationSpendingCascadeEmission[] | null = bodySession == null ? null : [];
+    const execution = this.services.activation.executeRegistrationRegistry(
+      container,
+      runtimeValue,
+      parameterValues,
+      bodySession == null
+        ? null
+        : (invocation) => {
+            const bodyStep = bodySession.record(invocation);
+            if (bodyStep == null) {
+              return;
+            }
+            let invocationFatal = false;
+            let evaluationMutationCount = 0;
+            let abruptCompletion: EvaluationExpressionAbruptCompletion | null = null;
+            for (const spent of this.spendBodyStep(container, bodyStep)) {
+              bodyCascades!.push(spent);
+              evaluationMutationCount += spent.evaluationMutationCount;
+              if (spent.completion === DiRegistrationCascadeCompletion.Fatal) {
+                invocationFatal = true;
+                abruptCompletion ??= spent.abruptCompletion;
+                break;
+              }
+            }
+            return {
+              shouldContinue: !invocationFatal,
+              hasEvaluationMutation: evaluationMutationCount > 0,
+              abruptCompletion,
+            };
+          },
+    );
+    const body = bodySession?.finish(execution)
+      ?? new RegistryAdmissionBodyExecution([], false, execution);
+    return {
+      ...this.applicationForRegistryBody(container, step, admission, ordinal, body),
+      bodyCascades: bodyCascades?.map((emission) => registryCascadeAfterEnclosingExecution(
+        emission,
+        execution?.abruptCompletion ?? null,
+      )) ?? null,
+    };
   }
 
   private prepareParameterizedRegistry(
@@ -710,14 +801,11 @@ class DiRegistrationSpendingCascade {
       registry,
     );
     if (activation.abruptCompletion != null) {
-      return this.failedRegistryApplication(
-        container,
-        step,
-        admission,
-        ordinal,
-        DiRegistryApplicationFailureKind.AbruptCompletion,
-        `Parameterized registry handler activation failed: ${evaluationAbruptCompletionSummary(activation.abruptCompletion)}`,
-      );
+      return {
+        ...emptyDiRegistrationApplication(),
+        fatal: true,
+        abruptFailure: activation.abruptCompletion,
+      };
     }
     if (activation.state === DiProviderActivationState.Failed) {
       return this.failedRegistryApplication(
@@ -839,13 +927,14 @@ class DiRegistrationSpendingCascade {
     }
 
     const parameterValues = parameterElements.map((element) => element.value);
-    const body = this.services.registryBodyIndex.matchRuntimeValue(
+    const bodyApplication = this.executeRegistryBody(
+      container,
+      step,
+      admission,
+      ordinal,
       activation.value,
-      this.services.activation.executeRegistrationRegistry(
-        container,
-        activation.value,
-        parameterValues,
-      ),
+      parameterValues,
+      this.services.registryBodyIndex.openRuntimeValueExecution(activation.value),
     );
     let application = mergeDiRegistrationApplications(
       {
@@ -853,9 +942,9 @@ class DiRegistrationSpendingCascade {
         records: activationPressure.records,
         openSeams: activationPressure.seams,
       },
-      this.applicationForRegistryBody(container, step, admission, ordinal, body),
+      bodyApplication,
     );
-    if (!body.closed && !application.fatal && application.openSeams.length === 0) {
+    if (!bodyApplication.body.closed && !application.fatal && application.openSeams.length === 0) {
       application = mergeDiRegistrationApplications(
         application,
         this.openParameterizedRegistryApplication(
@@ -893,17 +982,11 @@ class DiRegistrationSpendingCascade {
     };
     return execution?.abruptCompletion == null
       ? application
-      : mergeDiRegistrationApplications(
-          application,
-          this.failedRegistryApplication(
-            container,
-            step,
-            admission,
-            ordinal,
-            DiRegistryApplicationFailureKind.AbruptCompletion,
-            `Registry application failed after its reached effects: ${evaluationAbruptCompletionSummary(execution.abruptCompletion)}`,
-          ),
-        );
+      : {
+          ...application,
+          fatal: true,
+          abruptFailure: execution.abruptCompletion,
+        };
   }
 
   private failedRegistryApplication(
@@ -994,19 +1077,40 @@ class DiRegistrationSpendingCascade {
     container: Container,
     execution: RegistryBodyStepExecution,
   ): boolean {
-    const bodyStep = execution.step;
-    for (const admissionHandle of bodyStep.registrationAdmissionProductHandles) {
-      const admission = this.admissionForProduct(admissionHandle);
-      if (admission != null) {
-        const carrier = execution.runtimeCarrierForAdmission(admission);
-        const spent = this.spend(container, bodyStep, admission, carrier);
-        frame.recordCascade(spent);
-        if (spent.completion === DiRegistrationCascadeCompletion.Fatal) {
-          return false;
-        }
+    for (const spent of this.spendBodyStep(container, execution)) {
+      frame.recordCascade(spent);
+      if (spent.completion === DiRegistrationCascadeCompletion.Fatal) {
+        return false;
       }
     }
     return true;
+  }
+
+  private spendBodyStep(
+    container: Container,
+    execution: RegistryBodyStepExecution,
+  ): readonly DiRegistrationSpendingCascadeEmission[] {
+    const spentAdmissions: DiRegistrationSpendingCascadeEmission[] = [];
+    const bodyStep = execution.step;
+    for (const admissionHandle of bodyStep.registrationAdmissionProductHandles) {
+      const admission = this.admissionForProduct(admissionHandle);
+      if (admission == null) {
+        continue;
+      }
+      const spent = this.spend(
+        container,
+        bodyStep,
+        admission,
+        execution.runtimeCarrierForAdmission(admission),
+        null,
+        true,
+      );
+      spentAdmissions.push(spent);
+      if (spent.completion === DiRegistrationCascadeCompletion.Fatal) {
+        break;
+      }
+    }
+    return spentAdmissions;
   }
 
   private unableAutoRegisterCascade(
@@ -1040,6 +1144,8 @@ class DiRegistrationSpendingCascade {
       registrationOpenSeamScopes: [],
       issues: [publication.issue],
       resourceIssues: [],
+      evaluationMutationCount: 0,
+      abruptCompletion: null,
       completion: DiRegistrationCascadeCompletion.Fatal,
     };
   }
@@ -1061,14 +1167,34 @@ function registrationAdmissionStrategyLabel(admission: RegistrationAdmissionProd
   return admission.strategy;
 }
 
+function registryCascadeAfterEnclosingExecution(
+  emission: DiRegistrationSpendingCascadeEmission,
+  propagated: EvaluationExpressionAbruptCompletion | null,
+): DiRegistrationSpendingCascadeEmission {
+  const caught = emission.completion === DiRegistrationCascadeCompletion.Fatal
+    && (
+      propagated == null
+      || emission.abruptCompletion != null && emission.abruptCompletion !== propagated
+    );
+  return caught
+    ? {
+        ...emission,
+        completion: DiRegistrationCascadeCompletion.Completed,
+        abruptCompletion: null,
+      }
+    : emission;
+}
+
 function emptyDiRegistrationApplication(): DiRegistrationApplication {
   return {
     body: new RegistryAdmissionBodyExecution([], false),
+    bodyCascades: null,
     conditionalAdmissions: null,
     records: [],
     openSeams: [],
     issues: [],
     fatal: false,
+    abruptFailure: null,
   };
 }
 
@@ -1078,11 +1204,15 @@ function mergeDiRegistrationApplications(
 ): DiRegistrationApplication {
   return {
     body: registryBodyHasEvidence(right.body) ? right.body : left.body,
+    bodyCascades: left.bodyCascades == null && right.bodyCascades == null
+      ? null
+      : [...(left.bodyCascades ?? []), ...(right.bodyCascades ?? [])],
     conditionalAdmissions: right.conditionalAdmissions ?? left.conditionalAdmissions,
     records: [...left.records, ...right.records],
     openSeams: [...left.openSeams, ...right.openSeams],
     issues: [...left.issues, ...right.issues],
     fatal: left.fatal || right.fatal,
+    abruptFailure: right.abruptFailure ?? left.abruptFailure,
   };
 }
 
@@ -1585,7 +1715,13 @@ export class DiWorldConstructor {
       local,
       source.provenanceHandle,
     );
-    const frame = new DiRegistrationSpendingFrame(source, operation, registrationValue);
+    const frame = new DiRegistrationSpendingFrame(
+      source,
+      operation,
+      registrationValue,
+      application.body.execution?.mutationCount ?? 0,
+      application.abruptFailure ?? application.body.execution?.abruptCompletion ?? null,
+    );
     frame.records.push(...application.records);
     frame.retainOpenSeams([...inheritedOpenSeams, ...application.openSeams]);
     frame.issues.push(...application.issues.map((publication) => publication.issue));
@@ -2545,6 +2681,8 @@ function emptyRegistrationSpendingCascade(): DiRegistrationSpendingCascadeEmissi
     registrationOpenSeamScopes: [],
     issues: [],
     resourceIssues: [],
+    evaluationMutationCount: 0,
+    abruptCompletion: null,
     completion: DiRegistrationCascadeCompletion.Completed,
   };
 }
