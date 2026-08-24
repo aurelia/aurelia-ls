@@ -2,13 +2,14 @@
 
 See [../README.md](../README.md) for the folder-wide rebuild map and Atlas and auLink rule.
 
-This folder owns the framework-normal app model that analysis, fixture verification, and future app-building can point at. It is not a scaffold
-template library and not a source parser. It names the app-level shapes the semantic runtime must understand:
+This folder owns the framework-normal app model shared by analysis, fixture
+verification, and internal source planning. It is not a scaffold template
+library or source parser. It names the app-level shapes the semantic runtime must understand:
 entrypoints, root components, component-local dependencies, external templates, styles, services, registrations,
 resources, routes, and assets.
 
-The topology should stay close to idiomatic Aurelia application structure. If a future app-builder API proposes source,
-the proposed source should be able to round-trip through this model and then through the existing evaluation,
+The topology should stay close to idiomatic Aurelia application structure. If an internal source-lowering path proposes
+source, the proposed source should be able to round-trip through this model and then through the existing evaluation,
 configuration, DI, resource, and template layers.
 
 `ApplicationTopologyBuilder` is the app-level construction helper for fixture and app-builder source plans. Keep
@@ -79,14 +80,14 @@ framework style registries, and feeds both `AppTopology.styles` and component-lo
 ## Boundary
 
 - `application` describes what an app contains.
-- `app-builder` describes future AI-first app-building intent; see [../app-builder/README.md](../app-builder/README.md).
+- `app-builder` is legacy/internal app-building and source-lowering substrate; see [../app-builder/README.md](../app-builder/README.md).
 - `source-plan` describes neutral source artifact plans; see [../source-plan/README.md](../source-plan/README.md).
 - `api` opens workspaces and exposes analysis/query answers; see [../api/README.md](../api/README.md).
 - `boot`, `evaluation`, `configuration`, `di`, `resources`, `template`, and `type-system` prove whether the authored app
   actually means what the plan expected.
 
-Do not put generator taste, user preferences, or code formatting policy here. Those belong in app-builder or the
-AI/codegen layer. This folder should remain a calm topology model that TypeScript and Atlas can inspect.
+Do not put generator taste, user preferences, or code formatting policy here. Those belong in an owning source producer,
+not the shared topology model. This folder should remain a calm model that TypeScript and Atlas can inspect.
 
 ## Baseline Topology Pressure
 

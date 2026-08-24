@@ -1,12 +1,17 @@
 # Aurelia Semantic Runtime
 
-This source tree is the Aurelia 2 semantic substrate for the language server, Atlas, IDE features, and future compiler or analysis work. Treat Aurelia's externally observable framework contract as the semantic source of truth, and treat this package as the product model that makes that truth queryable.
+This source tree is the Aurelia 2 semantic substrate for the language server,
+MCP, Atlas, IDE features, and future analysis work. Treat Aurelia's externally
+observable framework contract as the semantic source of truth, and treat this
+package as the product model that makes that truth queryable.
 
 The package is intentionally architecture-first. Build durable substrate layers, then wire recognizers, materializers, and runtime emulators around those layers once the model has enough shape to avoid shims.
 
 ## Product Priorities
 
-Highest-value experiences include deep template autocomplete, go-to-definition from markup, reliable rename substrate, app maps, resource visibility, configuration tracing, DI explanations, and AI-assisted app building that can verify what it writes.
+Highest-value experiences include deep template autocomplete, go-to-definition from markup, reliable rename substrate,
+app maps, resource visibility, configuration tracing, DI explanations, and AI-assisted authoring grounded by Aurelia
+Patterns and verified against the real project.
 
 Correctness and explanation quality matter before latency while the architecture is still settling. False positives are more expensive than explicit open seams.
 
@@ -24,8 +29,8 @@ Keep the runtime-emulation split visible. Module evaluation, configuration admis
 
 - `kernel`: hot normalized record store, handles, vocabulary, identities, addresses, claims, evidence, provenance, materialization, open seams, and auLink anchors.
 - `boot`: workspace, project, and source admission before Aurelia semantics are interpreted.
-- `application`: framework-normal app topology shared by analysis, fixtures, and future app-building.
-- `app-builder`: AI-first pattern algebra for compact app-building intent, domain slots, reference-domain separation, and eventual Aurelia source lowering.
+- `application`: framework-normal app topology shared by analysis, fixtures, and internal source planning.
+- `app-builder`: legacy/internal app-building research, source-lowering experiments, SourcePlan assembly, and fixture pressure.
 - `source-plan`: shared source artifact planning, text authority, source-pattern metadata, and project tooling envelopes.
 - `support-state`: shared promise-strength ladder used by app-builder, fixture verification, and API rows.
 - `fixture-verification`: row-backed expected-effect contracts for reopened fixtures and generated source plans.
@@ -69,7 +74,7 @@ watchpoints, and current shape:
 - [boot/README.md](./boot/README.md) owns project discovery, source admission, compiler options, and project-shape
   boundaries before Aurelia interpretation.
 - [application/README.md](./application/README.md) owns app topology.
-- [app-builder/README.md](./app-builder/README.md) owns the AI-first pattern algebra that should sit before authoring source generation.
+- [app-builder/README.md](./app-builder/README.md) owns the legacy/internal app-builder boundary and its relationship to Aurelia Patterns.
 - [source-plan/README.md](./source-plan/README.md) owns shared source artifact and project-tooling plan policy.
 - [support-state.ts](./support-state.ts) owns the shared promise-strength ladder used by product/API surfaces.
 - [fixture-verification/README.md](./fixture-verification/README.md) owns row-backed expected-effect verification.

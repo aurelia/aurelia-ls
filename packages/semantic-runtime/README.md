@@ -52,8 +52,8 @@ pnpm --filter @aurelia-ls/semantic-runtime check:fixture-manifests
 
 The fixture lanes are roleful. `fixtures/pressure` contains analyzer pressure, including migrated app-pattern fixtures
 that used to live under the deleted recipe-authoring folder. `fixtures/pressure/app-builder-*` contains current app-builder
-output examples. App-builder is the future public generation path; fixture verification is a neutral test/pressure layer,
-not the generation API.
+output examples. App-builder is legacy/internal research and source-lowering substrate; fixture verification is a neutral
+test/pressure layer. Public MCP authoring guidance comes from `packages/patterns`.
 
 Run the inquiry-aware construction/query telemetry lane with:
 

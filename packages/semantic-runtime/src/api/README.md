@@ -5,6 +5,12 @@ See [../README.md](../README.md) for the folder-wide rebuild map and Atlas and a
 This folder owns the in-process API boundary for opening an Aurelia app with the semantic runtime. It is a library
 surface, not a daemon, CLI, or snapshot format.
 
+In this internal document, `public` normally means an exported semantic-runtime
+contract. It does not imply a supported external package or MCP surface.
+App-builder APIs are legacy/internal substrate; the current public MCP
+authoring path is Aurelia Patterns plus semantic verification of the adapted
+project.
+
 `semanticWorkspaceDescriptorForRuntimeOptions(...)` is the shared, serializable source-world boundary used by IDE,
 MCP, and future AOT adapters. It normalizes workspace exclusions and either automatic marker discovery plus host root
 hints or a complete explicit-project topology; store namespaces and live input-authority objects are deliberately not
@@ -190,7 +196,7 @@ Pass `continuationIntents` when a caller only wants moves for a
 current task such as `diagnose`, `inspect`, or `repair`; leave it unset for the full menu. App-builder continuations are
 API-level navigation over the catalog/readiness/detail/source-lowering surfaces; they should not become a recommendation
 engine or a replacement for the app-builder ontology.
-App-builder detail routes use a selected-detail posture for MCP token economy:
+App-builder detail routes use a selected-detail posture for compact internal inspection:
 unscoped detail calls return compact base rows, counts, and readiness/state
 summaries, while explicit row selectors or family filters activate rich joins by
 default. A caller should use catalog/readiness answers to select refs and then
@@ -284,9 +290,9 @@ runtime facade methods rather than raw catalog readers when the answer crosses a
 reuse, and cache overview all observe the same query-answer layer. Inside an already-entered claim boundary, use the
 focused raw answer builder instead of calling another public facade method; otherwise an implementation detail can
 create an unrelated default-profile claim even though only one public answer crossed the API boundary.
-The retired legacy recipe-authoring catalog, guidance, and recipe-plan answers have been removed. Public app generation
-should return through app-builder once that algebra has a stable API instead of preserving recipe-shaped compatibility
-surfaces here.
+The retired legacy recipe-authoring catalog, guidance, and recipe-plan answers have been removed. Do not restore
+recipe-shaped compatibility here. App-builder remains internal; current public
+authoring guidance comes from Aurelia Patterns.
 For component handoff, keep the declared type and the effective TypeChecker shape separate. A nullable object bindable
 such as `Product | null` should still surface as an object-shaped input for orientation while preserving the nullable
 declared type for assignability, diagnostics, and code actions.
@@ -1274,15 +1280,16 @@ useful sentence once and keep framework subsystem identity and AUR codes in stru
 separately.
 The legacy recipe-authoring catalog, guidance, orientation, and recipe-plan answers have been removed from this API.
 Do not add compatibility wrappers for them in `runtime.ts`, MCP, or query catalog rows. The preserved source artifacts
-now live as neutral fixture pressure and source-plan/app-builder substrate. Public app-generation answers grow through
-`SemanticRuntime.appBuilderQueryCatalog(...)` and `SemanticRuntime.answerAppBuilderQuery(...)`, a static/generation
-workflow facade kept separate from app-world query kinds. The app-builder facade includes read-only
-`ontology-catalog` terrain, selectable `target-catalog` rows, recommendation-policy review, source-lowering preflight, input readiness, input contract detail, affordance
-detail, application pattern detail, collection concept detail, control pattern detail, effect contract detail, policy
-axis detail, style detail, menu discovery,
-app-builder source-lowering invocation, app-builder source-lowering composition, source-lowering preview, concrete `part-source-invocation`
-callbacks, catalog integrity, and SourcePlan generation;
-MCP should forward those runtime-facade answers rather than reconstructing app-builder policy locally. The lower-level
+now live as neutral fixture pressure and source-plan/app-builder substrate.
+
+`SemanticRuntime.appBuilderQueryCatalog(...)` and
+`SemanticRuntime.answerAppBuilderQuery(...)` remain exported internal facades
+for contracts, fixture materialization, source-lowering research, and evidence
+harvesting. They are separate from app-world query kinds and are not registered
+as current MCP tools. The detailed boundary belongs to
+[`../app-builder/README.md`](../app-builder/README.md).
+
+The lower-level
 `answerSemanticRuntimeAppBuilderQuery(...)` and `answerSemanticRuntimeAppBuilderQueryCatalog(...)` helpers are pure
 deterministic answerers for contracts, generated fixture materialization, and registry checks; they do not attach
 query-claim wrapping or typed continuations unless a caller explicitly uses the shared continuation projector.
@@ -1290,21 +1297,21 @@ Diagnostics-to-action and
 future edit planning should grow from diagnostic/open-seam rows rather than from the old recipe/orientation shape.
 The app-builder query catalog and answerer registry are one checked API surface:
 adding a query kind must add enum value, catalog row, and answerer together so a
-transport cannot advertise an uncallable app-builder query.
-`ontology-catalog` is summary-first for public/MCP reads: it reports domain
+caller cannot select an uncallable app-builder query.
+`ontology-catalog` is summary-first for internal reads: it reports domain
 summaries, total row counts, source-lowering-implemented counts, relation counts,
 and display flags by default. Full ontology row families require
 `includeRows: true`, and relation graph rows require `includeRelations: true`
 or an explicit relation-kind filter, so broad orientation does not ship the
 entire app-builder graph unless the caller asks for detail.
 Input readiness accepts contract-wide markers, facet-scoped markers, and facet payloads; facet payloads validate
-against `input-contract-detail` schemas where modeled, so public callers can prove concrete supplied facts before
-source lowering without making the MCP invent missing app intent.
+against `input-contract-detail` schemas where modeled, so internal callers can prove concrete supplied facts before
+source lowering without relying on hidden app intent.
 Target catalog source-lowering availability is reverse canary coverage from current source-lowering surfaces to ontology
 rows; it is not a source-lowering support flag.
-No-argument target catalog answers return a 25-row first page in actionable-first order so the broad MCP/menu read stays
+No-argument target catalog answers return a 25-row first page in actionable-first order so broad internal reads stay
 compact while still exposing a cursor. Explicit filters, exact target selections, and caller-supplied page requests use
-the shared public paging behavior.
+the shared paging behavior.
 Target catalog rows also carry compact policy handles: whether the row is a local defaulting candidate, the optional
 defaulting policy scope/rationale, and whether a contextual executable row requires policy satisfaction. Full
 applicability/evidence rows remain in `recommendation-policy`, and satisfaction state remains in preflight where a

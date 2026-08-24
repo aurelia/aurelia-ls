@@ -411,7 +411,7 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
   router-only shortcut.
 - Router-owned source serializers live beside the router substrate. `route-instruction-source.ts` owns authored
   `load`/`href` attributes, and `route-configuration-source.ts` owns generated route-decorator object literals. Keep
-  app-builder and MCP generation on those helpers so generated route source, route products, diagnostics, and future
+  internal source producers on those helpers so generated route source, route products, diagnostics, and future
   edit loci do not split into separate string templates.
 - Authoring value completion for router resources should mirror that same shape. `load` and internal `href` values can
   offer modeled route-config ids/paths as candidates, but `href` remains open-ended because the framework intentionally

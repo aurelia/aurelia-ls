@@ -1,313 +1,327 @@
 # Architecture
 
-How the Aurelia language server analyzes projects and serves IDE features.
+Aurelia language tooling has two product surfaces: the VS Code extension and a
+local MCP server. They share one semantic model of an Aurelia project, then adapt
+that model for different hosts.
 
-## Overview
+This document describes the current contributor architecture. Package-specific
+READMEs own lower-level implementation details.
 
-The system has four layers. The **compiler** discovers resources and
-compiles templates. The **semantic workspace** maintains an incremental
-model of the project and dispatches feature queries. The **language
-server** translates between LSP and the workspace. The **VS Code
-extension** handles editor integration.
+## At a glance
 
-```
-                    VS Code Extension
-                          │
-                    Language Server (LSP adapter)
-                          │
-                    Semantic Workspace
-                    ┌─────┴──────┐
-              Project Pipeline   Template Pipeline
-                    └─────┬──────┘
-                       Compiler
-```
-
-The key architectural property: the language server doesn't construct
-semantic knowledge. The workspace owns all analysis, and the server
-just asks questions. This means every feature goes through the same
-resolution and confidence path.
-
-## Package Responsibilities
-
-| Package | Role |
-|---------|------|
-| `@aurelia-ls/compiler` | Resource discovery, template compilation, type system, provenance tracking |
-| `@aurelia-ls/semantic-workspace` | Incremental project model, feature dispatch, workspace lifecycle |
-| `@aurelia-ls/language-server` | LSP protocol adapter — translates workspace queries into LSP responses |
-| `@aurelia-ls/transform` | Build-time AOT transform (injects compiled templates) |
-| `@aurelia-ls/vite-plugin` | Vite integration for dev server and production builds |
-| `@aurelia-ls/ssr` | Server-side rendering |
-| `@aurelia-ls/ssg` | Static site generation |
-| `aurelia-2` | VS Code extension |
-
-## Compiler: Dual Pipelines
-
-The compiler runs two cooperating pipelines that converge into a single
-semantic model.
-
-### Project Pipeline
-
-Discovers what resources exist in the project and builds a unified
-picture of each one.
-
-```
-scan → identify → characterize → converge → SemanticModel
+```text
+                       shared semantic-runtime contracts
+                                  and product model
+                             ┌──────────┴──────────┐
+                             │                     │
+                         VS Code host                 MCP host
+                             │                           │
+                  workspace + synced docs          workspace files
+                             │                           │
+                 descriptor + managed session  descriptor + session registry
+                             │                           │
+                  semantic-runtime answers      semantic-runtime answers
+                             │                           │
+                      Language Server        MCP adapter <── Patterns/docs
+                             │                           │
+                     VS Code extension                AI client
 ```
 
-- **Scan**: Find all TypeScript and HTML files, resolve conventions,
-  detect dependencies.
-- **Identify**: Extract facts from each file — decorators, class
-  metadata, convention matches, `static $au` definitions, `.define()`
-  calls.
-- **Characterize**: Turn raw facts into observations about resources —
-  name, kind, bindables, binding modes, registration intent.
-- **Converge**: Merge observations from multiple sources (source
-  analysis, third-party packages, builtins, explicit configuration)
-  into a single definition per resource, per field, with full
-  provenance.
+This is an ownership diagram, not one shared live process. Each host creates its
+own descriptor-keyed semantic-runtime session. The semantic runtime owns project
+meaning; the adapters own host lifecycle and presentation without rebuilding a
+second semantic model.
 
-Convergence uses five field-level operators:
+## Responsibilities
 
-| Operator | What it does |
-|----------|-------------|
-| known-over-unknown | Lower-priority source fills in if higher-priority is absent |
-| stable-union | Arrays merge additively (e.g., bindable lists) |
-| select | First non-absent value wins |
-| locked-identity | Identity fields (name, kind) — conflict is an error |
-| patch-object | Object fields merge key-by-key with authority-based resolution |
+| Component | Owns |
+|---|---|
+| `@aurelia-ls/semantic-runtime` | The shared project model, semantic answers, and their currentness/lifetimes |
+| `@aurelia-ls/language-server` | Document synchronization and LSP request/diagnostic lifecycle |
+| `aurelia-2` | Workspace and process lifecycle, native VS Code presentation, and host-specific edit checks |
+| `@aurelia-ls/mcp` | AI transport plus MCP-only prompts, resources, Patterns, and bundled docs |
+| `@aurelia-ls/patterns` | Curated authoring examples and the packaged Aurelia documentation snapshot |
+| `@aurelia-ls/atlas` | Internal repository/framework navigation, queryable architecture memory, and maintenance lenses |
 
-The output is a `SemanticModel` — a map of `ConvergenceEntry` records
-keyed by resource identity, plus a dependency graph, vocabulary
-registry, and template map.
+The lane and integration harnesses are assurance infrastructure. Compiler,
+semantic-workspace, and the build-time packages are discussed under
+[Retained and legacy packages](#retained-and-legacy-packages).
 
-### Template Pipeline
+## How semantic rules are grounded
 
-Compiles each template against the semantic model.
+The framework's author-facing behavior is the source of truth. A rule is
+grounded by triangulating Aurelia documentation, framework tests, compiler
+lowering, runtime behavior, and logical ownership.
 
-```
-lower → link → bind → typecheck
-```
+Optimized runtime shape is evidence, but it is not automatically product policy.
+Private mutability, fallback behavior, or incidental runtime tolerance may be a
+poor basis for diagnostics or edits. Tooling adopts a stricter authoring rule
+only when that rule is well-grounded, actionable, and unlikely to create noise.
 
-- **Lower** (`10-lower`): Parse HTML into template IR using the frozen
-  vocabulary (binding commands, attribute patterns).
-- **Link** (`20-link`): Resolve elements, attributes, and template
-  controllers against the semantic model. Three-way resolution:
-  resolved (found with full definition), stub (found with gaps), or
-  absent (not in the model).
-- **Bind** (`30-bind`): Build scope chains, resolve expression
-  bindings, track variable visibility across template controller
-  boundaries.
-- **Typecheck** (`40-typecheck`): Validate expression types against
-  TypeScript via a generated overlay file.
+This grounding lets the semantic model be more explicit than the runtime. For
+example, tooling may need separate records for source identity, edit authority,
+provenance, and currentness even when one runtime object participates in all four.
 
-Each stage records its dependencies into a `DependencyGraph` for
-incremental invalidation.
+## One source world, several kinds of identity
 
-## Provenance and Confidence
+Long-lived, workspace-scoped adapters normalize their source inputs into a
+`semantic-workspace/1` descriptor. It captures the workspace root,
+authored-source exclusions, and either discovered project topology with host
+root hints or a complete explicit topology. One-shot runtimes can start from
+equivalent runtime options, while static MCP tools need no workspace at all.
 
-Three systems track the quality of the analysis.
+The descriptor is the shared input boundary, not a complete live editor state.
+VS Code also supplies synchronized open-document text through the language
+server. MCP normally reads the filesystem. Matching an editor session therefore
+requires the first MCP call to receive the same root hints and exclusions. The
+client must then carry the returned normalized hints and exclusions on related
+workspace/app calls. Live unsaved buffers need a future explicit handoff.
 
-### Sourced\<T\> — per-field provenance
+Within the selected roots, semantic-runtime reads exact-root Project
+Configuration V1 as project semantic input. `aurelia.project.json` defines
+durable source exclusions and finding presentation. Semantic-runtime's schema
+and parser own its meaning. VS Code's separate schema provides editing
+assistance only.
 
-Every field on a resource definition is wrapped in `Sourced<T>`,
-which records the value, where it came from (source file, package,
-config, builtin), and its confidence level. When the project pipeline
-converges multiple sources, the winning source's provenance is
-preserved.
+Several identity questions must stay separate:
 
-### Confidence Cascade
+| Question | Authority |
+|---|---|
+| Which logical source belongs to this project? | Semantic project/source admission |
+| Which physical file and TypeScript Program provide its types? | Type-system project and resolved package instance |
+| Can the source be read or navigated? | Exact source mapping and readable-source authority |
+| Can tooling edit it? | Authored-source ownership plus consumer transaction checks |
+| Which framework resource does an authored token mean? | Runtime-normalized resource identity plus the exact authored token |
 
-Every cursor position gets a confidence assessment from four
-independent signals:
+An excluded or external file may remain readable and navigable without becoming
+editable. An authored HTML or SVG token may also preserve its spelling while
+the browser-normalized name is used for framework identity. These distinctions
+prevent path similarity or parser normalization from granting edit authority.
 
-| Signal | What it measures |
-|--------|-----------------|
-| Resource | Was this resource discovered? How was it declared? |
-| Type | Does it have TypeScript type annotations? |
-| Scope | Was its registration scope fully determined? |
-| Expression | Was the expression fully analyzable? |
+## From source to a semantic answer
 
-The effective confidence is the minimum of all four signals. It flows
-through to every feature: hover shows confidence indicators, diagnostics
-demote severity, completions flag gaps.
+Semantic-runtime turns a source world into answers in five broad steps.
 
-### Gap Tracking
+1. **Admit projects and sources.** Boot discovers or receives project roots,
+   applies host hints and exclusions where relevant, reads compiler options,
+   and establishes project/source ownership.
+2. **Model framework construction.** Static evaluation records configuration and
+   registration effects. DI, resources, routing, plugins, and other framework
+   domains consume those facts through their owning models.
+3. **Analyze templates.** Compiler-world and template materializers parse HTML
+   and Aurelia expressions, build scopes, lower bindings, and use the owning
+   TypeScript project where type projection is needed.
+4. **Publish one app generation.** The kernel keeps separate record families for
+   materialized products and, where available, their identity, source address,
+   provenance, evidence, claims, and open seams. Publication is atomic:
+   consumers see the previous generation or the new generation, never a partial
+   mixture.
+5. **Answer a query.** The API selects an exact locus when possible, projects
+   only the requested product shape, applies paging, and returns typed next moves
+   where another query can continue the investigation.
 
-When analysis hits a limit — a dynamic registration pattern, an opaque
-third-party package, a `processContent` hook — the system records a
-structured gap: what couldn't be determined, why, and how to close it.
-Gaps propagate through the pipeline. A registration gap becomes a scope
-gap, which becomes a template analysis gap, which becomes a confidence
-demotion on the diagnostic.
+The kernel is a normalized in-process record store, not a transport database.
+Opaque handles are valid only for the generation that owns them. Portable
+answers use serializable source references and semantic fields instead.
 
-## Semantic Workspace
+`auLink` is narrower still. It links local model declarations to specific
+Aurelia framework symbols or facets; it does not replace product vocabulary or
+prove whole-class parity. Atlas reads these links and the surrounding source as
+maintainer navigation evidence.
 
-The workspace (`engine.ts`) sits between the compiler and the language
-server. It manages:
+## Managed sessions and currentness
 
-- **Project lifecycle**: open, update, close. Watches for file changes.
-- **Template lifecycle**: compile templates, maintain a template index,
-  track which templates need recompilation when resources change.
-- **Incremental invalidation**: three levels — content hashing (skip
-  unchanged files), fact fingerprinting (skip files whose facts didn't
-  change), and dependency-graph-scoped invalidation (only recompile
-  affected templates).
-- **Feature dispatch**: routes hover, completions, diagnostics,
-  definition, references, rename, and semantic token requests to the
-  appropriate handlers.
+A bare `SemanticRuntime` represents one resolved source-world snapshot. That is
+useful for bounded scripts, contracts, and future build consumers. Long-lived
+hosts use `ManagedSemanticWorkspaceSession` so each operation is checked against
+the current source world.
 
-### CursorEntity Resolution
+An ordinary managed query/read operation follows this lifecycle:
 
-All features share a single cursor resolution path. Given a cursor
-position in a template, `resolveCursorEntity()` produces a
-`CursorEntity` — a tagged union of 22 entity kinds (element tag,
-attribute name, bindable, binding command, expression identifier,
-value converter, template controller variable, etc.) with per-position
-confidence signals.
+1. Resolve and pin the current source world.
+2. Borrow a runtime facade for one callback.
+3. Compose every semantic query and exact source read into one analysis receipt.
+4. Finish transport or presentation mapping inside that callback.
+5. Re-check the source world and analysis basis before publishing the result.
 
-Features don't implement their own resolution. They receive a
-`CursorEntity` that already carries the semantic model's answer and
-project what they need from it.
+If the proof is stale, the operation fails with a typed currentness error. The
+session does not replay a callback whose mapping or side effects may already
+have run. The client may reissue the complete request.
 
-### Referential Index
+Analysis-cache clear is a separate exclusive transition. It is applied once,
+then reports `current` or `reconciliation-pending` if topology changed while the
+operation drained. It is never replayed or stale-rejected after the mutation has
+succeeded.
 
-Cross-domain reference tracking. Maps between template-domain
-references (tag names, attribute names, expression identifiers,
-pipe operators) and script-domain references (decorator properties,
-class names, import paths). Used by find-references and rename to
-locate all usages of a resource across both HTML and TypeScript.
+Applications are also generation-bound. A `SemanticApp` pins one complete app
+analysis, and replacement or disposal invalidates its handles and query objects.
+This is how the system avoids combining fresh kernel rows with an old object
+graph.
 
-### ResourceView Projection
+Cache ownership follows lifetime ownership:
 
-The query boundary between internal analysis (which uses `Sourced<T>`
-with full provenance wrappers) and feature consumers (which receive
-`Resolved<T>` values). The projection replaces gapped `Sourced<T>`
-fields with `Stub<T>` — a value that carries a fallback for continued
-processing plus metadata about what's missing and why.
+| Scope | Examples |
+|---|---|
+| App generation | App products, handle-bearing details, app-owned query claims |
+| Managed workspace session | Runtime snapshots, app epochs, TypeScript projects, session query retention |
+| Process | Shared TypeScript dependency `SourceFile` cache |
+| Language-server session | Synchronized document snapshots and receipt-backed diagnostic results |
+| MCP process | Descriptor-to-session registry; semantic retention stays in the selected sessions and process cache |
 
-## Language Server
+Disjoint admitted workspace roots do not share session-local state. Several
+project roots may live inside one descriptor and managed session; their project
+identities and app caches remain qualified within that source world. Two
+descriptors for the same filesystem root are also distinct when their hints or
+exclusions describe different source worlds.
 
-A thin LSP adapter. Each handler:
+## Answers preserve uncertainty
 
-1. Receives an LSP request (position, document URI)
-2. Translates it into a workspace query
-3. Receives a `FeatureResponse<T>` — either a result, a degradation
-   explanation, or not-applicable
-4. Translates back into an LSP response
+A semantic answer is not a single success flag. It keeps three independent
+questions visible:
 
-The server also handles:
+| Axis | Question |
+|---|---|
+| `result` | Did the query run and produce its declared shape? |
+| `selection` | Was one exact semantic locus selected, none found, or more than one plausible? |
+| `coverage` | Did analysis cover the requested semantic basis completely? |
 
-- Diagnostic taxonomy bridging (compiler diagnostic codes → VS Code
-  diagnostic data records)
-- Workspace change notifications for live updates
-- TypeScript rename interception (TS-side renames propagate to
-  templates)
+Paging is a transport fact and currentness is an analysis-basis fact; neither is
+folded into those axes. Resource publication also has its own freshness and
+failure state. Resource inventory and availability to one selected template are
+different questions.
 
-## VS Code Extension
+Uncertainty is represented by typed facts: open coverage, missing inputs,
+causal open seams, ambiguous selection, or stale currentness. There is no single
+confidence score that silently demotes every downstream feature.
 
-Feature-based architecture with per-feature modules:
+Diagnostics follow the same rule. Semantic-runtime retains the raw diagnostic
+facts and builds an answer-local presentation with a primary finding,
+contextual evidence, and explicitly withheld rows. The language server maps that
+presentation into LSP. VS Code owns the native Problems and Quick Fix UI.
+Ordinary project TypeScript/JavaScript diagnostics remain under their native
+authority.
 
-| Module | What it does |
-|--------|-------------|
-| `diagnostics-feature` | Bridges LSP diagnostics to VS Code problems panel, manages taxonomy |
-| `views-feature` | Resource Explorer sidebar, Find Resource picker |
-| `inlay-hints-feature` | Binding mode hints (shows `.bind` resolution) |
-| `code-lens-feature` | Bindable and usage counts on resource classes |
-| `inline-feature` | Gap indicators in the editor |
-| `status-feature` | Status bar with analysis state and resource counts |
-| `ts-rename-feature` | Intercepts TypeScript renames to propagate to templates |
-| `commands` | User commands (Find Resource, Inspect at Cursor, etc.) and debug commands |
-| `observability-feature` | Compiled template viewer, overlay mapping, server state dump |
+Explanations and continuations are model-authored projections over the same
+facts. Consumers should follow their typed source references and target queries
+instead of reconstructing causality from messages or nullable fields.
 
-### TypeScript Integration
+## VS Code and language-server flow
 
-The compiler generates a TypeScript overlay file for each template.
-The overlay maps template expressions to TypeScript declarations,
-giving the TS language service visibility into template bindings. This
-is what enables type checking, go-to-definition across HTML/TS, and
-expression completions.
+VS Code first decides which filesystem roots are candidates for Aurelia tooling.
+`auto` uses project evidence and semantic confirmation; `on` explicitly enables
+a root; `off` excludes a complete subtree. Every admitted root gets an
+independent language client and semantic session.
 
-The overlay is a virtual `.d.ts` file managed by the workspace's
-`OverlayFS` — it's never written to disk.
+Worker transport is the desktop default. IPC remains a debug/fallback path. The
+extension owns start, stop, restart, replacement, and root transitions; the
+language server owns requests after the transport is established.
 
-## Semantic Authority Host
+For one editor request:
 
-A persistent runtime for interactive querying outside VS Code
-(`pnpm host:start` / `pnpm host:query`). Used during development to
-run pressure sweeps against real corpora, replay and verify analysis
-results, and test features without the VS Code/LSP overhead.
+1. The language server snapshots the synchronized document and request epoch.
+2. A managed semantic operation answers the query and reads any additional
+   source through the pinned document/filesystem authority.
+3. The language server drains transport pages when the LSP feature needs one
+   complete result, then maps exact source references into URIs and ranges.
+4. The managed egress check authenticates the mapped response.
+5. VS Code presents the native feature and rejects stale UI context where the
+   product needs an additional host check.
 
-## Incremental Invalidation
+Document-structure features follow the same ownership. Semantic-runtime
+supplies source-backed tokens, symbols, highlights, ranges, and hints; the
+language server maps them, and VS Code selects and presents the native provider.
 
-Three levels minimize recomputation:
+Rename has the strongest host-specific boundary. Semantic-runtime produces one
+whole-operation plan or refuses it. The language server maps that plan and
+reports unresolved candidates. VS Code F2 additionally validates document
+version, content digest, URI identity, and real path before applying one
+`WorkspaceEdit`, which gives the user one undo unit. Generic LSP clients do not
+automatically receive those VS Code transaction guarantees.
 
-1. **Content hash**: File unchanged → skip extraction entirely.
-2. **Fact fingerprint**: File changed, but extracted facts are
-   structurally identical → skip characterize/converge.
-3. **Dependency graph**: Facts changed → `getAffected()` returns which
-   resources and templates are impacted. Only those recompile.
+Quick Fixes likewise re-plan from the current document before returning an edit.
+Native diagnostic suppression is a VS Code presentation choice: exactly owned
+templates may move to `aurelia-html`, which also suppresses legitimate embedded
+CSS/JavaScript diagnostics.
 
-The dependency graph tracks 10 node kinds (file, observation,
-convergence entry, scope, vocabulary, template, overlay, etc.) and
-their relationships.
+## MCP flow
 
-## Key Invariants
+MCP is a thin transport adapter over semantic-runtime plus two MCP-only content
+surfaces: Aurelia Patterns and bundled Aurelia docs.
 
-- **Provenance-first**: Every value carries its origin. Use `Sourced<T>`
-  and `SourceSpan`, not raw values.
-- **Deterministic analysis**: Same inputs → same outputs. Pipeline
-  stages are pure and cache-friendly.
-- **Configuration-driven syntax**: Binding commands, attribute patterns,
-  and template controller behavior come from configuration, not
-  hard-coded names.
-- **Confidence as first-class**: Every analysis result carries its
-  confidence level. Consumers decide what to do with low-confidence
-  results.
-- **Gaps over guesses**: When analysis can't determine something, it
-  records a structured gap. It never fabricates an answer.
+For a workspace-scoped tool call:
 
-## Directory Map
+1. Strict MCP input schemas validate the request.
+2. The adapter normalizes the workspace inputs and selects a managed session by
+   descriptor identity.
+3. The tool runs inside one managed operation and receives a semantic answer.
+4. MCP detaches process-private capabilities, returns structured JSON, and
+   renders compact text for clients that prefer it.
+5. Handler/runtime failures are serialized with their available currentness and
+   retry facts; SDK input failures remain ordinary MCP invalid-params errors.
 
-```
-packages/
-  compiler/
-    src/
-      schema/         — types, model, confidence, cursor entity,
-                        dependency graph, referential index, resource
-                        views, provenance (Sourced<T>)
-      project-semantics/ — project pipeline (scan → converge)
-      pipeline/       — template pipeline stages (lower → typecheck)
-      program/        — template program, overlay spans, completions
-      model/          — IR types, source spans, diagnostics
-      parsing/        — expression parser, attribute parser
-      synthesis/      — AOT and overlay code generation
-      diagnostics/    — diagnostic types, emitter, report
-      shared/         — utilities, module resolver, tracing
-  semantic-workspace/
-    src/
-      engine.ts       — workspace lifecycle + feature dispatch
-      hover.ts        — hover card generation
-      definition.ts   — go-to-definition
-      completions-engine.ts — completions with predictive DFA
-      semantic-tokens.ts — semantic token generation
-      typescript/     — TS service, overlay FS, project index
-      host/           — semantic authority host runtime
-  language-server/
-    src/
-      handlers/       — LSP request handlers (features, lifecycle,
-                        code lens, inlay hints, semantic tokens)
-      mapping/        — LSP type conversions
-      feature-response.ts — FeatureResponse → LSP translation
-  vscode/
-    src/
-      features/       — per-feature modules (diagnostics, views,
-                        inlay hints, code lens, rename, status,
-                        inline, observability, commands)
-      core/           — config, capabilities, service registry,
-                        query client, feature graph
-```
+Static tools and resources such as the app-query catalog, Pattern menu, and docs
+index do not open a workspace session. Cache tools can mutate analyzer retention
+but never write project files. Source edits are made by the AI client or another
+host.
 
-## Related Docs
+MCP and the language server share semantic rules, not a live process or hidden
+cache. Descriptor reuse provides MCP-to-MCP continuity. Exact editor parity
+requires the same source-world inputs and, for unsaved content, an explicit
+editor handoff that does not exist today.
 
-- [Getting Started](./getting-started.md) — setup and usage
-- [VS Code Extension README](../packages/vscode/README.md) — feature list
+## Static-analysis boundary
+
+Semantic-runtime models behavior that can be resolved from source and bounded
+framework construction. It does not run the application.
+
+The current model stops before live navigation and guards, arbitrary plugin or
+state-store execution, promise and viewport scheduling, bundler callbacks, and
+general browser/runtime emulation. When those facts matter, the answer stays
+open and records the missing evidence instead of inventing a result.
+
+This boundary is product behavior. An open answer can still contain useful exact
+identity, source, or type facts; consumers should preserve those facts while
+showing the specific limitation.
+
+## Retained and legacy packages
+
+`@aurelia-ls/compiler` and `@aurelia-ls/semantic-workspace` describe the earlier
+language-tooling architecture. They remain in the repository for bounded legacy
+and internal uses, but neither is the current feature authority for the language
+server, VS Code, or MCP.
+
+`@aurelia-ls/transform` and `@aurelia-ls/vite-plugin` are retained build-time
+packages outside the current VS Code and MCP release lines.
+`@aurelia-ls/ssr` and `@aurelia-ls/ssg` are retained rendering packages on that
+same independent package line.
+
+App-builder is legacy/internal semantic-runtime substrate for research,
+source-lowering experiments, and fixture pressure. The public MCP authoring path
+is Aurelia Patterns followed by semantic verification of the adapted project.
+See the [app-builder README](../packages/semantic-runtime/src/app-builder/README.md)
+for the internal boundary.
+
+Future AOT remains an architectural consumer constraint, not a completed product
+adapter. Semantic-runtime is likewise an internal substrate, not a separately
+supported public core API in this release.
+
+## Working with the architecture
+
+Before adding a carrier, cache, helper, or adapter-specific fallback, search for
+the owning semantic product and its provenance. The preferred repair is often to
+restore dropped data or reconnect an isolated implementation rather than derive
+the same fact again.
+
+Use the folder-level [semantic-runtime source map](../packages/semantic-runtime/src/README.md)
+for local ownership and Atlas for queryable repository/framework navigation.
+Keep release chronology in changelogs and recent implementation context in
+workbench notes; this document owns the present-tense system shape.
+
+## Related documentation
+
+- [Getting Started](./getting-started.md)
+- [Project Configuration V1](./project-configuration.md)
+- [VS Code extension reference](../packages/vscode/README.md)
+- [MCP package and protocol reference](../packages/mcp/README.md)
+- [Semantic-runtime source map](../packages/semantic-runtime/src/README.md)
+- [Semantic-runtime API](../packages/semantic-runtime/src/api/README.md)

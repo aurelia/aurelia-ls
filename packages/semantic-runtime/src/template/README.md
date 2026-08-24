@@ -172,7 +172,7 @@ classification, expression parsing, and instruction lowering converge on the sam
   command values parse with `IsFunction`, `for` parses with `IsIterator`, and
   static translation text has no expression parse. Use it for source-lowering
   integrity checks instead of rebuilding command-specific parser policy in
-  app-builder or MCP code.
+  individual source producers.
   `@aurelia/state` follows the framework renderer split: `.state` uses the
   function/listener entry family because the renderer later parses the source as
   `IsFunction`, while `.dispatch` is a state command whose renderer parses the
