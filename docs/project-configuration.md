@@ -71,10 +71,9 @@ directory may name future generated output, so it can be configured before a
 generator runs. Equivalent or nested redundant boundaries are normalized into
 the effective exclusion set.
 
-An exclusion changes authored-source membership, not filesystem access. Files
-under the boundary may still be read as dependency evidence through normal
-module resolution. The setting has no effect on bundling, generated output, or
-TypeScript's module-resolution rules.
+Exclusions change authored-source membership. Normal module resolution may
+still read excluded files as dependency evidence. Bundling, generated output,
+and TypeScript module resolution stay with their existing owners.
 
 ## Finding presentation
 
@@ -108,15 +107,16 @@ Tooling retains the normalized result and exact diagnostics even when part of a 
 | `partial` | The root and version are accepted, but a section or entry has diagnostics. | Valid sibling sections survive. Structurally invalid sections fall back as a unit; supported list or map entries can be retained independently. |
 | `rejected` | The file is unreadable, invalid JSONC, not an object, or has a root/version contract error. | No native exclusions or finding overrides are applied; deterministic defaults remain effective. |
 
-For example, a valid `authoredSources` section still applies when `findings` is not an object. A valid known finding rule
-still applies when `authoredSources` is malformed. An invalid `authoredSources` container, unknown or duplicate field,
-or non-array `excludedRoots` value discards that whole section. Within a structurally valid `excludedRoots` array,
-however, valid directory entries survive invalid elements; valid known finding rules likewise survive invalid sibling
-entries. Root-level ambiguity is intentionally different: an unknown or duplicate root field rejects the semantic
-contents of the file.
+Failures remain local to a section where possible. A valid `authoredSources`
+section still applies when `findings` is invalid, and a valid known finding rule
+still applies when `authoredSources` is malformed. An invalid section container
+rejects that section. For `authoredSources`, unknown or duplicate fields and a
+non-array `excludedRoots` value also reject the section. Valid entries in a
+structurally valid list or map survive invalid siblings. Unknown or duplicate
+root fields reject the file's semantic contents.
 
-The accepted version is `1` when that field is unique and supported, even if an unrelated root error rejects the file.
-It is unknown when `version` is missing, duplicated, malformed, or unsupported.
+The accepted version is `1` whenever the version field is unique and supported,
+even if an unrelated root error rejects the file. Otherwise it is unknown.
 
 The MCP `aurelia_project_configurations` tool exposes existing files only. Its
 default view reports the accepted version, application state, applied
@@ -160,14 +160,13 @@ filesystem checks, and the effective configuration applied across consumers.
 
 ## Current boundary and future versions
 
-Version 1 is deliberately small. It owns source boundaries and finding
-presentation. Framework conventions, template and route semantics, build
-tooling, output directories, and extension-only behavior stay with their
-existing owners.
+Version 1 covers source boundaries and finding presentation. Other framework,
+build, and editor concerns stay with their existing owners.
 
-There is no V2 contract today. New known finding rule IDs may extend V1: the namespaced `findings` map is its explicit
-forward-compatible lane, and older tooling warns about and ignores a well-formed unknown ID. V1 rejects unknown root
-fields, so new root structure or section grammar requires a new format version.
+New known finding rule IDs may extend V1 through the namespaced `findings` map;
+older tooling warns about and ignores well-formed unknown IDs. Because V1
+rejects unknown root fields, new root structure or section grammar requires a
+new format version.
 
 Future AOT or convention settings belong here only when IDE, MCP, and build
 consumers can share one contract and lifecycle. Incompatible changes require an

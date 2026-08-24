@@ -1,8 +1,8 @@
 # Aurelia Language Tooling
 
-Language intelligence for Aurelia 2, delivered through a VS Code extension and
-a local MCP server. Both are powered by the shared **Aurelia semantic runtime**,
-so editor and AI features start from the same model of the project.
+Aurelia 2 language intelligence is available through a VS Code extension and a
+local MCP server. Both use the shared **Aurelia semantic runtime** and work from
+the same project model.
 
 ## VS Code Extension
 
@@ -15,18 +15,14 @@ ext install AureliaEffect.aurelia-2
 
 The extension provides:
 
-- **Write templates** with completions and enriched hover.
-- **Navigate and refactor** with definitions, references, highlights, and
-  safety-checked rename.
-- **Diagnose problems** with Aurelia-aware findings and Quick Fixes that
-  re-check the current document.
-- **Understand document structure** through semantic coloring, symbols, folding,
-  linked editing, selection ranges, and optional binding-mode hints.
-- **Explore resources** in Explorer, including their origin, aliases, bindables,
-  and availability.
-- **Contextual explanations** show why supported diagnostics, uncertain
-  bindings, attributes, resource availability, or configured analysis
-  limitations behave as they do.
+- Template completions and enriched hover.
+- Definitions, references, highlights, and safety-checked rename.
+- Aurelia findings and Quick Fixes that re-check the current document.
+- Semantic coloring and source-backed document structure, with optional
+  binding-mode hints.
+- Resource inventory and availability, with origin, alias, and bindable context.
+- Contextual explanations for supported diagnostics, binding uncertainty,
+  attribute interpretation, resource availability, and configured limitations.
 
 See the [extension README](packages/vscode/README.md) for the full reference and
 troubleshooting. Version-specific changes and the complete 0.4-to-0.5 migration
@@ -34,10 +30,10 @@ are in the [extension changelog](packages/vscode/CHANGELOG.md).
 
 ## MCP Release
 
-`@aurelia-ls/mcp` gives AI coding tools a source-grounded view of an Aurelia
-app. Clients can inspect diagnostics, resources, and routing, then use curated
-Aurelia Patterns and bundled Aurelia docs while authoring. The server makes no
-project-file writes. Cache management only changes in-memory analysis state.
+`@aurelia-ls/mcp` exposes a source-grounded Aurelia app model to AI coding
+clients. It includes diagnostics, resource and route analysis, curated Aurelia
+Patterns, and bundled Aurelia docs. The MCP server makes no project-file writes;
+cache management changes only in-memory analysis state.
 
 The latest hosted tarball is MCP 0.2.0. The source tree targets 0.3.0; its
 [package README](packages/mcp/README.md) explains the difference and links the
@@ -62,10 +58,10 @@ published [MCP 0.2.0 release notes](packages/mcp/release-notes/mcp-v0.2.0.md).
 ## Shared Semantic Runtime
 
 `@aurelia-ls/semantic-runtime` is the internal model shared by the language
-server and MCP. It understands the project and produces semantic answers with
-the evidence needed to judge their scope and freshness.
+server and MCP. It models the project and produces semantic answers with the
+evidence needed to judge their scope and freshness.
 
-The surrounding layers have narrower jobs:
+Responsibilities around the shared model are divided as follows:
 
 - The language server keeps documents synchronized and maps semantic answers to
   LSP.

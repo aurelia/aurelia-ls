@@ -1,29 +1,35 @@
 # Aurelia Semantic Runtime
 
-This source tree is the Aurelia 2 semantic substrate for the language server,
-MCP, Atlas, IDE features, and future analysis work. Treat Aurelia's externally
-observable framework contract as the semantic source of truth, and treat this
-package as the product model that makes that truth queryable.
+This tree implements the Aurelia project model used by the language server,
+MCP, Atlas, IDE features, and future analysis consumers. Aurelia's author-facing
+framework contract is the authority; this README maps the source layers that
+make it queryable.
 
-The package is intentionally architecture-first. Build durable substrate layers, then wire recognizers, materializers, and runtime emulators around those layers once the model has enough shape to avoid shims.
+Build behavior on the layer that owns the underlying fact. Uncertainty stays
+explicit through typed answer facts, evidence, and open seams.
 
-## Product Priorities
+## Product Focus
 
-Highest-value experiences include deep template autocomplete, go-to-definition from markup, reliable rename substrate,
-app maps, resource visibility, configuration tracing, DI explanations, and AI-assisted authoring grounded by Aurelia
-Patterns and verified against the real project.
-
-Correctness and explanation quality matter before latency while the architecture is still settling. False positives are more expensive than explicit open seams.
+Current priorities are reliable template editing and refactoring, understandable
+project and resource behavior, and AI-assisted authoring grounded in Aurelia
+Patterns and verified against the real project. Current development prioritizes
+correctness and explanation quality while the architecture is settling.
 
 ## Runtime Grounding
 
-Aurelia's externally observable framework contract is the grounding authority. Establish that contract by triangulating framework documentation, framework tests, compiler lowering, runtime behavior, and logical ownership. Individual implementation shapes remain evidence, but optimized hot paths, private mutability, compatibility tolerance, and fallback behavior do not automatically define author-facing semantics.
+Aurelia's author-facing framework contract is the grounding authority. Start
+with framework documentation and tests. Use compiler and runtime evidence when a
+rule needs deeper grounding, then place it with the layer that logically owns
+it. Implementation shape alone does not define author-facing semantics.
 
 Product models may be more granular than runtime classes when tooling needs separate provenance, identity, inquiry, or explanation boundaries, but they should not be less precise than framework semantics. Tooling may enforce a stricter authoring rule when the framework is incidentally permissive only when that rule is well-grounded, low-noise, and actionable; otherwise preserve uncertainty as an open seam.
 
 Known semantic behavior exceptions should be called out directly. Attribute patterns and binding commands are the current example: runtime stores them through different mechanisms so attribute parsing can be fast, but the intended application semantics are a configured, app-global, effectively frozen syntax surface.
 
-Keep the runtime-emulation split visible. Module evaluation, configuration admission, registration spending, DI world construction, compiler-world formation, HTML and attribute parsing, instruction lowering, and compiled-template assembly can mostly follow evaluation-shaped Aurelia runtime construction. Activation-dependent answers cross into TypeChecker-backed speculative projection with explicit products, claims, provenance, and open seams.
+Keep the runtime-emulation split visible. Source-resolvable framework
+construction follows the evaluation-shaped layers in this tree.
+Activation-dependent answers use TypeChecker-backed projection with explicit
+products, claims, provenance, and open seams.
 
 ## Layer Map
 
@@ -55,7 +61,7 @@ Keep the runtime-emulation split visible. Module evaluation, configuration admis
 - `router`: router configuration, route config, route context, viewport instruction, and router-owned resource model anchors.
 - `api`: in-process app-opening and query facade over the product substrate.
 
-Template parser and compiler materializers should be built on these layers, not by reconnecting older runtime-shaped compiler models.
+Template parser and compiler materializers should build on these layers.
 
 ## Atlas And auLink
 

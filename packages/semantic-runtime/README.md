@@ -1,14 +1,13 @@
 # semantic-runtime
 
-`semantic-runtime` is the in-repo Aurelia semantic substrate for the language server, Atlas, MCP, IDE features, and
-future compiler or analysis work.
+`semantic-runtime` is the shared in-repo project model used by the language
+server, MCP, Atlas, and IDE features, with room for future analysis consumers.
+It owns project discovery, framework and template analysis, type projection,
+diagnostics, explanations, and query currentness. Internal app-builder and
+fixture tooling also live here; the snapshot/query CLI and recipe-authoring APIs
+are retired.
 
-It owns product semantics: kernel records, auLink anchors, static evaluation, resource recognition, configuration
-admission, DI world construction, template/compiler modeling, expression parsing, TypeChecker-backed projection,
-application topology, app-builder substrate, diagnostics, query answers, and fixture verification pressure. It does not
-own the retired snapshot/query CLI surface or the retired legacy recipe-authoring API.
-
-The package is intentionally source-first while the substrate is still moving. Build it with:
+Build the package with:
 
 ```powershell
 pnpm --filter @aurelia-ls/semantic-runtime build
@@ -37,11 +36,12 @@ pnpm --filter @aurelia-ls/semantic-runtime contract:suite -- --route app-pattern
 pnpm --filter @aurelia-ls/semantic-runtime contract:suite -- --domain forms --tier fast
 ```
 
-The suite builds once, then runs the selected row-backed contracts directly. Use `--list` to see available routes,
-domains, tiers, and scripts. Route filters accept exact route IDs or dotted route prefixes. This is the first
-lightweight contract lane for bold refactors: it checks semantic effects and public product rows, not snapshots or
-internal helper shapes. Successful child scripts are compact by default; pass `--verbose` when a contract needs its full
-JSON output during debugging.
+The suite builds once, then runs the selected row-backed contracts. Use `--list`
+to see available routes, domains, tiers, and scripts. Route filters accept exact
+route IDs or dotted prefixes. The contracts check semantic effects and exported
+product rows without depending on snapshots or internal helper structure.
+Successful child scripts are compact by default; use `--verbose` for full JSON
+while debugging.
 
 Run generic fixture typechecking or manifest-backed effect verification with:
 
@@ -50,10 +50,10 @@ pnpm --filter @aurelia-ls/semantic-runtime check:fixture-typecheck
 pnpm --filter @aurelia-ls/semantic-runtime check:fixture-manifests
 ```
 
-The fixture lanes are roleful. `fixtures/pressure` contains analyzer pressure, including migrated app-pattern fixtures
-that used to live under the deleted recipe-authoring folder. `fixtures/pressure/app-builder-*` contains current app-builder
-output examples. App-builder is legacy/internal research and source-lowering substrate; fixture verification is a neutral
-test/pressure layer. Public MCP authoring guidance comes from `packages/patterns`.
+Fixture lanes have distinct roles. `fixtures/pressure` contains analyzer
+pressure, including migrated app-pattern fixtures. Its `app-builder-*` entries
+contain internal app-builder output examples. Public MCP authoring guidance comes
+from `packages/patterns`.
 
 Run the inquiry-aware construction/query telemetry lane with:
 
@@ -61,13 +61,11 @@ Run the inquiry-aware construction/query telemetry lane with:
 pnpm --filter @aurelia-ls/semantic-runtime profile:app-telemetry
 ```
 
-That profiler compares analysis depth and inquiry profile, reports phase memory/kernel deltas, shows product/detail,
-handle-character, and source-span-role density when kernel breakdowns are enabled, prints TypeSystemProject subphases,
-Program source-file composition, and compiler-host cache counts, and separates app-world construction cost from public
-query projection cost and query-claim retention. Query rows report value JSON bytes, full answer-envelope JSON bytes, and
-continuation count/bytes separately so follow-up richness and MCP token pressure stay visible. Use it before changing
-cache policy, materialization depth, hot details, source-address storage, continuation presentation, or app-opening
-defaults.
+The profiler separates app construction, query projection, and retained-query
+costs. Optional breakdowns cover kernel/product density, TypeScript project and
+cache work, source-file composition, and serialized answer and continuation
+size. Use it before changing cache policy, materialization depth, hot details,
+source-address storage, continuation presentation, or app-opening defaults.
 
 Set `SEMANTIC_RUNTIME_PRESSURE_ROOTS` to a path-delimited list of external roots when using external clean-room apps as a
 transient pressure surface. Treat the output as local inspection material: do not promote exact paths, project keys, row
@@ -81,10 +79,10 @@ Large selected apps can still need an explicit Node heap while app-world memory 
 $env:NODE_OPTIONS='--max-old-space-size=8192'
 ```
 
-Keep durable semantics in typed records, vocabulary, claims, provenance, materialized products, and open seams. Use Atlas
-as the live orientation and inspection layer over this package instead of maintaining parallel static document packets.
-When a semantic-runtime note should guide future autonomous work, promote its durable essence into `packages/atlas/memory`
-and link back to the owning README or workbench rather than relying on `.temp` notes.
+Keep durable semantics in typed records, vocabulary, claims, provenance,
+materialized products, and open seams. Atlas is the live orientation and
+inspection layer over this package. Promote durable guidance into
+`packages/atlas/memory` and link it to the owning README or workbench.
 
 For the durable folder map, read [src/README.md](src/README.md). For recent context while the package is still settling,
 read [src/WORKBENCH.md](src/WORKBENCH.md). Pressure fixtures, including current app-builder pressure fixtures, are

@@ -19,8 +19,8 @@ Use these quick checks after activation:
 - Ctrl+click a supported tag, attribute, member, or route token to navigate to
   source.
 - Type `<` inside a template to request element completions.
-- Open **Aurelia Resources** in Explorer to browse the active root's resource
-  inventory.
+- Open **Aurelia Resources** in Explorer to browse the admitted workspace roots'
+  resource inventory.
 - Run **Aurelia: Go to Resource...** to search admitted resource rows.
 
 If discovery fails, use **Open Aurelia Output** from the view or affected
@@ -66,24 +66,24 @@ Problems for valid interpolation, set
 `aurelia.templateDiagnostics.suppressNative` to `true` for the affected
 workspace folder.
 
-Only templates with exact Aurelia ownership move into **Aurelia HTML** mode.
-That mode suppresses all embedded CSS/JavaScript findings and can change normal
-HTML editor behavior, including icons, scoped settings, snippets, and formatter
-selection. Keep the default unless interpolation noise outweighs that coverage.
-Use project lint or build checks to replace any validation you disable.
+Only exactly owned templates move into **Aurelia HTML** mode. This suppresses
+embedded CSS/JavaScript diagnostics, including legitimate findings, and may
+change native HTML editor behavior. Keep the default unless interpolation noise
+outweighs that loss, and preserve the disabled checks in project lint or build
+tooling.
 
 ## Using the MCP Release
 
 `@aurelia-ls/mcp` is a local MCP server for source-grounded Aurelia analysis,
-curated Patterns, and bundled docs. It makes no project-file writes; cache
-management only changes in-memory analysis state.
+curated Patterns, and bundled Aurelia docs. The MCP server makes no project-file
+writes; cache management changes only in-memory analysis state.
 
 The latest hosted release is 0.2.0. The source tree targets 0.3.0; see the
 [MCP package README](../packages/mcp/README.md) for that explicit boundary and
 the versioned protocol reference.
 
-For trustworthy TypeScript diagnostics, install the hosted MCP Release tarball
-inside the project being analyzed:
+To align MCP diagnostics with the project's TypeScript, install the hosted MCP
+release tarball inside the project being analyzed:
 
 ```bash
 npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.2.0/aurelia-ls-mcp-0.2.0.tgz
@@ -134,21 +134,20 @@ pnpm test
 The current IDE release gates are separated by responsibility:
 
 ```bash
-# Semantic-runtime suite, strict conformance, selected contracts, and lanes
+# Semantic-runtime, conformance, and cross-surface assurance
 pnpm test:ide:assurance
 
-# Complete language-server and VS Code package suites
+# Language-server and VS Code suites
 pnpm test:language-server
 pnpm test:vscode
 
-# Bounded support/product/package contract matrix
+# Support and packaging contracts
 pnpm test:ide:support
 ```
 
 `pnpm test:ide` builds the IDE packages and runs the language-server and VS Code
-suites. Run `test:ide:assurance` separately for semantic-runtime, conformance,
-and lane coverage. The `test:sem-*` commands belong to the retained legacy
-semantic-workspace package; they are not the current IDE feature matrix.
+suites. `test:ide:assurance` covers semantic-runtime, conformance, and lanes.
+The `test:sem-*` commands cover the retained semantic-workspace package.
 
 Real Extension Host acceptance is available through:
 

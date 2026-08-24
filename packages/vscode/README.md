@@ -1,69 +1,85 @@
 # Aurelia 2
 
-Language intelligence for Aurelia 2 templates, powered by the shared Aurelia semantic runtime.
+Language intelligence for Aurelia 2 templates using the shared Aurelia semantic runtime.
 
-The extension analyzes your Aurelia project to understand what your components are, what they accept, where they came from, and how templates connect to TypeScript. It handles decorators, conventions, `static $au`, `.define()` calls, third-party packages, and Aurelia binding syntax.
+The extension models component contracts and template-to-TypeScript connections.
+It recognizes decorators, conventions, `static $au`, `.define()` calls, package
+resources visible to analysis, and Aurelia binding syntax.
 
-When it cannot prove a fact, it preserves that uncertainty in semantic evidence instead of fabricating a confident
-answer. Broad or non-actionable uncertainty stays out of Problems and hover. Hover translates only typed uncertainty
-that materially affects its exact selected answer; broader resource state remains available in Aurelia Resources.
+Unproven facts stay explicit in semantic evidence. Problems excludes broad or
+non-actionable uncertainty. Hover includes typed uncertainty only when it affects
+the selected answer; broader resource state appears in **Aurelia Resources**.
 
 ## Features
 
-### Hover — understand your templates
+### Hover
 
-Hover over a supported Aurelia-authored token for one bounded answer at its exact authored range. Template members and
-locals show the selected type, with a local role when semantic evidence proves it; bare `$this` shows the current
-binding-context type, and each authored `$parent` hop shows the corresponding ancestor context. Member cards can include
-source-authored documentation, declared visibility, and deprecation; exact calls can show the selected overload or
-instantiated generic signature. Resource tokens show authored identity and Aurelia kind, with an alias relationship or
-implementation only when source-backed evidence proves it. Bindable declarations show their public type and declared
-default mode, while bindable usages show the exact effective mode and its authority when current evidence proves it.
-Exact static route-id or route-path tokens show the selected route context. A card may then include at most one presented
-cursor diagnostic or one typed uncertainty that affects that answer. Resource tags do not enumerate a component's
-bindables, and hover omits broad origin and provenance by default.
+Hover selects one supported Aurelia token at its exact authored range. Template
+members and locals show the selected type and any proved local role. Bare
+`$this` shows the current binding context; each authored `$parent` hop shows the
+corresponding ancestor context.
 
-### Diagnostics — catch real problems
+Member cards may include source documentation, visibility, and deprecation.
+Exact calls may show the selected overload or instantiated generic signature.
+Resource cards show authored identity and Aurelia kind, adding an alias
+relationship or implementation when source evidence proves it. Bindable
+declarations show their public type and declared default mode. Bindable usages
+show the current effective mode and its authority. Static route IDs and paths
+show their selected route context.
 
-Real-time, source-linked diagnostics for unknown elements, unknown attributes, expression errors, and binding
-mismatches. Errors are definite correctness or configuration failures; warnings are high-confidence risks that Aurelia
-may still tolerate at runtime; Information is reserved for exact, actionable incomplete-analysis loci. Broad weak-owner
-or admission uncertainty and operational failures do not become standalone Problems.
+A card includes at most one presented cursor diagnostic or typed uncertainty
+that affects its answer. Broad origin and provenance stay in **Aurelia
+Resources**, and resource-tag hover does not enumerate bindables.
 
-VS Code's native TypeScript/JavaScript provider owns ordinary Program diagnostics; Aurelia does not republish those
-rows. When Aurelia's semantic diagnosis and generated template checker evidence describe the same authored problem,
-the semantic diagnosis owns the squiggle and the checker fact appears as related information. The extension does not
-expose severity overrides, inline suppression, or a blanket strict mode in the 0.5 release line; those controls would
-need a separate, evidence-backed policy.
+### Diagnostics
 
-VS Code's built-in HTML service sends embedded style and script text to its CSS and JavaScript validators without
-understanding Aurelia interpolation. Aurelia templates stay in native `html` mode with those validators by default.
-Set `aurelia.templateDiagnostics.suppressNative` to `true` for a workspace folder to move exactly proved templates into
-the filename-neutral **Aurelia HTML** language mode and suppress embedded CSS/JavaScript diagnostics. This avoids
-false Problems for interpolation such as `style="width: ${value}%"`, but also suppresses legitimate CSS/JavaScript findings.
-Keeping suppression disabled is the recommended safety default. Enable it only when interpolation noise is more costly
-than losing embedded CSS/JavaScript Problems, and use project lint or build checks to retain that validation.
+Source-linked diagnostics cover unknown elements and attributes, expression
+errors, and binding mismatches. Errors identify definite correctness or
+configuration failures. Warnings identify high-confidence risks that Aurelia may
+still tolerate at runtime. Information is reserved for exact, actionable
+incomplete-analysis loci. Broad ownership/admission uncertainty and operational
+failures stay out of standalone Problems.
 
-Exact owned templates keep bounded Aurelia recovery Problems for supported malformed tags, attributes, comments,
-declarations, and foreign-content CDATA in either language mode. This is not a general HTML validator; other tokenizer
-and tree-building rules remain outside that set.
+VS Code's native TypeScript/JavaScript provider owns ordinary Program
+diagnostics; Aurelia does not republish those rows. When Aurelia's semantic
+diagnosis and generated template checker evidence describe the same authored
+problem, the semantic diagnosis owns the squiggle and the checker fact appears
+as related information. The 0.5 release line has no severity overrides, inline
+suppression, or blanket strict mode.
 
-HTML language-service participation and completions remain available in Aurelia HTML mode, but full native-mode parity
-is not promised: file icons, `[html]`-scoped settings, snippets, formatter selection, and other native HTML or editor
-behavior can change. Unowned HTML remains native, and the extension does not change global `html.validate.*` settings.
+VS Code's built-in HTML service validates embedded style and script text without
+interpreting Aurelia interpolation. Templates use native `html` mode with those
+validators by default. Setting
+`aurelia.templateDiagnostics.suppressNative=true` for a workspace folder moves
+exactly proved templates into **Aurelia HTML** mode. This removes interpolation
+false positives such as `style="width: ${value}%"` together with legitimate
+embedded CSS/JavaScript findings. Enable it when that tradeoff fits the project,
+and replace the disabled validation with project lint or build checks.
+
+Exactly owned templates keep bounded Aurelia recovery Problems for supported
+malformed tags, attributes, comments, declarations, and foreign-content CDATA
+in either language mode. This coverage is a defined recovery set, not a general
+HTML validator.
+
+Aurelia HTML retains HTML language-service participation and completions. As a
+separate language mode, it can change file icons, `[html]`-scoped settings,
+snippets, formatter selection, and related editor behavior. Unowned HTML stays
+native, and global `html.validate.*` settings are unchanged.
 When suppression is enabled, cold ownership proof is asynchronous, so native diagnostics can appear briefly before the
 mode settles. Withdrawing ownership or disabling suppression restores native `html` mode and validation.
 
-### Quick fixes — apply only current plans
+### Quick fixes
 
-Edit-backed diagnostics offer conservative quick fixes for source operations the semantic runtime can prove, such as
-declaring a missing view-model member or registering an available framework capability. A diagnostic without a proved
-edit plan does not advertise a generic repair. Edits are re-planned when selected; if the source changed, VS Code reports
-the exact refusal reason and applies nothing.
+Edit-backed diagnostics offer quick fixes for proved source operations, such as
+declaring a missing view-model member or registering an available framework
+capability. Only diagnostics with a proved plan offer a repair. Selecting a fix
+re-plans it against current source; an invalidated plan returns its exact refusal
+reason and applies nothing.
 
-### Explanations — ask at the exact source
+### Explanations
 
-The extension offers invoked, native explanations only when semantic-runtime can identify one exact current subject:
+Explanations are available when semantic-runtime identifies one exact current
+subject:
 
 - On an eligible framework-capability Problem, open Quick Fix and choose **Explain this Aurelia diagnostic**.
 - On an eligible binding with material uncertainty, open Quick Fix and choose **Explain this Aurelia binding**. This
@@ -75,11 +91,12 @@ The extension offers invoked, native explanations only when semantic-runtime can
   **Explain Availability in Active Template**. If more than one current compiler scope is possible, choose the exact scope
   first.
 
-Explanations use VS Code's native picker and modal UI, can disclose incomplete or truncated evidence, and re-check the
-document and semantic answer before opening a source. These contextual actions are intentionally absent from the Command
-Palette; there is no generic Inspect or report browser.
+Explanations use VS Code's native picker and modal UI. They can disclose
+incomplete or truncated evidence and re-check the document and semantic answer
+before opening source. These source-context actions do not appear in the Command
+Palette.
 
-### Analysis limitations — review current evidence
+### Analysis limitations
 
 When the **Aurelia Resources** view reports a current analysis limitation eligible for review, choose
 **Review Analysis Limitations** from the view title to inspect its exact source and reason. Version 1
@@ -100,36 +117,39 @@ resource coverage in **Aurelia Resources**. Version 1 also owns `authoredSources
 [Project Configuration](https://github.com/aurelia/aurelia-ls/blob/main/docs/project-configuration.md) contract for
 defaults and failure behavior.
 
-### Completions — discover what's available
+### Completions
 
-Context-aware suggestions that reflect your actual project. Element tags, bindable attributes, binding commands,
-expression members, value converters, and binding behaviors are filtered by what is registered and visible in scope.
+Suggestions use the resources and members registered and visible in the current
+project scope. They cover element tags, bindable attributes, binding commands,
+expression members, value converters, and binding behaviors.
 Completions carry exact authored replacement ranges and safely compose `.bind` for bindables and `.for` for the
 framework `repeat` controller without duplicating an existing command.
 
-### Go to Definition — navigate across boundaries
+### Go to Definition
 
-Jump from template usage to source definition. This works for custom elements, attributes, template controllers,
+Navigate from template usage to source definition. This works for custom elements, attributes, template controllers,
 bindables, expression identifiers, local scope variables, and source-resolvable router `load` paths and route ids. It
 crosses the HTML/TypeScript boundary.
 
 ### Find References
 
-Find verified usages of source-backed template members and Aurelia resources across your project. When the runtime has
-concrete candidate sites it could not verify, or a verified source row cannot be mapped into an editor location, the
-request returns the verified subset and reports the omitted count instead of presenting the subset as complete.
+Find verified usages of source-backed template members and Aurelia resources
+across your project. The result contains verified rows and an omitted count when
+candidate sites cannot be verified or mapped into editor locations.
 
-### Rename — refactor safely
+### Rename
 
-Rename source-backed template members, bindables and attribute aliases, custom elements, custom attributes, template
-controllers, value converters, and binding behaviors when semantic-runtime can prove editable declarations and
-verified references. Renames initiated from TypeScript, TSX, JavaScript, or JSX members are extended atomically into
-admitted templates only when the complete current transaction is verified and editable. If semantic-runtime retains an
-unverified candidate that could belong to the rename, or any target becomes stale, excluded, or physically different,
-the whole rename is refused and nothing is applied. In supported VS Code F2 journeys, one multi-file rename is one undo
-unit.
+Rename covers source-backed template members, bindables and aliases, custom
+elements and attributes, template controllers, value converters, and binding
+behaviors when declarations are editable and references are verified. Renames
+initiated from TypeScript, TSX, JavaScript, or JSX members extend atomically into
+admitted templates after the complete current transaction is verified.
 
-### Semantic Tokens — see the meaning
+An unverified candidate, stale target, excluded target, or physical file
+mismatch refuses the whole transaction. Supported VS Code F2 journeys apply a
+multi-file rename as one undo unit.
+
+### Semantic Tokens
 
 The server emits semantic classifications for Aurelia elements, attributes, bindables, controllers, commands,
 converters, behaviors, metadata elements, events, listener modifiers, and interpolation delimiters. The extension
@@ -142,38 +162,51 @@ stay in VS Code's native UI and use the same source-backed semantic answers as n
 
 ### Resource Discovery
 
-Browse the current runtime-resource inventory in the **Aurelia Resources** view in VS Code's built-in Explorer, grouped by kind. The view
-covers custom elements, custom attributes, template controllers, value converters, and binding behaviors; compiler-syntax
-features such as binding commands and attribute patterns remain outside the runtime-resource inventory. Aliases, bindables,
-declaration forms, origin, and exact source navigation stay attached to their owning definition. Multi-root workspaces show
-workspace and project ownership where it helps search or disambiguate identical names. Incomplete declaration metadata,
-uncertain template availability, updating state, and project-specific failure states remain explicit. A rejected refresh
-retains the last coherent tree as out of date. Resource rows provide exact declaration, implementation, and side-by-side
-navigation when those targets are proved. Failed or out-of-date project rows offer **Retry Resource Discovery** and
-**Open Aurelia Output**; unsupported project rows offer Output without implying that retry can change support.
+**Aurelia Resources** in Explorer shows the current runtime resource inventory,
+grouped by kind. It covers custom elements, custom attributes, template
+controllers, value converters, and binding behaviors. Compiler syntax such as
+binding commands and attribute patterns has separate ownership.
 
-The tree assigns one information axis to each level. Project boundaries use the project role; each collection has a
-distinct resource-kind icon; canonical resource rows show local-template, project, package, core-framework,
-official-plugin, external, or unknown provenance/locality; aliases show their relationship; and bindables show their
-declared default, one-time, to-view, from-view, two-way, or unknown mode. Text, tooltips, and accessibility labels retain
-the same information instead of relying on icons alone. Error, warning, and information colors identify actual failed,
-incomplete or invalid, unsupported, or out-of-date project states; legitimate pathless, duplicate, or open resources do
-not acquire problem styling.
+Each definition keeps its aliases, bindables, declaration form, origin, and
+exact source targets. Multi-root results include workspace and project identity
+when needed for search or disambiguation. Resource rows offer declaration,
+implementation, and side-by-side navigation when those targets are proved.
 
-When an opaque third-party registry could contribute resources that static analysis cannot enumerate, affected
-inventory or availability remains explicitly open. The extension does not fabricate those resources or claim that a
-missing name is definitely absent merely because it cannot inspect the registry body.
+Declaration metadata, selected-template availability, refresh status, and
+project failures are reported separately. A rejected refresh keeps the last
+coherent tree and marks it out of date. Failed and out-of-date projects offer
+**Retry Resource Discovery** and **Open Aurelia Output**. Unsupported projects
+offer Output.
 
-Use **Aurelia: Go to Resource...** to search navigable resources from the current inventory across active Aurelia workspaces. Use
-**Aurelia: Go to Resource Available to Active Template...** for the exact compiler scope at the current template cursor. The
-contextual command asks you to choose when project or template ownership is genuinely ambiguous; it never derives scope from
-which Explorer item happens to have focus. Quick Picks keep aliases, bindables, kinds, workspace and project ownership, source
-location, and incomplete metadata searchable. A navigation retry repeats the current template-availability proof before opening
-anything, so a stale selection cannot be paired with a newer project snapshot.
+Icons carry one meaning at each tree level:
+
+- Projects show their project role.
+- Collections show resource kind.
+- Resources show local-template, project, package, core-framework,
+  official-plugin, external, or unknown provenance/locality.
+- Aliases show their relationship to the canonical resource.
+- Bindables show their declared default, one-time, to-view, from-view, two-way,
+  or unknown mode.
+
+Text, tooltips, and accessibility labels carry the same information. Status
+colors identify failed, incomplete or invalid, unsupported, and out-of-date
+projects. Pathless, duplicate, and open resources keep neutral styling.
+
+Opaque third-party registries can leave inventory or selected-template
+availability open. In that state, an unobserved resource name is not treated as
+definitely absent.
+
+Use **Aurelia: Go to Resource...** to search current navigable inventory across
+active workspaces. **Aurelia: Go to Resource Available to Active Template...**
+uses the exact compiler scope at the template cursor and prompts when project or
+template ownership is ambiguous. Quick Picks search resource details, ownership,
+source location, and incomplete metadata. Before opening a retried navigation,
+the extension repeats the template-availability proof against the current
+project snapshot.
 
 ### Binding Mode Hints
 
-Optional inline hints show the resolved binding mode so you can see whether `.bind` resolves to two-way or to-view for a
+Optional inline hints show whether `.bind` resolves to two-way or to-view for a
 given target. They are disabled by default and can be enabled per workspace folder with
 `aurelia.inlayHints.bindingMode`.
 
@@ -190,17 +223,14 @@ given target. They are disabled by default and can be enabled per workspace fold
 - Static router instructions and route-parameter object keys when route topology is source-resolvable
 - Third-party package resources
 
-## How it handles uncertainty
+## How uncertainty is represented
 
-Most framework tooling either achieves complete knowledge by restricting what you can write, or provides incomplete knowledge without telling you.
-
-This extension takes a different approach: it analyzes what it can analyze, and when it reaches a limit (a dynamic
-registration pattern or a complex third-party package), it keeps the uncertainty explicit in the semantic evidence.
-Problems stays focused on source-linked, actionable findings. Hover stays on the exact selected identity and directly
-owned Aurelia context, plus at most one presented cursor diagnostic or typed uncertainty. Aurelia Resources remains the
-place for broader resource inventory and origin context.
-
-The goal is that you can trust what the extension tells you.
+Dynamic registration and opaque package code can leave static analysis open.
+The extension preserves the exact facts it has proved and records the missing
+evidence separately. Problems stays focused on source-linked, actionable
+findings. Hover stays with the selected identity and directly owned context,
+plus at most one relevant diagnostic or typed uncertainty. **Aurelia Resources**
+carries broader inventory, origin, and availability state.
 
 ## Requirements
 
@@ -211,22 +241,20 @@ The goal is that you can trust what the extension tells you.
 
 ## Workspace Activation
 
-By default, the extension uses dependency manifests, an already-open Aurelia entry source, or exact
-`aurelia.project.json` presence only as cheap candidate evidence. Parsing that native configuration, reporting its
-validity, and applying its authored-source exclusions remain semantic-runtime responsibilities. The language server
-then asks semantic-runtime for the workspace's project shape; it keeps shape-confirmed Aurelia app,
-resource-library-authoring, and package-inspection sessions, and may also retain a config-only session when
-semantic-runtime confirms the exact native configuration. Unrelated HTML and TypeScript workspaces remain inactive.
-The exact `aurelia.project.json` filename uses VS Code's built-in JSONC language mode. The extension automatically
-associates bundled, offline annotation assistance for root fields, sections, known finding-rule IDs, and values; no
-network request or explicit `$schema` property is required. The bundled annotations guide editing without asserting
-project semantics. VS Code may present editor-local JSONC parser feedback for malformed JSONC and duplicate keys, while
-semantic-runtime remains the sole authority for semantic configuration diagnostics, format acceptance, project
-meaning, filesystem checks, normalized exclusions, effective finding policy, and application state across consumers.
-The clean-slate version `1` contract includes both
-`authoredSources.excludedRoots` and stable finding IDs with `off`, `information`, `warning`, or `error` presentation.
-There is no supported V2 and no stable public schema URL to add to `$schema`. The language server publishes semantic
-configuration diagnostics only from an admitted session. See
+Automatic activation starts with dependency manifests, an open Aurelia entry
+source, or exact `aurelia.project.json` presence. Semantic-runtime then confirms
+the project shape. Confirmed sessions can represent an Aurelia app, resource
+library authoring, package inspection, or an exact configuration file. Other
+HTML and TypeScript workspaces stay inactive.
+
+`aurelia.project.json` opens in VS Code's built-in JSONC mode with bundled,
+offline editing assistance. VS Code reports local JSONC syntax and duplicate-key
+feedback. Semantic-runtime owns format acceptance, semantic diagnostics,
+filesystem checks, normalized exclusions, finding policy, and application state
+across consumers. The current V1 contract includes
+`authoredSources.excludedRoots` and stable finding IDs with `off`, `information`,
+`warning`, or `error` presentation. No public schema URL is currently published,
+and semantic configuration diagnostics require an admitted session. See
 [Project Configuration](https://github.com/aurelia/aurelia-ls/blob/main/docs/project-configuration.md) for the complete
 contract.
 
@@ -236,13 +264,17 @@ Set `aurelia.activationMode` per workspace folder when automatic admission is no
 - `on` keeps tooling active for dynamic, incomplete, or unusual project layouts;
 - `off` excludes that folder and its complete subtree from Aurelia tooling.
 
-An `off` subtree cannot be re-enabled by a nested `on` folder. An admitted outer project may still read code under an
-excluded subtree when ordinary imports make it a dependency, but the extension will not directly own its documents,
-publish its diagnostics, or include it as authored project source. Disjoint multi-root folders receive independent
-language-server sessions. Enabled nested workspace folders are supplied as project-root hints to the same shared
-semantic-runtime discovery; the extension does not reinterpret them as projects. Semantic-runtime owns admitted nested projects inside each root, while untitled and
-out-of-workspace documents remain unclaimed. The declared `0.5.0` support envelope covers filesystem-backed local
-workspaces. Virtual workspaces are unsupported, and remote development is not yet a release-tested promise.
+`off` is a hard subtree boundary and a nested `on` cannot re-enable it. Normal
+imports may still read excluded files as dependencies, while authored document
+ownership and diagnostics stay outside the subtree.
+
+Disjoint workspace roots receive independent language-server sessions. Enabled
+nested folders become project-root hints; semantic-runtime decides the admitted
+project boundaries inside each root. Untitled and out-of-workspace documents
+stay unclaimed.
+
+Version 0.5 supports filesystem-backed local workspaces. Virtual workspaces are
+unsupported, and remote development is outside the release-tested host envelope.
 
 ## Settings
 
@@ -256,8 +288,12 @@ workspaces. Virtual workspaces are unsupported, and remote development is not ye
 
 1. Install this extension
 2. Open an Aurelia 2 project
-3. Cheap Aurelia evidence may start a provisional language-server session; semantic-runtime then confirms the workspace project shape, and the extension retains only an admitted session
-4. Check **Aurelia LS (Client)** for activation and session status; each active root also has an **Aurelia Language Server (`<workspace-folder-name>`)** channel
+3. Candidate evidence starts a provisional language-server session;
+   semantic-runtime then confirms the workspace project shape. The extension
+   retains the session after admission.
+4. Check **Aurelia LS (Client)** for activation and session status. Each active
+   root also has an **Aurelia Language Server (`<workspace-folder-name>`)**
+   channel.
 
 ## Commands
 
@@ -274,7 +310,7 @@ commands remain unbound unless you assign them.
 
 ## Troubleshooting
 
-If features aren't working:
+If a feature is unavailable:
 
 1. Check **Aurelia LS (Client)** and the active root's **Aurelia Language Server (`<workspace-folder-name>`)** channel for errors
 2. Check that relevant source files are included by the project's TypeScript or JavaScript configuration, when one is present

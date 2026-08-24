@@ -590,10 +590,10 @@ describe("VS Code product contract", () => {
       expect(extensionChangelog).toContain(label);
     }
 
-    expect(extensionReadme).toContain("intentionally absent from the Command");
-    expect(extensionChangelog).toContain("remain absent from the Command Palette");
+    expect(extensionReadme).toContain("source-context actions do not appear in the Command");
+    expect(extensionChangelog).toContain("source-context actions do not appear in the Command Palette");
     expect(extensionReadme).toContain("`off` can suppress the projected finding and its review row");
-    expect(extensionChangelog).toContain("`off` does not promise a visible review row");
+    expect(extensionChangelog).toContain("`off` suppresses eligible projection and may leave no review row");
     for (const command of [
       AureliaCommand.ExplainAttributeInterpretation,
       AureliaCommand.ExplainBindingUncertainty,
@@ -606,8 +606,8 @@ describe("VS Code product contract", () => {
 
     expect(rootReadme).toContain("Contextual explanations");
     expect(rootReadme).toContain("shared **Aurelia semantic runtime**");
-    expect(extensionReadme).toContain("may start a provisional language-server session");
-    expect(extensionReadme).toContain("retains only an admitted session");
+    expect(extensionReadme).toContain("Candidate evidence starts a provisional language-server session");
+    expect(extensionReadme).toContain("retains the session after admission");
     for (const staleClaim of [
       "confidence-based severity so you don't get false positives",
       "jump from template to source for any Aurelia construct",

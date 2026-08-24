@@ -1,8 +1,7 @@
 # Architecture
 
 Aurelia language tooling has two product surfaces: the VS Code extension and a
-local MCP server. They share one semantic model of an Aurelia project, then adapt
-that model for different hosts.
+local MCP server. Each uses the shared semantic model through its own host.
 
 This document describes the current contributor architecture. Package-specific
 READMEs own lower-level implementation details.
@@ -27,10 +26,9 @@ READMEs own lower-level implementation details.
                      VS Code extension                AI client
 ```
 
-This is an ownership diagram, not one shared live process. Each host creates its
-own descriptor-keyed semantic-runtime session. The semantic runtime owns project
-meaning; the adapters own host lifecycle and presentation without rebuilding a
-second semantic model.
+Each workspace-scoped host path creates its own descriptor-keyed
+semantic-runtime session. The semantic runtime owns project meaning; adapters
+own host lifecycle and presentation.
 
 ## Responsibilities
 
@@ -49,14 +47,14 @@ semantic-workspace, and the build-time packages are discussed under
 
 ## How semantic rules are grounded
 
-The framework's author-facing behavior is the source of truth. A rule is
-grounded by triangulating Aurelia documentation, framework tests, compiler
-lowering, runtime behavior, and logical ownership.
+The framework's author-facing behavior is the source of truth. Start with
+Aurelia documentation and framework tests. Use compiler and runtime evidence
+when a rule needs deeper grounding, then place it with the layer that logically
+owns it.
 
-Optimized runtime shape is evidence, but it is not automatically product policy.
-Private mutability, fallback behavior, or incidental runtime tolerance may be a
-poor basis for diagnostics or edits. Tooling adopts a stricter authoring rule
-only when that rule is well-grounded, actionable, and unlikely to create noise.
+Implementation details and runtime permissiveness do not automatically define
+authoring policy. Tooling adopts a stricter rule only when it is well grounded,
+actionable, and unlikely to create noise.
 
 This grounding lets the semantic model be more explicit than the runtime. For
 example, tooling may need separate records for source identity, edit authority,
@@ -176,8 +174,7 @@ exclusions describe different source worlds.
 
 ## Answers preserve uncertainty
 
-A semantic answer is not a single success flag. It keeps three independent
-questions visible:
+A semantic answer separates three independent questions:
 
 | Axis | Question |
 |---|---|
@@ -190,9 +187,9 @@ folded into those axes. Resource publication also has its own freshness and
 failure state. Resource inventory and availability to one selected template are
 different questions.
 
-Uncertainty is represented by typed facts: open coverage, missing inputs,
-causal open seams, ambiguous selection, or stale currentness. There is no single
-confidence score that silently demotes every downstream feature.
+Typed facts represent uncertainty through open coverage, missing inputs, causal
+open seams, ambiguous selection, and stale currentness. Downstream features use
+those facts directly.
 
 Diagnostics follow the same rule. Semantic-runtime retains the raw diagnostic
 facts and builds an answer-local presentation with a primary finding,
@@ -201,9 +198,8 @@ presentation into LSP. VS Code owns the native Problems and Quick Fix UI.
 Ordinary project TypeScript/JavaScript diagnostics remain under their native
 authority.
 
-Explanations and continuations are model-authored projections over the same
-facts. Consumers should follow their typed source references and target queries
-instead of reconstructing causality from messages or nullable fields.
+Explanations and continuations project the same facts. Consumers follow their
+typed source references and target queries.
 
 ## VS Code and language-server flow
 
@@ -212,7 +208,7 @@ VS Code first decides which filesystem roots are candidates for Aurelia tooling.
 a root; `off` excludes a complete subtree. Every admitted root gets an
 independent language client and semantic session.
 
-Worker transport is the desktop default. IPC remains a debug/fallback path. The
+Worker transport is the desktop default. IPC is a debug/fallback path. The
 extension owns start, stop, restart, replacement, and root transitions; the
 language server owns requests after the transport is established.
 
@@ -276,8 +272,8 @@ framework construction. It does not run the application.
 
 The current model stops before live navigation and guards, arbitrary plugin or
 state-store execution, promise and viewport scheduling, bundler callbacks, and
-general browser/runtime emulation. When those facts matter, the answer stays
-open and records the missing evidence instead of inventing a result.
+general browser/runtime emulation. When those facts matter, the answer records
+the missing evidence and stays open.
 
 This boundary is product behavior. An open answer can still contain useful exact
 identity, source, or type facts; consumers should preserve those facts while
@@ -301,16 +297,16 @@ is Aurelia Patterns followed by semantic verification of the adapted project.
 See the [app-builder README](../packages/semantic-runtime/src/app-builder/README.md)
 for the internal boundary.
 
-Future AOT remains an architectural consumer constraint, not a completed product
-adapter. Semantic-runtime is likewise an internal substrate, not a separately
-supported public core API in this release.
+Future AOT informs the architecture as a prospective consumer. No AOT adapter
+ships in this release. Semantic-runtime is an internal substrate, with no
+separately supported public core API in this release.
 
 ## Working with the architecture
 
-Before adding a carrier, cache, helper, or adapter-specific fallback, search for
-the owning semantic product and its provenance. The preferred repair is often to
-restore dropped data or reconnect an isolated implementation rather than derive
-the same fact again.
+Before adding a carrier, cache, helper, or adapter-specific fallback, find the
+semantic product that should own the fact. First restore lost provenance or
+reconnect an existing implementation. Add a new derivation only when the model
+needs one.
 
 Use the folder-level [semantic-runtime source map](../packages/semantic-runtime/src/README.md)
 for local ownership and Atlas for queryable repository/framework navigation.

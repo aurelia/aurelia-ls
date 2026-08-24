@@ -1,20 +1,14 @@
 # Pressure Fixtures
 
-This folder is a reusable semantic evidence corpus, not one exhaustive or uniformly designed test suite. It contains
-hand-authored analyzer edge cases, migrated app-pattern fixtures, generated app-builder pressure, framework/runtime
-diagnostic canaries, and newer IDE-lane witnesses from several development eras. Fixture verification, semantic
-conformance, the lane harness, and focused contracts may all reopen entries from this corpus without making fixture
-count a coverage claim.
+This folder is a mixed corpus of realistic analyzer cases from several
+development eras. Fixture verification, conformance, lane, and focused
+contracts reuse it; fixture count is not a coverage metric.
 
-Migrated app-pattern fixtures should remain semantic contracts rather than app-builder recipes.
-
-Use these fixtures to preserve shapes that real Aurelia projects may contain, including weak type surfaces, mixed state
-ownership, callback bindables, object bindables on non-leaf components, dynamic form controls, and partially inconsistent
-template conventions.
-
-Pressure fixtures can be mixed or non-recommendation, but they should still be realistic app code rather than artificial
-parser torture cases. Recommendable public examples belong in `packages/patterns`. This folder keeps pressure evidence
-and internal app-builder fixtures, not reusable generated-code authority.
+Use these fixtures to preserve real project shapes and edge cases, including
+weak types, mixed state ownership, dynamic controls, and unusual component
+contracts. Migrated app-pattern fixtures stay semantic contracts. Public
+recommendations live in `packages/patterns`; this folder owns internal analyzer
+and app-builder pressure.
 
 ## Fixtures
 

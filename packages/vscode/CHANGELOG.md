@@ -2,22 +2,26 @@
 
 ## 0.5.0
 
-Version 0.5 moves the extension and language server onto the shared Aurelia semantic runtime. One source-backed model now
-supplies editor features, project/resource discovery, diagnostics, and currentness across workspace roots.
+Version 0.5 continues the extension and language-server migration to the shared
+Aurelia semantic runtime. Its source-backed project model now supplies editor
+features, resource discovery, diagnostics, and currentness across workspace
+roots.
 
 ### Highlights
 
 - Cross-file rename is one authenticated workspace transaction and one native VS Code undo unit.
 - **Aurelia Resources** now presents project inventory and selected-template availability with navigation and recovery.
-- Hover and completions add `$parent`, member documentation, effective binding modes, overloads, generics, and exact edits.
+- Hover adds exact context for `$parent`, members, bindables, and calls.
+  Completions now carry exact edits.
 - Contextual explanations and `aurelia.project.json` V1 expose more of the semantic model when requested.
 - Each admitted workspace root uses an isolated Worker-backed language server with restart and multi-root isolation.
 
 ### Language intelligence
 
-- Exact-locus hover covers member/local and `$this` types, authored `$parent` hops, member documentation and deprecation,
-  resource identity, bindable declaration and effective usage modes, selected overloads/generics, and static route
-  ids/paths.
+- Hover selects exact authored loci. Cards cover member, local, and `$this`
+  types; authored `$parent` hops; member documentation and deprecation; resource
+  identity; bindable modes; selected call signatures; and static route IDs and
+  paths.
 - Completions carry exact replacement edits and safely compose `.bind` for bindables and `.for` for framework `repeat`.
 - Definitions, references, and highlights use source-backed identity across templates, TypeScript related symbols, linked
   declarations, and source-resolvable route ids/`load` paths. Find References reports omitted candidate counts when its
@@ -25,8 +29,10 @@ supplies editor features, project/resource discovery, diagnostics, and currentne
 - Route-parameter object-key completions use endpoint declarations from source-resolvable route topology.
 - Supported resource/member rename extends between TypeScript and templates when the complete edit set is current and
   editable. An unverified candidate or stale target refuses the whole operation.
-- Semantic tokens, symbols, selection ranges, linked editing, folding, highlights, and optional binding-mode hints share
-  the same source evidence. Resource lookup preserves authored casing and SVG/HTML `foreignObject` ownership.
+- Semantic coloring and document-structure features share the same source
+  evidence. This includes symbols, ranges, linked editing, folding, highlights,
+  and optional binding-mode hints. Resource lookup preserves authored casing and
+  SVG/HTML `foreignObject` ownership.
 
 ### Diagnostics and safe fixes
 
@@ -41,9 +47,10 @@ supplies editor features, project/resource discovery, diagnostics, and currentne
 
 ### Resources, explanations, and configuration
 
-- **Aurelia Resources** lives in Explorer and covers custom elements, custom attributes, template controllers, value
-  converters, and binding behaviors. It reports inventory, active-template availability, answer coverage, project state,
-  aliases, bindables, declaration modes, ownership, provenance/locality, and source targets.
+- **Aurelia Resources** lives in Explorer and covers the five runtime resource
+  kinds. It separates project inventory from active-template availability and
+  reports answer coverage and project state. Resource identity retains aliases,
+  bindables, declaration form, ownership, provenance, and source targets.
 - Icons carry one information axis at each level: resource kind, resource provenance/locality, alias relationship, or
   declared bindable mode. Text, tooltips, and accessibility labels carry the same information.
 - Resource rows provide declaration, implementation, and side navigation. Failed/out-of-date projects provide Retry and
@@ -51,11 +58,12 @@ supplies editor features, project/resource discovery, diagnostics, and currentne
 - **Go to Resource...** searches navigable inventory across active roots. **Go to Resource Available to Active
   Template...** searches the active template's selected compiler scope and prompts when project/scope identity is
   ambiguous.
-- Contextual native actions include **Explain this Aurelia diagnostic**, **Explain this Aurelia binding**, **Explain how Aurelia uses this attribute**, and **Explain Availability in Active Template** for their exact eligible subjects. They
-  re-check the current document and subject and remain absent from the Command Palette.
+- Contextual actions include **Explain this Aurelia diagnostic** and **Explain this Aurelia binding**.
+  Attribute and resource actions are **Explain how Aurelia uses this attribute** and **Explain Availability in Active Template**.
+  They re-check the current document and subject. These source-context actions do not appear in the Command Palette.
 - **Review Analysis Limitations** exposes the configured dynamic-registration-spread finding when eligible.
   `aurelia.project.json` V1 can set it to `off`, `information`, `warning`, or `error`. The policy changes presentation;
-  `off` does not promise a visible review row.
+  `off` suppresses eligible projection and may leave no review row.
 - V1 also owns `authoredSources.excludedRoots`. Semantic-runtime owns format acceptance, application state, filesystem
   checks, semantic diagnostics, and effective policy. VS Code provides JSONC feedback plus a bundled offline assistance
   schema; the canonical semantic schema is packaged separately.
@@ -71,8 +79,8 @@ supplies editor features, project/resource discovery, diagnostics, and currentne
 
 ### Compatibility, changed surface, and removals
 
-- Requires VS Code 1.91 or newer and a filesystem-backed local workspace. Virtual workspaces are unsupported; remote
-  development is not a release-tested promise.
+- Requires VS Code 1.91 or newer and a filesystem-backed local workspace. Virtual workspaces are unsupported. Remote
+  development has no release-test coverage.
 - Modeled Repeat, virtualization, routing, and validation behavior is aligned with the Aurelia framework baseline used
   for this release.
 - The resource view moved from its dedicated Activity Bar container into Explorer and is now named **Aurelia Resources**.

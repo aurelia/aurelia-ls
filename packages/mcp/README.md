@@ -4,9 +4,9 @@
 semantic-runtime workspace and app analysis, curated Aurelia Patterns, and a
 bundled Aurelia documentation snapshot to MCP clients.
 
-The server makes no project-file writes. Its cache-clear tool can reclaim
-in-memory analyzer caches and managed-session analysis retention; source edits
-are applied by the MCP client or coding agent.
+The server makes no project-file writes. Ordinary workspace calls reconcile
+source and configuration changes; source edits are applied by the MCP client or
+coding agent.
 
 ## Release Status
 
@@ -45,8 +45,8 @@ For a quick trial:
 npx -y https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.2.0/aurelia-ls-mcp-0.2.0.tgz
 ```
 
-Direct URL `npx` runs in a temporary package-manager context. Use the
-project-local install for serious diagnostics, then call
+Direct URL `npx` runs in a temporary package-manager context. A project-local
+install lets the analyzer use the workspace's TypeScript package. Then call
 `aurelia_app_query` with `queryKind=typescript-diagnostic-summary` and prefer
 `relation=same-package`.
 
@@ -74,9 +74,8 @@ inspection, and feature authoring.
   same boundaries as an editor or another consumer.
 - Workspace responses include the normalized `workspaceDescriptor` used for
   analysis. Preserve its hints and exclusions on related calls.
-- `aurelia_app_query_catalog` is workspace-independent and is the authority for
-  query kinds, minimum analysis depth, selectors, paging, detail, batching, and
-  continuations.
+- `aurelia_app_query_catalog` is workspace-independent and defines each query
+  kind's analysis depth, inputs, paging, batching, and continuations.
 - Semantic answers keep `result`, `selection`, and `coverage` independent.
   Exceptional states include unsupported/invalid/failed results,
   absent/ambiguous/rerouted selections, and open/truncated coverage.
@@ -85,11 +84,11 @@ inspection, and feature authoring.
 - Managed sessions reconcile source and configuration changes on ordinary
   calls. Cache tools accept an optional nested `workspace` selector; omitting it
   addresses all retained sessions. TypeScript dependency-cache policy is
-  process-wide.
+  process-wide. The cache-clear tool reclaims in-memory analyzer and session
+  retention.
 
-See the [0.3.0 protocol reference](./docs/reference-v0.3.0.md) for exact
-envelopes, workspace inputs, answer states, paging, currentness, cache behavior,
-errors, and the 18 new app-query kinds.
+See the [0.3.0 protocol reference](./docs/reference-v0.3.0.md) for the exact
+transport contract and the 18 new app-query kinds.
 
 ## Patterns, Docs, And Agent Guidance
 

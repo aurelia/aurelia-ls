@@ -2,14 +2,10 @@
 
 See [../README.md](../README.md) for the folder-wide rebuild map and Atlas and auLink rule.
 
-This folder owns the in-process API boundary for opening an Aurelia app with the semantic runtime. It is a library
-surface, not a daemon, CLI, or snapshot format.
-
-In this internal document, `public` normally means an exported semantic-runtime
-contract. It does not imply a supported external package or MCP surface.
-App-builder APIs are legacy/internal substrate; the current public MCP
-authoring path is Aurelia Patterns plus semantic verification of the adapted
-project.
+This folder defines the internal, in-process API for opening and querying an
+Aurelia app. In this README, `public` means exported from semantic-runtime, not
+supported as a standalone package or MCP endpoint. App-builder remains internal;
+MCP authoring uses Aurelia Patterns followed by semantic verification.
 
 `semanticWorkspaceDescriptorForRuntimeOptions(...)` is the shared, serializable source-world boundary used by IDE,
 MCP, and future AOT adapters. It normalizes workspace exclusions and either automatic marker discovery plus host root
@@ -20,10 +16,9 @@ or set-like arrays. `semanticRuntimeOptionsForWorkspaceDescriptor(...)` reconstr
 validation. Ordinary consumers should use shared discovery and select an admitted `projectKey`; explicit projects are
 for hosts that own the complete project/source topology, not a shortcut for choosing one app.
 
-The API should stay close to the typed substrate. It may compose boot, evaluation, configuration, DI, resource,
-compiler, rendering, and TypeChecker-backed products, but it should not recreate those layers as private summary tables.
-When an answer becomes awkward, prefer improving the underlying product records or adding a narrow query projection over
-building compatibility glue here.
+The API composes typed products from their owning layers. If an answer is
+awkward, improve those products or add a focused projection. Keep substrate
+mirrors and compatibility tables out of the API layer.
 
 Keep `runtime.ts` as the boot/app facade. Public query enums, answer envelopes, row interfaces, and result interfaces
 belong in `contracts.ts`; row projection helpers that are already specific to one substrate family should live in

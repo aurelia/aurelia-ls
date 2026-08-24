@@ -10,18 +10,17 @@ preserve the repository's earlier package line.
 
 ## Unreleased
 
-This entry records shared work projected through VS Code 0.5.0 and MCP 0.3.0.
-`@aurelia-ls/semantic-runtime` is the shared internal substrate; the language
-server is the internal VS Code protocol adapter. There is no separate core
-artifact in this release.
+VS Code 0.5.0 and MCP 0.3.0 are the two product artifacts in this release.
+`@aurelia-ls/semantic-runtime` is their shared internal substrate; the language
+server is the internal VS Code protocol adapter.
 
 ### Shared semantic authority and source identity
 
-- Semantic-runtime now provides the shared project model used by the language
+- Semantic-runtime provides the shared project model used by the language
   server and MCP. Project discovery and configuration happen there, and the same
   model produces diagnostics, explanations, and framework-aware answers with
   explicit coverage and currentness.
-- Source identity now separates the physical TypeScript file from its evaluator
+- Source identity separates the physical TypeScript file from its evaluator
   and package identity, and separates navigation from edit authority. Linked or
   external declarations can be current and navigable without becoming editable;
   ambiguous edits fail closed.
@@ -29,22 +28,20 @@ artifact in this release.
   answer cannot mix old and new evidence. Managed workspace sessions reconcile
   source files, configuration, and analysis state before serving a new
   operation.
-- Resource answers keep three questions separate: did the query run, what did it
-  select, and how complete was the analysis? Publication freshness and failure
-  are tracked separately. Inventory and template availability keep stable
-  identities while exposing origin, aliases, and bindables.
+- Resource answers keep execution result, selection, and coverage separate from
+  publication freshness and failure. Inventory and template availability retain
+  stable identities, origin, aliases, and bindables.
 
 ### Framework and template analysis
 
-- The static model now understands template scoping and binding semantics. It
-  also models resource registration and aliases, routing, plugin setup, state
-  visibility, and bounded composition.
-- Deeper editor and MCP queries can trace DI, observation, property access, and
-  composition back to source. Those relationships are retained once and reused
-  across consumers.
-- Template queries now support the editor flow from authoring and inspection
-  through navigation, safe refactoring, diagnostics, and document structure.
-  Edit ranges are exact where selection and edit authority are proved.
+- Static analysis covers template scopes, binding semantics, resource
+  registration, source-resolvable routing, plugin and state setup, and bounded
+  composition.
+- Editor and MCP answers retain source links for DI, observation, property
+  access, and composition.
+- Template query coverage spans authoring, inspection, navigation, safe
+  refactoring, diagnostics, and document structure. Edit ranges are exact where
+  selection and edit authority are proved.
 - Causal explanations are available for capability diagnostics, uncertain
   bindings, resource availability, and attribute interpretation.
 - The optional `aurelia.project.json` V1 contract shares source exclusions and
@@ -58,7 +55,7 @@ artifact in this release.
 
 ### Language server and VS Code
 
-- The language server now consumes semantic-runtime directly. It manages
+- The language server consumes semantic-runtime directly. It manages
   synchronized documents and the LSP request/diagnostic lifecycle. Feature
   authority moved from compiler and semantic-workspace to semantic-runtime.
 - VS Code uses one Worker-backed language-server session per admitted root.
@@ -70,17 +67,17 @@ artifact in this release.
   features now share source-backed answers. Navigation requires an exact source
   mapping and keeps the authored spelling through HTML/SVG normalization; edits
   also require authored authority.
-- Rename validates the complete content/version/real-path transaction before
-  native F2 applies one workspace edit and records one undo unit. Any unresolved
-  candidate refuses the whole operation.
+- Rename authenticates every target by content, document version, and real path
+  before native F2 applies one workspace edit and creates one undo unit. The
+  transaction is refused when any candidate remains unresolved.
 - The diagnostic pipeline keeps its raw facts. Problems shows an actionable
   primary finding with contextual evidence, and Quick Fixes re-plan against
   current text. Ordinary project TypeScript/JavaScript diagnostics stay under
   their native authority.
-- Native HTML mode remains the default. Opt-in native-diagnostic suppression is
+- Native HTML mode is the default. Opt-in native-diagnostic suppression is
   exact-ownership gated and also suppresses legitimate embedded CSS/JavaScript
   findings for admitted Aurelia templates.
-- **Aurelia Resources** now lives in Explorer. It supports browsing and
+- **Aurelia Resources** lives in Explorer. It supports browsing and
   navigation, with search and recovery when needed. Each row explains what the
   resource is, where it came from, and how its aliases and bindables behave.
 - Older overlay/virtual UI and duplicate or experimental editor surfaces were
@@ -100,22 +97,22 @@ artifact in this release.
   independent `result`, `selection`, and `coverage` axes.
 - `aurelia_app_query_catalog` is static, workspace-independent vocabulary and no
   longer accepts `workspaceRoot`.
-- Managed sessions reconcile changes and make cache ownership explicit. Paging,
-  continuations, open-seam grouping by authored source site, and
-  handler/runtime errors now have stable transport contracts.
+- Managed sessions reconcile workspace changes and expose cache ownership.
+  Transport contracts cover paging, continuations, open-seam grouping by
+  authored source site, and structured handler/runtime errors.
 - The MCP server makes no project-file writes. Cache management can reclaim
   in-memory analysis state.
-- The tarball includes curated Aurelia Patterns and bundled docs, with
+- The tarball includes curated Aurelia Patterns and bundled Aurelia docs, with
   orientation resources and workflow prompts to guide clients. See the
   [MCP 0.3.0 release notes](packages/mcp/release-notes/mcp-v0.3.0.md) for the
   strict-client migration and versioned protocol reference.
 
-### Reliability, compatibility, and package status
+### Reliability and package status
 
 - Each confirmed root owns a separate source world and cache, with independent
   delivery and currentness. Operations refuse stale or mismatched evidence
   across sessions and generations.
-- Repeat, routing, validation, virtualization, and supporting Patterns now align
+- Repeat, routing, validation, virtualization, and supporting Patterns align
   with the RC2-era Aurelia framework contract used by this release candidate.
 - `@aurelia-ls/compiler` and `@aurelia-ls/semantic-workspace` are retained
   legacy/internal packages. The current language tooling authority is

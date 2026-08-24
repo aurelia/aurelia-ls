@@ -15,10 +15,14 @@ For the change from 0.2.0, see the
 
 Install the release inside the Aurelia app when TypeScript diagnostics should
 agree with its local `tsc`. The `typescript-diagnostic-summary` answer reports
-whether the analyzer and workspace TypeScript installations are the same
-package (`same-package`), the same version from different packages
-(`same-version-different-package`), different versions (`different-version`),
-or unavailable (`workspace-not-found`).
+the package relationship:
+
+| Relation | Meaning |
+|---|---|
+| `same-package` | Analyzer and workspace use the same TypeScript package. |
+| `same-version-different-package` | Versions match, but package instances differ. |
+| `different-version` | TypeScript versions differ. |
+| `workspace-not-found` | The workspace TypeScript installation is unavailable. |
 
 ## Tool Index
 
@@ -40,7 +44,7 @@ The server also registers four resources:
 - `aurelia://patterns/menu`
 - `aurelia://docs/index`
 
-And three workflow prompts:
+It also registers three workflow prompts:
 
 - `aurelia_orient_workspace`
 - `aurelia_inspect_app_feature`
@@ -70,9 +74,9 @@ calls. Descriptor reuse gives MCP-to-MCP source-world continuity. Matching a
 live editor also requires the first MCP call to receive the editor host's root
 hints and exclusions.
 
-MCP does not accept caller-owned `storeKey`, explicit `projects`, or
-`projectDiscovery` inputs. Managed sessions own their store namespace and
-project-input authority.
+Managed sessions own their store namespace and project-input authority. The
+transport therefore has no caller-owned `storeKey`, explicit `projects`, or
+`projectDiscovery` inputs.
 
 ## Response Envelope
 
@@ -97,7 +101,7 @@ Many semantic values use three independent answer axes. They replace the 0.2
 
 | Axis | Values | Meaning |
 |---|---|---|
-| `result` | `answered`, `unsupported`, `invalid`, `failed` | Whether the declared query ran and produced a trustworthy answer shape |
+| `result` | `answered`, `unsupported`, `invalid`, `failed` | Whether the query ran and produced its declared answer shape |
 | `selection` | `not-applicable`, `exact`, `absent`, `ambiguous`, `rerouted` | What semantic locus the query selected |
 | `coverage` | `complete`, `open`, `truncated`, `not-applicable` | Whether the requested semantic basis was fully covered |
 
@@ -168,11 +172,8 @@ The 18 query kinds added in 0.3.0 are:
 - `runtime-expression-access-uses`
 
 Use the catalog before constructing generic `aurelia_app_query` or batch
-requests. Query-owned inputs include source-file and cursor loci, resource and
-template-scope identity keys, framework capabilities, open-seam filters,
-observed-dependency loci, diagnostic projections, detail, and paging. Unsupported
-selectors return `result=unsupported` with the accepted affordance instead of
-being ignored.
+requests. It defines each query's selectors and other inputs. Unsupported
+selectors return `result=unsupported` with the accepted affordance.
 
 `aurelia_app_query_batch` opens one app/query-claim boundary for several
 related queries. `includeAppProfile` and `includeAppQueryClaimProfiles` are
@@ -265,10 +266,9 @@ carry the structured facts available from their owning error type.
 ## Project-Write And Analysis Boundary
 
 The server reads project sources and returns analysis, Patterns, docs, prompts,
-and structured next moves. It makes no project-file writes. MCP clients or coding
-agents apply any source edits themselves.
+and structured next moves. It makes no project-file writes; MCP clients or
+coding agents apply edits.
 
-The semantic model is bounded static/source-resolvable analysis. It does not
-execute live navigation, guards, arbitrary plugin or state-store code,
-promise/viewport scheduling, bundler callbacks, or general application runtime
-behavior.
+The semantic model covers static, source-resolvable behavior. Live navigation
+and guards, arbitrary plugin or state-store execution, scheduling, bundler
+callbacks, and general application runtime behavior are outside its boundary.

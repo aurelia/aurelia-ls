@@ -2,22 +2,19 @@
 
 See [../README.md](../README.md) for the folder-wide rebuild map and Atlas and auLink rule.
 
-This folder owns the framework-normal app model shared by analysis, fixture
-verification, and internal source planning. It is not a scaffold template
-library or source parser. It names the app-level shapes the semantic runtime must understand:
-entrypoints, root components, component-local dependencies, external templates, styles, services, registrations,
-resources, routes, and assets.
+This folder models Aurelia application structure for analysis, fixture
+verification, and internal source planning. It covers entry points, components
+and external templates, dependencies and registrations, resources, services,
+routes, styles, and assets. It is neither a scaffold library nor a source
+parser.
 
-The topology should stay close to idiomatic Aurelia application structure. If an internal source-lowering path proposes
-source, the proposed source should be able to round-trip through this model and then through the existing evaluation,
-configuration, DI, resource, and template layers.
+Internal source plans should round-trip through this model and the normal
+evaluation, configuration, DI, resource, and template layers.
 
-`ApplicationTopologyBuilder` is the app-level construction helper for fixture and app-builder source plans. Keep
-file/component/template/service/route assembly there when it is topology structure rather than generation taste; pattern
-selection should name intent and preferences, not rebuild the same topology product graph by hand.
-For larger source plans, keep the topology function as a short phase assembler and use named helpers for each topology
-artifact it contributes. This keeps root components, child components, state/service rows, routes, and entrypoints
-visible to Atlas without turning the builder into a generator-specific DSL.
+`ApplicationTopologyBuilder` assembles topology for fixtures and internal
+source plans. Keep structural assembly here and authoring preferences in the
+owning source producer. Split large plans into named helpers so their major
+pieces remain visible to Atlas.
 When a source plan allows custom source paths, topology references and template/style import specifiers must be derived from
 those paths in the same way the source plan derives authored imports. `ApplicationTopologyBuilder.component(...)`
 therefore accepts the importer path as `referenceFromPath` and derives the component reference module specifier from
@@ -86,8 +83,9 @@ framework style registries, and feeds both `AppTopology.styles` and component-lo
 - `boot`, `evaluation`, `configuration`, `di`, `resources`, `template`, and `type-system` prove whether the authored app
   actually means what the plan expected.
 
-Do not put generator taste, user preferences, or code formatting policy here. Those belong in an owning source producer,
-not the shared topology model. This folder should remain a calm model that TypeScript and Atlas can inspect.
+Generator preferences and formatting policy belong to the owning source
+producer. Keep this model focused on app topology that TypeScript and Atlas can
+inspect.
 
 ## Baseline Topology Pressure
 

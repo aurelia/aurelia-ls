@@ -1,17 +1,15 @@
 # Aurelia MCP 0.3.0
 
-Aurelia MCP 0.3.0 is a protocol and semantic-query release. It adds native
-project-configuration inspection, expands the app-query catalog, and gives MCP
-clients an exact shared workspace descriptor with explicit answer, paging,
-currentness, and cache semantics.
+Aurelia MCP 0.3.0 adds native project-configuration inspection and 18 app-query
+kinds. It also defines shared workspace descriptors and explicit contracts for
+answers, paging, currentness, and cache ownership.
 
-The server makes no project-file writes. `aurelia_clear_analysis_cache` can
-reclaim in-memory analyzer caches and session-local retained analysis.
+The server makes no project-file writes.
 
 ## Install
 
 After the `mcp-v0.3.0` GitHub release is published, install the tarball inside
-the Aurelia app for the best TypeScript diagnostic fidelity:
+the Aurelia app so the analyzer can use the project's TypeScript package:
 
 ```sh
 npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.3.0/aurelia-ls-mcp-0.3.0.tgz
@@ -28,8 +26,7 @@ and the [0.3.0 protocol reference](https://github.com/aurelia/aurelia-ls/blob/mc
 
 ## Required Client Migration
 
-The 0.3 workspace and response contracts are not additive-only. Strict clients
-need these changes when moving from 0.2.0:
+Version 0.3 requires these client changes when moving from 0.2.0:
 
 - Workspace-scoped tools accept `workspaceRoot`, `projectRootHints`, and
   `excludedWorkspaceRoots`. Remove `storeKey`, explicit `projects`, and
@@ -107,6 +104,8 @@ TypeScript dependency `SourceFile` cache. A non-`preserve`
 `typeSystemDependencyCacheClearPolicy` applies once at process scope, including
 when the request selects one workspace session.
 
+Cache clearing is retention control, not a required after-edit correctness step.
+
 ## Diagnostics, Explanations, Paging, And Continuations
 
 Diagnostics use coherent semantic-runtime generations and include ordinary
@@ -137,9 +136,9 @@ validation uses the standard MCP invalid-params error.
 - Filesystem-backed Aurelia workspaces
 - Project-local installation recommended for `relation=same-package`
 
-Analysis is static and source-resolvable. It does not execute live navigation,
-guards, arbitrary plugin or state-store code, promise/viewport scheduling, or
-bundler callbacks.
+Analysis covers static, source-resolvable behavior. Live navigation and guards,
+arbitrary plugin or state-store execution, scheduling, and bundler callbacks are
+outside this release's model.
 
 The tarball includes Aurelia Patterns, bundled docs search/fetch, and workflow
 prompts. The repository also provides persistent
