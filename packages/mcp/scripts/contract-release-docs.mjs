@@ -150,17 +150,20 @@ expectIncludes(docs.gettingStarted, 'MCP Release', 'Getting Started should descr
 expectIncludes(docs.gettingStarted, publishedTag, 'Getting Started should point to the published MCP release tag.');
 expectIncludes(docs.gettingStarted, publishedTarball, 'Getting Started should point to the published MCP release tarball.');
 
-if (workspacePackage?.scripts?.['bootstrap:aurelia'] !== 'npm --prefix aurelia ci --ignore-scripts') {
-  throw new Error('Root bootstrap:aurelia should install the linked Aurelia dependency closure without lifecycle scripts.');
+if (workspacePackage?.scripts?.['bootstrap:aurelia'] !== 'npm --prefix aurelia ci --ignore-scripts && npm --prefix aurelia run build') {
+  throw new Error('Root bootstrap:aurelia should install without lifecycle scripts and then build the linked Aurelia dependency closure.');
 }
 
 expectIncludes(docs.ciWorkflow, 'mcp-release', 'CI workflow should use release wording for the MCP job id.');
 expectIncludes(docs.ciWorkflow, 'MCP Release Pack', 'CI workflow should use release wording for the MCP job name.');
 expectIncludes(docs.ciWorkflow, 'Pack MCP release tarball', 'CI workflow should use release wording for the pack step.');
 expectIncludes(docs.ciWorkflow, 'aurelia-ls-mcp-release', 'CI artifact name should use release wording.');
-expectIncludes(docs.ciWorkflow, 'pnpm --filter @aurelia-ls/mcp contract:release', 'CI workflow should run the aggregate MCP release contract.');
+expectIncludes(docs.ciWorkflow, 'pnpm --filter @aurelia-ls/mcp contract:release-docs', 'CI workflow should run the MCP release-document contract.');
+expectIncludes(docs.ciWorkflow, 'pnpm --filter @aurelia-ls/mcp contract:adversarial-surface', 'CI workflow should run the MCP adversarial-surface contract.');
+expectIncludes(docs.ciWorkflow, 'pnpm --filter @aurelia-ls/mcp contract:patterns-semantic', 'CI workflow should run the MCP pattern-semantic contract.');
+expectIncludes(docs.ciWorkflow, 'pnpm --filter @aurelia-ls/mcp contract:continuation-pass-through', 'CI workflow should run the MCP continuation contract.');
 expectIncludes(docs.ciWorkflow, 'pnpm --filter @aurelia-ls/mcp release:pack', 'CI workflow should pack the MCP release tarball.');
-expectOccurrenceCount(docs.ciWorkflow, 'run: pnpm bootstrap:aurelia', 4, 'All four CI job definitions should bootstrap linked Aurelia dependencies before their contracts.');
+expectOccurrenceCount(docs.ciWorkflow, 'run: pnpm bootstrap:aurelia', 5, 'All five CI job definitions should bootstrap linked Aurelia dependencies before their contracts.');
 
 expectIncludes(docs.readme, 'Latest published release', 'README should distinguish the hosted release from source.');
 if (publishedReleaseVersion === sourceReleaseVersion) {

@@ -1,4 +1,3 @@
-import path from "node:path";
 import type { Range } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import { URI } from "vscode-uri";
@@ -36,7 +35,8 @@ export function semanticSourceReferenceUri(
       return filePath == null ? parsed.toString() : documentUris.uriForHostPath(filePath);
     }
   }
-  if (path.isAbsolute(sourcePath)) return documentUris.uriForHostPath(sourcePath);
+  const hostPath = documentUris.hostPath(sourcePath);
+  if (hostPath != null) return documentUris.uriForHostPath(hostPath);
   return documentUris.uriForWorkspaceRelativePath(sourcePath);
 }
 
@@ -47,11 +47,13 @@ export function semanticSourceReferenceFilePath(
   const sourcePath = semanticSourceReferencePath(source);
   if (sourcePath == null) return null;
   if (sourcePath.includes(":")) {
+    const parsed = URI.parse(sourcePath);
+    if (parsed.scheme.length > 1) return documentUris.hostPath(sourcePath);
     const filePath = documentUris.hostPath(sourcePath);
     if (filePath != null) return filePath;
   }
-  if (path.isAbsolute(sourcePath)) return sourcePath;
-  return documentUris.workspaceRoot == null ? null : path.join(documentUris.workspaceRoot, sourcePath);
+  const hostPath = documentUris.hostPath(sourcePath);
+  return hostPath ?? documentUris.hostPathForWorkspaceRelativePath(sourcePath);
 }
 
 /** Resolve an exact source span only when its offsets are valid for the current document text. */

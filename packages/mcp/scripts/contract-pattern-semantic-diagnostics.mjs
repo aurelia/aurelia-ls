@@ -164,7 +164,7 @@ async function assertPatternFixtureDependencies() {
     witnessManifest = JSON.parse(await fs.readFile(witnessManifestPath, 'utf8'));
   } catch (cause) {
     throw new Error(
-      `Missing Aurelia workspace dependency closure witness '${aureliaBootstrapWitness.packageName}' at ${witnessManifestPath}. Run pnpm bootstrap:aurelia at the repository root; an Aurelia build is not required.`,
+      `Missing Aurelia workspace dependency closure witness '${aureliaBootstrapWitness.packageName}' at ${witnessManifestPath}. Run pnpm bootstrap:aurelia at the repository root.`,
       { cause },
     );
   }

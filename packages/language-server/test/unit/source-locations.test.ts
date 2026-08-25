@@ -1,7 +1,9 @@
+import path from "node:path";
 import { describe, expect, test } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import {
   semanticSourceOffsetRangeForDocument,
+  semanticSourceReferenceFilePath,
   semanticSourceReferenceMatchesDocument,
   semanticSourceReferenceUri,
 } from "../../src/mapping/source-locations.js";
@@ -12,11 +14,11 @@ documentUris.configure("file:///C:/projects/app");
 const uri = documentUris.resolve("file:///C:/projects/app/src/app.html").uri;
 const document = TextDocument.create(uri, "html", 1, "<p>value</p>");
 
-function source(start: number, end: number) {
+function source(start: number, end: number, sourcePath = "src/app.html") {
   return {
     kind: "source-span-address" as const,
     label: `src/app.html@${start}..${end}`,
-    path: "src/app.html",
+    path: sourcePath,
     start,
     end,
     role: "range",
@@ -24,6 +26,23 @@ function source(start: number, end: number) {
 }
 
 describe("semantic source locations", () => {
+  test("resolves Windows source paths through the workspace path dialect on every host", () => {
+    const windowsUris = new WorkspaceDocumentUris();
+    windowsUris.configure("file:///C:/projects/app");
+    const absolute = source(0, 4, "C:/projects/app/src/component.ts");
+    const relative = source(0, 4, "src/component.ts");
+
+    expect(semanticSourceReferenceUri(absolute, windowsUris))
+      .toBe("file:///C:/projects/app/src/component.ts");
+    expect(semanticSourceReferenceFilePath(absolute, windowsUris))
+      .toBe(path.win32.normalize("C:/projects/app/src/component.ts"));
+    expect(semanticSourceReferenceFilePath(relative, windowsUris))
+      .toBe(path.win32.normalize("C:/projects/app/src/component.ts"));
+    expect(semanticSourceReferenceFilePath(
+      source(0, 4, "https://example.test/source.ts"),
+      windowsUris,
+    )).toBeNull();
+  });
   test("preserves exact spans and valid zero-width insertions", () => {
     expect(semanticSourceOffsetRangeForDocument(source(3, 8), document)).toEqual({ start: 3, end: 8 });
     const end = document.getText().length;

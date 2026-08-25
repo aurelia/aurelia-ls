@@ -248,7 +248,7 @@ describe('evaluation module package origin', () => {
         expect.arrayContaining([
           expect.objectContaining({
             kind: SemanticRuntimeProjectInputReadKind.Realpath,
-            readKey: expect.stringContaining(normalizeModuleKey(logicalPackageRoot).toLowerCase()),
+            readKey: expect.stringContaining(hostPathKey(logicalPackageRoot)),
           }),
         ]),
       );
@@ -725,7 +725,7 @@ describe('evaluation module package origin', () => {
       .filter(
         (read) =>
           read.kind === SemanticRuntimeProjectInputReadKind.Realpath &&
-          read.readKey.toLowerCase().includes(normalizeModuleKey(logicalPackageRoot).toLowerCase()),
+          read.readKey.includes(hostPathKey(logicalPackageRoot)),
       );
     expect(locatorRealpathReads.length).toBeGreaterThan(0);
     expect(generation.validateRegisteredInputValues().isCurrent).toBe(true);
@@ -827,11 +827,12 @@ function absoluteModulePath(rootDir: string, moduleKey: string): string {
 }
 
 function sameHostPath(left: string, right: string): boolean {
-  const normalize = (value: string): string => {
-    const normalized = normalizeModuleKey(path.resolve(value));
-    return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
-  };
-  return normalize(left) === normalize(right);
+  return hostPathKey(left) === hostPathKey(right);
+}
+
+function hostPathKey(value: string): string {
+  const normalized = normalizeModuleKey(path.resolve(value));
+  return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
 }
 
 function expectModuleIdentity(rootDir: string, moduleKey: string, expectedPath: string): void {

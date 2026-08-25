@@ -135,10 +135,7 @@ export function mapSemanticProjectConfigurationDiagnostics(
       );
       continue;
     }
-    if (
-      canonicalTypeSystemPath(row.source.filePath)
-      !== canonicalTypeSystemPath(documentHostPath)
-    ) {
+    if (!documentUris.sameDocument(row.source.filePath, documentHostPath)) {
       failures.push(
         `Project configuration diagnostic ${row.diagnosticKind} targets ${row.source.filePath}, not the current document.`,
       );

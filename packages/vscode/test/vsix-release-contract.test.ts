@@ -1,9 +1,11 @@
 import {
   appendFileSync,
+  existsSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  renameSync,
   rmSync,
   symlinkSync,
   unlinkSync,
@@ -527,6 +529,110 @@ describe("VSIX package-once lifecycle", () => {
     expect(harness.vsceCalls).toHaveLength(1);
   });
 
+  test("rejects a symlinked release root during verification", async () => {
+    const artifact = await loadArtifactModule();
+    const harness = await lifecycleHarness(artifact, "verify-symlink-root");
+    const target = path.join(harness.repoRoot, "release-target");
+    mkdirSync(target);
+    symlinkSync(target, harness.releaseRoot, process.platform === "win32" ? "junction" : "dir");
+
+    await expect(artifact.verifyVsix(harness.dependencies)).rejects.toThrow(/release root.*symlink/iu);
+    expect(harness.vsceCalls).toHaveLength(0);
+  });
+
+  test("rejects a release root reached through an untrusted nested symlink", async () => {
+    const artifact = await loadArtifactModule();
+    const harness = await lifecycleHarness(artifact, "verify-nested-symlink-root");
+    const target = path.join(harness.repoRoot, "release-target");
+    mkdirSync(path.join(target, "current"), { recursive: true });
+    const linkedParent = path.join(harness.extensionRoot, "releases");
+    symlinkSync(target, linkedParent, process.platform === "win32" ? "junction" : "dir");
+
+    await expect(artifact.verifyVsix({
+      ...harness.dependencies,
+      releaseRoot: path.join(linkedParent, "current"),
+    })).rejects.toThrow(/trusted parent|resolved unexpectedly/iu);
+    expect(harness.vsceCalls).toHaveLength(0);
+  });
+
+  test("allows a canonical ancestor alias above the trusted extension root", async () => {
+    const artifact = await loadArtifactModule();
+    const harness = await lifecycleHarness(artifact, "ancestor-alias");
+    const aliasContainer = temporaryRoot("aurelia-vsix-ancestor-alias-");
+    const aliasRoot = path.join(aliasContainer, "repo-link");
+    symlinkSync(
+      harness.repoRoot,
+      aliasRoot,
+      process.platform === "win32" ? "junction" : "dir",
+    );
+    const aliasedExtensionRoot = path.join(aliasRoot, "packages", "vscode");
+
+    await expect(artifact.packVsix({
+      ...harness.dependencies,
+      extensionRoot: aliasedExtensionRoot,
+      repoRoot: aliasRoot,
+      releaseRoot: path.join(aliasedExtensionRoot, ".release"),
+    })).resolves.toEqual(expect.objectContaining({ schemaVersion: artifact.artifactSchemaVersion }));
+    expect(harness.vsceCalls).toHaveLength(1);
+  });
+
+  test("refuses a release-root swap during staged inspection without following cleanup paths", async () => {
+    const artifact = await loadArtifactModule();
+    const harness = await lifecycleHarness(artifact, "inspection-root-swap");
+    const replacement = path.join(harness.repoRoot, "replacement-release");
+    let swapped = false;
+
+    await expect(artifact.packVsix({
+      ...harness.dependencies,
+      inspectVsixBuffer: async (...args: Parameters<VsixArtifactModule["inspectVsixBuffer"]>) => {
+        const inspection = await artifact.inspectVsixBuffer(...args);
+        if (!swapped) {
+          swapped = true;
+          const stagingName = path.basename(path.dirname(harness.vsceCalls[0]!.packagePath));
+          renameSync(harness.releaseRoot, `${harness.releaseRoot}-original`);
+          mkdirSync(path.join(replacement, stagingName), { recursive: true });
+          writeFileSync(path.join(replacement, stagingName, "sentinel"), "retain\n");
+          symlinkSync(
+            replacement,
+            harness.releaseRoot,
+            process.platform === "win32" ? "junction" : "dir",
+          );
+        }
+        return inspection;
+      },
+    })).rejects.toThrow(/identity changed|release root|trusted parent/iu);
+
+    const replacementStaging = path.join(
+      replacement,
+      path.basename(path.dirname(harness.vsceCalls[0]!.packagePath)),
+    );
+    expect(readFileSync(path.join(replacementStaging, "sentinel"), "utf8")).toBe("retain\n");
+    expect(existsSync(harness.paths.vsix)).toBe(false);
+  });
+
+  test("refuses a post-promotion root swap without deleting replacement outputs", async () => {
+    const artifact = await loadArtifactModule();
+    const harness = await lifecycleHarness(artifact, "promotion-root-swap");
+    const replacement = path.join(harness.repoRoot, "replacement-release");
+    const sentinelPath = path.join(replacement, path.basename(harness.paths.vsix));
+
+    await expect(artifact.packVsix({
+      ...harness.dependencies,
+      afterArtifactPromotion: () => {
+        renameSync(harness.releaseRoot, `${harness.releaseRoot}-original`);
+        mkdirSync(replacement, { recursive: true });
+        writeFileSync(sentinelPath, "retain\n");
+        symlinkSync(
+          replacement,
+          harness.releaseRoot,
+          process.platform === "win32" ? "junction" : "dir",
+        );
+      },
+    })).rejects.toThrow(/identity changed|release root|trusted parent/iu);
+
+    expect(readFileSync(sentinelPath, "utf8")).toBe("retain\n");
+  });
+
   test("rejects final artifact and checksum drift", async () => {
     const artifact = await loadArtifactModule();
     const artifactDrift = await lifecycleHarness(artifact, "artifact-drift");
@@ -539,6 +645,45 @@ describe("VSIX package-once lifecycle", () => {
     appendFileSync(checksumDrift.paths.checksum, "drift\n");
     await expect(artifact.verifyVsix(checksumDrift.dependencies))
       .rejects.toThrow(/checksum/u);
+  });
+
+  test("seals staged, artifact, receipt, and checksum bytes across repository-state reads", async () => {
+    const artifact = await loadArtifactModule();
+    for (const target of ["staged", "artifact", "receipt", "checksum"] as const) {
+      const harness = await lifecycleHarness(artifact, `state-drift-${target}`);
+      const repository = harness.dependencies.gitState();
+      let reads = 0;
+      await expect(artifact.packVsix({
+        ...harness.dependencies,
+        gitState: () => {
+          reads += 1;
+          if (target === "staged" && reads === 2) {
+            appendFileSync(harness.vsceCalls[0]!.packagePath, "drift\n");
+          }
+          if (target !== "staged" && reads === 4) {
+            appendFileSync(harness.paths[target === "artifact" ? "vsix" : target], "drift\n");
+          }
+          return repository;
+        },
+      }), target).rejects.toThrow(/bytes changed/iu);
+    }
+  });
+
+  test("rechecks artifact bytes after the verification repository-state seam", async () => {
+    const artifact = await loadArtifactModule();
+    const harness = await lifecycleHarness(artifact, "verify-state-drift");
+    await artifact.packVsix(harness.dependencies);
+    const repository = harness.dependencies.gitState();
+    let reads = 0;
+
+    await expect(artifact.verifyVsix({
+      ...harness.dependencies,
+      gitState: () => {
+        reads += 1;
+        if (reads === 2) appendFileSync(harness.paths.vsix, "drift\n");
+        return repository;
+      },
+    })).rejects.toThrow(/bytes changed/iu);
   });
 });
 
@@ -697,6 +842,63 @@ describe("VSIX release surface", () => {
     writeFileSync(path.join(extraDist.extensionRoot, "dist", "stale.cjs"), "stale\n");
     expect(() => artifact.expectedArchiveEntries(extraDist.extensionRoot, extraDist.options))
       .toThrow(/inventory mismatch.*extra/iu);
+  });
+
+  test("accepts canonical inputs reached through an intermediate ancestor alias", async () => {
+    const artifact = await loadArtifactModule();
+    const fixture = canonicalInputFixture();
+    const aliasContainer = temporaryRoot("aurelia-vsix-canonical-alias-");
+    const aliasedRepoRoot = path.join(aliasContainer, "repo-link");
+    symlinkSync(
+      fixture.repoRoot,
+      aliasedRepoRoot,
+      process.platform === "win32" ? "junction" : "dir",
+    );
+    const aliasedExtensionRoot = path.join(aliasedRepoRoot, "packages", "vscode");
+    const options = {
+      repoRoot: aliasedRepoRoot,
+      typescriptRoot: path.join(aliasedExtensionRoot, "node_modules", "typescript"),
+      projectSchemaSource: path.join(
+        aliasedRepoRoot,
+        "packages",
+        "semantic-runtime",
+        "schema",
+        "aurelia.project.schema.json",
+      ),
+      projectDialectSchemaSource: path.join(
+        aliasedExtensionRoot,
+        "src",
+        "schemas",
+        "aurelia.project.jsonc.schema.json",
+      ),
+      expectedTypeScriptVersion: "6.0.3",
+    };
+    const expectedEntries = artifact.expectedArchiveEntries(aliasedExtensionRoot, options);
+    const packageJson = JSON.parse(readFileSync(path.join(aliasedExtensionRoot, "package.json"), "utf8"));
+    const payloads = new Map([...expectedEntries].map(([archivePath, entry]) => [
+      archivePath,
+      readFileSync(entry.sourcePath),
+    ]));
+    const archive = await archiveForFixture({
+      root: fixture.repoRoot,
+      packageJson,
+      expectedEntries,
+      payloads,
+    });
+    const inspection = await artifact.inspectVsixBuffer(archive, {
+      extensionRoot: aliasedExtensionRoot,
+      repoRoot: aliasedRepoRoot,
+      packageJson,
+      expectedEntries,
+    });
+
+    for (const entry of inspection.entries) {
+      const source = entry.source as { readonly path?: string; readonly authority?: { readonly path?: string } };
+      if (source.path != null) expect(source.path).not.toMatch(/^\.\.(?:\/|$)|^[a-zA-Z]:|^\//u);
+      if (source.authority?.path != null) {
+        expect(source.authority.path).not.toMatch(/^\.\.(?:\/|$)|^[a-zA-Z]:|^\//u);
+      }
+    }
   });
 
   test("checks untracked files and exact submodule state through the real Git seam", async () => {

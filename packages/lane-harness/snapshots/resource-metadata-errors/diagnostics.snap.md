@@ -391,7 +391,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": 1240
       },
-      "message": "Unable to resolve signature of property decorator when called as an expression.\nArgument of type 'undefined' is not assignable to parameter of type 'never'.",
+      "message": "Unable to resolve signature of property decorator when called as an expression.\nArgument of type 'undefined' is not assignable to parameter of type 'WatchableMethod<ResourceMetadataErrorsApp, unknown, unknown>'.",
       "range": {
         "end": {
           "character": 16,

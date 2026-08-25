@@ -3,10 +3,8 @@ import {
   type DocumentDiagnosticParams,
   type DocumentDiagnosticReport,
 } from "vscode-languageserver/node";
-import path from "node:path";
 import {
   AURELIA_PROJECT_CONFIGURATION_FILE_NAME,
-  canonicalTypeSystemPath,
   inferSourceLanguage,
   SourceLanguage,
 } from "@aurelia-ls/semantic-runtime";
@@ -107,9 +105,5 @@ function isClientOwnedProjectConfigurationParserDiagnostic(
 }
 
 function isNativeProjectConfiguration(ctx: ServerContext, uri: string): boolean {
-  const hostPath = ctx.documentUris.hostPath(uri);
-  if (hostPath == null) return false;
-  return canonicalTypeSystemPath(hostPath) === canonicalTypeSystemPath(
-    path.join(path.dirname(hostPath), AURELIA_PROJECT_CONFIGURATION_FILE_NAME),
-  );
+  return ctx.documentUris.hasHostFileName(uri, AURELIA_PROJECT_CONFIGURATION_FILE_NAME);
 }

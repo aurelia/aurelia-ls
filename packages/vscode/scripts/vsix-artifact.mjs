@@ -69,9 +69,59 @@ export function assertInside(parent, child, label) {
   return childPath;
 }
 
-function sameResolvedPath(left, right) {
+function sameAbsolutePath(left, right) {
   const relative = path.relative(path.resolve(left), path.resolve(right));
   return relative === "" || relative === ".";
+}
+
+function assertCanonicalDescendant(parent, child, label) {
+  const childPath = assertInside(parent, child, label);
+  const lexicalRelative = path.relative(path.resolve(parent), childPath);
+  const expected = path.resolve(realpathSync(parent), lexicalRelative);
+  const actual = realpathSync(childPath);
+  if (!sameAbsolutePath(actual, expected)) {
+    throw new Error(`${label} resolved unexpectedly below its trusted parent: ${childPath}`);
+  }
+}
+
+function captureDirectoryWitness(directoryPath, label) {
+  const resolved = path.resolve(directoryPath);
+  const info = lstatSync(resolved);
+  if (info.isSymbolicLink() || !info.isDirectory()) {
+    throw new Error(`${label} must be a regular non-symlink directory: ${resolved}`);
+  }
+  return Object.freeze({
+    path: resolved,
+    realPath: realpathSync(resolved),
+    dev: info.dev,
+    ino: info.ino,
+    birthtimeMs: info.birthtimeMs,
+  });
+}
+
+function assertDirectoryWitness(witness, label) {
+  const current = captureDirectoryWitness(witness.path, label);
+  if (
+    !sameAbsolutePath(current.realPath, witness.realPath)
+    || current.dev !== witness.dev
+    || current.ino !== witness.ino
+    || current.birthtimeMs !== witness.birthtimeMs
+  ) {
+    throw new Error(`${label} identity changed during the release operation: ${witness.path}`);
+  }
+}
+
+function assertExactTrustedFile(parent, filePath, label, expectedBytes) {
+  assertRegularUnlinkedFile(filePath, label);
+  assertCanonicalDescendant(parent, filePath, label);
+  const expected = Buffer.isBuffer(expectedBytes) ? expectedBytes : Buffer.from(expectedBytes);
+  if (!readFileSync(filePath).equals(expected)) {
+    throw new Error(`${label} bytes changed during the release operation: ${filePath}`);
+  }
+}
+
+function canonicalEvidencePath(root, candidate) {
+  return path.relative(realpathSync(root), realpathSync(candidate)).split(path.sep).join("/");
 }
 
 function assertRegularUnlinkedFile(filePath, label) {
@@ -159,7 +209,8 @@ export function expectedArchiveEntries(root = extensionRoot, options = {}) {
   );
 
   const typescriptRoot = realpathSync(options.typescriptRoot ?? path.join(root, "node_modules/typescript"));
-  assertInside(options.repoRoot ?? repoRoot, typescriptRoot, "TypeScript runtime source");
+  const canonicalRepoRoot = realpathSync(options.repoRoot ?? repoRoot);
+  assertInside(canonicalRepoRoot, typescriptRoot, "TypeScript runtime source");
   const typescriptPackage = JSON.parse(readFileSync(path.join(typescriptRoot, "package.json"), "utf8"));
   const packageJson = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8"));
   const requiredTypeScriptVersion = options.expectedTypeScriptVersion ?? expectedTypeScriptVersion;
@@ -502,13 +553,13 @@ export async function inspectVsixBuffer(buffer, options = {}) {
       ? Object.freeze({ kind: "generated-control" })
       : Object.freeze({
         kind: expectedEntry.kind,
-        path: path.relative(options.repoRoot ?? repoRoot, expectedEntry.sourcePath).split(path.sep).join("/"),
+        path: canonicalEvidencePath(options.repoRoot ?? repoRoot, expectedEntry.sourcePath),
         bytes: data.length,
         sha256: sha256(sourceBytes),
         equal: true,
         ...(expectedEntry.authorityPath == null ? {} : {
           authority: Object.freeze({
-            path: path.relative(options.repoRoot ?? repoRoot, expectedEntry.authorityPath).split(path.sep).join("/"),
+            path: canonicalEvidencePath(options.repoRoot ?? repoRoot, expectedEntry.authorityPath),
             bytes: authorityBytes.length,
             sha256: sha256(authorityBytes),
             equal: true,
@@ -727,18 +778,48 @@ function requireUnchangedRepository(before, after, boundary) {
 
 function ensureReleaseRoot(context) {
   if (!existsSync(context.releaseRoot)) mkdirSync(context.releaseRoot);
-  const releaseInfo = lstatSync(context.releaseRoot);
-  if (releaseInfo.isSymbolicLink() || !releaseInfo.isDirectory() || !sameResolvedPath(realpathSync(context.releaseRoot), context.releaseRoot)) {
-    throw new Error(`VSIX release root must be a regular non-symlink directory: ${context.releaseRoot}`);
+  return captureReleaseRoots(context);
+}
+
+function captureReleaseRoots(context) {
+  const extension = captureDirectoryWitness(context.extensionRoot, "VSIX extension root");
+  const release = captureDirectoryWitness(context.releaseRoot, "VSIX release root");
+  assertCanonicalDescendant(context.extensionRoot, context.releaseRoot, "VSIX release root");
+  return Object.freeze({ extension, release });
+}
+
+function assertReleaseRoots(context, roots) {
+  assertDirectoryWitness(roots.extension, "VSIX extension root");
+  assertDirectoryWitness(roots.release, "VSIX release root");
+  assertCanonicalDescendant(context.extensionRoot, context.releaseRoot, "VSIX release root");
+}
+
+function removePromotedFilesSafely(promoted, paths, context, roots) {
+  for (const promotedPath of [...promoted].reverse()) {
+    try {
+      assertReleaseRoots(context, roots);
+      assertReleasePath(paths, promotedPath, "Promoted VSIX output cleanup");
+      if (!existsSync(promotedPath)) continue;
+      assertRegularUnlinkedFile(promotedPath, "Promoted VSIX output cleanup");
+      assertCanonicalDescendant(paths.releaseRoot, promotedPath, "Promoted VSIX output cleanup");
+      unlinkSync(promotedPath);
+    } catch {
+      // Cleanup must never follow a release path whose identity changed across an async boundary.
+    }
   }
 }
 
-function removeOwnStagingDirectory(stagingDirectory, paths) {
-  const resolved = assertInside(paths.releaseRoot, stagingDirectory, "VSIX staging directory");
-  if (!path.basename(resolved).startsWith(".staging-")) {
-    throw new Error(`Refusing to remove unexpected VSIX staging directory: ${resolved}`);
+function removeOwnStagingDirectorySafely(stagingDirectory, paths, context, roots, stagingWitness) {
+  try {
+    assertReleaseRoots(context, roots);
+    assertDirectoryWitness(stagingWitness, "VSIX staging directory");
+    const resolved = assertInside(paths.releaseRoot, stagingDirectory, "VSIX staging directory");
+    if (!path.basename(resolved).startsWith(".staging-")) return;
+    assertCanonicalDescendant(paths.releaseRoot, resolved, "VSIX staging directory");
+    rmSync(resolved, { recursive: true, force: true });
+  } catch {
+    // Leave the staging directory for the enclosing trusted workspace cleanup when identity is uncertain.
   }
-  rmSync(resolved, { recursive: true, force: true });
 }
 
 export async function packVsix(dependencies = {}) {
@@ -746,14 +827,18 @@ export async function packVsix(dependencies = {}) {
   const before = readRepositoryState(dependencies, context);
   const paths = artifactPaths(context.packageJson, context.releaseRoot, before.head);
   const toolsAndInputs = inputEvidence(context, dependencies);
-  ensureReleaseRoot(context);
+  const roots = ensureReleaseRoot(context);
   for (const [label, candidate] of [["VSIX artifact", paths.vsix], ["VSIX receipt", paths.receipt], ["VSIX checksum", paths.checksum]]) {
     assertReleasePath(paths, candidate, label);
     if (existsSync(candidate)) throw new Error(`Refusing to overwrite ${label}: ${candidate}`);
   }
   const stagingDirectory = mkdtempSync(path.join(paths.releaseRoot, ".staging-"));
+  assertCanonicalDescendant(paths.releaseRoot, stagingDirectory, "VSIX staging directory");
+  const stagingWitness = captureDirectoryWitness(stagingDirectory, "VSIX staging directory");
   const stagingVsix = path.join(stagingDirectory, "candidate.vsix");
   try {
+    assertReleaseRoots(context, roots);
+    assertDirectoryWitness(stagingWitness, "VSIX staging directory");
     const packageOnce = dependencies.createVSIX ?? require("@vscode/vsce").createVSIX;
     await packageOnce({
       cwd: context.extensionRoot,
@@ -765,6 +850,9 @@ export async function packVsix(dependencies = {}) {
       rewriteRelativeLinks: false,
       followSymlinks: false,
     });
+    assertReleaseRoots(context, roots);
+    assertDirectoryWitness(stagingWitness, "VSIX staging directory");
+    assertCanonicalDescendant(stagingDirectory, stagingVsix, "Staged VSIX artifact");
     assertRegularUnlinkedFile(stagingVsix, "Staged VSIX artifact");
     const expectedEntries = dependencies.expectedEntries
       ?? expectedArchiveEntries(context.extensionRoot, { repoRoot: context.repoRoot });
@@ -776,17 +864,22 @@ export async function packVsix(dependencies = {}) {
       packageJson: context.packageJson,
       expectedEntries,
     });
+    assertReleaseRoots(context, roots);
+    assertDirectoryWitness(stagingWitness, "VSIX staging directory");
+    assertExactTrustedFile(stagingDirectory, stagingVsix, "Staged VSIX artifact", stagedBytes);
     const afterPackage = readRepositoryState(dependencies, context);
     requireUnchangedRepository(before, afterPackage, "while packaging the VSIX");
     const promoted = [];
     try {
+      assertReleaseRoots(context, roots);
+      assertDirectoryWitness(stagingWitness, "VSIX staging directory");
+      assertExactTrustedFile(stagingDirectory, stagingVsix, "Staged VSIX artifact", stagedBytes);
       copyFileSync(stagingVsix, paths.vsix, fsConstants.COPYFILE_EXCL);
       promoted.push(paths.vsix);
       await dependencies.afterArtifactPromotion?.(paths);
+      assertReleaseRoots(context, roots);
       assertRegularUnlinkedFile(paths.vsix, "Promoted VSIX artifact");
-      if (!sameResolvedPath(realpathSync(paths.vsix), paths.vsix)) {
-        throw new Error(`Promoted VSIX artifact resolved unexpectedly: ${paths.vsix}`);
-      }
+      assertCanonicalDescendant(paths.releaseRoot, paths.vsix, "Promoted VSIX artifact");
       const finalBytes = readFileSync(paths.vsix);
       if (!finalBytes.equals(stagedBytes)) throw new Error("Promoted VSIX bytes differ from the inspected staged artifact.");
       const inspection = await inspect(finalBytes, {
@@ -795,6 +888,8 @@ export async function packVsix(dependencies = {}) {
         packageJson: context.packageJson,
         expectedEntries,
       });
+      assertReleaseRoots(context, roots);
+      assertExactTrustedFile(paths.releaseRoot, paths.vsix, "Promoted VSIX artifact", finalBytes);
       if (
         inspection.artifactSha256 !== stagedInspection.artifactSha256
         || inspection.artifactBytes !== stagedInspection.artifactBytes
@@ -803,22 +898,32 @@ export async function packVsix(dependencies = {}) {
       }
       const afterPromotion = readRepositoryState(dependencies, context);
       requireUnchangedRepository(before, afterPromotion, "while promoting the VSIX");
+      assertReleaseRoots(context, roots);
+      assertExactTrustedFile(paths.releaseRoot, paths.vsix, "Promoted VSIX artifact", finalBytes);
       const receipt = receiptFor(inspection, Object.freeze({ before, after: afterPromotion }), paths, context, toolsAndInputs);
       const receiptText = `${JSON.stringify(receipt, null, 2)}\n`;
       const checksumText = `${inspection.artifactSha256}  ${path.basename(paths.vsix)}\n`;
+      assertReleaseRoots(context, roots);
       writeFileSync(paths.receipt, receiptText, { encoding: "utf8", flag: "wx" });
       promoted.push(paths.receipt);
       writeFileSync(paths.checksum, checksumText, { encoding: "utf8", flag: "wx" });
       promoted.push(paths.checksum);
+      assertReleaseRoots(context, roots);
+      assertExactTrustedFile(paths.releaseRoot, paths.receipt, "Promoted VSIX receipt", receiptText);
+      assertExactTrustedFile(paths.releaseRoot, paths.checksum, "Promoted VSIX checksum", checksumText);
       const complete = readRepositoryState(dependencies, context);
       requireUnchangedRepository(before, complete, "while writing VSIX evidence");
+      assertReleaseRoots(context, roots);
+      assertExactTrustedFile(paths.releaseRoot, paths.vsix, "Promoted VSIX artifact", finalBytes);
+      assertExactTrustedFile(paths.releaseRoot, paths.receipt, "Promoted VSIX receipt", receiptText);
+      assertExactTrustedFile(paths.releaseRoot, paths.checksum, "Promoted VSIX checksum", checksumText);
       return receipt;
     } catch (error) {
-      for (const promotedPath of promoted.reverse()) unlinkSync(promotedPath);
+      removePromotedFilesSafely(promoted, paths, context, roots);
       throw error;
     }
   } finally {
-    removeOwnStagingDirectory(stagingDirectory, paths);
+    removeOwnStagingDirectorySafely(stagingDirectory, paths, context, roots, stagingWitness);
   }
 }
 
@@ -827,24 +932,30 @@ export async function verifyVsix(dependencies = {}) {
   const before = readRepositoryState(dependencies, context);
   const paths = artifactPaths(context.packageJson, context.releaseRoot, before.head);
   const toolsAndInputs = inputEvidence(context, dependencies);
+  const roots = existsSync(context.releaseRoot) ? captureReleaseRoots(context) : null;
   for (const [label, candidate] of [["VSIX artifact", paths.vsix], ["VSIX receipt", paths.receipt], ["VSIX checksum", paths.checksum]]) {
     assertReleasePath(paths, candidate, label);
     if (!existsSync(candidate)) throw new Error(`${label} is missing: ${candidate}`);
     assertRegularUnlinkedFile(candidate, label);
-    const real = realpathSync(candidate);
-    if (!sameResolvedPath(real, candidate)) throw new Error(`${label} resolved unexpectedly: ${candidate}`);
+    assertCanonicalDescendant(paths.releaseRoot, candidate, label);
   }
   const expectedEntries = dependencies.expectedEntries
     ?? expectedArchiveEntries(context.extensionRoot, { repoRoot: context.repoRoot });
   const inspect = dependencies.inspectVsixBuffer ?? inspectVsixBuffer;
-  const inspection = await inspect(readFileSync(paths.vsix), {
+  const artifactBytes = readFileSync(paths.vsix);
+  const inspection = await inspect(artifactBytes, {
     extensionRoot: context.extensionRoot,
     repoRoot: context.repoRoot,
     packageJson: context.packageJson,
     expectedEntries,
   });
+  if (roots == null) throw new Error(`VSIX release root is missing: ${context.releaseRoot}`);
+  assertReleaseRoots(context, roots);
+  assertExactTrustedFile(paths.releaseRoot, paths.vsix, "VSIX artifact", artifactBytes);
   const after = readRepositoryState(dependencies, context);
   requireUnchangedRepository(before, after, "while verifying the VSIX");
+  assertReleaseRoots(context, roots);
+  assertExactTrustedFile(paths.releaseRoot, paths.vsix, "VSIX artifact", artifactBytes);
   const expectedReceipt = receiptFor(
     inspection,
     Object.freeze({ before, after }),
@@ -859,9 +970,14 @@ export async function verifyVsix(dependencies = {}) {
     throw new Error("VSIX receipt does not match the current artifact, inputs, and repository HEAD.");
   }
   const expectedChecksum = `${inspection.artifactSha256}  ${path.basename(paths.vsix)}\n`;
-  if (readFileSync(paths.checksum, "utf8") !== expectedChecksum) {
+  const checksumText = readFileSync(paths.checksum, "utf8");
+  if (checksumText !== expectedChecksum) {
     throw new Error("VSIX checksum sidecar does not match the artifact.");
   }
+  assertReleaseRoots(context, roots);
+  assertExactTrustedFile(paths.releaseRoot, paths.vsix, "VSIX artifact", artifactBytes);
+  assertExactTrustedFile(paths.releaseRoot, paths.receipt, "VSIX receipt", receiptText);
+  assertExactTrustedFile(paths.releaseRoot, paths.checksum, "VSIX checksum", checksumText);
   return receipt;
 }
 
