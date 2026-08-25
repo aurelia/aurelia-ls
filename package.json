@@ -37,6 +37,8 @@
     "test:cov": "pnpm -w build && node scripts/run-vitest.mjs --coverage",
     "test:semantic-runtime": "pnpm --filter @aurelia-ls/semantic-runtime test",
     "test:semantic-runtime:built": "node scripts/run-vitest.mjs packages/semantic-runtime/test",
+    "test:aot": "pnpm --filter @aurelia-ls/aot test",
+    "test:aot:built": "node scripts/run-vitest.mjs packages/aot/test",
     "test:semantic-conformance:built": "node packages/semantic-runtime/scripts/contract-semantic-conformance.mjs --strict",
     "test:semantic-contracts:built": "pnpm run test:semantic-contracts:product:built && pnpm run test:semantic-contracts:runtime:built",
     "test:semantic-contracts:product:built": "node packages/semantic-runtime/scripts/contract-suite.mjs --route diagnostics --route inquiry --route kernel --route type-system --skip-build",

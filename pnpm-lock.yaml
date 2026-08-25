@@ -201,6 +201,37 @@ importers:
         specifier: ^6.0.3
         version: 6.4.1(@types/node@22.19.1)(tsx@4.21.0)
 
+  packages/aot:
+    dependencies:
+      '@aurelia-ls/semantic-runtime':
+        specifier: workspace:*
+        version: link:../semantic-runtime
+    devDependencies:
+      '@aurelia/kernel':
+        specifier: link:../../aurelia/packages/kernel
+        version: link:../../aurelia/packages/kernel
+      '@aurelia/platform-browser':
+        specifier: link:../../aurelia/packages/platform-browser
+        version: link:../../aurelia/packages/platform-browser
+      '@aurelia/runtime-html':
+        specifier: link:../../aurelia/packages/runtime-html
+        version: link:../../aurelia/packages/runtime-html
+      '@aurelia/template-compiler':
+        specifier: link:../../aurelia/packages/template-compiler
+        version: link:../../aurelia/packages/template-compiler
+      '@types/jsdom':
+        specifier: ^21.1.7
+        version: 21.1.7
+      '@types/node':
+        specifier: ^22.5.4
+        version: 22.19.1
+      jsdom:
+        specifier: ^25.0.1
+        version: 25.0.1
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+
   packages/atlas:
     devDependencies:
       '@types/node':

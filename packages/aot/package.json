@@ -1,0 +1,40 @@
+{
+  "name": "@aurelia-ls/aot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Aurelia AOT compiler and lowering-parity harness over semantic-runtime",
+  "type": "module",
+  "main": "./out/index.js",
+  "types": "./out/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./out/index.js",
+      "types": "./out/index.d.ts"
+    }
+  },
+  "engines": {
+    "node": ">=22.13 <25"
+  },
+  "scripts": {
+    "build": "tsc -b tsconfig.json",
+    "typecheck:test": "tsc --noEmit -p tsconfig.test.json",
+    "oracle:jit:built": "node scripts/run-jit-oracle.mjs",
+    "oracle:jit": "pnpm build && pnpm oracle:jit:built",
+    "test:built": "node ../../scripts/run-vitest.mjs --root ../.. --config vitest.config.ts packages/aot/test",
+    "test": "pnpm build && pnpm typecheck:test && pnpm test:built",
+    "clean": "node -e \"require('node:fs').rmSync('out', { recursive: true, force: true }); require('node:fs').rmSync('tsconfig.tsbuildinfo', { force: true }); require('node:fs').rmSync('tsconfig.test.tsbuildinfo', { force: true })\""
+  },
+  "dependencies": {
+    "@aurelia-ls/semantic-runtime": "workspace:*"
+  },
+  "devDependencies": {
+    "@aurelia/kernel": "link:../../aurelia/packages/kernel",
+    "@aurelia/platform-browser": "link:../../aurelia/packages/platform-browser",
+    "@aurelia/runtime-html": "link:../../aurelia/packages/runtime-html",
+    "@aurelia/template-compiler": "link:../../aurelia/packages/template-compiler",
+    "@types/jsdom": "^21.1.7",
+    "@types/node": "^22.5.4",
+    "jsdom": "^25.0.1",
+    "typescript": "6.0.3"
+  }
+}

@@ -57,8 +57,9 @@ published [MCP 0.3.0 release notes](packages/mcp/release-notes/mcp-v0.3.0.md).
 ## Shared Semantic Runtime
 
 `@aurelia-ls/semantic-runtime` is the internal model shared by the language
-server and MCP. It models the project and produces semantic answers with the
-evidence needed to judge their scope and freshness.
+server and MCP, and the semantic substrate for the greenfield AOT compiler. It
+models the project and produces semantic answers with the evidence needed to
+judge their scope and freshness.
 
 Responsibilities around the shared model are divided as follows:
 
@@ -68,6 +69,8 @@ Responsibilities around the shared model are divided as follows:
   editor presentation.
 - MCP adapts the model for AI clients and adds Aurelia Patterns plus bundled
   Aurelia docs.
+- AOT consumes generation-safe semantic products and owns parity, residual
+  policy, emission, source maps, and build integration.
 
 Analysis is bounded to static, source-resolvable behavior. Dynamic boundaries
 stay visible in answer coverage and explanations; runtime execution is outside
@@ -80,6 +83,7 @@ the model.
 | `aurelia-2` | VS Code extension | Current product |
 | `@aurelia-ls/mcp` | Local MCP server | Current product; GitHub tarball distribution |
 | `@aurelia-ls/semantic-runtime` | Shared semantic authority | Current internal substrate |
+| `@aurelia-ls/aot` | Greenfield AOT compiler and lowering-parity harness | New internal scaffold; normalized parity first |
 | `@aurelia-ls/language-server` | LSP lifecycle and protocol adapter | Current internal VS Code path |
 | `@aurelia-ls/patterns` | Curated Patterns and Aurelia docs snapshot support | Current internal MCP content |
 | `@aurelia-ls/atlas` | Repository/framework navigation and architecture memory | Internal maintainer tooling |

@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.test.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "strict": true,
+    "noImplicitAny": true,
+    "noUncheckedIndexedAccess": true,
+    "strictNullChecks": true,
+    "strictPropertyInitialization": true,
+    "useUnknownInCatchVariables": true
+  },
+  "include": ["test/**/*.ts"],
+  "references": [
+    { "path": "." }
+  ]
+}
