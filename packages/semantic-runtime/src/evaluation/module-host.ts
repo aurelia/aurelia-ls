@@ -342,6 +342,7 @@ export class FileSystemEvaluationModuleSourceHost implements EvaluationModuleSou
       this.compilerOptions.preserveSymlinks === true,
       this.moduleResolutionPolicy.admitSourceShippedPackageEntrypoints,
       this.authoredSources,
+      (fileName) => this.projectModules.moduleIdentityPath(fileName),
     );
   }
 

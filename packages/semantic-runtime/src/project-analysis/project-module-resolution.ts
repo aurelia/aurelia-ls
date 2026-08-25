@@ -170,6 +170,11 @@ export class ProjectModuleResolver {
     return this.moduleResolutionCache;
   }
 
+  /** Resolve physical dependencies while retaining the authored locator space inside this project root. */
+  moduleIdentityPath(fileName: string): string {
+    return this.moduleResolutionHost.realpath?.(fileName) ?? path.resolve(fileName);
+  }
+
   getImpliedNodeFormatForFile(fileName: string): ts.ResolutionMode {
     return ts.getImpliedNodeFormatForFile(
       path.resolve(fileName),
@@ -641,6 +646,8 @@ function projectModuleResolutionHost(
   rootDir: string,
   inputHost: SemanticRuntimeProjectInputHost,
 ): ts.ModuleResolutionHost {
+  const logicalRootDir = path.resolve(rootDir);
+  const physicalRootDir = path.resolve(inputHost.realpath(logicalRootDir));
   return {
     fileExists: (fileName) => inputHost.fileExists(fileName),
     readFile: (fileName) => inputHost.readFile(fileName),
@@ -649,7 +656,12 @@ function projectModuleResolutionHost(
     getDirectories: (directoryName) => inputHost.readDirectory(directoryName)
       .map((entry) => path.join(directoryName, entry))
       .filter((entry) => inputHost.directoryExists(entry)),
-    realpath: (fileName) => inputHost.realpath(fileName),
+    realpath: (fileName) => {
+      const physicalFileName = path.resolve(inputHost.realpath(fileName));
+      return isHostPathWithin(physicalFileName, physicalRootDir)
+        ? path.resolve(logicalRootDir, path.relative(physicalRootDir, physicalFileName))
+        : physicalFileName;
+    },
   };
 }
 

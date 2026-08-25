@@ -55,6 +55,28 @@ describe('ProjectModuleResolver linked-package source resolution', () => {
       .toBe(ts.sys.useCaseSensitiveFileNames ? null : expectedRoot);
   });
 
+  test('retains authored local-module locators through an aliased project root', () => {
+    const root = temporaryRoot();
+    const physicalRoot = path.join(root, 'physical-app');
+    const logicalRoot = path.join(root, 'logical-app');
+    const physicalMain = path.join(physicalRoot, 'src', 'main.ts');
+    const physicalDependency = path.join(physicalRoot, 'src', 'dependency.ts');
+    writeText(physicalMain, "import { marker } from './dependency';\n");
+    writeText(physicalDependency, "export const marker = 'local';\n");
+    linkDirectory(physicalRoot, logicalRoot);
+    const logicalMain = path.join(logicalRoot, 'src', 'main.ts');
+    const logicalDependency = path.join(logicalRoot, 'src', 'dependency.ts');
+    const { resolver } = capturedResolver(logicalRoot, 'aliased-authored-root');
+
+    const resolution = resolver.resolveModuleName('./dependency', logicalMain);
+
+    expect(resolution.kind).toBe(ProjectModuleResolutionKind.TypeScript);
+    expect(path.resolve(resolution.resolvedModule!.resolvedFileName)).toBe(path.resolve(logicalDependency));
+    expect(realpathSync.native(resolution.resolvedModule!.resolvedFileName)).toBe(
+      realpathSync.native(physicalDependency),
+    );
+  });
+
   test('maps one missing linked declaration to source with deterministic evidence and currentness reads', () => {
     const fixture = linkedPackageFixture();
     const first = capturedResolver(fixture.appRoot, 'exact-linked-source');

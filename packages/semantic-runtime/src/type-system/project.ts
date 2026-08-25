@@ -1488,7 +1488,9 @@ function createTypeSystemCompilerHost(
   compilerHost.getDirectories = (directoryName) => inputHost.readDirectory(directoryName)
     .map((entry) => path.join(directoryName, entry))
     .filter((entry) => inputHost.directoryExists(entry));
-  compilerHost.realpath = (fileName) => inputHost.realpath(fileName);
+  // Project-authored paths remain in the locator space selected at boot even when the host exposes that root through
+  // an OS alias (for example macOS /var -> /private/var). Dependencies outside that root retain physical identity.
+  compilerHost.realpath = (fileName) => moduleResolver.moduleIdentityPath(fileName);
   compilerHost.readDirectory = (rootDir, extensions, excludes, includes, depth) =>
     [...inputHost.matchFiles(rootDir, extensions, excludes, includes, depth)];
   compilerHost.resolveModuleNameLiterals = (

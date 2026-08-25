@@ -78,6 +78,8 @@ export class EvaluationPackageSourceResolver {
     private readonly preserveSymlinks: boolean,
     admitSourceShippedPackageEntrypoints: boolean,
     private readonly authoredSources: AuthoredSourceBoundary | null,
+    /** Keep source graph identity in the boot-selected project locator space while preserving external physical owners. */
+    private readonly moduleIdentityPath: (fileName: string) => string,
   ) {
     this.originIndex = new EvaluationPackageOriginIndex(rootDir, preserveSymlinks);
     this.packageLocator = new ProjectPackageLocator(fileSystem);
@@ -206,7 +208,9 @@ export class EvaluationPackageSourceResolver {
         ? packageBoundaryEvaluationModuleSourceResolution()
         : unresolvedEvaluationModuleSourceResolution();
     }
-    const modulePath = this.preserveSymlinks ? resolvedFileName : physicalFileName;
+    const modulePath = this.preserveSymlinks
+      ? resolvedFileName
+      : this.moduleIdentityPath(physicalFileName);
     if (packageInstance != null) {
       this.originIndex.remember(modulePath, physicalFileName, packageInstance, packageSourceScope!);
     }
@@ -241,7 +245,9 @@ export class EvaluationPackageSourceResolver {
       )) {
         continue;
       }
-      const modulePath = this.preserveSymlinks ? path.resolve(candidate) : physicalFileName;
+      const modulePath = this.preserveSymlinks
+        ? path.resolve(candidate)
+        : this.moduleIdentityPath(physicalFileName);
       if (packageInstance != null) {
         this.originIndex.remember(modulePath, physicalFileName, packageInstance, packageSourceScope!);
       }
@@ -311,9 +317,10 @@ export class EvaluationPackageSourceResolver {
   }
 
   private packageRootIsAuthored(packageRoot: string): boolean {
+    const moduleIdentityRoot = this.moduleIdentityPath(packageRoot);
     return this.authoredSources == null
-      ? isHostPathWithin(packageRoot, this.rootDir)
-      : this.authoredSources.contains(packageRoot);
+      ? isHostPathWithin(moduleIdentityRoot, this.rootDir)
+      : this.authoredSources.contains(moduleIdentityRoot);
   }
 
   private resolvedPackageInstance(
@@ -448,16 +455,20 @@ export class EvaluationPackageSourceResolver {
   }
 
   private sourceIsAuthored(fileName: string): boolean {
+    const moduleIdentityFileName = this.moduleIdentityPath(fileName);
     return this.authoredSources == null
-      ? isHostPathWithin(fileName, this.rootDir)
-      : this.authoredSources.contains(fileName);
+      ? isHostPathWithin(moduleIdentityFileName, this.rootDir)
+      : this.authoredSources.contains(moduleIdentityFileName);
   }
 
   private packageSourceModuleIdentityPath(
     physicalFileName: string,
     packageInstance: ResolvedPackageInstance,
   ): string {
-    if (!this.preserveSymlinks || packageInstance.locatorRootDir == null) {
+    if (!this.preserveSymlinks) {
+      return this.moduleIdentityPath(physicalFileName);
+    }
+    if (packageInstance.locatorRootDir == null) {
       return physicalFileName;
     }
     return path.resolve(

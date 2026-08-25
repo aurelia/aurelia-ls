@@ -107,6 +107,83 @@ describe('evaluation module resolution modes', () => {
     expect(build.graph.readLinkedModule(entryKey, PACKAGE_NAME, ts.ModuleKind.CommonJS)).toBe(requireKey);
   });
 
+  test.each([false, true])(
+    'keeps local evaluation modules in an aliased project locator space (preserveSymlinks=%s)',
+    async (preserveSymlinks) => {
+      const root = temporaryRoot();
+      const physicalRoot = path.join(root, 'physical-app');
+      const logicalRoot = path.join(root, 'logical-app');
+      const physicalDependencyPath = path.join(physicalRoot, 'src', 'dependency.ts');
+      const physicalSelfPath = path.join(physicalRoot, 'src', 'self.ts');
+      const logicalEntryPath = path.join(logicalRoot, 'src', 'entry.ts');
+      const logicalDependencyPath = path.join(logicalRoot, 'src', 'dependency.ts');
+      const logicalSelfPath = path.join(logicalRoot, 'src', 'self.ts');
+      writeJson(path.join(physicalRoot, 'package.json'), {
+        name: '@fixture/aliased-app',
+        private: true,
+        type: 'module',
+        exports: {
+          '.': './src/self.ts',
+        },
+      });
+      writeJson(path.join(physicalRoot, 'tsconfig.json'), {
+        compilerOptions: {
+          target: 'ES2022',
+          module: 'ESNext',
+          moduleResolution: 'Bundler',
+          preserveSymlinks,
+        },
+        files: ['src/entry.ts'],
+      });
+      writeText(path.join(physicalRoot, 'src', 'entry.ts'), [
+        "import { marker } from './dependency';",
+        "import { selfMarker } from '@fixture/aliased-app';",
+        'export const selected = `${marker}:${selfMarker}`;',
+        '',
+      ].join('\n'));
+      writeText(physicalDependencyPath, "export const marker = 'logical-project';\n");
+      writeText(physicalSelfPath, "export const selfMarker = 'self-reference';\n");
+      linkDirectory(physicalRoot, logicalRoot);
+
+      const runtime = await createSemanticRuntime({
+        workspaceRoot: logicalRoot,
+        storeKey: `test:evaluation-module-resolution-mode:aliased:${path.basename(root)}`,
+        projects: [{
+          projectKey: 'aliased-app',
+          rootDir: logicalRoot,
+          sourceFiles: [{ path: 'src/entry.ts', role: SourceFileRole.AppSource }],
+        }],
+      });
+      const project = runtime.workspace.projects[0]!;
+      const evaluationAccess = runtime.projectEvaluations.acquire(
+        project,
+        aureliaAppProjectEvaluationProfile,
+      );
+      const evaluation = evaluationAccess.readBaseline();
+      const sources = evaluation.readEvaluatedSources();
+      const entry = sources.find((source) => sameHostPath(source.sourceFile.fileName, logicalEntryPath));
+
+      expect(entry?.evaluation.environment.readValue('selected')).toMatchObject({
+        kind: EvaluationValueKind.String,
+        value: 'logical-project:self-reference',
+      });
+      expect(sources.some((source) => sameHostPath(source.sourceFile.fileName, logicalDependencyPath))).toBe(true);
+      expect(sources.some((source) => sameHostPath(source.sourceFile.fileName, logicalSelfPath))).toBe(true);
+      expect(sources.some((source) => sameHostPath(source.sourceFile.fileName, physicalDependencyPath))).toBe(false);
+      expect(sources.some((source) => sameHostPath(source.sourceFile.fileName, physicalSelfPath))).toBe(false);
+
+      const typeSystem = runtime.typeSystemProjects.acquire(
+        project,
+        evaluationAccess.generation,
+      ).readProject();
+      expect(typeSystem.readProgramSourceFileByHostPath(logicalDependencyPath)).not.toBeNull();
+      expect(typeSystem.readProgramSourceFileByHostPath(logicalSelfPath)).not.toBeNull();
+      expect(typeSystem.readProgramSourceFileByHostPath(physicalDependencyPath)).toBeNull();
+      expect(typeSystem.readProgramSourceFileByHostPath(physicalSelfPath)).toBeNull();
+    },
+    30_000,
+  );
+
   test('keeps evaluator and checker on the same conditional linked sources without granting authorship', async () => {
     const root = temporaryRoot();
     const appRoot = path.join(root, 'app');

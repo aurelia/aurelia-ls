@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -180,20 +180,23 @@ describe('type-system Program parse options', () => {
       ].join('\n'));
       writeText(dependencySourcePath, 'const dependencyScriptMarker = true;\n');
       writeText(dependencyJsxSourcePath, 'const dependencyJsxMarker = <div />;\n');
+      const physicalDependencyRoot = realpathSync.native(dependencyRoot);
+      const physicalDependencySourcePath = path.join(physicalDependencyRoot, 'plain.ts');
+      const physicalDependencyJsxSourcePath = path.join(physicalDependencyRoot, 'plain.tsx');
       writeParsePolicyApp(legacyRoot, 'Legacy');
       writeParsePolicyApp(forceRoot, 'Force');
 
       const legacy = await buildTypeSystem(legacyRoot, [
         { path: 'src/main.ts', role: SourceFileRole.AppSource },
       ], path.join(legacyRoot, 'src', 'main.ts'));
-      const legacyDependencySource = legacy.typeSystem.program.getSourceFile(dependencySourcePath);
+      const legacyDependencySource = legacy.typeSystem.program.getSourceFile(physicalDependencySourcePath);
       expect(legacyDependencySource).not.toBeUndefined();
       expect(ts.isExternalModule(legacyDependencySource!)).toBe(false);
 
       const forced = await buildTypeSystem(forceRoot, [
         { path: 'src/main.ts', role: SourceFileRole.AppSource },
       ], path.join(forceRoot, 'src', 'main.ts'));
-      const forcedDependencySource = forced.typeSystem.program.getSourceFile(dependencySourcePath);
+      const forcedDependencySource = forced.typeSystem.program.getSourceFile(physicalDependencySourcePath);
       expect(forcedDependencySource).not.toBeUndefined();
       expect(forcedDependencySource).not.toBe(legacyDependencySource);
       expect(ts.isExternalModule(forcedDependencySource!)).toBe(true);
@@ -207,14 +210,14 @@ describe('type-system Program parse options', () => {
       const classicJsx = await buildTypeSystem(classicJsxRoot, [
         { path: 'src/main.ts', role: SourceFileRole.AppSource },
       ], path.join(classicJsxRoot, 'src', 'main.ts'));
-      const classicJsxDependencySource = classicJsx.typeSystem.program.getSourceFile(dependencyJsxSourcePath);
+      const classicJsxDependencySource = classicJsx.typeSystem.program.getSourceFile(physicalDependencyJsxSourcePath);
       expect(classicJsxDependencySource).not.toBeUndefined();
       expect(ts.isExternalModule(classicJsxDependencySource!)).toBe(false);
 
       const automaticJsx = await buildTypeSystem(automaticJsxRoot, [
         { path: 'src/main.ts', role: SourceFileRole.AppSource },
       ], path.join(automaticJsxRoot, 'src', 'main.ts'));
-      const automaticJsxDependencySource = automaticJsx.typeSystem.program.getSourceFile(dependencyJsxSourcePath);
+      const automaticJsxDependencySource = automaticJsx.typeSystem.program.getSourceFile(physicalDependencyJsxSourcePath);
       expect(automaticJsxDependencySource).not.toBeUndefined();
       expect(automaticJsxDependencySource).not.toBe(classicJsxDependencySource);
       expect(ts.isExternalModule(automaticJsxDependencySource!)).toBe(true);
