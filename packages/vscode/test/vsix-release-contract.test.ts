@@ -5,6 +5,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   renameSync,
   rmSync,
   symlinkSync,
@@ -932,29 +933,34 @@ describe("VSIX release surface", () => {
     expect(submoduleCalls).toContainEqual(["submodule", "status", "--recursive"]);
   });
 
-  test("authenticates the lifecycle pnpm entrypoint without a shell or PATH lookup", async () => {
+  test("authenticates the canonical lifecycle pnpm entrypoint without a shell or PATH lookup", async () => {
     const artifact = await loadArtifactModule();
-    const repoRoot = temporaryRoot("aurelia-vsix-pnpm-");
-    const executable = path.join(repoRoot, "pnpm.mjs");
+    const physicalRepoRoot = temporaryRoot("aurelia-vsix-pnpm-");
+    const executable = path.join(physicalRepoRoot, "pnpm.mjs");
     writeFileSync(executable, "// synthetic pnpm entrypoint\n");
+    const aliasContainer = temporaryRoot("aurelia-vsix-pnpm-alias-");
+    const repoRoot = path.join(aliasContainer, "repo-link");
+    symlinkSync(physicalRepoRoot, repoRoot, process.platform === "win32" ? "junction" : "dir");
+    const aliasedExecutable = path.join(repoRoot, "pnpm.mjs");
+    const realExecutable = realpathSync(aliasedExecutable);
     const calls: { readonly command: string; readonly args: readonly string[]; readonly cwd: string }[] = [];
 
     const evidence = artifact.pnpmRuntimeEvidence({ repoRoot }, {
-      pnpmExecPath: executable,
+      pnpmExecPath: aliasedExecutable,
       execFileSync: (command: string, args: readonly string[], options: { readonly cwd: string }) => {
         calls.push({ command, args, cwd: options.cwd });
         return "11.5.2\n";
       },
     });
 
-    expect(calls).toEqual([{ command: process.execPath, args: [executable, "--version"], cwd: repoRoot }]);
+    expect(calls).toEqual([{ command: process.execPath, args: [realExecutable, "--version"], cwd: repoRoot }]);
     expect(evidence).toEqual({
       version: "11.5.2",
       executable: {
         kind: "pnpm-node-entrypoint",
-        path: executable.split(path.sep).join("/"),
-        bytes: readFileSync(executable).length,
-        sha256: artifact.sha256(readFileSync(executable)),
+        path: realExecutable.split(path.sep).join("/"),
+        bytes: readFileSync(realExecutable).length,
+        sha256: artifact.sha256(readFileSync(realExecutable)),
       },
     });
   });

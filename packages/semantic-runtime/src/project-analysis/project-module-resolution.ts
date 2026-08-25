@@ -294,6 +294,10 @@ export class ProjectModuleResolver {
       physicalPackageRoot,
       knownPackage,
     } = context;
+    const resolutionContainingFile = knownPackage != null
+      && this.compilerOptions.preserveSymlinks !== true
+      ? canonicalPhysicalModulePath(this.inputHost, containingFile)
+      : containingFile;
     if (
       knownPackage == null
       && (
@@ -347,7 +351,7 @@ export class ProjectModuleResolver {
     );
     const selected = ts.resolveModuleName(
       moduleSpecifier,
-      containingFile,
+      resolutionContainingFile,
       this.compilerOptions,
       syntheticHost,
       undefined,
@@ -477,7 +481,7 @@ export class ProjectModuleResolver {
       );
     }
     const sourceLink = new ResolvedProjectModuleSourceLink(
-      containingFile,
+      resolutionContainingFile,
       moduleSpecifier,
       resolutionMode ?? null,
       packageInstance,
@@ -541,13 +545,19 @@ export class ProjectModuleResolver {
   }
 
   private knownLinkedPackageContaining(containingFile: string): KnownLinkedPackage | null {
+    if (this.knownLinkedPackages.size === 0) {
+      return null;
+    }
     const absoluteContainingFile = path.resolve(containingFile);
-    const nestedPackageRoot = externalPackageRootForPath(absoluteContainingFile);
+    const packageIdentityContainingFile = this.compilerOptions.preserveSymlinks === true
+      ? absoluteContainingFile
+      : canonicalPhysicalModulePath(this.inputHost, absoluteContainingFile);
+    const nestedPackageRoot = externalPackageRootForPath(packageIdentityContainingFile);
     const candidates = [...this.knownLinkedPackages.values()]
       .map((candidate) => ({
         candidate,
         matchingRoot: [candidate.logicalPackageRoot, candidate.physicalPackageRoot]
-          .filter((root) => isHostPathWithin(absoluteContainingFile, root))
+          .filter((root) => isHostPathWithin(packageIdentityContainingFile, root))
           .sort((left, right) => right.length - left.length)[0] ?? null,
       }))
       .filter((entry): entry is typeof entry & { readonly matchingRoot: string } =>
@@ -604,6 +614,27 @@ export class ProjectModuleResolver {
       }
     }
   }
+}
+
+function canonicalPhysicalModulePath(
+  inputHost: SemanticRuntimeProjectInputHost,
+  fileName: string,
+): string {
+  const absolute = path.resolve(fileName);
+  const direct = path.resolve(inputHost.realpath(absolute));
+  if (projectModuleHostPathKey(direct) !== projectModuleHostPathKey(absolute)) {
+    return direct;
+  }
+  const suffix = [path.basename(absolute)];
+  let ancestor = path.dirname(absolute);
+  while (ancestor !== path.dirname(ancestor)) {
+    if (inputHost.directoryExists(ancestor)) {
+      return path.resolve(inputHost.realpath(ancestor), ...suffix);
+    }
+    suffix.unshift(path.basename(ancestor));
+    ancestor = path.dirname(ancestor);
+  }
+  return direct;
 }
 
 function projectModuleResolutionHost(

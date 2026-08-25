@@ -1,6 +1,7 @@
 import {
   mkdirSync,
   mkdtempSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -172,6 +173,9 @@ describe('evaluation module resolution modes', () => {
     writeText(importSourcePath, "export const importMarker = 'import-source' as const;\n");
     writeText(requireSourcePath, "export const requireMarker = 'require-source' as const;\n");
     linkDirectory(packageRoot, path.join(appRoot, 'node_modules', '@fixture', 'aurelia-mode-linked'));
+    const physicalPackageRoot = realpathSync.native(packageRoot);
+    const physicalImportSourcePath = path.join(physicalPackageRoot, 'src', 'import.mts');
+    const physicalRequireSourcePath = path.join(physicalPackageRoot, 'src', 'require.cts');
 
     const runtime = await createSemanticRuntime({
       workspaceRoot: appRoot,
@@ -203,7 +207,7 @@ describe('evaluation module resolution modes', () => {
       kind: EvaluationValueKind.String,
       value: 'require-source',
     });
-    for (const sourcePath of [importSourcePath, requireSourcePath]) {
+    for (const sourcePath of [physicalImportSourcePath, physicalRequireSourcePath]) {
       expect(evaluation.readEvaluatedSources().find((source) =>
         sameHostPath(source.sourceFile.fileName, sourcePath)
       )).toMatchObject({ admission: { role: SourceFileRole.ExternalSource } });
@@ -213,7 +217,7 @@ describe('evaluation module resolution modes', () => {
       project,
       evaluationAccess.generation,
     ).readProject();
-    for (const sourcePath of [importSourcePath, requireSourcePath]) {
+    for (const sourcePath of [physicalImportSourcePath, physicalRequireSourcePath]) {
       expect(typeSystem.program.getSourceFile(sourcePath)).not.toBeUndefined();
       expect(typeSystem.readProgramSourceFileRoleByHostPath(sourcePath)).toBe(SourceFileRole.ExternalSource);
       expect(typeSystem.isProjectEditableProgramSourceFileByHostPath(sourcePath)).toBe(false);

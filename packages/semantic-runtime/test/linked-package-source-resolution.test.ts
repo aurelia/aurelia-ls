@@ -437,6 +437,82 @@ describe('ProjectModuleResolver linked-package source resolution', () => {
     expect(internal.sourceLink!.logicalPackageRoot).toBe(internal.sourceLink!.physicalPackageRoot);
   });
 
+  test('reuses an established physical owner through a canonical ancestor alias', () => {
+    const fixture = linkedPackageFixture();
+    const physicalSelfSource = path.join(fixture.physicalPackageRoot, 'src', 'self.ts');
+    writeJson(path.join(fixture.physicalPackageRoot, 'package.json'), {
+      name: PACKAGE_NAME,
+      version: '1.0.0',
+      type: 'module',
+      exports: {
+        '.': { types: './dist/types/index.d.ts' },
+        './self': { types: './dist/types/self.d.ts' },
+      },
+    });
+    writeText(physicalSelfSource, "export const selfMarker = 'canonical-owner';\n");
+    const aliasPackageRoot = path.join(fixture.root, 'physical-package-alias');
+    linkDirectory(fixture.physicalPackageRoot, aliasPackageRoot);
+    const aliasContainingFile = path.join(aliasPackageRoot, 'src', 'index.ts');
+    const { resolver, readScope } = capturedResolver(fixture.appRoot, 'canonical-physical-owner');
+
+    const entry = resolver.resolveModuleName(PACKAGE_NAME, fixture.containingFile);
+    const self = resolver.resolveModuleName(`${PACKAGE_NAME}/self`, aliasContainingFile);
+
+    expect(entry.kind).toBe(ProjectModuleResolutionKind.LinkedSource);
+    expect(self.kind).toBe(ProjectModuleResolutionKind.LinkedSource);
+    expect(sameHostPath(self.resolvedModule!.resolvedFileName, physicalSelfSource)).toBe(true);
+    expect(self.sourceLink!.packageInstance.instanceKey)
+      .toBe(entry.sourceLink!.packageInstance.instanceKey);
+    expect(readEvidence(readScope)).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: SemanticRuntimeProjectInputReadKind.Realpath,
+        path: path.resolve(aliasContainingFile),
+        value: realpathSync.native(aliasContainingFile),
+      }),
+    ]));
+  });
+
+  test('reuses a canonical physical owner when the aliased containing leaf is missing', () => {
+    const fixture = linkedPackageFixture();
+    const physicalSelfSource = path.join(fixture.physicalPackageRoot, 'src', 'self.ts');
+    writeJson(path.join(fixture.physicalPackageRoot, 'package.json'), {
+      name: PACKAGE_NAME,
+      version: '1.0.0',
+      type: 'module',
+      exports: {
+        '.': { types: './dist/types/index.d.ts' },
+        './self': { types: './dist/types/self.d.ts' },
+      },
+    });
+    writeText(physicalSelfSource, "export const selfMarker = 'canonical-missing-owner';\n");
+    const aliasPackageRoot = path.join(fixture.root, 'missing-containing-alias');
+    linkDirectory(fixture.physicalPackageRoot, aliasPackageRoot);
+    const missingContainingFile = path.join(aliasPackageRoot, 'src', 'overlay-only.ts');
+    const aliasSourceDirectory = path.dirname(missingContainingFile);
+    const { resolver, readScope } = capturedResolver(fixture.appRoot, 'canonical-missing-owner');
+
+    const entry = resolver.resolveModuleName(PACKAGE_NAME, fixture.containingFile);
+    const self = resolver.resolveModuleName(`${PACKAGE_NAME}/self`, missingContainingFile);
+
+    expect(entry.kind).toBe(ProjectModuleResolutionKind.LinkedSource);
+    expect(self.kind).toBe(ProjectModuleResolutionKind.LinkedSource);
+    expect(sameHostPath(self.resolvedModule!.resolvedFileName, physicalSelfSource)).toBe(true);
+    expect(self.sourceLink!.packageInstance.instanceKey)
+      .toBe(entry.sourceLink!.packageInstance.instanceKey);
+    expect(readEvidence(readScope)).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: SemanticRuntimeProjectInputReadKind.DirectoryExistence,
+        path: path.resolve(aliasSourceDirectory),
+        value: true,
+      }),
+      expect.objectContaining({
+        kind: SemanticRuntimeProjectInputReadKind.Realpath,
+        path: path.resolve(aliasSourceDirectory),
+        value: realpathSync.native(aliasSourceDirectory),
+      }),
+    ]));
+  });
+
   test('keeps established self-reference resolution on the exact preserved locator', () => {
     const fixture = linkedPackageFixture();
     const physicalSelfSource = path.join(fixture.physicalPackageRoot, 'src', 'self.ts');
@@ -496,7 +572,9 @@ describe('ProjectModuleResolver linked-package source resolution', () => {
   test('invalidates the captured generation when a package junction is retargeted', () => {
     const fixture = linkedPackageFixture();
     const packageRootB = path.join(fixture.root, 'packages', 'linked-toolkit-b');
-    const sourceB = writePackage(packageRootB, { marker: 'package-b' });
+    writePackage(packageRootB, { marker: 'package-b' });
+    const physicalPackageRootB = realpathSync.native(packageRootB);
+    const sourceB = path.join(physicalPackageRootB, 'src', 'index.ts');
     const authority = new SemanticRuntimeProjectInputAuthority(new NodeSemanticRuntimeProjectInputHost());
     const firstGeneration = authority.capture({
       projectKey: 'retargeted-junction',
@@ -523,7 +601,7 @@ describe('ProjectModuleResolver linked-package source resolution', () => {
 
     unlinkSync(fixture.logicalPackageRoot);
     linkDirectory(packageRootB, fixture.logicalPackageRoot);
-    expect(sameHostPath(realpathSync(fixture.logicalPackageRoot), packageRootB)).toBe(true);
+    expect(sameHostPath(realpathSync.native(fixture.logicalPackageRoot), physicalPackageRootB)).toBe(true);
 
     expect(locatorRead!.validateObservedValue()).toMatchObject({
       isCurrent: false,
@@ -547,7 +625,7 @@ describe('ProjectModuleResolver linked-package source resolution', () => {
     expect(secondGeneration).not.toBe(firstGeneration);
     expect(secondResolution.kind).toBe(ProjectModuleResolutionKind.LinkedSource);
     expect(sameHostPath(secondResolution.resolvedModule!.resolvedFileName, sourceB)).toBe(true);
-    expect(sameHostPath(secondResolution.sourceLink!.physicalPackageRoot, packageRootB)).toBe(true);
+    expect(sameHostPath(secondResolution.sourceLink!.physicalPackageRoot, physicalPackageRootB)).toBe(true);
     expect(secondResolution.sourceLink!.revision).not.toBe(firstResolution.sourceLink!.revision);
   });
 });
@@ -575,13 +653,19 @@ function linkedPackageFixture(options: LinkedPackageFixtureOptions = {}): Linked
   const root = temporaryRoot();
   const appRoot = path.join(root, 'app');
   const containingFile = path.join(appRoot, 'src', 'main.ts');
-  const physicalPackageRoot = path.join(root, 'packages', 'linked-toolkit-a');
+  const physicalPackageLocatorRoot = path.join(root, 'packages', 'linked-toolkit-a');
   const logicalPackageRoot = path.join(appRoot, 'node_modules', '@fixture', 'linked-toolkit');
-  const sourceFile = writePackage(physicalPackageRoot, {
+  writePackage(physicalPackageLocatorRoot, {
     marker: 'package-a',
     sourceExtensions: options.sourceExtensions,
     writeDeclaration: options.writeDeclaration,
   });
+  const physicalPackageRoot = realpathSync.native(physicalPackageLocatorRoot);
+  const sourceFile = path.join(
+    physicalPackageRoot,
+    'src',
+    `index${options.sourceExtensions?.[0] ?? '.ts'}`,
+  );
   writeText(containingFile, `import { toolkitValue } from '${PACKAGE_NAME}';\n`);
   if (options.linkPackage === false) {
     writePackage(logicalPackageRoot, {
@@ -590,7 +674,7 @@ function linkedPackageFixture(options: LinkedPackageFixtureOptions = {}): Linked
       writeDeclaration: options.writeDeclaration,
     });
   } else {
-    linkDirectory(physicalPackageRoot, logicalPackageRoot);
+    linkDirectory(physicalPackageLocatorRoot, logicalPackageRoot);
   }
   return {
     root,
@@ -613,7 +697,7 @@ function writePackage(
     readonly sourceExtensions?: readonly string[];
     readonly writeDeclaration?: boolean;
   },
-): string {
+): void {
   writeJson(path.join(packageRoot, 'package.json'), {
     name: PACKAGE_NAME,
     version: '1.0.0',
@@ -650,7 +734,6 @@ function writePackage(
       'export declare const toolkitValue: string;\n',
     );
   }
-  return path.join(packageRoot, 'src', `index${sourceExtensions[0]!}`);
 }
 
 function capturedResolver(

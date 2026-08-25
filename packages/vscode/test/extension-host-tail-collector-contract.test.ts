@@ -380,7 +380,7 @@ describe("Extension Host tail collector", () => {
     expect(evidence).toMatchObject({
       status: "passed",
       strategy: process.platform === "win32" ? "junction" : "directory-symbolic-link",
-      linkPath: path.join(workspace.workspaceRoot, "node_modules"),
+      linkPath: path.join(realpathSync(workspace.workspaceRoot), "node_modules"),
       linkTarget: realpathSync(dependencyRoot),
       resolvedLinkTarget: realpathSync(dependencyRoot),
       resolvedModules: [
