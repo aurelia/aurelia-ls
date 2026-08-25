@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -185,7 +185,7 @@ describe('linked source identity and ownership', () => {
   }, 30_000);
 
   test('gives a shared physical dependency independent linked identities in each project', async () => {
-    const workspaceRoot = mkdtempSync(path.join(tmpdir(), 'aurelia-shared-linked-source-'));
+    const workspaceRoot = realpathSync.native(mkdtempSync(path.join(tmpdir(), 'aurelia-shared-linked-source-')));
     temporaryRoots.push(workspaceRoot);
     const firstRoot = path.join(workspaceRoot, 'apps/first');
     const secondRoot = path.join(workspaceRoot, 'apps/second');

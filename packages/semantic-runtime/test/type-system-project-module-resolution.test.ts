@@ -376,7 +376,7 @@ function unresolvedModuleDiagnostics(
 }
 
 function temporaryRoot(): string {
-  const root = mkdtempSync(path.join(tmpdir(), 'aurelia-type-system-module-resolution-'));
+  const root = realpathSync.native(mkdtempSync(path.join(tmpdir(), 'aurelia-type-system-module-resolution-')));
   temporaryRoots.push(root);
   return root;
 }

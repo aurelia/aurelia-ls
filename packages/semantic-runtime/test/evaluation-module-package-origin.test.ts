@@ -781,7 +781,7 @@ function evaluationHost(
 }
 
 function temporaryRoot(): string {
-  const root = mkdtempSync(path.join(tmpdir(), 'aurelia-evaluation-package-origin-'));
+  const root = realpathSync.native(mkdtempSync(path.join(tmpdir(), 'aurelia-evaluation-package-origin-')));
   temporaryRoots.push(root);
   return root;
 }

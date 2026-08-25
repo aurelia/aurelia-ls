@@ -1,6 +1,7 @@
 import {
   mkdirSync,
   mkdtempSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -209,7 +210,7 @@ function writeLinkedPackage(
 }
 
 function temporaryRoot(): string {
-  const root = mkdtempSync(path.join(tmpdir(), 'aurelia-linked-package-integration-'));
+  const root = realpathSync.native(mkdtempSync(path.join(tmpdir(), 'aurelia-linked-package-integration-')));
   temporaryRoots.push(root);
   return root;
 }
