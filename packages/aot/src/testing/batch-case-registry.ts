@@ -1,16 +1,24 @@
-import type { BatchCaseDescriptor, BatchCasePlan, BatchRunOptions, BatchShard } from "./batch-contracts.js";
+import type {
+  BatchCaseDescriptor,
+  BatchCasePlan,
+  BatchCaseSearchTerms,
+  BatchRunOptions,
+  BatchShard,
+} from "./batch-contracts.js";
 
 /** Validated deterministic case registry and selection authority for one runner. */
 export class BatchCaseRegistry<TCase extends BatchCaseDescriptor> {
   readonly #cases: readonly TCase[];
   readonly #families: ReadonlySet<string>;
   readonly #tags: ReadonlySet<string>;
+  readonly #searchTerms: BatchCaseSearchTerms<TCase>;
 
-  public constructor(cases: readonly TCase[]) {
+  public constructor(cases: readonly TCase[], searchTerms: BatchCaseSearchTerms<TCase>) {
     validateCases(cases);
     this.#cases = [...cases].sort((left, right) => left.id.localeCompare(right.id));
     this.#families = new Set(this.#cases.map((candidate) => candidate.family));
     this.#tags = new Set(this.#cases.flatMap((candidate) => [...candidate.tags]));
+    this.#searchTerms = searchTerms;
   }
 
   public plan(options: BatchRunOptions = {}): BatchCasePlan<TCase> {
@@ -33,7 +41,7 @@ export class BatchCaseRegistry<TCase extends BatchCaseDescriptor> {
       if (queryTokens.length === 0) {
         return true;
       }
-      const searchable = `${candidate.id} ${candidate.family} ${candidate.tags.join(" ")} ${candidate.requirement}`
+      const searchable = `${candidate.id} ${candidate.family} ${candidate.tags.join(" ")} ${candidate.requirement} ${this.#searchTerms(candidate).join(" ")}`
         .toLowerCase();
       return queryTokens.every((token) => searchable.includes(token));
     });

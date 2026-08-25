@@ -150,6 +150,7 @@ function validateCompilerCases(
     }
     for (const invariant of candidate.invariants) {
       requireCanonicalToken(invariant.id, `compiler case ${candidate.id} invariant id`);
+      validateSelectorCoordinates(candidate.id, invariant.id, invariant.selector);
       if (invariant.lanes.length === 0) {
         throw new Error(`Compiler case ${candidate.id} invariant ${invariant.id} has no oracle lane.`);
       }
@@ -228,6 +229,32 @@ function validateCompilerCases(
     }
 
     validateOperationProduct(candidate);
+  }
+}
+
+function validateSelectorCoordinates(
+  caseId: string,
+  invariantId: string,
+  selector: CompilerCase["invariants"][number]["selector"],
+): void {
+  const indexes: number[] = [];
+  if ("row" in selector) indexes.push(selector.row);
+  if ("instruction" in selector) indexes.push(selector.instruction);
+  if (indexes.some((index) => !Number.isSafeInteger(index) || index < 0)) {
+    throw new Error(`Compiler case ${caseId} invariant ${invariantId} has an invalid product index.`);
+  }
+  if (selector.kind === "instruction-path") {
+    if (selector.path.length === 0) {
+      throw new Error(`Compiler case ${caseId} invariant ${invariantId} has an empty instruction path.`);
+    }
+    for (const segment of selector.path) {
+      if (
+        (typeof segment === "number" && (!Number.isSafeInteger(segment) || segment < 0))
+        || (typeof segment === "string" && segment.length === 0)
+      ) {
+        throw new Error(`Compiler case ${caseId} invariant ${invariantId} has an invalid path segment.`);
+      }
+    }
   }
 }
 

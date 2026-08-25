@@ -11,7 +11,7 @@ import {
   JitCompilerInvocationError,
   type JitCompilerOracle,
 } from "../src/testing/jit-compiler-oracle.js";
-import { JIT_ORACLE_CASES } from "../src/testing/jit-oracle-cases.js";
+import { JIT_ORACLE_CASES } from "../src/testing/jit-oracle-case-registry.js";
 
 describe("JIT compiler case executor", () => {
   it("materializes setups fresh for every repeat and disposes them in reverse order", async () => {

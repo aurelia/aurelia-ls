@@ -241,6 +241,14 @@ export type CompilerInvariantSelector =
   | { readonly kind: "template-outer-html" }
   | { readonly kind: "instruction-row-width"; readonly row: number }
   | { readonly kind: "instruction-field"; readonly row: number; readonly instruction: number; readonly field: string }
+  | {
+      readonly kind: "instruction-path";
+      readonly row: number;
+      readonly instruction: number;
+      readonly path: readonly (string | number)[];
+    }
+  | { readonly kind: "surrogate-field"; readonly instruction: number; readonly field: string }
+  | { readonly kind: "definition-dependencies-count" }
   | { readonly kind: "spread-instruction-count" }
   | { readonly kind: "spread-instruction-field"; readonly instruction: number; readonly field: string }
   | { readonly kind: "compiler-error-code" }

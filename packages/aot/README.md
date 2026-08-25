@@ -31,9 +31,11 @@ aggregate and slow-case timing, bounds failure output, and supports query/id/tag
 fail-fast, list, and JSON modes. This keeps large corpus iteration cheap and makes external process sharding possible
 without sharing mutable compiler containers.
 
-Vitest is reserved for harness and contract invariants. The current six-case JIT registry characterizes compile-entry
-bypass, a compiler diagnostic, static markup, property/listener bindings, and text interpolation. It proves the
-framework-JIT lane mechanics, not semantic-runtime equivalence or corpus breadth.
+Vitest is reserved for harness and contract invariants. The current 42-case JIT registry spans compile-entry bypass,
+diagnostics, static/debug markup, bindings/interpolation/let, slots/projection, surrogates, compileSpread, resource
+precedence, capture/spread/ref, native form ordering, generated controller interactions, hooks, processContent, and
+nested template controllers. It remains a first breadth seed, not semantic-runtime equivalence or completed corpus
+coverage.
 
 Cases are declarative `aurelia-ls/compiler-case/v1` records. They carry pinned source/test provenance, semantic
 obligation witnesses, a runner-neutral compiler/resource world, explicit setup references and registration placement,

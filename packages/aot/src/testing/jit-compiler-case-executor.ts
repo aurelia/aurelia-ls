@@ -439,6 +439,15 @@ function selectedInvariantValue(invariant: CompilerFocusedInvariant, outcome: Ji
     case "instruction-field":
       return (definitionOutcome(outcome, selector.kind).instructions?.[selector.row]?.[selector.instruction] as unknown as
         Readonly<Record<string, unknown>> | undefined)?.[selector.field];
+    case "instruction-path": {
+      const instruction = definitionOutcome(outcome, selector.kind).instructions?.[selector.row]?.[selector.instruction];
+      return readProductPath(instruction, selector.path, selector.kind);
+    }
+    case "surrogate-field":
+      return (definitionOutcome(outcome, selector.kind).surrogates?.[selector.instruction] as unknown as
+        Readonly<Record<string, unknown>> | undefined)?.[selector.field];
+    case "definition-dependencies-count":
+      return definitionOutcome(outcome, selector.kind).dependencies?.length ?? 0;
     case "spread-instruction-count":
       return spreadOutcome(outcome, selector.kind).length;
     case "spread-instruction-field":
@@ -452,6 +461,20 @@ function selectedInvariantValue(invariant: CompilerFocusedInvariant, outcome: Ji
         return error instanceof Error ? error.message : String(error);
       }
   }
+}
+
+function readProductPath(value: unknown, path: readonly (string | number)[], selector: string): unknown {
+  let current = value;
+  for (const segment of path) {
+    if (current == null || (typeof current !== "object" && typeof current !== "function")) {
+      throw new Error(`Invariant selector ${selector} cannot read path segment ${String(segment)}.`);
+    }
+    if (!Object.hasOwn(current, segment)) {
+      throw new Error(`Invariant selector ${selector} cannot find path segment ${String(segment)}.`);
+    }
+    current = (current as Readonly<Record<PropertyKey, unknown>>)[segment];
+  }
+  return current;
 }
 
 function definitionOutcome(

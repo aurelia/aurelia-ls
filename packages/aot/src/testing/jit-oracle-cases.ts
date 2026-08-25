@@ -1,16 +1,15 @@
 import { BindingMode, itListenerBinding, itPropertyBinding, itTextBinding } from "@aurelia/template-compiler";
 import {
-  BASELINE_CHARACTERIZATION_CLOSURE,
-  COMPILER_CASE_SCHEMA_VERSION,
-  COMPILER_CORPUS_FRAMEWORK_REVISION,
-  type CompilerAuthorityReference,
-  type CompilerCase,
-  type CompilerCaseContrast,
-  type CompilerCaseData,
-  type CompilerFocusedInvariant,
-  type CompilerObligationWitness,
-  type CompilerWorld,
-} from "./compiler-case.js";
+  compilerAuthority as authority,
+  compiledDefinitionEnvelope as compiledEnvelope,
+  compilerObligation as obligation,
+  equalJitInvariant as equalInvariant,
+  includesJitInvariant as includesInvariant,
+  inlineCompilerWorld as inlineWorld,
+  instructionFieldSelector as instructionField,
+  jitCharacterizationCase as characterizationCase,
+} from "./compiler-case-builders.js";
+import type { CompilerCase } from "./compiler-case.js";
 
 const templateCompilerSource = "packages/template-compiler/src/template-compiler.ts";
 const bindingCommandSource = "packages/template-compiler/src/binding-command.ts";
@@ -307,144 +306,3 @@ export const JIT_ORACLE_CASES: readonly CompilerCase[] = [
     }],
   }),
 ];
-
-interface CharacterizationInput {
-  readonly id: string;
-  readonly family: string;
-  readonly tags: readonly string[];
-  readonly requirement: string;
-  readonly provenance: readonly CompilerAuthorityReference[];
-  readonly obligations: readonly CompilerObligationWitness[];
-  readonly world: CompilerWorld;
-  readonly expectedProduct?: "compiled-definition" | "unchanged-definition" | "compiler-error";
-  readonly invariants: readonly CompilerFocusedInvariant[];
-  readonly contrasts: readonly CompilerCaseContrast[];
-}
-
-function characterizationCase(input: CharacterizationInput): CompilerCase {
-  return {
-    schemaVersion: COMPILER_CASE_SCHEMA_VERSION,
-    id: input.id,
-    family: input.family,
-    tags: input.tags,
-    requirement: input.requirement,
-    provenance: input.provenance,
-    obligations: input.obligations,
-    world: input.world,
-    effects: [],
-    closure: BASELINE_CHARACTERIZATION_CLOSURE,
-    oracles: {
-      lanes: [{ id: "framework-jit", expectedProduct: input.expectedProduct ?? "compiled-definition" }],
-      claims: [],
-    },
-    invariants: input.invariants,
-    contrasts: input.contrasts,
-  };
-}
-
-function authority(
-  filePath: string,
-  startLine: number,
-  endLine: number,
-  role: CompilerAuthorityReference["role"],
-  detail: Omit<CompilerAuthorityReference, "repository" | "revision" | "role" | "filePath" | "startLine" | "endLine">,
-): CompilerAuthorityReference {
-  return {
-    repository: "aurelia",
-    revision: COMPILER_CORPUS_FRAMEWORK_REVISION,
-    role,
-    filePath,
-    startLine,
-    endLine,
-    ...detail,
-  };
-}
-
-function obligation(
-  id: CompilerObligationWitness["id"],
-  role: CompilerObligationWitness["role"],
-  summary: string,
-): CompilerObligationWitness {
-  return { id, role, summary };
-}
-
-function inlineWorld(name: string, markup: string): CompilerWorld {
-  return {
-    configuration: "standard",
-    entry: {
-      kind: "compile",
-      definition: {
-        name,
-        type: "custom-element",
-        template: { kind: "markup", value: markup },
-      },
-    },
-    compiler: { debug: false, resolveResources: false },
-    setups: [],
-    registrations: [],
-  };
-}
-
-function compiledEnvelope(name: string, instructionRowCount: number): readonly CompilerFocusedInvariant[] {
-  return [
-    equalInvariant("definition.name", "The compiled definition preserves its explicit name.", {
-      kind: "definition-field",
-      field: "name",
-    }, name),
-    equalInvariant("definition.type", "The compiler returns a custom-element definition.", {
-      kind: "definition-field",
-      field: "type",
-    }, "custom-element"),
-    equalInvariant("definition.needs-compile", "The compiler closes the JIT handoff.", {
-      kind: "definition-field",
-      field: "needsCompile",
-    }, false),
-    equalInvariant("definition.template-node", "The compiled template remains an HTML template element.", {
-      kind: "template-node-name",
-    }, "TEMPLATE"),
-    equalInvariant("definition.rows", "The case has the expected number of hydration targets.", {
-      kind: "instruction-row-count",
-    }, instructionRowCount),
-    equalInvariant("definition.surrogates", "The case contributes no root surrogate instructions.", {
-      kind: "surrogate-count",
-    }, 0),
-  ];
-}
-
-function equalInvariant(
-  id: string,
-  description: string,
-  selector: CompilerFocusedInvariant["selector"],
-  expected: CompilerCaseData,
-): CompilerFocusedInvariant {
-  return {
-    id,
-    description,
-    lanes: ["framework-jit"],
-    selector,
-    assertion: { kind: "equal", expected },
-  };
-}
-
-function includesInvariant(
-  id: string,
-  description: string,
-  selector: CompilerFocusedInvariant["selector"],
-  expected: string,
-): CompilerFocusedInvariant {
-  return {
-    id,
-    description,
-    lanes: ["framework-jit"],
-    selector,
-    assertion: { kind: "includes", expected },
-  };
-}
-
-function instructionField(
-  row: number,
-  instruction: number,
-  field: string,
-): CompilerFocusedInvariant["selector"] {
-  return { kind: "instruction-field", row, instruction, field };
-}

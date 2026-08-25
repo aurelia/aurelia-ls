@@ -6,6 +6,7 @@ import type {
   BatchCaseDescriptor,
   BatchCaseExecutor,
   BatchCasePlan,
+  BatchCaseSearchTerms,
   BatchFailure,
   BatchRunOptions,
   BatchRunResult,
@@ -17,6 +18,7 @@ export type {
   BatchCaseExecutor,
   BatchCaseOutcome,
   BatchCasePlan,
+  BatchCaseSearchTerms,
   BatchCaseResult,
   BatchFailure,
   BatchProgressEvent,
@@ -31,8 +33,12 @@ export class BatchRunner<TCase extends BatchCaseDescriptor, TContext> {
   readonly #registry: BatchCaseRegistry<TCase>;
   readonly #execute: BatchCaseExecutor<TCase, TContext>;
 
-  public constructor(cases: readonly TCase[], execute: BatchCaseExecutor<TCase, TContext>) {
-    this.#registry = new BatchCaseRegistry(cases);
+  public constructor(
+    cases: readonly TCase[],
+    execute: BatchCaseExecutor<TCase, TContext>,
+    searchTerms: BatchCaseSearchTerms<TCase> = () => [],
+  ) {
+    this.#registry = new BatchCaseRegistry(cases, searchTerms);
     this.#execute = execute;
   }
 

@@ -1,19 +1,23 @@
 import { describe, expect, it } from "vitest";
 import { CompilerCaseCatalog } from "../src/testing/compiler-case-catalog.js";
 import { assertCompilerCaseData } from "../src/testing/compiler-canonical-data.js";
+import { compilerCaseSearchTerms } from "../src/testing/compiler-case-search.js";
 import { compilerCaseRegistryFingerprint } from "../src/testing/compiler-case-fingerprint.js";
+import { BatchRunner } from "../src/testing/batch-runner.js";
 import type { CompilerCase, CompilerSetupFactory } from "../src/testing/compiler-case.js";
 import { COMPILER_OBLIGATION_CATALOG } from "../src/testing/compiler-obligation-catalog.js";
-import { JIT_ORACLE_CASES } from "../src/testing/jit-oracle-cases.js";
+import { JIT_ORACLE_CASES } from "../src/testing/jit-oracle-case-registry.js";
+import { JIT_ORACLE_SETUP_FACTORIES } from "../src/testing/jit-oracle-setups.js";
 
 describe("compiler case contract", () => {
-  it("admits the migrated JIT cases as characterization without equivalence or closure claims", () => {
+  it("admits JIT characterizations without equivalence or false closed claims", () => {
     const catalog = caseCatalog(JIT_ORACLE_CASES);
 
-    expect(catalog.cases).toHaveLength(6);
+    expect(catalog.cases).toHaveLength(42);
     expect(catalog.cases.every((candidate) => candidate.oracles.claims.length === 0)).toBe(true);
-    expect(catalog.cases.every((candidate) => candidate.closure.every((claim) => claim.state === "not-claimed")))
+    expect(catalog.cases.every((candidate) => candidate.closure.every((claim) => claim.state !== "closed")))
       .toBe(true);
+    expect(catalog.cases.some((candidate) => candidate.closure.some((claim) => claim.state === "open"))).toBe(true);
     expect(catalog.cases.every((candidate) => candidate.provenance.length > 0)).toBe(true);
   });
 
@@ -24,10 +28,12 @@ describe("compiler case contract", () => {
     expect(audit.witnessedCount).toBeGreaterThan(0);
     expect(audit.unwitnessedCount).toBeGreaterThan(0);
     expect(audit.closedCount).toBe(0);
-    expect(audit.rows.find((row) => row.id === "compiler.instruction.property-binding")).toMatchObject({
-      state: "witnessed-not-claimed",
-      witnesses: [{ caseId: "binding.property.input-value", role: "primary" }],
-    });
+    const propertyBinding = audit.rows.find((row) => row.id === "compiler.instruction.property-binding");
+    expect(propertyBinding?.state).toBe("witnessed-not-claimed");
+    expect(propertyBinding?.witnesses).toContainEqual(expect.objectContaining({
+      caseId: "binding.property.input-value",
+      role: "primary",
+    }));
     expect(audit.rows.find((row) => row.id === "compiler.browser-tree.authored-lineage")).toMatchObject({
       state: "unwitnessed",
       witnesses: [],
@@ -35,12 +41,12 @@ describe("compiler case contract", () => {
   });
 
   it("fingerprints canonical descriptors independent of registry order", () => {
-    const forward = compilerCaseRegistryFingerprint(JIT_ORACLE_CASES, []);
-    const reversed = compilerCaseRegistryFingerprint([...JIT_ORACLE_CASES].reverse(), []);
+    const forward = compilerCaseRegistryFingerprint(JIT_ORACLE_CASES, JIT_ORACLE_SETUP_FACTORIES);
+    const reversed = compilerCaseRegistryFingerprint([...JIT_ORACLE_CASES].reverse(), JIT_ORACLE_SETUP_FACTORIES);
     const changed = compilerCaseRegistryFingerprint([
       withCase(JIT_ORACLE_CASES[0]!, { requirement: "Changed semantic requirement." }),
       ...JIT_ORACLE_CASES.slice(1),
-    ], []);
+    ], JIT_ORACLE_SETUP_FACTORIES);
 
     expect(reversed).toBe(forward);
     expect(changed).not.toBe(forward);
@@ -68,6 +74,15 @@ describe("compiler case contract", () => {
 
     expect(compilerCaseRegistryFingerprint(cases, [factory]))
       .toBe(compilerCaseRegistryFingerprint([...cases].reverse(), [factory]));
+  });
+
+  it("selects cases by obligation and pinned provenance without coupling the generic batch registry", () => {
+    const runner = new BatchRunner(JIT_ORACLE_CASES, () => {}, compilerCaseSearchTerms);
+
+    expect(runner.plan({ query: "compiler.entry.bypass" }).selected.map((candidate) => candidate.id))
+      .toEqual(["entry.bypass.needs-compile-false"]);
+    expect(runner.plan({ query: "template-compiler.convention.spec.ts" }).selected.map((candidate) => candidate.id))
+      .toContain("binding.property.input-value");
   });
 
   it("rejects setup references that are absent from the versioned manifest", () => {
@@ -165,7 +180,7 @@ function withCase(candidate: CompilerCase, changes: Partial<CompilerCase>): Comp
 
 function caseCatalog(
   cases: readonly CompilerCase[],
-  manifests: readonly CompilerSetupFactory[] = [],
+  manifests: readonly CompilerSetupFactory[] = JIT_ORACLE_SETUP_FACTORIES,
 ): CompilerCaseCatalog {
   return new CompilerCaseCatalog(cases, manifests, COMPILER_OBLIGATION_CATALOG);
 }

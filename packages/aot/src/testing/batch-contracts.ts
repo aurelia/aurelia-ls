@@ -17,6 +17,9 @@ export type BatchCaseExecutor<TCase extends BatchCaseDescriptor, TContext> = (
   context: TContext,
 ) => void | BatchCaseExecution | Promise<void | BatchCaseExecution>;
 
+/** Extra exact query terms supplied by a case dialect without coupling the generic registry to it. */
+export type BatchCaseSearchTerms<TCase extends BatchCaseDescriptor> = (candidate: TCase) => readonly string[];
+
 /** Stable zero-based shard selection for separate runner processes. */
 export interface BatchShard {
   readonly index: number;

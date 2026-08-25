@@ -11,12 +11,13 @@ import {
   compilerCaseRegistryFingerprint,
   compilerObligationCatalogFingerprint,
 } from "../out/testing/compiler-case-fingerprint.js";
+import { compilerCaseSearchTerms } from "../out/testing/compiler-case-search.js";
 import {
   JitCompilerCaseExecutor,
   validateJitCharacterizationCases,
 } from "../out/testing/jit-compiler-case-executor.js";
 import { createJitCompilerOracle } from "../out/testing/jit-compiler-oracle.js";
-import { JIT_ORACLE_CASES } from "../out/testing/jit-oracle-cases.js";
+import { JIT_ORACLE_CASES } from "../out/testing/jit-oracle-case-registry.js";
 import {
   JIT_ORACLE_SETUP_FACTORIES,
   JIT_ORACLE_SETUP_MATERIALIZERS,
@@ -303,6 +304,7 @@ function createHarness() {
       }
       return jitCaseExecutor.execute(candidate, oracle);
     },
+    compilerCaseSearchTerms,
   );
   return { compilerCaseCatalog, batchRunner };
 }
