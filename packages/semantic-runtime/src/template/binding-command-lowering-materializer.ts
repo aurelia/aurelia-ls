@@ -163,6 +163,7 @@ export class BindingCommandLoweringEmission {
     readonly instructions: readonly TemplateInstruction[],
     readonly valueSites: readonly TemplateValueSite[],
     readonly expressionParses: readonly TemplateExpressionParse[],
+    readonly openSeams: readonly OpenSeam[],
     readonly records: readonly KernelStoreRecord[],
   ) {}
 }
@@ -258,6 +259,7 @@ class BindingCommandLoweringFrame {
       this.instructions,
       this.valueSites,
       this.expressionParses,
+      this.openSeams,
       this.records,
     );
   }

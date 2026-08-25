@@ -261,7 +261,9 @@ classification, expression parsing, and instruction lowering converge on the sam
   controllers; the value site is `MultiBindingValue`, while its `AttributeClassification` carries which resource owns
   the bindables. Empty `.bind`, `.two-way`, and `.from-view` command values infer the source expression from the
   authored target name before DOM target-property mapping; for example `minlength.bind` reads `minlength` while the
-  target access can still map to `minLength`.
+  target access can still map to `minLength`. The returned lowering emission retains the exact open seams collected by
+  this pass; compiled-template assembly consumes those seams and issues so a custom command body cannot disappear below
+  a falsely complete compiled-template state.
 - `binding-command-lowering-publication.ts` owns the product envelopes for that lowering phase: source/provenance/open
   seams, ordinary command build/lowering products, multi-binding segment/syntax/lowering products, instruction identity
   publication, and the claims that connect command lowerings to produced instructions and expression parses. A segment
@@ -272,10 +274,12 @@ classification, expression parsing, and instruction lowering converge on the sam
   value serializer for inline custom-attribute multi-binding segments. Keep raw
   segment splitting and authored segment formatting there so command lowering
   and source producers share one grammar boundary.
-- `compiled-template.ts` and `compiled-template-materializer.ts` model the compiler/runtime handoff that the runtime
-  stores as transformed template DOM, target rows, surrogate rows, and `ICompiledElementComponentDefinition`
-  instructions. This is the point where authored HTML plus lowered instructions become render targets and instruction
-  sequences. The materializer now assembles runtime-shaped rows for text interpolation, let elements, custom elements,
+- `compiled-template.ts` and `compiled-template-materializer.ts` model the normalized compiler/runtime handoff behind
+  the runtime's transformed template DOM, target rows, surrogate rows, and `ICompiledElementComponentDefinition`
+  instructions. The current product retains authored-node-linked render targets and instruction sequences; it does not
+  yet materialize the browser-parsed, compiler-mutated DOM tree. That missing tree belongs to the latent transformed
+  template phase, not to the authored `HtmlParseEmission`. The materializer assembles runtime-shaped rows for text
+  interpolation, let elements (including an empty `<let>` hydration row), custom elements,
   custom attributes, template controllers, surrogate host attribute instructions, static/property-set instructions, and
   command-produced bindings, while keeping compiler DOM work that still needs sharper modeling visible through open
   seams. It also lowers direct spread syntax to `SpreadTransferedBindingInstruction` or
@@ -287,6 +291,12 @@ classification, expression parsing, and instruction lowering converge on the sam
   Custom-element `processContent` hooks are treated as owning the child-DOM transform: the assembler can still emit the
   element's direct hydration row, but it does not compile the authored children through as ordinary content unless that
   hook execution is modeled.
+- `compiler-instruction-order.ts` owns the framework's observer-sensitive native row order: model/value/matcher precede
+  checked for checkbox/radio inputs, and multiple precedes value for multi-selects. Keep that semantic order beside
+  compiled instruction assembly instead of reconstructing it in renderer or value-channel consumers. Root
+  containerless custom-element rows are render-location targets at this boundary. Exact nested target ownership remains
+  part of the transformed-template work; downstream synthetic-view grouping must not permanently reinterpret those
+  rows from instruction adjacency.
 - `runtime-rendering-materializer.ts` owns the runtime `Rendering` dispatch loop over compiled render targets and
   instruction sequences. `runtime-view-factory-materializer.ts` owns the `Rendering.getViewFactory(...)` product lane
   for template controllers: generated embedded custom-element definitions, `IViewFactory` products, synthetic-view

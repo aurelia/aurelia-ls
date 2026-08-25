@@ -107,6 +107,7 @@ import {
   type TemplateInstruction,
 } from './instruction-ir.js';
 import { instructionKindKeyFor } from './instruction-vocabulary.js';
+import { orderCompilerInstructionsForElement } from './compiler-instruction-order.js';
 import { TemplateSpecialAttributeName } from './special-attribute-source.js';
 import { runtimeAttributeName, runtimeElementResourceName } from './runtime-dom-name.js';
 import type { BindingCommandLoweringEmission } from './binding-command-lowering-materializer.js';
@@ -375,6 +376,8 @@ class CompiledTemplateAssemblyState {
     readonly source: CompiledTemplateSourceSet,
   ) {
     this.issuePublisher = new TemplateCompilerIssuePublisher(store);
+    this.issues.push(...input.bindingCommandLowering.issues);
+    this.openSeams.push(...input.bindingCommandLowering.openSeams);
   }
 
   readonly addOpenSeam = (
@@ -986,29 +989,27 @@ class CompiledTemplateInstructionTraversal {
       return false;
     }
     const letInstructions = this.letBindingInstructionsForElement(node);
-    if (letInstructions.length > 0) {
-      emitRow(
-        `let:${node.productHandle}`,
-        node,
-        [
-          this.assemblyState.createInstruction(
-            `hydrate-let:${node.productHandle}`,
-            TemplateInstructionKind.HydrateLetElement,
-            node.identityHandle,
+    emitRow(
+      `let:${node.productHandle}`,
+      node,
+      [
+        this.assemblyState.createInstruction(
+          `hydrate-let:${node.productHandle}`,
+          TemplateInstructionKind.HydrateLetElement,
+          node.identityHandle,
+          node.sourceAddressHandle,
+          (productHandle, identityHandle) => new HydrateLetElementInstruction(
+            productHandle,
+            identityHandle,
+            node.toReference(),
+            letInstructions.map((instruction) => instruction.productHandle),
+            hasHtmlAttribute(this.indexes.ownersByElement.get(node.productHandle) ?? null, 'to-binding-context'),
             node.sourceAddressHandle,
-            (productHandle, identityHandle) => new HydrateLetElementInstruction(
-              productHandle,
-              identityHandle,
-              node.toReference(),
-              letInstructions.map((instruction) => instruction.productHandle),
-              hasHtmlAttribute(this.indexes.ownersByElement.get(node.productHandle) ?? null, 'to-binding-context'),
-              node.sourceAddressHandle,
-              [],
-            ),
+            [],
           ),
-        ],
-      );
-    }
+        ),
+      ],
+    );
     return true;
   }
 
@@ -1087,7 +1088,7 @@ class CompiledTemplateInstructionTraversal {
     const directRow = [
       ...elementInstructions,
       ...parts.attributeInstructions,
-      ...parts.plainInstructions,
+      ...orderCompilerInstructionsForElement(node, owner, parts.plainInstructions),
     ];
     const shouldCompileChildren = elementDefinition == null
       || (!elementDefinition.containerless && !hasHtmlAttribute(owner, TemplateSpecialAttributeName.Containerless) && !parts.hasOpenProcessContentHook);
@@ -1121,7 +1122,14 @@ class CompiledTemplateInstructionTraversal {
       return;
     }
 
-    emitRow(`element:${node.productHandle}`, node, directRow);
+    emitRow(
+      `element:${node.productHandle}`,
+      node,
+      directRow,
+      elementInstruction?.containerless === true
+        ? TemplateRenderTargetKind.RenderLocation
+        : TemplateRenderTargetKind.MarkerTarget,
+    );
 
     if (
       runtimeElementResourceName(node.tagName, node.namespace) === 'template'
@@ -1942,7 +1950,11 @@ export class CompiledTemplateMaterializer {
           emission.instructions,
           KernelDetailAdmission.IfAbsent,
         ),
-        ...publishProductDetails(TemplateProductDetails.CompilerIssue, emission.issues),
+        ...publishProductDetails(
+          TemplateProductDetails.CompilerIssue,
+          emission.issues,
+          KernelDetailAdmission.IfAbsent,
+        ),
       ],
     ));
     return emission;
